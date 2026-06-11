@@ -41,6 +41,13 @@ interface ReviewArticleLayoutProps {
   downloadHref?: string;
   downloadLabel?: string;
   headerActions?: React.ReactNode;
+  /**
+   * 'light' — the classic stone/white article look (default).
+   * 'editorial' — the FitClub dark editorial system: photo hero,
+   * charcoal cards, lime accent, auto-numbered sections. Used for
+   * generated investor updates so they come out designed.
+   */
+  theme?: 'light' | 'editorial';
 }
 
 const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
@@ -55,7 +62,10 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
   downloadHref = '/PulseDeck12_9.pdf',
   downloadLabel = 'Download PDF',
   headerActions,
-}) => (
+  theme = 'light',
+}) => {
+  const dark = theme === 'editorial';
+  return (
   <>
     <PageHead
       metaData={{
@@ -72,11 +82,23 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
 
     <ReadingProgress />
 
-    <div className="review-article min-h-screen bg-[#FAFAF7] text-stone-700">
-      <nav className="sticky top-0 z-50 border-b border-stone-200/60 bg-[#FAFAF7]/90 backdrop-blur-md">
+    <div
+      className={
+        dark
+          ? 'review-article review-article--editorial min-h-screen bg-[#020408] text-white/75'
+          : 'review-article min-h-screen bg-[#FAFAF7] text-stone-700'
+      }
+    >
+      <nav
+        className={
+          dark
+            ? 'sticky top-0 z-50 border-b border-white/10 bg-[#020408]/85 backdrop-blur-md'
+            : 'sticky top-0 z-50 border-b border-stone-200/60 bg-[#FAFAF7]/90 backdrop-blur-md'
+        }
+      >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 md:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <img src="/pulse-logo.svg" alt="Pulse" className="h-8" />
+            <img src={dark ? '/pulse-logo-white.svg' : '/pulse-logo.svg'} alt="Pulse" className="h-8" />
           </Link>
 
           <div className="hidden items-center gap-8 sm:flex">
@@ -102,6 +124,58 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
         </div>
       </nav>
 
+      {dark && (
+        <header className="relative flex min-h-[72vh] items-end overflow-hidden">
+          <img
+            src="/review/editorial-hero.jpg"
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover object-[50%_35%]"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(to bottom, rgba(2,4,8,0.55) 0%, rgba(2,4,8,0.15) 30%, rgba(2,4,8,0.6) 65%, #020408 100%)',
+            }}
+          />
+          <div className="relative mx-auto w-full max-w-6xl px-6 pb-16 md:px-8">
+            <div className="mb-8">
+              <Link
+                href="/review"
+                className="inline-block rounded-full border border-white/20 bg-black/40 px-4 py-2 font-mono text-xs font-bold tracking-[0.12em] text-white/70 backdrop-blur-md transition-colors hover:text-white"
+              >
+                ← All Investor Updates
+              </Link>
+            </div>
+            <p className="mb-6 font-mono text-xs font-bold uppercase tracking-[0.32em] text-white/60">
+              {eyebrow}
+            </p>
+            <h1 className="max-w-4xl text-5xl font-black leading-[1.0] tracking-[-0.03em] text-white md:text-6xl lg:text-7xl">
+              {title}
+            </h1>
+            <p className="mt-7 max-w-2xl text-lg leading-relaxed text-white/75 md:text-xl">
+              {description}
+            </p>
+            {(downloadHref || headerActions) && (
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                {downloadHref && (
+                  <a
+                    href={downloadHref}
+                    download
+                    className="inline-flex items-center gap-2 rounded-full bg-[#E0FE10] px-5 py-3 text-sm font-bold text-black"
+                  >
+                    <Download size={16} />
+                    {downloadLabel}
+                  </a>
+                )}
+                {headerActions}
+              </div>
+            )}
+          </div>
+        </header>
+      )}
+
+      {!dark && (
       <header className="mx-auto max-w-6xl px-6 pb-12 pt-16 md:px-8 md:pb-16 md:pt-24">
         <div className="mb-6">
           <Link href="/review" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
@@ -157,13 +231,14 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
           </motion.div>
         )}
       </header>
+      )}
 
       <main>{children}</main>
 
-      <footer className="border-t border-stone-200 bg-[#FAFAF7]">
+      <footer className={dark ? 'border-t border-white/10 bg-[#020408]' : 'border-t border-stone-200 bg-[#FAFAF7]'}>
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-6 py-12 md:flex-row md:items-center md:px-8">
           <div>
-            <img src="/pulse-logo.svg" alt="Pulse" className="mb-3 h-6" />
+            <img src={dark ? '/pulse-logo-white.svg' : '/pulse-logo.svg'} alt="Pulse" className="mb-3 h-6" />
             <p className="text-sm text-stone-400">
               © {new Date().getFullYear()} Pulse Intelligence Labs, Inc.
             </p>
@@ -285,7 +360,145 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
         border-color: rgba(214, 211, 209, 0.85) !important;
       }
     `}</style>
+
+    <style jsx global>{`
+      /* ---------- Editorial (dark) content re-theme ----------
+         Generated investor updates render with the same Tailwind
+         classes as the light article; this scope flips them into the
+         FitClub editorial system without touching the renderers. */
+
+      .review-article--editorial main {
+        counter-reset: editorial-section;
+      }
+
+      /* Auto-numbered section headings: "01 / HEADING" */
+      .review-article--editorial main h2 {
+        color: #ffffff !important;
+        font-weight: 900 !important;
+        letter-spacing: -0.025em !important;
+        font-size: clamp(28px, 4vw, 40px) !important;
+      }
+      .review-article--editorial main h2::before {
+        counter-increment: editorial-section;
+        content: counter(editorial-section, decimal-leading-zero);
+        display: block;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.28em;
+        color: #e0fe10;
+        margin-bottom: 10px;
+      }
+
+      .review-article--editorial main h3 {
+        color: rgba(255, 255, 255, 0.92) !important;
+        font-weight: 800 !important;
+      }
+
+      .review-article--editorial main p,
+      .review-article--editorial main li {
+        color: rgba(255, 255, 255, 0.7) !important;
+      }
+
+      .review-article--editorial main strong {
+        color: #ffffff !important;
+      }
+
+      .review-article--editorial main a {
+        color: #ffffff !important;
+        text-decoration-color: rgba(224, 254, 16, 0.6) !important;
+      }
+      .review-article--editorial main a:hover {
+        text-decoration-color: #e0fe10 !important;
+      }
+
+      .review-article--editorial main ul {
+        list-style: none !important;
+        padding-left: 0 !important;
+      }
+      .review-article--editorial main ul > li {
+        position: relative;
+        padding-left: 26px;
+        list-style: none !important;
+      }
+      .review-article--editorial main ul > li::before {
+        content: '';
+        position: absolute;
+        left: 2px;
+        top: 0.72em;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #e0fe10;
+      }
+      .review-article--editorial main ul > li::marker {
+        content: '';
+      }
+
+      /* Light cards -> charcoal glass */
+      .review-article--editorial main [class*='bg-white'],
+      .review-article--editorial main [class*='bg-gray-50'],
+      .review-article--editorial main [class*='bg-stone-50'] {
+        background: rgba(17, 18, 21, 0.78) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      .review-article--editorial main [class*='border-stone-2'],
+      .review-article--editorial main [class*='border-stone-3'],
+      .review-article--editorial main [class*='border-gray-2'] {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+      }
+
+      /* Stone text scale -> white scale */
+      .review-article--editorial main [class*='text-stone-9'],
+      .review-article--editorial main [class*='text-stone-8'],
+      .review-article--editorial main [class*='text-gray-9'] {
+        color: #ffffff !important;
+      }
+      .review-article--editorial main [class*='text-stone-7'],
+      .review-article--editorial main [class*='text-stone-6'],
+      .review-article--editorial main [class*='text-gray-7'],
+      .review-article--editorial main [class*='text-gray-6'] {
+        color: rgba(255, 255, 255, 0.7) !important;
+      }
+      .review-article--editorial main [class*='text-stone-5'],
+      .review-article--editorial main [class*='text-stone-4'],
+      .review-article--editorial main [class*='text-gray-5'],
+      .review-article--editorial main [class*='text-gray-4'] {
+        color: rgba(255, 255, 255, 0.45) !important;
+      }
+
+      /* Light tinted gradients -> neutral charcoal */
+      .review-article--editorial main [class*='from-amber-50'],
+      .review-article--editorial main [class*='from-yellow-50'],
+      .review-article--editorial main [class*='from-orange-50'],
+      .review-article--editorial main [class*='from-emerald-50'],
+      .review-article--editorial main [class*='from-teal-50'],
+      .review-article--editorial main [class*='from-blue-50'],
+      .review-article--editorial main [class*='from-sky-50'],
+      .review-article--editorial main [class*='from-indigo-50'],
+      .review-article--editorial main [class*='from-purple-50'],
+      .review-article--editorial main [class*='from-gray-50'] {
+        background: rgba(17, 18, 21, 0.78) !important;
+        border-color: rgba(255, 255, 255, 0.1) !important;
+      }
+
+      /* Blockquotes get the host-note serif voice */
+      .review-article--editorial main blockquote {
+        font-family: Georgia, 'Times New Roman', serif !important;
+        font-style: italic;
+        color: rgba(255, 255, 255, 0.85) !important;
+        border-left: 2px solid #e0fe10 !important;
+      }
+
+      /* Images: hairline + deep shadow like the phone rails */
+      .review-article--editorial main img {
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+      }
+    `}</style>
   </>
-);
+  );
+};
 
 export default ReviewArticleLayout;

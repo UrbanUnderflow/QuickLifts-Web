@@ -1804,78 +1804,11 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                     </div>
                                 </div>
                             </motion.div>
-                            {/* Personal / Professional Context */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 }}
-                                className="rounded-2xl border border-zinc-700/40 p-5"
-                                style={{ background: 'rgba(59,130,246,0.03)' }}
-                            >
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Users className="w-4 h-4 text-blue-400" />
-                                    <h4 className="text-sm font-bold text-white">Personal / Professional</h4>
-                                    <span className="text-[9px] text-zinc-600 ml-auto">Non-Sport Stressors</span>
-                                </div>
-                                <p className="text-[10px] text-zinc-500 mb-4 leading-relaxed">
-                                    These are life factors outside of sport that Nora has identified as active contributors to Kevin&apos;s current mental state.
-                                </p>
-
-                                <div className="space-y-3">
-                                    {[
-                                        {
-                                            icon: '👶',
-                                            label: 'New Father — 6 Weeks Postpartum',
-                                            note: 'First child born Jan 18. Sleep disruption averaging 3–4h/night. Kevin has mentioned feeling "torn between being present at home and being locked in for the season."',
-                                            impact: 'Sleep & Focus',
-                                            impactColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-                                        },
-                                        {
-                                            icon: '💼',
-                                            label: 'Brand Deal Pressure — Pending Contract',
-                                            note: 'Negotiating a $2.1M endorsement deal contingent on end-of-season performance metrics. Kevin flagged anxiety around "performing for the contract, not the team."',
-                                            impact: 'Identity Stress',
-                                            impactColor: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
-                                        },
-                                        {
-                                            icon: '📋',
-                                            label: 'Contract Year — Free Agency Eligible',
-                                            note: 'Entering the final year of his rookie deal. Self-described pressure: "every game feels like an audition." Nora detected this framing across 4 check-ins this month.',
-                                            impact: 'Performance Anxiety',
-                                            impactColor: 'text-red-400 bg-red-500/10 border-red-500/20',
-                                        },
-                                        {
-                                            icon: '👨‍👩‍👦',
-                                            label: 'Estranged Relationship — Father',
-                                            note: 'Kevin mentioned his father reached out for the first time in 3 years last week. He described it as "bad timing" and has not followed up. Unresolved tension flagged as background stressor.',
-                                            impact: 'Emotional Load',
-                                            impactColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
-                                        },
-                                    ].map((item) => (
-                                        <div
-                                            key={item.label}
-                                            className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 flex gap-3"
-                                        >
-                                            <div className="text-xl flex-shrink-0 mt-0.5">{item.icon}</div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2 mb-1">
-                                                    <div className="text-xs font-semibold text-zinc-200 leading-snug">{item.label}</div>
-                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium flex-shrink-0 ${item.impactColor}`}>
-                                                        {item.impact}
-                                                    </span>
-                                                </div>
-                                                <p className="text-[11px] text-zinc-500 leading-relaxed">{item.note}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </motion.div>
-
                             {/* Medical History */}
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.45 }}
+                                transition={{ delay: 0.4 }}
                                 className="rounded-2xl border border-zinc-700/40 p-5"
                                 style={{ background: 'rgba(147,51,234,0.03)' }}
                             >
@@ -1935,6 +1868,73 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </motion.div>
+
+                            {/* Personal / Professional Context */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.45 }}
+                                className="rounded-2xl border border-zinc-700/40 p-5"
+                                style={{ background: 'rgba(59,130,246,0.03)' }}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Users className="w-4 h-4 text-blue-400" />
+                                    <h4 className="text-sm font-bold text-white">Personal / Professional</h4>
+                                    <span className="text-[9px] text-zinc-600 ml-auto">Non-Sport Stressors</span>
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mb-4 leading-relaxed">
+                                    These are life factors outside of sport that Nora has identified as active contributors to Kevin&apos;s current mental state.
+                                </p>
+
+                                <div className="space-y-3">
+                                    {[
+                                        {
+                                            icon: '👶',
+                                            label: 'New Father — 6 Weeks Postpartum',
+                                            note: 'First child born Jan 18. Sleep disruption averaging 3–4h/night. Kevin has mentioned feeling "torn between being present at home and being locked in for the season."',
+                                            impact: 'Sleep & Focus',
+                                            impactColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                                        },
+                                        {
+                                            icon: '💼',
+                                            label: 'Brand Deal Pressure — Pending Contract',
+                                            note: 'Negotiating a $2.1M endorsement deal contingent on end-of-season performance metrics. Kevin flagged anxiety around "performing for the contract, not the team."',
+                                            impact: 'Identity Stress',
+                                            impactColor: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+                                        },
+                                        {
+                                            icon: '📋',
+                                            label: 'Contract Year — Free Agency Eligible',
+                                            note: 'Entering the final year of his rookie deal. Self-described pressure: "every game feels like an audition." Nora detected this framing across 4 check-ins this month.',
+                                            impact: 'Performance Anxiety',
+                                            impactColor: 'text-red-400 bg-red-500/10 border-red-500/20',
+                                        },
+                                        {
+                                            icon: '👨‍👩‍👦',
+                                            label: 'Estranged Relationship — Father',
+                                            note: 'Kevin mentioned his father reached out for the first time in 3 years last week. He described it as "bad timing" and has not followed up. Unresolved tension flagged as background stressor.',
+                                            impact: 'Emotional Load',
+                                            impactColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+                                        },
+                                    ].map((item) => (
+                                        <div
+                                            key={item.label}
+                                            className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 flex gap-3"
+                                        >
+                                            <div className="text-xl flex-shrink-0 mt-0.5">{item.icon}</div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <div className="text-xs font-semibold text-zinc-200 leading-snug">{item.label}</div>
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium flex-shrink-0 ${item.impactColor}`}>
+                                                        {item.impact}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-zinc-500 leading-relaxed">{item.note}</p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </motion.div>
 

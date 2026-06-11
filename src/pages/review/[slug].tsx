@@ -454,6 +454,7 @@ const PublishedStructuredReview: React.FC<{ draft: DraftReview; isAdmin: boolean
     description={draft.description}
     pageOgUrl={`https://fitwithpulse.ai/review/${draft.id}`}
     downloadHref={undefined}
+    theme={draft.formatStyle === 'article' ? 'light' : 'editorial'}
     headerActions={
       isAdmin ? (
         <button
