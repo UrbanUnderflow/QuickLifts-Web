@@ -19,6 +19,8 @@ import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
 import { normalizePhoneToE164, isValidE164 } from '../../utils/phone';
 import { userService } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
+import { useDispatch } from 'react-redux';
+import { showToast } from '../../redux/toastSlice';
 
 
 const formatInviteRole = (role?: PulseCheckTeamMembershipRole) => {
@@ -151,6 +153,7 @@ const Stepper = ({ current }: { current: number }) => (
 
 export default function PulseCheckPostActivationPage() {
   const router = useRouter();
+  const dispatch = useDispatch();
   const currentUser = useUser();
   const currentUserLoading = useUserLoading();
   const organizationId = typeof router.query.organizationId === 'string' ? router.query.organizationId : '';
@@ -305,10 +308,10 @@ export default function PulseCheckPostActivationPage() {
   const handleCopy = async (value: string, successText: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      setMessage({ type: 'success', text: successText });
+      dispatch(showToast({ message: successText, type: 'success' }));
     } catch (error) {
       console.error('[PulseCheck post-activation] Clipboard copy failed:', error);
-      setMessage({ type: 'error', text: 'Failed to copy to clipboard.' });
+      dispatch(showToast({ message: 'Failed to copy to clipboard.', type: 'error' }));
     }
   };
 
@@ -439,7 +442,7 @@ export default function PulseCheckPostActivationPage() {
       if (staffPhotoFile) {
         try {
           const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
-          const upload = await firebaseStorageService.uploadImage(staffPhotoFile, UploadImageType.Profile);
+          const upload = await firebaseStorageService.uploadImage(staffPhotoFile, UploadImageType.Profile, { updateUserProfile: false });
           prefilledProfileImageUrl = upload.downloadURL;
         } catch (uploadError) {
           console.error('[PulseCheck post-activation] staff photo upload failed', uploadError);

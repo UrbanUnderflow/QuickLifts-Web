@@ -1913,7 +1913,7 @@ const StaffSection: React.FC<{
     if (!photoFile) return '';
     try {
       const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
-      const upload = await firebaseStorageService.uploadImage(photoFile, UploadImageType.Profile);
+      const upload = await firebaseStorageService.uploadImage(photoFile, UploadImageType.Profile, { updateUserProfile: false });
       return upload.downloadURL;
     } catch (err) {
       console.error('[CoachDashboard] staff photo upload failed', err);

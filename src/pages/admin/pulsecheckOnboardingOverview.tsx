@@ -1069,6 +1069,66 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
     setLaunchNarrating(false);
   }, []);
 
+  const stopWalkthroughAudio = useCallback(() => {
+    [introAudioRef, dashboardAudioRef, step1AudioRef, step2AudioRef, meetingsAudioRef, launchAudioRef].forEach((ref) => {
+      const audio = ref.current;
+      if (!audio) return;
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
+    });
+    setIntroPlaying(false);
+    setDashboardNarrating(false);
+    setStep1Narrating(false);
+    setStep2Narrating(false);
+    setMeetingsNarrating(false);
+    setLaunchNarrating(false);
+    setShowBeginModal(false);
+    setShowSkipButton(false);
+    setSkipHiding(false);
+    setHighlightedCtaIndex(null);
+  }, []);
+
+  const replayNoraTraining = useCallback(() => {
+    stopWalkthroughAudio();
+    introStartedRef.current = false;
+    step1StartedRef.current = false;
+    step2StartedRef.current = false;
+    meetingsStartedRef.current = false;
+    launchStartedRef.current = false;
+    launchWaypointRef.current = 0;
+    ctaCueFiredRef.current.clear();
+    setExpandedPhases(new Set([0]));
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem('pulsecheck-onboarding-intro', 'done');
+      } catch {}
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+
+    const audio = introAudioRef.current;
+    if (!audio) {
+      setShowBeginModal(true);
+      return;
+    }
+    try {
+      introStartedRef.current = true;
+      audio.currentTime = 0;
+      const played = audio.play();
+      if (played && typeof played.then === 'function') {
+        played.then(() => setIntroPlaying(true)).catch(() => setShowBeginModal(true));
+      } else {
+        setIntroPlaying(true);
+      }
+    } catch {
+      setShowBeginModal(true);
+    }
+  }, [stopWalkthroughAudio]);
+
   const advanceToTenSteps = useCallback(() => {
     const audio = dashboardAudioRef.current;
     if (audio) {
@@ -1891,6 +1951,14 @@ const PulseCheckOnboardingOverviewPage: React.FC = () => {
                     System Overview
                     <ChevronRight className="h-4 w-4" />
                   </Link>
+                  <button
+                    type="button"
+                    onClick={replayNoraTraining}
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#00d4aa]/25 bg-[#00d4aa]/10 px-4 py-2.5 text-sm font-semibold text-[#8ff5dd] transition hover:border-[#00d4aa]/40 hover:bg-[#00d4aa]/15"
+                  >
+                    Replay Nora training
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 

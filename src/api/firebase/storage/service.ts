@@ -156,8 +156,12 @@ export class FirebaseStorageService {
     }
 
   async uploadImage(
-    file: File, 
-    imageType: UploadImageType = UploadImageType.Profile
+    file: File,
+    imageType: UploadImageType = UploadImageType.Profile,
+    // updateUserProfile: false = uploading a photo on someone else's behalf
+    // (e.g. a staff invite headshot) — store it without touching the
+    // uploader's own user doc.
+    options?: { updateUserProfile?: boolean }
   ): Promise<UploadResult> {
     // Ensure user is authenticated
     const user = auth.currentUser;
@@ -183,7 +187,7 @@ export class FirebaseStorageService {
       const gsURL = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
 
       // If it's a profile image, update the user
-      if (imageType === UploadImageType.Profile) {
+      if (imageType === UploadImageType.Profile && (options?.updateUserProfile ?? true)) {
         await this.updateUserProfileImage(downloadURL);
       }
 

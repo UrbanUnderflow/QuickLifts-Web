@@ -4,6 +4,7 @@ import { useUser, useUserLoading } from '../hooks/useUser';
 import { CoachModel } from '../types/Coach';
 import { db } from '../api/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
+import { pulseCheckProvisioningService } from '../api/firebase/pulsecheckProvisioning/service';
 
 interface Props {
   children: React.ReactNode;
@@ -32,11 +33,27 @@ const CoachProtectedRoute: React.FC<Props> = ({
         return;
       }
 
+      // PulseCheck staff (head coaches, team admins, performance staff) are
+      // provisioned via team memberships and never get a legacy `coaches` doc.
+      const hasPulseCheckStaffAccess = async () => {
+        try {
+          const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+          return memberships.some((m) => m.role && m.role !== 'athlete');
+        } catch (membershipError) {
+          console.error('Error checking PulseCheck staff access:', membershipError);
+          return false;
+        }
+      };
+
       try {
         // Fetch coach profile first (source of truth for coach access)
         const coachDoc = await getDoc(doc(db, 'coaches', currentUser.id));
-        
+
         if (!coachDoc.exists()) {
+          if (await hasPulseCheckStaffAccess()) {
+            setLoading(false);
+            return;
+          }
           // If no profile exists, fall back to role to decide where to go
           if (currentUser.role === 'coach') {
             // Coach role but missing profile → send to setup
@@ -68,6 +85,10 @@ const CoachProtectedRoute: React.FC<Props> = ({
         setLoading(false);
       } catch (error) {
         console.error('Error checking coach access:', error);
+        if (await hasPulseCheckStaffAccess()) {
+          setLoading(false);
+          return;
+        }
         router.push('/');
       }
     };
