@@ -126,6 +126,19 @@ export const NORA_ATHLETE_TRANSLATION: FeatureRoutingConfig = {
   migrationModeId: 'pulsecheck-translation-v1',
 };
 
+// FitClub nightly recap — Nora authors the one-line "here's how the club
+// showed up today" copy that the nightly cron pushes + stores. Short,
+// coach-voice, athlete-facing. Haiku is plenty for a single sentence and
+// keeps the cron cheap across many clubs. The cron always has a templated
+// fallback if Claude errors, so no fallbackProvider is wired.
+export const FITCLUB_NIGHTLY_RECAP: FeatureRoutingConfig = {
+  featureId: 'fitclubNightlyRecap',
+  provider: 'anthropic',
+  model: ANTHROPIC_MODEL_HAIKU_4_5,
+  maxTokens: 200,
+  migrationModeId: 'macra-full-cutover-v1',
+};
+
 export const FEATURE_ROUTING_CONFIGS: FeatureRoutingConfig[] = [
   NORA_NUTRITION_CHAT,
   MACRA_MEAL_PLAN,
@@ -136,6 +149,7 @@ export const FEATURE_ROUTING_CONFIGS: FeatureRoutingConfig[] = [
   PULSECHECK_PHASE_J_LIFT_SUMMARY_PARSE,
   GENERATE_CAPTION,
   NORA_ATHLETE_TRANSLATION,
+  FITCLUB_NIGHTLY_RECAP,
 ];
 
 const FEATURE_ROUTING_BY_ID = new Map(
@@ -168,6 +182,10 @@ export const ANTHROPIC_FEATURE_LIMITS: Record<string, { maxTokens: number; model
   generateCaption: { maxTokens: GENERATE_CAPTION.maxTokens, modelPattern: ANTHROPIC_MODEL_PATTERN },
   noraAthleteTranslation: {
     maxTokens: NORA_ATHLETE_TRANSLATION.maxTokens,
+    modelPattern: ANTHROPIC_MODEL_PATTERN,
+  },
+  fitclubNightlyRecap: {
+    maxTokens: FITCLUB_NIGHTLY_RECAP.maxTokens,
     modelPattern: ANTHROPIC_MODEL_PATTERN,
   },
   default: { maxTokens: 1000, modelPattern: ANTHROPIC_MODEL_PATTERN },

@@ -106,6 +106,12 @@ const MEDIA: MediaItem[] = [
     caption: 'Pinned host announcement at the top of club home + the compose sheet.',
     group: 'Events & Experience',
   },
+  {
+    src: '/fitclub-media/14-club-calendar.png',
+    title: 'Club calendar',
+    caption: '“What’s coming” — events, challenge starts, and cycle ends in one agenda.',
+    group: 'Events & Experience',
+  },
 ];
 
 const GROUPS: MediaItem['group'][] = ['App Store', 'Redesign', 'Events & Experience'];
