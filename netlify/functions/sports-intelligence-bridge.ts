@@ -22,6 +22,13 @@ import { db, headers as corsHeaders } from './config/firebase';
 const CONFIG_COLLECTION = 'company-config';
 const CONFIG_DOCUMENT = 'pulsecheck-sports';
 
+// No sport on the athlete (or an unresolvable one) → default to aesthetics-led
+// physique programming as the base taste for strength workouts. SPORT-LEVEL
+// nuance only — never the competition division overrides ("legs are not
+// scored" etc.), and clients must NOT surface the sport name for defaulted
+// athletes; the response carries `defaulted: true` so they know.
+const DEFAULT_TASTE_SPORT_ID = 'bodybuilding-physique';
+
 type SportEntry = {
   id?: string;
   name?: string;
@@ -127,31 +134,28 @@ const handler: Handler = async (event) => {
     };
   }
 
-  if (!sport.trim()) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Missing required "sport" parameter.' }),
-    };
-  }
-
   try {
     const snapshot = await db.collection(CONFIG_COLLECTION).doc(CONFIG_DOCUMENT).get();
     const sports: SportEntry[] = snapshot.exists ? (snapshot.data()?.sports || []) : [];
 
-    const match = resolveEntry(sports, sport);
-    const archetype = archetypeFor(sport);
+    const hasSport = Boolean(sport.trim());
+    const match = hasSport ? resolveEntry(sports, sport) : null;
 
+    // No sport / unresolvable sport → aesthetics-led default taste
+    // (sport-level nuance only; no division override; flagged `defaulted`
+    // so clients keep the sport name OUT of user-facing copy).
     if (!match) {
+      const fallback = sports.find((entry) => entry.id === DEFAULT_TASTE_SPORT_ID);
       return {
         statusCode: 200,
         headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=300' },
         body: JSON.stringify({
           resolved: false,
-          sport: { id: null, name: sport.trim(), emoji: null },
+          defaulted: Boolean(fallback),
+          sport: { id: null, name: hasSport ? sport.trim() : null, emoji: null },
           division: null,
-          archetype,
-          trainingNuance: null,
+          archetype: hasSport ? archetypeFor(sport) : 'strength',
+          trainingNuance: fallback ? resolveNuance(fallback, null) : null,
           languagePosture: null,
         }),
       };
@@ -165,13 +169,14 @@ const handler: Handler = async (event) => {
       headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=300' },
       body: JSON.stringify({
         resolved: true,
+        defaulted: false,
         sport: {
           id: match.entry.id || null,
           name: match.entry.name || sport.trim(),
           emoji: match.entry.emoji || null,
         },
         division: resolvedDivision,
-        archetype,
+        archetype: archetypeFor(sport),
         trainingNuance: resolveNuance(match.entry, resolvedDivision),
         languagePosture: posture
           ? { mustAvoid: posture.mustAvoid || [], recommendedLanguage: posture.recommendedLanguage || [] }

@@ -1464,11 +1464,11 @@ const gymnasticsReportPolicy: PulseCheckSportReportPolicy = {
 const bodybuildingPhysiqueTrainingNuance: PulseCheckSportTrainingNuance = {
   muscleEmphases: ['shoulders', 'back', 'chest', 'arms', 'core'],
   preferredPatterns: ['incline press', 'overhead press', 'lateral raise', 'lat pulldown',
-    'pull up', 'row', 'rear delt', 'cable fly'],
+    'pull up', 'row', 'rear delt', 'cable fly', 'curl'],
   deprioritizedPatterns: ['decline press'],
   schemeBias: 'hypertrophy',
   conditioningPosture: 'Steady-state cardio (steps, incline walks) is a conditioning tool programmed separately — never inside a hypertrophy lifting session.',
-  coachNotes: 'Physique divisions are judged on proportion and condition: capped delts, back width (V-taper), full chest, tight waist. Prioritize medial/rear delt volume and lat width over raw load. Incline pressing serves upper-chest aesthetics better than decline.',
+  coachNotes: 'Physique divisions are judged on proportion and condition: capped delts, back width (V-taper), full chest, tight waist. Prioritize medial/rear delt volume and lat width over raw load. Incline pressing serves upper-chest aesthetics better than decline. Balance arm work on upper days — direct biceps (curls) alongside triceps, never triceps-only.',
   divisionOverrides: {
     'Men’s Physique': {
       muscleEmphases: ['shoulders', 'back', 'chest', 'arms', 'core'],
