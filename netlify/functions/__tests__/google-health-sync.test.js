@@ -193,6 +193,45 @@ test('shouldWriteDomain preserves stronger existing source winners', () => {
   );
 });
 
+test('shouldWriteDomain takes over an intraday domain when its winner has gone dark', () => {
+  const observedAt = 1_750_000_000;
+  const staleActivity = {
+    provenance: {
+      domainWinners: { activity: 'polar' },
+      domainObservedAt: { activity: observedAt },
+    },
+  };
+  // Within the 4h window the stronger winner keeps the domain.
+  assert.equal(shouldWriteDomain(staleActivity, 'activity', true, observedAt + 3 * 3600), false);
+  // Past the window the reporting lane takes over.
+  assert.equal(shouldWriteDomain(staleActivity, 'activity', true, observedAt + 5 * 3600), true);
+  // No observation timestamp (pre-migration docs) → keep the hard block.
+  assert.equal(
+    shouldWriteDomain(
+      { provenance: { domainWinners: { activity: 'polar' } } },
+      'activity',
+      true,
+      observedAt + 5 * 3600
+    ),
+    false
+  );
+  // Recovery is a nightly domain — never taken over by write-recency.
+  assert.equal(
+    shouldWriteDomain(
+      {
+        provenance: {
+          domainWinners: { recovery: 'polar' },
+          domainObservedAt: { recovery: observedAt },
+        },
+      },
+      'recovery',
+      true,
+      observedAt + 24 * 3600
+    ),
+    false
+  );
+});
+
 test('fetchPagedDataPoints follows page tokens until the API stops returning them', async () => {
   const pages = [
     { dataPoints: [{ heartRate: { beatsPerMinute: '60' } }], nextPageToken: 'page-2' },

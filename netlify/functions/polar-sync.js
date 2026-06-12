@@ -371,24 +371,33 @@ function mapRecoveryPayload({ sleep, recharge }) {
   const sleepStart = sleep?.sleep_start_time || null;
   const sleepEnd = sleep?.sleep_end_time || null;
   const sleepHrSamples = Object.values(sleep?.heart_rate_samples || {});
+  const sleepDuration = sleepStart && sleepEnd ? secondsToHours((Date.parse(sleepEnd) - Date.parse(sleepStart)) / 1000) : null;
+  // A zero/negative sleep interval means the watch wasn't worn to bed —
+  // "no sleep recorded", not a 0h reading. Drop the sleep fields and keep
+  // only the recharge-side metrics, which carry their own values.
+  const sleepBlock = sleepDuration > 0
+    ? {
+        sleepDuration,
+        deepSleepDuration: secondsToHours(sleep?.deep_sleep),
+        remSleepDuration: secondsToHours(sleep?.rem_sleep),
+        lightSleepDuration: secondsToHours(sleep?.light_sleep),
+        sleepScore: numberValue(sleep?.sleep_score),
+        sleepEfficiency: numberValue(sleep?.continuity),
+        sleepCharge: numberValue(sleep?.sleep_charge),
+        bedtimeStart: sleepStart,
+        bedtimeEnd: sleepEnd,
+        sleepMidpoint: computeSleepMidpointEpochSeconds(sleepStart, sleepEnd),
+        rawDeviceId: sleep?.device_id || null,
+      }
+    : {};
   return compactObject({
-    sleepDuration: sleepStart && sleepEnd ? secondsToHours((Date.parse(sleepEnd) - Date.parse(sleepStart)) / 1000) : null,
-    deepSleepDuration: secondsToHours(sleep?.deep_sleep),
-    remSleepDuration: secondsToHours(sleep?.rem_sleep),
-    lightSleepDuration: secondsToHours(sleep?.light_sleep),
-    sleepScore: numberValue(sleep?.sleep_score),
-    sleepEfficiency: numberValue(sleep?.continuity),
-    sleepCharge: numberValue(sleep?.sleep_charge),
-    bedtimeStart: sleepStart,
-    bedtimeEnd: sleepEnd,
-    sleepMidpoint: computeSleepMidpointEpochSeconds(sleepStart, sleepEnd),
-    heartRateResting: numberValue(recharge?.heart_rate_avg) || min(sleepHrSamples),
+    ...sleepBlock,
+    heartRateResting: numberValue(recharge?.heart_rate_avg) || (sleepDuration > 0 ? min(sleepHrSamples) : null),
     heartRateVariability: numberValue(recharge?.heart_rate_variability_avg),
     respiratoryRate: numberValue(recharge?.breathing_rate_avg),
     nightlyRechargeStatus: numberValue(recharge?.nightly_recharge_status),
     ansCharge: numberValue(recharge?.ans_charge),
     ansChargeStatus: numberValue(recharge?.ans_charge_status),
-    rawDeviceId: sleep?.device_id || null,
   });
 }
 
@@ -446,10 +455,16 @@ function activityDayEntries(value) {
   return [];
 }
 
-function selectActivityDay(entries, dateKey) {
+function selectActivityDay(entries, dateKey, { allowDateless = true } = {}) {
   const normalizedEntries = (entries || []).filter(Boolean);
   const exactMatch = normalizedEntries.find((entry) => polarRecordDate(entry) === dateKey);
   if (exactMatch) return exactMatch;
+  // The dateless fallback is only sound for responses from date-scoped
+  // endpoints, where the URL already pinned the day. Transaction records
+  // span days and linger until committed — a dateless one must never be
+  // attributed to the requested day (it shows up as "today's steps via
+  // Polar · Fresh" from a watch that hasn't synced in days).
+  if (!allowDateless) return {};
   return normalizedEntries.find((entry) => !polarRecordDate(entry)) || {};
 }
 
@@ -518,7 +533,7 @@ function mapActivityPayload({ activitySamples, activitySummaries, activityDays, 
   // step samples, then the v4 daily activity sample list.
   const v3ActivitySampleDay = selectActivityDay(activitySampleDayEntries(activitySamples), dateKey);
   const v3StepSummary = summarizeV3ActivitySampleSteps(v3ActivitySampleDay);
-  const summaryDay = selectActivityDay(activityEntries(activitySummaries), dateKey);
+  const summaryDay = selectActivityDay(activityEntries(activitySummaries), dateKey, { allowDateless: false });
   const v4ActivityDay = selectActivityDay(activityDayEntries(activityDays), dateKey);
   const v4StepSummary = summarizeV4ActivitySteps(v4ActivityDay);
   const matchingCardio = (Array.isArray(cardioLoads) ? cardioLoads : [])
@@ -570,7 +585,7 @@ function buildActivityDebug({ activitySamples, activitySummaries, activityDays, 
   const selectedV3ActivitySampleDay = selectActivityDay(v3Entries, dateKey);
   const selectedV3StepSummary = summarizeV3ActivitySampleSteps(selectedV3ActivitySampleDay);
   const entries = activityEntries(activitySummaries);
-  const selected = selectActivityDay(entries, dateKey);
+  const selected = selectActivityDay(entries, dateKey, { allowDateless: false });
   const v4Entries = activityDayEntries(activityDays);
   const selectedV4ActivityDay = selectActivityDay(v4Entries, dateKey);
   const selectedV4StepSummary = summarizeV4ActivitySteps(selectedV4ActivityDay);
@@ -683,6 +698,16 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
     ...(Object.keys(payloads.activity).length ? { activity: 'polar' } : {}),
     ...(Object.keys(payloads.training).length ? { training: 'polar' } : {}),
   };
+  // When the winning lane last actually had data for each domain. Other
+  // lanes use this to take over a domain whose winner has gone dark (see
+  // shouldWriteDomain in google-health-sync.js).
+  const nextDomainObservedAt = {
+    ...(existingProvenance.domainObservedAt || {}),
+    ...(Object.keys(payloads.recovery).length ? { recovery: syncAt } : {}),
+    ...(Object.keys(payloads.biometrics).length ? { biometrics: syncAt } : {}),
+    ...(Object.keys(payloads.activity).length ? { activity: syncAt } : {}),
+    ...(Object.keys(payloads.training).length ? { training: syncAt } : {}),
+  };
 
   const snapshot = {
     ...(existingSnapshot || {}),
@@ -718,6 +743,7 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
       sourcesUsed: nextSourcesUsed,
       sourceRecordIds: nextSourceRecordIds,
       domainWinners: nextDomainWinners,
+      domainObservedAt: nextDomainObservedAt,
       latestObservedPolarDateKey: dateKey,
     },
     domains: {

@@ -187,6 +187,39 @@ interface DomainAssembly<T> {
   contributorIds: string[];
 }
 
+/**
+ * Physiological fields where a stored 0 means "not recorded" — nobody sleeps
+ * 0h or breathes 0/min; adapters emit those zeros when a device wasn't worn
+ * to bed. Scrubbed before the merge so a zero from the winner can't land in
+ * the snapshot as a reading or mask a contributor's real value. Activity
+ * fields (steps, calories, minutes, distance) are NOT listed: a zero there is
+ * a genuine reading on a rest day.
+ */
+const ZERO_MEANS_MISSING_FIELDS = new Set([
+  'sleepDuration',
+  'timeInBed',
+  'timeInBedHours',
+  'sleepEfficiency',
+  'sleepScore',
+  'deepSleepDuration',
+  'remSleepDuration',
+  'lightSleepDuration',
+  'heartRateResting',
+  'heartRateVariability',
+  'respiratoryRate',
+  'heartRateAvg',
+  'vo2Max',
+]);
+
+const scrubZeroMeansMissing = (payload: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (ZERO_MEANS_MISSING_FIELDS.has(key) && typeof value === 'number' && value <= 0) continue;
+    result[key] = value;
+  }
+  return result;
+};
+
 const buildDomainBlock = <T extends Record<string, unknown>>(
   domain: HealthContextDomain,
   records: HealthContextSourceRecord[],
@@ -229,12 +262,13 @@ const buildDomainBlock = <T extends Record<string, unknown>>(
   const contributingFamilies = Array.from(byFamily.keys()).filter((f) => f !== winnerFamily);
 
   // Merge payloads: winner's fields take precedence, contributing sources fill
-  // gaps for fields the winner didn't carry.
-  const mergedPayload: Record<string, unknown> = { ...(winnerRecord.payload as Record<string, unknown>) };
+  // gaps for fields the winner didn't carry. Zero-means-missing fields are
+  // scrubbed first so a no-wear night's 0 doesn't count as carrying a value.
+  const mergedPayload: Record<string, unknown> = scrubZeroMeansMissing(winnerRecord.payload as Record<string, unknown>);
   for (const family of contributingFamilies) {
     const familyRecord = (byFamily.get(family) || [])[0];
     if (!familyRecord) continue;
-    for (const [key, value] of Object.entries(familyRecord.payload as Record<string, unknown>)) {
+    for (const [key, value] of Object.entries(scrubZeroMeansMissing(familyRecord.payload as Record<string, unknown>))) {
       if (mergedPayload[key] === undefined && value !== undefined) {
         mergedPayload[key] = value;
         notes.push(`[${domain}] field "${key}" filled from "${family}" (winner "${winnerFamily}" had no value).`);

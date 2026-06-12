@@ -4525,7 +4525,7 @@ const EmailSequencesAdmin: React.FC = () => {
                   </div>
                   <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerInstalls}</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    {macraScoreboardSummary.appsFlyerIsAggregateCsv
+                    {macraScoreboardSummary.appsFlyerIsAggregateCsv && !macraScoreboardSummary.appsFlyerInstalls
                       ? 'Aggregate performance CSV does not include install rows'
                       : `${macraScoreboardSummary.appsFlyerNonOrganicInstalls} paid · ${macraScoreboardSummary.appsFlyerOrganicInstalls} organic`}
                   </div>

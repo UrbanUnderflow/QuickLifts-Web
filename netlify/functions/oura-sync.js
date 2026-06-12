@@ -382,12 +382,19 @@ function computeSleepMidpointEpochSeconds(bedtimeStartIso, bedtimeEndIso) {
 }
 
 function mapSleepPayload(record) {
+  const sleepDuration = secondsToHours(firstNumber(record, ['total_sleep_duration']));
+  // Oura can emit a record with total_sleep_duration 0 when the ring wasn't
+  // worn to bed. That's "no sleep recorded", not a 0h reading — drop the
+  // block entirely (the HR/HRV/breath fields below are measured during the
+  // session, so they're meaningless without one).
+  if (!(sleepDuration > 0)) return {};
+
   const bedtimeStart = firstString(record, ['bedtime_start']);
   const bedtimeEnd = firstString(record, ['bedtime_end']);
   const sleepMidpoint = computeSleepMidpointEpochSeconds(bedtimeStart, bedtimeEnd);
 
   return compactObject({
-    sleepDuration: secondsToHours(firstNumber(record, ['total_sleep_duration'])),
+    sleepDuration,
     deepSleepDuration: secondsToHours(firstNumber(record, ['deep_sleep_duration'])),
     remSleepDuration: secondsToHours(firstNumber(record, ['rem_sleep_duration'])),
     sleepEfficiency: firstNumber(record, ['efficiency']),
@@ -778,6 +785,10 @@ function buildSnapshotArtifacts({
       sourcesUsed: nextSourcesUsed,
       sourceRecordIds: nextSourceRecordIds,
       domainWinners: nextDomainWinners,
+      domainObservedAt: {
+        ...(existingProvenance.domainObservedAt || {}),
+        ...(shouldWriteOuraRecovery ? { recovery: syncAt } : {}),
+      },
       requestedSnapshotDateKey: requestedDateKey || dateKey,
       latestObservedOuraDateKey: observedDateKey || dateKey,
     },

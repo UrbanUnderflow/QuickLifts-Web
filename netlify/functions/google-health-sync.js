@@ -462,6 +462,11 @@ function mapSleepPayload(sleepData, dateKey) {
     rawDeviceDisplayName: selected?.point?.dataSource?.device?.displayName || null,
     rawPlatform: selected?.point?.dataSource?.platform || null,
   });
+  // A zero-length session is what the API hands back when the device wasn't
+  // worn to bed — that's "no sleep recorded", not a 0h reading. Drop the
+  // whole sleep block so the snapshot stores nothing instead of 0h / 0%
+  // (and the zero can't overwrite another device's real sleep on merge).
+  if (!(numberValue(payload.sleepDuration) > 0)) return {};
   return compactObject({
     ...payload,
     sleepScore: sleepQualityScore(payload),
@@ -838,7 +843,19 @@ function existingWinner(existingSnapshot, domain) {
   return String(existingSnapshot?.provenance?.domainWinners?.[domain] || '').toLowerCase();
 }
 
-function shouldWriteDomain(existingSnapshot, domain, hasPayload) {
+// Intraday domains where a higher-precedence winner only holds its block
+// while its data is current. A signature device that goes dark (watch off,
+// left at home) must not pin hours-old numbers as the day's read while a
+// connected lane keeps reporting — past this window the reporting lane takes
+// the domain over. Recovery and training keep the hard block: those winners
+// legitimately write once per day (overnight / per session), so write-recency
+// says nothing about staleness there.
+const STALE_WINNER_TAKEOVER_SECONDS = {
+  activity: 4 * 3600,
+  biometrics: 4 * 3600,
+};
+
+function shouldWriteDomain(existingSnapshot, domain, hasPayload, syncAt = null) {
   if (!hasPayload) return false;
   const winner = existingWinner(existingSnapshot, domain);
   if (!winner || winner === 'none') return true;
@@ -848,7 +865,12 @@ function shouldWriteDomain(existingSnapshot, domain, hasPayload) {
     activity: ['health_kit', 'apple_health', 'apple_watch', 'polar', 'garmin', 'whoop'],
     training: ['fit_with_pulse', 'health_kit', 'apple_health', 'apple_watch', 'polar', 'garmin', 'whoop'],
   };
-  return !(blocked[domain] || []).some((source) => winner.includes(source));
+  if (!(blocked[domain] || []).some((source) => winner.includes(source))) return true;
+  const takeoverSeconds = STALE_WINNER_TAKEOVER_SECONDS[domain];
+  if (!takeoverSeconds || !Number.isFinite(syncAt)) return false;
+  const observedAt = numberValue(existingSnapshot?.provenance?.domainObservedAt?.[domain]);
+  if (observedAt === null) return false;
+  return syncAt - observedAt > takeoverSeconds;
 }
 
 function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatusDoc, sourceRecordDocs, payloads, existingSnapshot }) {
@@ -863,10 +885,10 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
   const existingSourcesUsed = Array.isArray(existingProvenance.sourcesUsed) ? existingProvenance.sourcesUsed : [];
   const nextSourcesUsed = Array.from(new Set([...existingSourcesUsed, 'fitbit']));
   const domainWrite = {
-    recovery: shouldWriteDomain(existingSnapshot, 'recovery', Object.keys(payloads.recovery).length > 0),
-    biometrics: shouldWriteDomain(existingSnapshot, 'biometrics', Object.keys(payloads.biometrics).length > 0),
-    activity: shouldWriteDomain(existingSnapshot, 'activity', Object.keys(payloads.activity).length > 0),
-    training: shouldWriteDomain(existingSnapshot, 'training', Object.keys(payloads.training).length > 0),
+    recovery: shouldWriteDomain(existingSnapshot, 'recovery', Object.keys(payloads.recovery).length > 0, syncAt),
+    biometrics: shouldWriteDomain(existingSnapshot, 'biometrics', Object.keys(payloads.biometrics).length > 0, syncAt),
+    activity: shouldWriteDomain(existingSnapshot, 'activity', Object.keys(payloads.activity).length > 0, syncAt),
+    training: shouldWriteDomain(existingSnapshot, 'training', Object.keys(payloads.training).length > 0, syncAt),
   };
   const nextDomainWinners = {
     ...(existingProvenance.domainWinners || {}),
@@ -874,6 +896,15 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
     ...(domainWrite.biometrics ? { biometrics: 'fitbit' } : {}),
     ...(domainWrite.activity ? { activity: 'fitbit' } : {}),
     ...(domainWrite.training ? { training: 'fitbit' } : {}),
+  };
+  // When the winning lane last actually had data per domain — read by
+  // shouldWriteDomain's staleness takeover (here and in the other lanes).
+  const nextDomainObservedAt = {
+    ...(existingProvenance.domainObservedAt || {}),
+    ...(domainWrite.recovery ? { recovery: syncAt } : {}),
+    ...(domainWrite.biometrics ? { biometrics: syncAt } : {}),
+    ...(domainWrite.activity ? { activity: syncAt } : {}),
+    ...(domainWrite.training ? { training: syncAt } : {}),
   };
 
   const snapshot = {
@@ -911,6 +942,7 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
       sourcesUsed: nextSourcesUsed,
       sourceRecordIds: nextSourceRecordIds,
       domainWinners: nextDomainWinners,
+      domainObservedAt: nextDomainObservedAt,
       latestObservedFitbitDateKey: dateKey,
     },
     domains: {

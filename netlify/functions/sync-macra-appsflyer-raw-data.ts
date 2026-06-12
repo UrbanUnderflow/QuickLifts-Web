@@ -472,6 +472,25 @@ const isAggregatedPerformanceRow = (row: NormalizedRow): boolean =>
 const isAggregatedPerformanceReport = (rows: NormalizedRow[]): boolean =>
   rows.some(isAggregatedPerformanceRow);
 
+const APPSFLYER_DAILY_EVENT_COUNTER_SUFFIX = '_event_counter';
+const APPSFLYER_DAILY_EVENT_REVENUE_SUFFIX = '_sales_in_usd';
+
+const dailyAggregateEventCounterEntries = (row: NormalizedRow): Array<{ eventName: string; actions: number; revenue: number }> =>
+  Object.entries(row).reduce<Array<{ eventName: string; actions: number; revenue: number }>>((out, [key, value]) => {
+    if (!key.endsWith(APPSFLYER_DAILY_EVENT_COUNTER_SUFFIX)) return out;
+
+    const eventName = key.slice(0, -APPSFLYER_DAILY_EVENT_COUNTER_SUFFIX.length);
+    const actions = Math.max(0, Math.round(parseReportNumber(value)));
+    if (!eventName || !actions) return out;
+
+    out.push({
+      eventName,
+      actions,
+      revenue: parseReportNumber(row[`${eventName}${APPSFLYER_DAILY_EVENT_REVENUE_SUFFIX}`]),
+    });
+    return out;
+  }, []);
+
 const mergeCountMaps = (base: Record<string, number> = {}, delta: Record<string, number> = {}) => {
   const out = { ...base };
   Object.entries(delta).forEach(([key, value]) => {
@@ -538,11 +557,13 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
   const campaign = getValue(row, ['campaign', 'campaign_name', 'c']) || 'Unknown campaign';
   const aggregateEventName = getValue(row, ['in_apps_events']);
   const revenue = parseReportNumber(getValue(row, ['revenue', 'event_revenue', 'af_revenue']));
-  const addRevenue = (eventName: string) => {
-    if (!revenue) return;
-    summary.revenue.total += revenue;
-    bump(summary.revenue.byEventName, eventName || 'unknown_event', revenue);
-    bump(summary.revenue.byMediaSource, mediaSource, revenue);
+  const dailyEventCounters = dailyAggregateEventCounterEntries(row);
+  const addRevenue = (eventName: string, amount = revenue) => {
+    const numericAmount = Number(amount || 0) || 0;
+    if (!numericAmount) return;
+    summary.revenue.total += numericAmount;
+    bump(summary.revenue.byEventName, eventName || 'unknown_event', numericAmount);
+    bump(summary.revenue.byMediaSource, mediaSource, numericAmount);
   };
 
   if (report.type === 'event' && isAggregatedPerformanceRow(row)) {
@@ -567,6 +588,12 @@ const addRowToSummary = (summary: SummaryShape, row: NormalizedRow, report: Repo
     else summary.installs.nonOrganic += 1;
     bump(summary.installs.byMediaSource, mediaSource);
     bump(summary.installs.byCampaign, campaign);
+    dailyEventCounters.forEach(({ eventName, actions, revenue: eventRevenue }) => {
+      summary.events.total += actions;
+      bump(summary.events.byName, eventName, actions);
+      bump(summary.events.byMediaSource, mediaSource, actions);
+      addRevenue(eventName, eventRevenue);
+    });
   } else {
     const eventName = getValue(row, ['event_name']) || 'unknown_event';
     summary.events.total += 1;
