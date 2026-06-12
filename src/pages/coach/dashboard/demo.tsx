@@ -20,7 +20,7 @@ const CoachDashboardDemo: React.FC = () => {
       <Head>
         <title>Coach Dashboard (Demo) | PulseCheck</title>
       </Head>
-      <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs px-4 py-1.5 text-center">
+      <div className="bg-[#1c1407] border-b border-amber-500/30 text-amber-300 text-xs px-4 py-1.5 text-center">
         Demo mode — mock data for walkthroughs. No real athletes or Firebase writes.
       </div>
       {mockReady && (

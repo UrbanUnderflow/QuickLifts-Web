@@ -173,6 +173,9 @@ const NoraDashboardTraining: React.FC<{ onComplete?: () => void }> = ({ onComple
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cueIndexRef = useRef(0);
+  // Set when the browser's autoplay policy rejects play() (no user gesture yet);
+  // the next gesture anywhere on the page retries the current step's clip.
+  const pendingAutoplayRef = useRef(false);
   const highlightedElRef = useRef<Element | null>(null);
   const hoveredElRef = useRef<Element | null>(null);
 
@@ -322,9 +325,18 @@ const NoraDashboardTraining: React.FC<{ onComplete?: () => void }> = ({ onComple
         audio.currentTime = 0;
         const played = audio.play();
         if (played && typeof played.then === 'function') {
-          played.then(() => setSpeaking(true)).catch(() => setSpeaking(false));
+          played
+            .then(() => {
+              pendingAutoplayRef.current = false;
+              setSpeaking(true);
+            })
+            .catch(() => {
+              pendingAutoplayRef.current = true;
+              setSpeaking(false);
+            });
         }
       } catch {
+        pendingAutoplayRef.current = true;
         setSpeaking(false);
       }
     },
@@ -424,6 +436,24 @@ const NoraDashboardTraining: React.FC<{ onComplete?: () => void }> = ({ onComple
     playStep(step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIndex, dismissed]);
+
+  // Autoplay rescue: if the browser blocked the initial play() (no user gesture
+  // yet), start the current step's narration on the first gesture anywhere —
+  // the coach shouldn't have to find the Replay button to hear Nora.
+  useEffect(() => {
+    if (dismissed || typeof window === 'undefined') return;
+    const resume = () => {
+      if (!pendingAutoplayRef.current) return;
+      pendingAutoplayRef.current = false;
+      playStep(step);
+    };
+    window.addEventListener('pointerdown', resume, true);
+    window.addEventListener('keydown', resume, true);
+    return () => {
+      window.removeEventListener('pointerdown', resume, true);
+      window.removeEventListener('keydown', resume, true);
+    };
+  }, [dismissed, playStep, step]);
 
   // Clean up any lingering highlight + audio graph on unmount.
   useEffect(

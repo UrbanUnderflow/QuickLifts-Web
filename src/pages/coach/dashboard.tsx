@@ -62,7 +62,7 @@ import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
 import { setUser } from '../../redux/userSlice';
 import { showToast } from '../../redux/toastSlice';
-import { userService } from '../../api/firebase/user';
+import { userService, User as UserModel } from '../../api/firebase/user';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
@@ -1064,7 +1064,7 @@ const CoachDashboard: React.FC = () => {
         // Training mode: walk the coach through the dashboard on demo data, with
         // their real name. Finishing swaps to real data (see finishTraining).
         <>
-          <div className="bg-purple-500/10 border-b border-purple-500/20 text-purple-200 text-xs px-4 py-1.5 text-center">
+          <div className="bg-[#150f2b] border-b border-purple-500/30 text-purple-200 text-xs px-4 py-1.5 text-center">
             Training walkthrough — sample data. Finish to load your team.
           </div>
           {mockReady && (
@@ -1717,6 +1717,7 @@ type StaffRow = {
   status: 'active' | 'invited';
   permissions: StaffPermission[];
   avatarUrl?: string;
+  title?: string; // explicit title (invited rows: the invite's invitedTitle)
   joinedAt?: string; // ISO date the staffer was onboarded (active members)
 };
 
@@ -1781,9 +1782,13 @@ const capabilitiesFromLegacyRole = (role?: string): StaffPermission[] => {
   }
 };
 
-const staffRowFromMembership = (m: PulseCheckTeamMembership): StaffRow => {
+// Active rows prefer the member's own user doc (real name + profile photo);
+// the membership doc only carries email + title, so without the lookup the
+// card falls back to the title ("Head Coach") and an initials placeholder.
+const staffRowFromMembership = (m: PulseCheckTeamMembership, user?: UserModel | null): StaffRow => {
   const caps = m.staffCapabilities?.length ? m.staffCapabilities : capabilitiesFromLegacyRole(m.role);
-  const name = (m.title || '').trim() || (m.email || '').split('@')[0] || 'Staff member';
+  const displayName = (user?.displayName || user?.username || '').trim();
+  const name = displayName || (m.title || '').trim() || (m.email || '').split('@')[0] || 'Staff member';
   return {
     id: m.id,
     name,
@@ -1791,6 +1796,8 @@ const staffRowFromMembership = (m: PulseCheckTeamMembership): StaffRow => {
     email: m.email || '',
     status: 'active',
     permissions: caps,
+    avatarUrl: user?.profileImage?.profileImageURL || undefined,
+    title: (m.title || '').trim(),
     joinedAt: timestampToIso(m.grantedAt) || timestampToIso(m.createdAt),
   };
 };
@@ -1801,10 +1808,12 @@ const staffRowFromInvite = (link: PulseCheckInviteLink): StaffRow => {
   return {
     id: link.id,
     name,
-    role: deriveStaffRole(caps),
+    role: (link.invitedTitle || '').trim() || deriveStaffRole(caps),
     email: link.targetEmail || '',
     status: 'invited',
     permissions: caps,
+    avatarUrl: (link.prefilledProfileImageUrl || '').trim() || undefined,
+    title: (link.invitedTitle || '').trim(),
   };
 };
 
@@ -1835,6 +1844,14 @@ const StaffSection: React.FC<{
   const [editing, setEditing] = useState<StaffRow | null>(null);
   const [editPerms, setEditPerms] = useState<StaffPermission[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  // Pending-invite profile editing (admin-only). Lets the coach preload name,
+  // title, and photo on the invite before the member accepts.
+  const [editingInvite, setEditingInvite] = useState<StaffRow | null>(null);
+  const [invName, setInvName] = useState('');
+  const [invTitle, setInvTitle] = useState('');
+  const [invPhotoFile, setInvPhotoFile] = useState<File | null>(null);
+  const [invPhotoPreview, setInvPhotoPreview] = useState('');
+  const [savingInvite, setSavingInvite] = useState(false);
   // Resolved active-team context for the signed-in coach (live mode only).
   const [team, setTeam] = useState<{
     organizationId: string;
@@ -1874,7 +1891,18 @@ const StaffSection: React.FC<{
         pulseCheckProvisioningService.listTeamInviteLinks(teamId).catch(() => [] as PulseCheckInviteLink[]),
       ]);
 
-      const activeRows = teamMembers.filter((m) => m.role !== 'athlete').map(staffRowFromMembership);
+      const activeMemberships = teamMembers.filter((m) => m.role !== 'athlete');
+      // Resolve member identities (display name + photo) from their user docs;
+      // on failure fall back to membership-only display.
+      let usersById = new Map<string, UserModel>();
+      try {
+        const memberIds = [...new Set(activeMemberships.map((m) => m.userId).filter(Boolean))];
+        const users = await userService.getUsersByIds(memberIds);
+        usersById = new Map(users.map((u) => [u.id, u]));
+      } catch (err) {
+        console.error('[CoachDashboard] failed to resolve staff user profiles', err);
+      }
+      const activeRows = activeMemberships.map((m) => staffRowFromMembership(m, usersById.get(m.userId) || null));
       const memberEmails = new Set(activeRows.map((r) => r.email.toLowerCase()).filter(Boolean));
       const seenInviteEmails = new Set<string>();
       const pendingRows = inviteLinks
@@ -1928,6 +1956,62 @@ const StaffSection: React.FC<{
   const openEdit = (row: StaffRow) => {
     setEditing(row);
     setEditPerms(row.permissions.length ? [...row.permissions] : ['coaching']);
+  };
+
+  // Open the pending-invite profile editor (admin-only, invited members).
+  const openEditInvite = (row: StaffRow) => {
+    setEditingInvite(row);
+    setInvName(row.name);
+    setInvTitle(row.title || '');
+    setInvPhotoFile(null);
+    setInvPhotoPreview(row.avatarUrl || '');
+  };
+
+  const saveInviteEdit = async () => {
+    if (!editingInvite) return;
+    const n = invName.trim();
+    if (!n) {
+      setToast("Add the staff member's name first.");
+      return;
+    }
+
+    // Demo: update local state only.
+    if (isDemo) {
+      setStaff((prev) =>
+        prev.map((s) =>
+          s.id === editingInvite.id
+            ? { ...s, name: n, title: invTitle.trim(), role: invTitle.trim() || s.role, avatarUrl: invPhotoPreview || undefined }
+            : s
+        )
+      );
+      setToast(`Updated ${n}'s invite.`);
+      setEditingInvite(null);
+      return;
+    }
+
+    setSavingInvite(true);
+    try {
+      let prefilledProfileImageUrl: string | undefined;
+      if (invPhotoFile) {
+        const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
+        const upload = await firebaseStorageService.uploadImage(invPhotoFile, UploadImageType.Profile, { updateUserProfile: false });
+        prefilledProfileImageUrl = upload.downloadURL;
+      }
+      await pulseCheckProvisioningService.updateInviteLinkProfile({
+        inviteId: editingInvite.id,
+        recipientName: n,
+        invitedTitle: invTitle.trim(),
+        ...(prefilledProfileImageUrl ? { prefilledProfileImageUrl } : {}),
+      });
+      setToast(`Updated ${n}'s invite — it'll be pre-filled when they accept.`);
+      setEditingInvite(null);
+      await loadStaff();
+    } catch (err) {
+      console.error('[CoachDashboard] failed to update staff invite', err);
+      setToast('Could not update the invite. Try again.');
+    } finally {
+      setSavingInvite(false);
+    }
   };
   const toggleEditPerm = (k: StaffPermission) =>
     setEditPerms((prev) => (prev.includes(k) ? prev.filter((p) => p !== k) : [...prev, k]));
@@ -2401,6 +2485,95 @@ const StaffSection: React.FC<{
             </motion.div>
           </motion.div>
         )}
+
+        {/* Pending-invite profile editor — preload photo/name/title before acceptance */}
+        {editingInvite && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingInvite(null)} />
+            <motion.div
+              data-edit-invite-modal
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <div>
+                  <div className="text-base font-semibold text-white">Edit invite profile</div>
+                  <div className="text-xs text-zinc-500">{editingInvite.email || editingInvite.name}</div>
+                </div>
+                <button
+                  onClick={() => setEditingInvite(null)}
+                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <label className="relative flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-700/50 bg-zinc-800/40 hover:border-[#E0FE10]/40">
+                    {invPhotoPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={invPhotoPreview} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-zinc-500" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setInvPhotoFile(f);
+                        if (f) setInvPhotoPreview(URL.createObjectURL(f));
+                      }}
+                    />
+                  </label>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input
+                      value={invName}
+                      onChange={(e) => setInvName(e.target.value)}
+                      placeholder="Name (required)"
+                      className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                    <input
+                      value={invTitle}
+                      onChange={(e) => setInvTitle(e.target.value)}
+                      placeholder="Title (optional) — e.g. Associate Head Coach"
+                      className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  These pre-fill their profile when they accept the invite — they can change them later.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setEditingInvite(null)}
+                    className="px-4 py-2 rounded-lg border border-zinc-700/50 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveInviteEdit}
+                    disabled={!invName.trim() || savingInvite}
+                    className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {savingInvite ? 'Saving…' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {staff.length === 0 ? (
@@ -2491,6 +2664,14 @@ const StaffSection: React.FC<{
                       className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#E0FE10]/80 transition-colors hover:text-[#E0FE10]"
                     >
                       <Pencil className="h-3 w-3" /> Edit permissions
+                    </button>
+                  )}
+                  {canInvite && s.status === 'invited' && (
+                    <button
+                      onClick={() => openEditInvite(s)}
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-[#E0FE10]/80 transition-colors hover:text-[#E0FE10]"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit profile
                     </button>
                   )}
                 </div>

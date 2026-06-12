@@ -3563,6 +3563,25 @@ export const pulseCheckProvisioningService = {
     });
   },
 
+  // Edit the prefilled profile fields on a pending invite (name, title, photo)
+  // so the member's card and post-redeem onboarding are ready before they accept.
+  async updateInviteLinkProfile(input: {
+    inviteId: string;
+    recipientName?: string;
+    invitedTitle?: string;
+    prefilledProfileImageUrl?: string;
+  }): Promise<void> {
+    const inviteRef = doc(db, INVITE_LINKS_COLLECTION, normalizeString(input.inviteId));
+    await updateDoc(inviteRef, {
+      ...(input.recipientName !== undefined ? { recipientName: normalizeString(input.recipientName) } : {}),
+      ...(input.invitedTitle !== undefined ? { invitedTitle: normalizeString(input.invitedTitle) } : {}),
+      ...(input.prefilledProfileImageUrl !== undefined
+        ? { prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl) }
+        : {}),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   async deleteInviteLink(inviteId: string): Promise<void> {
     const inviteRef = doc(db, INVITE_LINKS_COLLECTION, normalizeString(inviteId));
     await deleteDoc(inviteRef);

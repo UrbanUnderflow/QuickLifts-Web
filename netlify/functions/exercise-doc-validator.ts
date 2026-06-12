@@ -41,7 +41,7 @@ const decisiveRegion = (name: string): Region | null => {
     }
   }
   if (any('plank', 'planks', 'crunch', 'crunches', 'situp', 'situps') || has('sit up')) return 'core';
-  if (has('leg curl') || has('hamstring curl')) return 'hamstrings';
+  if (has('leg curl') || has('leg curls') || has('hamstring curl') || has('hamstring curls')) return 'hamstrings';
   if (any('deadlift', 'deadlifts', 'rdl')) return 'hamstrings';
   if (has('hip thrust') || any('glute', 'glutes')) return 'glutes';
   if (any('calf', 'calves')) return 'calves';
