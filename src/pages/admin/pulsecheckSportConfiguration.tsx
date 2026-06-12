@@ -35,6 +35,7 @@ import {
   type PulseCheckSportReportPolicy,
   type PulseCheckSportLoadModel,
   type PulseCheckSportsIntelligenceDimension,
+  type PulseCheckSportTrainingNuance,
 } from '../../api/firebase/pulsecheckSportConfig';
 
 type EditableAttribute = PulseCheckSportAttributeDefinition & {
@@ -52,7 +53,16 @@ type EditableSport = Omit<PulseCheckSportConfigurationEntry, 'attributes' | 'met
   riskFlagsInput: string;
   restrictedAdviceInput: string;
   recommendedLanguageInput: string;
+  // Training Nuance (sport taste consumed by workout generation via the bridge)
+  muscleEmphasesInput: string;
+  preferredPatternsInput: string;
+  deprioritizedPatternsInput: string;
+  schemeBiasInput: string;
+  conditioningPostureInput: string;
+  coachNotesInput: string;
 };
+
+const SCHEME_BIAS_OPTIONS = ['hypertrophy', 'strength', 'power', 'endurance', 'mixed'];
 
 const ATTRIBUTE_TYPES: PulseCheckSportAttributeType[] = ['text', 'number', 'date', 'boolean', 'singleSelect', 'multiSelect'];
 const ATTRIBUTE_SCOPES: PulseCheckSportAttributeScope[] = ['athlete', 'team', 'season', 'competition', 'nutrition', 'recovery'];
@@ -152,6 +162,12 @@ const buildEditableSports = (sports: PulseCheckSportConfigurationEntry[]): Edita
     riskFlagsInput: (sport.prompting?.riskFlags || []).join('\n'),
     restrictedAdviceInput: (sport.prompting?.restrictedAdvice || []).join('\n'),
     recommendedLanguageInput: (sport.prompting?.recommendedLanguage || []).join('\n'),
+    muscleEmphasesInput: (sport.trainingNuance?.muscleEmphases || []).join(', '),
+    preferredPatternsInput: (sport.trainingNuance?.preferredPatterns || []).join('\n'),
+    deprioritizedPatternsInput: (sport.trainingNuance?.deprioritizedPatterns || []).join('\n'),
+    schemeBiasInput: sport.trainingNuance?.schemeBias || '',
+    conditioningPostureInput: sport.trainingNuance?.conditioningPosture || '',
+    coachNotesInput: sport.trainingNuance?.coachNotes || '',
   }));
 
 const buildNewSport = (): EditableSport => ({
@@ -169,6 +185,12 @@ const buildNewSport = (): EditableSport => ({
   riskFlagsInput: '',
   restrictedAdviceInput: '',
   recommendedLanguageInput: '',
+  muscleEmphasesInput: '',
+  preferredPatternsInput: '',
+  deprioritizedPatternsInput: '',
+  schemeBiasInput: '',
+  conditioningPostureInput: '',
+  coachNotesInput: '',
 });
 
 const buildNewAttribute = (sortOrder: number): EditableAttribute => ({
@@ -225,6 +247,30 @@ const normalizeListInput = (value: string) => {
       seen.add(key);
       return true;
     });
+};
+
+// Build the saved trainingNuance from the editable inputs. Division overrides
+// are carried through untouched (seeded in code; rendered read-only below).
+const buildTrainingNuance = (sport: EditableSport): PulseCheckSportTrainingNuance | undefined => {
+  const muscleEmphases = normalizeListInput(sport.muscleEmphasesInput);
+  const preferredPatterns = normalizeListInput(sport.preferredPatternsInput);
+  const deprioritizedPatterns = normalizeListInput(sport.deprioritizedPatternsInput);
+  const schemeBias = sport.schemeBiasInput.trim();
+  const conditioningPosture = sport.conditioningPostureInput.trim();
+  const coachNotes = sport.coachNotesInput.trim();
+  const divisionOverrides = sport.trainingNuance?.divisionOverrides;
+  const isEmpty = !muscleEmphases.length && !preferredPatterns.length && !deprioritizedPatterns.length
+    && !schemeBias && !conditioningPosture && !coachNotes && !divisionOverrides;
+  if (isEmpty) return undefined;
+  return {
+    muscleEmphases,
+    preferredPatterns,
+    deprioritizedPatterns,
+    schemeBias: schemeBias || 'mixed',
+    ...(conditioningPosture ? { conditioningPosture } : {}),
+    coachNotes,
+    ...(divisionOverrides ? { divisionOverrides } : {}),
+  };
 };
 
 const slugifySportId = (value: string) =>
@@ -960,7 +1006,13 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
       | 'macraNutritionContextInput'
       | 'riskFlagsInput'
       | 'restrictedAdviceInput'
-      | 'recommendedLanguageInput',
+      | 'recommendedLanguageInput'
+      | 'muscleEmphasesInput'
+      | 'preferredPatternsInput'
+      | 'deprioritizedPatternsInput'
+      | 'schemeBiasInput'
+      | 'conditioningPostureInput'
+      | 'coachNotesInput',
     value: string
   ) => {
     setSports((current) =>
@@ -1176,6 +1228,10 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 	          recommendedLanguage: normalizeListInput(sport.recommendedLanguageInput),
 	        },
 	        reportPolicy: sport.reportPolicy,
+	        ...(() => {
+	          const nuance = buildTrainingNuance(sport);
+	          return nuance ? { trainingNuance: nuance } : {};
+	        })(),
 	      };
 	    });
 	  };
@@ -1475,6 +1531,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                       const positionCount = normalizePositionsInput(sport.positionsInput).length;
                       const hasReportPolicy = Boolean(sport.reportPolicy);
                       const hasLoadModel = Boolean(sport.reportPolicy?.loadModel);
+                      const hasTrainingNuance = Boolean(sport.muscleEmphasesInput.trim() || sport.coachNotesInput.trim());
 
                       return (
                         <div key={sport.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
@@ -1521,6 +1578,19 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                                   >
                                     <Lock className="h-3 w-3" />
                                     {hasLoadModel ? 'Load' : 'No load'}
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${
+                                      hasTrainingNuance
+                                        ? 'border-[#d7ff00]/40 bg-[#d7ff00]/10 text-[#d7ff00]'
+                                        : 'border-zinc-800 bg-[#111417] text-zinc-500'
+                                    }`}
+                                    title={hasTrainingNuance
+                                      ? 'Training nuance documented — steers workout generation via the SI bridge'
+                                      : 'No training nuance yet for this sport'}
+                                  >
+                                    <Sparkles className="h-3 w-3" />
+                                    {hasTrainingNuance ? 'Nuance' : 'No nuance'}
                                   </span>
                                 </div>
                               </div>
@@ -1897,6 +1967,97 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 	                            ))}
 	                          </div>
 	                        </div>
+
+                            <div className="mt-5 rounded-2xl border border-[#d7ff00]/25 bg-black/25 p-4">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-[#d7ff00]" />
+                                <h4 className="text-sm font-semibold text-white">Training Nuance</h4>
+                              </div>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                The coaching taste layer for this sport — what its training prioritizes and avoids. Consumed by FWP workout generation, Nora prompting, and SI reads through the sports-intelligence bridge.
+                              </p>
+                              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                                <label className="space-y-2">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Muscle Emphases (priority order)</span>
+                                  <input
+                                    value={sport.muscleEmphasesInput}
+                                    onChange={(event) => handleSportFieldChange(sport.id, 'muscleEmphasesInput', event.target.value)}
+                                    className="w-full rounded-xl border border-zinc-700 bg-[#111417] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#d7ff00]"
+                                    placeholder="shoulders, back, chest, arms, core"
+                                  />
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Scheme Bias</span>
+                                  <select
+                                    value={sport.schemeBiasInput}
+                                    onChange={(event) => handleSportFieldChange(sport.id, 'schemeBiasInput', event.target.value)}
+                                    className="w-full rounded-xl border border-zinc-700 bg-[#111417] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#d7ff00]"
+                                  >
+                                    <option value="">Not set</option>
+                                    {SCHEME_BIAS_OPTIONS.map((bias) => (
+                                      <option key={bias} value={bias}>{bias}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Preferred Patterns (one per line)</span>
+                                  <textarea
+                                    rows={4}
+                                    value={sport.preferredPatternsInput}
+                                    onChange={(event) => handleSportFieldChange(sport.id, 'preferredPatternsInput', event.target.value)}
+                                    className="w-full rounded-xl border border-zinc-700 bg-[#111417] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#d7ff00]"
+                                    placeholder={'incline press\nlateral raise\nlat pulldown'}
+                                  />
+                                </label>
+                                <label className="space-y-2">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Deprioritized Patterns (one per line)</span>
+                                  <textarea
+                                    rows={4}
+                                    value={sport.deprioritizedPatternsInput}
+                                    onChange={(event) => handleSportFieldChange(sport.id, 'deprioritizedPatternsInput', event.target.value)}
+                                    className="w-full rounded-xl border border-zinc-700 bg-[#111417] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#d7ff00]"
+                                    placeholder="decline press"
+                                  />
+                                </label>
+                              </div>
+                              <label className="mt-3 block space-y-2">
+                                <span className="text-xs uppercase tracking-wide text-zinc-500">Conditioning Posture</span>
+                                <textarea
+                                  rows={2}
+                                  value={sport.conditioningPostureInput}
+                                  onChange={(event) => handleSportFieldChange(sport.id, 'conditioningPostureInput', event.target.value)}
+                                  className="w-full rounded-xl border border-zinc-700 bg-[#111417] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#d7ff00]"
+                                  placeholder="How steady-state cardio fits this sport's training"
+                                />
+                              </label>
+                              <label className="mt-3 block space-y-2">
+                                <span className="text-xs uppercase tracking-wide text-zinc-500">Coach Notes (the taste — also included in LLM prompts)</span>
+                                <textarea
+                                  rows={3}
+                                  value={sport.coachNotesInput}
+                                  onChange={(event) => handleSportFieldChange(sport.id, 'coachNotesInput', event.target.value)}
+                                  className="w-full rounded-xl border border-zinc-700 bg-[#111417] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#d7ff00]"
+                                  placeholder="What a great coach knows about training for this sport"
+                                />
+                              </label>
+                              {sport.trainingNuance?.divisionOverrides ? (
+                                <div className="mt-4">
+                                  <div className="text-xs uppercase tracking-wide text-zinc-500">Division Overrides · seeded in code</div>
+                                  <div className="mt-2 space-y-2">
+                                    {Object.entries(sport.trainingNuance.divisionOverrides).map(([division, override]) => (
+                                      <div key={division} className="rounded-xl border border-zinc-800 bg-[#111417] px-3 py-2 text-xs">
+                                        <div className="font-semibold text-zinc-200">{division}</div>
+                                        {override.muscleEmphases ? (
+                                          <div className="mt-1 text-zinc-400">Emphases: {override.muscleEmphases.join(' · ')}</div>
+                                        ) : null}
+                                        {override.coachNotes ? <div className="mt-1 text-zinc-500">{override.coachNotes}</div> : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+
 
                             <div className="mt-5 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
                               <Eye className="h-3.5 w-3.5" />

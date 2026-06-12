@@ -12,6 +12,31 @@ export interface PulseCheckSportConfigurationEntry {
   metrics?: PulseCheckSportMetricDefinition[];
   prompting?: PulseCheckSportPromptingConfiguration;
   reportPolicy?: PulseCheckSportReportPolicy;
+  trainingNuance?: PulseCheckSportTrainingNuance;
+}
+
+// The codified training "taste" for a sport — the growing knowledge layer that
+// workout generation (FWP), Nora prompting, and SI reads consume via the
+// sports-intelligence-bridge. Content-editable in the admin UI: unlike report
+// policy / load model this is coaching knowledge, not safety-gated policy.
+export interface PulseCheckSportTrainingNuance {
+  // Muscle regions this sport prioritizes, most important first. Shared coarse
+  // vocabulary: chest | back | shoulders | arms | traps | core | quads |
+  // hamstrings | glutes | calves
+  muscleEmphases: string[];
+  // Movement-pattern keywords to PREFER when choosing between equivalent moves
+  // (matched against move names, e.g. "incline press", "lateral raise").
+  preferredPatterns: string[];
+  // Patterns to deprioritize when alternatives exist (e.g. "decline press").
+  deprioritizedPatterns: string[];
+  // Overall scheme bias: hypertrophy | strength | power | endurance | mixed
+  schemeBias: string;
+  // How steady-state cardio fits this sport's training.
+  conditioningPosture?: string;
+  // Free-text coach taste notes — readable by humans AND included in LLM prompts.
+  coachNotes: string;
+  // Division/position-specific overrides (key = position label, e.g. "Men's Physique").
+  divisionOverrides?: Record<string, Partial<Omit<PulseCheckSportTrainingNuance, 'divisionOverrides'>>>;
 }
 
 export type PulseCheckSportAttributeType =
@@ -1434,6 +1459,40 @@ const gymnasticsReportPolicy: PulseCheckSportReportPolicy = {
   },
 };
 
+// Training nuance: the coaching taste layer. Division overrides keyed by the
+// position labels above (apostrophe-normalized by the bridge on lookup).
+const bodybuildingPhysiqueTrainingNuance: PulseCheckSportTrainingNuance = {
+  muscleEmphases: ['shoulders', 'back', 'chest', 'arms', 'core'],
+  preferredPatterns: ['incline press', 'overhead press', 'lateral raise', 'lat pulldown',
+    'pull up', 'row', 'rear delt', 'cable fly'],
+  deprioritizedPatterns: ['decline press'],
+  schemeBias: 'hypertrophy',
+  conditioningPosture: 'Steady-state cardio (steps, incline walks) is a conditioning tool programmed separately — never inside a hypertrophy lifting session.',
+  coachNotes: 'Physique divisions are judged on proportion and condition: capped delts, back width (V-taper), full chest, tight waist. Prioritize medial/rear delt volume and lat width over raw load. Incline pressing serves upper-chest aesthetics better than decline.',
+  divisionOverrides: {
+    'Men’s Physique': {
+      muscleEmphases: ['shoulders', 'back', 'chest', 'arms', 'core'],
+      coachNotes: 'Judged in board shorts — legs are not scored: capped delts, V-taper back width, tight waist, full chest and arms lead. Medial-delt volume (lateral raises, overhead press) and lat width (pulldowns, pull-ups) anchor upper days. Lower work supports conditioning, not judging criteria.',
+    },
+    'Classic Physique': {
+      muscleEmphases: ['shoulders', 'back', 'quads', 'chest', 'core'],
+      coachNotes: 'Classic lines: full quads and a dramatic V-taper both score. Squat patterns and overhead pressing anchor the split.',
+    },
+    'Bikini': {
+      muscleEmphases: ['glutes', 'hamstrings', 'shoulders', 'back', 'core'],
+      coachNotes: 'Glute and hamstring development lead; shoulder roundness balances the line. Hinge and thrust patterns dominate lower days.',
+    },
+    'Figure': {
+      muscleEmphases: ['back', 'shoulders', 'glutes', 'core', 'hamstrings'],
+      coachNotes: 'Back width and shoulder caps frame the X-taper; glute-ham tie-in is scored.',
+    },
+    'Wellness': {
+      muscleEmphases: ['glutes', 'quads', 'hamstrings', 'back', 'shoulders'],
+      coachNotes: 'Lower-body dominant division — glute/quad fullness leads with balanced upper-body polish.',
+    },
+  },
+};
+
 const bodybuildingPhysiqueReportPolicy: PulseCheckSportReportPolicy = {
   contextModifiers: ['prepPhase', 'weeksOut', 'peakWeek', 'foodVarianceTolerance', 'travelImpact'],
   kpiRefs: ['weeksOut', 'stageWeightTarget', 'cardioMinutesPerWeek', 'fastedWeightAverage', 'dailySteps', 'posingMinutes', 'waistMeasurement'],
@@ -1605,6 +1664,14 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       recommendedLanguage: basketballReportPolicy.languagePosture.recommendedLanguage,
     },
     reportPolicy: basketballReportPolicy,
+    trainingNuance: {
+      muscleEmphases: ['quads', 'glutes', 'calves', 'core', 'hamstrings'],
+      preferredPatterns: ['squat', 'lunge', 'hip thrust', 'jump', 'calf raise', 'single leg'],
+      deprioritizedPatterns: [],
+      schemeBias: 'power',
+      conditioningPosture: 'Repeat-sprint and change-of-direction conditioning over steady-state; landing mechanics matter as much as output.',
+      coachNotes: 'Explosive lower-body power, landing resilience, and core anti-rotation lead. Single-leg strength protects knees/ankles across a long season.',
+    },
   }),
   sportDefaults({
     id: 'soccer',
@@ -1641,6 +1708,14 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       recommendedLanguage: ['Use match-phase language: build-up, transition, final third, defending.', 'Frame mindset around the next action and communication.', 'Connect biomechanics to repeatable field behaviors.'],
     },
     reportPolicy: soccerReportPolicy,
+    trainingNuance: {
+      muscleEmphases: ['quads', 'hamstrings', 'glutes', 'core', 'calves'],
+      preferredPatterns: ['squat', 'lunge', 'nordic', 'hamstring curl', 'hip thrust', 'single leg'],
+      deprioritizedPatterns: [],
+      schemeBias: 'power',
+      conditioningPosture: 'High-speed running load lives on the pitch — gym conditioning supplements, never duplicates, field sessions.',
+      coachNotes: 'Hamstring resilience is the #1 injury lever — eccentric hamstring work weekly. Single-leg power and adductor strength protect across congested fixtures.',
+    },
   }),
   sportDefaults({
     id: 'football',
@@ -2286,6 +2361,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       recommendedLanguage: ['Use precise prep-coach language and explain when user-set targets should be questioned.'],
     },
     reportPolicy: bodybuildingPhysiqueReportPolicy,
+    trainingNuance: bodybuildingPhysiqueTrainingNuance,
   }),
   sportDefaults({
     id: 'other',
@@ -2748,6 +2824,59 @@ const cloneSports = (sports: PulseCheckSportConfigurationEntry[]) =>
     reportPolicy: normalizeReportPolicy(sport.reportPolicy),
   }));
 
+const normalizeTrainingNuance = (value: unknown): PulseCheckSportTrainingNuance | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Record<string, unknown>;
+  const list = (v: unknown) => (Array.isArray(v) ? v.map(normalizeString).filter(Boolean) : []);
+
+  const muscleEmphases = list(candidate.muscleEmphases);
+  const preferredPatterns = list(candidate.preferredPatterns);
+  const deprioritizedPatterns = list(candidate.deprioritizedPatterns);
+  const schemeBias = normalizeString(candidate.schemeBias);
+  const conditioningPosture = normalizeString(candidate.conditioningPosture);
+  const coachNotes = normalizeString(candidate.coachNotes);
+
+  type NuanceOverride = Partial<Omit<PulseCheckSportTrainingNuance, 'divisionOverrides'>>;
+  let divisionOverrides: Record<string, NuanceOverride> | undefined;
+  if (candidate.divisionOverrides && typeof candidate.divisionOverrides === 'object') {
+    const entries = Object.entries(candidate.divisionOverrides as Record<string, unknown>)
+      .reduce<Record<string, NuanceOverride>>((acc, [division, raw]) => {
+        if (!raw || typeof raw !== 'object') return acc;
+        const o = raw as Record<string, unknown>;
+        const override: NuanceOverride = {};
+        const emphases = list(o.muscleEmphases);
+        if (emphases.length) override.muscleEmphases = emphases;
+        const preferred = list(o.preferredPatterns);
+        if (preferred.length) override.preferredPatterns = preferred;
+        const deprioritized = list(o.deprioritizedPatterns);
+        if (deprioritized.length) override.deprioritizedPatterns = deprioritized;
+        const bias = normalizeString(o.schemeBias);
+        if (bias) override.schemeBias = bias;
+        const posture = normalizeString(o.conditioningPosture);
+        if (posture) override.conditioningPosture = posture;
+        const notes = normalizeString(o.coachNotes);
+        if (notes) override.coachNotes = notes;
+        if (Object.keys(override).length) acc[division] = override;
+        return acc;
+      }, {});
+    if (Object.keys(entries).length) divisionOverrides = entries;
+  }
+
+  const isEmpty = !muscleEmphases.length && !preferredPatterns.length && !deprioritizedPatterns.length
+    && !schemeBias && !conditioningPosture && !coachNotes && !divisionOverrides;
+  if (isEmpty) return undefined;
+
+  return {
+    muscleEmphases,
+    preferredPatterns,
+    deprioritizedPatterns,
+    schemeBias: schemeBias || 'mixed',
+    ...(conditioningPosture ? { conditioningPosture } : {}),
+    coachNotes,
+    ...(divisionOverrides ? { divisionOverrides } : {}),
+  };
+};
+
 const normalizeSportArray = (value: unknown): PulseCheckSportConfigurationEntry[] => {
   if (!Array.isArray(value)) {
     return getDefaultPulseCheckSports();
@@ -2783,6 +2912,10 @@ const normalizeSportArray = (value: unknown): PulseCheckSportConfigurationEntry[
       metrics: normalizeMetrics(candidate.metrics),
       prompting: normalizePrompting(candidate.prompting),
       reportPolicy: normalizeReportPolicy(candidate.reportPolicy),
+      ...(() => {
+        const nuance = normalizeTrainingNuance(candidate.trainingNuance);
+        return nuance ? { trainingNuance: nuance } : {};
+      })(),
     });
 
     return acc;

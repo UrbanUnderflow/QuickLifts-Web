@@ -188,6 +188,10 @@ const buildDiff = (currentSports: SportEntry[], defaultSports: SportEntry[]): Sp
       changes.push('prompting: changed (diff only; preserved unless --include-prompting is passed)');
     }
 
+    if (current.trainingNuance === undefined && defaultSport.trainingNuance !== undefined) {
+      changes.push('trainingNuance: added (seeded only when missing — admin UI edits always win)');
+    }
+
     return {
       sportId,
       sportName: current.name || defaultSport.name || sportId,
@@ -212,6 +216,11 @@ const mergeSports = (currentSports: SportEntry[], defaultSports: SportEntry[], a
     merged.push({
       ...current,
       reportPolicy: defaultSport.reportPolicy,
+      // Training nuance is ADMIN-EDITABLE content: seed only fills it when
+      // missing — never clobber edits made in the SI Layer admin UI.
+      ...(current.trainingNuance === undefined && defaultSport.trainingNuance !== undefined
+        ? { trainingNuance: defaultSport.trainingNuance }
+        : {}),
       ...(args.includePrompting ? { prompting: defaultSport.prompting } : {}),
     });
   }

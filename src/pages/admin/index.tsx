@@ -52,6 +52,12 @@ const adminCardsData = [
     link: "/admin/screenDemo"
   },
   {
+    title: "FitClub Media",
+    description: "Every generated FitClub screen mock and App Store creative — the redesign, events, and experience concepts. Browse, lightbox, and download for screenshots and decks.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/admin/fitclubMedia"
+  },
+  {
     title: "Group Meet",
     description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
     icon: <Calendar className="w-5 h-5" />,
