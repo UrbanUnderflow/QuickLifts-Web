@@ -857,6 +857,7 @@ const looksLikeLegacyAggregateCsvInstallImport = (scoreboard: Record<string, any
 async function resolveAppsFlyerToken() {
   const envToken = normalizeString(
     process.env.APPSFLYER_RAW_DATA_API_TOKEN ||
+      process.env.MACRA_APP_FLYER_TOKEN ||
       process.env.APPSFLYER_API_TOKEN_V2 ||
       process.env.APPSFLYER_API_TOKEN
   );
@@ -1712,6 +1713,110 @@ async function persistAggregateCsvPeriodImport(args: {
   };
 }
 
+export async function runMacraAppsFlyerPullImport(args: {
+  db: any;
+  actor: { uid: string; email?: string; source?: string };
+  body?: Record<string, any>;
+}): Promise<{ status: number; payload: Record<string, any> }> {
+  const body = args.body || {};
+  const appId = normalizeString(
+    body.appId || process.env.APPSFLYER_MACRA_APP_ID || process.env.MACRA_APPSFLYER_APP_ID || MACRA_APPSFLYER_APP_ID
+  );
+  const adminRequest = {
+    uid: args.actor.uid,
+    email: normalizeString(args.actor.email),
+    source: normalizeString(args.actor.source) || 'pull_import',
+    db: args.db,
+  };
+
+  const tokenResolution = await resolveAppsFlyerToken();
+  const token = tokenResolution.token;
+  if (!token) {
+    return {
+      status: 500,
+      payload: {
+        error: 'Missing AppsFlyer raw-data API token. Set APPSFLYER_RAW_DATA_API_TOKEN in Netlify env, or create a Google Secret Manager secret named APPSFLYER_RAW_DATA_API_TOKEN.',
+        secretManagerErrors: tokenResolution.errors.slice(0, 3),
+      },
+    };
+  }
+
+  const { from, to, daysBack } = resolveDateRange(body);
+  const timezone = normalizeString(body.timezone) || '+00:00';
+  const maximumRows = Math.max(1000, Math.min(1000000, parseInteger(body.maximumRows, DEFAULT_MAXIMUM_ROWS)));
+  const reports = resolveReports(body);
+  const runId = `macra-appsflyer-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const allRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }> = [];
+  const reportErrors: Array<{ report: string; error: string }> = [];
+
+  for (const report of reports) {
+    try {
+      const rows = await fetchAppsFlyerReport({ token, appId, report, from, to, maximumRows, timezone });
+      rows.forEach((row) => {
+        allRows.push({ row, report, rawRowId: stableRawRowId(row, report) });
+      });
+    } catch (error: any) {
+      reportErrors.push({ report: report.key, error: error?.message || 'fetch failed' });
+    }
+  }
+
+  if (!allRows.length && reportErrors.length === reports.length) {
+    return {
+      status: 502,
+      payload: {
+        error: 'Every AppsFlyer Pull API report request failed. Check the token and plan access for raw-data reports.',
+        tokenSource: tokenResolution.source,
+        reportErrors,
+      },
+    };
+  }
+
+  const { newRows, duplicateRows } = await filterNewRows(args.db, allRows);
+  const summary = createSummary({
+    appId,
+    from,
+    to,
+    daysBack,
+    maximumRows,
+    timezone,
+    tokenSource: tokenResolution.source,
+    importSource: 'raw_data_pull_api_v2',
+  });
+  summary.duplicateRows = duplicateRows;
+  const aggregateByDocId = new Map<string, AttributionAggregate>();
+
+  for (const { row, report } of newRows) {
+    summary.rows += 1;
+    bump(summary.reports, report.key);
+    addRowToSummary(summary, row, report);
+    mergeAttributionRow({ aggregateByDocId, row, report });
+  }
+
+  const cumulativeSummary = await persistImport({
+    db: args.db,
+    adminRequest,
+    runId,
+    summary,
+    aggregateByDocId,
+    source: 'raw_data_pull_api_v2',
+    rawRows: newRows,
+  });
+
+  return {
+    status: 200,
+    payload: {
+      success: true,
+      runId,
+      summary,
+      cumulativeSummary,
+      fetchedRows: allRows.length,
+      importedRows: newRows.length,
+      duplicateRows,
+      reportErrors,
+    },
+  };
+}
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers, body: '' };
@@ -2141,69 +2246,12 @@ export const handler: Handler = async (event) => {
       });
     }
 
-    const tokenResolution = await resolveAppsFlyerToken();
-    const token = tokenResolution.token;
-    if (!token) {
-      return json(500, {
-        error: 'Missing AppsFlyer raw-data API token. Set APPSFLYER_RAW_DATA_API_TOKEN in Netlify env, or create a Google Secret Manager secret named APPSFLYER_RAW_DATA_API_TOKEN.',
-        secretManagerErrors: tokenResolution.errors.slice(0, 3),
-      });
-    }
-
-    const { from, to, daysBack } = resolveDateRange(body);
-    const timezone = normalizeString(body.timezone) || '+00:00';
-    const maximumRows = Math.max(1000, Math.min(1000000, parseInteger(body.maximumRows, DEFAULT_MAXIMUM_ROWS)));
-    const reports = resolveReports(body);
-    const runId = `macra-appsflyer-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const allRows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId: string }> = [];
-
-    for (const report of reports) {
-      const rows = await fetchAppsFlyerReport({ token, appId, report, from, to, maximumRows, timezone });
-      rows.forEach((row) => {
-        allRows.push({ row, report, rawRowId: stableRawRowId(row, report) });
-      });
-    }
-
-    const { newRows, duplicateRows } = await filterNewRows(adminRequest.db, allRows);
-    const summary = createSummary({
-      appId,
-      from,
-      to,
-      daysBack,
-      maximumRows,
-      timezone,
-      tokenSource: tokenResolution.source,
-      importSource: 'raw_data_pull_api_v2',
-    });
-    summary.duplicateRows = duplicateRows;
-    const aggregateByDocId = new Map<string, AttributionAggregate>();
-
-    for (const { row, report } of newRows) {
-      summary.rows += 1;
-      bump(summary.reports, report.key);
-      addRowToSummary(summary, row, report);
-      mergeAttributionRow({ aggregateByDocId, row, report });
-    }
-
-    const cumulativeSummary = await persistImport({
+    const pullResult = await runMacraAppsFlyerPullImport({
       db: adminRequest.db,
-      adminRequest,
-      runId,
-      summary,
-      aggregateByDocId,
-      source: 'raw_data_pull_api_v2',
-      rawRows: newRows,
+      actor: adminRequest,
+      body: { ...body, appId },
     });
-
-    return json(200, {
-      success: true,
-      runId,
-      summary,
-      cumulativeSummary,
-      fetchedRows: allRows.length,
-      importedRows: newRows.length,
-      duplicateRows,
-    });
+    return json(pullResult.status, pullResult.payload);
   } catch (error: any) {
     console.error('[sync-macra-appsflyer-raw-data] Failed:', error);
     return json(500, { error: error?.message || 'Failed to sync AppsFlyer raw data' });

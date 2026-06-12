@@ -1638,6 +1638,90 @@ const buildAppsFlyerRawRowsSummaryForRange = (
   };
 };
 
+const buildLayeredAppsFlyerSummaryForRange = (
+  rawSummary: Record<string, any> | null,
+  aggregateSummary: Record<string, any> | null,
+  range: MacraScoreboardDateRange
+): Record<string, any> | null => {
+  if (!rawSummary) return aggregateSummary;
+  if (!aggregateSummary) return rawSummary;
+
+  const rawInstallTotal = Number(getNestedValue(rawSummary, 'installs.total') || 0) || 0;
+  const aggregateInstallTotal = Number(getNestedValue(aggregateSummary, 'installs.total') || 0) || 0;
+  const rawEventTotal = Number(getNestedValue(rawSummary, 'events.total') || 0) || 0;
+  const aggregateEventTotal = Number(getNestedValue(aggregateSummary, 'events.total') || 0) || 0;
+  const installSource = rawInstallTotal ? rawSummary : aggregateSummary;
+  const eventSource = aggregateEventTotal ? aggregateSummary : rawSummary;
+  const eventTotal = aggregateEventTotal || rawEventTotal;
+  const installTotal = rawInstallTotal || aggregateInstallTotal;
+  const reports: Record<string, number> = {};
+  mergeScoreboardNumberMap(reports, rawSummary.reports);
+  mergeScoreboardNumberMap(reports, aggregateSummary.reports);
+
+  const fromValues = [normalizeScoreboardString(rawSummary.from), normalizeScoreboardString(aggregateSummary.from), range.start].filter(Boolean).sort();
+  const toValues = [normalizeScoreboardString(rawSummary.to), normalizeScoreboardString(aggregateSummary.to), range.end].filter(Boolean).sort();
+  const coverageStart = fromValues[0] || range.start;
+  const coverageEnd = toValues[toValues.length - 1] || range.end;
+  const importedAt =
+    (scoreMillis(aggregateSummary.importedAt) || 0) >= (scoreMillis(rawSummary.importedAt) || 0)
+      ? aggregateSummary.importedAt
+      : rawSummary.importedAt;
+  const aggregateCsvPeriods = [
+    ...(Array.isArray(rawSummary.aggregateCsvPeriods) ? rawSummary.aggregateCsvPeriods : []),
+    ...(Array.isArray(aggregateSummary.aggregateCsvPeriods) ? aggregateSummary.aggregateCsvPeriods : []),
+  ];
+  const topMediaSources = eventTotal
+    ? Array.isArray(eventSource.topMediaSources)
+      ? eventSource.topMediaSources
+      : []
+    : Array.isArray(installSource.topMediaSources)
+      ? installSource.topMediaSources
+      : [];
+
+  const layeredSummary = {
+    ...aggregateSummary,
+    source: 'layered_raw_and_aggregate_csv',
+    importSource: 'layered_raw_and_aggregate_csv',
+    appId: normalizeScoreboardString(rawSummary.appId || aggregateSummary.appId || 'id6463771067'),
+    from: coverageStart,
+    to: coverageEnd,
+    rows: (Number(rawSummary.rows || 0) || 0) + (Number(aggregateSummary.rows || 0) || 0),
+    maximumRows: (Number(rawSummary.maximumRows || rawSummary.rows || 0) || 0) + (Number(aggregateSummary.maximumRows || aggregateSummary.rows || 0) || 0),
+    reports,
+    installs: {
+      total: installTotal,
+      organic: Number(getNestedValue(installSource, 'installs.organic') || 0) || 0,
+      nonOrganic: Number(getNestedValue(installSource, 'installs.nonOrganic') || 0) || 0,
+      byMediaSource: getNestedValue(installSource, 'installs.byMediaSource') || {},
+      byCampaign: getNestedValue(installSource, 'installs.byCampaign') || {},
+    },
+    events: {
+      total: eventTotal,
+      byName: getNestedValue(eventSource, 'events.byName') || {},
+      byMediaSource: getNestedValue(eventSource, 'events.byMediaSource') || {},
+    },
+    revenue: {
+      total: Number(getNestedValue(eventSource, 'revenue.total') || 0) || 0,
+      byEventName: getNestedValue(eventSource, 'revenue.byEventName') || {},
+      byMediaSource: getNestedValue(eventSource, 'revenue.byMediaSource') || {},
+    },
+    topMediaSources,
+    topCampaigns: Array.isArray(installSource.topCampaigns) ? installSource.topCampaigns : [],
+    topEvents: Array.isArray(eventSource.topEvents) ? eventSource.topEvents : [],
+    latestRunSummary: eventSource.latestRunSummary || eventSource.aggregateCsvSummary || eventSource,
+    aggregateCsvSummary: eventSource.aggregateCsvSummary || eventSource,
+    aggregateCsvPeriods,
+    aggregateCsvPeriodCount: aggregateCsvPeriods.length,
+    aggregateCsvCoverageStart: coverageStart,
+    aggregateCsvCoverageEnd: coverageEnd,
+    rawCumulativeSummary: rawSummary.rawCumulativeSummary || aggregateSummary.rawCumulativeSummary || null,
+    importedAt,
+    updatedAt: importedAt,
+  };
+
+  return layeredSummary;
+};
+
 const getFirstString = (sources: Array<Record<string, any> | null | undefined>, paths: string[]): string => {
   for (const source of sources) {
     for (const path of paths) {
@@ -2762,7 +2846,7 @@ const EmailSequencesAdmin: React.FC = () => {
       const appsFlyerBaseSummary = appsFlyerSummarySnap?.exists() ? ((appsFlyerSummarySnap.data() || {}) as Record<string, any>) : null;
       const appsFlyerRawSummaryForRange = buildAppsFlyerRawRowsSummaryForRange(appsFlyerBaseSummary, appsFlyerRawRowDocs, activeRange);
       const appsFlyerPeriodSummaryForRange = buildAppsFlyerAggregateSummaryForRange(appsFlyerBaseSummary, appsFlyerAggregatePeriodDocs, activeRange);
-      const appsFlyerSummaryForRange = appsFlyerRawSummaryForRange || appsFlyerPeriodSummaryForRange;
+      const appsFlyerSummaryForRange = buildLayeredAppsFlyerSummaryForRange(appsFlyerRawSummaryForRange, appsFlyerPeriodSummaryForRange, activeRange);
       const summarizeAppsFlyerDebugSummary = (summary: Record<string, any> | null) =>
         summary
           ? {
@@ -2797,7 +2881,9 @@ const EmailSequencesAdmin: React.FC = () => {
         purchaseLogs: purchaseLogsInRange.length,
       });
       console.info('Summary choice', {
-        selectedSource: appsFlyerRawSummaryForRange ? 'raw_rows' : appsFlyerPeriodSummaryForRange ? 'aggregate_periods' : 'none',
+        selectedSource: appsFlyerSummaryForRange
+          ? normalizeScoreboardString(appsFlyerSummaryForRange.importSource || appsFlyerSummaryForRange.source)
+          : 'none',
         rawSummary: summarizeAppsFlyerDebugSummary(appsFlyerRawSummaryForRange),
         aggregatePeriodSummary: summarizeAppsFlyerDebugSummary(appsFlyerPeriodSummaryForRange),
         selectedSummary: summarizeAppsFlyerDebugSummary(appsFlyerSummaryForRange),

@@ -609,3 +609,7 @@
 # Macra: shared retargeting scheduler for paywall cancel, proof, value, 7-day, and trial activation lanes
 [functions.schedule-macra-retargeting-email]
   schedule = "0 * * * *"  # Hourly
+
+# Macra: pull AppsFlyer installs + in-app events (raw-data Pull API, last 7 days) for the retargeting scoreboard
+[functions.scheduled-sync-macra-appsflyer]
+  schedule = "30 6 * * *"  # Daily at 6:30 AM UTC
