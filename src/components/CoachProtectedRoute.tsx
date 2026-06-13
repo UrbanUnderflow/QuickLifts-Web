@@ -27,9 +27,10 @@ const CoachProtectedRoute: React.FC<Props> = ({
       if (userLoading) {
         return;
       }
-      // If no user, redirect to home
+      // If no user, send them to the coach login and return them here after.
       if (!currentUser) {
-        router.push('/');
+        const dest = router.asPath || '/coach/dashboard';
+        router.replace(`/coach/login?redirect=${encodeURIComponent(dest)}`);
         return;
       }
 

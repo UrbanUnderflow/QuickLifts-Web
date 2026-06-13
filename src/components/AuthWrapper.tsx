@@ -86,7 +86,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/checkout-redirect', '/subscription-success', '/subscription-error',
     '/group-meet', '/group-meet/privacy', '/group-meet/terms',
     // Public onboarding/marketing entry points
-    '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
+    '/sign-up', '/coach', '/coach/sign-up', '/coach/login', '/build-your-round', '/creator-onboarding',
     // Design language showcase
     '/chromatic-glass',
     // Business overview

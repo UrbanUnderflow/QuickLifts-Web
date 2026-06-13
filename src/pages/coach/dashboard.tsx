@@ -65,6 +65,8 @@ import { showToast } from '../../redux/toastSlice';
 import { userService, User as UserModel } from '../../api/firebase/user';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import { auth } from '../../api/firebase/config';
+import { signOut } from 'firebase/auth';
 import {
   deriveMembershipAccessFromCapabilities,
   normalizeStaffCapabilities,
@@ -662,11 +664,18 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
 
       <div className="mt-auto pt-3 border-t border-zinc-800/60">
         <button
-          onClick={() => router.push('/')}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-600 hover:text-zinc-400"
+          onClick={async () => {
+            try {
+              await signOut(auth);
+            } catch (err) {
+              console.error('[CoachDashboard] sign out failed', err);
+            }
+            router.replace('/coach/login');
+          }}
+          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-400 transition-colors hover:bg-zinc-800/40 hover:text-zinc-200"
         >
           <LogOut className="w-4 h-4" />
-          <span>Logout</span>
+          <span>Log out</span>
         </button>
       </div>
     </div>

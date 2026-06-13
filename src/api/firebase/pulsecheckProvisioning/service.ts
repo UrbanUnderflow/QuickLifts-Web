@@ -101,6 +101,11 @@ const LEGACY_ROSTER_MIGRATION_STATUS_COMPLETED = 'completed';
 const LEGACY_ROSTER_LINK_MIGRATION_STATUS = 'migrated';
 const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 const DEFAULT_PUBLIC_SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+// Canonical origin for NEW PulseCheck activation links. Forces pulsecheckmind.ai
+// in production regardless of which domain (fitwithpulse.ai or pulsecheckmind.ai)
+// the admin generated the link on, so links are consistent. fitwithpulse.ai still
+// serves every PulseCheck route, so already-sent links keep resolving.
+const PULSECHECK_LINK_ORIGIN = (process.env.NEXT_PUBLIC_PULSECHECK_SITE_URL || 'https://pulsecheckmind.ai').replace(/\/+$/, '');
 
 const normalizeString = (value?: string) => value?.trim() || '';
 const normalizeEmail = (value?: string) => normalizeString(value).toLowerCase();
@@ -130,6 +135,13 @@ const isInviteLinkUsable = (status: unknown, redemptionMode?: unknown) =>
 const isLocalHostname = (hostname?: string | null) => LOCALHOST_HOSTNAMES.has(normalizeString(hostname ?? undefined).toLowerCase());
 const getCurrentSiteOrigin = () =>
   typeof window !== 'undefined' ? window.location.origin.replace(/\/+$/, '') : DEFAULT_PUBLIC_SITE_ORIGIN;
+// Origin for new PulseCheck activation/invite links. Keeps localhost during dev
+// (so local testing + devFirebase stamping work), otherwise the canonical
+// pulsecheckmind.ai origin regardless of the generating domain.
+const getPulseCheckLinkOrigin = () =>
+  typeof window !== 'undefined' && isLocalHostname(window.location.hostname)
+    ? window.location.origin.replace(/\/+$/, '')
+    : PULSECHECK_LINK_ORIGIN;
 const shouldStampDevFirebaseLinks = () =>
   typeof window !== 'undefined' &&
   (isLocalHostname(window.location.hostname) ||
@@ -2871,7 +2883,7 @@ export const pulseCheckProvisioningService = {
     createdByEmail?: string;
   }): Promise<string> {
     const token = crypto.randomUUID();
-    const baseUrl = getCurrentSiteOrigin();
+    const baseUrl = getPulseCheckLinkOrigin();
     const activationUrl = `${baseUrl}/PulseCheck/admin-activation/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
 
     // The admin always carries the administrative capability; coaching / athletic
@@ -2942,7 +2954,7 @@ export const pulseCheckProvisioningService = {
     createdByEmail?: string;
   }): Promise<string> {
     const token = crypto.randomUUID();
-    const baseUrl = getCurrentSiteOrigin();
+    const baseUrl = getPulseCheckLinkOrigin();
     const activationUrl = `${baseUrl}/PulseCheck/clinician-onboarding/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
 
     const payload = {
@@ -3026,7 +3038,7 @@ export const pulseCheckProvisioningService = {
           toTimestampMillis((left.data() as Record<string, any>).createdAt)
       )[0] || null;
     const token = normalizeString((mostRecentMatchingLink?.data() as Record<string, any> | undefined)?.token) || crypto.randomUUID();
-    const baseUrl = getCurrentSiteOrigin();
+    const baseUrl = getPulseCheckLinkOrigin();
     const fallbackPath = `/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
     let activationUrl = `${baseUrl}${fallbackPath}`;
     let commercialSnapshot = buildTeamCommercialSnapshot({

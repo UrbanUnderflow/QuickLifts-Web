@@ -1,3 +1,9 @@
+// OneLink `af_r` web-fallback origin (+ default preview image host). Kept on
+// fitwithpulse.ai because that domain is already on AppsFlyer's af_r redirect
+// allowlist — recipients only ever see the pulsecheckapp.onelink.me link, so the
+// fallback host is invisible to them. To move this to pulsecheckmind.ai later,
+// flip this constant AND add pulsecheckmind.ai to the AppsFlyer OneLink (uT14)
+// af_r redirect allowlist, or the desktop/no-app fallback silently breaks.
 const PULSE_WEB_ORIGIN = 'https://fitwithpulse.ai';
 const APPS_FLYER_SUBDOMAIN = 'pulsecheckapp.onelink.me';
 const APPS_FLYER_TEMPLATE_ID = 'uT14';
