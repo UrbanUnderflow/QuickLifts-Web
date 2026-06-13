@@ -4033,7 +4033,7 @@ const NoraChatPanel: React.FC<{
   };
 
   return (
-    <div className="rounded-2xl border border-purple-500/25 bg-gradient-to-br from-purple-500/8 to-blue-500/5 overflow-hidden">
+    <div className="rounded-2xl border border-purple-500/25 bg-[#0d0d1a]/95 backdrop-blur-xl shadow-[0_24px_70px_rgba(0,0,0,0.55)] overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-purple-500/15">
         <div className="flex items-center gap-2">

@@ -213,36 +213,68 @@ class CoachScheduleService {
       throw new Error('Couldn’t read anything useful from that page.');
     }
 
-    // 2) Extract events through the openai-bridge (authed, keyed in Netlify).
+    // 2) Extract events on a background job. A full season of meets is a long
+    //    single LLM completion that used to run past the synchronous function
+    //    timeout — the gateway killed it with a 504 ("Inactivity Timeout").
+    //    We kick the extraction onto a background worker (15-min ceiling) and
+    //    poll for the result. See netlify/functions/coach-schedule-import*.ts.
     const idToken = await auth.currentUser?.getIdToken();
     if (!idToken) throw new Error('Please sign in again to import a schedule.');
 
-    const aiRes = await fetch('/api/openai/v1/chat/completions', {
+    const aiRequest = {
+      model: 'gpt-4o-mini',
+      temperature: 0.1,
+      max_tokens: 4000,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: SCHEDULE_EXTRACTION_PROMPT },
+        {
+          role: 'user',
+          content: `Page title: ${title || '(none)'}\nURL: ${url}\n\nPAGE TEXT:\n${text}`,
+        },
+      ],
+    };
+
+    const startRes = await fetch('/api/coach/schedule-import', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${idToken}`,
-        'openai-organization': 'coachScheduleImport',
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        temperature: 0.1,
-        max_tokens: 4000,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SCHEDULE_EXTRACTION_PROMPT },
-          {
-            role: 'user',
-            content: `Page title: ${title || '(none)'}\nURL: ${url}\n\nPAGE TEXT:\n${text}`,
-          },
-        ],
-      }),
+      body: JSON.stringify(aiRequest),
     });
-    if (!aiRes.ok) {
-      const errText = await aiRes.text().catch(() => '');
-      throw new Error(`Nora couldn’t read that schedule (${aiRes.status}). ${errText.slice(0, 160)}`.trim());
+    const startJson = await startRes.json().catch(() => ({} as any));
+    const jobId: string | undefined = startJson?.jobId;
+    if (!startRes.ok || !jobId) {
+      throw new Error(
+        startJson?.error?.message || startJson?.error || `Nora couldn’t start that import (${startRes.status}).`
+      );
     }
-    const completion = await aiRes.json().catch(() => ({}));
+
+    // Poll until the worker writes the result back. The job has a ~15-min
+    // ceiling on Netlify; the UI sits in its "fetching" state meanwhile.
+    const POLL_INTERVAL_MS = 2000;
+    const MAX_POLLS = 90; // ~3 min of headroom for a long season
+    let completion: any = null;
+    for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      const statusRes = await fetch(
+        `/api/coach/schedule-import-status?jobId=${encodeURIComponent(jobId)}`,
+        { headers: { authorization: `Bearer ${idToken}` } }
+      );
+      const statusJson = await statusRes.json().catch(() => ({} as any));
+      if (!statusRes.ok) continue; // transient — keep polling until attempts run out
+      if (statusJson.status === 'succeeded') {
+        completion = statusJson.result || {};
+        break;
+      }
+      if (statusJson.status === 'failed') {
+        throw new Error(statusJson.errorMessage || 'Nora couldn’t read that schedule.');
+      }
+    }
+    if (!completion) {
+      throw new Error('Nora is still reading that schedule — give it another try in a moment.');
+    }
     const raw = completion?.choices?.[0]?.message?.content || '{}';
     let parsed: { sourceTitle?: string; events?: any[] };
     try {

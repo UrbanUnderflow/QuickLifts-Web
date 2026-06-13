@@ -149,6 +149,29 @@ const MixpanelInitializer: React.FC = () => {
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   const router = useRouter();
 
+  // Per-host favicon. _document defaults to the white Pulse mark; on the
+  // pulsecheckmind.ai host we swap to the purple PulseCheck icon. One build
+  // serves every domain, so the host is only known client-side.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const host = window.location.hostname.toLowerCase();
+    const isPulseCheckHost = host === 'pulsecheckmind.ai' || host === 'www.pulsecheckmind.ai';
+    if (!isPulseCheckHost) return;
+    const href = '/pulseCheckIcon.png';
+    const setIcon = (rel: string) => {
+      let link = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = rel;
+        document.head.appendChild(link);
+      }
+      if (rel === 'icon') link.type = 'image/png';
+      link.href = href;
+    };
+    setIcon('icon');
+    setIcon('apple-touch-icon');
+  }, []);
+
   // Add debugging for Android issues
   useEffect(() => {
     if (typeof window !== 'undefined') {

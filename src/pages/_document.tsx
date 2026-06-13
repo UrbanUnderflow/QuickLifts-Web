@@ -69,6 +69,15 @@ class MyDocument extends Document {
           </noscript>
 
           {/*
+            Default favicon: the white Pulse mark (fitwithpulse.ai + all hosts).
+            pulsecheckmind.ai swaps this to the purple PulseCheck icon client-side
+            in _app.tsx (one build serves every domain, so the host is only known
+            at request time on the client).
+          */}
+          <link rel="icon" type="image/png" href="/PulseWhite.png" />
+          <link rel="apple-touch-icon" href="/PulseWhite.png" />
+
+          {/*
             OG / Twitter meta tags are NOT set here.
             They are set per-page via <PageHead /> so crawlers see exactly one
             set of og:image / og:title tags.  Putting defaults in _document

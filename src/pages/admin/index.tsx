@@ -58,6 +58,12 @@ const adminCardsData = [
     link: "/admin/fitclubMedia"
   },
   {
+    title: "FWP Media",
+    description: "Every generated Fit With Pulse screen mock and App Store creative — Today, recovery heat map, workout preview, immersive player, Movers, and progress. Browse, lightbox, and download for screenshots and decks.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/admin/fwpMedia"
+  },
+  {
     title: "Group Meet",
     description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
     icon: <Calendar className="w-5 h-5" />,

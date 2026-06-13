@@ -129,6 +129,19 @@
   status = 200
   force = true
 
+# Coach Schedule import → background job (avoids the synchronous LLM timeout)
+[[redirects]]
+  from = "/api/coach/schedule-import"
+  to = "/.netlify/functions/coach-schedule-import"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/coach/schedule-import-status"
+  to = "/.netlify/functions/coach-schedule-import-status"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/api/anthropic/*"
   to = "/.netlify/functions/anthropic-bridge"

@@ -87,6 +87,7 @@ const APPS: AppEntry[] = [
       text: 'text-[#A05EF8]',
     },
     iosUrl: 'https://apps.apple.com/us/app/pulsecheck-mindset-coaching/id6747253393',
+    webUrl: 'https://pulsecheckmind.ai',
     status: 'available',
   },
   {

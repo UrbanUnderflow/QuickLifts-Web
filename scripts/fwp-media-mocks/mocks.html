@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  /* ===== FWP design tokens (from FWP/Design/PulseTheme.swift) ===== */
+  :root{
+    --lime:#E0FE10;
+    --purple:#A78BFA;
+    --surface:#0A0A0B;
+    --card:#161618;
+    --card2:#1E1E21;
+    --stroke:rgba(255,255,255,.06);
+    --stroke2:rgba(255,255,255,.10);
+    --txt:#FFFFFF;
+    --txt2:rgba(255,255,255,.55);
+    --txt3:rgba(255,255,255,.38);
+    --fresh:#E0FE10;   /* recovered */
+    --recovering:#FFB23E;
+    --fatigued:#FF5A4D;
+    --font:-apple-system,"SF Pro Display","SF Pro Text",system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  body{background:#000;font-family:var(--font);}
+
+  /* phone screen: 9:19 (matches gallery aspect-[9/19]) */
+  .screen{
+    width:432px;height:912px;position:relative;overflow:hidden;
+    background:var(--surface);color:var(--txt);
+    display:flex;flex-direction:column;
+    margin:24px;float:left;
+  }
+  .scroll{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+
+  /* status bar */
+  .status{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 8px;}
+  .status .time{font-size:16px;font-weight:700;letter-spacing:.2px;}
+  .status .ic{display:flex;gap:7px;align-items:center;}
+  .status .ic svg{display:block;}
+
+  /* tab bar */
+  .tabbar{height:88px;flex:none;display:flex;border-top:1px solid var(--stroke);
+    background:rgba(10,10,11,.92);backdrop-filter:blur(20px);padding-top:10px;}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--txt3);font-size:11px;font-weight:600;}
+  .tab.active{color:var(--lime);}
+  .tab svg{width:25px;height:25px;}
+
+  .pad{padding:0 20px;}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 10px;}
+  .iconbtn{width:38px;height:38px;border-radius:50%;background:var(--card);border:1px solid var(--stroke);
+    display:flex;align-items:center;justify-content:center;}
+  .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#000;}
+
+  .kicker{font-size:11px;font-weight:800;letter-spacing:1.8px;color:var(--lime);text-transform:uppercase;}
+  .kicker.muted{color:var(--txt3);}
+  .h1{font-size:34px;line-height:1.04;font-weight:800;letter-spacing:-.6px;}
+  .h2{font-size:22px;font-weight:800;letter-spacing:-.3px;}
+  .sub{color:var(--txt2);font-size:16px;line-height:1.35;}
+  .sec-h{font-size:18px;font-weight:800;letter-spacing:-.2px;}
+  .seeall{color:var(--lime);font-size:13px;font-weight:700;}
+
+  .card{background:var(--card);border:1px solid var(--stroke);border-radius:18px;}
+  .cta{background:var(--lime);color:#000;border-radius:22px;padding:17px 20px;display:flex;align-items:center;justify-content:space-between;}
+  .cta .t{font-size:17px;font-weight:800;}
+  .cta .s{font-size:13px;font-weight:600;opacity:.7;}
+
+  .row{display:flex;align-items:center;gap:12px;}
+  .chip{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:13px 4px;width:78px;color:var(--txt2);font-size:12px;font-weight:600;}
+  .chip svg{width:22px;height:22px;}
+  .chip.lime{background:var(--lime);color:#000;border-color:transparent;}
+  .chip.lime svg{color:#000;}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;font-weight:700;}
+
+  .muscle-chip{font-size:10px;font-weight:700;letter-spacing:.3px;padding:3px 9px;border-radius:999px;
+    background:rgba(224,254,16,.12);color:var(--lime);}
+
+  .scrim{position:absolute;inset:0;}
+  .hide-scroll{scrollbar-width:none;}
+  .gap{display:flex;flex-direction:column;}
+</style>
+</head>
+<body>
+
+<!-- ============================================================= -->
+<!-- 00 · APP STORE HERO                                           -->
+<!-- ============================================================= -->
+<div class="screen" id="appstore" style="background:radial-gradient(120% 80% at 80% -5%, rgba(224,254,16,.16), transparent 55%), radial-gradient(90% 60% at 0% 105%, rgba(167,139,250,.10), transparent 50%), #0A0A0B;">
+  <div class="status">
+    <span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="17" height="12" viewBox="0 0 17 12" fill="none"><path d="M8.5 2.6c2.3 0 4.4.9 6 2.4l1.4-1.5C13.9 1.5 11.3.4 8.5.4S3.1 1.5.6 3.5L2 5C3.6 3.5 5.7 2.6 8.5 2.6Z" fill="#fff"/><path d="M8.5 6.1c1.3 0 2.5.5 3.4 1.3l1.4-1.5c-1.3-1.2-3-1.9-4.8-1.9s-3.5.7-4.8 1.9L5.1 7.4c.9-.8 2.1-1.3 3.4-1.3Z" fill="#fff"/><circle cx="8.5" cy="10" r="1.8" fill="#fff"/></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="#fff"/><rect x="23" y="4.5" width="2" height="4" rx="1" fill="#fff" fill-opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;padding:18px 30px 0;">
+    <div style="display:flex;align-items:center;gap:11px;">
+      <img src="../../public/fwp-app-icon.jpg" alt="" style="width:36px;height:36px;border-radius:10px;display:block;object-fit:cover;" />
+      <span style="font-size:18px;font-weight:800;letter-spacing:-.3px;">Fit With Pulse</span>
+    </div>
+
+    <div style="margin-top:54px;">
+      <div class="kicker">Your trainer is an algorithm</div>
+      <h1 class="h1" style="font-size:46px;margin-top:16px;line-height:1.02;">Press play.<br/>We built the<br/>rest.</h1>
+      <p class="sub" style="margin-top:18px;max-width:300px;font-size:17px;">AI assembles the workout. Your favorite Movers star in it. You just show up.</p>
+    </div>
+
+    <!-- floating device peeking from bottom -->
+    <div style="margin-top:auto;position:relative;height:300px;">
+      <div style="position:absolute;left:50%;bottom:-150px;transform:translateX(-50%) rotate(-4deg);width:264px;height:300px;background:#161618;border-radius:40px 40px 0 0;border:8px solid #232327;border-bottom:none;box-shadow:0 -30px 80px rgba(224,254,16,.10),0 -2px 0 rgba(255,255,255,.05) inset;padding:22px 18px 0;">
+        <div class="kicker" style="font-size:9px;">Good morning, Tre</div>
+        <div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:8px;">You're recovered.</div>
+        <div style="color:var(--txt2);font-size:13px;margin-top:6px;">Legs &amp; core are freshest today.</div>
+        <div class="cta" style="margin-top:18px;border-radius:18px;padding:14px 16px;">
+          <div><div class="t" style="font-size:15px;">Start today's workout</div><div class="s" style="font-size:11px;">~45 min · Full Body</div></div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+        <div style="margin-top:16px;display:flex;gap:8px;">
+          <div style="height:62px;flex:1;border-radius:12px;background:linear-gradient(135deg,#2a2118,#161618);"></div>
+          <div style="height:62px;flex:1;border-radius:12px;background:linear-gradient(135deg,#1a2417,#161618);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 01 · TODAY (home)                                             -->
+<!-- ============================================================= -->
+<div class="screen" id="today">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="toolbar">
+      <div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+      <div class="avatar" style="width:38px;height:38px;background:linear-gradient(135deg,#A78BFA,#7C5CE6);font-size:14px;">TG</div>
+    </div>
+    <div class="pad" style="margin-top:6px;">
+      <div class="sub" style="font-size:15px;">Good morning, Tre</div>
+      <h1 class="h1" style="margin-top:6px;">You're recovered.</h1>
+      <p class="sub" style="margin-top:8px;">Legs &amp; core are freshest today.</p>
+
+      <div class="cta" style="margin-top:20px;">
+        <div><div class="t">Start today's workout</div><div class="s">~45 min · Full Body</div></div>
+        <div style="width:42px;height:42px;border-radius:50%;background:rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg></div>
+      </div>
+
+      <!-- Featuring Movers -->
+      <div style="margin-top:24px;display:flex;align-items:center;justify-content:space-between;">
+        <span class="kicker muted">Featuring Movers</span>
+      </div>
+      <div class="row" style="margin-top:12px;gap:18px;">
+        <div style="text-align:center;"><div class="avatar" style="width:54px;height:54px;background:linear-gradient(135deg,#FF6B6B,#C2410C);font-size:18px;margin:0 auto;">MJ</div><div style="font-size:11px;color:var(--txt2);margin-top:6px;">Marcus</div></div>
+        <div style="text-align:center;"><div class="avatar" style="width:54px;height:54px;background:linear-gradient(135deg,#34D399,#0F766E);font-size:18px;margin:0 auto;">SL</div><div style="font-size:11px;color:var(--txt2);margin-top:6px;">Sloane</div></div>
+        <div style="text-align:center;"><div class="avatar" style="width:54px;height:54px;background:linear-gradient(135deg,#60A5FA,#1D4ED8);font-size:18px;margin:0 auto;">DV</div><div style="font-size:11px;color:var(--txt2);margin-top:6px;">Dev</div></div>
+        <div style="text-align:center;"><div class="avatar" style="width:54px;height:54px;background:linear-gradient(135deg,#F472B6,#9D174D);font-size:18px;margin:0 auto;">KO</div><div style="font-size:11px;color:var(--txt2);margin-top:6px;">Kayo</div></div>
+      </div>
+
+      <!-- focus chips -->
+      <div style="margin-top:24px;"><span class="sec-h">Or pick a focus</span></div>
+      <div class="row hide-scroll" style="margin-top:12px;gap:10px;overflow:hidden;">
+        <div class="chip lime"><svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M6 6l12 12M18 6 6 18"/></svg>Pick muscles</div>
+        <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>Full body</div>
+        <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 18V8a3 3 0 0 1 6 0M18 18V8a3 3 0 0 0-6 0"/></svg>Upper</div>
+        <div class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v8l-2 10M16 3v8l2 10"/></svg>Lower</div>
+      </div>
+
+      <!-- Move of the Day -->
+      <div class="card" style="margin-top:26px;height:204px;position:relative;overflow:hidden;border:none;">
+        <div style="position:absolute;inset:0;background:linear-gradient(150deg,#3A2A10 0%,#1a1407 45%,#0A0A0B 100%);"></div>
+        <div style="position:absolute;inset:0;background:radial-gradient(70% 90% at 75% 20%, rgba(224,254,16,.22), transparent 60%);"></div>
+        <div style="position:absolute;top:16px;left:16px;" class="kicker">Move of the day</div>
+        <div style="position:absolute;top:14px;right:16px;" class="pill" style="background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:5px 11px;border-radius:999px;">0:45</div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:62px;height:62px;border-radius:50%;background:rgba(255,255,255,.14);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.25);">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+        <div style="position:absolute;left:16px;right:16px;bottom:14px;">
+          <div style="font-size:19px;font-weight:800;letter-spacing:-.3px;">Bulgarian Split Squat</div>
+          <div class="row" style="margin-top:8px;gap:8px;">
+            <div class="avatar" style="width:24px;height:24px;background:linear-gradient(135deg,#FF6B6B,#C2410C);font-size:9px;">MJ</div>
+            <span style="font-size:13px;color:var(--txt2);">with Marcus J.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- What to work today (heat map card) -->
+      <div style="margin-top:26px;"><span class="sec-h">What to work today</span></div>
+    </div>
+  </div>
+  <div class="tabbar">
+    <div class="tab active"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>Today</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>Progress</div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 02 · WHAT TO WORK TODAY (recovery heat map)                   -->
+<!-- ============================================================= -->
+<div class="screen" id="heatmap">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic"><svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg></span>
+  </div>
+  <div class="scroll pad">
+    <div class="sub" style="font-size:15px;margin-top:6px;">Good morning, Tre</div>
+
+    <!-- BodyHeatMapCard (faithful to FWP/Views/BodyHeatMapCard.swift) -->
+    <div class="card" style="margin-top:16px;padding:18px;border-radius:20px;">
+      <!-- header row: title + Front/Back segmented -->
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <span style="font-size:17px;font-weight:700;letter-spacing:-.2px;">What to work today</span>
+        <div style="background:#000;border:1px solid var(--stroke);border-radius:9px;padding:2px;display:flex;width:140px;">
+          <div style="flex:1;text-align:center;padding:6px 0;border-radius:7px;background:var(--lime);color:#000;font-size:13px;font-weight:700;">Front</div>
+          <div style="flex:1;text-align:center;padding:6px 0;font-size:13px;font-weight:600;color:var(--txt2);">Back</div>
+        </div>
+      </div>
+
+      <!-- figure + legend -->
+      <div class="row" style="margin-top:14px;gap:20px;align-items:center;">
+        <div style="flex:1;height:330px;display:flex;align-items:center;justify-content:center;">__BODYMAP_FRONT__</div>
+        <div style="width:130px;flex:none;display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <div style="height:8px;border-radius:4px;background:linear-gradient(90deg,var(--fatigued),var(--recovering),var(--fresh));"></div>
+            <div class="row" style="justify-content:space-between;margin-top:6px;font-size:11px;color:var(--txt2);font-weight:600;"><span>Worked</span><span>Fresh</span></div>
+          </div>
+          <p style="font-size:13px;color:var(--txt2);line-height:1.4;">Freshest muscles are your best bet today.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta" style="margin-top:18px;">
+      <div><div class="t">Build a legs &amp; core workout</div><div class="s">Targets your freshest muscles</div></div>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 03 · WORKOUT PREVIEW (Built for you)                          -->
+<!-- ============================================================= -->
+<div class="screen" id="preview">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic"><svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg></span>
+  </div>
+  <div class="scroll">
+    <div class="pad">
+      <div style="display:flex;justify-content:flex-end;"><div class="iconbtn"><svg width="16" height="16" viewBox="0 0 24 24" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></div></div>
+      <h1 class="h1" style="margin-top:4px;font-size:30px;">Full Body</h1>
+      <p class="sub" style="margin-top:6px;">~45 min · 9 moves · featuring 3 Movers</p>
+
+      <!-- BUILT FOR YOU score card -->
+      <div class="card" style="margin-top:18px;padding:18px;border:1px solid rgba(224,254,16,.22);background:linear-gradient(150deg,rgba(224,254,16,.08),var(--card));">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;">
+          <div><div class="kicker">Built for you</div>
+            <div style="font-size:16px;font-weight:700;margin-top:8px;letter-spacing:-.2px;">Matched to today's recovery</div></div>
+          <div style="width:50px;height:50px;border-radius:14px;background:var(--lime);color:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <span style="font-size:21px;font-weight:800;line-height:1;">97</span><span style="font-size:8px;font-weight:700;">SCORE</span></div>
+        </div>
+        <p class="sub" style="font-size:13px;margin-top:10px;">Heavy on quads &amp; core — your freshest groups — and pulls in the Movers in your Rotation.</p>
+        <div class="row" style="margin-top:12px;gap:8px;flex-wrap:wrap;">
+          <span class="muscle-chip">Focus 99</span><span class="muscle-chip">Recovery 96</span><span class="muscle-chip">Volume 94</span>
+        </div>
+      </div>
+
+      <!-- moves -->
+      <div style="margin-top:22px;display:flex;align-items:center;justify-content:space-between;">
+        <span class="sec-h">9 moves</span><span class="seeall">Tuned in 3 builds</span></div>
+    </div>
+
+    <div class="pad" style="margin-top:12px;display:flex;flex-direction:column;gap:12px;">
+      <!-- move row -->
+      <div class="card" style="padding:11px;display:flex;align-items:center;gap:12px;border-radius:16px;">
+        <div style="width:54px;height:54px;border-radius:12px;background:linear-gradient(135deg,#2a2118,#161618);position:relative;flex:none;">
+          <span style="position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--lime);color:#000;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;">1</span></div>
+        <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;">Goblet Squat</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:3px;">3 × 10 reps · with Marcus J.</div>
+          <span class="muscle-chip" style="margin-top:6px;display:inline-block;">Quads</span></div>
+        <div class="row" style="gap:6px;">
+          <div style="width:32px;height:32px;border-radius:9px;background:rgba(224,254,16,.15);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="var(--lime)"><path d="M7 10v11h3V10H7zm10-1h-4l.6-4a1.5 1.5 0 0 0-3-.3L9 10v11h7a2 2 0 0 0 2-1.6l1-6A2 2 0 0 0 17 9z"/></svg></div>
+          <div style="width:32px;height:32px;border-radius:9px;background:var(--card2);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="var(--txt3)" style="transform:rotate(180deg)"><path d="M7 10v11h3V10H7zm10-1h-4l.6-4a1.5 1.5 0 0 0-3-.3L9 10v11h7a2 2 0 0 0 2-1.6l1-6A2 2 0 0 0 17 9z"/></svg></div>
+        </div>
+      </div>
+      <div class="card" style="padding:11px;display:flex;align-items:center;gap:12px;border-radius:16px;">
+        <div style="width:54px;height:54px;border-radius:12px;background:linear-gradient(135deg,#16241a,#161618);position:relative;flex:none;">
+          <span style="position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--lime);color:#000;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;">2</span></div>
+        <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;">Hanging Leg Raise</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:3px;">3 × 12 reps · with Sloane L.</div>
+          <span class="muscle-chip" style="margin-top:6px;display:inline-block;">Core</span></div>
+        <div class="row" style="gap:6px;">
+          <div style="width:32px;height:32px;border-radius:9px;background:var(--card2);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="var(--txt3)"><path d="M7 10v11h3V10H7zm10-1h-4l.6-4a1.5 1.5 0 0 0-3-.3L9 10v11h7a2 2 0 0 0 2-1.6l1-6A2 2 0 0 0 17 9z"/></svg></div>
+          <div style="width:32px;height:32px;border-radius:9px;background:var(--card2);display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="var(--txt3)" style="transform:rotate(180deg)"><path d="M7 10v11h3V10H7zm10-1h-4l.6-4a1.5 1.5 0 0 0-3-.3L9 10v11h7a2 2 0 0 0 2-1.6l1-6A2 2 0 0 0 17 9z"/></svg></div>
+        </div>
+      </div>
+      <div class="card" style="padding:11px;display:flex;align-items:center;gap:12px;border-radius:16px;opacity:.5;">
+        <div style="width:54px;height:54px;border-radius:12px;background:linear-gradient(135deg,#241620,#161618);position:relative;flex:none;">
+          <span style="position:absolute;top:-6px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--lime);color:#000;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;">3</span></div>
+        <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;">Walking Lunge</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:3px;">3 × 20 steps · with Dev V.</div></div>
+      </div>
+    </div>
+  </div>
+  <!-- floating CTA -->
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:30px 20px 26px;background:linear-gradient(to top,var(--surface) 55%,transparent);">
+    <div class="cta" style="border-radius:18px;justify-content:center;gap:10px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+      <div class="t">Start workout</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 04 · IMMERSIVE PLAYER                                         -->
+<!-- ============================================================= -->
+<div class="screen" id="player" style="background:#0A0A0B;">
+  <!-- real Mover video frame (videos/Squats, quicklifts Firebase) as the immersive backdrop -->
+  <img src="player-bg.jpg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;" />
+  <div class="scrim" style="background:linear-gradient(to bottom,rgba(0,0,0,.5) 0%,rgba(0,0,0,.12) 22%,rgba(0,0,0,.12) 44%,rgba(0,0,0,.78) 74%,rgba(10,10,11,.95) 100%);"></div>
+
+  <div style="position:relative;z-index:2;flex:1;display:flex;flex-direction:column;">
+    <div class="status"><span class="time">9:41</span>
+      <span class="ic"><svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg></span>
+    </div>
+    <!-- top bar -->
+    <div class="pad" style="display:flex;align-items:center;gap:14px;margin-top:2px;">
+      <div class="iconbtn" style="background:rgba(255,255,255,.12);border:none;"><svg width="15" height="15" viewBox="0 0 24 24" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></div>
+      <div style="flex:1;"><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.18);"><div style="width:44%;height:100%;border-radius:3px;background:var(--lime);"></div></div></div>
+      <span style="font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:700;">12:48</span>
+      <div class="iconbtn" style="background:rgba(255,255,255,.12);border:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+    </div>
+
+    <!-- play control center -->
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+      <div style="width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1.5"/><rect x="14" y="5" width="4" height="14" rx="1.5"/></svg>
+      </div>
+    </div>
+
+    <!-- bottom info -->
+    <div class="pad" style="padding-bottom:36px;">
+      <div class="row" style="gap:9px;">
+        <div class="avatar" style="width:26px;height:26px;background:linear-gradient(135deg,#FF6B6B,#C2410C);font-size:10px;">MJ</div>
+        <span style="font-size:14px;color:rgba(255,255,255,.7);font-weight:600;">Move 4 of 9 · with Marcus</span>
+      </div>
+      <div class="h1" style="margin-top:12px;font-size:40px;">Back Squat</div>
+      <!-- set dots -->
+      <div class="row" style="margin-top:16px;gap:8px;">
+        <span style="width:11px;height:11px;border-radius:50%;background:var(--lime);"></span>
+        <span style="width:11px;height:11px;border-radius:50%;background:var(--lime);"></span>
+        <span style="width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.3);"></span>
+      </div>
+      <div style="margin-top:14px;font-size:22px;font-weight:800;color:var(--lime);">3 × 10 reps</div>
+      <div style="margin-top:6px;font-size:15px;color:rgba(255,255,255,.6);">Set 3 · last one, drive through the heels.</div>
+
+      <div class="row" style="margin-top:24px;gap:12px;">
+        <div style="flex:1;text-align:center;padding:16px 0;border-radius:16px;background:rgba(255,255,255,.10);font-size:16px;font-weight:700;color:#fff;">Skip</div>
+        <div style="flex:2;text-align:center;padding:16px 0;border-radius:16px;background:var(--lime);color:#000;font-size:16px;font-weight:800;">Done — next move</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 05 · PROGRESS                                                 -->
+<!-- ============================================================= -->
+<div class="screen" id="progress">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic"><svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg></span>
+  </div>
+  <div class="scroll pad">
+    <h1 class="h1" style="margin-top:4px;font-size:30px;">Progress</h1>
+
+    <!-- weekly ring -->
+    <div class="card" style="margin-top:18px;padding:20px;display:flex;align-items:center;gap:20px;">
+      <svg width="104" height="104" viewBox="0 0 104 104" style="flex:none;">
+        <circle cx="52" cy="52" r="44" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="11"/>
+        <circle cx="52" cy="52" r="44" fill="none" stroke="var(--lime)" stroke-width="11" stroke-linecap="round"
+          stroke-dasharray="276.5" stroke-dashoffset="55.3" transform="rotate(-90 52 52)"/>
+        <text x="52" y="49" text-anchor="middle" fill="#fff" font-size="26" font-weight="800" font-family="-apple-system">4</text>
+        <text x="52" y="68" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="11" font-weight="700" font-family="-apple-system">of 5</text>
+      </svg>
+      <div style="flex:1;">
+        <div style="font-size:18px;font-weight:800;letter-spacing:-.2px;">4 workouts this week</div>
+        <div class="pill" style="margin-top:8px;background:rgba(224,254,16,.14);color:var(--lime);font-size:12px;padding:5px 11px;border-radius:999px;">🔥 12-day streak</div>
+        <div class="row" style="margin-top:12px;gap:7px;">
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--lime);"></span>
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--lime);"></span>
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--lime);"></span>
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--lime);"></span>
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--card2);"></span>
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--card2);"></span>
+          <span style="width:22px;height:22px;border-radius:7px;background:var(--card2);"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- pulse rank -->
+    <div class="card" style="margin-top:14px;padding:18px;">
+      <div class="row" style="justify-content:space-between;">
+        <div class="row" style="gap:12px;">
+          <div style="width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#E0FE10,#A3B80B);display:flex;align-items:center;justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="#000"><path d="M12 2 4 14h6l-1 8 9-12h-6z"/></svg></div>
+          <div><div class="kicker muted" style="font-size:10px;">Pulse rank</div><div style="font-size:19px;font-weight:800;margin-top:2px;">Warrior</div></div>
+        </div>
+        <div style="text-align:right;"><div style="font-size:19px;font-weight:800;">8,420</div><div style="font-size:11px;color:var(--txt3);">points</div></div>
+      </div>
+      <div style="margin-top:14px;height:8px;border-radius:5px;background:var(--card2);"><div style="width:68%;height:100%;border-radius:5px;background:var(--lime);"></div></div>
+      <div style="margin-top:8px;font-size:12px;color:var(--txt2);">1,580 to <span style="color:#fff;font-weight:600;">Champion</span> · every finished workout moves this.</div>
+    </div>
+
+    <!-- training balance -->
+    <div style="margin-top:20px;"><span class="sec-h">Training balance</span></div>
+    <div class="card" style="margin-top:12px;padding:18px;display:flex;flex-direction:column;gap:14px;">
+      <div><div class="row" style="justify-content:space-between;font-size:13px;font-weight:600;"><span>Legs</span><span style="color:var(--lime);">On plan</span></div>
+        <div style="margin-top:6px;height:7px;border-radius:4px;background:var(--card2);"><div style="width:88%;height:100%;border-radius:4px;background:var(--lime);"></div></div></div>
+      <div><div class="row" style="justify-content:space-between;font-size:13px;font-weight:600;"><span>Push</span><span style="color:var(--lime);">On plan</span></div>
+        <div style="margin-top:6px;height:7px;border-radius:4px;background:var(--card2);"><div style="width:74%;height:100%;border-radius:4px;background:var(--lime);"></div></div></div>
+      <div><div class="row" style="justify-content:space-between;font-size:13px;font-weight:600;"><span>Pull</span><span style="color:var(--recovering);">Behind</span></div>
+        <div style="margin-top:6px;height:7px;border-radius:4px;background:var(--card2);"><div style="width:38%;height:100%;border-radius:4px;background:var(--recovering);"></div></div></div>
+    </div>
+  </div>
+  <div class="tabbar">
+    <div class="tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>Today</div>
+    <div class="tab active"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>Progress</div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 06 · FIND MOVERS (search)                                     -->
+<!-- ============================================================= -->
+<div class="screen" id="movers">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic"><svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg></span>
+  </div>
+  <div class="scroll pad">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h1 class="h1" style="font-size:28px;">Find Movers</h1>
+      <span class="seeall">Done</span>
+    </div>
+    <!-- search input -->
+    <div class="card" style="margin-top:16px;padding:13px 15px;display:flex;align-items:center;gap:11px;border-radius:15px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span style="font-size:15px;color:#fff;">marcus</span>
+      <span style="width:2px;height:18px;background:var(--lime);margin-left:-6px;"></span>
+    </div>
+    <p class="sub" style="font-size:13px;margin-top:12px;">Follow people and add them to your <span style="color:var(--lime);font-weight:600;">Rotation</span> so their moves get favored in your workouts.</p>
+
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:10px;">
+      <!-- result row (in rotation) -->
+      <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;border-radius:16px;">
+        <div class="avatar" style="width:46px;height:46px;background:linear-gradient(135deg,#FF6B6B,#C2410C);font-size:16px;">MJ</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">Marcus Johnson</div><div style="font-size:12px;color:var(--txt2);">@marcusbuilds</div></div>
+        <div class="pill" style="background:rgba(224,254,16,.14);color:var(--lime);font-size:11px;padding:5px 10px;border-radius:999px;">In Rotation</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+      <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;border-radius:16px;">
+        <div class="avatar" style="width:46px;height:46px;background:linear-gradient(135deg,#60A5FA,#1D4ED8);font-size:16px;">MC</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">Marcus Cole</div><div style="font-size:12px;color:var(--txt2);">@coachcole</div></div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+      <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;border-radius:16px;">
+        <div class="avatar" style="width:46px;height:46px;background:linear-gradient(135deg,#34D399,#0F766E);font-size:16px;">MR</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">Marcy Reed</div><div style="font-size:12px;color:var(--txt2);">@marcymobility</div></div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+      <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;border-radius:16px;">
+        <div class="avatar" style="width:46px;height:46px;background:linear-gradient(135deg,#F472B6,#9D174D);font-size:16px;">MA</div>
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">Marco Alvarez</div><div style="font-size:12px;color:var(--txt2);">@marcolifts</div></div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 07 · ME PROFILE                                               -->
+<!-- ============================================================= -->
+<div class="screen" id="profile">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic"><svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg></span>
+  </div>
+  <div class="scroll pad">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="iconbtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7"/></svg></div>
+      <span class="seeall">Done</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;margin-top:8px;">
+      <div class="avatar" style="width:96px;height:96px;background:linear-gradient(135deg,#A78BFA,#7C5CE6);font-size:34px;">TG</div>
+      <div style="font-size:22px;font-weight:800;margin-top:12px;letter-spacing:-.3px;">Tremaine G.</div>
+      <div style="font-size:14px;color:var(--txt2);margin-top:2px;">@tremaine</div>
+      <div style="margin-top:14px;display:flex;gap:10px;">
+        <div class="pill" style="background:rgba(224,254,16,.12);color:var(--lime);font-size:12px;padding:6px 13px;border-radius:999px;font-weight:700;">⚡ Warrior</div>
+        <div style="border:1px solid var(--stroke2);color:#fff;font-size:12px;padding:6px 16px;border-radius:999px;font-weight:700;">Edit profile</div>
+      </div>
+    </div>
+
+    <!-- followers -->
+    <div class="row" style="margin-top:22px;gap:12px;">
+      <div class="card" style="flex:1;padding:14px;text-align:center;"><div style="font-size:20px;font-weight:800;">312</div><div style="font-size:12px;color:var(--txt2);">Followers</div></div>
+      <div class="card" style="flex:1;padding:14px;text-align:center;"><div style="font-size:20px;font-weight:800;">87</div><div style="font-size:12px;color:var(--txt2);">In Rotation</div></div>
+      <div class="card" style="flex:1;padding:14px;text-align:center;"><div style="font-size:20px;font-weight:800;">146</div><div style="font-size:12px;color:var(--txt2);">Workouts</div></div>
+    </div>
+
+    <!-- tabs -->
+    <div class="row" style="margin-top:20px;gap:24px;border-bottom:1px solid var(--stroke);padding-bottom:0;">
+      <div style="font-size:14px;font-weight:700;color:#fff;padding-bottom:12px;border-bottom:2px solid var(--lime);">Stats</div>
+      <div style="font-size:14px;font-weight:700;color:var(--txt3);padding-bottom:12px;">Activity</div>
+      <div style="font-size:14px;font-weight:700;color:var(--txt3);padding-bottom:12px;">Creator</div>
+    </div>
+
+    <!-- health snapshot hero -->
+    <div class="card" style="margin-top:18px;padding:18px;border:1px solid rgba(224,254,16,.20);background:linear-gradient(150deg,rgba(224,254,16,.07),var(--card));">
+      <div class="kicker">Health snapshot</div>
+      <div style="font-size:22px;font-weight:800;margin-top:8px;letter-spacing:-.3px;">Ready to push</div>
+      <p class="sub" style="font-size:13px;margin-top:6px;">Recovery's high and your last 3 sessions trended up. Good day for volume.</p>
+    </div>
+
+    <div class="row" style="margin-top:14px;gap:12px;">
+      <div class="card" style="flex:1;padding:16px;"><div style="font-size:11px;color:var(--txt2);font-weight:600;">This week</div><div style="font-size:24px;font-weight:800;margin-top:6px;">14,200<span style="font-size:13px;color:var(--txt2);font-weight:600;"> lb</span></div><div style="font-size:11px;color:var(--lime);margin-top:2px;">↑ 8% volume</div></div>
+      <div class="card" style="flex:1;padding:16px;"><div style="font-size:11px;color:var(--txt2);font-weight:600;">Body weight</div><div style="font-size:24px;font-weight:800;margin-top:6px;">182<span style="font-size:13px;color:var(--txt2);font-weight:600;"> lb</span></div><div style="font-size:11px;color:var(--txt2);margin-top:2px;">↓ 1.4 this month</div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
