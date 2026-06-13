@@ -5,6 +5,10 @@ const OURA_AUTHORIZE_URL = 'https://cloud.ouraring.com/oauth/authorize';
 const OURA_TOKEN_URL = 'https://api.ouraring.com/oauth/token';
 const OURA_REVOKE_URL = 'https://api.ouraring.com/oauth/revoke';
 
+// Non-secret OAuth client identifier — safe to hardcode (visible in the auth redirect).
+// Kept overridable via env so non-prod can swap it; the client *secret* stays in env only.
+const DEFAULT_CLIENT_ID = 'de9e8969-b244-4945-9b66-4a4f9265ca7b';
+
 const DEFAULT_SCOPES = ['daily'];
 const ALLOWED_SCOPES = new Set([
   'email',
@@ -211,11 +215,11 @@ function getConfiguredScopes() {
 }
 
 function getOauthCredentials() {
-  const clientId = process.env.OURA_CLIENT_ID;
+  const clientId = process.env.OURA_CLIENT_ID || DEFAULT_CLIENT_ID;
   const clientSecret = process.env.OURA_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw createError(500, 'Missing OURA_CLIENT_ID or OURA_CLIENT_SECRET environment variables.');
+    throw createError(500, 'Missing OURA_CLIENT_SECRET environment variable.');
   }
 
   return { clientId, clientSecret };

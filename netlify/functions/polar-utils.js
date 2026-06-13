@@ -5,6 +5,10 @@ const POLAR_AUTHORIZE_URL = 'https://flow.polar.com/oauth2/authorization';
 const POLAR_TOKEN_URL = 'https://polarremote.com/v2/oauth2/token';
 const POLAR_API_BASE_URL = 'https://www.polaraccesslink.com/v3';
 
+// Non-secret OAuth client identifier — safe to hardcode (visible in the auth redirect).
+// Kept overridable via env so non-prod can swap it; the client *secret* stays in env only.
+const DEFAULT_CLIENT_ID = 'f1680f3f-bed6-4914-afbb-abba0cd40474';
+
 const DEFAULT_SCOPES = ['accesslink.read_all'];
 const ALLOWED_SCOPES = new Set(['accesslink.read_all']);
 const DEFAULT_RETURN_TO = '/PulseCheck/polar';
@@ -129,10 +133,10 @@ function getConfiguredScopes() {
 }
 
 function getOauthCredentials() {
-  const clientId = process.env.POLAR_CLIENT_ID;
+  const clientId = process.env.POLAR_CLIENT_ID || DEFAULT_CLIENT_ID;
   const clientSecret = process.env.POLAR_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    throw createError(500, 'Missing POLAR_CLIENT_ID or POLAR_CLIENT_SECRET environment variables.');
+    throw createError(500, 'Missing POLAR_CLIENT_SECRET environment variable.');
   }
   return { clientId, clientSecret };
 }
