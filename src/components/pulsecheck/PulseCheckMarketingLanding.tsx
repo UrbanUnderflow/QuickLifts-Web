@@ -164,6 +164,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           <a href="#nora">Nora AI</a>
           <a href="#coach">Coach Dashboard</a>
           <a href="#clinical">Clinical Safety</a>
+          <a href="/coach/login" className="pc2-nav-login">Log in</a>
           <button
             type="button"
             className="pc2-nav-cta"
@@ -1815,8 +1816,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         @media(max-width:700px){
           .pc2-nav{padding:14px 20px;}
           .pc2-nav--scrolled{padding:12px 20px;}
-          .pc2-nav-links a:not(.pc2-nav-cta){display:none;}
-          .pc2-nav-login{display:none;}
+          .pc2-nav-links a:not(.pc2-nav-cta):not(.pc2-nav-login){display:none;}
           .pc2-section{padding:80px 24px;}
           .pc2-hero-inner{padding:90px 24px 60px;}
           /* Even smaller phone on tiny screens */
