@@ -100,7 +100,7 @@ const PulseCheckProtocolResponsivenessProfileSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Responsiveness Profile Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Personalization-layer artifact for how PulseCheck should learn athlete-specific protocol response patterns. This page defines the canonical responsiveness profile, the evidence signals that update it, how confidence and decay should work, and how Nora should weigh responsiveness against the current state snapshot when selecting among bounded protocol candidates."

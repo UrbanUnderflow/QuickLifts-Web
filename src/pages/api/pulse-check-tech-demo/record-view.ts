@@ -137,7 +137,7 @@ async function sendViewNotification(args: {
   const htmlContent = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:680px;margin:0 auto;background:#080808;color:#f4f4f5;border:1px solid #242424;border-radius:14px;overflow:hidden;">
       <div style="padding:24px 26px;background:linear-gradient(135deg,rgba(200,255,0,0.14),rgba(74,217,255,0.08));border-bottom:1px solid #242424;">
-        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#c8ff00;">Pulse Check Tech Demo</div>
+        <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#c8ff00;">PulseCheck Tech Demo</div>
         <h1 style="margin:8px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Someone viewed the demo page</h1>
       </div>
       <div style="padding:22px 26px;">
@@ -161,7 +161,7 @@ async function sendViewNotification(args: {
   `;
 
   const textContent = [
-    'Pulse Check Tech Demo viewed',
+    'PulseCheck Tech Demo viewed',
     '',
     `Viewer: ${viewerLabel}`,
     `Viewer email: ${args.viewerEmail || 'Unknown'}`,
@@ -182,7 +182,7 @@ async function sendViewNotification(args: {
     const result = await client.sendTransacEmail({
       to: [{ email: NOTIFICATION_TO_EMAIL, name: NOTIFICATION_TO_NAME }],
       sender: { email: SENDER_EMAIL, name: SENDER_NAME },
-      subject: `Pulse Check Tech Demo Viewed: ${viewerLabel}`,
+      subject: `PulseCheck Tech Demo Viewed: ${viewerLabel}`,
       htmlContent,
       textContent,
     });

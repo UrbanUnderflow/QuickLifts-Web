@@ -219,7 +219,7 @@ const PulseCheckModeratedCheckInSpecTab: React.FC = () => {
         <div className="mb-1 flex items-center gap-2">
           <HeartHandshake className="h-4 w-4 text-violet-400" />
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">
-            Pulse Check · Coach ↔ Athlete Trust
+            PulseCheck · Coach ↔ Athlete Trust
           </p>
         </div>
         <h2 className="text-xl font-semibold text-white">Nora-Moderated Check-In</h2>

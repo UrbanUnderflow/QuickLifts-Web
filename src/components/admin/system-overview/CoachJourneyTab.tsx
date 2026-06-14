@@ -104,7 +104,7 @@ const COACH_PHASES: CoachPhase[] = [
     accent: '#facc15',
     description: 'Coach uses the system across pilot checkpoints and the competitive calendar.',
     detail:
-      'Over time, the coach should use Pulse Check to review cohort trends, athlete-level movement, checkpoint outcomes, and what happened after interventions. The system should feel like an operating layer across the season, not a one-time dashboard.',
+      'Over time, the coach should use PulseCheck to review cohort trends, athlete-level movement, checkpoint outcomes, and what happened after interventions. The system should feel like an operating layer across the season, not a one-time dashboard.',
   },
 ];
 
@@ -220,12 +220,12 @@ const CoachJourneyTab: React.FC = () => {
         <div className="mb-1 flex items-center gap-2">
           <BellRing className="h-4 w-4 text-emerald-400" />
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400">
-            Pulse Check · Coach Experience
+            PulseCheck · Coach Experience
           </p>
         </div>
         <h2 className="text-xl font-semibold text-white">Coach User Journey</h2>
         <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-          Recommended entry, setup, daily operating flow, and long-term rhythm for coaches using Pulse Check as a team and pilot operating surface.
+          Recommended entry, setup, daily operating flow, and long-term rhythm for coaches using PulseCheck as a team and pilot operating surface.
         </p>
       </div>
 

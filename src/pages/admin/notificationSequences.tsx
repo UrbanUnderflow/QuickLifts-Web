@@ -105,10 +105,10 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.scheduleDailyNotification()',
         dataKeys: ['identifier: dailyActivityReminder'],
         opensInto: 'Pulse home / training start surfaces',
-        notes: 'Audited 2026-05-05: removed the old “or sim” copy. Sims are Pulse Check only.',
+        notes: 'Audited 2026-05-05: removed the old “or sim” copy. Sims are PulseCheck only.',
         domainGuardrails: [
             'Pulse daily activity copy may mention lift, run, ride, fat burn, or stretch.',
-            'Do not mention sim, protocol, Nora curriculum, or Pulse Check-only actions.',
+            'Do not mention sim, protocol, Nora curriculum, or PulseCheck-only actions.',
         ],
     },
     {
@@ -124,7 +124,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: run_phone_on_body', 'timestamp'],
         opensInto: 'Active run session',
         notes: 'Guarded by RemoteConfigService.isWearableRunAttentionGuardrailsEnabled().',
-        domainGuardrails: ['Pulse run telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+        domainGuardrails: ['Pulse run telemetry only. Must not mention PulseCheck, Nora, sims, or protocols.'],
     },
     {
         id: 'pulse-run-still-active-local',
@@ -139,7 +139,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: run_still_active', 'timestamp'],
         opensInto: 'Active run session',
         notes: 'Guarded by RemoteConfigService.isWearableRunAttentionGuardrailsEnabled().',
-        domainGuardrails: ['Pulse run telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+        domainGuardrails: ['Pulse run telemetry only. Must not mention PulseCheck, Nora, sims, or protocols.'],
     },
     {
         id: 'pulse-bike-phone-placement-local',
@@ -153,7 +153,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.sendBikePhonePlacementReminder()',
         dataKeys: ['type: bike_phone_on_body', 'timestamp'],
         opensInto: 'Active bike session',
-        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention PulseCheck, Nora, sims, or protocols.'],
     },
     {
         id: 'pulse-bike-still-active-local',
@@ -167,7 +167,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.sendBikeStillActiveReminder()',
         dataKeys: ['type: bike_still_active', 'timestamp'],
         opensInto: 'Active bike session',
-        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention PulseCheck, Nora, sims, or protocols.'],
     },
     {
         id: 'pulse-fatburn-phone-placement-local',
@@ -181,7 +181,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.sendFatBurnPhonePlacementReminder(equipmentName:)',
         dataKeys: ['type: fatburn_phone_on_body', 'timestamp'],
         opensInto: 'Active fat-burn session',
-        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention PulseCheck, Nora, sims, or protocols.'],
     },
     {
         id: 'pulse-fatburn-still-active-local',
@@ -195,7 +195,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.sendFatBurnStillActiveReminder(equipmentName:)',
         dataKeys: ['type: fatburn_still_active', 'timestamp'],
         opensInto: 'Active fat-burn session',
-        domainGuardrails: ['Pulse cardio telemetry only. Must not mention Pulse Check, Nora, sims, or protocols.'],
+        domainGuardrails: ['Pulse cardio telemetry only. Must not mention PulseCheck, Nora, sims, or protocols.'],
     },
     {
         id: 'weekly-checkin-reminder',
@@ -268,7 +268,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: SHARE_BONUS', 'points', 'source'],
         opensInto: 'Pulse rewards/profile context',
         tokenField: 'users.fcmToken',
-        domainGuardrails: ['Pulse points/reward copy only. Do not mention Pulse Check assignments, sims, or Nora protocols.'],
+        domainGuardrails: ['Pulse points/reward copy only. Do not mention PulseCheck assignments, sims, or Nora protocols.'],
     },
     {
         id: 'one-on-one-training-updated',
@@ -284,7 +284,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         opensInto: 'Pulse 1-on-1 training room',
         tokenField: 'users.fcmToken',
         notes: 'Queued/coalesced so multi-step coach edits do not send repeated pushes.',
-        domainGuardrails: ['Pulse coach/training-room copy only. Do not mention Pulse Check sims, protocols, or Nora curriculum.'],
+        domainGuardrails: ['Pulse coach/training-room copy only. Do not mention PulseCheck sims, protocols, or Nora curriculum.'],
     },
     {
         id: 'one-on-one-client-activity',
@@ -300,7 +300,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         opensInto: 'Pulse 1-on-1 training room',
         tokenField: 'users.fcmToken',
         notes: 'Activity values: run, bike, fatBurn, lift, food. Food can originate from Macra but opens the Pulse training room for the coach.',
-        domainGuardrails: ['Pulse/Macra coaching handoff only. Do not mention Pulse Check sims or mental-training protocols.'],
+        domainGuardrails: ['Pulse/Macra coaching handoff only. Do not mention PulseCheck sims or mental-training protocols.'],
     },
 
     // ── Round Activity ─────────────────────────────────
@@ -328,7 +328,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: NEW_PARTICIPANT', 'challengeId', 'newUserId', 'newUsername'],
         opensInto: 'Pulse Round detail',
         tokenField: 'users.fcmToken / challenge participant fcmToken',
-        domainGuardrails: ['Pulse Round membership only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse Round membership only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'challenge-released-from-waiting-room',
@@ -343,7 +343,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: WAITING_ROOM_RELEASED', 'challengeId', 'challengeTitle'],
         opensInto: 'Pulse Round detail',
         tokenField: 'users.fcmToken / challenge participant fcmToken',
-        domainGuardrails: ['Pulse Round lifecycle only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse Round lifecycle only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'challenge-started',
@@ -358,7 +358,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: CHALLENGE_STARTED', 'challengeId', 'challengeTitle'],
         opensInto: 'Pulse Round detail',
         tokenField: 'users.fcmToken / challenge participant fcmToken',
-        domainGuardrails: ['Pulse Round lifecycle only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse Round lifecycle only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'workout-started',
@@ -373,7 +373,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: WORKOUT_STARTED', 'challengeId', 'workoutId', 'startingUserId', 'startingUsername'],
         opensInto: 'Pulse Round detail / workout activity',
         tokenField: 'users.fcmToken / challenge participant fcmToken',
-        domainGuardrails: ['Pulse workout/Round activity only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse workout/Round activity only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'callout-answered',
@@ -388,7 +388,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: CALLOUT_ANSWERED', 'challengeId', 'calloutId', 'userId'],
         opensInto: 'Pulse Round callout context',
         tokenField: 'users.fcmToken',
-        domainGuardrails: ['Pulse Round callout only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse Round callout only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'checkin-chain',
@@ -403,7 +403,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: CHECKIN_CHAIN', 'challengeId', 'calloutId', 'fromUserId', 'userId'],
         opensInto: 'Pulse Round check-in context',
         tokenField: 'users.fcmToken',
-        domainGuardrails: ['Pulse Round check-in only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse Round check-in only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'chain-reaction',
@@ -418,7 +418,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: CHAIN_REACTION', 'challengeId', 'fromUserId', 'userId'],
         opensInto: 'Pulse Round detail',
         tokenField: 'users.fcmToken',
-        domainGuardrails: ['Pulse Round engagement only. Do not mention Pulse Check sims or protocols.'],
+        domainGuardrails: ['Pulse Round engagement only. Do not mention PulseCheck sims or protocols.'],
     },
     {
         id: 'round-win-badge',
@@ -433,7 +433,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: ROUND_WIN_BADGE', 'challengeId', 'roundName', 'badgeId'],
         opensInto: 'Pulse profile / Round achievement',
         tokenField: 'users.fcmToken',
-        domainGuardrails: ['Pulse achievement copy only. Do not mention Pulse Check-only sims or protocols.'],
+        domainGuardrails: ['Pulse achievement copy only. Do not mention PulseCheck-only sims or protocols.'],
     },
 
     // ── Run Round ──────────────────────────────────────
@@ -609,7 +609,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         opensInto: 'Pulse direct message thread',
         tokenField: 'users.fcmToken',
         notes: 'Skips empty-content special messages to avoid duplicating challenge-specific notification systems.',
-        domainGuardrails: ['Pulse social messaging only unless the source thread is a Pulse Check coach-athlete message.'],
+        domainGuardrails: ['Pulse social messaging only unless the source thread is a PulseCheck coach-athlete message.'],
     },
     {
         id: 'round-table-message',
@@ -625,7 +625,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         opensInto: 'Pulse Round table chat',
         tokenField: 'users.fcmToken',
         notes: 'Skips non-visible and empty messages.',
-        domainGuardrails: ['Pulse Round messaging only. Do not mention Pulse Check sims or Nora protocols.'],
+        domainGuardrails: ['Pulse Round messaging only. Do not mention PulseCheck sims or Nora protocols.'],
     },
     {
         id: 'club-chat-message',
@@ -640,7 +640,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: CLUB_CHAT_MESSAGE', 'clubId', 'messageId', 'senderId'],
         opensInto: 'Pulse club chat',
         tokenField: 'users.fcmToken',
-        domainGuardrails: ['Pulse Club messaging only. Do not mention Pulse Check sims or Nora protocols.'],
+        domainGuardrails: ['Pulse Club messaging only. Do not mention PulseCheck sims or Nora protocols.'],
     },
     {
         id: 'coach-athlete-message',
@@ -655,8 +655,8 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: coach_athlete_message', 'conversationId', 'senderId', 'recipientId'],
         opensInto: 'Pulse coach-athlete messaging',
         tokenField: 'users.fcmToken',
-        notes: 'Legacy Pulse coach-athlete message trigger. Pulse Check pilot/team messaging should use the Pulse Check scoped token and app surfaces instead.',
-        domainGuardrails: ['Pulse coach messaging only. Do not reuse for Pulse Check pilot/team messaging without pulseCheckFcmToken scoping.'],
+        notes: 'Legacy Pulse coach-athlete message trigger. PulseCheck pilot/team messaging should use the PulseCheck scoped token and app surfaces instead.',
+        domainGuardrails: ['Pulse coach messaging only. Do not reuse for PulseCheck pilot/team messaging without pulseCheckFcmToken scoping.'],
     },
 
     // ── Apple Watch ────────────────────────────────────
@@ -698,9 +698,9 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'local',
         source: 'iOS — NotificationService.scheduleDailyReflectionReminder()',
         dataKeys: ['type: DAILY_REFLECTION', 'route: nora_chat', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
-        opensInto: 'Nora chat in the Pulse Check app',
+        opensInto: 'Nora chat in the PulseCheck app',
         tokenField: 'users.pulseCheckFcmToken',
-        notes: 'Enabled during Nora onboarding and seeded for athlete team onboarding. Tapping stays in Pulse Check and opens Nora chat.',
+        notes: 'Enabled during Nora onboarding and seeded for athlete team onboarding. Tapping stays in PulseCheck and opens Nora chat.',
     },
     {
         id: 'pulsecheck-wind-down-local',
@@ -714,9 +714,9 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'local',
         source: 'iOS — NotificationService.scheduleWindDownReminder()',
         dataKeys: ['type: WIND_DOWN_REMINDER', 'route: nora_chat', 'prompt', 'assistantOpeningMessage', 'launchSubtitle'],
-        opensInto: 'Nora chat in the Pulse Check app',
+        opensInto: 'Nora chat in the PulseCheck app',
         tokenField: 'users.pulseCheckFcmToken',
-        notes: 'Depends on HealthKit sleep data and local notification authorization. Tapping opens Nora chat inside Pulse Check.',
+        notes: 'Depends on HealthKit sleep data and local notification authorization. Tapping opens Nora chat inside PulseCheck.',
     },
     {
         id: 'pulsecheck-biometric-brief-ready',
@@ -739,9 +739,9 @@ const NOTIFICATIONS: NotificationRow[] = [
             'snapshotDateKey',
             'observedDateKey',
         ],
-        opensInto: 'Nora chat in the Pulse Check app',
+        opensInto: 'Nora chat in the PulseCheck app',
         tokenField: 'users.pulseCheckFcmToken',
-        notes: 'This is a Pulse Check notification, not a Fit With Pulse one. Tapping should stay in Pulse Check and launch Nora chat with the biometric brief context.',
+        notes: 'This is a PulseCheck notification, not a Fit With Pulse one. Tapping should stay in PulseCheck and launch Nora chat with the biometric brief context.',
     },
     {
         id: 'pulsecheck-daily-checkin-scheduled',
@@ -756,10 +756,10 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: MENTAL_CHECKIN', 'prompt', 'checkInType', 'screen', 'webUrl'],
         opensInto: 'PulseCheck web Today task',
         tokenField: 'users.pulseCheckFcmToken',
-        notes: 'Requires dailyReflectionPreferences.enabled=true and a valid users.pulseCheckFcmToken. This is the only Pulse Check sequence here that intentionally opens the web task.',
+        notes: 'Requires dailyReflectionPreferences.enabled=true and a valid users.pulseCheckFcmToken. This is the only PulseCheck sequence here that intentionally opens the web task.',
         domainGuardrails: [
-            'Pulse Check only. Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
-            'Can mention web daily task, readiness, Nora, protocols, or sims when the target is Pulse Check.',
+            'PulseCheck only. Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
+            'Can mention web daily task, readiness, Nora, protocols, or sims when the target is PulseCheck.',
         ],
     },
     {
@@ -773,27 +773,27 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'local',
         source: 'iOS — NotificationService.scheduleStreakReminder(currentStreak:atHour:)',
         dataKeys: ['type: STREAK_WARNING', 'currentStreak'],
-        opensInto: 'Pulse Check mental training',
+        opensInto: 'PulseCheck mental training',
         tokenField: 'local-only',
-        notes: 'Suppressed when Pulse Check operational hold/nudge suppression is active.',
-        domainGuardrails: ['Pulse Check mental-training copy only. Do not send from Pulse fitness app reminders.'],
+        notes: 'Suppressed when PulseCheck operational hold/nudge suppression is active.',
+        domainGuardrails: ['PulseCheck mental-training copy only. Do not send from Pulse fitness app reminders.'],
     },
     {
         id: 'pulsecheck-curriculum-midday-sim',
         name: 'PulseCheck — Curriculum Midday Sim Reminder',
         trigger: 'Netlify scheduled function runs every 30 minutes and nudges an uncompleted curriculum-engine sim in the athlete local midday window',
         title: 'Quick sim — 5 min',
-        body: "{{simName}} is queued. Open Pulse Check and knock it out before the day fills up.",
+        body: "{{simName}} is queued. Open PulseCheck and knock it out before the day fills up.",
         category: 'mental-training',
         productScope: 'pulsecheck',
         deliveryMethod: 'scheduled-function',
         source: 'Netlify — netlify/functions/scheduled-curriculum-reminder.ts',
         dataKeys: ['type: curriculum_reminder', 'cadence: midday', 'assignmentId'],
-        opensInto: 'Pulse Check daily curriculum sim',
+        opensInto: 'PulseCheck daily curriculum sim',
         tokenField: 'users.pulseCheckFcmToken',
         notes: 'Audited 2026-05-05: fixed token read from target.fcmToken to target.token.',
         domainGuardrails: [
-            'Pulse Check only. Sim wording is allowed here and forbidden in Pulse daily training reminders.',
+            'PulseCheck only. Sim wording is allowed here and forbidden in Pulse daily training reminders.',
             'Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
         ],
     },
@@ -808,11 +808,11 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'scheduled-function',
         source: 'Netlify — netlify/functions/scheduled-curriculum-reminder.ts',
         dataKeys: ['type: curriculum_reminder', 'cadence: evening', 'assignmentId'],
-        opensInto: 'Pulse Check daily curriculum protocol or sim',
+        opensInto: 'PulseCheck daily curriculum protocol or sim',
         tokenField: 'users.pulseCheckFcmToken',
-        notes: 'Suppressed by Pulse Check operational restrictions and manual holds.',
+        notes: 'Suppressed by PulseCheck operational restrictions and manual holds.',
         domainGuardrails: [
-            'Pulse Check only. Protocol/sim wording is allowed here and forbidden in Pulse daily training reminders.',
+            'PulseCheck only. Protocol/sim wording is allowed here and forbidden in Pulse daily training reminders.',
             'Must resolve users.pulseCheckFcmToken with pushTokenSourceApp=pulsecheck.',
         ],
     },
@@ -827,15 +827,15 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'scheduled-function',
         source: 'Netlify — netlify/functions/scheduled-nora-conversation.ts',
         dataKeys: ['type: nora_conversation', 'conversationId', 'trigger'],
-        opensInto: 'Pulse Check Nora conversation thread',
+        opensInto: 'PulseCheck Nora conversation thread',
         tokenField: 'users.pulseCheckFcmToken',
         notes: 'Audited 2026-05-05: fixed token read from target.fcmToken to target.token and changed push title from Pulse to Nora.',
-        domainGuardrails: ['Pulse Check Nora only. Must not present as a generic Pulse fitness notification.'],
+        domainGuardrails: ['PulseCheck Nora only. Must not present as a generic Pulse fitness notification.'],
     },
     {
         id: 'pulsecheck-pilot-ready',
         name: 'PulseCheck — Pilot Activation Ready',
-        trigger: 'Admin sends pilot activation push after a Pulse Check athlete has been provisioned',
+        trigger: 'Admin sends pilot activation push after a PulseCheck athlete has been provisioned',
         title: '{{teamName}} Pilot',
         body: 'Your PulseCheck app is ready! Open the app, complete consent, and you should be good to go.',
         category: 'onboarding',
@@ -843,41 +843,41 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'fcm-remote',
         source: 'Netlify — netlify/functions/send-pulsecheck-pilot-activation-push.js',
         dataKeys: ['type: PULSECHECK_PILOT_READY', 'route: app_home', 'deepLinkUrl', 'pilotId', 'athleteId', 'outreachDocId'],
-        opensInto: 'Pulse Check app home / consent continuation',
+        opensInto: 'PulseCheck app home / consent continuation',
         tokenField: 'users.pulseCheckFcmToken',
-        domainGuardrails: ['Pulse Check activation only. Must not target users.fcmToken.'],
+        domainGuardrails: ['PulseCheck activation only. Must not target users.fcmToken.'],
     },
     {
         id: 'pulsecheck-vision-pro-trial-ready',
         name: 'PulseCheck — Vision Pro Trial Ready',
         trigger: 'When a coach/admin queues an immersive sim trial for an athlete',
         title: 'Vision Pro trial ready',
-        body: '{{coachDisplayName}} queued {{simName}}. Open Pulse Check to pair the headset.',
+        body: '{{coachDisplayName}} queued {{simName}}. Open PulseCheck to pair the headset.',
         category: 'mental-training',
         productScope: 'pulsecheck',
         deliveryMethod: 'fcm-remote',
         source: 'Netlify — netlify/functions/vision-pro-trials-utils.js sendVisionProQueuedNotification()',
         dataKeys: ['type: VISION_PRO_TRIAL_READY', 'sessionId', 'assignmentId', 'assignmentCollection', 'athleteUserId', 'simId', 'simName', 'coachDisplayName', 'queuedAt'],
-        opensInto: 'Pulse Check Vision Pro pairing / sim runtime',
+        opensInto: 'PulseCheck Vision Pro pairing / sim runtime',
         tokenField: 'users.pulseCheckFcmToken',
         notes: 'Audited 2026-05-05: changed dispatch to resolvePulseCheckPushTarget() instead of users.fcmToken.',
-        domainGuardrails: ['Pulse Check immersive sim only. Must never be sent with the Pulse fitness token.'],
+        domainGuardrails: ['PulseCheck immersive sim only. Must never be sent with the Pulse fitness token.'],
     },
     {
         id: 'pulsecheck-crisis-wall',
         name: 'PulseCheck — Crisis Wall',
         trigger: 'Server-side Tier 3 crisis-wall dispatch when escalation workflow requires the in-app wall',
         title: 'Nora',
-        body: 'Open Pulse Check for support.',
+        body: 'Open PulseCheck for support.',
         category: 'mental-training',
         productScope: 'pulsecheck',
         deliveryMethod: 'fcm-remote',
         source: 'iOS receiver — NotificationService.NoraNotificationType.crisisWall; server dispatch pending/owned by escalation pipeline',
         dataKeys: ['type: crisisWall', 'escalationId'],
-        opensInto: 'Pulse Check crisis wall',
+        opensInto: 'PulseCheck crisis wall',
         tokenField: 'users.pulseCheckFcmToken',
         notes: 'Receiver is implemented; server-side dispatch remains future/pipeline-owned. Keep listed so the admin surface documents the payload contract.',
-        domainGuardrails: ['Pulse Check safety surface only. Do not route through generic Pulse notification helpers.'],
+        domainGuardrails: ['PulseCheck safety surface only. Do not route through generic Pulse notification helpers.'],
     },
 
     // ── Mental Training (Scheduled) ────────────────────
@@ -991,7 +991,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         tokenField: 'users.macraFcmToken || users.pushTokens.macra',
         notes: 'Audited 2026-05-06: removed the users.fcmToken fallback so Macra nutrition pushes cannot appear under Pulse.',
         domainGuardrails: [
-            'Macra nutrition only. May mention food, macros, meal logging, and Nora nutrition; must not mention Pulse Check sims/protocols.',
+            'Macra nutrition only. May mention food, macros, meal logging, and Nora nutrition; must not mention PulseCheck sims/protocols.',
             'Must use a Macra-owned push token only. Do not target users.fcmToken.',
         ],
     },
@@ -1083,9 +1083,9 @@ const DOMAIN_AUDIT_ITEMS = [
         detail: 'Removed sim from the Pulse daily activity reminder. Pulse can offer lift, run, ride, fat burn, or stretch.',
     },
     {
-        label: 'Pulse Check token routing',
+        label: 'PulseCheck token routing',
         status: 'Fixed',
-        detail: 'Curriculum reminders, Nora conversation pushes, and Vision Pro trial pushes resolve the Pulse Check token surface.',
+        detail: 'Curriculum reminders, Nora conversation pushes, and Vision Pro trial pushes resolve the PulseCheck token surface.',
     },
     {
         label: 'Admin inventory',
@@ -1187,7 +1187,7 @@ const getScopedPushTokenLabel = (user: TestTargetUser | null, notification: Noti
     const scope = getNotificationProductScope(notification);
 
     if (scope === 'pulsecheck') {
-        return available ? 'Pulse Check push token available' : 'No Pulse Check push token on file';
+        return available ? 'PulseCheck push token available' : 'No PulseCheck push token on file';
     }
     if (scope === 'macra') {
         return available ? 'Macra push token available' : 'No Macra push token on file';
@@ -1200,7 +1200,7 @@ const getPreviewAppChrome = (notification: NotificationRow) => {
     const scope = getNotificationProductScope(notification);
     if (scope === 'pulsecheck') {
         return {
-            label: 'Pulse Check',
+            label: 'PulseCheck',
             initial: 'PC',
             badgeClassName: 'bg-cyan-400 text-slate-950',
         };

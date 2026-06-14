@@ -52,7 +52,7 @@ const PulseCheckProtocolEvidenceDashboardTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Evidence Dashboard"
         version="Version 0.1 | March 18, 2026"
         summary="Evidence and monitoring artifact for how the protocol system should be measured at launch. This page defines the dashboard panels, KPIs, alert conditions, and slice dimensions required to tell whether live protocols are helping, doing nothing, or causing bad outcomes."

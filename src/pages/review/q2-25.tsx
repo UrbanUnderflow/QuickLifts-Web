@@ -373,7 +373,7 @@ const Q2Review2025 = () => {
                 "iOS crash-free sessions ↑ to 99.3%",
                 "First Apple Watch HR streaming inside Sweat Sync Live",
                 "Stripe Connect revenue-share ledger live",
-                "Admin Tools CMS • 100 Coaches CRM • Pulse Check app inception"
+                "Admin Tools CMS • 100 Coaches CRM • PulseCheck app inception"
               ].map((win, index) => (
                 <div key={index} className="flex items-start gap-3 bg-gray-50/80 backdrop-blur-sm rounded-lg p-3">
                   <CheckCircle size={16} className="text-yellow-500 mt-0.5 flex-shrink-0" />

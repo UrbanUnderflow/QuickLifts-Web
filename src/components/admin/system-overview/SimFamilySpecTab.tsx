@@ -96,7 +96,7 @@ const SimFamilySpecTab: React.FC = () => {
                 <div className="flex items-center gap-2 mb-1">
                     <FileText className="w-4 h-4 text-purple-400" />
                     <p className="text-xs uppercase tracking-wide text-purple-400 font-semibold">
-                        Pulse Check · Sim Family Specs
+                        PulseCheck · Sim Family Specs
                     </p>
                 </div>
                 <h2 className="text-xl font-semibold text-white">Sim FamilySpec Library</h2>

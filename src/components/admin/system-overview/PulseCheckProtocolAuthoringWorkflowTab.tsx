@@ -86,7 +86,7 @@ const PulseCheckProtocolAuthoringWorkflowTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Authoring Workflow"
         version="Version 0.1 | March 17, 2026"
         summary="Design artifact for the operational workspace that should create, revise, review, publish, and retire PulseCheck protocols. This page defines the authoring flow, required workspace surfaces, change classes, publish controls, and revision model we should build before calling protocol governance mature."

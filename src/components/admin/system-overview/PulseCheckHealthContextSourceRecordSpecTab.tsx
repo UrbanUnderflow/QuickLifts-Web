@@ -6,7 +6,7 @@ const PRINCIPLE_CARDS = [
   {
     title: 'Adapters Emit Records, Not Stories',
     accent: 'red' as const,
-    body: 'HealthKit, Polar, Oura, Fit With Pulse, Macra, and Pulse Check self-report adapters should emit normalized source records only. They should not create Nora-facing summaries or consumer-specific payloads.',
+    body: 'HealthKit, Polar, Oura, Fit With Pulse, Macra, and PulseCheck self-report adapters should emit normalized source records only. They should not create Nora-facing summaries or consumer-specific payloads.',
   },
   {
     title: 'Append-Oriented And Rebuildable',
@@ -43,7 +43,7 @@ const TYPE_ROWS = [
   ['measurement', 'A point-in-time or compact time-window metric such as HRV, resting heart rate, weight, VO2 max, oxygen saturation, or steps-total-for-day.', 'Fine-grained health metrics and daily totals.'],
   ['session', 'A bounded activity or recovery interval such as workout, sleep session, meditation session, or recovery block.', 'Workouts, sleep, readiness windows.'],
   ['journal_entry', 'A human-entered log such as meal, hydration, symptom note, or training note.', 'Nutrition and qualitative context.'],
-  ['checkin', 'Pulse Check subjective response such as mood, readiness, stress, confidence, or post-session reflection.', 'Behavioral and emotional context.'],
+  ['checkin', 'PulseCheck subjective response such as mood, readiness, stress, confidence, or post-session reflection.', 'Behavioral and emotional context.'],
   ['summary_input', 'A pre-aggregated upstream record allowed as an input to assembly, such as Fit With Pulse daily summary fragments.', 'Migration-safe bridge from current system to target system.'],
   ['derived_signal', 'A computed signal produced by an approved derivation step before full snapshot assembly.', 'Gap flags, adherence score inputs, and other reusable signals.'],
 ];
@@ -54,7 +54,7 @@ const PAYLOAD_ROWS = [
   ['activity payload', 'Steps, active calories, distance, stand hours, exercise minutes, movement load.', 'Daily or interval activity records.'],
   ['nutrition payload', 'Meal id, calories, macros, hydration, nutrient detail, journal confidence, meal timestamp.', 'Macra-owned journal-entry or daily-total inputs, with legacy Fit With Pulse nutrition only as migration support.'],
   ['biometrics payload', 'Weight, body fat, lean mass, respiratory rate, oxygen saturation, VO2 max, and unit-normalized values.', 'Measurement records only.'],
-  ['behavioral payload', 'Mood, readiness, stress, perceived recovery, sim outcome, compliance, notes, selected answers.', 'Pulse Check check-ins and reflections.'],
+  ['behavioral payload', 'Mood, readiness, stress, perceived recovery, sim outcome, compliance, notes, selected answers.', 'PulseCheck check-ins and reflections.'],
 ];
 
 const SOURCE_ROWS = [
@@ -64,7 +64,7 @@ const SOURCE_ROWS = [
   ['Apple Watch origin metadata', 'Attach watch-origin detail inside `sourceMetadata` when HealthKit data originated from watch capture.', 'Useful for confidence and device-aware explanation, but not a separate consumer schema.'],
   ['Polar adapter', 'Emit Polar AccessLink training/activity/recovery records and Polar BLE live heart-rate records normalized to the same contract.', 'Direct Polar evidence can outrank biometric fallback, but it still writes source records instead of bypassing assembly.'],
   ['Oura adapter', 'Emit recovery and readiness records normalized to the same contract.', 'Must not create a separate Oura-only snapshot shape.'],
-  ['Pulse Check self-report adapter', 'Emit check-in and behavioral records from Pulse Check service flows.', 'Subjective context belongs in the same record system, not a side channel.'],
+  ['PulseCheck self-report adapter', 'Emit check-in and behavioral records from PulseCheck service flows.', 'Subjective context belongs in the same record system, not a side channel.'],
 ];
 
 const STORAGE_ROWS = [
@@ -78,7 +78,7 @@ const STORAGE_ROWS = [
 const HANDOFF_STEPS = [
   {
     title: 'Adapter Fetches Upstream Item',
-    body: 'The adapter reads a HealthKit sample, Polar payload, Oura payload, Fit With Pulse workout, Macra nutrition record, or Pulse Check check-in event.',
+    body: 'The adapter reads a HealthKit sample, Polar payload, Oura payload, Fit With Pulse workout, Macra nutrition record, or PulseCheck check-in event.',
     owner: 'Source adapter',
   },
   {
@@ -114,7 +114,7 @@ const GUARDRAIL_ROWS = [
 const BUILD_ORDER_ROWS = [
   ['1. Finalize source-record contract', 'Lock record shape, enums, unit rules, and adapter responsibilities.', 'Needed before adapter implementation.'],
   ['2. Implement HealthKit adapter', 'Map HealthKit-origin measurements and sessions into source records.', 'Targets the contract rather than inventing storage.'],
-  ['3. Implement Pulse Check self-report adapter', 'Write check-ins and behavioral context into the same source-record system.', 'Makes subjective context a first-class input.'],
+  ['3. Implement PulseCheck self-report adapter', 'Write check-ins and behavioral context into the same source-record system.', 'Makes subjective context a first-class input.'],
   ['4. Implement Polar adapter', 'Map Polar AccessLink and Polar BLE inputs into source records.', 'Gives run detection and health-context assembly a direct device lane before Oura fallback.'],
   ['5. Implement Oura adapter', 'Map Oura recovery and readiness inputs into source records.', 'Drops into the same assembler path cleanly.'],
   ['6. Build operator tooling', 'Add inspection tools for raw source records and snapshot assembly traces.', 'Makes ingestion debuggable without leaking raw complexity into product surfaces.'],
@@ -133,7 +133,7 @@ const PulseCheckHealthContextSourceRecordSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Health Context"
+        eyebrow="PulseCheck Health Context"
         title="Health Context Source Record Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Canonical contract for the normalized source-record layer that every health-context adapter must write before snapshot assembly. This spec is the bridge between raw upstream systems and the `AthleteHealthContextSnapshot`, and it exists to stop HealthKit, Oura, Fit With Pulse, Macra, or self-report adapters from creating schema drift beneath the snapshot contract."
@@ -156,7 +156,7 @@ const PulseCheckHealthContextSourceRecordSpecTab: React.FC = () => {
       <RuntimeAlignmentPanel
         role="Contract artifact for the source-record layer that feeds canonical athlete-context snapshots. It defines what every source adapter must write, how records are versioned and deduplicated, and where merge responsibility begins and ends."
         sourceOfTruth="This document is authoritative for the `HealthContextSourceRecord` shape, record types, source-family expectations, payload normalization rules, persistence guardrails, and the handoff boundary between source adapters and the snapshot assembler."
-        masterReference="Use this page before implementing native HealthKit ingestion, Oura ingestion, Fit With Pulse snapshot migration adapters, Macra nutrition adapters, Pulse Check self-report ingestion, or operator tooling for health-context debugging."
+        masterReference="Use this page before implementing native HealthKit ingestion, Oura ingestion, Fit With Pulse snapshot migration adapters, Macra nutrition adapters, PulseCheck self-report ingestion, or operator tooling for health-context debugging."
         relatedDocs={[
           'Health Context Architecture',
           'Athlete Context Snapshot Spec',

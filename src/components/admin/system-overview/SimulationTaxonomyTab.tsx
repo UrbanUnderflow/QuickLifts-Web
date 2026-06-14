@@ -121,14 +121,14 @@ const SCORE_LAYERS = [
 const EVIDENCE_LEVELS = [
     { level: 'Mechanism-Only', color: '#94a3b8', claim: 'The sim exercises a cognitive mechanism that research shows matters for performance.', requirement: 'Published peer-reviewed research on the underlying cognitive construct.' },
     { level: 'Adjacent', color: '#60a5fa', claim: 'The mechanism is established, and related training interventions have shown effects in sport or performance contexts.', requirement: 'Mechanism research + published training studies in adjacent domains.' },
-    { level: 'Internally Validated', color: '#22c55e', claim: "Pulse Check's implementation specifically has demonstrated measurable improvement in controlled testing.", requirement: 'Internal pre/post data showing significant improvement on target metrics.' },
+    { level: 'Internally Validated', color: '#22c55e', claim: "PulseCheck's implementation specifically has demonstrated measurable improvement in controlled testing.", requirement: 'Internal pre/post data showing significant improvement on target metrics.' },
     { level: 'Transfer-Validated', color: '#E0FE10', claim: 'The trained skill retains and transfers through Trials of increasing fidelity toward competition.', requirement: 'Transfer testing across Baseline → Immersive → Field trials with measurable Transfer Gap reduction.' },
 ];
 
 const FAMILY_VALIDITY_FINDINGS = [
     { family: 'Reset', validity: 'Strong mechanism rationale', note: 'Maps to attentional control, stress exposure, choking/pressure, and refocusing logic. Product proof must show recovery latency and post-disruption accuracy predict pressure recovery outside the controlled sim.' },
     { family: 'Noise Gate', validity: 'Strong mechanism rationale', note: 'Maps cleanly to selective attention and interference filtering. Product proof must show that distractor-cost improvements survive higher-fidelity pressure contexts.' },
-    { family: 'Brake Point', validity: 'Strong adjacent support', note: 'Maps to response inhibition and stop-signal literature. Sport meta-analysis supports inhibition relevance, but Pulse Check still needs implementation reliability and transfer data.' },
+    { family: 'Brake Point', validity: 'Strong adjacent support', note: 'Maps to response inhibition and stop-signal literature. Sport meta-analysis supports inhibition relevance, but PulseCheck still needs implementation reliability and transfer data.' },
     { family: 'Signal Window', validity: 'Strong but transfer-sensitive', note: 'Maps to perceptual-cognitive decision-making. Transfer is most credible when signals resemble sport decisions rather than abstract laboratory choices.' },
     { family: 'Sequence Shift', validity: 'Mechanism-supported', note: 'Maps to shifting, updating, and old-rule intrusion. Product proof must show the sim captures meaningful rule or context changes rather than generic task switching only.' },
     { family: 'Endurance Lock', validity: 'Strong adjacent support', note: 'Maps to sustained attention and mental fatigue. Product proof must separate cognitive-fatigue effects from boredom, physical fatigue, and interface friction.' },
@@ -215,7 +215,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                     </div>
                 </div>
                 <p className="text-sm text-zinc-300 max-w-4xl">
-                    The complete reference for Pulse Check&apos;s mental performance system — pillars, skills, modifiers, sims, scoring, evidence framework, and program orchestration.
+                    The complete reference for PulseCheck&apos;s mental performance system — pillars, skills, modifiers, sims, scoring, evidence framework, and program orchestration.
                 </p>
             </div>
 
@@ -226,10 +226,10 @@ const SimulationTaxonomyTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Pulse Check exists to train measurable mental performance under pressure. It is not a library of disconnected mini-games and it is not a wellness app with a performance wrapper.
+                        PulseCheck exists to train measurable mental performance under pressure. It is not a library of disconnected mini-games and it is not a wellness app with a performance wrapper.
                     </p>
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Pulse Check is a <span className="text-white font-semibold">simulation system</span>: a serious training lane that helps athletes and coaches build, measure, and improve the mental side of execution in the same way physical systems build measurable strength, speed, and conditioning.
+                        PulseCheck is a <span className="text-white font-semibold">simulation system</span>: a serious training lane that helps athletes and coaches build, measure, and improve the mental side of execution in the same way physical systems build measurable strength, speed, and conditioning.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
                         {['Not a library of disconnected mini-games', 'Not a wellness app with a performance wrapper', 'A simulation system for measurable mental performance'].map((point, i) => (
@@ -248,7 +248,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                        Pulse Check uses a simple, durable object model. This document intentionally uses <span className="text-white font-semibold">Program</span> as the curriculum layer and avoids legacy vocabulary that creates unnecessary education overhead.
+                        PulseCheck uses a simple, durable object model. This document intentionally uses <span className="text-white font-semibold">Program</span> as the curriculum layer and avoids legacy vocabulary that creates unnecessary education overhead.
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {[
@@ -315,7 +315,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Activity className="w-4 h-4 text-cyan-400" /> 4. Cross-Cutting Modifiers
                 </h3>
-                <p className="text-sm text-zinc-400">Modifiers are not pillars. They are overlays that can affect every skill in the system. They help Pulse Check separate trait from state and distinguish stable strengths from context-dependent breakdowns.</p>
+                <p className="text-sm text-zinc-400">Modifiers are not pillars. They are overlays that can affect every skill in the system. They help PulseCheck separate trait from state and distinguish stable strengths from context-dependent breakdowns.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {MODIFIERS.map((mod) => (
                         <div key={mod.key} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4 space-y-2">
@@ -365,7 +365,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <FlaskConical className="w-4 h-4 text-blue-400" /> 6. Scientific Evidence Framework
                 </h3>
-                <p className="text-sm text-zinc-400">Every sim includes a Scientific Basis section. Citations alone are not enough — a paper can support the mechanism without proving the Pulse Check implementation is effective.</p>
+                <p className="text-sm text-zinc-400">Every sim includes a Scientific Basis section. Citations alone are not enough — a paper can support the mechanism without proving the PulseCheck implementation is effective.</p>
                 <div className="space-y-2">
                     {EVIDENCE_LEVELS.map((ev) => (
                         <div key={ev.level} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4 flex items-start gap-4">
@@ -382,7 +382,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                     <div className="space-y-2">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-amber-300">Six-Family Validity Finding</p>
                         <p className="text-sm text-zinc-300 leading-relaxed">
-                            Current research supports the six families as a <span className="font-semibold text-white">mechanism-valid taxonomy</span>, not as a product-validated final model. Each family maps to a defensible cognitive or performance-science construct, but Pulse Check must still prove that these six families are psychometrically distinct, reliable inside the product, and predictive across higher-fidelity Trials.
+                            Current research supports the six families as a <span className="font-semibold text-white">mechanism-valid taxonomy</span>, not as a product-validated final model. Each family maps to a defensible cognitive or performance-science construct, but PulseCheck must still prove that these six families are psychometrically distinct, reliable inside the product, and predictive across higher-fidelity Trials.
                         </p>
                         <p className="text-xs text-zinc-400 leading-relaxed">
                             The current validation question is whether the six family scores explain athlete outcomes better than a simpler three-pillar model using Focus, Composure, and Decision alone.
@@ -430,7 +430,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Layers className="w-4 h-4 text-amber-400" /> 7. Sim Specification Template
                 </h3>
-                <p className="text-sm text-zinc-400">Every Pulse Check sim is authored against one common template. If a proposed sim cannot fill out these fields cleanly, it should not ship.</p>
+                <p className="text-sm text-zinc-400">Every PulseCheck sim is authored against one common template. If a proposed sim cannot fill out these fields cleanly, it should not ship.</p>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                         {['Sim Name', 'Primary Pillar', 'Target Skills', 'Core Metric', 'Supporting Metrics', 'Pressure Types', 'Tier Progression Rules', 'Duration (per tier)', 'Scientific Basis', 'Evidence Status', 'Transfer Hypothesis', 'Validation Plan'].map((field) => (
@@ -449,7 +449,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        <span className="text-white font-semibold">Nora</span> functions as the program director for Pulse Check, not just a recommendation bot. The adaptation engine runs on a state-and-profile model rather than a single generic score.
+                        <span className="text-white font-semibold">Nora</span> functions as the program director for PulseCheck, not just a recommendation bot. The adaptation engine runs on a state-and-profile model rather than a single generic score.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {[
@@ -472,7 +472,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Timer className="w-4 h-4 text-orange-400" /> 9. Session Length and Duration Framework
                 </h3>
-                <p className="text-sm text-zinc-400">Duration is part of what Pulse Check measures. Some weaknesses only appear with time-on-task.</p>
+                <p className="text-sm text-zinc-400">Duration is part of what PulseCheck measures. Some weaknesses only appear with time-on-task.</p>
                 <div className="overflow-x-auto border border-zinc-800 rounded-2xl">
                     <table className="w-full text-sm min-w-[640px]">
                         <thead className="bg-black/20 text-zinc-400 uppercase text-xs tracking-wide">
@@ -584,7 +584,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                     <Gauge className="w-4 h-4 text-green-400" /> 12. Validation Roadmap and Operating Rules
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
-                    <p className="text-sm text-zinc-300 leading-relaxed">Pulse Check builds credibility through disciplined validation. Every new sim moves through the same ladder from mechanism to transfer.</p>
+                    <p className="text-sm text-zinc-300 leading-relaxed">PulseCheck builds credibility through disciplined validation. Every new sim moves through the same ladder from mechanism to transfer.</p>
                     <div className="space-y-2">
                         {[
                             { step: '1', title: 'Mechanism Review', desc: 'Identify the cognitive construct. Confirm peer-reviewed research supports the mechanism.', color: '#94a3b8' },
@@ -592,7 +592,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                             { step: '3', title: 'Internal Pilot', desc: 'Run the sim with internal testers. Validate measurement reliability and UX completion rates.', color: '#a78bfa' },
                             { step: '4', title: 'Pre/Post Validation', desc: 'Measure improvement on target metrics before and after a training block. Establish effect sizes.', color: '#22c55e' },
                             { step: '5', title: 'Transfer Testing', desc: 'Test whether trained skills transfer through Trials of increasing fidelity (Immersive → Field).', color: '#E0FE10' },
-                            { step: '6', title: 'Outcome Correlation', desc: 'Correlate Pulse Check data with real competition performance and coach assessments.', color: '#fb923c' },
+                            { step: '6', title: 'Outcome Correlation', desc: 'Correlate PulseCheck data with real competition performance and coach assessments.', color: '#fb923c' },
                         ].map((item) => (
                             <div key={item.step} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-black/20 p-3">
                                 <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold" style={{ background: item.color + '20', color: item.color, border: `1px solid ${item.color}40` }}>{item.step}</div>

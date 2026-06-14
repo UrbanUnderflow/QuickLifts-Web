@@ -212,12 +212,12 @@ const TECHNICAL_IMPLEMENTATION_ROWS = [
   [
     'Daily evidence ledger',
     'Write date-keyed aggregate activity evidence separately from timestamped primitives. Mark aggregate-only source records as not session-candidate eligible.',
-    'Pulse Check iOS / shared Fit With Pulse health services',
+    'PulseCheck iOS / shared Fit With Pulse health services',
   ],
   [
     'iOS primitive extractor',
     'Generalize the current lift/Polar work into a SessionPrimitiveAccumulator for timestamped HR zones, movement density, accel bursts, rest gaps, step/distance, and device coverage.',
-    'Pulse Check iOS / shared Fit With Pulse health services',
+    'PulseCheck iOS / shared Fit With Pulse health services',
   ],
   [
     'Sport detection profiles',
@@ -237,7 +237,7 @@ const TECHNICAL_IMPLEMENTATION_ROWS = [
   [
     'Athlete response capture',
     'Support quick taps, text summary, and voice summary. Parse lift/practice/conditioning summaries into structured context using the Claude bridge/GPT fallback path.',
-    'Pulse Check iOS + AI bridge',
+    'PulseCheck iOS + AI bridge',
   ],
   [
     'Coach context capture',
@@ -478,7 +478,7 @@ const PulseCheckContextualSportsDetectionEngineSpecTab: React.FC = () => {
         eyebrow="Pulse Sports Intelligence"
         title="Contextual Sports Detection Engine"
         version="Version 0.3 | May 13, 2026"
-        summary="The differentiating Sports Intelligence loop: timestamped sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, separates daily rollups from session candidates, then intelligently closes gaps with the athlete and coach."
+        summary="The differentiating Sports Intelligence loop: timestamped sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. PulseCheck does not depend solely on the wearable. It uses the wearable as evidence, separates daily rollups from session candidates, then intelligently closes gaps with the athlete and coach."
         highlights={[
           {
             title: 'Device Gives Evidence, Nora Gives Meaning',
@@ -517,7 +517,7 @@ const PulseCheckContextualSportsDetectionEngineSpecTab: React.FC = () => {
           <InfoCard
             title="The Moat"
             accent="green"
-            body="Most wearable systems stop at sensor interpretation: elevated HR, steps, active minutes, generic workout detection. Pulse Check has athlete profile, sport, position, coach intent, schedule, prescribed plan, Nora check-ins, direct athlete answers, and historical corrections. That lets us interpret evidence instead of merely reporting it."
+            body="Most wearable systems stop at sensor interpretation: elevated HR, steps, active minutes, generic workout detection. PulseCheck has athlete profile, sport, position, coach intent, schedule, prescribed plan, Nora check-ins, direct athlete answers, and historical corrections. That lets us interpret evidence instead of merely reporting it."
           />
           <InfoCard
             title="Operating Rule"

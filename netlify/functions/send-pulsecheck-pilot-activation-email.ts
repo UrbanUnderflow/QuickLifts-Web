@@ -190,7 +190,7 @@ function renderFallbackHtml(args: {
                 </p>
                 <p style="margin:24px 0 12px 0;">
                   <a href="${openAppUrl}" style="display:inline-block;background:#d7ff00;color:#0b0f16;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:800;">
-                    Open Pulse Check App
+                    Open PulseCheck App
                   </a>
                 </p>
                 <p style="margin:0 0 16px 0;font-size:13px;line-height:1.7;color:#a1a1aa;">
@@ -307,7 +307,7 @@ export const handler: Handler = async (event) => {
       subject: template.subject,
       body: stripHtmlToPreviewText(emailHtml),
       html: emailHtml,
-      ctaLabel: 'Open Pulse Check App',
+      ctaLabel: 'Open PulseCheck App',
       ctaUrl: openAppUrl,
     };
 

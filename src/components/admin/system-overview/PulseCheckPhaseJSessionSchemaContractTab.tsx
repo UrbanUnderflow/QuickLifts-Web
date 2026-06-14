@@ -156,7 +156,7 @@ const ACTOR_ROWS = PHASE_J_ACTOR_PRECEDENCE.map((actorRole, index) => [
 const PROVENANCE_FIELD_DESCRIPTIONS: Record<keyof PhaseJRecordProvenance, string> = {
   adapter: 'Adapter or module that normalized the evidence.',
   confidenceHints: 'Adapter or router hints that shaped the confidence tier.',
-  ingestedAt: 'When Pulse Check wrote the normalized record.',
+  ingestedAt: 'When PulseCheck wrote the normalized record.',
   observedAt: 'When the upstream event happened.',
   qualityFlags: 'Coverage gaps, stale data, denied permission, partial parse, conflict, or other warnings.',
   rawRef: 'Optional pointer to raw vendor payload or internal trace.',
@@ -193,7 +193,7 @@ const PulseCheckPhaseJSessionSchemaContractTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Sports Intelligence"
+        eyebrow="PulseCheck Sports Intelligence"
         title="Phase J Session Schema Contract"
         version={`Version 0.1 | ${PHASE_J_SESSION_CONTRACT_VERSION} | May 1, 2026`}
         summary="Implementation-facing Firestore and TypeScript contract for the Contextual Sports Detection Engine. This locks candidate, prompt, confirmation, session-record, athlete-pattern, confidence, actor-precedence, index, and provenance rules before runtime work builds on top of them."

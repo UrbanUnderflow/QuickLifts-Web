@@ -31,7 +31,7 @@ const RULE_ROWS = [
 ];
 
 const CONSENT_ROWS = [
-  ['Product consent', 'Required for Pulse Check use.'],
+  ['Product consent', 'Required for PulseCheck use.'],
   ['Research consent', 'Pilot- and cohort-dependent; determines study-dataset eligibility.'],
   ['Escalation / clinical consent', 'Separate event-driven workflow inside Tier 2 escalation and not part of generic onboarding permissions.'],
 ];
@@ -40,7 +40,7 @@ const PulseCheckPermissionsVisibilityModelTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Governance"
+        eyebrow="PulseCheck Governance"
         title="Permissions & Visibility Model"
         version="Version 1.0 | March 10, 2026"
         summary="Governance artifact for role-based access, invite-linked permissions, dashboard visibility, and escalation boundaries across athletes, coaches, staff, admins, and clinicians."
@@ -55,7 +55,7 @@ const PulseCheckPermissionsVisibilityModelTab: React.FC = () => {
           },
           {
             title: 'Clinician Access Is Explicit',
-            body: 'Clinician workflows should be anchored through a real Pulse Check to AuntEdna mapping, not through broad dashboard access.',
+            body: 'Clinician workflows should be anchored through a real PulseCheck to AuntEdna mapping, not through broad dashboard access.',
           },
         ]}
       />

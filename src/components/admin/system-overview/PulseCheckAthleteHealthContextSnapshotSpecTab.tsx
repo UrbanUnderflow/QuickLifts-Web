@@ -6,12 +6,12 @@ const SNAPSHOT_PRINCIPLES = [
   {
     title: 'Contract Before Pipes',
     accent: 'red' as const,
-    body: 'Do not build Pulse Check HealthKit or Oura ingestion against an ad hoc shape. The canonical snapshot contract must be locked first so every ingestion lane targets the same normalized model.',
+    body: 'Do not build PulseCheck HealthKit or Oura ingestion against an ad hoc shape. The canonical snapshot contract must be locked first so every ingestion lane targets the same normalized model.',
   },
   {
     title: 'One Snapshot, Many Sources',
     accent: 'blue' as const,
-    body: 'Fit With Pulse, Macra, HealthKit, Apple Watch, Oura, and Pulse Check self-report should all merge into one athlete-context artifact rather than branching into separate runtime-specific models.',
+    body: 'Fit With Pulse, Macra, HealthKit, Apple Watch, Oura, and PulseCheck self-report should all merge into one athlete-context artifact rather than branching into separate runtime-specific models.',
   },
   {
     title: 'Provenance Is Product Logic',
@@ -43,7 +43,7 @@ const DOMAIN_ROWS = [
   ['activity', 'Steps, active calories, distance, exercise minutes, stand hours, cardio and general movement context.', 'Required when activity sources exist.'],
   ['nutrition', 'Macra meal count, calories, macros, hydration, macro targets, journal confidence, and energy-balance interpretation.', 'Required when nutrition context exists.'],
   ['biometrics', 'Weight, body fat, muscle mass, respiratory rate, oxygen saturation, VO2 max, and other body / fitness metrics.', 'Optional but normalized when present.'],
-  ['behavioral', 'Pulse Check check-ins, mood, subjective readiness, sim outcomes, compliance, and recent self-report context.', 'Required for Pulse Check personalization.'],
+  ['behavioral', 'PulseCheck check-ins, mood, subjective readiness, sim outcomes, compliance, and recent self-report context.', 'Required for PulseCheck personalization.'],
   ['summary', 'High-level merged takeaways safe for Nora and dashboard consumption.', 'Required.'],
 ];
 
@@ -79,7 +79,7 @@ const MERGE_ROWS = [
   ['Recovery domain', 'Oura and Apple Health sources merge, with direct wearable recovery signals preferred over broader inferred heuristics.', 'Choose the most recovery-specific direct signal.'],
   ['Activity domain', 'HealthKit / Apple Watch-origin activity metrics are canonical for general movement and daily exertion.', 'Avoid duplicating derived totals from less precise sources.'],
   ['Nutrition domain', 'Macra wins for logged nutrition and macro planning; legacy Fit With Pulse food journal data can supplement during migration where Macra detail is missing.', 'Prefer the dedicated nutrition surface over calorie-only readings.'],
-  ['Behavioral domain', 'Pulse Check self-report and app-native state always win because they express athlete intent and subjective state.', 'Do not let device metrics overwrite self-report.'],
+  ['Behavioral domain', 'PulseCheck self-report and app-native state always win because they express athlete intent and subjective state.', 'Do not let device metrics overwrite self-report.'],
   ['Summary domain', 'The summary block is generated from normalized domains and their freshness / provenance metadata, not from a raw source payload.', 'Keep runtime language source-aware and consistent.'],
 ];
 
@@ -113,18 +113,18 @@ const LIFECYCLE_STEPS = [
 
 const BUILD_ORDER_ROWS = [
   ['1. Lock contract', 'Finalize the `AthleteHealthContextSnapshot` schema, enums, merge precedence, and provenance rules.', 'Required before new ingestion work starts.'],
-  ['2. Build source adapters', 'Implement Pulse Check HealthKit and later Oura source adapters to output normalized source records targeting the contract.', 'Adapters should not invent their own storage shape.'],
-  ['3. Implement assembler', 'Create the snapshot builder that merges shared Fit With Pulse context, Macra nutrition, and Pulse Check sources.', 'Assembler enforces one product truth.'],
+  ['2. Build source adapters', 'Implement PulseCheck HealthKit and later Oura source adapters to output normalized source records targeting the contract.', 'Adapters should not invent their own storage shape.'],
+  ['3. Implement assembler', 'Create the snapshot builder that merges shared Fit With Pulse context, Macra nutrition, and PulseCheck sources.', 'Assembler enforces one product truth.'],
   ['4. Migrate consumers', 'Point Nora, proactive insights, and coach surfaces at the snapshot contract.', 'Stops schema drift from spreading.'],
   ['5. Expand safely', 'Add new domains or fields through contract revisioning, not one-off consumer fields.', 'Keeps future expansion disciplined.'],
 ];
 
 const EXAMPLE_ROWS = [
-  ['summaryMode', '`merged_direct`', 'Fit With Pulse training + Macra nutrition + HealthKit activity + Pulse Check self-report all present on the same day.'],
+  ['summaryMode', '`merged_direct`', 'Fit With Pulse training + Macra nutrition + HealthKit activity + PulseCheck self-report all present on the same day.'],
   ['training.freshness', '`fresh`', 'Athlete completed a Fit With Pulse workout recently and it synced.'],
   ['recovery.freshness', '`historical_only`', 'Only prior-night recovery data exists for a same-day coaching turn.'],
   ['nutrition.sourceStatus.macra', '`connected_synced`', 'Meals were logged in Macra, the dedicated nutrition surface.'],
-  ['behavioral.primarySource', '`pulsecheck_self_report`', 'Mood and readiness came from a Pulse Check check-in.'],
+  ['behavioral.primarySource', '`pulsecheck_self_report`', 'Mood and readiness came from a PulseCheck check-in.'],
   ['audit.missingDomains', '`["biometrics"]`', 'No body-composition source reported today.'],
 ];
 
@@ -132,10 +132,10 @@ const PulseCheckAthleteHealthContextSnapshotSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Health Context"
+        eyebrow="PulseCheck Health Context"
         title="AthleteHealthContextSnapshot Spec"
         version="Version 0.1 | March 17, 2026"
-        summary="Canonical contract for the normalized athlete health-context artifact that Pulse Check, Nora, dashboards, and future automation should consume. This spec exists to prevent schema drift by locking the merged context model before native HealthKit or Oura ingestion work begins."
+        summary="Canonical contract for the normalized athlete health-context artifact that PulseCheck, Nora, dashboards, and future automation should consume. This spec exists to prevent schema drift by locking the merged context model before native HealthKit or Oura ingestion work begins."
         highlights={[
           {
             title: 'Contract First',
@@ -143,7 +143,7 @@ const PulseCheckAthleteHealthContextSnapshotSpecTab: React.FC = () => {
           },
           {
             title: 'Shared Plus Standalone',
-            body: 'The snapshot is designed to merge Fit With Pulse training context, Macra nutrition context, and Pulse Check wearable and self-report signals.',
+            body: 'The snapshot is designed to merge Fit With Pulse training context, Macra nutrition context, and PulseCheck wearable and self-report signals.',
           },
           {
             title: 'Runtime-Safe Context',

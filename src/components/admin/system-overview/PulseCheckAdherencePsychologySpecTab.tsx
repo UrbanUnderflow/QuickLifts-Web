@@ -23,7 +23,7 @@ import {
 const PRINCIPLE_ROWS = [
   [
     'Performance pact, not compliance',
-    'Pulse Check should frame adherence as the athlete choosing a daily edge for better control, confidence, pattern recognition, and performance under pressure.',
+    'PulseCheck should frame adherence as the athlete choosing a daily edge for better control, confidence, pattern recognition, and performance under pressure.',
     'Onboarding, reminder copy, completion closeout, pilot recap.',
   ],
   [
@@ -67,7 +67,7 @@ const LITERATURE_ROWS = [
   [
     'Implementation intentions',
     'When/where/how commitments improve follow-through.',
-    'Capture the athlete pact as: after this moment, in this place, I complete Pulse Check.',
+    'Capture the athlete pact as: after this moment, in this place, I complete PulseCheck.',
   ],
   [
     'Self-Determination Theory',
@@ -119,7 +119,7 @@ const PRIVACY_ROWS = [
   ],
   [
     'Athlete trust copy',
-    'The product must repeatedly tell the athlete what stays private and why Pulse Check asks them to show up daily.',
+    'The product must repeatedly tell the athlete what stays private and why PulseCheck asks them to show up daily.',
     'Show privacy reassurance during onboarding, check-in, chat entry, and completion closeout.',
   ],
 ];
@@ -170,7 +170,7 @@ const ATHLETE_COPY_ROWS = [
   ],
   [
     'Privacy reassurance',
-    'This space is yours. Nora does not show coaches raw reflections, mental health disclosures, chat transcripts, or private sleep details. Your team may see that you completed Pulse Check, but not the personal details you share here.',
+    'This space is yours. Nora does not show coaches raw reflections, mental health disclosures, chat transcripts, or private sleep details. Your team may see that you completed PulseCheck, but not the personal details you share here.',
     'Use in onboarding, chat entry, and settings.',
   ],
   [
@@ -247,10 +247,10 @@ const PulseCheckAdherencePsychologySpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Pilot"
+        eyebrow="PulseCheck Pilot"
         title="Adherence Psychology Spec"
         version="Version 1.0 | May 6, 2026"
-        summary="Product psychology contract for making Pulse Check adherence feel like a private performance pact the athlete makes for their own benefit. This artifact defines the motivational framing, privacy posture, daily loop, rescue mechanics, copy rules, and pilot-dashboard state model required to make adherence the first success metric of the pilot."
+        summary="Product psychology contract for making PulseCheck adherence feel like a private performance pact the athlete makes for their own benefit. This artifact defines the motivational framing, privacy posture, daily loop, rescue mechanics, copy rules, and pilot-dashboard state model required to make adherence the first success metric of the pilot."
         highlights={[
           {
             title: 'Adherence Is the Athlete Edge',
@@ -269,7 +269,7 @@ const PulseCheckAdherencePsychologySpecTab: React.FC = () => {
 
       <RuntimeAlignmentPanel
         sectionLabel="Pilot Alignment"
-        role="Canonical product psychology and UX contract for Pulse Check pilot adherence."
+        role="Canonical product psychology and UX contract for PulseCheck pilot adherence."
         sourceOfTruth="This document is authoritative for adherence framing, privacy-safe athlete copy, daily-loop mechanics, rescue nudges, completion closeout, and dashboard adherence-state language."
         masterReference="Use this page when implementing onboarding pact copy, reminder strategy, Today/Nora next-action routing, completion closeouts, missed-day recovery, or the pilot dashboard adherence orchestrator."
         relatedDocs={[
@@ -286,7 +286,7 @@ const PulseCheckAdherencePsychologySpecTab: React.FC = () => {
       </SectionBlock>
 
       <SectionBlock icon={Brain} title="Evidence-Backed Design Basis">
-        <DataTable columns={['Literature', 'Core Idea', 'Pulse Check Application']} rows={LITERATURE_ROWS} />
+        <DataTable columns={['Literature', 'Core Idea', 'PulseCheck Application']} rows={LITERATURE_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={ShieldCheck} title="Privacy and Trust Contract">

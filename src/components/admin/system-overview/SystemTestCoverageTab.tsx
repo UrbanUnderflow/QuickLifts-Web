@@ -41,7 +41,7 @@ const COVERAGE_AREAS: CoverageArea[] = [
     tone: 'purple',
   },
   {
-    area: 'Pulse Check iOS',
+    area: 'PulseCheck iOS',
     current: 41,
     target: 85,
     scope: 'Mock-club launch, activation flow, onboarding, intro composer, and native identifier contracts.',
@@ -97,9 +97,9 @@ const METHOD_ROWS = [
 const COVERAGE_MATRIX_ROWS = [
   ['Firebase-backed Next API routes', 'Yes', 'No', 'Yes', 'All 36 callable Firebase-backed Next API routes are now routed through Netlify functions in the workspace; the live probe script is the release check.'],
   ['Stripe revenue and payout lanes', 'Yes', 'No', 'No', 'Critical subscription, onboarding, deposit, webhook, payout execution, and earnings-read handlers have direct runtime coverage.'],
-  ['Pulse Check shared function proxy', 'Yes', 'No', 'Indirect', 'Runtime contract tests prove the proxy forwards to Netlify functions instead of executing inside Next; Pulse Check iOS still needs native flow validation on top.'],
+  ['PulseCheck shared function proxy', 'Yes', 'No', 'Indirect', 'Runtime contract tests prove the proxy forwards to Netlify functions instead of executing inside Next; PulseCheck iOS still needs native flow validation on top.'],
   ['Admin and share-link web flows', 'Mixed', 'Yes', 'Partial', 'Browser coverage exists for major admin/share-link journeys, while the live probe layer only verifies backend reachability and non-500 behavior.'],
-  ['Pulse Check iOS profile and Oura lane', 'Partial', 'No', 'No', 'Backend sync and proxy paths are now protected, but the native profile read and UI-state layer still depends on simulator or device validation.'],
+  ['PulseCheck iOS profile and Oura lane', 'Partial', 'No', 'No', 'Backend sync and proxy paths are now protected, but the native profile read and UI-state layer still depends on simulator or device validation.'],
   ['Operational release safety', 'Yes', 'No', 'Yes', 'Audit scripts and live smoke probes now exist for the bridged Firebase surface, but deployment-state verification is still an operator gate rather than a full CI release block.'],
 ];
 
@@ -329,7 +329,7 @@ const SystemCoverageTab: React.FC = () => {
           title="Next investment order"
           accent="red"
           body={<BulletList items={[
-            'Expand the lowest native surfaces first, especially Fit With Pulse Android and Pulse Check iOS.',
+            'Expand the lowest native surfaces first, especially Fit With Pulse Android and PulseCheck iOS.',
             'Keep the Playwright admin harness broad enough to protect the web system surfaces that already have real browser coverage.',
             'Only raise a percentage when the harness can actually exercise the behavior, not when the doc page looks complete.',
           ]} />}

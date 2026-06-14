@@ -103,10 +103,10 @@ const productDetails: Record<ProductKey, {
   buyers: string[];
 }> = {
   pulseCheck: {
-    name: 'Pulse Check',
+    name: 'PulseCheck',
     eyebrow: 'Flagship institutional platform',
     title: 'Cognitive training, athlete signal detection, and sports intelligence for teams.',
-    body: 'Pulse Check helps teams and athletes train attention, regulation, stress response, and decision-making under pressure. It is the flagship institutional product inside the Pulse Intelligence Labs portfolio.',
+    body: 'PulseCheck helps teams and athletes train attention, regulation, stress response, and decision-making under pressure. It is the flagship institutional product inside the Pulse Intelligence Labs portfolio.',
     status: 'Shipped flagship. Institutional pilot pipeline active.',
     oneLiner: 'Elite cognitive performance',
     platformLabel: 'iOS · Web',
@@ -180,7 +180,7 @@ const tractionItems = [
   {
     label: 'Professional sports',
     title: 'NFL conversations underway',
-    body: 'Initial New England Patriots conversations are focused on how Pulse Check could support the professional team lane and broader league environment.',
+    body: 'Initial New England Patriots conversations are focused on how PulseCheck could support the professional team lane and broader league environment.',
     icon: Medal,
     color: VIOLET,
   },
@@ -225,7 +225,7 @@ const team = [
     image: '/lola.jpg',
     color: VIOLET,
     tags: ['Product design', 'Brand identity', 'UX'],
-    body: 'Owns visual identity, product surface, and experience quality across Pulse Check, Fit With Pulse, and Macra.',
+    body: 'Owns visual identity, product surface, and experience quality across PulseCheck, Fit With Pulse, and Macra.',
   },
 ];
 
@@ -513,9 +513,9 @@ const PILOnePage: NextPage = () => {
         metaData={{
           pageId: 'pulse-intelligence-labs-company-brief',
           pageTitle: 'Pulse Intelligence Labs, Inc. | Executive Summary',
-          metaDescription: 'Company one-pager and executive summary for Pulse Intelligence Labs, Inc., covering founder credibility, team, products, traction, and market timing across Pulse Check, Fit With Pulse, and Macra.',
+          metaDescription: 'Company one-pager and executive summary for Pulse Intelligence Labs, Inc., covering founder credibility, team, products, traction, and market timing across PulseCheck, Fit With Pulse, and Macra.',
           ogTitle: 'Pulse Intelligence Labs, Inc. | Executive Summary',
-          ogDescription: 'Company brief for Pulse Intelligence Labs: human performance AI, Pulse Check, Fit With Pulse, Macra, team, traction, and pre-seed narrative.',
+          ogDescription: 'Company brief for Pulse Intelligence Labs: human performance AI, PulseCheck, Fit With Pulse, Macra, team, traction, and pre-seed narrative.',
           ogImage: 'https://fitwithpulse.ai/pil-og.png',
           ogType: 'website',
           twitterCard: 'summary_large_image',
@@ -582,7 +582,7 @@ const PILOnePage: NextPage = () => {
               </h1>
 
               <p className="mt-8 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl sm:leading-9">
-                Pulse Intelligence Labs builds applied AI software for human performance. Pulse Check is the flagship institutional platform for athlete mental performance. Fit With Pulse serves fitness communities and wellness operators. Macra is the dedicated AI nutrition intelligence surface.
+                Pulse Intelligence Labs builds applied AI software for human performance. PulseCheck is the flagship institutional platform for athlete mental performance. Fit With Pulse serves fitness communities and wellness operators. Macra is the dedicated AI nutrition intelligence surface.
               </p>
 
               <div className="mt-10 flex flex-wrap items-center gap-3">
@@ -787,7 +787,7 @@ const PILOnePage: NextPage = () => {
             {[
               { icon: Building2, title: 'Company', body: 'Pulse Intelligence Labs, Inc. is a Delaware C-Corp headquartered in Atlanta. The company operates three shipped product surfaces under one human-performance strategy.' },
               { icon: Compass, title: 'Vision', body: 'Build the software layer for human performance across fitness, athletics, wellness, and cognition.' },
-              { icon: LineChart, title: 'Model', body: 'Enterprise pilots and contracts on Pulse Check; platform revenue on Fit With Pulse; consumer and performance-user revenue on Macra. Partner channels reduce dependence on paid acquisition.' },
+              { icon: LineChart, title: 'Model', body: 'Enterprise pilots and contracts on PulseCheck; platform revenue on Fit With Pulse; consumer and performance-user revenue on Macra. Partner channels reduce dependence on paid acquisition.' },
               { icon: Briefcase, title: 'Counsel', body: 'Corporate and securities counsel through Erik Edwards at Cooley LLP. Structured for institutional capital from day one.' },
             ].map((item, index) => {
               const Icon = item.icon;
@@ -844,9 +844,9 @@ const PILOnePage: NextPage = () => {
             </div>
             <div className="border border-white/10 bg-white/[0.04] p-6 rounded-lg">
               <div className="text-xs font-bold uppercase text-zinc-500">Active pre-seed: $1.4M</div>
-              <h3 className="mt-3 text-3xl font-black">Pulse Check beachhead proof is the priority for this round.</h3>
+              <h3 className="mt-3 text-3xl font-black">PulseCheck beachhead proof is the priority for this round.</h3>
               <p className="mt-5 text-sm leading-7 text-zinc-300">
-                The current raise is a $1.4M pre-seed at $10M pre-money. The primary focus is funding the Pulse Check institutional beachhead while continuing shipped Fit With Pulse and Macra growth. Planned uses include product, team, partnership infrastructure, and select tuck-in acquisitions.
+                The current raise is a $1.4M pre-seed at $10M pre-money. The primary focus is funding the PulseCheck institutional beachhead while continuing shipped Fit With Pulse and Macra growth. Planned uses include product, team, partnership infrastructure, and select tuck-in acquisitions.
               </p>
             </div>
           </motion.div>

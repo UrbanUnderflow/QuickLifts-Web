@@ -47,7 +47,7 @@ const WINNER_ROWS = [
   ['Recovery', 'Prefer direct recovery-specific records, such as Oura readiness/recovery or Apple health recovery metrics, over derived general activity heuristics.', 'Recovery should stay recovery-specific.'],
   ['Activity', 'Prefer HealthKit / Apple-device activity totals for steps, movement, stand, and general exertion.', 'Best canonical activity lane.'],
   ['Nutrition', 'Prefer structured Macra nutrition records when present; use legacy Fit With Pulse food journal and HealthKit dietary totals only as supplements, not richer replacements.', 'Dedicated nutrition data is more actionable.'],
-  ['Behavioral', 'Prefer Pulse Check self-report and app-native check-ins for subjective state.', 'Subjective state should not be overwritten by devices.'],
+  ['Behavioral', 'Prefer PulseCheck self-report and app-native check-ins for subjective state.', 'Subjective state should not be overwritten by devices.'],
   ['Conflicts', 'If two sources provide the same field, choose via domain precedence, recency, directness, and completeness in that order.', 'Stable deterministic conflict resolution.'],
 ];
 
@@ -129,7 +129,7 @@ const PulseCheckHealthContextSnapshotAssemblerSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Health Context"
+        eyebrow="PulseCheck Health Context"
         title="Health Context Snapshot Assembler Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Canonical spec for the assembly layer that transforms normalized health-context source records into daily and rolling `AthleteHealthContextSnapshot` artifacts. This is the only layer allowed to decide merge winners, freshness posture, trend windows, and recompute behavior."

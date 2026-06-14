@@ -1041,7 +1041,7 @@ const ProtocolRegistryTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Registry"
         version="Version 0.3 | March 17, 2026"
         summary="Operational sibling to the sim Variant Registry for Nora’s bounded protocol inventory. This workspace now models the real hierarchy: protocol families define the intervention lane, protocol variants define the authored expression, and published runtime records are the bounded objects Nora can actually assign."

@@ -111,10 +111,10 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Product Surface"
+        eyebrow="PulseCheck Product Surface"
         title="Profile Architecture & Data Model"
         version="Profile IA v1.3 + Data Model v1.2 | March 2025"
-        summary="System overview artifact for the Pulse Check athlete and staff profile. This page defines Profile as the stable identity and development surface, the locked information architecture, the milestone snapshot model, and the field-level rules that keep Profile useful for athletes, staff, and research workflows."
+        summary="System overview artifact for the PulseCheck athlete and staff profile. This page defines Profile as the stable identity and development surface, the locked information architecture, the milestone snapshot model, and the field-level rules that keep Profile useful for athletes, staff, and research workflows."
         highlights={[
           {
             title: 'Profile Is Not Another Dashboard',
@@ -133,7 +133,7 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
 
       <RuntimeAlignmentPanel
         sectionLabel="Artifact Alignment"
-        role="Source-of-truth overview for Pulse Check profile information architecture, field grouping, snapshot rules, and implementation boundaries."
+        role="Source-of-truth overview for PulseCheck profile information architecture, field grouping, snapshot rules, and implementation boundaries."
         sourceOfTruth="This document is authoritative for what Profile stores, what it derives, how snapshot history behaves, and which product questions the profile surface must answer. It is not authoritative for raw sim metric computation, escalation policy, or full Nora conversation behavior."
         masterReference="Use this page when designing or implementing the Profile surface, snapshot creation flow, profile exports, or role-gated profile visibility. Use the runtime, taxonomy, onboarding, and permissions artifacts when the question shifts to upstream computation or access policy."
         relatedDocs={[
@@ -275,7 +275,7 @@ const PROFILE_SYSTEM_PAGES: ArtifactPageEntry[] = [
 const PulseCheckProfileArchitectureTab: React.FC = () => {
   return (
     <ArtifactPageLibrary
-      eyebrow="Pulse Check · Profile System"
+      eyebrow="PulseCheck · Profile System"
       title="Profile System Library"
       summary="Profile parent artifact with internal pages for information architecture, milestone snapshot rules, and the canonical export contract."
       entries={PROFILE_SYSTEM_PAGES}

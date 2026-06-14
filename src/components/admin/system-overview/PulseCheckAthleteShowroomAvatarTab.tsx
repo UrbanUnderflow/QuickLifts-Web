@@ -111,7 +111,7 @@ const PulseCheckAthleteShowroomAvatarTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Profile System"
+        eyebrow="PulseCheck Profile System"
         title="Optional Multi-View 3D Athlete Avatar"
         version="Avatar Spec v1.0 | April 2026"
         summary="Canonical System Overview artifact for the optional Profile-only 3D athlete avatar flow: four-angle guided capture, local validation, backend generation, USDZ output, RealityKit showroom rendering, and lifecycle controls."

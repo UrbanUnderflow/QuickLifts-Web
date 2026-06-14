@@ -34,7 +34,7 @@ const PulseCheckStateEscalationOrchestrationTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="State & Escalation Orchestration"
         version="Version 1.2 | March 10, 2026"
         summary="Architecture-layer artifact for how the shared State Signal Layer feeds the performance lane, support visibility lane, and safety lane without collapsing those responsibilities into a single severity system."

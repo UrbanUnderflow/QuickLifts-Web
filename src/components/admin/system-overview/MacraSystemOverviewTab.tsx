@@ -88,7 +88,7 @@ const BRIDGE_ROWS = [
 
 const CONTRACTS = [
   'Root users/{uid} documents are shared across products; Macra must patch explicit fields instead of writing a full user model over an existing document.',
-  'Macra profile answers live at users/{uid}/macra/profile so nutrition onboarding can evolve without breaking Fit With Pulse or Pulse Check profile semantics.',
+  'Macra profile answers live at users/{uid}/macra/profile so nutrition onboarding can evolve without breaking Fit With Pulse or PulseCheck profile semantics.',
   'AI calls require a Firebase ID token and route through the website base URL to keep OpenAI credentials server-side.',
   'Label scan imagery uses the label-scans storage folder and should remain tied to scan documents or pinned scan summaries.',
   'Screenshot exports are release artifacts, not live simulator captures; regenerate from the Macra Playwright harness when the product story changes.',

@@ -502,7 +502,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-zinc-400">
-                  Use this only if this athlete should be taken out of the normal Pulse Check flow.
+                  Use this only if this athlete should be taken out of the normal PulseCheck flow.
                 </p>
 
                 <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
@@ -513,7 +513,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   <div className="mt-2 text-sm text-zinc-400">
                     {currentWatchList?.watchListActive
                       ? 'Standard watch-list protections are active for this athlete.'
-                      : 'This athlete is currently in the normal Pulse Check experience.'}
+                      : 'This athlete is currently in the normal PulseCheck experience.'}
                   </div>
                 </div>
 
@@ -565,7 +565,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   </button>
                   <div className="max-w-xl text-sm text-zinc-400">
                     {currentWatchList?.watchListActive
-                      ? 'Turning this off returns the athlete to the normal Pulse Check flow.'
+                      ? 'Turning this off returns the athlete to the normal PulseCheck flow.'
                       : 'Turning this on applies the standard watch-list protections for this athlete.'}
                   </div>
                 </div>

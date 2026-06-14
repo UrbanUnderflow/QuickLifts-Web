@@ -35,7 +35,7 @@ const PulseCheckNoraQaEdgeCaseScenarioMatrixTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Nora QA / Edge-Case Scenario Matrix"
         version="Version 1.0 | March 10, 2026"
         summary="QA artifact for conflict, override, and runtime edge cases in Nora routing and state-aware performance decisions. This page turns architecture edge cases into explicit test scenarios before pilot."

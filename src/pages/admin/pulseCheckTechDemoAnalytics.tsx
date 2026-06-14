@@ -252,7 +252,7 @@ const PulseCheckTechDemoAnalyticsPage: React.FC = () => {
   return (
     <AdminRouteGuard>
       <Head>
-        <title>Pulse Check Tech Demo Analytics | Pulse Admin</title>
+        <title>PulseCheck Tech Demo Analytics | Pulse Admin</title>
       </Head>
 
       <div className="min-h-screen bg-[#0f1216] px-4 py-10 text-white">
@@ -266,7 +266,7 @@ const PulseCheckTechDemoAnalyticsPage: React.FC = () => {
             <div>
               <h1 className="flex items-center gap-3 text-3xl font-black">
                 <BarChart2 className="h-8 w-8 text-[#d7ff00]" />
-                Pulse Check Tech Demo Analytics
+                PulseCheck Tech Demo Analytics
               </h1>
               <p className="mt-3 max-w-3xl text-sm text-zinc-400">
                 Track reviewer visits, sources, email notifications, visitor history, and recent page views for the demo page.

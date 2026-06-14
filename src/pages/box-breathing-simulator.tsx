@@ -150,7 +150,7 @@ const PulseCheckWordmark: React.FC<{ compact?: boolean; className?: string }> = 
   <div className={`flex items-center gap-3 ${className}`}>
     <img
       src="/pulsecheck-logo.svg"
-      alt="Pulse Check"
+      alt="PulseCheck"
       className={compact ? 'h-14 w-auto' : 'h-16 w-auto md:h-20'}
     />
     <div>
@@ -1102,10 +1102,10 @@ const BoxBreathingSimulatorPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Box Breathing Simulator | Pulse Check x AuntEdna</title>
+        <title>Box Breathing Simulator | PulseCheck x AuntEdna</title>
         <meta
           name="description"
-          content="Presentation for the Pulse Check and AuntEdna box breathing simulator story."
+          content="Presentation for the PulseCheck and AuntEdna box breathing simulator story."
         />
       </Head>
 

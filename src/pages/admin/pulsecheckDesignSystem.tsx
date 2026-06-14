@@ -28,7 +28,7 @@ const PulseCheckDesignSystemPage: React.FC = () => {
                       PulseCheck Design System
                     </h1>
                     <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-                      Dedicated reference page for the full Pulse Check visual
+                      Dedicated reference page for the full PulseCheck visual
                       language, motion system, copy rules, and screen specs.
                       This stays separate from the core handbook so its own
                       navigation and artifacts can breathe.

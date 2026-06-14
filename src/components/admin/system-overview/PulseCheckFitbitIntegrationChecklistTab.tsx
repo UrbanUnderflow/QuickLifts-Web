@@ -28,9 +28,9 @@ const EXTERNAL_CONTRACT_ROWS = [
 ];
 
 const SCOPE_ROWS = [
-  ['activity_and_fitness.readonly', 'Steps, distance, active energy, active minutes, active zone minutes, exercise sessions, heart-rate zone time, VO2-related activity metrics.', 'Required for Fit With Pulse and Pulse Check activity/training context.'],
-  ['health_metrics_and_measurements.readonly', 'Heart rate, HRV, resting heart rate, oxygen saturation, respiratory rate, sleep temperature derivations, weight, body fat where present.', 'Required for Pulse Check recovery, biometrics, and correlation work.'],
-  ['sleep.readonly', 'Sleep sessions and sleep-stage context.', 'Required for Pulse Check recovery and readiness interpretation.'],
+  ['activity_and_fitness.readonly', 'Steps, distance, active energy, active minutes, active zone minutes, exercise sessions, heart-rate zone time, VO2-related activity metrics.', 'Required for Fit With Pulse and PulseCheck activity/training context.'],
+  ['health_metrics_and_measurements.readonly', 'Heart rate, HRV, resting heart rate, oxygen saturation, respiratory rate, sleep temperature derivations, weight, body fat where present.', 'Required for PulseCheck recovery, biometrics, and correlation work.'],
+  ['sleep.readonly', 'Sleep sessions and sleep-stage context.', 'Required for PulseCheck recovery and readiness interpretation.'],
   ['profile.readonly', 'Google Health profile identity details.', 'Optional; only use if account matching or support workflows need it.'],
   ['location.readonly', 'GPS location attached to exercise.', 'Later phase only. Do not request by default unless product value requires route-level workout context.'],
 ];
@@ -40,7 +40,7 @@ const MODEL_ROWS = [
   ['Source family', 'Add `fitbit` to `HealthContextSourceFamily` and map it to a canonical snapshot source id.', 'All Fitbit Air records should enter the same HCSR and snapshot pipeline as Oura, Polar, and Apple Health.'],
   ['Source types', '`fitbit_sleep`, `fitbit_activity`, `fitbit_training`, `fitbit_biometrics`, `fitbit_summary`.', 'Namespaced source types preserve adapter ownership without leaking raw Google Health payloads into consumers.'],
   ['Registry data types', 'Add missing capability labels such as `oxygen_saturation`, `respiratory_rate`, `active_minutes`, `active_zone_minutes`, and `vo2_max` if needed.', 'Fitbit Air exposes useful recovery and activity primitives that are not fully represented by the current registry enum.'],
-  ['Connection collection', 'Prefer a product-shareable connection record such as `health-provider-connections/{userId}_google_health`.', 'Pulse Check can ship first while Fit With Pulse later reuses the same token posture and status vocabulary.'],
+  ['Connection collection', 'Prefer a product-shareable connection record such as `health-provider-connections/{userId}_google_health`.', 'PulseCheck can ship first while Fit With Pulse later reuses the same token posture and status vocabulary.'],
   ['Source status', 'Write `health-context-source-status/{userId}_fitbit` with lifecycle, last attempted sync, last successful sync, last observed record, and last error fields.', 'Nora, admin tooling, and Fit With Pulse need the same source-health read.'],
 ];
 
@@ -63,7 +63,7 @@ const PRECEDENCE_ROWS = [
 const BACKEND_CHECKLIST_ROWS = [
   ['External setup', 'Create Google Cloud project configuration, OAuth client, redirect URI, consent screen, app verification path, and webhook subscriber endpoint.', 'Production OAuth can start and callback can complete in a verified environment.'],
   ['Shared utilities', 'Add `google-health-utils` with OAuth state, token exchange/refresh, error normalization, health user identity lookup, and scoped API client helpers.', 'Matches the Oura/Polar pattern while using Google identity and Google Health endpoints.'],
-  ['Auth routes', 'Add auth-start, callback, status, disconnect, and token-refresh-safe helpers for Google Health.', 'Pulse Check UI can connect, inspect, refresh, and disconnect the Fitbit lane.'],
+  ['Auth routes', 'Add auth-start, callback, status, disconnect, and token-refresh-safe helpers for Google Health.', 'PulseCheck UI can connect, inspect, refresh, and disconnect the Fitbit lane.'],
   ['Sync route', 'Add `google-health-sync` to query the approved data types for a requested date/window and normalize into HCSR records.', 'Manual refresh and scheduled refresh produce deterministic records.'],
   ['Webhook route', 'Add `google-health-webhook` with endpoint verification, authorization check, signature verification, immediate 204 response, and async sync enqueue.', 'Pulse can receive updates without polling every connected athlete blindly.'],
   ['Scheduler fallback', 'Add an end-of-day scheduled sync for connected users in case webhooks arrive late, are retried, or a user opens the app after a stale period.', 'Fitbit freshness can recover even if webhook delivery is imperfect.'],
@@ -71,20 +71,20 @@ const BACKEND_CHECKLIST_ROWS = [
 ];
 
 const PULSECHECK_UI_ROWS = [
-  ['Connection page', 'Create `/PulseCheck/fitbit` using the Oura page pattern: status, connect, refresh, disconnect, last sync, scopes granted, and support-safe error states.', 'Athletes can manage Fitbit Air from the Pulse Check device surface.'],
-  ['Member setup', 'Add Fitbit Air as a recovery/activity option after Apple Health, Polar, and Oura; explain that it syncs after the Google Health app receives data.', 'Pulse Check onboarding sets correct expectations before consent.'],
+  ['Connection page', 'Create `/PulseCheck/fitbit` using the Oura page pattern: status, connect, refresh, disconnect, last sync, scopes granted, and support-safe error states.', 'Athletes can manage Fitbit Air from the PulseCheck device surface.'],
+  ['Member setup', 'Add Fitbit Air as a recovery/activity option after Apple Health, Polar, and Oura; explain that it syncs after the Google Health app receives data.', 'PulseCheck onboarding sets correct expectations before consent.'],
   ['Device settings card', 'Add a shared Fitbit card with connected, waiting for data, stale, needs reconnect, and disconnected states.', 'The same component can later mount inside Fit With Pulse.'],
   ['Biometric brief', 'Show Fitbit as a contributing source in the recovery/activity cards with freshness and confidence labels.', 'Nora and athlete views can explain what Fitbit contributed without overclaiming.'],
   ['Coach/admin views', 'Expose Fitbit source health in pilot dashboard, athlete detail, health-context debug surfaces, and operator source-status panels.', 'Support and coaches can see whether missing context is consent, sync, freshness, or payload coverage.'],
-  ['Copy guardrail', 'Use value-first language: connect Fitbit Air to bring sleep, heart-rate, and activity context into Pulse Check.', 'Avoid API-centric language and avoid claiming live workout capture from Fitbit Air.'],
+  ['Copy guardrail', 'Use value-first language: connect Fitbit Air to bring sleep, heart-rate, and activity context into PulseCheck.', 'Avoid API-centric language and avoid claiming live workout capture from Fitbit Air.'],
 ];
 
 const FIT_WITH_PULSE_PORT_ROWS = [
-  ['Shared service wrapper', 'Extract a product-neutral Google Health integration service that accepts product context: `pulsecheck` or `fit_with_pulse`.', 'Pulse Check ships first, Fit With Pulse ports without duplicating provider code.'],
+  ['Shared service wrapper', 'Extract a product-neutral Google Health integration service that accepts product context: `pulsecheck` or `fit_with_pulse`.', 'PulseCheck ships first, Fit With Pulse ports without duplicating provider code.'],
   ['Shared UI primitives', 'Create reusable device cards, status badges, connect/disconnect buttons, scope summary, stale-state banners, and refresh controls.', 'Keeps parity with the Polar pattern and prevents copy drift.'],
-  ['Product projections', 'Pulse Check reads recovery/cognition context; Fit With Pulse reads activity, training reconciliation, and workout enrichment.', 'Same HCSR records, different product projections.'],
+  ['Product projections', 'PulseCheck reads recovery/cognition context; Fit With Pulse reads activity, training reconciliation, and workout enrichment.', 'Same HCSR records, different product projections.'],
   ['Routing parity', 'Fit With Pulse should not build a second Fitbit adapter. It should read the same connection record, source status, and normalized source records.', 'One connector, two products, clean parity.'],
-  ['Rollout sequence', 'Ship Pulse Check beta, validate sync quality and UI states, then mount the shared card into Fit With Pulse device settings and workout recap surfaces.', 'Avoids copying a half-proven integration into both products.'],
+  ['Rollout sequence', 'Ship PulseCheck beta, validate sync quality and UI states, then mount the shared card into Fit With Pulse device settings and workout recap surfaces.', 'Avoids copying a half-proven integration into both products.'],
 ];
 
 const TEST_ROWS = [
@@ -93,22 +93,22 @@ const TEST_ROWS = [
   ['Webhook tests', 'Verify endpoint challenge, authorization failure, signature success/failure, duplicate notification idempotency, and async enqueue behavior.', 'Webhook delivery is secure and repeat-safe.'],
   ['Assembler tests', 'Add Fitbit records into domain precedence tests for recovery, activity, training, biometrics, and summary.', 'Fitbit data wins only where the contract says it should.'],
   ['UI state tests', 'Cover disconnected, connected waiting for data, connected synced, stale, error, revoked consent, partial scopes, and refresh-in-progress.', 'Athlete and admin surfaces render the same state vocabulary.'],
-  ['Parity tests', 'Mount the shared connector primitives in a Fit With Pulse test harness after Pulse Check is stable.', 'Future product parity can be checked without duplicating assertions.'],
+  ['Parity tests', 'Mount the shared connector primitives in a Fit With Pulse test harness after PulseCheck is stable.', 'Future product parity can be checked without duplicating assertions.'],
 ];
 
 const RELEASE_GATE_ROWS = [
   ['Contract gate', 'Fitbit appears in registry, HCSR family types, snapshot mapping, source status, and System Overview docs.', 'No hidden one-off provider path.'],
   ['External gate', 'Google Health API app verification is approved and webhook endpoint verification passes in production.', 'The connector can run outside local mocks.'],
   ['Data gate', 'At least one real Fitbit Air account produces sleep, activity, biometrics, and exercise records with expected freshness behavior.', 'The adapter works with real sync cadence and partial data.'],
-  ['Safety gate', 'No Pulse Check or Fit With Pulse surface claims Fitbit Air is live source-of-truth for active workouts.', 'The product fails honest around post-sync data.'],
+  ['Safety gate', 'No PulseCheck or Fit With Pulse surface claims Fitbit Air is live source-of-truth for active workouts.', 'The product fails honest around post-sync data.'],
   ['Ops gate', 'Support can inspect connection status, scopes, health user id mapping, last sync, last observed record, webhook receipts, and adapter errors.', 'The team can debug without raw Google console spelunking.'],
-  ['Parity gate', 'Fit With Pulse consumes the same shared connector after Pulse Check beta, with no duplicate Fitbit-specific auth or sync code.', 'Long-term maintenance stays sane.'],
+  ['Parity gate', 'Fit With Pulse consumes the same shared connector after PulseCheck beta, with no duplicate Fitbit-specific auth or sync code.', 'Long-term maintenance stays sane.'],
 ];
 
 const BUILD_ORDER_STEPS = [
   {
-    title: 'Lock The Pulse Check Contract',
-    owner: 'Pulse Check platform',
+    title: 'Lock The PulseCheck Contract',
+    owner: 'PulseCheck platform',
     body: 'Add Fitbit to the device registry, HCSR source family, source-status vocabulary, snapshot source mapping, and domain precedence before building UI or connector code.',
   },
   {
@@ -122,8 +122,8 @@ const BUILD_ORDER_STEPS = [
     body: 'Map Google Health data types into recovery, activity, training, biometrics, and summary HCSR records with deterministic ids, source provenance, and no consumer-facing copy.',
   },
   {
-    title: 'Ship Pulse Check UI First',
-    owner: 'Pulse Check web + mobile',
+    title: 'Ship PulseCheck UI First',
+    owner: 'PulseCheck web + mobile',
     body: 'Add connection, setup, health-context, coach/admin, stale-state, and support surfaces using reusable device components and shared provider constants.',
   },
   {
@@ -142,14 +142,14 @@ const PulseCheckFitbitIntegrationChecklistTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Device Integrations"
+        eyebrow="PulseCheck Device Integrations"
         title="Fitbit / Google Health Implementation Checklist"
         version="Version 0.1 | June 1, 2026"
-        summary="End-to-end checklist for adding Google Fitbit Air and the broader Fitbit lane into Pulse Check first, then porting the same connector, model vocabulary, and UI primitives into Fit With Pulse so both products stay in parity like the Polar integration."
+        summary="End-to-end checklist for adding Google Fitbit Air and the broader Fitbit lane into PulseCheck first, then porting the same connector, model vocabulary, and UI primitives into Fit With Pulse so both products stay in parity like the Polar integration."
         highlights={[
           {
-            title: 'Pulse Check First',
-            body: 'Build the full Fitbit lane in Pulse Check first because recovery, sleep, and cognitive-state context are the clearest product fit.',
+            title: 'PulseCheck First',
+            body: 'Build the full Fitbit lane in PulseCheck first because recovery, sleep, and cognitive-state context are the clearest product fit.',
           },
           {
             title: 'One Connector',
@@ -163,8 +163,8 @@ const PulseCheckFitbitIntegrationChecklistTab: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Implementation control checklist for adding Fitbit Air through the Google Health API while preserving Pulse Check and Fit With Pulse device parity."
-        sourceOfTruth="This page owns the end-to-end Fitbit implementation sequence: external Google setup, canonical models, source records, sync, webhooks, Pulse Check UI, Fit With Pulse porting, testing, and release gates."
+        role="Implementation control checklist for adding Fitbit Air through the Google Health API while preserving PulseCheck and Fit With Pulse device parity."
+        sourceOfTruth="This page owns the end-to-end Fitbit implementation sequence: external Google setup, canonical models, source records, sync, webhooks, PulseCheck UI, Fit With Pulse porting, testing, and release gates."
         masterReference="Use this checklist before writing Fitbit connector code or product UI. If an implementation conflicts with this page, update the architecture contract first."
         relatedDocs={[
           'Device Integration Strategy',
@@ -213,7 +213,7 @@ const PulseCheckFitbitIntegrationChecklistTab: React.FC = () => {
         <DataTable columns={['Workstream', 'Checklist Item', 'Done State']} rows={BACKEND_CHECKLIST_ROWS} />
       </SectionBlock>
 
-      <SectionBlock icon={Smartphone} title="Pulse Check UI Checklist">
+      <SectionBlock icon={Smartphone} title="PulseCheck UI Checklist">
         <DataTable columns={['Surface', 'Checklist Item', 'Done State']} rows={PULSECHECK_UI_ROWS} />
       </SectionBlock>
 
@@ -240,7 +240,7 @@ const PulseCheckFitbitIntegrationChecklistTab: React.FC = () => {
           <InfoCard
             title="Keep The Pipe Shared"
             accent="green"
-            body={<BulletList items={['Pulse Check owns the first implementation.', 'Fit With Pulse ports shared connector components.', 'Both products read the same normalized records.']} />}
+            body={<BulletList items={['PulseCheck owns the first implementation.', 'Fit With Pulse ports shared connector components.', 'Both products read the same normalized records.']} />}
           />
           <InfoCard
             title="Keep Ops Visible"

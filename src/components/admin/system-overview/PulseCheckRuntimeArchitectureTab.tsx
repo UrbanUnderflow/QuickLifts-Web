@@ -132,7 +132,7 @@ const RuntimeArchitectureOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Runtime Architecture"
         version="Version 1.3 | March 16, 2026"
         summary="Top-level operating model for the perception-to-action stack. This artifact explains how the athlete entry gate, State Signal Layer, Nora Assignment Rules, the Signal Layer v1 Assignment Orchestrator, coach intervention, State & Escalation Orchestration, and the Escalation Integration Spec work together without collapsing onboarding, performance, and safety into one system."
@@ -361,7 +361,7 @@ const RUNTIME_STACK_PAGES: ArtifactPageEntry[] = [
 const PulseCheckRuntimeArchitectureTab: React.FC = () => {
   return (
     <ArtifactPageLibrary
-      eyebrow="Pulse Check · Runtime Stack"
+      eyebrow="PulseCheck · Runtime Stack"
       title="Runtime Stack Library"
       summary="Operating parent artifact with internal pages for state logic, check-in contracts, assignment policy, escalation routing, freshness posture, and QA coverage."
       entries={RUNTIME_STACK_PAGES}

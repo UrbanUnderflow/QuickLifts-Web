@@ -202,10 +202,10 @@ const PulseCheckDeviceRegistrySpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Device Integrations"
+        eyebrow="PulseCheck Device Integrations"
         title="Device Registry + Shared Writer Boundary"
         version="Version 0.1 | May 1, 2026"
-        summary="Canonical spec for keeping wearable and health-platform integrations organized as Pulse Check scales. Device adapters stay vendor-specific for connection, auth, SDK quirks, and extraction. Shared writer modules own normalized Health Context Source Record writes, source-status lifecycle, provenance, and the handoff into Phase J primitive accumulation."
+        summary="Canonical spec for keeping wearable and health-platform integrations organized as PulseCheck scales. Device adapters stay vendor-specific for connection, auth, SDK quirks, and extraction. Shared writer modules own normalized Health Context Source Record writes, source-status lifecycle, provenance, and the handoff into Phase J primitive accumulation."
         highlights={[
           {
             title: 'Adapters Own Vendor Reality',

@@ -772,7 +772,7 @@ const PulseCheckProfileView: React.FC = () => {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                       <div>
                         <p className="text-lg font-semibold text-white">Daily Check-In Reminder</p>
-                        <p className="mt-1 text-sm text-zinc-400">Sent from the native iOS Pulse Check app, but meant to drive you back to the web Today task.</p>
+                        <p className="mt-1 text-sm text-zinc-400">Sent from the native iOS PulseCheck app, but meant to drive you back to the web Today task.</p>
                       </div>
                       <label className="inline-flex items-center gap-3 text-sm text-zinc-300">
                         <span>Enabled</span>

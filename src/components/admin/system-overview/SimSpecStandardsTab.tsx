@@ -162,7 +162,7 @@ const SimSpecStandardsTab: React.FC = () => {
                     </div>
                 </div>
                 <p className="text-sm text-zinc-300 max-w-4xl">
-                    Shared measurement precision rules, fail conditions, trial standardization requirements, feedback mode definitions, motor confound protocols, and validation roadmap structure that apply to all Pulse Check sim family specifications.
+                    Shared measurement precision rules, fail conditions, trial standardization requirements, feedback mode definitions, motor confound protocols, and validation roadmap structure that apply to all PulseCheck sim family specifications.
                 </p>
             </div>
 
@@ -173,7 +173,7 @@ const SimSpecStandardsTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        This document defines the shared measurement standards, session logic, and research protocols that apply to <span className="text-white font-semibold">every</span> Pulse Check sim family specification. Individual sim specs define what is unique to each family: the mechanism, game flow, skill targets, and modifier behavior. This addendum defines what is <span className="text-white font-semibold">universal</span>.
+                        This document defines the shared measurement standards, session logic, and research protocols that apply to <span className="text-white font-semibold">every</span> PulseCheck sim family specification. Individual sim specs define what is unique to each family: the mechanism, game flow, skill targets, and modifier behavior. This addendum defines what is <span className="text-white font-semibold">universal</span>.
                     </p>
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
                         <p className="text-xs text-amber-300 leading-relaxed">
@@ -241,10 +241,10 @@ const SimSpecStandardsTab: React.FC = () => {
                 <CollapsibleSection title="2.3 Product Targets vs. Research Benchmarks">
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
                         <p className="text-xs text-zinc-300 leading-relaxed">
-                            Performance targets in individual specs (e.g., Reset Tier 1 targets recovery under 3 seconds) are <span className="text-amber-300 font-semibold">Pulse Check product progression thresholds</span>. They are not validated population norms.
+                            Performance targets in individual specs (e.g., Reset Tier 1 targets recovery under 3 seconds) are <span className="text-amber-300 font-semibold">PulseCheck product progression thresholds</span>. They are not validated population norms.
                         </p>
                         <p className="text-xs text-zinc-400 leading-relaxed">
-                            Published research from Pulse Check studies will establish normative data over time. Until that data exists, all targets should be framed as <span className="text-white font-semibold">internal product standards</span> when referenced in external materials, proposals, or research documentation.
+                            Published research from PulseCheck studies will establish normative data over time. Until that data exists, all targets should be framed as <span className="text-white font-semibold">internal product standards</span> when referenced in external materials, proposals, or research documentation.
                         </p>
                     </div>
                 </CollapsibleSection>
@@ -412,7 +412,7 @@ const SimSpecStandardsTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Pulse Check sims measure <span className="text-white font-semibold">cognitive-perceptual skills</span>, not motor speed or device proficiency. Because all sims require physical interaction with a device, some measured variance reflects motor execution rather than the target cognitive skill.
+                        PulseCheck sims measure <span className="text-white font-semibold">cognitive-perceptual skills</span>, not motor speed or device proficiency. Because all sims require physical interaction with a device, some measured variance reflects motor execution rather than the target cognitive skill.
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -557,7 +557,7 @@ const SimSpecStandardsTab: React.FC = () => {
                 </div>
                 <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3">
                     <p className="text-xs text-blue-300 leading-relaxed">
-                        This addendum applies to all current and future Pulse Check sim family specifications. Individual specs should reference this document by name. When precision rules defined here conflict with statements in an individual spec, <span className="text-white font-semibold">this addendum governs</span>.
+                        This addendum applies to all current and future PulseCheck sim family specifications. Individual specs should reference this document by name. When precision rules defined here conflict with statements in an individual spec, <span className="text-white font-semibold">this addendum governs</span>.
                     </p>
                 </div>
             </section>

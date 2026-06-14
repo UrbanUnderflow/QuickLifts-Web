@@ -88,7 +88,7 @@ exports.handler = async (event) => {
       title: buildPushTitle({ teamName, organizationName, pilotName }),
       subtitle: 'Open the app to continue',
       body: buildPushBody(enrollmentStatus),
-      ctaLabel: 'Open Pulse Check App',
+      ctaLabel: 'Open PulseCheck App',
       ctaUrl: openAppUrl,
     };
 

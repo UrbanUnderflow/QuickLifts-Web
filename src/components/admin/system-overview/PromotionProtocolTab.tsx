@@ -186,7 +186,7 @@ const PromotionProtocolTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        The Pulse Check System Taxonomy defines what a sim family <em className="text-white">is</em>: a distinct training mechanism that targets a named skill, produces a unique core metric, and earns its own place in the athlete profile. This protocol defines how new families come into existence, how candidates are evaluated against existing families, and how the taxonomy stays disciplined as the system grows.
+                        The PulseCheck System Taxonomy defines what a sim family <em className="text-white">is</em>: a distinct training mechanism that targets a named skill, produces a unique core metric, and earns its own place in the athlete profile. This protocol defines how new families come into existence, how candidates are evaluated against existing families, and how the taxonomy stays disciplined as the system grows.
                     </p>
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
                         <p className="text-xs text-amber-300 leading-relaxed">
@@ -459,7 +459,7 @@ const PromotionProtocolTab: React.FC = () => {
 
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
                         <p className="text-xs text-amber-300 leading-relaxed italic">
-                            <span className="font-semibold">Protocol statement:</span> Thresholds are initial operating standards. Pulse Check may recommend recalibration as the athlete dataset matures, but threshold updates are versioned, reviewed against valid athlete-session volume, and approved before deployment.
+                            <span className="font-semibold">Protocol statement:</span> Thresholds are initial operating standards. PulseCheck may recommend recalibration as the athlete dataset matures, but threshold updates are versioned, reviewed against valid athlete-session volume, and approved before deployment.
                         </p>
                     </div>
                 </div>
@@ -554,7 +554,7 @@ const PromotionProtocolTab: React.FC = () => {
                     </p>
                     <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                         <p className="text-[10px] text-zinc-400 leading-relaxed italic">
-                            These defaults are operating standards, not scientific truths. They are expected to become more precise as Pulse Check accumulates broader athlete data.
+                            These defaults are operating standards, not scientific truths. They are expected to become more precise as PulseCheck accumulates broader athlete data.
                         </p>
                     </div>
                 </div>

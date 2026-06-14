@@ -51,9 +51,9 @@ const PILLARS: Pillar[] = [
     id: 'mindset',
     label: 'Mindset Intelligence',
     title: 'How you feel, translated into how you perform.',
-    body: 'Pulse Check is the two-minute daily check-in for athletes — turning state-of-mind signals into the coaching the people behind them can actually use.',
+    body: 'PulseCheck is the two-minute daily check-in for athletes — turning state-of-mind signals into the coaching the people behind them can actually use.',
     accent: 'text-[#A05EF8]',
-    product: 'Pulse Check',
+    product: 'PulseCheck',
     Icon: Brain,
   },
   {
@@ -70,7 +70,7 @@ const PILLARS: Pillar[] = [
 const APP_TILES = [
   { name: 'Fit With Pulse', icon: '/fwp-app-icon.jpg', dot: 'bg-[#E0FE10]', status: 'Available', href: '/apps' },
   { name: 'Macra', icon: '/macra-icon.png', dot: 'bg-[#3B82F6]', status: 'Available', href: '/apps' },
-  { name: 'Pulse Check', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]', status: 'Available', href: '/apps' },
+  { name: 'PulseCheck', icon: '/pulseCheckIcon.png', dot: 'bg-[#A05EF8]', status: 'Available', href: '/apps' },
   { name: 'Pulse Ritual', icon: '/pulse-ritual-icon.png', dot: 'bg-[#5EEAD4]', status: 'Join early access', href: '/Ritual' },
 ];
 
@@ -465,7 +465,7 @@ const PILPage: NextPage = () => {
               <a href="https://fitwithpulse.ai/pulseintelligencelabs" className="hover:text-white transition-colors">Lab</a>
               <a href="https://fitwithpulse.ai" className="hover:text-white transition-colors">Fit With Pulse</a>
               <a href="https://eatwithmacra.ai" className="hover:text-white transition-colors">Macra</a>
-              <a href="https://pulsecheckmind.ai" className="hover:text-white transition-colors">Pulse Check</a>
+              <a href="https://pulsecheckmind.ai" className="hover:text-white transition-colors">PulseCheck</a>
             </div>
           </div>
         </footer>

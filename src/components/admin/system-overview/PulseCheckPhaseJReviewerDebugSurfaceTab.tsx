@@ -210,7 +210,7 @@ const PulseCheckPhaseJReviewerDebugSurfaceTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Sports Intelligence"
+        eyebrow="PulseCheck Sports Intelligence"
         title="Phase J Reviewer / Debug Surface Skeleton"
         version="Phase 3 skeleton | May 1, 2026"
         summary="Admin System Overview spec for the Phase J reviewer surface. This static skeleton defines the queue, trace, provenance, confidence visibility, operator actions, filters, data dependencies, and gates needed before live reviewer tooling connects to Phase J collections."

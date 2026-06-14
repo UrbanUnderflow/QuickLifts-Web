@@ -171,7 +171,7 @@ const NutritionInsightLayerPage: React.FC = () => {
                 <p className="mt-2 max-w-3xl text-sm leading-relaxed text-zinc-400">
                   Review Macra daily insight outputs with their fact ledger, candidate rankings,
                   validation trace, and final copy. This is the tuning surface for the reusable
-                  nutrition reasoning layer before it expands into Pulse Check athlete context.
+                  nutrition reasoning layer before it expands into PulseCheck athlete context.
                 </p>
               </div>
             </div>

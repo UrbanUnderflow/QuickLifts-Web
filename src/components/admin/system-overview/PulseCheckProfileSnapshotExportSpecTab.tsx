@@ -77,10 +77,10 @@ const PulseCheckProfileSnapshotExportSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Profile Pipeline"
+        eyebrow="PulseCheck Profile Pipeline"
         title="Canonical Snapshot & Research Export Spec"
         version="Version 1.0 | March 14, 2026"
-        summary="Implementation-facing artifact for the missing Pulse Check profile snapshot pipeline. This spec defines the canonical snapshot store, idempotent write protocol, template-bound Nora explanation contract, and canonical-first research export behavior."
+        summary="Implementation-facing artifact for the missing PulseCheck profile snapshot pipeline. This spec defines the canonical snapshot store, idempotent write protocol, template-bound Nora explanation contract, and canonical-first research export behavior."
         highlights={[
           {
             title: 'One Canonical Head Per Milestone Scope',

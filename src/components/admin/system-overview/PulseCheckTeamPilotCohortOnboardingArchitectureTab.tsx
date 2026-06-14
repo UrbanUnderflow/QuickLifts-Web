@@ -3,7 +3,7 @@ import { ClipboardCheck, Database, FlaskConical, Link2, ShieldCheck, Users, Wayp
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const OBJECT_MODEL_ROWS = [
-  ['Organization', 'Top-level customer account created by Pulse Check. Owns implementation defaults, customer admins, and top-level posture.'],
+  ['Organization', 'Top-level customer account created by PulseCheck. Owns implementation defaults, customer admins, and top-level posture.'],
   ['OrganizationMembership', 'Connects a person to an organization with org-scoped role such as org admin or implementation observer.'],
   ['Team', 'Persistent sport-, unit-, or roster-level container inside the organization. This is created separately from the organization.'],
   ['TeamMembership', 'Connects a person to a team with role and permissions.'],
@@ -12,7 +12,7 @@ const OBJECT_MODEL_ROWS = [
   ['PilotEnrollment', 'Connects a person to a pilot and cohort, and stores consent truth and eligibility.'],
   ['InviteLink', 'Permissioned onboarding path for admin activation, staff, athlete, or clinician onboarding.'],
   ['PermissionSet / Role', 'Determines dashboard access, notifications, and escalation visibility.'],
-  ['ClinicianBridge', 'Pulse Check to AuntEdna mapping that keeps the escalation pathway live.'],
+  ['ClinicianBridge', 'PulseCheck to AuntEdna mapping that keeps the escalation pathway live.'],
 ];
 
 const INVITE_ROWS = [
@@ -23,11 +23,11 @@ const INVITE_ROWS = [
 ];
 
 const JOURNEY_ROWS = [
-  ['Pulse Check implementation admin', 'Create the organization shell, create the initial team in the same internal dashboard flow, attach defaults, and generate the first admin activation link.'],
+  ['PulseCheck implementation admin', 'Create the organization shell, create the initial team in the same internal dashboard flow, attach defaults, and generate the first admin activation link.'],
   ['Org / team admin', 'Arrive through the admin activation link, finish onboarding, become the customer admin for that organization and team, then invite staff and manage roster operations.'],
   ['Athlete', 'Arrive through the team athlete link sent by a coach, staff member, or team admin, complete account and product consent, branch into research consent if required, then enter baseline routing automatically.'],
   ['Coach / staff', 'Arrive through the team staff invite, confirm role, title, and team access, receive the right permission set, and gain athlete-invite ability if their role allows it.'],
-  ['Clinician', 'Accept invite inside Pulse Check, complete identity and compliance onboarding, then get provisioned into AuntEdna through the ClinicianBridge.'],
+  ['Clinician', 'Accept invite inside PulseCheck, complete identity and compliance onboarding, then get provisioned into AuntEdna through the ClinicianBridge.'],
 ];
 
 const STUDY_MODE_ROWS = [
@@ -57,12 +57,12 @@ const PHASE_ROWS = [
 ];
 
 const PROVISIONING_ROWS = [
-  ['Organization', 'Pulse Check internal admin', 'Implementation-led', 'Top-level customer account should not be open self-serve on day 1 because permissions, research posture, and clinician routing defaults originate here.'],
-  ['Team', 'Pulse Check internal admin', 'Implementation-led at launch', 'Separate step from organization creation because sport or unit, roster scope, and invite policy live here.'],
+  ['Organization', 'PulseCheck internal admin', 'Implementation-led', 'Top-level customer account should not be open self-serve on day 1 because permissions, research posture, and clinician routing defaults originate here.'],
+  ['Team', 'PulseCheck internal admin', 'Implementation-led at launch', 'Separate step from organization creation because sport or unit, roster scope, and invite policy live here.'],
   ['Admin activation', 'System-generated after team creation', 'Customer self-serve after handoff', 'First approved external user becomes the customer admin and can run day-to-day onboarding inside the created container.'],
-  ['Staff / coach onboarding', 'Customer org or team admin', 'Self-serve', 'Customer admin should be able to invite coaches and staff without Pulse Check intervention once the team shell exists.'],
-  ['Athlete onboarding', 'Coach, staff, or team admin', 'Self-serve', 'Coaches should be able to send the team athlete link directly so roster activation does not bottleneck on Pulse Check staff.'],
-  ['Pilot creation', 'Pulse Check internal admin', 'Internal-only for v1', 'Keep pilot objectives, study mode, and cohort design controlled internally until permissions and consent logic are proven stable.'],
+  ['Staff / coach onboarding', 'Customer org or team admin', 'Self-serve', 'Customer admin should be able to invite coaches and staff without PulseCheck intervention once the team shell exists.'],
+  ['Athlete onboarding', 'Coach, staff, or team admin', 'Self-serve', 'Coaches should be able to send the team athlete link directly so roster activation does not bottleneck on PulseCheck staff.'],
+  ['Pilot creation', 'PulseCheck internal admin', 'Internal-only for v1', 'Keep pilot objectives, study mode, and cohort design controlled internally until permissions and consent logic are proven stable.'],
 ];
 
 const ORGANIZATION_DATA_ROWS = [
@@ -70,7 +70,7 @@ const ORGANIZATION_DATA_ROWS = [
   ['displayName + legalName', 'Customer-facing name plus contract or IRB-safe legal name when needed.'],
   ['organizationType', 'Athletic department, school, club, franchise, clinic partner, or other top-level category.'],
   ['status', 'draft, active, archived, or implementation-hold.'],
-  ['implementationOwnerUserId', 'Internal Pulse Check operator responsible for setup and handoff.'],
+  ['implementationOwnerUserId', 'Internal PulseCheck operator responsible for setup and handoff.'],
   ['primaryCustomerAdminContact', 'Default external contact who receives the first admin activation link.'],
   ['defaultStudyPosture', 'Operational default for the account; pilots can override this later.'],
   ['defaultClinicianBridgeMode', 'Clinician routing requirement: none, optional, or required depending on rollout posture.'],
@@ -102,14 +102,14 @@ const PILOT_DATA_ROWS = [
 
 const CREATION_STEPS = [
   {
-    title: 'Create organization in the internal Pulse Check dashboard',
-    body: 'Pulse Check admin creates the top-level organization record, sets implementation defaults, and records the first customer admin contact.',
-    owner: 'Pulse Check internal admin',
+    title: 'Create organization in the internal PulseCheck dashboard',
+    body: 'PulseCheck admin creates the top-level organization record, sets implementation defaults, and records the first customer admin contact.',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Create the initial team inside that organization',
-    body: 'In the same dashboard workflow, Pulse Check admin creates the first team, picks the sport or unit, assigns routing defaults, and enables invite policy.',
-    owner: 'Pulse Check internal admin',
+    body: 'In the same dashboard workflow, PulseCheck admin creates the first team, picks the sport or unit, assigns routing defaults, and enables invite policy.',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Generate the admin activation link',
@@ -128,7 +128,7 @@ const CREATION_STEPS = [
   },
   {
     title: 'Coaches and staff invite athletes',
-    body: 'Permissioned coaches and staff can send the team athlete link directly so athletes enter the right team without waiting on Pulse Check operations.',
+    body: 'Permissioned coaches and staff can send the team athlete link directly so athletes enter the right team without waiting on PulseCheck operations.',
     owner: 'Coach / staff',
   },
 ];
@@ -137,10 +137,10 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Operations"
+        eyebrow="PulseCheck Operations"
         title="Team, Pilot, and Cohort Onboarding Architecture"
         version="Version 1.2 | March 11, 2026"
-        summary="System-entry architecture for how organizations, teams, athletes, coaches, staff, clinicians, pilots, and cohorts enter Pulse Check and connect to one another. This artifact now makes the provisioning model explicit: Pulse Check creates the organization and initial team internally, then hands off ongoing staff and athlete onboarding through permissioned invite links."
+        summary="System-entry architecture for how organizations, teams, athletes, coaches, staff, clinicians, pilots, and cohorts enter PulseCheck and connect to one another. This artifact now makes the provisioning model explicit: PulseCheck creates the organization and initial team internally, then hands off ongoing staff and athlete onboarding through permissioned invite links."
         highlights={[
           {
             title: 'Team and Pilot Are Separate Layers',
@@ -148,7 +148,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
           },
           {
             title: 'Implementation-Led Setup, Self-Serve Onboarding',
-            body: 'Pulse Check should create the organization and first team. Customer admins, coaches, and staff should then handle ongoing staff and athlete onboarding.',
+            body: 'PulseCheck should create the organization and first team. Customer admins, coaches, and staff should then handle ongoing staff and athlete onboarding.',
           },
           {
             title: 'Role-Specific Invites Are Required',
@@ -271,7 +271,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
             body={
               <BulletList
                 items={[
-                  'Product consent is required for Pulse Check use.',
+                  'Product consent is required for PulseCheck use.',
                   'Research consent is pilot- and cohort-dependent and controls dataset eligibility.',
                   'Escalation / clinical consent remains a separate event-driven workflow inside Tier 2 escalation.',
                   'Onboarding should never merge product, research, and clinical consent into one lane.',
@@ -286,7 +286,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard title="Baseline Is the First Trial" accent="green" body="Onboarding should hand the athlete directly into a standardized baseline path instead of making them navigate to it later." />
           <InfoCard title="Pilot-Aware Branching" accent="amber" body="Research-enrolled athletes should enter the research baseline path; product-only athletes should still enter the standard baseline path." />
-          <InfoCard title="Clinician Bridge Cohesion" accent="purple" body="Clinicians should be invited and provisioned from inside Pulse Check so the AuntEdna escalation bridge stays administratively coherent." />
+          <InfoCard title="Clinician Bridge Cohesion" accent="purple" body="Clinicians should be invited and provisioned from inside PulseCheck so the AuntEdna escalation bridge stays administratively coherent." />
         </CardGrid>
       </SectionBlock>
 
@@ -297,12 +297,12 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
           body={
             <BulletList
               items={[
-                'Pulse Check creates the organization and initial team internally; customers should not create orgs freely at launch.',
+                'PulseCheck creates the organization and initial team internally; customers should not create orgs freely at launch.',
                 'Generate the admin activation link only after the team shell exists and is correctly configured.',
                 'Do not make pilot logic part of team logic. Pilots are structured layers inside teams.',
                 'Use role-specific invite links. Do not rely on one generic invite for all user types.',
                 'Allow coaches and staff with the right permission to send the team athlete link directly.',
-                'Treat clinician onboarding as a first-class workflow inside Pulse Check.',
+                'Treat clinician onboarding as a first-class workflow inside PulseCheck.',
                 'Pilot defines the study posture. Cohort can refine it. Enrollment stores the consent truth.',
                 'Pilot dashboards and pilot reports must read athlete populations from active `PilotEnrollment` truth rather than from whole-team membership.',
                 'Keep pilots internal-only until permissioning, consent, and reporting behavior are stable enough for customer self-serve.',

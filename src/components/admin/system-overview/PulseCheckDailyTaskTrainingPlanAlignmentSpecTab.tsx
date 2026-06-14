@@ -134,7 +134,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Daily Task + Training Plan Alignment Spec"
         version="Version 1.1 | June 2026"
         summary="Runtime surface-coherence contract for athlete work in PulseCheck. This artifact defines the canonical DailyTask, TrainingPlan, CurriculumSlate, and PlanStep model; materialization rules; lifecycle state machine; date-boundary rules; event contract; and migration path so Home, Training Room, and Nora chat always speak from one assignment truth."

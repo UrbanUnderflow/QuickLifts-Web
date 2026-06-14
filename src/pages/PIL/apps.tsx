@@ -75,7 +75,7 @@ const APPS: AppEntry[] = [
   },
   {
     id: 'pulse-check',
-    name: 'Pulse Check',
+    name: 'PulseCheck',
     tagline: 'Mindset coaching for athletes.',
     description:
       'A daily two-minute check-in that turns how you feel into how you perform. Designed for athletes, coaches, and the people behind them.',
@@ -110,7 +110,7 @@ const APPS: AppEntry[] = [
 
 const META_TITLE = 'The Pulse Apps — Pulse Intelligence Labs';
 const META_DESCRIPTION =
-  'The Pulse Intelligence Labs app suite — Fit With Pulse, Macra, Pulse Check, and Pulse Ritual. Performance, nutrition, mindset, and daily ritual, all in one place.';
+  'The Pulse Intelligence Labs app suite — Fit With Pulse, Macra, PulseCheck, and Pulse Ritual. Performance, nutrition, mindset, and daily ritual, all in one place.';
 const META_URL = 'https://pulseintelligencelabs.com/apps';
 const META_OG_IMAGE = 'https://pulseintelligencelabs.com/pil-og.png';
 

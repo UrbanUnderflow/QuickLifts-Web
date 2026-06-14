@@ -202,7 +202,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const shouldShowDownloadFirst = shouldPreferAppDownload && !showWebOnboarding && !redeemedState;
   const inviteScopeLabel = invite.pilotName || invite.teamName;
   const inviteHeadline = shouldPreferAppDownload
-    ? `Download the Pulse Check app to join ${inviteScopeLabel}.`
+    ? `Download the PulseCheck app to join ${inviteScopeLabel}.`
     : `Join ${invite.teamName}`;
 
   const updateWebOnboardingPreference = (nextValue: boolean) => {
@@ -670,7 +670,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <p className="max-w-2xl text-sm leading-7 text-zinc-300">
                   {shouldPreferAppDownload ? (
                     <>
-                      Pulse Check helps athletes build readiness, mindset, and performance habits with guided check-ins and coaching.
+                      PulseCheck helps athletes build readiness, mindset, and performance habits with guided check-ins and coaching.
                       Download the app to join <span className="font-medium text-white">{invite.teamName}</span> inside{' '}
                       <span className="font-medium text-white">{invite.organizationName}</span>.
                     </>
@@ -821,7 +821,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">App-First Onboarding</p>
                   <h2 className="mt-2 text-3xl font-semibold text-white">Download the app to join this pilot</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Download Pulse Check on your phone, then sign in with{' '}
+                    Download PulseCheck on your phone, then sign in with{' '}
                     <span className="font-medium text-white">{invite.targetEmail || 'your invited email'}</span> to continue into{' '}
                     <span className="font-medium text-white">{inviteScopeLabel}</span>.
                   </p>
@@ -831,7 +831,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <div className="space-y-3">
                     <div className="text-sm font-semibold text-white">Recommended path</div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-200">
-                      Install the Pulse Check app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
+                      Install the PulseCheck app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <a

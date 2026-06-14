@@ -64,7 +64,7 @@ const PulseCheckProtocolPlannerPolicyEnforcementTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Planner Policy Enforcement"
         version="Version 0.1 | March 18, 2026"
         summary="Runtime-policy artifact for how Nora should filter, validate, and select protocol candidates safely at launch. This page defines the non-negotiable enforcement layer that sits between the registry and the assignment planner so a protocol cannot become assignable just because it exists."

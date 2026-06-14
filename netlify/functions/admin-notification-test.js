@@ -95,7 +95,7 @@ function resolveScopedFcmToken(userData, productScope) {
 }
 
 function productLabel(productScope) {
-  if (productScope === 'pulsecheck') return 'Pulse Check';
+  if (productScope === 'pulsecheck') return 'PulseCheck';
   if (productScope === 'macra') return 'Macra';
   return 'Pulse';
 }

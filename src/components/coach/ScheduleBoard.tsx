@@ -569,7 +569,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
           ))}
         </div>
         <div className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-          Our team makes these connections during pilot setup — tailoring Pulse Check to your institution,
+          Our team makes these connections during pilot setup — tailoring PulseCheck to your institution,
           your team, and your athletes.
         </div>
       </div>

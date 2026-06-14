@@ -42,7 +42,7 @@ const WINDOW_MINUTES = 30;
 // that still names the assignment type and next action.
 const middaySimMessage = (simName?: string): { title: string; body: string } => ({
   title: 'Quick sim — 5 min',
-  body: `${simName ?? "Today's sim"} is queued. Open Pulse Check and knock it out before the day fills up.`,
+  body: `${simName ?? "Today's sim"} is queued. Open PulseCheck and knock it out before the day fills up.`,
 });
 
 const eveningProtocolMessage = (protocolLabel?: string): { title: string; body: string } => ({

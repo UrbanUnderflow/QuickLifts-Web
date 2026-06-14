@@ -237,7 +237,7 @@ const PulseCheckCheckInSignalLayerIntegrationSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Check-In ↔ AI Signal Layer Integration Spec"
         version="Version 2.0 | March 17, 2026"
         summary="Implementation-spec artifact for turning the athlete readiness check-in into an AI-native runtime signal. This page defines how explicit self-report, raw and enriched state snapshots, bounded assignment candidate sets, Nora daily assignments, chat context, and assignment lifecycle events should connect so the athlete sees one coherent system instead of separate UI tricks."

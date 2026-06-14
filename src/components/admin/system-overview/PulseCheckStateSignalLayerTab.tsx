@@ -106,7 +106,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="State Signal Layer"
         version="Version 1.5 | March 20, 2026"
         summary="Foundation-layer artifact for the shared perception model. This page now defines the raw-signal intake, AI-enriched state interpretation, confidence logic, freshness defaults, and the persisted snapshot that downstream runtime systems should consume before Nora assignment planning. Fresh same-day self-report leads current-state readiness; the longer-term profile can bias interpretation, but it must not override a fresh check-in."

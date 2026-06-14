@@ -41,7 +41,7 @@ const PulseCheckProtocolLaunchReadinessTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Launch Readiness"
         version="Version 0.1 | March 18, 2026"
         summary="Launch-gating artifact for deciding whether the PulseCheck protocol system is safe, observable, governable, and explainable enough to ship. This page turns the protocol stack into an explicit go / no-go checklist rather than assuming the existence of docs and code means launch readiness."

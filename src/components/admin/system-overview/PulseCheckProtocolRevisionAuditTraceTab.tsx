@@ -56,7 +56,7 @@ const PulseCheckProtocolRevisionAuditTraceTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Revision & Audit Trace"
         version="Version 0.1 | March 18, 2026"
         summary="Auditability artifact for how protocol authorship, publish lineage, planner decisions, and assignment execution should connect into one traceable chain. This page defines the provenance required to explain exactly which protocol object Nora assigned and why."

@@ -110,7 +110,7 @@ const DEVICE_LAYER_ROWS = [
   ['Oura', 'Oura OAuth/API direct lane (preferred) or HealthKit-derived fallback → Oura adapter → Health Context Source Record.', 'Active source today. Direct OAuth preferred; HealthKit fallback documented in the Oura Integration Strategy spec.'],
   ['Polar', 'Polar OAuth + Accesslink → Polar adapter → Health Context Source Record.', 'Planned future device. Adapter not yet implemented; on the HCSR build queue.'],
   ['Whoop / Garmin / future', 'Per-vendor OAuth → vendor adapter → Health Context Source Record.', 'Planned future devices; implementation-only addition once HCSR adapter scaffolding lands.'],
-  ['Pulse Check self-report', 'Nora check-in → self-report intake → Health Context Source Record with `source: pulsecheck_self_report`.', 'Active when an athlete has no connected wearable. Confidence capped at `emerging` per spec — never drives high-trust coach claims.'],
+  ['PulseCheck self-report', 'Nora check-in → self-report intake → Health Context Source Record with `source: pulsecheck_self_report`.', 'Active when an athlete has no connected wearable. Confidence capped at `emerging` per spec — never drives high-trust coach claims.'],
   ['Coach-entered', 'Manual entry → manual adapter → Health Context Source Record with provenance flag.', 'Lowest-confidence lane; explicit provenance carries through to coach-facing copy.'],
 ];
 
@@ -135,7 +135,7 @@ const SPORT_PROFILE_FIELDS = [
 ];
 
 const OUTPUT_SURFACES = [
-  ['Weekly Sports Intelligence Report', 'Coach', 'Sundays before the week starts.', 'Team load trend, aggregate sentiment, cognitive movement (Focus / Composure / Decisioning), individual vs team-wide recovery patterns, athlete watchlist, plain-language coach messages, and reviewer-visible validated payload trace. Walk-through with Pulse Check team weekly during pilot.'],
+  ['Weekly Sports Intelligence Report', 'Coach', 'Sundays before the week starts.', 'Team load trend, aggregate sentiment, cognitive movement (Focus / Composure / Decisioning), individual vs team-wide recovery patterns, athlete watchlist, plain-language coach messages, and reviewer-visible validated payload trace. Walk-through with PulseCheck team weekly during pilot.'],
   ['Game-Day Readiness Report', 'Coach', 'Morning of competition.', 'Athlete-by-athlete mind-body state combining biometric recovery, cognitive trajectory, sentiment 48h prior, optional travel impact factor, and pre-competition protocols. Each athlete read must trace to a selected candidate and source freshness state.'],
   ['Early-Warning Alert', 'Coach', 'Real-time after review gate.', 'Sustained pattern flags are candidate alerts only until reviewed: individual under-recovery, team-wide under-recovery, sudden sentiment shift, cognitive decline. Clinical-threshold signals do NOT route here; they go through escalation.'],
   ['Coach Nora Transparency Panel', 'Coach / reviewer', 'On athlete review surfaces.', 'Read-only context panel showing recent Nora conversations plus recent assigned protocols / sims and rationale. It helps staff understand what Nora has already told the athlete without giving coaches raw athlete-Nora message review powers from Nora Guard.'],
@@ -189,7 +189,7 @@ const PHASE_ROADMAP = [
 
 const TRUST_GATES = [
   ['Build now', 'Sports Fact Ledger, candidate read generation, scoring, guardrails, rubric validation, report draft generation, Macra/Nora sport-context enrichment, evidence/provenance display.', 'May run automatically if outputs are clearly marked as context or draft intelligence and persist the validated payload trace.'],
-  ['Human review required', 'Weekly Sports Intelligence Reports, Game-Day Readiness Reports, high-impact coach-facing pattern interpretations.', 'Pulse Check team reviews before coach delivery during early pilots.'],
+  ['Human review required', 'Weekly Sports Intelligence Reports, Game-Day Readiness Reports, high-impact coach-facing pattern interpretations.', 'PulseCheck team reviews before coach delivery during early pilots.'],
   ['Blocked from full automation', 'Early-warning alerts, high-trust athlete watchlist promotion, sustained under-recovery flags, coach-facing risk recommendations.', 'Requires locked thresholds, evaluation criteria, false-positive review, and pilot evidence in the Aggregation + Inference Contract.'],
   ['Never owned here', 'Clinical-threshold interpretation, clinical return-to-play decisions, clinician-gated disclosures.', 'Until AuntEDNA integration ships, Tier 3 signals route through `pulsecheck-clinical-escalations` to the team\'s designated clinician staff member. The clinician applies judgment; the athlete\'s app gates to a 988 / Crisis Text Line / 911 surface and informs them the clinician has been notified. Pulse never auto-dials emergency services.'],
 ];
@@ -444,7 +444,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           <InfoCard
             title="Coach Reports + Thin Coach Dashboard"
             accent="green"
-            body="Coaches make decisions from reports — concise, narrative outputs timed to when coaching decisions get made. The report must distinguish individual vs team-wide patterns so the coach can tell whether a state issue is isolated, clustered, or systemic. It surfaces data, trend, watchlist, adherence/coverage state, and plain-language coaching moments; it does not tell the coach how to modify the physical program. Pulse Check team does a 20-minute weekly walk-through with each head coach during pilot."
+            body="Coaches make decisions from reports — concise, narrative outputs timed to when coaching decisions get made. The report must distinguish individual vs team-wide patterns so the coach can tell whether a state issue is isolated, clustered, or systemic. It surfaces data, trend, watchlist, adherence/coverage state, and plain-language coaching moments; it does not tell the coach how to modify the physical program. PulseCheck team does a 20-minute weekly walk-through with each head coach during pilot."
           />
         </CardGrid>
       </SectionBlock>

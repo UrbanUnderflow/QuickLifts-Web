@@ -221,7 +221,7 @@ const adminCardsData = [
     link: "/admin/metrics"
   },
   {
-    title: "Pulse Check Tech Demo Analytics",
+    title: "PulseCheck Tech Demo Analytics",
     description: "Track reviewer visits, sources, email notification status, and individual page views for the tech demo page.",
     icon: <BarChart2 className="w-5 h-5" />,
     link: "/admin/pulseCheckTechDemoAnalytics"
@@ -378,7 +378,7 @@ const adminCardsData = [
   },
   {
     title: "Nutrition Insight Layer",
-    description: "QA Macra daily insight facts, candidate rankings, validation traces, and final Nora copy before the layer expands to Pulse Check.",
+    description: "QA Macra daily insight facts, candidate rankings, validation traces, and final Nora copy before the layer expands to PulseCheck.",
     icon: <Utensils className="w-5 h-5" />,
     link: "/admin/nutritionInsightLayer"
   },

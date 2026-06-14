@@ -29,7 +29,7 @@ const PulseCheckPerformanceStateFlagDefinitionsTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Performance-State Flag Definitions"
         version="Version 1.0 | March 10, 2026"
         summary="Operational inference artifact for converting acute sim behavior into state flags. This page defines which family-level session patterns should be interpreted as state signals rather than long-term skill deficits."

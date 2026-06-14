@@ -151,7 +151,7 @@ export default function FirebaseAdminCredentialArchitectureTab() {
       />
 
       <RuntimeAlignmentPanel
-        role="Cross-runtime credential architecture for Fit With Pulse Web/Admin, Pulse Check server routes, Macra bridge functions, and Netlify functions that depend on Firebase Admin, Firestore, Storage, Auth, or other Google server-side APIs."
+        role="Cross-runtime credential architecture for Fit With Pulse Web/Admin, PulseCheck server routes, Macra bridge functions, and Netlify functions that depend on Firebase Admin, Firestore, Storage, Auth, or other Google server-side APIs."
         sourceOfTruth="This page is the architectural source of truth for how server credentials should be loaded, normalized, and initialized. Route-level secret parsing is considered a bug once this design is adopted."
         masterReference="Use this artifact before touching Firebase Admin initialization, adding a new server route that uses Firestore, rotating service-account format, or deciding whether a new function belongs on the shared adapter."
         relatedDocs={[

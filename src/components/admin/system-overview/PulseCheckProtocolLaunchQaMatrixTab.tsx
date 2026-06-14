@@ -39,7 +39,7 @@ const PulseCheckProtocolLaunchQaMatrixTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Launch QA Matrix"
         version="Version 0.1 | March 18, 2026"
         summary="Launch-facing QA artifact for the protocol subsystem. This page defines the specific protocol scenarios that should pass before launch confidence is claimed, with release-blocking posture attached to each one."

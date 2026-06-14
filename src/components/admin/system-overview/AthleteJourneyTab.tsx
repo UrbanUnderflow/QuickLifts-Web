@@ -59,7 +59,7 @@ const PHASES: Phase[] = [
         icon: BookOpen,
         accent: '#a78bfa',
         status: 'partial',
-        description: 'Pulse Check explains itself in plain language and confirms why this athlete is here.',
+        description: 'PulseCheck explains itself in plain language and confirms why this athlete is here.',
         detail:
             'Current v1 covers name capture, product consent, versioned required pilot documents, and research consent when a pilot requires it. Consent v6 re-prompts older pilot acceptances. Nora-as-guide language is still directionally right, but Nora is not yet the true onboarding orchestrator, and clinical consent remains future safety-lane work.',
     },
@@ -125,7 +125,7 @@ const PHASES: Phase[] = [
         icon: Trophy,
         accent: '#facc15',
         status: 'target',
-        description: 'Pulse Check serves as a readiness and development layer before, during, and between competition windows.',
+        description: 'PulseCheck serves as a readiness and development layer before, during, and between competition windows.',
         detail:
             'This is still a future product layer. The current athlete flow has no true competition-mode surface yet beyond general readiness language and optional Vision Pro checkpoint messaging.',
     },
@@ -163,7 +163,7 @@ const CORE_PRINCIPLES = [
         icon: Target,
         label: 'Visible progress matters early',
         description:
-            'The athlete should quickly see what Pulse Check is training, what is improving, and what comes next.',
+            'The athlete should quickly see what PulseCheck is training, what is improving, and what comes next.',
     },
 ];
 
@@ -191,7 +191,7 @@ const ENTRY_CONTEXTS = [
 ];
 
 const CONSENT_BRANCHES = [
-    { lane: 'Product consent', meaning: 'Required for Pulse Check use and should happen in every athlete path.' },
+    { lane: 'Product consent', meaning: 'Required for PulseCheck use and should happen in every athlete path.' },
     { lane: 'Required pilot documents', meaning: 'Versioned required consents such as the v6 pilot participation and privacy notices. Older accepted versions re-open the consent gate.' },
     { lane: 'Research consent', meaning: 'Shown only when the pilot or cohort requires it. Decline should not necessarily block product use.' },
     { lane: 'Escalation / clinical consent', meaning: 'Still future safety-lane work. Keep separate from onboarding, but do not treat it as live athlete flow until the clinical stack exists.' },
@@ -371,12 +371,12 @@ const AthleteJourneyTab: React.FC = () => {
                 <div className="flex items-center gap-2 mb-1">
                     <CalendarDays className="w-4 h-4 text-sky-400" />
                     <p className="text-xs uppercase tracking-wide text-sky-400 font-semibold">
-                        Pulse Check · Athlete Adoption
+                        PulseCheck · Athlete Adoption
                     </p>
                 </div>
                 <h2 className="text-xl font-semibold text-white">Athlete User Journey</h2>
                 <p className="text-sm text-zinc-400 mt-1 max-w-2xl">
-                    Recommended entry, progression, and system flow for the easiest athlete adoption path through Pulse Check.
+                    Recommended entry, progression, and system flow for the easiest athlete adoption path through PulseCheck.
                     The goal is to make first use simple, daily use sticky, and long-term progression credible.
                 </p>
             </div>

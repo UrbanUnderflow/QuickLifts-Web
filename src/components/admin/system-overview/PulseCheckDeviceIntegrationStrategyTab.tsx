@@ -229,10 +229,10 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Health Context"
+        eyebrow="PulseCheck Health Context"
         title="Device Integration Strategy"
         version="Version 0.1 | March 17, 2026"
-        summary="Operating reference for how Pulse Check should integrate wearables, platform bridges, and elite performance systems. The goal is to keep device integrations source-aware, freshness-aware, and normalized into the same canonical athlete-context pipeline instead of creating one-off adapters."
+        summary="Operating reference for how PulseCheck should integrate wearables, platform bridges, and elite performance systems. The goal is to keep device integrations source-aware, freshness-aware, and normalized into the same canonical athlete-context pipeline instead of creating one-off adapters."
         highlights={[
           {
             title: 'One Pipeline',
@@ -250,7 +250,7 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Strategy artifact for deciding which device and platform integrations Pulse Check should pursue, how they should be classified, and how they should feed the canonical athlete-context pipeline."
+        role="Strategy artifact for deciding which device and platform integrations PulseCheck should pursue, how they should be classified, and how they should feed the canonical athlete-context pipeline."
         sourceOfTruth="This page is the reference for wearable, platform, and team-system integrations. It explains the integration taxonomy, wishlist tiers, routing rules, and why the same canonical contract must absorb every source."
         masterReference="Use this page when scoping new device work, deciding whether a vendor belongs on the roadmap, or checking how a vendor should map into source records and snapshots."
         relatedDocs={[
@@ -336,10 +336,10 @@ const RunWearableSourceOfTruthDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Run Runtime"
+        eyebrow="PulseCheck Run Runtime"
         title="Run Wearable System Outline"
         version="Version 0.1 | March 18, 2026"
-        summary="System outline for how Pulse Check should run active workout tracking across Apple Watch, Oura, and phone-led fallback logic. This document defines the run-session architecture, source hierarchy, metric ownership rules, safeguard behaviors, and the canonical output shape the runtime should produce."
+        summary="System outline for how PulseCheck should run active workout tracking across Apple Watch, Oura, and phone-led fallback logic. This document defines the run-session architecture, source hierarchy, metric ownership rules, safeguard behaviors, and the canonical output shape the runtime should produce."
         highlights={[
           {
             title: 'Apple Watch Wins Live',
@@ -357,7 +357,7 @@ const RunWearableSourceOfTruthDoc: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="System design artifact for active run sessions inside Fit With Pulse and Pulse Check. It explains which runtime components exist, how source arbitration should work, which metrics belong to which device lane, and how guardrails preserve session quality."
+        role="System design artifact for active run sessions inside Fit With Pulse and PulseCheck. It explains which runtime components exist, how source arbitration should work, which metrics belong to which device lane, and how guardrails preserve session quality."
         sourceOfTruth="This page is the outline document for the run wearable system. Use it whenever we implement or revise run-session logic involving Apple Watch, Oura, phone-led tracking, confidence rules, or the final canonical run record."
         masterReference="Use this page when building the run session controller, source arbitration layer, reconciliation layer, guardrail behaviors, and the canonical run persistence flow."
         relatedDocs={[
@@ -391,7 +391,7 @@ const RunWearableSourceOfTruthDoc: React.FC = () => {
           <InfoCard
             title="Architecture Rule"
             accent="blue"
-            body="Do not treat Oura as a live GPS replacement. If the athlete only has the ring, Pulse Check should still use the phone-led run runtime for route and pace while Oura strengthens the biometrics and session-confidence layer."
+            body="Do not treat Oura as a live GPS replacement. If the athlete only has the ring, PulseCheck should still use the phone-led run runtime for route and pace while Oura strengthens the biometrics and session-confidence layer."
           />
           <InfoCard
             title="Honest Degradation"
@@ -484,7 +484,7 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
   {
     id: 'fitbit-integration-checklist',
     label: 'Fitbit Checklist',
-    subtitle: 'Google Health connector, Pulse Check UI, and Fit With Pulse parity rollout.',
+    subtitle: 'Google Health connector, PulseCheck UI, and Fit With Pulse parity rollout.',
     icon: Activity,
     accent: '#38bdf8',
     render: () => <PulseCheckFitbitIntegrationChecklistTab />,
@@ -518,7 +518,7 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
 const PulseCheckDeviceIntegrationStrategyTab: React.FC = () => {
   return (
     <ArtifactPageLibrary
-      eyebrow="Pulse Check · Device & Wearable Integrations"
+      eyebrow="PulseCheck · Device & Wearable Integrations"
       title="Device & Wearable Integrations Library"
       summary="Integration parent artifact with internal pages for device strategy, run source-of-truth rules, partnership prioritization, and the Oura-specific connector lane."
       entries={DEVICE_INTEGRATION_PAGES}

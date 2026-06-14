@@ -278,7 +278,7 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Responsiveness Inspector"
         version="Read-only operator surface"
         summary="A lightweight admin-facing surface for inspecting athlete protocol responsiveness profiles directly, without entering coach assignment review. It reads the shared responsiveness profile collection and shows freshness, evidence traces, family posture, and variant posture in one read-only view."

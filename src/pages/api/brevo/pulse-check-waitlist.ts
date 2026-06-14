@@ -152,21 +152,21 @@ async function sendWelcomeEmail(email: string, name?: string) {
       email: 'hello@pulsecommunity.app', 
       name: 'Pulse Team' 
     },
-    subject: 'Welcome to the Pulse Check Waitlist! 🚀',
+    subject: 'Welcome to the PulseCheck Waitlist! 🚀',
     htmlContent: `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #E0FE10; font-size: 28px; margin: 0;">Welcome to Pulse Check!</h1>
+          <h1 style="color: #E0FE10; font-size: 28px; margin: 0;">Welcome to PulseCheck!</h1>
           <p style="color: #666; font-size: 16px; margin: 10px 0 0 0;">Always-On Sport Psychology for Athletes & Coaches</p>
         </div>
         
         <div style="background: #f8f9fa; border-radius: 12px; padding: 25px; margin: 20px 0;">
           <h2 style="color: #333; font-size: 20px; margin: 0 0 15px 0;">Hey ${firstName}! 👋</h2>
           <p style="color: #555; line-height: 1.6; margin: 0 0 15px 0;">
-            Thanks for joining the Pulse Check waitlist! You're now part of an exclusive group getting early access to the future of sport psychology.
+            Thanks for joining the PulseCheck waitlist! You're now part of an exclusive group getting early access to the future of sport psychology.
           </p>
           
-          <h3 style="color: #333; font-size: 18px; margin: 20px 0 10px 0;">What is Pulse Check?</h3>
+          <h3 style="color: #333; font-size: 18px; margin: 20px 0 10px 0;">What is PulseCheck?</h3>
           <ul style="color: #555; line-height: 1.6; padding-left: 20px;">
             <li><strong>Daily Check-in Bot:</strong> Smart mood tracking that understands athletic context</li>
             <li><strong>Bio-Sync Context:</strong> Your biometric data explains your mental state</li>
@@ -176,7 +176,7 @@ async function sendWelcomeEmail(email: string, name?: string) {
           
           <h3 style="color: #333; font-size: 18px; margin: 20px 0 10px 0;">What's Next?</h3>
           <p style="color: #555; line-height: 1.6; margin: 0;">
-            We're putting the finishing touches on Pulse Check and will email you as soon as it's ready. 
+            We're putting the finishing touches on PulseCheck and will email you as soon as it's ready. 
             In the meantime, you can check out our main Pulse app for community workouts and training.
           </p>
         </div>
@@ -197,16 +197,16 @@ async function sendWelcomeEmail(email: string, name?: string) {
     textContent: `
 Hey ${firstName}!
 
-Thanks for joining the Pulse Check waitlist! You're now part of an exclusive group getting early access to the future of sport psychology.
+Thanks for joining the PulseCheck waitlist! You're now part of an exclusive group getting early access to the future of sport psychology.
 
-What is Pulse Check?
+What is PulseCheck?
 - Daily Check-in Bot: Smart mood tracking that understands athletic context
 - Bio-Sync Context: Your biometric data explains your mental state  
 - AI Corner-Man Chat: Instant answers to training and performance questions
 - Escalation Loop: Seamless connection to your coach when needed
 
 What's Next?
-We're putting the finishing touches on Pulse Check and will email you as soon as it's ready. In the meantime, you can check out our main Pulse app for community workouts and training.
+We're putting the finishing touches on PulseCheck and will email you as soon as it's ready. In the meantime, you can check out our main Pulse app for community workouts and training.
 
 Download Pulse App: https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729
 

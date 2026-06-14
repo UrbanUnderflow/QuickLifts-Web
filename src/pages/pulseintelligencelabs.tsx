@@ -26,7 +26,7 @@ const STEP_META: Record<number, { section: string; label: string }> = {
   0: { section: 'Intro', label: 'Pulse Intelligence Labs' },
   1: { section: 'Vision', label: 'The AI Lab Vision' },
   2: { section: 'Product', label: 'Fit With Pulse' },
-  3: { section: 'Product', label: 'Pulse Check' },
+  3: { section: 'Product', label: 'PulseCheck' },
   4: { section: 'Vision', label: 'What Connects The Portfolio' },
   5: { section: 'Proof', label: 'Partners' },
   6: { section: 'Proof', label: 'Brands We Have Worked With' },
@@ -88,7 +88,7 @@ const PRODUCT_COLUMNS = [
     icon: Users,
   },
   {
-    title: 'Pulse Check',
+    title: 'PulseCheck',
     eyebrow: 'Mental performance platform',
     blurb: 'A simulation-based mental performance training platform for elite athletes that helps improve cognitive performance under stress.',
     bullets: ['Elite athletes and performance environments', 'Simulation training under pressure', 'Sharper decisions when stress rises'],
@@ -180,11 +180,11 @@ const SceneCover = () => (
           We are building an <span className="text-[#E0FE10]">AI lab</span> for the human body, health intelligence, and human performance.
         </h1>
         <p className="mt-6 max-w-3xl text-lg leading-relaxed text-zinc-300 md:text-2xl">
-          Today that vision shows up in two separate products: Fit With Pulse for building and monetizing fitness communities, and Pulse Check for helping elite athletes improve cognitive performance under stress through simulation training.
+          Today that vision shows up in two separate products: Fit With Pulse for building and monetizing fitness communities, and PulseCheck for helping elite athletes improve cognitive performance under stress through simulation training.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <div className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-sm font-semibold text-[#E0FE10]">Fit With Pulse</div>
-          <div className="rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-300">Pulse Check</div>
+          <div className="rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-300">PulseCheck</div>
           <div className="rounded-full border border-purple-400/30 bg-purple-400/10 px-4 py-2 text-sm font-semibold text-purple-300">Athletics, Fitness, Wellness</div>
         </div>
       </motion.div>
@@ -339,7 +339,7 @@ const ScenePulseCheck = () => (
                 <Brain className="h-6 w-6 text-sky-300" />
               </div>
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Pulse Check</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-500">PulseCheck</p>
                 <p className="text-xl font-bold text-white">Mental performance training for elite athletes</p>
               </div>
             </div>
@@ -365,12 +365,12 @@ const ScenePulseCheck = () => (
         transition={{ ...transition, delay: 0.08 }}
         className="order-1 lg:order-2"
       >
-        <SlideKicker>Pulse Check</SlideKicker>
+        <SlideKicker>PulseCheck</SlideKicker>
         <h2 className="text-4xl font-black leading-tight text-white md:text-6xl">
           Simulation-based mental performance training for <span className="text-[#38BDF8]">elite athletes</span>.
         </h2>
         <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300">
-          Pulse Check is focused on helping athletes increase cognitive performance under stress. This is not a community product. It is a high-performance training product built around simulation, pressure, and measurable improvement.
+          PulseCheck is focused on helping athletes increase cognitive performance under stress. This is not a community product. It is a high-performance training product built around simulation, pressure, and measurable improvement.
         </p>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {[
@@ -455,7 +455,7 @@ const ScenePartners = () => (
             <img src="/techstars.png" alt="Techstars" className="h-10 w-auto object-contain opacity-90" />
           </div>
           <p className="mt-6 max-w-3xl text-sm leading-relaxed text-zinc-300">
-            LAUNCH and Jason Calacanis signal founder-market backing. Cooley supports company formation and legal readiness. AuntEdna expands the clinical adjacency story around Pulse Check and escalation infrastructure.
+            LAUNCH and Jason Calacanis signal founder-market backing. Cooley supports company formation and legal readiness. AuntEdna expands the clinical adjacency story around PulseCheck and escalation infrastructure.
           </p>
         </div>
       </GlassCard>
@@ -715,7 +715,7 @@ const ScenePathTo100M = () => (
         <GlassCard accentColor={PULSE_PURPLE}>
           <div className="p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-zinc-500">Wedge two</p>
-            <p className="mt-2 text-xl font-bold text-white">Pulse Check grows through elite athletes, teams, and simulation-based mental performance training.</p>
+            <p className="mt-2 text-xl font-bold text-white">PulseCheck grows through elite athletes, teams, and simulation-based mental performance training.</p>
           </div>
         </GlassCard>
         <GlassCard accentColor="#E0FE10">
@@ -745,7 +745,7 @@ const SceneRaise = () => (
           <div className="mt-6 space-y-4">
             {[
               { icon: Users, title: 'Fit With Pulse growth', body: 'Scale the community platform for creators, brands, and corporations.' },
-              { icon: Brain, title: 'Pulse Check development', body: 'Advance the simulation training product for elite mental performance under stress.' },
+              { icon: Brain, title: 'PulseCheck development', body: 'Advance the simulation training product for elite mental performance under stress.' },
               { icon: Briefcase, title: 'Research and AI infrastructure', body: 'Keep building the intelligence backbone that supports the broader lab vision.' },
               { icon: Rocket, title: 'Go-to-market and partnerships', body: 'Turn existing relationships and early traction into sharper commercial motion.' },
             ].map((item) => {
@@ -798,7 +798,7 @@ const SceneClose = () => (
         Pulse Intelligence Labs is building the company we want to exist for <span className="text-[#E0FE10]">athletics</span>, <span className="text-[#38BDF8]">fitness</span>, <span className="text-[#8B5CF6]">wellness</span>, and eventually the human operating system.
       </h2>
       <p className="mt-6 text-lg leading-relaxed text-zinc-300 md:text-xl">
-        Today that shows up through Fit With Pulse and Pulse Check. Tomorrow it becomes a broader portfolio of products built around the human body, health intelligence, and better performance.
+        Today that shows up through Fit With Pulse and PulseCheck. Tomorrow it becomes a broader portfolio of products built around the human body, health intelligence, and better performance.
       </p>
 
       <GlassCard className="mx-auto mt-10 max-w-xl" accentColor="#E0FE10">
@@ -908,7 +908,7 @@ const PulseIntelligenceLabsDeck: React.FC = () => {
         <title>Pulse Intelligence Labs — Deck</title>
         <meta
           name="description"
-          content="Interactive company presentation for Pulse Intelligence Labs, covering Fit With Pulse, Pulse Check, partners, team, founder story, and the path to $100M."
+          content="Interactive company presentation for Pulse Intelligence Labs, covering Fit With Pulse, PulseCheck, partners, team, founder story, and the path to $100M."
         />
       </Head>
 

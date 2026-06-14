@@ -3,8 +3,8 @@ import Head from 'next/head';
 import { GetServerSideProps } from 'next';
 import mixpanel from 'mixpanel-browser';
 
-const DEMO_TITLE = 'Pulse Check Tech Demo | Pulse Intelligence Labs';
-const DEMO_DESCRIPTION = 'A focused Pulse Check tech demo page for investors and reviewers.';
+const DEMO_TITLE = 'PulseCheck Tech Demo | Pulse Intelligence Labs';
+const DEMO_DESCRIPTION = 'A focused PulseCheck tech demo page for investors and reviewers.';
 const VIDEO_SRC = 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/webassets%2Fpulse-check-tech-demo.mp4?alt=media&token=de71c561-351d-459d-9d06-dc534b80d000';
 const VIDEO_DURATION_SECONDS = 1111;
 
@@ -209,7 +209,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Pulse Check Tech Demo | Pulse Intelligence Labs</title>
+        <title>PulseCheck Tech Demo | Pulse Intelligence Labs</title>
         <meta
           name="description"
           content={DEMO_DESCRIPTION}
@@ -233,7 +233,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
               <span className="logo-text">Pulse Intelligence Labs</span>
             </a>
             <div className="nav-meta">
-              <span className="hide-mobile">Pulse Check / Tech Demo</span>
+              <span className="hide-mobile">PulseCheck / Tech Demo</span>
               <span className="live-indicator">
                 <span className="live-dot" />
                 Tech Demo
@@ -301,13 +301,13 @@ const PulseCheckTechDemoPage: React.FC = () => {
                     onError={() => setVideoError(true)}
                   >
                     <source src={VIDEO_SRC} type="video/mp4" />
-                    <a href={VIDEO_SRC}>Download the Pulse Check tech demo video.</a>
+                    <a href={VIDEO_SRC}>Download the PulseCheck tech demo video.</a>
                   </video>
                   {showPlayOverlay ? (
                     <button
                       type="button"
                       className="video-play-overlay"
-                      aria-label="Play the Pulse Check tech demo"
+                      aria-label="Play the PulseCheck tech demo"
                       onClick={playDemo}
                     >
                       <span className="play-ring">
@@ -317,7 +317,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
                     </button>
                   ) : null}
                   <div className="video-meta">
-                    <div className="video-title-overlay">Pulse Check - Full Product Walkthrough</div>
+                    <div className="video-title-overlay">PulseCheck - Full Product Walkthrough</div>
                     <div className="video-runtime">18:31</div>
                   </div>
                   <button
@@ -435,7 +435,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
                 </h2>
                 <p>
                   Pulse Intelligence Labs is building the integrated system for measuring and training human performance.
-                  Pulse Check is the flagship.
+                  PulseCheck is the flagship.
                 </p>
               </div>
             </div>

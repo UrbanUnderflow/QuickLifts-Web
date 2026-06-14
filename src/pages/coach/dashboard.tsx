@@ -3058,6 +3058,10 @@ type AthleteInviteRow = {
   name: string;
   email: string;
   activationUrl: string;
+  // Invite token — used to record the email-send result on resend.
+  token: string;
+  // Pre-filled avatar shown on the invite + carried into their profile on join.
+  avatarUrl?: string;
 };
 
 const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
@@ -3066,6 +3070,7 @@ const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
     name: 'Jordan Lee',
     email: 'jordan.lee@school.edu',
     activationUrl: 'https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete-1',
+    token: 'demo-athlete-1',
   },
 ];
 
@@ -3089,6 +3094,13 @@ const AthleteInviteSection: React.FC<{
   const [inviteLink, setInviteLink] = useState('https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete');
   const [busy, setBusy] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  // Edit-invite modal: tweak a pending athlete's name + pre-filled profile photo.
+  const [editingInvite, setEditingInvite] = useState<AthleteInviteRow | null>(null);
+  const [invName, setInvName] = useState('');
+  const [invPhotoFile, setInvPhotoFile] = useState<File | null>(null);
+  const [invPhotoPreview, setInvPhotoPreview] = useState<string | null>(null);
+  const [savingInvite, setSavingInvite] = useState(false);
   const [team, setTeam] = useState<{
     organizationId: string;
     teamId: string;
@@ -3137,6 +3149,8 @@ const AthleteInviteSection: React.FC<{
           name: (l.recipientName || '').trim() || (l.targetEmail || '').split('@')[0] || 'Invited athlete',
           email: l.targetEmail || '',
           activationUrl: l.activationUrl,
+          token: l.token,
+          avatarUrl: (l.prefilledProfileImageUrl || '').trim() || undefined,
         }));
       setInvites(rows);
     } catch (err) {
@@ -3220,7 +3234,7 @@ const AthleteInviteSection: React.FC<{
 
     if (isDemo) {
       setInvites((prev) => [
-        { id: `demo-${prev.length + 1}-${e}`, name: n, email: e, activationUrl: inviteLink },
+        { id: `demo-${prev.length + 1}-${e}`, name: n, email: e, activationUrl: inviteLink, token: `demo-${e}` },
         ...prev,
       ]);
       setToast(`Invite sent to ${n}.`);
@@ -3302,6 +3316,119 @@ const AthleteInviteSection: React.FC<{
     }
   };
 
+  // Re-send the athlete invite email for an existing pending invite. Reuses the
+  // already-created link (no new link minted) and mirrors sendInvite's email +
+  // result-recording flow so the activation funnel stays accurate.
+  const resendInvite = async (row: AthleteInviteRow) => {
+    const e = row.email.trim();
+    if (!e) {
+      setToast(`${row.name}'s invite has no email on file — share the link instead.`);
+      return;
+    }
+    if (isDemo) {
+      setToast(`Invite re-sent to ${e}.`);
+      return;
+    }
+    if (!team || !coachId) {
+      setToast('Still resolving your team — try again in a moment.');
+      return;
+    }
+    setResendingId(row.id);
+    try {
+      let emailSent = false;
+      // Athlete-specific, app-first email template (distinct from staff invite).
+      const resp = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail: e,
+          activationUrl: row.activationUrl,
+          recipientName: row.name,
+          organizationName: team.organizationName,
+          teamName: team.teamName,
+          senderName: coachName,
+        }),
+      });
+      const result = await resp.json().catch(() => ({ success: false }));
+      emailSent = resp.ok && result?.success === true;
+      await pulseCheckProvisioningService.recordAdminActivationEmailResult({
+        token: row.token,
+        success: emailSent,
+        messageId: result?.messageId,
+        sentByUserId: coachId,
+        sentByEmail: coachEmail || '',
+        targetEmail: e,
+        organizationId: team.organizationId,
+        teamId: team.teamId,
+        errorMessage: emailSent ? '' : String(result?.error || 'Send failed'),
+      });
+      setToast(
+        emailSent
+          ? `Invite re-sent to ${e}.`
+          : `Couldn't re-send to ${e} — share the link instead.`
+      );
+    } catch (err) {
+      console.error('[CoachDashboard] failed to resend athlete invite', err);
+      setToast('Could not re-send the invite. Try again.');
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  // Open the edit modal pre-loaded with the invite's current name + photo.
+  const openEditInvite = (row: AthleteInviteRow) => {
+    setEditingInvite(row);
+    setInvName(row.name);
+    setInvPhotoFile(null);
+    setInvPhotoPreview(row.avatarUrl || null);
+  };
+
+  // Persist name + (optional) new photo onto the existing invite link. The photo
+  // is uploaded to storage and stored as prefilledProfileImageUrl, which pre-fills
+  // the athlete's profile when they accept — same field staff invites use.
+  const saveInviteEdit = async () => {
+    if (!editingInvite) return;
+    const n = invName.trim();
+    if (!n) {
+      setToast("Add the athlete's name first.");
+      return;
+    }
+    if (isDemo) {
+      setInvites((prev) =>
+        prev.map((i) =>
+          i.id === editingInvite.id ? { ...i, name: n, avatarUrl: invPhotoPreview || i.avatarUrl } : i
+        )
+      );
+      setToast(`Updated ${n}'s invite.`);
+      setEditingInvite(null);
+      return;
+    }
+    setSavingInvite(true);
+    try {
+      let prefilledProfileImageUrl: string | undefined;
+      if (invPhotoFile) {
+        const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
+        const upload = await firebaseStorageService.uploadImage(invPhotoFile, UploadImageType.Profile, {
+          updateUserProfile: false,
+        });
+        prefilledProfileImageUrl = upload.downloadURL;
+      }
+      await pulseCheckProvisioningService.updateInviteLinkProfile({
+        inviteId: editingInvite.id,
+        recipientName: n,
+        ...(prefilledProfileImageUrl ? { prefilledProfileImageUrl } : {}),
+      });
+      setToast(`Updated ${n}'s invite.`);
+      setEditingInvite(null);
+      await loadInvites();
+    } catch (err) {
+      console.error('[CoachDashboard] failed to update athlete invite', err);
+      setToast('Could not save changes. Try again.');
+    } finally {
+      setSavingInvite(false);
+    }
+  };
+
   const revokeInvite = async (row: AthleteInviteRow) => {
     if (isDemo) {
       setInvites((prev) => prev.filter((i) => i.id !== row.id));
@@ -3357,18 +3484,42 @@ const AthleteInviteSection: React.FC<{
         <div className="rounded-xl border border-zinc-700/30 divide-y divide-zinc-800/50 overflow-hidden">
           {invites.map((inv) => (
             <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5">
-              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10">
-                {initialsOf(inv.name)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-white truncate">{inv.name}</span>
-                  <span className="text-[10px] uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded-full px-1.5 py-0.5">
-                    Invited
-                  </span>
+              <button
+                type="button"
+                onClick={() => canInvite && openEditInvite(inv)}
+                disabled={!canInvite}
+                title={canInvite ? 'Edit invite profile' : undefined}
+                className="group flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+              >
+                <span className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10">
+                  {inv.avatarUrl ? (
+                    <img src={inv.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initialsOf(inv.name)
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-white truncate group-hover:text-[#E0FE10]">{inv.name}</span>
+                    <span className="text-[10px] uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded-full px-1.5 py-0.5">
+                      Invited
+                    </span>
+                    {canInvite && (
+                      <Pencil className="h-3 w-3 flex-none text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100" />
+                    )}
+                  </div>
+                  <div className="text-[11px] text-zinc-500 truncate">{inv.email || inv.activationUrl}</div>
                 </div>
-                <div className="text-[11px] text-zinc-500 truncate">{inv.email || inv.activationUrl}</div>
-              </div>
+              </button>
+              {canInvite && inv.email && (
+                <button
+                  onClick={() => resendInvite(inv)}
+                  disabled={resendingId === inv.id}
+                  className="flex flex-none items-center gap-1.5 rounded-lg border border-zinc-700/50 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+                >
+                  <Mail className="h-3.5 w-3.5" /> {resendingId === inv.id ? 'Sending…' : 'Resend'}
+                </button>
+              )}
               <button
                 onClick={() => {
                   try {
@@ -3457,7 +3608,7 @@ const AthleteInviteSection: React.FC<{
                     </button>
                   </div>
                   <p className="text-[11px] text-zinc-600">
-                    Athletes get set up in the Pulse app. Email is optional — you can share a link instead.
+                    Athletes get set up in the PulseCheck app. Email is optional — you can share a link instead.
                   </p>
                 </div>
 
@@ -3473,6 +3624,89 @@ const AthleteInviteSection: React.FC<{
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
                     {copied ? 'Copied' : busy ? 'Creating…' : 'Copy link'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit-invite modal — update a pending athlete's name + pre-filled photo. */}
+      <AnimatePresence>
+        {editingInvite && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingInvite(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <div>
+                  <div className="text-base font-semibold text-white">Edit athlete invite</div>
+                  <div className="text-xs text-zinc-500">{editingInvite.email || editingInvite.name}</div>
+                </div>
+                <button
+                  onClick={() => setEditingInvite(null)}
+                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  <label className="relative flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-700/50 bg-zinc-800/40 hover:border-[#E0FE10]/40">
+                    {invPhotoPreview ? (
+                      <img src={invPhotoPreview} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon className="h-5 w-5 text-zinc-500" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        setInvPhotoFile(f);
+                        if (f) setInvPhotoPreview(URL.createObjectURL(f));
+                      }}
+                    />
+                  </label>
+                  <div className="min-w-0 flex-1">
+                    <input
+                      value={invName}
+                      onChange={(e) => setInvName(e.target.value)}
+                      placeholder="Athlete name (required)"
+                      className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-zinc-600">
+                  These pre-fill the athlete's profile when they accept the invite — they can change them later.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    onClick={() => setEditingInvite(null)}
+                    className="px-4 py-2 rounded-lg border border-zinc-700/50 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveInviteEdit}
+                    disabled={!invName.trim() || savingInvite}
+                    className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {savingInvite ? 'Saving…' : 'Save changes'}
                   </button>
                 </div>
               </div>

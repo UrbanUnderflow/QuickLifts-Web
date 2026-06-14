@@ -171,7 +171,7 @@ const PRODUCT_POSITIONING = [
       "The external consumer surface for workouts, clubs, rounds, creators, profile health, and social accountability. QuickLifts remains the repo/internal lineage name.",
   },
   {
-    title: "Pulse Check",
+    title: "PulseCheck",
     eyebrow: "Elite athlete service tech",
     icon: Brain,
     accent: "border-violet-400/25 bg-violet-400/[0.06] text-violet-200",
@@ -251,7 +251,7 @@ const SYSTEM_TABS: SystemTab[] = [
   },
   {
     id: "pulsecheck",
-    label: "Pulse Check",
+    label: "PulseCheck",
     icon: Brain,
     accent: "#c084fc",
     sectionIds: [
@@ -598,7 +598,7 @@ const SystemOverviewPage: React.FC = () => {
               "APNS",
               "notification sequences",
               "Fit With Pulse",
-              "Pulse Check",
+              "PulseCheck",
               "pulseCheckFcmToken",
               "fcmToken",
               "pushTokenSourceApp",
@@ -615,7 +615,7 @@ const SystemOverviewPage: React.FC = () => {
               "candidate insight engine",
               "regenerate",
               "guardrails",
-              "Pulse Check nutrition context",
+              "PulseCheck nutrition context",
               "athlete nutrition profile",
               "NutritionContextSnapshot",
             );
@@ -941,7 +941,7 @@ const SystemOverviewPage: React.FC = () => {
         title: "Products",
         value: String(systemOverviewManifest.products.length),
         icon: <Layers className="w-5 h-5" />,
-        caption: "Fit With Pulse, Pulse Check, Macra, Web/Admin",
+        caption: "Fit With Pulse, PulseCheck, Macra, Web/Admin",
         tone: "from-blue-500/30 to-blue-300/10",
       },
       {
@@ -1005,12 +1005,12 @@ const SystemOverviewPage: React.FC = () => {
                   Current Product Architecture
                 </p>
                 <h2 className="text-xl font-semibold mt-1">
-                  Fit With Pulse, Pulse Check, and Macra are distinct surfaces
+                  Fit With Pulse, PulseCheck, and Macra are distinct surfaces
                 </h2>
                 <p className="text-sm text-zinc-400 mt-2 max-w-4xl">
                   The overview now treats QuickLifts naming as repo/internal
                   lineage. The external product model is Fit With Pulse for
-                  consumer fitness and clubs, Pulse Check for white-glove elite
+                  consumer fitness and clubs, PulseCheck for white-glove elite
                   athlete service technology, and Macra for nutrition.
                 </p>
               </div>
@@ -1150,7 +1150,7 @@ const SystemOverviewPage: React.FC = () => {
               <div>
                 <h2 className="text-xl font-semibold">Notification Systems</h2>
                 <p className="text-sm text-zinc-400 mt-1 max-w-3xl">
-                  Cross-product reference for how Fit With Pulse and Pulse Check
+                  Cross-product reference for how Fit With Pulse and PulseCheck
                   notifications are scoped, stored, scheduled, sent, and
                   debugged. This section documents the architecture; the
                   notification sequence page is the living inventory of
@@ -1182,7 +1182,7 @@ const SystemOverviewPage: React.FC = () => {
                     <p className="mt-2 text-zinc-400">
                       Legacy Pulse / Fit With Pulse mobile push lane. This field
                       should continue to power Fit With Pulse notifications and
-                      should not be repurposed for Pulse Check.
+                      should not be repurposed for PulseCheck.
                     </p>
                   </div>
                   <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
@@ -1211,7 +1211,7 @@ const SystemOverviewPage: React.FC = () => {
               <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center gap-2">
                   <Brain className="w-4 h-4 text-violet-300" />
-                  <h3 className="text-lg font-semibold">Pulse Check</h3>
+                  <h3 className="text-lg font-semibold">PulseCheck</h3>
                 </div>
                 <div className="space-y-3 text-sm text-zinc-300">
                   <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
@@ -1220,7 +1220,7 @@ const SystemOverviewPage: React.FC = () => {
                     </p>
                     <p className="mt-1 font-mono text-cyan-200">users.pulseCheckFcmToken</p>
                     <p className="mt-2 text-zinc-400">
-                      Owned by the Pulse Check iOS app. Pulse Check writes this
+                      Owned by the PulseCheck iOS app. PulseCheck writes this
                       token together with{" "}
                       <span className="font-mono text-zinc-300">
                         pushTokenSourceApp = "pulsecheck"
@@ -1233,9 +1233,9 @@ const SystemOverviewPage: React.FC = () => {
                       Typical Senders
                     </p>
                     <ul className="mt-2 list-disc pl-5 space-y-1 text-zinc-300">
-                      <li>Pulse Check remote push jobs in Netlify and Firebase functions.</li>
+                      <li>PulseCheck remote push jobs in Netlify and Firebase functions.</li>
                       <li>Oura-sync biometric-brief push pipeline.</li>
-                      <li>Daily reflection push scheduler and Pulse Check-scoped admin tests.</li>
+                      <li>Daily reflection push scheduler and PulseCheck-scoped admin tests.</li>
                     </ul>
                   </div>
                   <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3">
@@ -1243,8 +1243,8 @@ const SystemOverviewPage: React.FC = () => {
                       Guardrail
                     </p>
                     <p className="mt-1 text-zinc-300">
-                      Pulse Check senders should require both the Pulse Check
-                      token field and the Pulse Check source marker so a stale
+                      PulseCheck senders should require both the PulseCheck
+                      token field and the PulseCheck source marker so a stale
                       or mis-scoped token cannot route a Nora notification to
                       the wrong app.
                     </p>
@@ -1267,10 +1267,10 @@ const SystemOverviewPage: React.FC = () => {
                   </p>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
-                  <p className="text-xs uppercase tracking-wide text-zinc-500">Pulse Check Lane</p>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">PulseCheck Lane</p>
                   <p className="mt-2 font-mono text-cyan-200">users.pulseCheckFcmToken</p>
                   <p className="mt-2 text-zinc-400">
-                    Reserved for Pulse Check remote pushes and Pulse Check
+                    Reserved for PulseCheck remote pushes and PulseCheck
                     notification sequences.
                   </p>
                 </div>
@@ -1287,9 +1287,9 @@ const SystemOverviewPage: React.FC = () => {
               <div className="rounded-xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
                 <p className="font-semibold text-white">Canonical rule</p>
                 <p className="mt-2">
-                  Do not mirror Pulse Check tokens into{" "}
+                  Do not mirror PulseCheck tokens into{" "}
                   <span className="font-mono">users.fcmToken</span>. Fit With
-                  Pulse and Pulse Check should each own their own FCM field, and
+                  Pulse and PulseCheck should each own their own FCM field, and
                   senders must choose the field that matches the target product.
                 </p>
               </div>
@@ -1314,7 +1314,7 @@ const SystemOverviewPage: React.FC = () => {
                     <p className="font-semibold text-white">Local iOS Notifications</p>
                     <p className="mt-1 text-zinc-400">
                       Device-scheduled reminders owned by the app itself, such
-                      as Pulse Check onboarding reflection reminders and
+                      as PulseCheck onboarding reflection reminders and
                       wind-down prompts.
                     </p>
                   </div>
@@ -1322,7 +1322,7 @@ const SystemOverviewPage: React.FC = () => {
                     <p className="font-semibold text-white">Scheduled Backend Jobs</p>
                     <p className="mt-1 text-zinc-400">
                       Recurring functions that evaluate time windows and user
-                      state before sending, such as Pulse Check daily reflection
+                      state before sending, such as PulseCheck daily reflection
                       scheduler jobs.
                     </p>
                   </div>
@@ -1368,13 +1368,13 @@ const SystemOverviewPage: React.FC = () => {
             <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-300" />
-                <h3 className="text-lg font-semibold">Current Pulse Check Notification Path</h3>
+                <h3 className="text-lg font-semibold">Current PulseCheck Notification Path</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
                   <p className="text-xs uppercase tracking-wide text-zinc-500">1. Client Registration</p>
                   <p className="mt-2 text-zinc-300">
-                    Pulse Check receives an FCM token and writes{" "}
+                    PulseCheck receives an FCM token and writes{" "}
                     <span className="font-mono">pulseCheckFcmToken</span> plus{" "}
                     <span className="font-mono">pushTokenSourceApp</span>.
                   </p>
@@ -1382,22 +1382,22 @@ const SystemOverviewPage: React.FC = () => {
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
                   <p className="text-xs uppercase tracking-wide text-zinc-500">2. Backend Event</p>
                   <p className="mt-2 text-zinc-300">
-                    Oura sync, reflection scheduler, or another Pulse Check
+                    Oura sync, reflection scheduler, or another PulseCheck
                     sender decides that a Nora notification should fire.
                   </p>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
                   <p className="text-xs uppercase tracking-wide text-zinc-500">3. Scope Validation</p>
                   <p className="mt-2 text-zinc-300">
-                    Sender resolves the Pulse Check push target and rejects the
+                    Sender resolves the PulseCheck push target and rejects the
                     send if the token or source marker is missing or mismatched.
                   </p>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
                   <p className="text-xs uppercase tracking-wide text-zinc-500">4. Nora Launch</p>
                   <p className="mt-2 text-zinc-300">
-                    Payload arrives under the Pulse Check app, then routes into
-                    Nora chat or the intended Pulse Check surface using the data
+                    Payload arrives under the PulseCheck app, then routes into
+                    Nora chat or the intended PulseCheck surface using the data
                     keys defined in Notification Sequences.
                   </p>
                 </div>
@@ -1411,16 +1411,16 @@ const SystemOverviewPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 text-sm text-zinc-300">
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
-                  <p className="font-semibold text-white">If a Pulse Check push lands under Fit With Pulse</p>
+                  <p className="font-semibold text-white">If a PulseCheck push lands under Fit With Pulse</p>
                   <ul className="mt-2 list-disc pl-5 space-y-1">
                     <li>Check the user doc for both token fields and confirm which one the sender used.</li>
-                    <li>Confirm the Pulse Check sender required the Pulse Check source marker.</li>
-                    <li>Open Pulse Check on device to refresh and re-save the latest token metadata.</li>
-                    <li>Verify the message came from a Pulse Check sender, not a legacy Pulse sender with similar copy.</li>
+                    <li>Confirm the PulseCheck sender required the PulseCheck source marker.</li>
+                    <li>Open PulseCheck on device to refresh and re-save the latest token metadata.</li>
+                    <li>Verify the message came from a PulseCheck sender, not a legacy Pulse sender with similar copy.</li>
                   </ul>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4">
-                  <p className="font-semibold text-white">If a Pulse Check push does not send at all</p>
+                  <p className="font-semibold text-white">If a PulseCheck push does not send at all</p>
                   <ul className="mt-2 list-disc pl-5 space-y-1">
                     <li>Confirm the user has a non-empty <span className="font-mono">pulseCheckFcmToken</span>.</li>
                     <li>Confirm <span className="font-mono">pushTokenSourceApp</span> is set to <span className="font-mono">pulsecheck</span>.</li>

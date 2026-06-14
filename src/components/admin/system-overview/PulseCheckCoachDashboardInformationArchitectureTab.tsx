@@ -71,10 +71,10 @@ const PulseCheckCoachDashboardInformationArchitectureTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Product Surface"
+        eyebrow="PulseCheck Product Surface"
         title="Coach Dashboard Information Architecture"
         version="Version 1.0 | March 10, 2026"
-        summary="Coach-facing product-surface artifact for roster-level Pulse Check visibility. This page translates the runtime architecture into a daily operating view that helps staff understand what is happening, why it matters, and what action is appropriate."
+        summary="Coach-facing product-surface artifact for roster-level PulseCheck visibility. This page translates the runtime architecture into a daily operating view that helps staff understand what is happening, why it matters, and what action is appropriate."
         highlights={[
           {
             title: 'Three-Panel Model Is Non-Negotiable',
@@ -95,7 +95,7 @@ const PulseCheckCoachDashboardInformationArchitectureTab: React.FC = () => {
         sectionLabel="Product Alignment"
         role="Coach-facing information architecture artifact for dashboard structure, workflow organization, panel hierarchy, and privacy boundaries."
         sourceOfTruth="This document is authoritative for coach dashboard hierarchy, panel structure, workflow support, and visibility boundaries. It is not authoritative for state schema, routing logic, or escalation policy."
-        masterReference="Use this page when designing or reviewing coach-facing Pulse Check surfaces. Use the runtime artifacts when the question is how state, routing, or escalation logic actually works under the hood."
+        masterReference="Use this page when designing or reviewing coach-facing PulseCheck surfaces. Use the runtime artifacts when the question is how state, routing, or escalation logic actually works under the hood."
         relatedDocs={[
           'Runtime Architecture v1.0',
           'State & Escalation Orchestration v1.2',

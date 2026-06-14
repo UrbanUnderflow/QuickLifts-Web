@@ -30,7 +30,7 @@ const SLIDE_META = [
   { label: 'Pulse Intelligence Labs', eyebrow: 'Slide 3' },
   { label: 'Why Now', eyebrow: 'Slide 4' },
   { label: 'Fit With Pulse', eyebrow: 'Slide 5' },
-  { label: 'Pulse Check', eyebrow: 'Slide 6' },
+  { label: 'PulseCheck', eyebrow: 'Slide 6' },
   { label: 'Q1 Momentum', eyebrow: 'Slide 7' },
   { label: 'AuntEdna', eyebrow: 'Slide 8' },
   { label: 'Partnerships', eyebrow: 'Slide 9' },
@@ -79,7 +79,7 @@ const AI_LAB_OUTCOMES = [
     icon: Brain,
   },
   {
-    title: 'Pulse Check, white papers, and publishable research all come from the same engine.',
+    title: 'PulseCheck, white papers, and publishable research all come from the same engine.',
     accent: '#E0FE10',
     icon: FileText,
   },
@@ -725,10 +725,10 @@ const ScenePulseCheckProduct: React.FC = () => (
   <SceneFrame accent="#38BDF8">
     <div className="grid items-center gap-8 lg:grid-cols-[1.02fr_0.98fr]">
       <div>
-        <SlideKicker>Pulse Check</SlideKicker>
+        <SlideKicker>PulseCheck</SlideKicker>
         <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.32em] text-zinc-500">Mental performance product</div>
         <h1 className="mt-4 text-5xl font-black leading-[0.94] text-white md:text-7xl">
-          Pulse Check
+          PulseCheck
         </h1>
         <p className="mt-4 max-w-3xl text-2xl font-semibold leading-tight text-sky-300 md:text-4xl">
           Training cognition under pressure.
@@ -745,7 +745,7 @@ const ScenePulseCheckProduct: React.FC = () => (
         <div className="p-6 md:p-7">
           <div className="mb-6 flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-400/12">
-              <img src="/pulsecheck-logo.svg" alt="Pulse Check" className="h-10 w-10 object-contain" />
+              <img src="/pulsecheck-logo.svg" alt="PulseCheck" className="h-10 w-10 object-contain" />
             </div>
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">New product</div>
@@ -842,13 +842,13 @@ const SceneAuntEdna: React.FC = () => (
       <div>
         <SlideKicker>AuntEdna</SlideKicker>
         <h1 className="mt-5 text-5xl font-black leading-[0.95] text-white md:text-6xl">
-          AuntEdna gives Pulse Check a credible path from signal to care.
+          AuntEdna gives PulseCheck a credible path from signal to care.
         </h1>
 
         <div className="mt-7 rounded-[28px] border border-white/10 bg-black/20 p-5">
           <div className="flex items-center justify-between gap-4">
             {[
-              { label: 'Pulse Check', accent: '#38BDF8', icon: Brain },
+              { label: 'PulseCheck', accent: '#38BDF8', icon: Brain },
               { label: 'Signal Layer', accent: '#8B5CF6', icon: Layers3 },
               { label: 'AuntEdna', accent: '#FB7185', icon: Shield },
             ].map((node, index, all) => {

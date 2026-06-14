@@ -19,12 +19,12 @@ interface PresentationLink {
 const PRESENTATION_REGISTRY: PresentationLink[] = [
   {
     id: 'pulsecheckdemo',
-    title: 'Pulse Check Demo',
+    title: 'PulseCheck Demo',
     href: '/pulsecheckdemo',
     category: 'Interactive Demos',
     typeLabel: 'Interactive demo',
     accessLabel: 'Live route',
-    description: 'Patriots-focused Pulse Check walkthrough for mental performance and escalation flow.',
+    description: 'Patriots-focused PulseCheck walkthrough for mental performance and escalation flow.',
   },
   {
     id: 'box-breathing-simulator',
@@ -33,7 +33,7 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     category: 'Interactive Demos',
     typeLabel: 'Interactive presentation',
     accessLabel: 'Live route',
-    description: 'Four-slide Pulse Check x AuntEdna presentation centered on anxiety data and the live box breathing simulation.',
+    description: 'Four-slide PulseCheck x AuntEdna presentation centered on anxiety data and the live box breathing simulation.',
   },
   {
     id: 'wunnarundemo',
@@ -97,7 +97,7 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     category: 'Presentation Decks',
     typeLabel: 'Interactive deck',
     accessLabel: 'Live route',
-    description: 'Interactive company presentation covering Pulse, Pulse Check, partners, team, and raise narrative.',
+    description: 'Interactive company presentation covering Pulse, PulseCheck, partners, team, and raise narrative.',
   },
   {
     id: 'pil-executive-summary',
@@ -124,7 +124,7 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     category: 'Presentation Decks',
     typeLabel: 'Pitch deck',
     accessLabel: 'Auth protected',
-    description: 'Competition-style 10-slide pitch deck for the Pulse Check x auntEDNA.ai signal-to-care platform.',
+    description: 'Competition-style 10-slide pitch deck for the PulseCheck x auntEDNA.ai signal-to-care platform.',
   },
   {
     id: 'pulse-auntedna-stakeholder-deck',
@@ -133,7 +133,7 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     category: 'Presentation Decks',
     typeLabel: 'Stakeholder deck',
     accessLabel: 'Live route',
-    description: 'Story-driven stakeholder presentation for the Pulse Check x auntEDNA.ai signal-to-care vision without market-size or fundraising content.',
+    description: 'Story-driven stakeholder presentation for the PulseCheck x auntEDNA.ai signal-to-care vision without market-size or fundraising content.',
   },
   {
     id: 'the-athletic-mind-council',

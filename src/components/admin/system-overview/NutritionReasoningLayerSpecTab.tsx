@@ -8,7 +8,7 @@ const ARCHITECTURE_ROWS = [
   ['3', 'Scoring + Guardrails', 'Candidates are ranked by confidence, goal relevance, actionability, novelty, severity, and hard contradiction checks.'],
   ['4', 'Nora Copy Layer', 'The model receives approved facts and candidate decisions only. It writes concise human copy but does not calculate or invent.'],
   ['5', 'Validated Insight Payload', 'Server validates unsupported numbers, conflicting advice, weak actions, and copy policy before persistence or push.'],
-  ['6', 'Product Consumers', 'Macra daily insights consume first; Pulse Check later consumes athlete nutrition context inside health/sports intelligence snapshots.'],
+  ['6', 'Product Consumers', 'Macra daily insights consume first; PulseCheck later consumes athlete nutrition context inside health/sports intelligence snapshots.'],
 ];
 
 const FACT_LEDGER_ROWS = [
@@ -85,7 +85,7 @@ const OUTPUT_ROWS = [
 const CROSS_APP_ROWS = [
   ['Macra iOS', 'First implementation surface for daily insights, Ask Nora nutrition chat, macro planning, and insight regeneration.', 'Consumes fact ledger + validated insight payload from Web/Admin functions.'],
   ['Fit With Pulse', 'Shared workout/energy context can enrich nutrition interpretation without becoming the nutrition source of truth.', 'Feeds calories-out/training context where provenance is clear.'],
-  ['Pulse Check', 'Future athlete-context consumer. Nora should understand athlete nutrition profile, macro consistency, fueling timing, and data confidence.', 'Reads a normalized NutritionContextSnapshot inside the health/sports intelligence stack.'],
+  ['PulseCheck', 'Future athlete-context consumer. Nora should understand athlete nutrition profile, macro consistency, fueling timing, and data confidence.', 'Reads a normalized NutritionContextSnapshot inside the health/sports intelligence stack.'],
   ['Web/Admin', 'Owns reasoning-layer server functions, validation, QA dashboard, audit traces, and cross-product schema governance.', 'Maintains candidate logic, guardrails, generated payloads, and operator review tools.'],
 ];
 
@@ -101,7 +101,7 @@ const IMPLEMENTATION_CHECKLIST_ROWS = [
   ['4', 'Validated payload schema', 'Return title, fact, interpretation, action, confidenceNote, selectedCandidateId, rejectedCandidateIds, and validation trace.', 'Not started'],
   ['5', 'Regenerate semantics', 'Make regenerate select next-best candidate or angle, not simply re-roll the same prompt.', 'Not started'],
   ['6', 'Admin QA dashboard', 'Show fact ledger, all candidates, scores, rejection reasons, final copy, and feedback labels for tuning.', 'Not started'],
-  ['7', 'Pulse Check bridge', 'Publish NutritionContextSnapshot into the athlete health-context pipeline for Nora, reports, and sport-aware fueling context.', 'Future'],
+  ['7', 'PulseCheck bridge', 'Publish NutritionContextSnapshot into the athlete health-context pipeline for Nora, reports, and sport-aware fueling context.', 'Future'],
 ];
 
 const ACCEPTANCE_CRITERIA = [
@@ -111,14 +111,14 @@ const ACCEPTANCE_CRITERIA = [
   'The selected insight type is justified by available data and confidence.',
   'Low-confidence days do not pretend to have patterns.',
   'Regenerate produces a materially different eligible angle or explains why this is still the best read.',
-  'Pulse Check consumers receive nutrition profile context with source labels, confidence, freshness, and no unsupported diet claims.',
+  'PulseCheck consumers receive nutrition profile context with source labels, confidence, freshness, and no unsupported diet claims.',
 ];
 
 const PHASES = [
   {
     title: 'Freeze The Shared Contract',
     owner: 'Platform + Nutrition',
-    body: 'Define shared schemas and copy policy before adding new prompt behavior. The contract must work for Macra today and Pulse Check athlete context later.',
+    body: 'Define shared schemas and copy policy before adding new prompt behavior. The contract must work for Macra today and PulseCheck athlete context later.',
   },
   {
     title: 'Build The Fact Ledger',
@@ -141,8 +141,8 @@ const PHASES = [
     body: 'Make regenerate choose alternate candidates and add admin review tooling to inspect facts, candidate rankings, and rejection reasons.',
   },
   {
-    title: 'Publish Nutrition Context To Pulse Check',
-    owner: 'Pulse Check Runtime',
+    title: 'Publish Nutrition Context To PulseCheck',
+    owner: 'PulseCheck Runtime',
     body: 'Roll up athlete nutrition profile, fueling timing, macro consistency, and confidence into the health-context snapshot without making Macra data look like clinical truth.',
   },
 ];
@@ -154,7 +154,7 @@ const NutritionReasoningLayerSpecTab: React.FC = () => {
         eyebrow="Shared Intelligence"
         title="Nutrition Reasoning Layer"
         version="Version 0.1 | May 5, 2026"
-        summary="Cross-product spec for replacing freeform AI nutrition commentary with a fact-grounded reasoning layer. Macra is the first consumer for daily insights. Pulse Check should later consume the same source-aware nutrition context so Nora can understand an athlete’s fueling profile, macro consistency, and data confidence inside the broader health and sports intelligence stack."
+        summary="Cross-product spec for replacing freeform AI nutrition commentary with a fact-grounded reasoning layer. Macra is the first consumer for daily insights. PulseCheck should later consume the same source-aware nutrition context so Nora can understand an athlete’s fueling profile, macro consistency, and data confidence inside the broader health and sports intelligence stack."
         highlights={[
           {
             title: 'AI Writes, Code Reasons',
@@ -166,15 +166,15 @@ const NutritionReasoningLayerSpecTab: React.FC = () => {
           },
           {
             title: 'Built For Multiple Apps',
-            body: 'Macra gets better daily insights now. Pulse Check later gets a NutritionContextSnapshot for athlete-aware Nora decisions and reports.',
+            body: 'Macra gets better daily insights now. PulseCheck later gets a NutritionContextSnapshot for athlete-aware Nora decisions and reports.',
           },
         ]}
       />
 
       <RuntimeAlignmentPanel
-        role="Shared reasoning artifact for nutrition intelligence across Macra, Fit With Pulse, Pulse Check, and Web/Admin."
+        role="Shared reasoning artifact for nutrition intelligence across Macra, Fit With Pulse, PulseCheck, and Web/Admin."
         sourceOfTruth="This document is authoritative for the nutrition fact ledger, candidate insight engine, scoring rules, guardrails, copy-layer boundary, regenerate behavior, and cross-app rollout checklist."
-        masterReference="Use this page before editing Macra daily insights, Ask Nora nutrition prompts, nutrition profile snapshots, Pulse Check nutrition context, or any AI copy that references food, macros, fueling, or nutrition history."
+        masterReference="Use this page before editing Macra daily insights, Ask Nora nutrition prompts, nutrition profile snapshots, PulseCheck nutrition context, or any AI copy that references food, macros, fueling, or nutrition history."
         relatedDocs={[
           { label: 'Macra', sectionId: 'macra-system-overview' },
           { label: 'Health Context Pipeline', sectionId: 'pulsecheck-health-chat-architecture' },
@@ -208,7 +208,7 @@ const NutritionReasoningLayerSpecTab: React.FC = () => {
         <InfoCard
           title="Pipeline"
           accent="green"
-          body="Meal logs + targets + history → Nutrition Fact Ledger → Candidate Insight Engine → Scoring + Guardrails → Nora Copy Layer → Validated Insight Payload → Macra UI / push / history / Pulse Check context."
+          body="Meal logs + targets + history → Nutrition Fact Ledger → Candidate Insight Engine → Scoring + Guardrails → Nora Copy Layer → Validated Insight Payload → Macra UI / push / history / PulseCheck context."
         />
         <DataTable columns={['Step', 'Layer', 'Responsibility']} rows={ARCHITECTURE_ROWS} />
       </SectionBlock>
@@ -304,9 +304,9 @@ const NutritionReasoningLayerSpecTab: React.FC = () => {
       <SectionBlock icon={Brain} title="Cross-App Nutrition Context">
         <DataTable columns={['Consumer', 'Use Case', 'Contract']} rows={CROSS_APP_ROWS} />
         <InfoCard
-          title="Pulse Check Future Contract"
+          title="PulseCheck Future Contract"
           accent="purple"
-          body="Pulse Check should consume nutrition as a source-aware context layer: macro consistency, fueling timing, recovery-relevant intake, supplement signals when available, goal direction, history coverage, and confidence. It should not treat nutrition data as diagnosis, medical instruction, or coach-visible certainty when provenance is weak."
+          body="PulseCheck should consume nutrition as a source-aware context layer: macro consistency, fueling timing, recovery-relevant intake, supplement signals when available, goal direction, history coverage, and confidence. It should not treat nutrition data as diagnosis, medical instruction, or coach-visible certainty when provenance is weak."
         />
       </SectionBlock>
 

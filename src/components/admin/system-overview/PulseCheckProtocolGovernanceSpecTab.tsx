@@ -77,7 +77,7 @@ const ProtocolGovernanceOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Governance Spec"
         version="Version 0.1 | March 17, 2026"
         summary="Governance-layer artifact for how PulseCheck should define, discover, evaluate, publish, and retire Nora protocols. This page treats protocols as bounded state interventions with their own ontology, evidence model, and review lifecycle rather than as lightweight content cards or sim variants in disguise."
@@ -272,7 +272,7 @@ const PROTOCOL_SYSTEM_PAGES: ArtifactPageEntry[] = [
 const PulseCheckProtocolGovernanceSpecTab: React.FC = () => {
   return (
     <ArtifactPageLibrary
-      eyebrow="Pulse Check · Protocol System"
+      eyebrow="PulseCheck · Protocol System"
       title="Protocol System Library"
       summary="Governance parent artifact with internal pages for protocol authoring, responsiveness, launch controls, evidence, auditability, and live-ops discipline."
       entries={PROTOCOL_SYSTEM_PAGES}

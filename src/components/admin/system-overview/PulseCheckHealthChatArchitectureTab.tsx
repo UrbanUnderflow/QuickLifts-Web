@@ -18,31 +18,31 @@ import PulseCheckCorrelationDataModelSpecTab from './PulseCheckCorrelationDataMo
 import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from './PulseCheckCorrelationEngineEngineeringTaskBreakdownTab';
 
 const LIVE_NOW_ROWS = [
-  ['Shared Firestore health summary', 'Pulse Check can read `daily-health-summaries` from the shared Firebase stack.', 'Live and already important.'],
+  ['Shared Firestore health summary', 'PulseCheck can read `daily-health-summaries` from the shared Firebase stack.', 'Live and already important.'],
   ['Fit With Pulse workout context', 'If the athlete trains in Fit With Pulse, workout summaries and lift aggregates can flow into the daily summary snapshot.', 'Live, but depends on upstream sync.'],
   ['Fit With Pulse legacy nutrition context', 'Legacy meal journal data and nutrition totals can be written into the same daily snapshot; Macra is the dedicated nutrition surface going forward.', 'Live in partial form.'],
-  ['Health-backed Nora chat', 'Pulse Check can detect health questions, resolve summaries, generate story cards, and fall back to standard Nora when needed.', 'Live, but contract is still narrow.'],
-  ['Contextual fallback summaries', 'If same-day data is missing, Pulse Check can use a recent summary for light context instead of fabricating data.', 'Live, but not yet formalized as provenance.'],
+  ['Health-backed Nora chat', 'PulseCheck can detect health questions, resolve summaries, generate story cards, and fall back to standard Nora when needed.', 'Live, but contract is still narrow.'],
+  ['Contextual fallback summaries', 'If same-day data is missing, PulseCheck can use a recent summary for light context instead of fabricating data.', 'Live, but not yet formalized as provenance.'],
 ];
 
 const CURRENT_STATE_ROWS = [
-  ['Fit With Pulse', 'Acts as the primary writer for the Firestore daily health snapshot by combining HealthKit, workouts, and legacy food journal data.', 'Pulse Check benefits from this context today.'],
-  ['Pulse Check', 'Primarily reads the shared daily summary and layers chat logic, fallback behavior, and simple insight generation on top.', 'Pulse Check is more consumer than producer right now.'],
-  ['Source ownership', 'The most useful shared health context is currently assembled upstream in Fit With Pulse rather than inside Pulse Check.', 'Context quality depends on Fit With Pulse sync running.'],
+  ['Fit With Pulse', 'Acts as the primary writer for the Firestore daily health snapshot by combining HealthKit, workouts, and legacy food journal data.', 'PulseCheck benefits from this context today.'],
+  ['PulseCheck', 'Primarily reads the shared daily summary and layers chat logic, fallback behavior, and simple insight generation on top.', 'PulseCheck is more consumer than producer right now.'],
+  ['Source ownership', 'The most useful shared health context is currently assembled upstream in Fit With Pulse rather than inside PulseCheck.', 'Context quality depends on Fit With Pulse sync running.'],
   ['Identity contract', 'Health chat still passes a placeholder `current_user` in several paths while lower reads resolve through authenticated Firebase user state.', 'Works in self-service mode, but not from a clean explicit contract.'],
-  ['Native Pulse Check capture', 'Pulse Check does not yet own a first-class ingestion layer for direct Apple Watch, HealthKit-only, or Oura-first athletes.', 'This is the biggest product gap for standalone Pulse Check.'],
+  ['Native PulseCheck capture', 'PulseCheck does not yet own a first-class ingestion layer for direct Apple Watch, HealthKit-only, or Oura-first athletes.', 'This is the biggest product gap for standalone PulseCheck.'],
 ];
 
 const PRINCIPLE_CARDS = [
   {
     title: 'Shared Context Should Stay',
     accent: 'blue' as const,
-    body: 'If the athlete uses Fit With Pulse, Pulse Check should inherit that richer workout and legacy nutrition context rather than pretending it is a separate universe.',
+    body: 'If the athlete uses Fit With Pulse, PulseCheck should inherit that richer workout and legacy nutrition context rather than pretending it is a separate universe.',
   },
   {
-    title: 'Pulse Check Must Also Stand Alone',
+    title: 'PulseCheck Must Also Stand Alone',
     accent: 'green' as const,
-    body: 'If the athlete never opens Fit With Pulse, Pulse Check still needs its own ingestion system for recovery, sleep, readiness, activity, and wearable context.',
+    body: 'If the athlete never opens Fit With Pulse, PulseCheck still needs its own ingestion system for recovery, sleep, readiness, activity, and wearable context.',
   },
   {
     title: 'One Canonical Athlete Context',
@@ -53,25 +53,25 @@ const PRINCIPLE_CARDS = [
 
 const INGESTION_ROWS = [
   ['Lane A: Shared Fit With Pulse context', 'Workout summaries, exercise volume, legacy meal context, and any future training-plan or adherence signals from the Fit With Pulse ecosystem.', 'This is the richest training context lane and should remain first-class.'],
-  ['Lane B: Native Apple Health / Apple Watch capture', 'HealthKit-authorized steps, calories, sleep, HR, HRV, body metrics, workouts, VO2 max, respiratory rate, and related Apple-device data even when Fit With Pulse is not used.', 'This is the standalone Pulse Check foundation.'],
+  ['Lane B: Native Apple Health / Apple Watch capture', 'HealthKit-authorized steps, calories, sleep, HR, HRV, body metrics, workouts, VO2 max, respiratory rate, and related Apple-device data even when Fit With Pulse is not used.', 'This is the standalone PulseCheck foundation.'],
   ['Lane C: Oura recovery lane', 'Sleep, readiness, recovery, temperature, HRV, resting heart rate, and other Oura-origin signals via HealthKit where available or direct connector sync where needed.', 'Needed for athletes whose primary recovery system is Oura.'],
-  ['Lane D: Pulse Check-native behavioral context', 'Check-ins, mood, readiness answers, coaching notes, session completions, sim outcomes, and daily self-reported state.', 'This turns raw health data into athlete-specific coaching context.'],
+  ['Lane D: PulseCheck-native behavioral context', 'Check-ins, mood, readiness answers, coaching notes, session completions, sim outcomes, and daily self-reported state.', 'This turns raw health data into athlete-specific coaching context.'],
   ['Lane E: Normalization and merge', 'All upstream inputs should merge into one canonical athlete-context snapshot with source attribution and recency markers.', 'This is the layer Nora should actually consume.'],
 ];
 
 const GAP_ROWS = [
-  ['Pulse Check lacks its own ingestion backbone', 'Today it mostly reads what Fit With Pulse wrote. If Fit With Pulse is not in the picture, Pulse Check has no equally robust native context pipeline.', 'Standalone athletes get a thinner experience.'],
+  ['PulseCheck lacks its own ingestion backbone', 'Today it mostly reads what Fit With Pulse wrote. If Fit With Pulse is not in the picture, PulseCheck has no equally robust native context pipeline.', 'Standalone athletes get a thinner experience.'],
   ['No canonical merged context object', 'There is a daily summary model, but not yet a broader `AthleteHealthContextSnapshot` spanning training, recovery, readiness, nutrition, and source provenance.', 'Nora still reasons from a narrower artifact than the product vision needs.'],
   ['Source freshness is under-specified', 'The system stores `lastSyncTimestamp`, but chat and UI do not consistently branch on what is fresh, stale, inferred, or historical.', 'Responses can sound more certain than the data deserves.'],
-  ['Connector strategy is incomplete', 'HealthKit is partially leveraged upstream, but Pulse Check-native HealthKit capture and Oura strategy are not yet formalized as product contracts.', 'Important athlete segments are underserved.'],
+  ['Connector strategy is incomplete', 'HealthKit is partially leveraged upstream, but PulseCheck-native HealthKit capture and Oura strategy are not yet formalized as product contracts.', 'Important athlete segments are underserved.'],
   ['Auditability is weak', 'There is no durable event describing exactly which health context Nora used on a given turn.', 'Harder to debug, QA, and trust health-backed coaching.'],
-  ['Schema drift is already visible', 'The shared snapshot contains richer fields than Pulse Check currently models or explains.', 'Useful context is left on the table.'],
+  ['Schema drift is already visible', 'The shared snapshot contains richer fields than PulseCheck currently models or explains.', 'Useful context is left on the table.'],
 ];
 
 const TARGET_FLOW = [
   {
     title: 'Ingest From Every Eligible Source',
-    body: 'Accept context from Fit With Pulse, Pulse Check-native HealthKit reads, Apple Watch-origin metrics, Oura-origin recovery signals, Macra nutrition context where appropriate, and Pulse Check behavioral inputs such as check-ins and sim results.',
+    body: 'Accept context from Fit With Pulse, PulseCheck-native HealthKit reads, Apple Watch-origin metrics, Oura-origin recovery signals, Macra nutrition context where appropriate, and PulseCheck behavioral inputs such as check-ins and sim results.',
     owner: 'Ingestion layer',
   },
   {
@@ -109,7 +109,7 @@ const CONTEXT_ROWS = [
   ['Rolling trend block', '7-day, 14-day, and 30-day baselines for recovery and workload interpretation.', 'Strongly recommended.'],
   ['Training context block', 'Fit With Pulse workout summaries, volume, body parts worked, adherence, and recent training load.', 'Required when athlete uses training app.'],
   ['Recovery context block', 'Sleep, HRV, resting HR, readiness, and recovery-relevant wearable signals.', 'Required for health-backed coaching.'],
-  ['Behavioral context block', 'Check-ins, mood, notes, sim results, compliance, and other subjective Pulse Check state.', 'Required for personalization.'],
+  ['Behavioral context block', 'Check-ins, mood, notes, sim results, compliance, and other subjective PulseCheck state.', 'Required for personalization.'],
   ['Provenance block', 'Exact sources used, timestamps, summary type, and whether data is direct, contextual, inferred, or empty.', 'Required.'],
 ];
 
@@ -117,12 +117,12 @@ const RESPONSE_RULES = [
   {
     title: 'Rich Shared Context',
     accent: 'blue' as const,
-    body: <BulletList items={['If Fit With Pulse data is present, Nora should understand workouts, volume, and legacy nutrition context as part of the athlete story.', 'Training context should meaningfully shape coaching language, not live as disconnected metadata.', 'Pulse Check should surface that it understands both mental and physical load together.']} />,
+    body: <BulletList items={['If Fit With Pulse data is present, Nora should understand workouts, volume, and legacy nutrition context as part of the athlete story.', 'Training context should meaningfully shape coaching language, not live as disconnected metadata.', 'PulseCheck should surface that it understands both mental and physical load together.']} />,
   },
   {
-    title: 'Standalone Pulse Check Context',
+    title: 'Standalone PulseCheck Context',
     accent: 'green' as const,
-    body: <BulletList items={['If the athlete never uses Fit With Pulse, Pulse Check should still generate strong recovery and readiness context from HealthKit, Apple Watch, Oura, and self-report.', 'Standalone mode should not feel like a degraded placeholder mode.', 'Nora should adapt to the sources that are actually available.']} />,
+    body: <BulletList items={['If the athlete never uses Fit With Pulse, PulseCheck should still generate strong recovery and readiness context from HealthKit, Apple Watch, Oura, and self-report.', 'Standalone mode should not feel like a degraded placeholder mode.', 'Nora should adapt to the sources that are actually available.']} />,
   },
   {
     title: 'Sparse or Missing Context',
@@ -132,9 +132,9 @@ const RESPONSE_RULES = [
 ];
 
 const ROADMAP_ROWS = [
-  ['Phase 1', 'Fix the current health-chat identity contract and document Fit With Pulse as the current snapshot writer while Pulse Check remains the reader.', 'This cleans up the existing system before expansion.'],
+  ['Phase 1', 'Fix the current health-chat identity contract and document Fit With Pulse as the current snapshot writer while PulseCheck remains the reader.', 'This cleans up the existing system before expansion.'],
   ['Phase 2', 'Create and lock a canonical `AthleteHealthContextSnapshot` spec that merges daily summary, rolling trends, source status, and provenance.', 'This must be finalized before native ingestion starts so every adapter targets the same contract.'],
-  ['Phase 3', 'Build Pulse Check-native HealthKit ingestion so Pulse Check can write or refresh context even without Fit With Pulse involvement.', 'This unlocks true standalone behavior after the contract is locked.'],
+  ['Phase 3', 'Build PulseCheck-native HealthKit ingestion so PulseCheck can write or refresh context even without Fit With Pulse involvement.', 'This unlocks true standalone behavior after the contract is locked.'],
   ['Phase 4', 'Add Oura ingestion and normalize Oura recovery signals into the same canonical context model.', 'This broadens athlete compatibility without fragmenting Nora logic.'],
   ['Phase 5', 'Route Nora, proactive alerts, and coach views through the canonical snapshot plus audit events and role-aware privacy filters.', 'This makes the system robust, debuggable, and safe to scale.'],
 ];
@@ -152,18 +152,18 @@ const HealthContextArchitectureOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Health Context"
+        eyebrow="PulseCheck Health Context"
         title="Health Context Pipeline"
         version="Version 0.2 | March 17, 2026"
-        summary="Source-of-truth artifact for how Pulse Check should build robust athlete health context across the shared Fit With Pulse ecosystem, Macra nutrition context where appropriate, and its own standalone capture stack. This document covers current reality, target ingestion lanes, canonical context design, and the rollout path for making Nora meaningfully aware of workouts, recovery, health, and daily athlete state."
+        summary="Source-of-truth artifact for how PulseCheck should build robust athlete health context across the shared Fit With Pulse ecosystem, Macra nutrition context where appropriate, and its own standalone capture stack. This document covers current reality, target ingestion lanes, canonical context design, and the rollout path for making Nora meaningfully aware of workouts, recovery, health, and daily athlete state."
         highlights={[
           {
             title: 'Keep Shared Context',
-            body: 'If the athlete uses Fit With Pulse, Pulse Check should inherit that training and legacy nutrition context as a first-class input rather than rebuilding it from scratch.',
+            body: 'If the athlete uses Fit With Pulse, PulseCheck should inherit that training and legacy nutrition context as a first-class input rather than rebuilding it from scratch.',
           },
           {
             title: 'Own Standalone Capture',
-            body: 'Pulse Check also needs its own native ingestion path for athletes who only connect Apple Health, Apple Watch, Oura, and self-reported readiness signals.',
+            body: 'PulseCheck also needs its own native ingestion path for athletes who only connect Apple Health, Apple Watch, Oura, and self-reported readiness signals.',
           },
           {
             title: 'Normalize Before Nora',
@@ -173,8 +173,8 @@ const HealthContextArchitectureOverviewDoc: React.FC = () => {
       />
 
       <RuntimeAlignmentPanel
-        role="Architecture artifact for the Pulse Check health-context lane. It defines how shared training context and direct wearable / health context should enter the system, how those inputs must be normalized, and what Nora should consume as the canonical athlete-health artifact."
-        sourceOfTruth="This document is authoritative for source lanes, context normalization, provenance, freshness, and the relationship between Fit With Pulse-generated health context and Pulse Check-native capture. It supersedes any assumption that health-backed chat is only a lightweight Firestore read path."
+        role="Architecture artifact for the PulseCheck health-context lane. It defines how shared training context and direct wearable / health context should enter the system, how those inputs must be normalized, and what Nora should consume as the canonical athlete-health artifact."
+        sourceOfTruth="This document is authoritative for source lanes, context normalization, provenance, freshness, and the relationship between Fit With Pulse-generated health context and PulseCheck-native capture. It supersedes any assumption that health-backed chat is only a lightweight Firestore read path."
         masterReference="Use this page when implementing health-backed Nora behavior, direct wearable ingestion, recovery and readiness context, or any system that needs to understand the athlete beyond a single chat turn."
         relatedDocs={[
           'Runtime Architecture v1.0',
@@ -384,7 +384,7 @@ const PulseCheckHealthChatArchitectureTab: React.FC = () => {
         <div className="flex items-center gap-2 mb-1">
           <FileText className="w-4 h-4 text-purple-400" />
           <p className="text-xs uppercase tracking-wide text-purple-400 font-semibold">
-            Pulse Check · Health Context Pipeline
+            PulseCheck · Health Context Pipeline
           </p>
         </div>
         <h2 className="text-xl font-semibold text-white">Health Context Pipeline Library</h2>

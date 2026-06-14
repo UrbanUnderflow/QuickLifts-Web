@@ -3001,7 +3001,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 <div className="w-8 h-1 rounded-full bg-zinc-700 mx-auto mb-4" />
                                                                 <div className="flex items-start justify-between">
                                                                     <div>
-                                                                        <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5" style={{ color: active.accent }}>Pulse Check</div>
+                                                                        <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5" style={{ color: active.accent }}>PulseCheck</div>
                                                                         <div className="text-lg font-black text-white leading-tight">Skill Profile</div>
                                                                         <div className="text-[10px] text-zinc-500 mt-0.5">Tremaine Grant</div>
                                                                     </div>
@@ -4231,10 +4231,10 @@ const PulseCheckDemo: React.FC = () => {
     return (
         <>
             <Head>
-                <title>Pulse Check Demo — Patriots</title>
+                <title>PulseCheck Demo — Patriots</title>
                 <meta
                     name="description"
-                    content="Pulse Check: AI-powered mental performance coaching for elite athletes."
+                    content="PulseCheck: AI-powered mental performance coaching for elite athletes."
                 />
             </Head>
 
@@ -4252,7 +4252,7 @@ const PulseCheckDemo: React.FC = () => {
                                 <Brain className="w-4 h-4 text-[#E0FE10]" />
                             </div>
                             <div>
-                                <h1 className="text-sm font-bold text-white">Pulse Check</h1>
+                                <h1 className="text-sm font-bold text-white">PulseCheck</h1>
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
                                     {currentAct === 'act1'
                                         ? 'Athlete Experience'
@@ -4447,7 +4447,7 @@ const PulseCheckDemo: React.FC = () => {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-0.5">
-                                                    <span className="text-xs font-bold text-white uppercase tracking-wide">Pulse Check</span>
+                                                    <span className="text-xs font-bold text-white uppercase tracking-wide">PulseCheck</span>
                                                     <span className="text-[10px] text-zinc-500">now</span>
                                                 </div>
                                                 <p className="text-sm text-zinc-200 leading-snug">

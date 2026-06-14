@@ -73,7 +73,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Nora Assignment Rules"
         version="Version 1.5 | June 2026"
         summary="Execution-layer artifact for how Nora selects the next athlete action in real time. This page formalizes an AI-led planner that reads the enriched state snapshot, current curriculum slate, athlete response history, device context, chat signal, and coach constraints, then chooses from a bounded candidate set after safety and policy constraints are applied. Red days are protocol-first by default at Tier 0; defer is reserved for severe or high-cost situations rather than ordinary low-readiness days."

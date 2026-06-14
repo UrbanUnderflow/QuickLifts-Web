@@ -194,7 +194,7 @@ The way we were taught to do research has changed overnight, and the curricula h
 
 With the rise of agentic AI, builders now have access to ten PhD-level researchers working around the clock, able to go deep across disciplines simultaneously, surface literature they did not know existed, and synthesize it into something they can actually build from. The question is whether they know how to direct that infrastructure with rigor.
 
-Tremaine Grant, Founder and CEO of Pulse Intelligence Labs and former D1 Track and Field athlete at Florida State, will teach a transferable methodology for using AI as a research and product development engine, made concrete through how he used it to build Pulse Check, a cognitive performance training system grounded in peer-reviewed neuroscience and sport psychology research. Through a live walkthrough, attendees will see how rigorous research can move from literature into product thinking, system design, and real execution.
+Tremaine Grant, Founder and CEO of Pulse Intelligence Labs and former D1 Track and Field athlete at Florida State, will teach a transferable methodology for using AI as a research and product development engine, made concrete through how he used it to build PulseCheck, a cognitive performance training system grounded in peer-reviewed neuroscience and sport psychology research. Through a live walkthrough, attendees will see how rigorous research can move from literature into product thinking, system design, and real execution.
 
 Attendees will leave with a repeatable framework they can apply immediately, regardless of industry, technical background, or which tools they are using: how to scope the right research question, direct AI toward real depth, validate what it returns, and use those insights to shape strategy, products, content, and real-world experiences. They will leave with a clear method for moving from a question to credible research to informed action.
 
@@ -215,7 +215,7 @@ Tremaine Grant is the Founder and CEO of Pulse Intelligence Labs, where he build
 
 His clinical work spans research studies on Long Covid, Type 2 Diabetes, and Parkinson's disease, conducted through IQVIA and Clinical Inc in partnership with organizations including Pfizer, Eli Lilly, Medpace, and Dexcom. That foundation - understanding how evidence gets built and validated - is what shaped how he approaches product development today.
 
-His company's flagship products, Pulse and Pulse Check, represent a new category of performance technology where creator-first fitness experiences and AI-driven mental performance training converge.
+His company's flagship products, Pulse and PulseCheck, represent a new category of performance technology where creator-first fitness experiences and AI-driven mental performance training converge.
 
 He is backed by LAUNCH, the fund behind early investments in Uber, Calm, Robinhood, and Superhuman, and advised by leaders including Marques Zak, CMO of the ACC, and DeRay Mckesson. His work has been featured on This Week in Startups with Jason Calacanis and the Global Startups podcast with Gary Fowler.
 

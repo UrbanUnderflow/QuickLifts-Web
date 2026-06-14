@@ -81,7 +81,7 @@ const originTabConfigs: Array<{
   {
     tab: 'originPulseCheck',
     key: 'pulse_check',
-    label: 'Pulse Check',
+    label: 'PulseCheck',
     caption: 'Mind origin',
     badgeClassName: 'bg-purple-900/30 text-purple-300 border-purple-900',
   },

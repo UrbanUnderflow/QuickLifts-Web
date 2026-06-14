@@ -1273,7 +1273,7 @@ async function sendVisionProQueuedNotification(admin, db, {
   }
 
   const title = 'Vision Pro trial ready';
-  const body = `${coachDisplayName || 'Your coach'} queued ${simName}. Open Pulse Check to pair the headset.`;
+  const body = `${coachDisplayName || 'Your coach'} queued ${simName}. Open PulseCheck to pair the headset.`;
 
   await admin.messaging().send({
     token: pushTarget.token,

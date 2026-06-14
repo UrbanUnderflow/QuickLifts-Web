@@ -27,7 +27,7 @@ const PulseCheckStateSnapshotFreshnessPolicyTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="State Snapshot Freshness & Decay Policy"
         version="Version 1.0 | March 10, 2026"
         summary="Operational policy artifact for shared recency, validity, and decay rules across Nora and the escalation system. This page turns freshness from a guideline into a runtime rule set."

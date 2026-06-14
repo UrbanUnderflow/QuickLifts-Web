@@ -45,7 +45,7 @@ const PulseCheckProtocolOpsRunbookTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Ops Runbook"
         version="Version 0.1 | March 18, 2026"
         summary="Operations artifact for how the team should monitor, contain, diagnose, and recover protocol-system issues at launch. This page defines the minimum operational posture required so protocol failures are survivable without ad hoc decision-making."

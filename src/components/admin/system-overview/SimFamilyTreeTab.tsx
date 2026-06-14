@@ -260,7 +260,7 @@ const SimFamilyTreeTab: React.FC = () => {
                     </div>
                 </div>
                 <p className="text-sm text-zinc-300 max-w-4xl">
-                    The complete family, candidate, and variant architecture for the Pulse Check simulation system. Includes locked families, candidate families with promotion criteria, exploratory concepts, and the full variant library.
+                    The complete family, candidate, and variant architecture for the PulseCheck simulation system. Includes locked families, candidate families with promotion criteria, exploratory concepts, and the full variant library.
                 </p>
             </div>
 
@@ -271,7 +271,7 @@ const SimFamilyTreeTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        A <span className="text-white font-semibold">sim family</span> is a distinct training mechanism that targets a named skill, produces a unique core metric, and occupies its own slot in the athlete&apos;s profile. It is the architectural unit of the Pulse Check system — the thing Nora programs against, the thing coaches see in a player&apos;s profile, and the thing the taxonomy is built around.
+                        A <span className="text-white font-semibold">sim family</span> is a distinct training mechanism that targets a named skill, produces a unique core metric, and occupies its own slot in the athlete&apos;s profile. It is the architectural unit of the PulseCheck system — the thing Nora programs against, the thing coaches see in a player&apos;s profile, and the thing the taxonomy is built around.
                     </p>
 
                     {/* SQUAT ANALOGY */}
@@ -281,7 +281,7 @@ const SimFamilyTreeTab: React.FC = () => {
                             Think of it like the <span className="text-white font-semibold">squat</span> in physical training. &quot;Squat&quot; is the family. Back squat, front squat, goblet squat, pause squat, box squat — those are <span className="text-cyan-300 font-semibold">variants</span>. They all train hip and knee extension under load, but they vary the surface mechanics. You wouldn&apos;t count them as separate exercises in your programming taxonomy — they&apos;re all squats. But an athlete&apos;s actual training program might rotate through several squat variants depending on what phase they&apos;re in.
                         </p>
                         <p className="text-sm text-zinc-300 leading-relaxed">
-                            Pulse Check works the same way. <span className="text-white font-semibold">Reset</span> is a family — it trains disruption recovery. Visual disruption Reset, audio disruption Reset, cognitive-provocation Reset — those are variants. They all target the same mechanism (recover goal-directed focus after disruption) and produce the same core metric (post-error recovery time). Nora rotates through them for variety and engagement, but the profile shows one Reset score, not eight different variant scores.
+                            PulseCheck works the same way. <span className="text-white font-semibold">Reset</span> is a family — it trains disruption recovery. Visual disruption Reset, audio disruption Reset, cognitive-provocation Reset — those are variants. They all target the same mechanism (recover goal-directed focus after disruption) and produce the same core metric (post-error recovery time). Nora rotates through them for variety and engagement, but the profile shows one Reset score, not eight different variant scores.
                         </p>
 
                         {/* SIDE-BY-SIDE COMPARISON */}
@@ -300,7 +300,7 @@ const SimFamilyTreeTab: React.FC = () => {
                                 </div>
                             </div>
                             <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.03] p-4">
-                                <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 mb-2">🧠 Pulse Check</p>
+                                <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 mb-2">🧠 PulseCheck</p>
                                 <p className="text-xs font-bold text-white mb-2">Reset <span className="text-zinc-500 font-normal">← Family</span></p>
                                 <div className="space-y-1 pl-3 border-l-2 border-purple-500/30">
                                     {['Visual Disruption Reset', 'Audio Disruption Reset', 'Cognitive-Provocation Reset', 'Sport-Context Reset', 'Immersive Reset Chamber'].map((v) => (

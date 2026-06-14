@@ -5,7 +5,7 @@ import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
 import PulseCheckTeamPilotCohortOnboardingArchitectureTab from './PulseCheckTeamPilotCohortOnboardingArchitectureTab';
 
 const READINESS_ROWS = [
-  ['Organization readiness', 'Pulse Check has created the organization shell internally and attached implementation defaults.'],
+  ['Organization readiness', 'PulseCheck has created the organization shell internally and attached implementation defaults.'],
   ['Team readiness', 'At least one team exists with branding, invite policy, default admins, and escalation routing defaults.'],
   ['Clinical readiness', 'A default clinician profile and ClinicianBridge posture are defined when the rollout requires escalation support.'],
   ['Invite readiness', 'Role-specific invite paths exist for admin activation, coach or staff, athlete, and clinician entry.'],
@@ -13,29 +13,29 @@ const READINESS_ROWS = [
 
 const SYSTEM_SETUP_STEPS = [
   {
-    title: 'Create the organization in the internal Pulse Check dashboard',
-    body: 'Pulse Check implementation creates the top-level organization record, assigns the implementation owner, sets the study posture default, and records the initial operational admin contact.',
-    owner: 'Pulse Check internal admin',
+    title: 'Create the organization in the internal PulseCheck dashboard',
+    body: 'PulseCheck implementation creates the top-level organization record, assigns the implementation owner, sets the study posture default, and records the initial operational admin contact.',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Create the first team inside that organization',
-    body: 'Pulse Check creates the team shell separately from the organization so sport, roster scope, branding, invite policy, and team-level defaults live in the right object.',
-    owner: 'Pulse Check internal admin',
+    body: 'PulseCheck creates the team shell separately from the organization so sport, roster scope, branding, invite policy, and team-level defaults live in the right object.',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Configure the team operating defaults',
     body: 'Set the team type, sport or unit, default invite policy, team admins, and any baseline routing defaults that the roster should inherit at entry.',
-    owner: 'Pulse Check internal admin',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Create or attach the clinical route',
     body: 'If the rollout uses clinical escalation, attach the team default clinician profile and establish the ClinicianBridge posture so future safety events have a real destination.',
-    owner: 'Pulse Check internal admin',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Create pilot and cohort structure when the rollout needs it',
     body: 'If the rollout is pilot-based, define the pilot object, study mode, checkpoint cadence, and any cohort grouping before athlete invites go out.',
-    owner: 'Pulse Check internal admin',
+    owner: 'PulseCheck internal admin',
   },
   {
     title: 'Provision operational admin access',
@@ -54,7 +54,7 @@ const ROLE_HANDOFF_ROWS = [
 const COACH_AND_STAFF_STEPS = [
   {
     title: 'Operational admin invites coaches and staff',
-    body: 'Once the team is live, the operational admin sends role-specific invites to coaches, performance staff, support staff, and any secondary admins if those responsibilities are not still being managed by Pulse Check.',
+    body: 'Once the team is live, the operational admin sends role-specific invites to coaches, performance staff, support staff, and any secondary admins if those responsibilities are not still being managed by PulseCheck.',
     owner: 'Operational admin',
   },
   {
@@ -69,7 +69,7 @@ const COACH_AND_STAFF_STEPS = [
   },
   {
     title: 'Permissioned coaches and staff begin athlete invite operations',
-    body: 'The correct next move is to send the team athlete link directly so roster activation does not bottleneck on Pulse Check implementation staff.',
+    body: 'The correct next move is to send the team athlete link directly so roster activation does not bottleneck on PulseCheck implementation staff.',
     owner: 'Coach or staff',
   },
 ];
@@ -123,13 +123,13 @@ const ATHLETE_STEPS = [
 ];
 
 const OBJECT_ROWS = [
-  ['Organization', 'Top-level organization account created internally by Pulse Check.'],
+  ['Organization', 'Top-level organization account created internally by PulseCheck.'],
   ['Team', 'Persistent sport, program, or unit container under the organization.'],
   ['Pilot', 'Time-bound initiative inside a team with its own study posture and checkpoints.'],
   ['PilotCohort', 'Subgroup inside a pilot used for reporting, experimentation, or differentiated programming.'],
   ['InviteLink', 'Role-specific entry path for admin, staff, athlete, or clinician onboarding.'],
   ['OrganizationMembership / TeamMembership', 'Role and permission truth for admins, coaches, staff, and athletes.'],
-  ['ClinicianBridge', 'Explicit Pulse Check to AuntEdna bridge that keeps escalation routing coherent.'],
+  ['ClinicianBridge', 'Explicit PulseCheck to AuntEdna bridge that keeps escalation routing coherent.'],
   ['users/{uid}', 'Athlete or staff profile record and onboarding completion truth.'],
   ['athlete-mental-progress/{uid}', 'Baseline routing, pathway seed, and post-baseline recommendations.'],
 ];
@@ -432,7 +432,7 @@ const ONBOARDING_ACCESS_PAGES: ArtifactPageEntry[] = [
 const PulseCheckMemberOnboardingGuideTab: React.FC = () => {
   return (
     <ArtifactPageLibrary
-      eyebrow="Pulse Check · Onboarding & Access"
+      eyebrow="PulseCheck · Onboarding & Access"
       title="Onboarding & Access Library"
       summary="Operational parent artifact with internal pages for member entry flow, team and pilot onboarding architecture, and PulseCheck permissions posture."
       entries={ONBOARDING_ACCESS_PAGES}

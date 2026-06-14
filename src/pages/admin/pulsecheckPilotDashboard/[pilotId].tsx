@@ -841,7 +841,7 @@ const buildDefaultPushPreview = (detail: PilotDashboardDetail, athlete: PilotDas
   title: buildPilotReadyPushTitle(detail),
   subtitle: 'Open the app to continue',
   body: buildPilotReadyPushBody(athlete),
-  ctaLabel: 'Open Pulse Check App',
+  ctaLabel: 'Open PulseCheck App',
   ctaUrl: PULSECHECK_APP_DEEP_LINK_URL,
 });
 const COMMUNICATION_STATUS_STAGES = ['sent', 'delivered', 'opened'] as const;
@@ -4404,7 +4404,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     {emailRecord?.status === 'failed' ? (
                                       <span className="text-xs text-rose-200">{emailRecord.lastError || 'Last send failed'}</span>
                                     ) : (
-                                      <span className="text-[11px] text-zinc-500">Includes an Open Pulse Check App button.</span>
+                                      <span className="text-[11px] text-zinc-500">Includes an Open PulseCheck App button.</span>
                                     )}
                                   </div>
                                 </td>

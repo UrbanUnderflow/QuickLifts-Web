@@ -145,7 +145,7 @@ const FirestoreIndexRegistryTab: React.FC = () => {
         eyebrow="Platform Data Operations"
         title="Firestore Index Registry"
         version="Version 0.1 | March 17, 2026"
-        summary="Internal registry and operating policy for Cloud Firestore indexes across Fit With Pulse, Pulse Check, Macra, and shared platform surfaces. This artifact makes the shared `firestore.indexes.json` file the visible source of truth, tracks current registry coverage, and defines the discipline required to keep development and production index posture in sync."
+        summary="Internal registry and operating policy for Cloud Firestore indexes across Fit With Pulse, PulseCheck, Macra, and shared platform surfaces. This artifact makes the shared `firestore.indexes.json` file the visible source of truth, tracks current registry coverage, and defines the discipline required to keep development and production index posture in sync."
         highlights={[
           {
             title: 'Registry Tied To Real File',
@@ -261,7 +261,7 @@ const FirestoreIndexRegistryTab: React.FC = () => {
           <InfoCard
             title="Current Discipline"
             accent="red"
-            body="Because Fit With Pulse, Pulse Check, and Macra share platform data contracts, index drift becomes system drift. Treat index maintenance as platform configuration work, not optional cleanup."
+            body="Because Fit With Pulse, PulseCheck, and Macra share platform data contracts, index drift becomes system drift. Treat index maintenance as platform configuration work, not optional cleanup."
           />
         </CardGrid>
       </SectionBlock>

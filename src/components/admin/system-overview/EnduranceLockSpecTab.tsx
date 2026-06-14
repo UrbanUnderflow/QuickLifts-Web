@@ -104,9 +104,9 @@ const REFS = [
 
 const GDOCS = [
     { name: 'Sim Specification Standards Addendum (v2)', desc: 'Shared measurement precision, session validity, modifier boundaries, feedback modes, trial standardization, motor confounds, validation roadmap.' },
-    { name: 'Pulse Check System Taxonomy (v3)', desc: 'Three pillars, skill map, cross-cutting modifiers, score architecture, AI adaptation, session length, trial architecture.' },
+    { name: 'PulseCheck System Taxonomy (v3)', desc: 'Three pillars, skill map, cross-cutting modifiers, score architecture, AI adaptation, session length, trial architecture.' },
     { name: 'Sim Family Promotion Protocol (v2)', desc: 'How families are proposed, evaluated, promoted. Variant classification, divergence detection.' },
-    { name: 'Sim Family Tree (v2)', desc: 'Complete family, candidate, variant, and exploratory hierarchy for all Pulse Check simulations.' },
+    { name: 'Sim Family Tree (v2)', desc: 'Complete family, candidate, variant, and exploratory hierarchy for all PulseCheck simulations.' },
 ];
 
 const EXP = [

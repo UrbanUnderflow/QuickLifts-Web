@@ -107,7 +107,7 @@ const PulseCheckProtocolPracticeConversationSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Protocol Practice Conversation Spec"
         version="Version 0.1 | March 18, 2026"
         summary="Design and runtime contract for turning protocols into a two-stage experience: Nora first teaches the technique, then actively coaches the member through a bounded practice conversation that proves they can apply it. This artifact exists because a protocol should not end the moment Nora finishes explaining it."

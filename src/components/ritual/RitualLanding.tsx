@@ -86,7 +86,7 @@ const RitualLanding: React.FC = () => {
           <div className="space-y-4">
             {[
               'Three drops a day: Mind, Body, and Spirit.',
-              'Auto-waters from Pulse Check, Fit With Pulse, and Macra as the ecosystem grows.',
+              'Auto-waters from PulseCheck, Fit With Pulse, and Macra as the ecosystem grows.',
               'Designed as a calm daily layer for athletes, coaches, wellness operators, and anyone building better performance habits.',
             ].map((item) => (
               <div key={item} className="flex gap-4 rounded-2xl border border-white/10 bg-black/30 p-5">

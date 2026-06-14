@@ -42,7 +42,7 @@ const PulseCheckEscalationIntegrationSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="Pulse Check Runtime"
+        eyebrow="PulseCheck Runtime"
         title="Escalation Integration Spec"
         version="Version 1.1 | March 10, 2026"
         summary="Execution-layer artifact for the concrete bridge between the shared state snapshot and the existing escalation workflow. This page defines how state context is passed into classification and how safety-lane outcomes are written back into runtime objects."

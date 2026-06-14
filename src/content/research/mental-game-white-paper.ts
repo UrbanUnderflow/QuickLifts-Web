@@ -10,9 +10,9 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_SLUG =
 export const TRAINING_MENTAL_GAME_WHITE_PAPER_METADATA = {
   title: 'Training the Mental Game: A Protocol and Simulation Architecture for Mental Performance in Sport',
   subtitle:
-    'How Pulse Check combines state-regulation protocols, pressure simulations, curriculum planning, and automaticity science to build a structured mental training system for athletes.',
+    'How PulseCheck combines state-regulation protocols, pressure simulations, curriculum planning, and automaticity science to build a structured mental training system for athletes.',
   excerpt:
-    'A white paper on Pulse Check as a two-lane mental performance system: protocols for regulation, simulations for sharpening, and curriculum that builds automaticity over time.',
+    'A white paper on PulseCheck as a two-lane mental performance system: protocols for regulation, simulations for sharpening, and curriculum that builds automaticity over time.',
   category: 'Performance Science',
   author: 'Tremaine Grant',
   authorTitle: 'Founder of Pulse Intelligence Labs',
@@ -51,9 +51,9 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_CONTENT = `
 :::abstract
 Mental performance is widely acknowledged as a critical factor in athletic competition, yet the tools available to train it have not kept pace with the systems used to develop physical capacity. Most existing approaches fall into one of two categories: clinical sport psychology delivered through conversation, or consumer-facing brain training apps built on generic cognitive tasks with limited evidence of transfer to sport-specific contexts. Neither approach provides athletes and coaches with a structured, measurable, progressive training system for the cognitive-perceptual and state-regulation skills that determine performance under pressure.
 
-This paper introduces Pulse Check as a protocol and simulation architecture for mental performance training. The system operates through two coordinated lanes. Protocols are bounded mental regulation, priming, and recovery interventions that help an athlete change state before, between, or after demanding performance moments. Simulations are instrumented pressure-training environments that sharpen and measure Focus, Composure, and Decision skills under controlled challenge. Nora, the adaptive planning engine, reads state signals, profile history, protocol responsiveness, simulation outcomes, and curriculum progress before assigning the next useful action.
+This paper introduces PulseCheck as a protocol and simulation architecture for mental performance training. The system operates through two coordinated lanes. Protocols are bounded mental regulation, priming, and recovery interventions that help an athlete change state before, between, or after demanding performance moments. Simulations are instrumented pressure-training environments that sharpen and measure Focus, Composure, and Decision skills under controlled challenge. Nora, the adaptive planning engine, reads state signals, profile history, protocol responsiveness, simulation outcomes, and curriculum progress before assigning the next useful action.
 
-The core thesis is that athletes do not need a one-day competition trick. They need a curriculum that builds automaticity over time. Pulse Check therefore keeps a small active slate of protocols and simulations in flight, rotates them as mastery emerges, and uses repeated, state-aware practice to make useful responses easier to retrieve when pressure taxes attention. This paper describes the scientific foundations, system architecture, protocol and simulation design principles, curriculum model, automaticity framework, physiology-cognition roadmap, and validation discipline that govern Pulse Check.
+The core thesis is that athletes do not need a one-day competition trick. They need a curriculum that builds automaticity over time. PulseCheck therefore keeps a small active slate of protocols and simulations in flight, rotates them as mastery emerges, and uses repeated, state-aware practice to make useful responses easier to retrieve when pressure taxes attention. This paper describes the scientific foundations, system architecture, protocol and simulation design principles, curriculum model, automaticity framework, physiology-cognition roadmap, and validation discipline that govern PulseCheck.
 :::
 
 # 1. The Problem: Mental Performance Without a Training System
@@ -68,13 +68,13 @@ The mental side of sport is usually less organized. Sport psychology has produce
 
 None of those approaches, by themselves, create a complete training system. A conversation can be powerful, but it is not the same as instrumented practice. A breathing exercise can help, but it does not automatically become available under pressure unless it is rehearsed and embedded into the athlete's performance routine. A generic reaction game may improve performance on that game without teaching the athlete how to regulate state or execute inside sport-relevant pressure.
 
-Pulse Check addresses that gap by combining two complementary forms of training. Simulations create serious mental training environments that target and measure cognitive-perceptual skills under controlled stress. Protocols provide bounded mental interventions that help athletes regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
+PulseCheck addresses that gap by combining two complementary forms of training. Simulations create serious mental training environments that target and measure cognitive-perceptual skills under controlled stress. Protocols provide bounded mental interventions that help athletes regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
 
-Pulse Check is a protocol and simulation system. Protocols help the athlete change state. Simulations test and sharpen execution under pressure. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a practiced response that has already been rehearsed, measured, and refined.
+PulseCheck is a protocol and simulation system. Protocols help the athlete change state. Simulations test and sharpen execution under pressure. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a practiced response that has already been rehearsed, measured, and refined.
 
 ## 1.1 What This Looks Like in Practice
 
-Consider an athlete who opens Pulse Check after a difficult practice. They report feeling keyed up, frustrated by a mistake, and unsure whether they should push into another pressure challenge. If a connected device is available, the state layer may also see that recovery markers are below that athlete's recent baseline. A generic app might serve a relaxation clip or a reaction game. Pulse Check should do something more specific.
+Consider an athlete who opens PulseCheck after a difficult practice. They report feeling keyed up, frustrated by a mistake, and unsure whether they should push into another pressure challenge. If a connected device is available, the state layer may also see that recovery markers are below that athlete's recent baseline. A generic app might serve a relaxation clip or a reaction game. PulseCheck should do something more specific.
 
 Nora first reads the current state pattern. If the main bottleneck is overactivation, Nora may assign a short regulation protocol such as Box Breathing or Nerves to Excitement. The athlete practices the intervention inside a bounded exchange, and the system records whether the athlete can name the body signal, apply the technique, and describe a useful shift. If the athlete becomes more available for challenge, Nora can then assign The Reset Switch to test whether the athlete can return to task focus after disruption.
 
@@ -84,21 +84,21 @@ That is the product thesis in miniature: read state, choose a bounded interventi
 
 # 2. Scientific Foundations
 
-Pulse Check is not built on one theory. It draws from several research traditions that collectively describe how attention, control, state, pressure, learning, and automaticity interact in athletic performance. The system does not claim that its full implementation has already been validated through randomized controlled trials. That work must be earned. What the system does claim is that its design choices are grounded in established science and that its evidence model separates mechanism support from implementation validation.
+PulseCheck is not built on one theory. It draws from several research traditions that collectively describe how attention, control, state, pressure, learning, and automaticity interact in athletic performance. The system does not claim that its full implementation has already been validated through randomized controlled trials. That work must be earned. What the system does claim is that its design choices are grounded in established science and that its evidence model separates mechanism support from implementation validation.
 
 ## 2.1 Attentional Control Theory
 
-Attentional Control Theory, developed by Eysenck, Derakshan, Santos, and Calvo, provides one of the primary theoretical backbones of Pulse Check. The theory argues that anxiety disrupts the balance between two attentional systems: a goal-directed system that keeps attention on task-relevant information, and a stimulus-driven system that pulls attention toward threat, distraction, and irrelevant cues. [cite:1,2]
+Attentional Control Theory, developed by Eysenck, Derakshan, Santos, and Calvo, provides one of the primary theoretical backbones of PulseCheck. The theory argues that anxiety disrupts the balance between two attentional systems: a goal-directed system that keeps attention on task-relevant information, and a stimulus-driven system that pulls attention toward threat, distraction, and irrelevant cues. [cite:1,2]
 
 Under pressure, the stimulus-driven system gains influence. The athlete may know what matters, but attention becomes easier to capture. The mind searches for threat, the body reacts to urgency, and execution quality can degrade. This is not a lack of character. It is a predictable shift in cognitive control.
 
-Pulse Check simulations train this directly. Noise Gate asks whether an athlete can keep the right signal active while irrelevant stimuli compete for attention. Reset asks whether the athlete can return to goal-directed focus after disruption. Signal Window and Sequence Shift ask whether the athlete can read, update, and act while time and ambiguity compress the decision window.
+PulseCheck simulations train this directly. Noise Gate asks whether an athlete can keep the right signal active while irrelevant stimuli compete for attention. Reset asks whether the athlete can return to goal-directed focus after disruption. Signal Window and Sequence Shift ask whether the athlete can read, update, and act while time and ambiguity compress the decision window.
 
 ## 2.2 Stress Inoculation Training
 
 Stress Inoculation Training, associated with Meichenbaum, provides the pedagogical logic for pressure exposure. The core principle is that controlled, graduated exposure to stressors, paired with skill rehearsal, can build more stable performance when real stressors appear. [cite:3]
 
-In Pulse Check, this appears through modifiers and curriculum progression. The system does not simply make tasks harder. It changes the psychological context: time pressure, evaluative threat, ambiguity, distraction, consequence, and fatigue load. The goal is not to eliminate stress. The goal is to build the capacity to perform through it.
+In PulseCheck, this appears through modifiers and curriculum progression. The system does not simply make tasks harder. It changes the psychological context: time pressure, evaluative threat, ambiguity, distraction, consequence, and fatigue load. The goal is not to eliminate stress. The goal is to build the capacity to perform through it.
 
 This matters because competition does not wait until the athlete feels perfectly calm. A useful mental training system has to teach athletes how to regulate when regulation is needed, and how to execute when stress remains present.
 
@@ -106,7 +106,7 @@ This matters because competition does not wait until the athlete feels perfectly
 
 The executive function framework, particularly the model proposed by Miyake and colleagues, identifies inhibition, shifting, and updating as core cognitive control processes. These are directly relevant to sport. [cite:4]
 
-Inhibition helps an athlete resist the wrong response, ignore a tempting decoy, or stop an error from cascading. Shifting helps attention move from disruption back to the next useful target. Updating helps the athlete refresh working memory when rules, reads, or conditions change. Pulse Check maps these functions into trainable skill families instead of treating cognition as one generic score.
+Inhibition helps an athlete resist the wrong response, ignore a tempting decoy, or stop an error from cascading. Shifting helps attention move from disruption back to the next useful target. Updating helps the athlete refresh working memory when rules, reads, or conditions change. PulseCheck maps these functions into trainable skill families instead of treating cognition as one generic score.
 
 ## 2.4 Automaticity and Procedural Learning
 
@@ -116,13 +116,13 @@ This is not magic and it is not mindlessness. Automaticity is learned efficiency
 
 For athletes, this is critical because pressure taxes working memory and attention. When a skill still requires heavy conscious control, pressure can interfere with execution. When a skill has become more automatic, the athlete has more attentional capacity available for reading the environment, adapting, and staying present.
 
-Mental skills can follow a similar pattern. A breathing pattern, reframe, cue word, visualization sequence, or reset routine is not most useful when the athlete can explain it calmly. It is most useful when the body and mind can access it quickly under pressure. Pulse Check curriculum exists to build that availability.
+Mental skills can follow a similar pattern. A breathing pattern, reframe, cue word, visualization sequence, or reset routine is not most useful when the athlete can explain it calmly. It is most useful when the body and mind can access it quickly under pressure. PulseCheck curriculum exists to build that availability.
 
 ## 2.5 Choking, Explicit Monitoring, and Pressure
 
 Research on choking under pressure adds a warning. Well-learned skills can break down when athletes over-monitor them. Beilock and Carr's work on skilled performance and Masters' work on explicit versus implicit knowledge both support the idea that pressure can pull attention inward, causing athletes to consciously control processes that usually run more fluidly. [cite:13,14]
 
-Pulse Check does not want athletes to memorize long scripts in the middle of competition. It wants them to build compact, practiced responses. A cue word should point attention toward the right target. Box breathing should steady the body without turning into a complicated counting task. A reset sequence should help the athlete return to execution, not trap them in self-analysis. [cite:15,18]
+PulseCheck does not want athletes to memorize long scripts in the middle of competition. It wants them to build compact, practiced responses. A cue word should point attention toward the right target. Box breathing should steady the body without turning into a complicated counting task. A reset sequence should help the athlete return to execution, not trap them in self-analysis. [cite:15,18]
 
 This is why the system pairs protocols and simulations. Protocols teach the response. Simulations test whether the response survives pressure, distraction, and time compression.
 
@@ -130,11 +130,11 @@ This is why the system pairs protocols and simulations. Protocols teach the resp
 
 Posner and Petersen's model of attention supports the idea that attention is not one thing. It includes alerting, orienting, and executive control. Applied sport psychology work, including Nideffer and Sagal's attention-control framing and USOC mental training materials, reinforces that attention in sport is directional, contextual, and trainable. [cite:5,6,7,8]
 
-Pulse Check's Focus, Composure, and Decision pillars translate those ideas into product architecture. The system uses coaching-friendly language at the top, but keeps research-grounded skill definitions and raw metrics underneath.
+PulseCheck's Focus, Composure, and Decision pillars translate those ideas into product architecture. The system uses coaching-friendly language at the top, but keeps research-grounded skill definitions and raw metrics underneath.
 
-# 3. The Pulse Check System Architecture
+# 3. The PulseCheck System Architecture
 
-Pulse Check is organized around a formal architecture that defines what is being trained, how state is interpreted, how assignments are selected, how progress is measured, and how evidence claims are governed.
+PulseCheck is organized around a formal architecture that defines what is being trained, how state is interpreted, how assignments are selected, how progress is measured, and how evidence claims are governed.
 
 ## 3.1 Two Sibling Lanes: Protocols and Simulations
 
@@ -169,7 +169,7 @@ Each family can have variants, sport-context expressions, pressure modifiers, an
 
 ## 3.4 Three Pillars: Focus, Composure, Decision
 
-At the coaching layer, Pulse Check organizes mental performance into three durable pillars.
+At the coaching layer, PulseCheck organizes mental performance into three durable pillars.
 
 Focus is the ability to direct, sustain, and shift attention toward task-relevant information while resisting distraction or internal noise.
 
@@ -181,7 +181,7 @@ These pillars are intentionally stable. They give athletes and coaches a shared 
 
 ## 3.5 State Signal Layer
 
-Pulse Check does not assign work from profile history alone. It reads current state first.
+PulseCheck does not assign work from profile history alone. It reads current state first.
 
 The State Signal Layer collects self-report, conversation signals, performance patterns, context, biometrics when available, execution events, and coach constraints. It then builds a shared state snapshot that captures activation, focus readiness, emotional load, cognitive fatigue, overall readiness, confidence, freshness, and recommended routing posture.
 
@@ -189,13 +189,13 @@ This is important because two athletes can both look "Yellow" but need different
 
 ## 3.6 Score Architecture and Modifiers
 
-Pulse Check's score system operates in layers. At the top are pillar composites for Focus, Composure, and Decision. Beneath them are skill scores, such as selective attention, error recovery speed, pressure stability, response inhibition, working-memory updating, and signal discrimination. Beneath those are raw metrics: response time, accuracy, false starts, recovery latency, variance, degradation slope, and modifier-stratified performance.
+PulseCheck's score system operates in layers. At the top are pillar composites for Focus, Composure, and Decision. Beneath them are skill scores, such as selective attention, error recovery speed, pressure stability, response inhibition, working-memory updating, and signal discrimination. Beneath those are raw metrics: response time, accuracy, false starts, recovery latency, variance, degradation slope, and modifier-stratified performance.
 
 Modifiers change the psychological context of a simulation without changing the underlying target skill. Time pressure, evaluative threat, ambiguity, distraction, fatigue load, and consequence allow the system to distinguish baseline ability from pressure-sensitive performance.
 
 # 4. Protocol Design Principles
 
-Protocols are the mental regulation side of Pulse Check. They teach athletes what to do with state.
+Protocols are the mental regulation side of PulseCheck. They teach athletes what to do with state.
 
 ## 4.1 Protocols Are State Interventions
 
@@ -240,13 +240,13 @@ Responsiveness also stays subordinate to current state. If the latest state snap
 
 # 5. Simulation Design Principles
 
-Simulations are the mental sharpening side of Pulse Check. They create controlled, instrumented challenges that let the system train and measure cognitive-perceptual skills under pressure.
+Simulations are the mental sharpening side of PulseCheck. They create controlled, instrumented challenges that let the system train and measure cognitive-perceptual skills under pressure.
 
 ## 5.1 The Sim Specification Template
 
 Every simulation is authored against a specification template. A valid simulation must define its primary pillar, target skills, underlying mechanism, scientific basis, game flow, scoring model, raw metrics, modifier compatibility, difficulty progression, session validity rules, and evidence status.
 
-This prevents the most common failure mode in cognitive training products: building something that feels engaging but has no clear connection to a trainable mechanism or no way to evaluate transfer. Pulse Check simulations should feel like training, not entertainment with a performance label.
+This prevents the most common failure mode in cognitive training products: building something that feels engaging but has no clear connection to a trainable mechanism or no way to evaluate transfer. PulseCheck simulations should feel like training, not entertainment with a performance label.
 
 ## 5.2 Example: The Reset Switch
 
@@ -282,7 +282,7 @@ Together, these families give the system enough coverage to train and measure th
 
 # 6. Curriculum, Mastery, and Automaticity
 
-Pulse Check is not a one-day recommendation engine. It is a curriculum model.
+PulseCheck is not a one-day recommendation engine. It is a curriculum model.
 
 ## 6.1 The Six-Exercise Active Slate
 
@@ -313,7 +313,7 @@ When an exercise reaches mastery, Nora rotates the mastered exercise into mainte
 
 Automaticity develops through repeated, context-linked practice. A response becomes easier to retrieve when the athlete has encountered the cue many times and practiced the response in enough relevant conditions. [cite:9,10,11,12]
 
-Pulse Check supports this in three ways.
+PulseCheck supports this in three ways.
 
 First, protocols create compact state-response mappings. Box Breathing maps a steadying need to a known breathing cadence. Cognitive Reframing maps pressure sensations to challenge language. Visualization maps a coming action to a refreshed internal model. Cue-Word Anchoring maps a short phrase to a trained attentional target.
 
@@ -335,7 +335,7 @@ The curriculum is therefore not a content schedule. It is an automaticity engine
 
 # 7. Nora Planning and Training Plan Architecture
 
-Nora is the adaptive planning engine for Pulse Check. Nora operates as a bounded planner: it reads state, profile, curriculum, protocol responsiveness, simulation outcomes, coach constraints, and candidate availability, then chooses the next useful action from approved protocol and simulation inventory.
+Nora is the adaptive planning engine for PulseCheck. Nora operates as a bounded planner: it reads state, profile, curriculum, protocol responsiveness, simulation outcomes, coach constraints, and candidate availability, then chooses the next useful action from approved protocol and simulation inventory.
 
 ## 7.1 Assignment Outcomes
 
@@ -382,7 +382,7 @@ The six-exercise active slate sits inside this larger plan architecture. A plan 
 
 The physiology-cognition correlation engine connects body-state evidence with mental performance evidence.
 
-The product edge is not simply that Pulse Check can connect wearable data. Wearables can see aspects of the body. Simulations can measure aspects of mental performance. The differentiated opportunity is joining those evidence streams to learn how a specific athlete's mental performance behaves under different body states.
+The product edge is not simply that PulseCheck can connect wearable data. Wearables can see aspects of the body. Simulations can measure aspects of mental performance. The differentiated opportunity is joining those evidence streams to learn how a specific athlete's mental performance behaves under different body states.
 
 The engine models personal thresholds, confidence, freshness, and state-performance relationships. It asks questions like:
 
@@ -391,18 +391,18 @@ The engine models personal thresholds, confidence, freshness, and state-performa
 - Does pressure sensitivity increase when resting heart rate is elevated?
 - Which protocol tends to help when the athlete is in a specific physiological posture?
 
-No single wearable is the engine. Polar is the signature sports-performance lane because its direct device path can contribute training, exertion, live heart-rate or RR evidence, activity samples, and session context. Apple Watch and HealthKit provide the baseline iOS wearable and health-platform lane. Oura contributes a strong sleep and recovery lane through direct API support or HealthKit fallback. Fitbit Air and the broader Fitbit lane contribute post-sync sleep, heart-rate, activity, biometrics, and recovery context through Google Health. Each source has different strengths, timing, freshness, and limitations, so Pulse Check normalizes them into the same health-context record model before the correlation engine uses them.
+No single wearable is the engine. Polar is the signature sports-performance lane because its direct device path can contribute training, exertion, live heart-rate or RR evidence, activity samples, and session context. Apple Watch and HealthKit provide the baseline iOS wearable and health-platform lane. Oura contributes a strong sleep and recovery lane through direct API support or HealthKit fallback. Fitbit Air and the broader Fitbit lane contribute post-sync sleep, heart-rate, activity, biometrics, and recovery context through Google Health. Each source has different strengths, timing, freshness, and limitations, so PulseCheck normalizes them into the same health-context record model before the correlation engine uses them.
 
-The language must stay honest. These are correlations unless stronger evidence supports causal claims. Pulse Check may learn that an athlete usually performs better inside a certain recovery band, or that a specific protocol tends to help under a specific body-state pattern. It should not pretend that wearable data alone decides training. Body-state evidence informs interpretation; Pulse Check still needs simulation outcomes, protocol evidence, athlete feedback, and coaching context.
+The language must stay honest. These are correlations unless stronger evidence supports causal claims. PulseCheck may learn that an athlete usually performs better inside a certain recovery band, or that a specific protocol tends to help under a specific body-state pattern. It should not pretend that wearable data alone decides training. Body-state evidence informs interpretation; PulseCheck still needs simulation outcomes, protocol evidence, athlete feedback, and coaching context.
 
 # 9. Scientific Evidence Framework and Validation
 
-Pulse Check uses an evidence framework because citations alone are not enough. A scientific paper can support a mechanism without validating a specific product implementation.
+PulseCheck uses an evidence framework because citations alone are not enough. A scientific paper can support a mechanism without validating a specific product implementation.
 
 The system distinguishes between:
 
 - Mechanism support: published evidence supports the underlying cognitive, physiological, or behavioral mechanism.
-- Internal validity: Pulse Check's implementation reliably measures what it claims to measure inside the platform.
+- Internal validity: PulseCheck's implementation reliably measures what it claims to measure inside the platform.
 - Transfer validity: improvements generalize to higher-fidelity environments or real-world performance contexts.
 - Protocol effectiveness: a protocol produces the intended state shift and improves the usefulness of downstream execution.
 - Curriculum effectiveness: the system's plan structure improves durability, adherence, automaticity, and performance over time.
@@ -411,7 +411,7 @@ The system distinguishes between:
 
 The evidence posture should be visible at the level of each major product claim. This keeps the paper from blending established science, plausible design translation, and unproven implementation outcomes into one overconfident story.
 
-| Product claim | Mechanism support | Pulse Check implementation | Current evidence posture | Next validation step |
+| Product claim | Mechanism support | PulseCheck implementation | Current evidence posture | Next validation step |
 | --- | --- | --- | --- | --- |
 | Protocols can help athletes shift state before or after demanding moments. | Slow breathing, reappraisal, self-talk, and imagery have mechanism-level and intervention support. [cite:16,17,18,19] | Published protocol registry, target state shifts, bounded practice, pre/post state capture, downstream simulation comparison. | Mechanism-supported. Product-specific effectiveness still needs pilot data. | Compare protocol-to-simulation sequences against simulation-only assignments within similar state windows. |
 | Simulations can train and measure cognitive-perceptual pressure skills. | Attentional control, executive function, and stress inoculation support the target mechanisms, while sport cognitive-training reviews warn that transfer is not automatic. [cite:1,3,4,23] | Reset, Noise Gate, Brake Point, Signal Window, Sequence Shift, and Endurance Lock with raw metrics and pressure modifiers. | Mechanism-supported and internally instrumentable. Transfer validity remains an earned claim. | Establish reliability, construct validity, and sport-relevant transfer signals across pilot cohorts. |
@@ -421,13 +421,13 @@ The evidence posture should be visible at the level of each major product claim.
 
 Validation must also include pilot outcome metrics. Enrollment, adherence, mental performance improvement, escalations, speed to care, trust, and recommendation intent all matter. A mental training system that produces scores but loses athlete trust is not succeeding.
 
-For research readouts, Pulse Check uses frozen evidence frames. A readout locks to one pilot, one date window, one cohort filter, one read-model version, and one set of metrics. Claims are tagged as observed, inferred, or speculative. Unsupported sections are suppressed rather than dressed up with confident language. Human review remains the authority before stronger claims become official.
+For research readouts, PulseCheck uses frozen evidence frames. A readout locks to one pilot, one date window, one cohort filter, one read-model version, and one set of metrics. Claims are tagged as observed, inferred, or speculative. Unsupported sections are suppressed rather than dressed up with confident language. Human review remains the authority before stronger claims become official.
 
 This is not just legal caution. It is scientific discipline. The system earns its claims.
 
 # 10. Why This Architecture Over Alternatives
 
-The decision to build Pulse Check as protocols plus simulations reflects a belief about what mental performance training actually needs.
+The decision to build PulseCheck as protocols plus simulations reflects a belief about what mental performance training actually needs.
 
 A content library can teach concepts, but it does not know whether the athlete can apply them under pressure.
 
@@ -437,29 +437,29 @@ A chatbot can personalize language, but conversation alone does not create measu
 
 A generic brain-training game can improve the practiced task, but may not train state regulation or sport-relevant pressure response.
 
-Pulse Check combines the missing pieces. Protocols give the athlete concrete state tools. Simulations create measurable pressure practice. Nora ties both to state, profile, and curriculum. The active slate turns one-off assignments into repeated practice. The validation layer keeps claims constrained by evidence.
+PulseCheck combines the missing pieces. Protocols give the athlete concrete state tools. Simulations create measurable pressure practice. Nora ties both to state, profile, and curriculum. The active slate turns one-off assignments into repeated practice. The validation layer keeps claims constrained by evidence.
 
 # 11. What We Are Not Claiming
 
-Pulse Check is not claiming that the full system has already been validated through randomized controlled trials. The claims in this paper are structural and mechanistic. Efficacy claims must follow data.
+PulseCheck is not claiming that the full system has already been validated through randomized controlled trials. The claims in this paper are structural and mechanistic. Efficacy claims must follow data.
 
-Pulse Check is not claiming that simulation gains automatically transfer to competition. Transfer is a real problem in cognitive training. The system is designed with transfer in mind, but transfer has to be tested.
+PulseCheck is not claiming that simulation gains automatically transfer to competition. Transfer is a real problem in cognitive training. The system is designed with transfer in mind, but transfer has to be tested.
 
-Pulse Check is not claiming that protocols replace sport psychology, therapy, medical care, or human coaching. Protocols are performance-state interventions. They can complement professional support, but they do not replace clinical or relational work.
+PulseCheck is not claiming that protocols replace sport psychology, therapy, medical care, or human coaching. Protocols are performance-state interventions. They can complement professional support, but they do not replace clinical or relational work.
 
-Pulse Check is not claiming that wearable data determines athlete readiness by itself. Physiology informs the model. It does not own the decision.
+PulseCheck is not claiming that wearable data determines athlete readiness by itself. Physiology informs the model. It does not own the decision.
 
-Pulse Check is not claiming that all mental performance reduces to cognition. Sleep, nutrition, identity, environment, coaching, team dynamics, injury, stress, and life context all matter. Pulse Check trains a defined layer: state regulation, cognitive-perceptual skill, pressure response, and curriculum-based automaticity.
+PulseCheck is not claiming that all mental performance reduces to cognition. Sleep, nutrition, identity, environment, coaching, team dynamics, injury, stress, and life context all matter. PulseCheck trains a defined layer: state regulation, cognitive-perceptual skill, pressure response, and curriculum-based automaticity.
 
 # 12. Looking Ahead
 
-Pulse Check is designed as a curriculum-based mental performance system. It keeps a balanced active slate of protocols and simulations, rotates exercises as mastery emerges, learns protocol responsiveness by athlete, connects state and body-context signals carefully, and validates claims through governed pilot evidence.
+PulseCheck is designed as a curriculum-based mental performance system. It keeps a balanced active slate of protocols and simulations, rotates exercises as mastery emerges, learns protocol responsiveness by athlete, connects state and body-context signals carefully, and validates claims through governed pilot evidence.
 
 The long-term vision is not a mental performance content app. It is a training operating system for the mental side of sport.
 
 Athletes do not only need insight. They need practiced responses. They need state tools that are ready before competition. They need simulations that reveal whether those tools hold under pressure. They need a curriculum that builds automaticity without overloading them. And they need a system honest enough to say what it knows, what it suspects, and what it has not proven yet.
 
-Mental performance training deserves the same rigor as physical performance training. Pulse Check is an attempt to provide it.
+Mental performance training deserves the same rigor as physical performance training. PulseCheck is an attempt to provide it.
 
 :::references
 [1] Eysenck, M. W., Derakshan, N., Santos, R., & Calvo, M. G. (2007). Anxiety and cognitive performance: Attentional control theory. Emotion, 7(2), 336-353.

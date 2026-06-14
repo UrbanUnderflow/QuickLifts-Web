@@ -64,7 +64,7 @@ const COLORS = {
 
 const PIL_PRODUCTS = [
   {
-    name: 'Pulse Check',
+    name: 'PulseCheck',
     status: 'Shipped · flagship',
     buyer: 'Teams, universities, federations',
     detail: 'Mental performance training, athlete signal detection, and program-level sports intelligence.',
@@ -153,7 +153,7 @@ const SOLUTION_STAGES = [
   {
     number: '1',
     title: 'Detect',
-    detail: 'Pulse Check finds the performance signal early.',
+    detail: 'PulseCheck finds the performance signal early.',
     tagLead: 'Passive',
     tagValue: 'Biometric',
     accent: '#5B8DEF',
@@ -474,7 +474,7 @@ const ATHLETE_SPOTLIGHT = {
   role: 'Pilot athlete spotlight',
   imageSrc: '/nakyala-cau.jpg',
   quote: 'A live university athlete is how we anchor the product story, the care story, and the commercial story.',
-  quoteAttribution: 'Pulse Check Flagship Thesis',
+  quoteAttribution: 'PulseCheck Flagship Thesis',
   biometrics: [
     { label: 'HRV baseline', value: '62 ms', accent: COLORS.sky },
     { label: 'Pre-match focus', value: 'High', accent: COLORS.lime },
@@ -543,7 +543,7 @@ const TEAM_STRATEGIC_PARTNERS = [
   {
     name: 'AuntEDNA.ai',
     role: 'Clinical pathway partner',
-    detail: 'Escalation, clinician workflow, and care-routing infrastructure for Pulse Check.',
+    detail: 'Escalation, clinician workflow, and care-routing infrastructure for PulseCheck.',
     accent: COLORS.pink,
     people: [
       { name: 'Jelanna Salas Olivera', role: 'CEO', imageSrc: '/jelanna.jpg' },
@@ -860,7 +860,7 @@ const SceneTitle: React.FC = () => (
             transition={{ duration: 0.9, delay: 0.9 }}
           >
             We build AI-powered systems for measuring and training human performance.{' '}
-            <span className="font-medium text-[#E0FE10]">Pulse Check is the flagship institutional platform.</span>
+            <span className="font-medium text-[#E0FE10]">PulseCheck is the flagship institutional platform.</span>
           </motion.div>
 
           <motion.div
@@ -872,7 +872,7 @@ const SceneTitle: React.FC = () => (
             {[
               { label: 'Pre-Seed Ask', value: '$1.4M', detail: '$10M pre-money', color: COLORS.lime },
               { label: 'Founder', value: 'Tremaine Grant', detail: 'Founder & CEO', color: COLORS.sky },
-              { label: 'Flagship product', value: 'Pulse Check', detail: '', color: COLORS.pink },
+              { label: 'Flagship product', value: 'PulseCheck', detail: '', color: COLORS.pink },
             ].map((item) => (
               <div key={item.label} className="rounded-2xl border border-white/10 bg-black/35 px-5 py-4 text-left backdrop-blur-xl">
                 <div className="text-[9px] font-bold uppercase tracking-[0.24em]" style={{ color: item.color }}>
@@ -1002,10 +1002,10 @@ const SceneFlagshipThesis: React.FC = () => (
       <div>
         <SlideKicker>Flagship focus</SlideKicker>
         <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-7xl">
-          Pulse Check is our primary focus and clearest path to a $100M company.
+          PulseCheck is our primary focus and clearest path to a $100M company.
         </h1>
         <p className="mt-5 max-w-3xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
-          Institutional buyers, proprietary sports context, and a clear clinical pathway make Pulse Check the flagship
+          Institutional buyers, proprietary sports context, and a clear clinical pathway make PulseCheck the flagship
           product.
         </p>
       </div>
@@ -1239,7 +1239,7 @@ const SceneMeetNakyala: React.FC = () => (
         </div>
         <div className="text-[13px] leading-[1.45] text-zinc-300 md:text-[0.92rem]">
           <span className="font-semibold text-white">A real athlete journey inside a live university environment.</span>{' '}
-          {ATHLETE_SPOTLIGHT.name}&apos;s story is what Pulse Check is built to support before, during, and after the
+          {ATHLETE_SPOTLIGHT.name}&apos;s story is what PulseCheck is built to support before, during, and after the
           breakdown, with AuntEDNA.ai available as the strategic clinical pathway partner when care is needed.
         </div>
       </motion.div>
@@ -1351,7 +1351,7 @@ const SceneSolution: React.FC = () => (
             <span className="text-[#E0FE10]">We see it first.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-xl leading-[1.6] text-zinc-300 md:text-xl">
-            Pulse Check turns athlete pressure signals into action, detecting the signal before it becomes a crisis,
+            PulseCheck turns athlete pressure signals into action, detecting the signal before it becomes a crisis,
             regulating it in the moment, and routing to real care when the athlete needs more than coaching.
           </p>
         </motion.div>
@@ -1575,7 +1575,7 @@ const SceneCheckIn: React.FC = () => {
           <div>
             <SlideKicker>How it works</SlideKicker>
             <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.94] text-white md:text-6xl">
-              Pulse Check catches the athlete <span className="text-[#00D4AA]">before the spiral.</span>
+              PulseCheck catches the athlete <span className="text-[#00D4AA]">before the spiral.</span>
             </h1>
             <div className="mt-4 max-w-5xl text-xl leading-relaxed text-zinc-300 md:text-xl">
               A passive check-in fires at game-day timing. Nora requests a chat, detects the signal, and{' '}
@@ -1717,7 +1717,7 @@ const SceneCheckIn: React.FC = () => {
                   {
                     step: '01',
                     title: 'Game-day prompt',
-                    detail: 'Pulse Check reaches the athlete before staff can see the pressure building.',
+                    detail: 'PulseCheck reaches the athlete before staff can see the pressure building.',
                     accent: COLORS.teal,
                   },
                   {
@@ -1759,7 +1759,7 @@ const SceneCheckIn: React.FC = () => {
                 <div className="mt-2 text-2xl font-black leading-tight text-white">Support happens before escalation.</div>
                 <div className="mt-3 text-xl leading-relaxed text-zinc-300">
                   If the athlete settles, the moment stays lightweight. If the signal worsens, the next slide shows how
-                  Pulse Check routes the context to the clinical pathway.
+                  PulseCheck routes the context to the clinical pathway.
                 </div>
               </div>
             </motion.div>
@@ -1791,10 +1791,10 @@ const SceneClinicalRouting: React.FC = () => (
       <div className="max-w-6xl">
         <SlideKicker>How it works</SlideKicker>
         <h1 className="mt-5 text-5xl font-black leading-[0.94] text-white md:text-6xl">
-          When it moves beyond Nora, Pulse Check routes through a strategic clinical pathway.
+          When it moves beyond Nora, PulseCheck routes through a strategic clinical pathway.
         </h1>
         <div className="mt-4 max-w-5xl text-xl font-semibold leading-tight text-purple-300 md:text-3xl">
-          The trigger shows up in the chat first. Then Pulse Check packages the context for AuntEDNA.ai, PIL&apos;s
+          The trigger shows up in the chat first. Then PulseCheck packages the context for AuntEDNA.ai, PIL&apos;s
           strategic clinical pathway partner.
         </div>
       </div>
@@ -1931,7 +1931,7 @@ const SceneClinicalRouting: React.FC = () => (
               <div className="relative grid gap-6 md:grid-cols-3">
                 {[
                   {
-                    name: 'Pulse Check',
+                    name: 'PulseCheck',
                     sub: 'Athlete check-in',
                     accent: COLORS.lime,
                     icon: Brain,
@@ -2149,10 +2149,10 @@ const SceneCompetitiveNarrative: React.FC = () => (
       <div className="max-w-6xl">
         <SlideKicker>Uniqueness / superiority</SlideKicker>
         <h1 className="mt-4 text-[2.9rem] font-black leading-[0.92] text-white md:text-[4.1rem]">
-          Pulse Check owns the athlete-performance workflow competitors split apart.
+          PulseCheck owns the athlete-performance workflow competitors split apart.
         </h1>
         <div className="mt-3 text-xl font-medium text-zinc-300 md:text-[1.35rem]">
-          Catapult, WHOOP, and Lumos Labs each own a slice. Pulse Check ties signal, training, routing, and measurement
+          Catapult, WHOOP, and Lumos Labs each own a slice. PulseCheck ties signal, training, routing, and measurement
           into one institutional system.
         </div>
       </div>
@@ -2215,7 +2215,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
             <div className="relative">
               <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#00D4AA]">Unified here</div>
               <div className="mt-3 text-[2.4rem] font-black leading-[0.95] text-white md:text-[3.1rem]">
-                Pulse Check turns that stack into one system.
+                PulseCheck turns that stack into one system.
               </div>
 
               <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
@@ -2279,7 +2279,7 @@ const SceneCompetitiveProof: React.FC = () => (
                 </div>
               ))}
               <div className="flex items-center justify-center border-l border-[#E0FE10]/10 bg-[#E0FE10]/10 px-4 py-5 text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-[#E0FE10] md:text-[13px]">
-                Pulse Check
+                PulseCheck
               </div>
             </div>
 
@@ -2318,7 +2318,7 @@ const SceneCompetitiveProof: React.FC = () => (
           </div>
           <div className="text-xl leading-relaxed text-zinc-300 md:text-xl">
             <span className="font-bold text-white">No single competitor covers the full pipeline.</span> Athletes today
-            need multiple disconnected tools. Pulse Check owns the workflow from performance signal to pressure training,
+            need multiple disconnected tools. PulseCheck owns the workflow from performance signal to pressure training,
             strategic clinical handoff, and program-level measurement.
           </div>
         </div>
@@ -2567,7 +2567,7 @@ const SceneMarket: React.FC = () => {
           </h1>
 
           <p className="mb-8 max-w-[520px] text-[15px] leading-relaxed text-white/55">
-            Pulse Check sits where performance tech, digital mental health, and connected care overlap. The near-term
+            PulseCheck sits where performance tech, digital mental health, and connected care overlap. The near-term
             serviceable market is the institutional sports performance buyer set we can sell into first.
           </p>
 
@@ -2721,7 +2721,7 @@ const SceneHundredMPath: React.FC = () => (
               A visible path to <span className="text-[#E0FE10]">$100M ARR.</span>
             </h1>
             <div className="mt-4 max-w-3xl text-xl leading-relaxed text-zinc-300 md:text-xl">
-              Phased contract roadmap. Prove Pulse Check in every segment, then scale with proof points.
+              Phased contract roadmap. Prove PulseCheck in every segment, then scale with proof points.
             </div>
           </div>
 
@@ -3517,7 +3517,7 @@ const SceneAuntEdnaPartnership: React.FC = () => (
             AuntEDNA.ai — <span className="text-[#F472B6]">Clinical pathway, validated.</span>
           </h1>
           <p className="mt-4 max-w-4xl text-xl leading-relaxed text-zinc-300 md:text-2xl">
-            For Pulse Check specifically, AuntEDNA strengthens clinical support, athlete adherence psychology, and implementation practices.
+            For PulseCheck specifically, AuntEDNA strengthens clinical support, athlete adherence psychology, and implementation practices.
           </p>
         </div>
 
@@ -3561,7 +3561,7 @@ const SceneAuntEdnaPartnership: React.FC = () => (
           {
             label: 'R&D Data Partnership',
             value: 'Shared research layer',
-            detail: 'Pulse Check models trained against the largest validated athlete mental health dataset in the category.',
+            detail: 'PulseCheck models trained against the largest validated athlete mental health dataset in the category.',
             accent: COLORS.pink,
             icon: Brain,
           },
@@ -4193,7 +4193,7 @@ const SceneSummary: React.FC = () => (
           className="close-thesis mx-auto mb-9 max-w-[750px] leading-relaxed text-white/55"
           style={{ fontSize: 'clamp(16px, 1.6vw, 22px)' }}
         >
-          Pulse Check is the flagship system inside PIL&apos;s human performance portfolio, closing the gap between{' '}
+          PulseCheck is the flagship system inside PIL&apos;s human performance portfolio, closing the gap between{' '}
           <span className="font-medium text-white">
             performance signal, pressure training, and strategic clinical pathway routing
           </span>{' '}
@@ -4323,7 +4323,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Pulse Intelligence Labs Stakeholder Deck | Pulse Check</title>
+        <title>Pulse Intelligence Labs Stakeholder Deck | PulseCheck</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -4332,7 +4332,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
         />
         <meta
           name="description"
-          content="Pitch presentation for Pulse Intelligence Labs, with Pulse Check as the flagship institutional human performance platform."
+          content="Pitch presentation for Pulse Intelligence Labs, with PulseCheck as the flagship institutional human performance platform."
         />
       </Head>
 

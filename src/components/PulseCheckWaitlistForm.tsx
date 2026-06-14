@@ -89,7 +89,7 @@ export const PulseCheckWaitlistForm: React.FC<WaitlistFormProps> = ({
             </button>
             
             <h2 className="text-2xl font-bold text-zinc-900 mb-2">
-              Join the Pulse Check Waitlist
+              Join the PulseCheck Waitlist
             </h2>
             <p className="text-zinc-800 text-sm">
               Be the first to experience always-on sport psychology
@@ -105,7 +105,7 @@ export const PulseCheckWaitlistForm: React.FC<WaitlistFormProps> = ({
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2">You're on the list! 🎉</h3>
                 <p className="text-zinc-400 text-sm leading-relaxed">
-                  Check your email for a welcome message with more details about Pulse Check.
+                  Check your email for a welcome message with more details about PulseCheck.
                 </p>
               </div>
             ) : (
@@ -217,7 +217,7 @@ export const PulseCheckWaitlistForm: React.FC<WaitlistFormProps> = ({
                 </button>
 
                 <p className="text-xs text-zinc-500 text-center">
-                  We'll email you when Pulse Check is ready. No spam, promise! 🤝
+                  We'll email you when PulseCheck is ready. No spam, promise! 🤝
                 </p>
               </form>
             )}

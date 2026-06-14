@@ -148,7 +148,7 @@ The dashboard is the access surface for reports, not a replacement for them. Coa
 | Gate | Scope | Rule |
 |---|---|---|
 | Build now | Aggregation plumbing, report draft generation, Macra/Nora sport-context enrichment, evidence/provenance display | May run automatically if outputs are clearly marked as context or draft intelligence. |
-| Human review required | Weekly + Game-Day Reports, high-impact coach-facing pattern interpretations | Pulse Check team reviews before coach delivery during early pilots. |
+| Human review required | Weekly + Game-Day Reports, high-impact coach-facing pattern interpretations | PulseCheck team reviews before coach delivery during early pilots. |
 | Blocked from full automation | Early-warning alerts, high-trust athlete watchlist promotion, sustained under-recovery flags, coach-facing risk recommendations | Requires locked thresholds, evaluation criteria, false-positive review, pilot evidence. |
 | Never owned here | Clinical-threshold interpretation, clinical return-to-play decisions, clinician-gated disclosures | Routes through AuntEDNA escalation. |
 
@@ -386,7 +386,7 @@ Mock report baselines define expected report shape and language. They do not ove
 const SPEC_4_CONTEXTUAL_DETECTION = `
 ## 4. Contextual Detection Engine
 
-The differentiating Sports Intelligence loop: timestamped sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. Pulse Check does not depend solely on the wearable. It uses the wearable as evidence, separates daily rollups from session candidates, then intelligently closes gaps with the athlete and coach.
+The differentiating Sports Intelligence loop: timestamped sensor evidence starts the read, but athlete profile, coach context, Nora clarification, and historical corrections turn ambiguous activity into sport-specific meaning. PulseCheck does not depend solely on the wearable. It uses the wearable as evidence, separates daily rollups from session candidates, then intelligently closes gaps with the athlete and coach.
 
 ### Core Rule
 When confidence is low, do not guess harder. Ask better. Nora is the missing-signal engine: she asks for the one answer that can change the classification, confidence tier, load contribution, or recommendation.

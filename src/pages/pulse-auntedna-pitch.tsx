@@ -106,7 +106,7 @@ const SOLUTION_STAGES = [
   {
     number: '1',
     title: 'Detect',
-    detail: 'Pulse Check finds the performance signal early.',
+    detail: 'PulseCheck finds the performance signal early.',
     tagLead: 'Passive',
     tagValue: 'Biometric',
     accent: '#5B8DEF',
@@ -445,7 +445,7 @@ const ATHLETE_SPOTLIGHT = {
   role: 'Pilot athlete spotlight',
   imageSrc: '/nakyala-cau.jpg',
   quote: 'A live university athlete is how we anchor the product story, the care story, and the commercial story.',
-  quoteAttribution: 'Pulse Check × auntEDNA.ai Pilot Thesis',
+  quoteAttribution: 'PulseCheck × auntEDNA.ai Pilot Thesis',
   biometrics: [
     { label: 'HRV baseline', value: '62 ms', accent: COLORS.sky },
     { label: 'Pre-match focus', value: 'High', accent: COLORS.lime },
@@ -1125,7 +1125,7 @@ const SceneMeetNakyala: React.FC = () => (
         </div>
         <div className="text-[13px] leading-[1.45] text-zinc-300 md:text-[0.92rem]">
           <span className="font-semibold text-white">A real athlete journey inside a live university environment.</span>{' '}
-          {ATHLETE_SPOTLIGHT.name}&apos;s story is what Pulse Check × auntEDNA.ai is built to support before, during, and
+          {ATHLETE_SPOTLIGHT.name}&apos;s story is what PulseCheck × auntEDNA.ai is built to support before, during, and
           after the breakdown.
         </div>
       </motion.div>
@@ -1237,7 +1237,7 @@ const SceneSolution: React.FC = () => (
             <span className="text-[#E0FE10]">We see it first.</span>
           </h1>
           <p className="mt-6 max-w-2xl text-lg leading-[1.6] text-zinc-300 md:text-xl">
-            Pulse Check turns athlete pressure signals into action, detecting the signal before it becomes a crisis,
+            PulseCheck turns athlete pressure signals into action, detecting the signal before it becomes a crisis,
             regulating it in the moment, and routing to real care when the athlete needs more than coaching.
           </p>
         </motion.div>
@@ -1461,7 +1461,7 @@ const SceneCheckIn: React.FC = () => {
           <div>
             <SlideKicker>How it works</SlideKicker>
             <h1 className="mt-5 max-w-5xl text-5xl font-black leading-[0.94] text-white md:text-6xl">
-              Pulse Check catches the athlete <span className="text-[#00D4AA]">before the spiral.</span>
+              PulseCheck catches the athlete <span className="text-[#00D4AA]">before the spiral.</span>
             </h1>
             <div className="mt-4 max-w-5xl text-lg leading-relaxed text-zinc-300 md:text-xl">
               A passive check-in fires at game-day timing. Nora opens the conversation, detects the signal, and{' '}
@@ -1513,7 +1513,7 @@ const SceneCheckIn: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center justify-between gap-3 text-[9px] font-bold uppercase tracking-[0.14em]">
-                        <span className="text-[#E0FE10]">Pulse Check</span>
+                        <span className="text-[#E0FE10]">PulseCheck</span>
                         <span className="font-medium tracking-[0.12em] text-white/25">now</span>
                       </div>
                       <div className="mt-1.5 text-[11.5px] font-medium leading-[1.35] text-white">
@@ -1690,7 +1690,7 @@ const SceneClinicalRouting: React.FC = () => (
           When it moves beyond Nora, the signal routes into <span className="text-purple-400">auntEDNA.ai.</span>
         </h1>
         <div className="mt-4 max-w-5xl text-xl font-semibold leading-tight text-purple-300 md:text-3xl">
-          The trigger shows up in the chat first. Then Pulse Check packages the context and routes it to HIPAA-compliant clinical care.
+          The trigger shows up in the chat first. Then PulseCheck packages the context and routes it to HIPAA-compliant clinical care.
         </div>
       </div>
 
@@ -1802,7 +1802,7 @@ const SceneClinicalRouting: React.FC = () => (
               <div className="relative grid gap-6 md:grid-cols-3">
                 {[
                   {
-                    name: 'Pulse Check',
+                    name: 'PulseCheck',
                     sub: 'Athlete check-in',
                     accent: COLORS.lime,
                     icon: Brain,
@@ -2092,7 +2092,7 @@ const SceneCompetitiveNarrative: React.FC = () => (
             <div className="relative">
               <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#00D4AA]">Unified here</div>
               <div className="mt-3 text-[2.4rem] font-black leading-[0.95] text-white md:text-[3.1rem]">
-                Pulse Check x auntEDNA.ai turns that stack into one system.
+                PulseCheck x auntEDNA.ai turns that stack into one system.
               </div>
 
               <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
@@ -2156,7 +2156,7 @@ const SceneCompetitiveProof: React.FC = () => (
                 </div>
               ))}
               <div className="flex items-center justify-center border-l border-[#E0FE10]/10 bg-[#E0FE10]/10 px-4 py-5 text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-[#E0FE10] md:text-[13px]">
-                Pulse Check × auntEDNA.ai
+                PulseCheck × auntEDNA.ai
               </div>
             </div>
 
@@ -2198,7 +2198,7 @@ const SceneCompetitiveProof: React.FC = () => (
           </div>
           <div className="text-base leading-relaxed text-zinc-300 md:text-lg">
             <span className="font-bold text-white">No single competitor covers the full pipeline.</span> Athletes today
-            need multiple disconnected tools. Pulse Check x auntEDNA.ai is the system that owns the workflow from signal
+            need multiple disconnected tools. PulseCheck x auntEDNA.ai is the system that owns the workflow from signal
             detection through crisis escalation.
           </div>
         </div>
@@ -3892,7 +3892,7 @@ const SceneSummary: React.FC = () => (
           className="close-thesis mx-auto mb-9 max-w-[750px] leading-relaxed text-white/55"
           style={{ fontSize: 'clamp(16px, 1.6vw, 22px)' }}
         >
-          Pulse Check × auntEDNA.ai closes the gap between{' '}
+          PulseCheck × auntEDNA.ai closes the gap between{' '}
           <span className="font-medium text-white">
             performance tech, real-time regulation, and licensed care
           </span>{' '}
@@ -4022,7 +4022,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Pulse Check x auntEDNA.ai Pitch | Pulse Intelligence Labs</title>
+        <title>PulseCheck x auntEDNA.ai Pitch | Pulse Intelligence Labs</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -4031,7 +4031,7 @@ const PulseAuntEdnaPitchPage: React.FC = () => {
         />
         <meta
           name="description"
-          content="Pitch presentation for Pulse Check x auntEDNA.ai, a mental performance-to-care platform for elite athletes."
+          content="Pitch presentation for PulseCheck x auntEDNA.ai, a mental performance-to-care platform for elite athletes."
         />
       </Head>
 
