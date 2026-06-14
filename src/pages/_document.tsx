@@ -69,13 +69,13 @@ class MyDocument extends Document {
           </noscript>
 
           {/*
-            Default favicon: the Pulse icon glyph only (fitwithpulse.ai + all hosts).
+            Default favicon: the FitClub badge icon (fitwithpulse.ai + all hosts).
             pulsecheckmind.ai swaps this to the purple PulseCheck icon client-side
             in _app.tsx (one build serves every domain, so the host is only known
             at request time on the client).
           */}
-          <link rel="icon" type="image/png" href="/logo512.png" />
-          <link rel="apple-touch-icon" href="/logo512.png" />
+          <link rel="icon" type="image/png" href="/fitclub-favicon.png" />
+          <link rel="apple-touch-icon" href="/fitclub-favicon.png" />
 
           {/*
             OG / Twitter meta tags are NOT set here.
