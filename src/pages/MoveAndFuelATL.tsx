@@ -448,7 +448,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
             <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
               <div className="md:w-1/3 animate-fade-in-up animation-delay-300">
                 <img 
-                  src="/TremaineFounder.jpg" 
+                  src="/founder-portrait-1.jpg" 
                   alt="Tremaine Grant" 
                   className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-cover rounded-full mx-auto border-4 border-[#E0FE10]`}
                 />

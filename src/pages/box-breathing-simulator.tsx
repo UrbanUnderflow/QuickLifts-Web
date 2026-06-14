@@ -68,7 +68,7 @@ const PULSE_CONTACTS: ContactCardProps[] = [
     name: 'Tremaine Grant',
     role: 'Founder & CEO',
     email: 'tre@fitwithpulse.ai',
-    imageSrc: '/TremaineFounder.jpg',
+    imageSrc: '/founder-portrait-1.jpg',
     accent: '#E0FE10',
     initials: 'TG',
     badges: [

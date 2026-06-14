@@ -495,7 +495,7 @@ const Subscribe: React.FC = () => {
             className="inline-flex items-center gap-3 bg-zinc-900/80 hover:bg-zinc-800/80 backdrop-blur-xl border border-white/10 rounded-full px-6 py-3 transition-colors"
           >
             <img 
-              src="/TremaineFounder.jpg" 
+              src="/founder-portrait-1.jpg" 
               alt="Tremaine" 
               className="w-10 h-10 rounded-full object-cover"
             />

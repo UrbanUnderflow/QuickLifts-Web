@@ -1105,7 +1105,7 @@ const SceneFounderBrand: React.FC = () => (
       <GlassCard accentColor="#F59E0B">
         <div className="p-5">
           <div className="overflow-hidden rounded-[24px] border border-white/10">
-            <img src="/TremaineFounder.jpg" alt="Tremaine Grant" className="h-[420px] w-full object-cover object-top" />
+            <img src="/founder-portrait-1.jpg" alt="Tremaine Grant" className="h-[420px] w-full object-cover object-top" />
           </div>
           <div className="mt-5">
             <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Founder visibility</div>

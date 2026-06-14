@@ -185,7 +185,7 @@ How I Used AI Research to Build a Cognitive Performance System Grounded in Peer-
 **Role:** Founder & CEO, Pulse Intelligence Labs
 **Format:** Solo Talk + Product Demo
 
-![Tremaine Grant headshot](https://fitwithpulse.ai/TremaineFounder.jpg)
+![Tremaine Grant headshot](https://fitwithpulse.ai/founder-portrait-1.jpg)
 
 ## Session Description
 Most professionals are sitting on what amounts to a million-dollar R&D department and treating it like a search engine.

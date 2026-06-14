@@ -71,7 +71,7 @@ const GetInTouch: NextPage = () => {
             <div className="flex justify-center">
               <div className="w-80 h-80 rounded-2xl overflow-hidden border-2 border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-colors duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20">
                 <img
-                  src="/TremaineFounder.jpg"
+                  src="/founder-portrait-1.jpg"
                   alt="Tremaine Grant - Founder & CEO of Pulse"
                   className="w-full h-full object-cover"
                 />

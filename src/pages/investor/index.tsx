@@ -5297,7 +5297,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
                           <div className="aspect-square overflow-hidden">
                             <img
-                              src="TremaineFounder.jpg"
+                              src="founder-portrait-1.jpg"
                               alt="Tremaine Grant - CEO & Founder"
                               className="w-full h-full object-cover"
                             />

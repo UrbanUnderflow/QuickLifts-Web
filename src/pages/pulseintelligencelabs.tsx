@@ -527,7 +527,7 @@ const SceneFounderStory = () => (
           <div className="p-4 md:p-8">
             <div className="mx-auto max-w-[280px] md:max-w-sm">
               <div className="overflow-hidden rounded-[28px] border border-white/10">
-                <img src="/TremaineFounder.jpg" alt="Tremaine Grant" className="h-[220px] w-full object-cover object-top md:h-[420px]" />
+                <img src="/founder-portrait-1.jpg" alt="Tremaine Grant" className="h-[220px] w-full object-cover object-top md:h-[420px]" />
               </div>
               <div className="mt-4 text-center">
                 <h3 className="text-xl font-bold text-white md:text-2xl">Tremaine Grant</h3>
@@ -586,7 +586,7 @@ const SceneTeam = () => (
           <a href={linkedIn.tremaine} target="_blank" rel="noopener noreferrer" className="w-36 text-center group md:w-44">
             <div className="relative mb-3">
               <div className="mx-auto h-24 w-24 overflow-hidden rounded-full border-3 border-[#E0FE10] ring-4 ring-[#E0FE10]/20 ring-offset-2 ring-offset-black md:h-28 md:w-28">
-                <img src="/TremaineFounder.jpg" alt="Tremaine Grant" className="h-full w-full object-cover" />
+                <img src="/founder-portrait-1.jpg" alt="Tremaine Grant" className="h-full w-full object-cover" />
               </div>
             </div>
             <h4 className="text-base font-bold text-white transition-colors group-hover:text-[#E0FE10] md:text-lg">Tremaine Grant</h4>

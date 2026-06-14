@@ -204,7 +204,7 @@ const team = [
   {
     name: 'Tremaine Grant',
     role: 'Founder and CEO',
-    image: '/TremaineFounder.jpg',
+    image: '/founder-portrait-1.jpg',
     color: PULSE_GREEN,
     tags: ['D1 athlete', 'Principal engineer', 'Clinical research'],
     body: 'Leads product and company strategy from his background as an athlete, enterprise engineer, and clinical research operator.',

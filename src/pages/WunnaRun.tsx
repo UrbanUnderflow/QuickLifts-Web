@@ -2476,7 +2476,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
                 <a href={linkedIn.tremaine} target="_blank" rel="noopener noreferrer" className="text-center group w-36 md:w-44">
                   <div className="relative mb-3">
                     <div className="w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-3 border-[#E0FE10] mx-auto ring-4 ring-[#E0FE10]/20 ring-offset-2 ring-offset-black">
-                      <img src="/TremaineFounder.jpg" alt="Tremaine Grant" className="w-full h-full object-cover" />
+                      <img src="/founder-portrait-1.jpg" alt="Tremaine Grant" className="w-full h-full object-cover" />
                     </div>
                   </div>
                   <h4 className="text-white font-bold text-base md:text-lg group-hover:text-[#E0FE10] transition-colors">Tremaine Grant</h4>

@@ -491,7 +491,7 @@ const MANAGEMENT_TEAM = [
   {
     name: 'Tremaine Grant',
     role: 'Founder & CEO',
-    imageSrc: '/TremaineFounder.jpg',
+    imageSrc: '/founder-portrait-1.jpg',
     imagePosition: 'center 12%',
     accent: COLORS.lime,
     schoolChip: { label: 'Florida State', background: '#782F40', color: '#CEB888', border: '#CEB88866' },

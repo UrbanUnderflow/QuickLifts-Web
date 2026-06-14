@@ -461,7 +461,7 @@ const OnePager: NextPage = () => {
                         <div className="md:col-span-1 flex justify-center md:justify-start">
                           <div className="relative w-32 h-32 rounded-3xl overflow-hidden border-4 border-[#3B82F6]/30 mb-6">
                             <img 
-                              src="/TremaineFounder.jpg" 
+                              src="/founder-portrait-1.jpg" 
                               alt="Tremaine Grant" 
                               className="w-full h-full object-cover"
                             />
