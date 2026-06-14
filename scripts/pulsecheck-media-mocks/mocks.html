@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  /* ===== PulseCheck design tokens (from PulseCheck/Design/PulseCheckColors.swift) ===== */
+  :root{
+    --purple:#8B5CF6;     /* brand */
+    --purple2:#7C3AED;    /* pressed */
+    --lime:#E0FE10;       /* Today tab / energy accent */
+    --cyan:#22D3EE;       /* Nora tab */
+    --blue:#3B82F6;       /* Profile tab */
+    --teal:#14E7D0;
+    --surface:#0A0A0B;
+    --surface2:#111111;
+    --card:#161618;
+    --card2:#1C1C20;
+    --stroke:rgba(255,255,255,.06);
+    --stroke2:rgba(255,255,255,.10);
+    --txt:#FFFFFF;
+    --txt2:rgba(255,255,255,.62);
+    --txt3:rgba(255,255,255,.40);
+    --hr:#FF3B5C;         /* live heart rate */
+    --drained:#EF4444;
+    --low:#F97316;
+    --okay:#EAB308;
+    --solid:#22C55E;
+    --locked:#E0FE10;
+    --font:"Inter",-apple-system,"SF Pro Display","SF Pro Text",system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  body{background:#000;font-family:var(--font);}
+
+  /* phone screen: 9:19 (matches gallery aspect-[9/19]) */
+  .screen{
+    width:432px;height:912px;position:relative;overflow:hidden;
+    background:var(--surface);color:var(--txt);
+    display:flex;flex-direction:column;
+    margin:24px;float:left;
+  }
+  .scroll{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+
+  /* status bar */
+  .status{height:54px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 8px;}
+  .status .time{font-size:16px;font-weight:700;letter-spacing:.2px;}
+  .status .ic{display:flex;gap:7px;align-items:center;}
+  .status .ic svg{display:block;}
+
+  /* floating pill tab bar */
+  .tabwrap{flex:none;padding:10px 18px 22px;}
+  .tabbar{height:64px;border-radius:999px;display:flex;align-items:center;justify-content:space-around;
+    background:rgba(26,26,32,.97);border:1px solid rgba(255,255,255,.09);
+    box-shadow:0 8px 16px rgba(0,0,0,.35);padding:0 8px;}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--txt3);font-size:11px;font-weight:600;}
+  .tab svg{width:23px;height:23px;}
+  .tab .av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#000;}
+
+  .pad{padding:0 20px;}
+  .toolbar{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 10px;}
+  .iconbtn{width:38px;height:38px;border-radius:50%;background:var(--card);border:1px solid var(--stroke);
+    display:flex;align-items:center;justify-content:center;}
+  .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;}
+
+  .kicker{font-size:11px;font-weight:800;letter-spacing:1.8px;color:var(--purple);text-transform:uppercase;}
+  .kicker.muted{color:var(--txt3);}
+  .h1{font-size:34px;line-height:1.05;font-weight:800;letter-spacing:-.6px;}
+  .h2{font-size:22px;font-weight:800;letter-spacing:-.3px;}
+  .sub{color:var(--txt2);font-size:16px;line-height:1.38;}
+  .sec-h{font-size:18px;font-weight:800;letter-spacing:-.2px;}
+  .seeall{color:var(--purple);font-size:13px;font-weight:700;}
+
+  .card{background:var(--card);border:1px solid var(--stroke);border-radius:18px;}
+  .cta{background:var(--purple);color:#fff;border-radius:18px;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;}
+  .cta .t{font-size:16px;font-weight:800;}
+  .cta .s{font-size:12px;font-weight:600;opacity:.78;}
+
+  .row{display:flex;align-items:center;gap:12px;}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;font-weight:700;}
+  .via{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(139,92,246,.16);color:#C4B0FF;}
+  .badge{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:999px;}
+
+  /* Nora orb */
+  .orb{border-radius:50%;position:relative;
+    background:radial-gradient(60% 60% at 35% 30%, #C4B5FD, #8B5CF6 45%, #5B21B6 80%);
+    box-shadow:0 0 18px rgba(139,92,246,.55), inset 0 0 10px rgba(255,255,255,.25);}
+  .orb::after{content:"";position:absolute;inset:0;border-radius:50%;
+    background:radial-gradient(40% 30% at 65% 70%, rgba(34,211,238,.55), transparent 60%);}
+
+  .readbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 0;border-radius:14px;
+    background:var(--card2);border:1px solid var(--stroke);font-size:11px;font-weight:700;color:var(--txt2);}
+  .readbtn .em{font-size:22px;}
+
+  .hide-scroll{scrollbar-width:none;}
+</style>
+</head>
+<body>
+
+<!-- ============================================================= -->
+<!-- 00 · APP STORE HERO                                           -->
+<!-- ============================================================= -->
+<div class="screen" id="appstore" style="background:radial-gradient(120% 80% at 82% -5%, rgba(139,92,246,.26), transparent 55%), radial-gradient(90% 60% at 0% 105%, rgba(34,211,238,.12), transparent 50%), #0A0A0B;">
+  <div class="status">
+    <span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="#fff"/><rect x="23" y="4.5" width="2" height="4" rx="1" fill="#fff" fill-opacity=".5"/></svg>
+    </span>
+  </div>
+
+  <div style="flex:1;display:flex;flex-direction:column;padding:18px 30px 0;">
+    <div style="display:flex;align-items:center;gap:11px;">
+      <img src="../../public/pulsecheck-app-icon.jpg" alt="" style="width:36px;height:36px;border-radius:10px;display:block;object-fit:cover;" />
+      <span style="font-size:18px;font-weight:800;letter-spacing:-.3px;">PulseCheck</span>
+    </div>
+
+    <div style="margin-top:48px;">
+      <div class="kicker">Your mind is the rest of the game</div>
+      <h1 class="h1" style="font-size:45px;margin-top:16px;line-height:1.03;">Check in.<br/>Nora takes<br/>it from here.</h1>
+      <p class="sub" style="margin-top:18px;max-width:300px;font-size:17px;">A private mental-performance coach that reads your readiness and biometrics — then builds today's reps.</p>
+    </div>
+
+    <!-- floating device peeking from bottom -->
+    <div style="margin-top:auto;position:relative;height:300px;">
+      <div style="position:absolute;left:50%;bottom:-150px;transform:translateX(-50%) rotate(-4deg);width:264px;height:300px;background:#161618;border-radius:40px 40px 0 0;border:8px solid #232327;border-bottom:none;box-shadow:0 -30px 80px rgba(139,92,246,.18),0 -2px 0 rgba(255,255,255,.05) inset;padding:22px 18px 0;">
+        <div class="row" style="gap:9px;">
+          <div class="orb" style="width:26px;height:26px;"></div>
+          <span style="font-size:13px;font-weight:800;">Nora</span>
+        </div>
+        <div style="font-size:14px;font-weight:700;letter-spacing:-.2px;margin-top:10px;line-height:1.3;">Quick private check-in. How do you feel today?</div>
+        <div class="row" style="margin-top:14px;gap:6px;">
+          <div class="readbtn" style="padding:8px 0;"><span class="em" style="font-size:18px;">🪫</span></div>
+          <div class="readbtn" style="padding:8px 0;"><span class="em" style="font-size:18px;">😐</span></div>
+          <div class="readbtn" style="padding:8px 0;border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.14);"><span class="em" style="font-size:18px;">💪</span></div>
+          <div class="readbtn" style="padding:8px 0;"><span class="em" style="font-size:18px;">🔥</span></div>
+        </div>
+        <div class="cta" style="margin-top:14px;padding:12px 14px;border-radius:14px;">
+          <div class="t" style="font-size:14px;">Talk to Nora</div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 01 · TODAY — daily check-in                                   -->
+<!-- ============================================================= -->
+<div class="screen" id="today">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="toolbar">
+      <div><div class="kicker muted" style="letter-spacing:1.4px;">Thursday · Jun 13</div><div class="h2" style="margin-top:4px;">Today</div></div>
+      <div class="avatar" style="width:38px;height:38px;background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);font-size:14px;">TG</div>
+    </div>
+    <div class="pad" style="margin-top:4px;">
+      <!-- Live biometrics card -->
+      <div class="card" style="padding:16px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="row" style="gap:7px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="var(--hr)"><path d="M12 21s-7-4.6-9.3-9C1.2 8.6 2.7 5 6 5c2 0 3.2 1.2 4 2.4C10.8 6.2 12 5 14 5c3.3 0 4.8 3.6 3.3 7-2.3 4.4-9.3 9-9.3 9z"/></svg>
+            <span style="font-size:10px;font-weight:800;letter-spacing:1.4px;color:var(--txt3);">LIVE HEART RATE</span>
+          </div>
+          <div style="font-size:30px;font-weight:800;letter-spacing:-1px;margin-top:6px;">62 <span style="font-size:15px;font-weight:700;color:var(--txt2);">bpm</span></div>
+        </div>
+        <div style="text-align:right;">
+          <span class="via">via Polar</span>
+          <div style="font-size:11px;color:var(--solid);margin-top:8px;font-weight:700;">● Connected</div>
+        </div>
+      </div>
+
+      <!-- Nora check-in -->
+      <div class="card" style="margin-top:14px;padding:16px;">
+        <div class="row" style="gap:9px;">
+          <div class="orb" style="width:28px;height:28px;"></div>
+          <span style="font-size:14px;font-weight:800;">Nora</span>
+        </div>
+        <p class="sub" style="margin-top:10px;font-size:14px;">Hey Tre, quick private check-in. Tap one and I'll follow up and lock in your session.</p>
+        <div class="row" style="margin-top:14px;gap:7px;">
+          <div class="readbtn"><span class="em">🪫</span>Drained</div>
+          <div class="readbtn"><span class="em">😔</span>Off</div>
+          <div class="readbtn"><span class="em">😐</span>Okay</div>
+          <div class="readbtn" style="border-color:rgba(34,197,94,.55);background:rgba(34,197,94,.14);color:#fff;"><span class="em">💪</span>Solid</div>
+          <div class="readbtn"><span class="em">🔥</span>Locked</div>
+        </div>
+      </div>
+
+      <!-- Today's actions (unlocked) -->
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;">
+        <span class="sec-h">Today's actions</span>
+        <span class="seeall">Step 1 of 2</span>
+      </div>
+      <div class="card" style="margin-top:12px;padding:16px;position:relative;overflow:hidden;border:none;background:linear-gradient(135deg,#241640,#161618);">
+        <span class="badge" style="background:var(--purple);color:#fff;">Today's rep</span>
+        <div style="font-size:18px;font-weight:800;margin-top:12px;letter-spacing:-.3px;">Pressure Simulation</div>
+        <div class="sub" style="font-size:13px;margin-top:4px;">12 min · raise your heart rate, hold your focus.</div>
+        <div class="cta" style="margin-top:16px;">
+          <div><div class="t">Start</div><div class="s">Nora guides you live</div></div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+      </div>
+
+      <!-- Streak -->
+      <div class="card" style="margin-top:14px;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <div class="row" style="gap:10px;">
+          <span style="font-size:20px;">🔥</span>
+          <div><div style="font-size:15px;font-weight:800;">8 day streak</div><div style="font-size:12px;color:var(--txt2);">Best yet — keep it lit.</div></div>
+        </div>
+        <div class="row" style="gap:4px;">
+          <span style="width:9px;height:9px;border-radius:50%;background:var(--locked);"></span>
+          <span style="width:9px;height:9px;border-radius:50%;background:var(--locked);"></span>
+          <span style="width:9px;height:9px;border-radius:50%;background:var(--locked);"></span>
+          <span style="width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.14);"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tabwrap"><div class="tabbar">
+    <div class="tab" style="color:var(--lime);"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2z"/></svg>Today</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5"/><path d="M3 18V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-4 4z"/></svg>Nora</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 6 17a3 3 0 0 0 3.5 3V3z"/><path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 18 17a3 3 0 0 1-3.5 3V3z"/></svg>Training</div>
+    <div class="tab"><div class="av" style="background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);">TG</div>Profile</div>
+  </div></div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 02 · NORA CHAT                                                -->
+<!-- ============================================================= -->
+<div class="screen" id="chat">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <!-- chat header -->
+  <div class="pad" style="display:flex;align-items:center;gap:11px;padding-top:4px;padding-bottom:14px;border-bottom:1px solid var(--stroke);">
+    <div class="orb" style="width:38px;height:38px;"></div>
+    <div><div style="font-size:17px;font-weight:800;">Nora</div><div style="font-size:12px;color:var(--solid);font-weight:600;">● Online</div></div>
+  </div>
+  <!-- mental notes bar -->
+  <div class="row hide-scroll" style="gap:8px;padding:12px 20px 4px;overflow:hidden;">
+    <span style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--txt3);flex:none;">NOTES</span>
+    <div class="pill" style="flex:none;background:rgba(139,92,246,.14);color:#C4B0FF;font-size:12px;padding:6px 12px;border:1px solid rgba(139,92,246,.25);">Free throws feel rushed</div>
+    <div class="pill" style="flex:none;background:rgba(139,92,246,.14);color:#C4B0FF;font-size:12px;padding:6px 12px;border:1px solid rgba(139,92,246,.25);">Sleep was rough</div>
+  </div>
+
+  <div class="scroll" style="justify-content:flex-end;">
+    <div class="pad" style="display:flex;flex-direction:column;gap:14px;padding-bottom:6px;">
+      <!-- nora -->
+      <div class="row" style="align-items:flex-start;gap:9px;">
+        <div class="orb" style="width:28px;height:28px;flex:none;margin-top:2px;"></div>
+        <div style="background:rgba(255,255,255,.10);border-radius:4px 16px 16px 16px;padding:12px 14px;font-size:14px;line-height:1.4;max-width:78%;">Your HRV is a little low and you flagged rough sleep. Want to keep today's rep light and breathing-led?</div>
+      </div>
+      <!-- user -->
+      <div style="display:flex;justify-content:flex-end;">
+        <div style="background:rgba(255,255,255,.05);border:1px solid var(--stroke);border-radius:16px 4px 16px 16px;padding:12px 14px;font-size:14px;line-height:1.4;max-width:78%;">Yeah. I've got a big game Friday and my head's loud.</div>
+      </div>
+      <!-- nora -->
+      <div class="row" style="align-items:flex-start;gap:9px;">
+        <div class="orb" style="width:28px;height:28px;flex:none;margin-top:2px;"></div>
+        <div style="background:rgba(255,255,255,.10);border-radius:4px 16px 16px 16px;padding:12px 14px;font-size:14px;line-height:1.4;max-width:78%;">Let's quiet it. A 4-minute reset, then we rehearse the first possession so it feels familiar before tip-off.</div>
+      </div>
+      <div class="row" style="align-items:flex-start;gap:9px;">
+        <div class="orb" style="width:28px;height:28px;flex:none;"></div>
+        <div class="row" style="background:rgba(255,255,255,.10);border-radius:16px;padding:13px 16px;gap:5px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--txt3);"></span>
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--txt2);"></span>
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--txt3);"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- input -->
+  <div class="pad" style="padding-top:10px;padding-bottom:18px;">
+    <div class="row" style="background:var(--card);border:1px solid var(--stroke2);border-radius:999px;padding:6px 6px 6px 16px;">
+      <span style="flex:1;font-size:14px;color:var(--txt3);">Message Nora…</span>
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--card2);display:flex;align-items:center;justify-content:center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10a7 7 0 0 1-14 0M12 17v4"/></svg>
+      </div>
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--lime);display:flex;align-items:center;justify-content:center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="#000"><path d="M3 11l18-8-8 18-2-7-8-3z"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 03 · SPORTS INTEL                                             -->
+<!-- ============================================================= -->
+<div class="screen" id="intel">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="pad" style="padding-top:6px;">
+      <div class="kicker muted" style="letter-spacing:1.4px;">Sports Intel</div>
+      <h1 class="h1" style="font-size:30px;margin-top:6px;">Today's read</h1>
+      <p class="sub" style="font-size:14px;margin-top:6px;">Your best data across every connected device, in one read.</p>
+      <div class="row hide-scroll" style="gap:7px;margin-top:12px;overflow:hidden;">
+        <span class="via">via Polar</span>
+        <span class="via" style="background:rgba(34,211,238,.16);color:#9DEBFA;">via Oura</span>
+        <span class="via" style="background:rgba(255,178,62,.16);color:#FFD79B;">via Fitbit Air</span>
+      </div>
+
+      <!-- live HR hero -->
+      <div class="card" style="margin-top:16px;padding:18px;background:linear-gradient(135deg,#2a1014,#161618);border:none;">
+        <div class="row" style="gap:7px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="var(--hr)"><path d="M12 21s-7-4.6-9.3-9C1.2 8.6 2.7 5 6 5c2 0 3.2 1.2 4 2.4C10.8 6.2 12 5 14 5c3.3 0 4.8 3.6 3.3 7-2.3 4.4-9.3 9-9.3 9z"/></svg>
+          <span style="font-size:10px;font-weight:800;letter-spacing:1.4px;color:var(--txt3);">LIVE HEART RATE</span>
+        </div>
+        <div style="font-size:40px;font-weight:800;letter-spacing:-1.5px;margin-top:8px;">62 <span style="font-size:17px;font-weight:700;color:var(--txt2);">bpm</span></div>
+        <span class="via" style="margin-top:8px;display:inline-block;">via Polar</span>
+      </div>
+
+      <!-- Nora read -->
+      <div class="card" style="margin-top:14px;padding:16px;">
+        <div style="font-size:10px;font-weight:800;letter-spacing:1.2px;color:var(--purple);">NORA · SPORTS INTEL · BASKETBALL</div>
+        <div class="row" style="justify-content:space-between;margin-top:10px;align-items:flex-end;">
+          <div style="font-size:13px;color:var(--txt2);">Readiness</div>
+          <div style="font-size:24px;font-weight:800;color:var(--solid);">78%</div>
+        </div>
+        <div style="height:8px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:8px;overflow:hidden;">
+          <div style="width:78%;height:100%;background:linear-gradient(90deg,var(--okay),var(--solid));"></div>
+        </div>
+        <p class="sub" style="font-size:13px;margin-top:12px;">Recovery is solid and load is moderate. Good day to push focus work — keep tonight's sleep honest.</p>
+      </div>
+
+      <!-- metrics with per-device tags -->
+      <div style="margin-top:18px;"><span class="sec-h">Recovery &amp; biometrics</span></div>
+      <div class="card" style="margin-top:12px;padding:4px 16px;">
+        <div class="row" style="justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--stroke);">
+          <span style="font-size:14px;color:var(--txt2);">Recovery</span>
+          <div class="row" style="gap:8px;"><span style="font-size:15px;font-weight:800;">68</span><span class="via" style="background:rgba(34,211,238,.16);color:#9DEBFA;">via Oura</span></div>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--stroke);">
+          <span style="font-size:14px;color:var(--txt2);">HR variability</span>
+          <div class="row" style="gap:8px;"><span style="font-size:15px;font-weight:800;">52 ms</span><span class="via">via Polar</span></div>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--stroke);">
+          <span style="font-size:14px;color:var(--txt2);">Resting HR</span>
+          <div class="row" style="gap:8px;"><span style="font-size:15px;font-weight:800;">54 bpm</span><span class="via" style="background:rgba(34,211,238,.16);color:#9DEBFA;">via Oura</span></div>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:13px 0;">
+          <span style="font-size:14px;color:var(--txt2);">Sleep</span>
+          <div class="row" style="gap:8px;"><span style="font-size:15px;font-weight:800;">6h 48m</span><span class="via" style="background:rgba(255,178,62,.16);color:#FFD79B;">via Fitbit Air</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tabwrap"><div class="tabbar">
+    <div class="tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2z"/></svg>Today</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5"/><path d="M3 18V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-4 4z"/></svg>Nora</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 6 17a3 3 0 0 0 3.5 3V3z"/><path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 18 17a3 3 0 0 1-3.5 3V3z"/></svg>Training</div>
+    <div class="tab"><div class="av" style="background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);">TG</div>Profile</div>
+  </div></div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 04 · CONNECT A WEARABLE                                       -->
+<!-- ============================================================= -->
+<div class="screen" id="wearables">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="pad" style="padding-top:10px;">
+      <div class="kicker">Connect a wearable</div>
+      <h1 class="h1" style="font-size:30px;margin-top:8px;">Give Nora<br/>the full picture.</h1>
+      <p class="sub" style="font-size:14px;margin-top:8px;">She reads your body state to know when your mental game is sharpest — or most vulnerable.</p>
+
+      <!-- Polar (recommended, connected) -->
+      <div class="card" style="margin-top:18px;padding:16px;border:1px solid rgba(139,92,246,.45);background:linear-gradient(135deg,#1c1530,#161618);">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row" style="gap:12px;">
+            <div style="width:40px;height:40px;border-radius:11px;background:#E2001A;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:11px;">P</div>
+            <div><div style="font-size:16px;font-weight:800;">Polar</div><div style="font-size:11px;color:var(--purple);font-weight:700;">Our signature device</div></div>
+          </div>
+          <span class="badge" style="background:rgba(34,197,94,.16);color:var(--solid);">● Connected</span>
+        </div>
+        <p class="sub" style="font-size:12.5px;margin-top:12px;">Live heart rate during simulations, plus recovery and sleep context from Polar Flow.</p>
+      </div>
+
+      <!-- Apple Watch -->
+      <div class="card" style="margin-top:12px;padding:16px;">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row" style="gap:12px;">
+            <div style="width:40px;height:40px;border-radius:11px;background:#1C1C20;border:1px solid var(--stroke2);display:flex;align-items:center;justify-content:center;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M16 4H8a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3z"/></svg>
+            </div>
+            <div><div style="font-size:16px;font-weight:800;">Apple Watch</div><div style="font-size:11px;color:var(--txt2);">Sleep, HR &amp; activity via Apple Health</div></div>
+          </div>
+          <span class="badge" style="background:var(--card2);color:var(--txt2);border:1px solid var(--stroke2);">Connect</span>
+        </div>
+      </div>
+
+      <!-- Fitbit Air -->
+      <div class="card" style="margin-top:12px;padding:16px;">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row" style="gap:12px;">
+            <div style="width:40px;height:40px;border-radius:11px;background:#1C1C20;border:1px solid var(--stroke2);display:flex;align-items:center;justify-content:center;">
+              <span style="width:18px;height:18px;border-radius:50%;border:3px solid #FF8A3D;display:block;"></span>
+            </div>
+            <div><div style="font-size:16px;font-weight:800;">Fitbit Air</div><div style="font-size:11px;color:var(--txt2);">Sleep, HR &amp; activity via Google Health</div></div>
+          </div>
+          <span class="badge" style="background:var(--card2);color:var(--txt2);border:1px solid var(--stroke2);">Connect</span>
+        </div>
+      </div>
+
+      <!-- Oura -->
+      <div class="card" style="margin-top:12px;padding:16px;">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row" style="gap:12px;">
+            <div style="width:40px;height:40px;border-radius:11px;background:#1C1C20;border:1px solid var(--stroke2);display:flex;align-items:center;justify-content:center;">
+              <span style="width:17px;height:17px;border-radius:50%;border:3px solid #9DEBFA;display:block;"></span>
+            </div>
+            <div><div style="font-size:16px;font-weight:800;">Oura Ring</div><div style="font-size:11px;color:var(--txt2);">Recovery, readiness &amp; sleep quality</div></div>
+          </div>
+          <span class="badge" style="background:var(--card2);color:var(--txt2);border:1px solid var(--stroke2);">Connect</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 05 · TRAINING                                                 -->
+<!-- ============================================================= -->
+<div class="screen" id="training">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="pad" style="padding-top:6px;">
+      <div class="h2" style="margin-top:6px;">Training</div>
+
+      <!-- progress card -->
+      <div class="card" style="margin-top:14px;padding:18px;background:linear-gradient(135deg,#241640,#161618);border:none;">
+        <div class="row" style="justify-content:space-between;">
+          <div><div style="font-size:30px;font-weight:800;letter-spacing:-1px;">8</div><div style="font-size:12px;color:var(--txt2);">day streak</div></div>
+          <div><div style="font-size:30px;font-weight:800;letter-spacing:-1px;">24</div><div style="font-size:12px;color:var(--txt2);">reps done</div></div>
+          <div><div style="font-size:30px;font-weight:800;letter-spacing:-1px;color:var(--purple);">Lvl 4</div><div style="font-size:12px;color:var(--txt2);">Composure</div></div>
+        </div>
+      </div>
+
+      <!-- today's work -->
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;">
+        <span class="sec-h">Today's work</span>
+        <span class="badge" style="background:rgba(139,92,246,.16);color:#C4B0FF;">1 session</span>
+      </div>
+      <div class="card" style="margin-top:12px;padding:15px 16px;">
+        <div class="row" style="justify-content:space-between;">
+          <div class="row" style="gap:12px;">
+            <div style="width:42px;height:42px;border-radius:12px;background:rgba(139,92,246,.18);display:flex;align-items:center;justify-content:center;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div><div style="font-size:15px;font-weight:800;">Pressure Simulation</div><div style="font-size:12px;color:var(--txt2);">12 min · not started</div></div>
+          </div>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      </div>
+
+      <!-- plans -->
+      <div style="margin-top:20px;"><span class="sec-h">Your plan</span></div>
+      <div class="card" style="margin-top:12px;padding:16px;">
+        <div class="row" style="justify-content:space-between;">
+          <div style="font-size:15px;font-weight:800;">Stay calm under pressure</div>
+          <span style="font-size:12px;color:var(--purple);font-weight:700;">Step 6 / 10</span>
+        </div>
+        <div style="height:8px;border-radius:999px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden;">
+          <div style="width:60%;height:100%;background:var(--purple);"></div>
+        </div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:10px;">From your coach · 4 reps left this phase</div>
+      </div>
+
+      <!-- recent -->
+      <div style="margin-top:20px;"><span class="sec-h">Recent results</span></div>
+      <div class="card" style="margin-top:12px;padding:4px 16px;">
+        <div class="row" style="justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--stroke);">
+          <div><div style="font-size:14px;font-weight:700;">Reset breathing</div><div style="font-size:11px;color:var(--txt3);">Jun 12</div></div>
+          <span style="font-size:13px;color:var(--solid);font-weight:700;">Calm +18%</span>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:13px 0;">
+          <div><div style="font-size:14px;font-weight:700;">Pressure Simulation</div><div style="font-size:11px;color:var(--txt3);">Jun 10</div></div>
+          <span style="font-size:13px;color:var(--solid);font-weight:700;">Confidence +12%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="tabwrap"><div class="tabbar">
+    <div class="tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2z"/></svg>Today</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5"/><path d="M3 18V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-4 4z"/></svg>Nora</div>
+    <div class="tab" style="color:var(--purple);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 6 17a3 3 0 0 0 3.5 3V3z"/><path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 18 17a3 3 0 0 1-3.5 3V3z"/></svg>Training</div>
+    <div class="tab"><div class="av" style="background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);">TG</div>Profile</div>
+  </div></div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 06 · NORA INBOX                                               -->
+<!-- ============================================================= -->
+<div class="screen" id="inbox">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="pad" style="padding-top:6px;">
+      <div class="row" style="gap:11px;margin-top:6px;">
+        <div class="orb" style="width:34px;height:34px;"></div>
+        <div class="h2">Nora</div>
+      </div>
+
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--txt3);margin-top:22px;">TODAY</div>
+      <div class="card" style="margin-top:10px;padding:15px 16px;">
+        <div class="row" style="justify-content:space-between;">
+          <div style="font-size:14px;font-weight:700;">Quick private check-in — how do you feel?</div>
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--purple);flex:none;margin-left:10px;"></span>
+        </div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:6px;">9:02 AM · tap to reply</div>
+      </div>
+      <div class="card" style="margin-top:10px;padding:15px 16px;">
+        <div style="font-size:14px;color:var(--txt2);">Nice work closing out the pressure rep — calm held.</div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:6px;">8:40 AM</div>
+      </div>
+
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--txt3);margin-top:22px;">YESTERDAY</div>
+      <div class="card" style="margin-top:10px;padding:15px 16px;">
+        <div style="font-size:14px;color:var(--txt2);">Your HRV dipped — let's protect sleep tonight.</div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:6px;">Jun 12 · 9:10 PM</div>
+      </div>
+      <div class="card" style="margin-top:10px;padding:15px 16px;">
+        <div style="font-size:14px;color:var(--txt2);">You logged a note: "Free throws feel rushed."</div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:6px;">Jun 12 · 4:21 PM</div>
+      </div>
+
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--txt3);margin-top:22px;">JUN 11</div>
+      <div class="card" style="margin-top:10px;padding:15px 16px;">
+        <div style="font-size:14px;color:var(--txt2);">Morning check-in · you felt locked in 🔥</div>
+        <div style="font-size:12px;color:var(--txt3);margin-top:6px;">Jun 11 · 8:55 AM</div>
+      </div>
+    </div>
+  </div>
+  <div class="tabwrap"><div class="tabbar">
+    <div class="tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2z"/></svg>Today</div>
+    <div class="tab" style="color:var(--cyan);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5"/><path d="M3 18V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-4 4z"/></svg>Nora</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 6 17a3 3 0 0 0 3.5 3V3z"/><path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 18 17a3 3 0 0 1-3.5 3V3z"/></svg>Training</div>
+    <div class="tab"><div class="av" style="background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);">TG</div>Profile</div>
+  </div></div>
+</div>
+
+<!-- ============================================================= -->
+<!-- 07 · PROFILE — private by default                            -->
+<!-- ============================================================= -->
+<div class="screen" id="profile">
+  <div class="status"><span class="time">9:41</span>
+    <span class="ic">
+      <svg width="18" height="12" viewBox="0 0 18 12"><g fill="#fff"><rect x="0" y="7" width="3" height="5" rx="1"/><rect x="5" y="4.5" width="3" height="7.5" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></g></svg>
+      <svg width="26" height="13" viewBox="0 0 26 13"><rect x="1" y="1" width="21" height="11" rx="3" fill="none" stroke="#fff" stroke-opacity=".5"/><rect x="3" y="3" width="16" height="7" rx="1.5" fill="var(--lime)"/></svg>
+    </span>
+  </div>
+  <div class="scroll">
+    <div class="pad" style="padding-top:14px;text-align:center;">
+      <div class="avatar" style="width:84px;height:84px;background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);font-size:30px;margin:0 auto;border:2px solid rgba(20,231,208,.4);">TG</div>
+      <div style="font-size:22px;font-weight:800;margin-top:14px;">Tre Grant</div>
+      <div style="font-size:13px;color:var(--txt2);margin-top:4px;">Basketball · Guard · In-Season</div>
+    </div>
+
+    <div class="pad" style="margin-top:22px;">
+      <!-- privacy hero -->
+      <div class="card" style="padding:18px;border:1px solid rgba(139,92,246,.4);background:linear-gradient(135deg,#1c1530,#161618);">
+        <div class="row" style="gap:10px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="m9 12 2 2 4-4"/></svg>
+          <span style="font-size:16px;font-weight:800;">Private by default</span>
+        </div>
+        <p class="sub" style="font-size:13px;margin-top:10px;">Nora never shows coaches your reflections, chat transcripts, or sleep details unless you choose to share.</p>
+      </div>
+
+      <!-- connected devices -->
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--txt3);margin-top:22px;">CONNECTED DEVICES</div>
+      <div class="card" style="margin-top:10px;padding:4px 16px;">
+        <div class="row" style="justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--stroke);">
+          <div class="row" style="gap:11px;"><div style="width:30px;height:30px;border-radius:8px;background:#E2001A;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:10px;">P</div><span style="font-size:14px;font-weight:600;">Polar</span></div>
+          <span style="font-size:12px;color:var(--solid);font-weight:700;">● Live</span>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:14px 0;">
+          <div class="row" style="gap:11px;"><div style="width:30px;height:30px;border-radius:8px;background:#1C1C20;border:1px solid var(--stroke2);display:flex;align-items:center;justify-content:center;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid #9DEBFA;"></span></div><span style="font-size:14px;font-weight:600;">Oura Ring</span></div>
+          <span style="font-size:12px;color:var(--txt2);">2h ago</span>
+        </div>
+      </div>
+
+      <!-- rows -->
+      <div class="card" style="margin-top:14px;padding:4px 16px;">
+        <div class="row" style="justify-content:space-between;padding:15px 0;border-bottom:1px solid var(--stroke);"><span style="font-size:14px;">Settings &amp; privacy</span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="row" style="justify-content:space-between;padding:15px 0;"><span style="font-size:14px;">Your coach &amp; team</span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--txt3)" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></div>
+      </div>
+    </div>
+  </div>
+  <div class="tabwrap"><div class="tabbar">
+    <div class="tab"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4V6a2 2 0 0 1 2-2z"/></svg>Today</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 10h8M8 14h5"/><path d="M3 18V6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-4 4z"/></svg>Nora</div>
+    <div class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 3a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.5A3 3 0 0 0 6 17a3 3 0 0 0 3.5 3V3z"/><path d="M14.5 3a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.5A3 3 0 0 1 18 17a3 3 0 0 1-3.5 3V3z"/></svg>Training</div>
+    <div class="tab" style="color:var(--blue);"><div class="av" style="background:linear-gradient(135deg,#0D332A,#10211D);color:var(--teal);box-shadow:0 0 0 2px var(--blue);">TG</div>Profile</div>
+  </div></div>
+</div>
+
+</body>
+</html>

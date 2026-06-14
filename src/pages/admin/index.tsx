@@ -64,6 +64,12 @@ const adminCardsData = [
     link: "/admin/fwpMedia"
   },
   {
+    title: "PulseCheck Media",
+    description: "Every generated PulseCheck screen mock and App Store creative — daily check-in, Sports Intel, Nora chat & inbox, wearables, and training. Browse, lightbox, and download for screenshots and decks.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/admin/pulsecheckMedia"
+  },
+  {
     title: "Group Meet",
     description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
     icon: <Calendar className="w-5 h-5" />,
