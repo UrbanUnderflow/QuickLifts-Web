@@ -20,6 +20,9 @@ const SCREENS = [
   ['training',  '05-training'],
   ['inbox',     '06-nora-inbox'],
   ['profile',   '07-profile-private'],
+  ['boxbreathing','08-box-breathing'],
+  ['critical',  '09-critical-signal'],
+  ['welfare',   '10-welfare-check'],
 ];
 
 const FILE = 'file://' + path.join(__dirname, 'mocks.html');

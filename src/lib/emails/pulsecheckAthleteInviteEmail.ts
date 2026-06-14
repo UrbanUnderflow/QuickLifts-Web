@@ -35,8 +35,8 @@ export function renderAthleteInviteEmail(opts: {
   const senderName = (opts.senderName || 'your coach').trim();
 
   const subject = teamName
-    ? `You're invited to join ${teamName} on PulseCheck`
-    : `You're invited to join ${organizationName} on PulseCheck`;
+    ? `You're invited to join ${teamName} on Pulse Check`
+    : `You're invited to join ${organizationName} on Pulse Check`;
 
   const html = `
   <!doctype html>
@@ -48,7 +48,7 @@ export function renderAthleteInviteEmail(opts: {
     </head>
     <body style="margin:0;padding:0;background:#ffffff;">
       <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-        Download the Pulse app and sign in with this email to join your team on PulseCheck.
+        Download the Pulse Check app and sign in with this email to join your team on Pulse Check.
       </div>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;padding:24px 0;">
         <tr>
@@ -56,7 +56,7 @@ export function renderAthleteInviteEmail(opts: {
             <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;">
               <tr>
                 <td align="center" style="padding: 6px 8px 18px 8px;">
-                  <img src="https://fitwithpulse.ai/pulseCheckIcon.png" alt="PulseCheck" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:14px;" />
+                  <img src="https://fitwithpulse.ai/pulseCheckIcon.png" alt="Pulse Check" width="64" height="64" style="display:block;width:64px;height:64px;border-radius:14px;" />
                 </td>
               </tr>
               <tr>
@@ -70,13 +70,10 @@ export function renderAthleteInviteEmail(opts: {
                           </tr>
                         </table>
                         <h1 style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:24px;line-height:1.2;color:#000000;font-weight:900;">
-                          You're invited to PulseCheck
+                          You're invited to Pulse Check
                         </h1>
                         <p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:16px;line-height:1.6;color:#000000;">
-                          Hey ${escapeHtml(name)}, ${escapeHtml(senderName)} invited you to join ${teamName ? `<span style="font-weight:700;">${escapeHtml(teamName)}</span>` : `<span style="font-weight:700;">${escapeHtml(organizationName)}</span>`} on PulseCheck.
-                        </p>
-                        <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:14px;line-height:1.6;color:#000000;">
-                          PulseCheck lives in the <span style="font-weight:700;">Pulse app</span>. Tap below to get set up — you'll download the app (if you don't have it yet) and sign in with this email to connect to your team.
+                          Hey ${escapeHtml(name)}, ${escapeHtml(senderName)} invited you to join ${teamName ? `<span style="font-weight:700;">${escapeHtml(teamName)}</span>` : `<span style="font-weight:700;">${escapeHtml(organizationName)}</span>`} on Pulse Check.
                         </p>
                         <p style="margin:0 0 28px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#52525B;">
                           Use this email when you sign in so your coach can connect you to the team.
@@ -85,7 +82,7 @@ export function renderAthleteInviteEmail(opts: {
                           JOIN YOUR TEAM
                         </a>
                         <p style="margin:20px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:12px;line-height:1.6;color:#52525B;">
-                          Already have the Pulse app? Open it and sign in with this email.
+                          Already have the Pulse Check app? Open it and sign in with this email.
                         </p>
                         <p style="margin:16px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:12px;line-height:1.6;color:#52525B;">
                           If the button doesn't work, copy and paste this link into your browser:<br/>
@@ -105,7 +102,7 @@ export function renderAthleteInviteEmail(opts: {
                     Need help? Reply to this email or contact <a href="mailto:hello@fitwithpulse.ai" style="color:#000000;text-decoration:underline;">hello@fitwithpulse.ai</a>.
                   </p>
                   <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:11px;line-height:1.6;color:#52525B;">
-                    You received this email because you were invited to a team on <a href="https://fitwithpulse.ai" style="color:#000000;text-decoration:underline;">PulseCheck</a>.
+                    You received this email because you were invited to a team on <a href="https://fitwithpulse.ai" style="color:#000000;text-decoration:underline;">Pulse Check</a>.
                   </p>
                 </td>
               </tr>
