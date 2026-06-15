@@ -337,6 +337,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const cohortId = normalizeString(invite.cohortId);
       const teamMembershipRole = normalizeString(invite.teamMembershipRole) as PulseCheckTeamMembershipRole;
       const invitedTitle = normalizeString(invite.invitedTitle);
+      // Coach-preloaded invite image + notify-coach context (read here so the
+      // membership inherits the avatar and the accept email can name the coach).
+      const prefilledProfileImageUrl = normalizeString(invite.prefilledProfileImageUrl);
       if (!organizationId || !teamId || !teamMembershipRole) {
         throw new Error('Invite is missing organization, team, or role context.');
       }
@@ -465,6 +468,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             : {}),
           allowedAthleteIds: [],
           athleteOnboarding: nextAthleteOnboarding,
+          // Carry the coach-preloaded invite image onto the athlete membership so
+          // the coach dashboard avatar fallback has data before they upload a photo.
+          ...(teamMembershipRole === 'athlete' && prefilledProfileImageUrl
+            ? { prefilledProfileImageUrl }
+            : {}),
           onboardingStatus: nextMembershipOnboardingStatus,
           commercialAccess: commercialSnapshot,
           grantedByInviteToken: token,
@@ -545,10 +553,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
+      // Whether this redemption actually creates a NEW membership (vs a no-op
+      // re-entry). Used to gate the one-time "athlete accepted" email so a coach
+      // never gets a duplicate notification. For single-use invites the usability
+      // guard above already blocks a second redeem, so reaching here is a fresh join.
+      const isNewJoin =
+        redemptionMode === 'general'
+          ? !hadExistingTeamMembership ||
+            (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment)
+          : true;
+
       if (redemptionMode === 'general') {
-        const grantedNewScopeAccess =
-          !hadExistingTeamMembership ||
-          (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment);
+        const grantedNewScopeAccess = isNewJoin;
         const shouldRepairInviteStatus = normalizeString(invite.status) !== 'active';
 
         if (grantedNewScopeAccess || shouldRepairInviteStatus) {
@@ -596,10 +612,54 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         invitedTitle,
         commercialSnapshot,
         teamPlanBypassesPaywall: commercialSnapshot.teamPlanBypassesPaywall,
+        // Internal (stripped from the client response below): drives the
+        // fire-and-forget "athlete accepted" email after the transaction commits.
+        _isNewJoin: isNewJoin,
+        _recipientName: normalizeString(invite.recipientName),
+        _coachName: normalizeString(invite.createdByName),
+        _coachEmail: normalizeString(invite.createdByEmail),
+        _notifyCoachOnAccept: invite.notifyCoachOnAccept === true,
       };
     });
 
-    return res.status(200).json(result);
+    // Fire-and-forget the "athlete accepted" email for real new athlete joins only.
+    // Email failure must NOT fail the redemption response.
+    if (result._isNewJoin && result.teamMembershipRole === 'athlete') {
+      try {
+        const athleteName =
+          result._recipientName || normalizeString(decoded.name) || userEmail.split('@')[0] || 'An athlete';
+        const origin = normalizeString(req.headers.origin) || 'https://fitwithpulse.ai';
+        const functionUrl = `${origin}/.netlify/functions/send-pulsecheck-invite-accepted-email`;
+        void fetch(functionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            athleteName,
+            athleteEmail: userEmail,
+            teamName: result.teamName,
+            organizationName: result.organizationName,
+            role: result.teamMembershipRole,
+            coachName: result._coachName,
+            coachEmail: result._coachEmail,
+            notifyCoach: result._notifyCoachOnAccept,
+          }),
+        }).catch((mailErr) => {
+          console.error('[pulsecheck-team-invite/redeem] accept email send failed:', mailErr);
+        });
+      } catch (mailErr) {
+        console.error('[pulsecheck-team-invite/redeem] accept email dispatch error:', mailErr);
+      }
+    }
+
+    const {
+      _isNewJoin,
+      _recipientName,
+      _coachName,
+      _coachEmail,
+      _notifyCoachOnAccept,
+      ...clientResult
+    } = result;
+    return res.status(200).json(clientResult);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to redeem invite.';
     const statusCode =

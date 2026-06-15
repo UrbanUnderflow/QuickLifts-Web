@@ -76,7 +76,7 @@ const NoraMetricHelpButton: React.FC<NoraMetricHelpButtonProps> = ({ metricKey, 
           data-testid={testId ? `${testId}-modal` : undefined}
         >
           <div
-            className="w-full max-w-2xl rounded-[28px] border border-cyan-400/20 bg-[#101722] p-6 text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
+            className="flex max-h-[calc(100vh-64px)] w-full max-w-2xl flex-col overflow-y-auto overscroll-contain rounded-[28px] border border-cyan-400/20 bg-[#101722] p-6 text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();

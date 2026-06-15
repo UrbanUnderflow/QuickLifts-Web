@@ -672,6 +672,10 @@ export interface PulseCheckInviteLink {
   activationUrl: string;
   createdByUserId?: string;
   createdByEmail?: string;
+  // Inviting coach's display name + opt-in flag for the "athlete accepted" email,
+  // read on redeem (web + iOS) to notify the coach who sent this invite.
+  createdByName?: string;
+  notifyCoachOnAccept?: boolean;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
   redeemedByUserId?: string;
@@ -858,6 +862,12 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   prefilledProfileImageUrl?: string;
   createdByUserId?: string;
   createdByEmail?: string;
+  // Inviting coach's display name, stamped on the invite so the "athlete accepted"
+  // email can name who sent it (createdByEmail alone isn't friendly copy).
+  createdByName?: string;
+  // Opt-in: also email the inviting coach when this athlete accepts/redeems.
+  // hello@fitwithpulse.ai is always notified regardless of this flag.
+  notifyCoachOnAccept?: boolean;
 }
 
 export interface SavePulseCheckPostActivationSetupInput {

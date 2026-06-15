@@ -3105,6 +3105,8 @@ export const pulseCheckProvisioningService = {
         activationUrl,
         createdByUserId: normalizeString(input.createdByUserId),
         createdByEmail: normalizeString(input.createdByEmail),
+        createdByName: normalizeString(input.createdByName),
+        notifyCoachOnAccept: !!input.notifyCoachOnAccept,
         updatedAt: serverTimestamp(),
       });
 
@@ -3146,6 +3148,8 @@ export const pulseCheckProvisioningService = {
       activationUrl,
       createdByUserId: normalizeString(input.createdByUserId),
       createdByEmail: normalizeString(input.createdByEmail),
+      createdByName: normalizeString(input.createdByName),
+      notifyCoachOnAccept: !!input.notifyCoachOnAccept,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };

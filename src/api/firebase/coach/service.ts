@@ -5,6 +5,16 @@ import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/f
 import { privacyService } from '../privacy/service';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import type { PulseCheckRosterVisibilityScope, PulseCheckTeamMembership, PulseCheckTeamMembershipRole } from '../pulsecheckProvisioning/types';
+import {
+  CurriculumAssignmentStatus,
+  PulseCheckDailyAssignmentStatus,
+  athleteProgressFromFirestore,
+  curriculumAssignmentFromFirestore,
+  pulseCheckDailyAssignmentFromFirestore,
+  type AthleteMentalProgress,
+  type CurriculumAssignment,
+  type PulseCheckDailyAssignment,
+} from '../mentaltraining/types';
 
 export interface DailySentimentRecord {
   id: string;
@@ -33,13 +43,300 @@ export interface ConversationSession {
   messages: ConversationMessage[];
 }
 
+export type CoachAthleteCurriculumItemKind = 'protocol' | 'simulation' | 'curriculum' | 'program';
+export type CoachAthleteCurriculumItemStatus = 'assigned' | 'in-progress' | 'completed' | 'paused';
+export type CoachAthleteCurriculumItemSource = 'daily-assignment' | 'curriculum-assignment' | 'athlete-progress';
+
+export interface CoachAthleteCurriculumItem {
+  id: string;
+  kind: CoachAthleteCurriculumItemKind;
+  source: CoachAthleteCurriculumItemSource;
+  title: string;
+  detail: string;
+  status: CoachAthleteCurriculumItemStatus;
+  progressPct: number;
+  dueToday?: boolean;
+  updatedAt?: Date;
+}
+
+export interface CoachAthleteCurriculumSnapshot {
+  athleteId: string;
+  items: CoachAthleteCurriculumItem[];
+  completedCount: number;
+  totalCount: number;
+  currentPathway?: string;
+  pathwayStep?: number;
+  totalAssignmentsCompleted?: number;
+  totalExercisesMastered?: number;
+  activeProgramTitle?: string;
+  lastUpdatedAt?: Date;
+}
+
 const PULSECHECK_ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const PULSECHECK_TEAMS_COLLECTION = 'pulsecheck-teams';
 const PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const PULSECHECK_MORNING_CHECKINS_COLLECTION = 'pulsecheck-morning-checkins';
+const PULSECHECK_NORA_CONVERSATIONS_COLLECTION = 'pulsecheck-nora-conversations';
+const MENTAL_CHECKINS_ROOT = 'mental-check-ins';
+const SIM_COMPLETIONS_ROOT = 'sim-completions';
+const IOS_MENTAL_COMPLETIONS_ROOT = 'mental-exercise-completions';
+const SIM_SESSIONS_ROOT = 'sim-sessions';
+const MENTAL_TRAINING_STREAKS_COLLECTION = 'mental-training-streaks';
+const PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
+const MENTAL_CURRICULUM_ASSIGNMENTS_COLLECTION = 'mental-curriculum-assignments';
+const ATHLETE_MENTAL_PROGRESS_COLLECTION = 'athlete-mental-progress';
 
 const DIRECT_COACH_ROLES = new Set<PulseCheckTeamMembershipRole>(['team-admin', 'coach']);
 const COACH_ACCESS_ROLES = new Set<PulseCheckTeamMembershipRole>(['team-admin', 'coach', 'performance-staff', 'support-staff']);
+
+type DailySignalAggregate = {
+  scoreSum: number;
+  scoreCount: number;
+  messageCount: number;
+  latestAt: Date;
+};
+
+const toMillis = (value: any): number | null => {
+  if (value == null) return null;
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+  if (typeof value?.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date.getTime() : null;
+  }
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+
+  const parsed = typeof value === 'string' ? Number.parseFloat(value) : value;
+  if (typeof parsed !== 'number' || !Number.isFinite(parsed)) return null;
+  return Math.abs(parsed) < 10_000_000_000 ? parsed * 1000 : parsed;
+};
+
+const toDateOrNull = (value: any): Date | null => {
+  const millis = toMillis(value);
+  if (millis == null) return null;
+  const date = new Date(millis);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const latestDateOf = (...dates: Array<Date | null | undefined>): Date | undefined => {
+  const valid = dates.filter((date): date is Date => !!date && Number.isFinite(date.getTime()));
+  if (valid.length === 0) return undefined;
+  return new Date(Math.max(...valid.map((date) => date.getTime())));
+};
+
+const ymd = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const resolveDayKey = (data: Record<string, any>): string | null => {
+  const explicit = String(data.date || data.dayKey || data.sourceDate || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(explicit)) return explicit;
+
+  const date = toDateOrNull(data.createdAt || data.updatedAt || data.completedAt);
+  return date ? ymd(date) : null;
+};
+
+const clampSentiment = (value: number): number => Math.max(-1, Math.min(1, value));
+
+const readinessToSentiment = (value: any): number | null => {
+  const score = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(score)) return null;
+  if (score >= 1 && score <= 5) return clampSentiment((score - 3) / 2);
+  if (score >= 0 && score <= 100) return clampSentiment((score - 50) / 50);
+  if (score >= -1 && score <= 1) return clampSentiment(score);
+  return null;
+};
+
+const moodWordToSentiment = (value: any): number | null => {
+  const word = String(value || '').trim().toLowerCase();
+  if (!word) return null;
+  if (['drained', 'terrible', 'awful', 'low'].includes(word)) return -0.8;
+  if (['rough', 'stressed', 'anxious', 'tired'].includes(word)) return -0.45;
+  if (['okay', 'ok', 'mixed', 'neutral'].includes(word)) return 0;
+  if (['solid', 'good', 'calm', 'ready'].includes(word)) return 0.45;
+  if (['locked', 'great', 'excellent', 'strong'].includes(word)) return 0.85;
+  return null;
+};
+
+const resolveCheckInSentiment = (data: Record<string, any>): number =>
+  readinessToSentiment(data.readinessScore ?? data.levelScore ?? data.score) ??
+  moodWordToSentiment(data.moodWord ?? data.level ?? data.levelLabel) ??
+  0;
+
+const countPulseCheckConversationTurns = (turns: any[]): number =>
+  turns.filter((turn) => {
+    const role = String(turn?.role || '').toLowerCase();
+    return role === 'athlete' || role === 'user' || role === 'athlete-reply';
+  }).length;
+
+const extractPulseCheckConversationTexts = (turns: any[]): string[] =>
+  turns
+    .filter((turn) => {
+      const role = String(turn?.role || '').toLowerCase();
+      return role === 'athlete' || role === 'user' || role === 'athlete-reply';
+    })
+    .map((turn) => String(turn?.text || turn?.content || '').trim())
+    .filter(Boolean);
+
+const countCompletedDocs = (docs: Array<{ data: () => Record<string, any> }>): number =>
+  docs.filter((docSnapshot) => {
+    const data = docSnapshot.data();
+    const status = String(data.status || data.sessionOutcome || '').toLowerCase();
+    if (status && ['aborted', 'cancelled', 'canceled', 'queued', 'assigned', 'pending'].includes(status)) return false;
+    return true;
+  }).length;
+
+const humanizeToken = (value: any): string =>
+  String(value || '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+
+const compactText = (value: any, maxLength = 120): string => {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}…` : text;
+};
+
+const dateKeyToCoachLabel = (dateKey?: string): string => {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return '';
+  const date = new Date(`${dateKey}T12:00:00`);
+  if (!Number.isFinite(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+const dateFromDateKey = (dateKey?: string): Date | null => {
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+  const date = new Date(`${dateKey}T12:00:00`);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const isDailyCurriculumRecord = (assignment: PulseCheckDailyAssignment): boolean =>
+  assignment.assignedBy === 'curriculum-engine' || Boolean(assignment.curriculumIntent);
+
+const isDailyAssignmentComplete = (assignment: PulseCheckDailyAssignment): boolean => {
+  if (assignment.status === PulseCheckDailyAssignmentStatus.Completed || typeof assignment.completedAt === 'number') return true;
+  const session = assignment.protocolPracticeSession as Record<string, any> | undefined;
+  if (!session) return false;
+  if (toMillis(session.completedAt) != null) return true;
+  return Boolean(session.scorecard && Object.keys(session.scorecard).length > 0);
+};
+
+const dailyAssignmentKind = (assignment: PulseCheckDailyAssignment): CoachAthleteCurriculumItemKind => {
+  if (assignment.actionType === 'protocol') return 'protocol';
+  if (assignment.actionType === 'sim' || assignment.actionType === 'simulation' || assignment.actionType === 'lighter_sim') {
+    return 'simulation';
+  }
+  return assignment.curriculumIntent?.artifactKind === 'protocol' ? 'protocol' : 'curriculum';
+};
+
+const dailyAssignmentTitle = (assignment: PulseCheckDailyAssignment): string =>
+  compactText(
+    assignment.protocolLabel ||
+      assignment.protocolVariantLabel ||
+      assignment.simName ||
+      assignment.simFamilyLabel ||
+      assignment.trainingPlanStepLabel ||
+      assignment.curriculumIntent?.focusName ||
+      humanizeToken(assignment.legacyExerciseId || assignment.protocolId || assignment.simSpecId || assignment.actionType),
+    80
+  ) || 'Assigned practice';
+
+const dailyAssignmentStatus = (assignment: PulseCheckDailyAssignment): CoachAthleteCurriculumItemStatus => {
+  if (isDailyAssignmentComplete(assignment)) return 'completed';
+  if (
+    assignment.status === PulseCheckDailyAssignmentStatus.Paused ||
+    assignment.status === PulseCheckDailyAssignmentStatus.Deferred ||
+    assignment.status === PulseCheckDailyAssignmentStatus.Expired
+  ) {
+    return 'paused';
+  }
+  if (assignment.status === PulseCheckDailyAssignmentStatus.Started || assignment.status === PulseCheckDailyAssignmentStatus.Viewed) {
+    return 'in-progress';
+  }
+  return 'assigned';
+};
+
+const dailyAssignmentProgressPct = (assignment: PulseCheckDailyAssignment): number => {
+  if (isDailyAssignmentComplete(assignment)) return 100;
+  const intent = assignment.curriculumIntent;
+  if (intent && Number.isFinite(intent.currentRep) && Number.isFinite(intent.targetReps) && intent.targetReps > 0) {
+    return Math.max(0, Math.min(99, Math.round((intent.currentRep / intent.targetReps) * 100)));
+  }
+  const phases = assignment.phaseProgress || assignment.completionSummary?.phaseProgress;
+  if (phases && phases.totalPhases > 0) {
+    return Math.max(0, Math.min(99, Math.round((phases.currentPhaseIndex / phases.totalPhases) * 100)));
+  }
+  return dailyAssignmentStatus(assignment) === 'in-progress' ? 35 : 0;
+};
+
+const dailyAssignmentDetail = (assignment: PulseCheckDailyAssignment): string => {
+  const kindLabel = dailyAssignmentKind(assignment) === 'protocol' ? 'Protocol' : dailyAssignmentKind(assignment) === 'simulation' ? 'Simulation' : 'Curriculum';
+  const dateLabel = dateKeyToCoachLabel(assignment.sourceDate);
+  const intentDetail = assignment.curriculumIntent?.progressLabel || assignment.curriculumIntent?.whyThisToday;
+  return [kindLabel, dateLabel, compactText(intentDetail || assignment.plannerSummary || assignment.rationale, 90)]
+    .filter(Boolean)
+    .join(' • ');
+};
+
+const curriculumAssignmentStatus = (assignment: CurriculumAssignment): CoachAthleteCurriculumItemStatus => {
+  if (assignment.status === CurriculumAssignmentStatus.Completed || assignment.masteryAchieved) return 'completed';
+  if (assignment.status === CurriculumAssignmentStatus.Paused) return 'paused';
+  if (assignment.completedDays > 0 || assignment.status === CurriculumAssignmentStatus.Active || assignment.status === CurriculumAssignmentStatus.Extended) {
+    return 'in-progress';
+  }
+  return 'assigned';
+};
+
+const curriculumAssignmentProgressPct = (assignment: CurriculumAssignment): number => {
+  if (curriculumAssignmentStatus(assignment) === 'completed') return 100;
+  if (Number.isFinite(assignment.completionRate) && assignment.completionRate > 0) {
+    return Math.max(0, Math.min(99, Math.round(assignment.completionRate)));
+  }
+  if (assignment.targetDays > 0) {
+    return Math.max(0, Math.min(99, Math.round((assignment.completedDays / assignment.targetDays) * 100)));
+  }
+  return 0;
+};
+
+const curriculumAssignmentDetail = (assignment: CurriculumAssignment): string => {
+  const parts = [
+    humanizeToken(assignment.pathway) || 'Curriculum',
+    assignment.currentDayNumber > 0 && assignment.durationDays > 0
+      ? `Day ${Math.min(assignment.currentDayNumber, assignment.durationDays)} of ${assignment.durationDays}`
+      : '',
+    assignment.status === CurriculumAssignmentStatus.Extended ? 'Extended' : '',
+  ];
+  return parts.filter(Boolean).join(' • ');
+};
+
+const progressProgramTitle = (progress?: AthleteMentalProgress | null): string => {
+  const activeProgram = progress?.activeProgram as Record<string, any> | undefined;
+  return compactText(
+    progress?.activeAssignmentExerciseName ||
+      activeProgram?.title ||
+      activeProgram?.name ||
+      activeProgram?.recommendedSimName ||
+      humanizeToken(activeProgram?.recommendedLegacyExerciseId || activeProgram?.recommendedSimId),
+    80
+  );
+};
+
+const dailyAssignmentUpdatedAt = (assignment: PulseCheckDailyAssignment): Date | undefined =>
+  latestDateOf(
+    toDateOrNull(assignment.completedAt),
+    toDateOrNull(assignment.updatedAt),
+    toDateOrNull(assignment.createdAt),
+    dateFromDateKey(assignment.sourceDate)
+  );
+
+const curriculumAssignmentUpdatedAt = (assignment: CurriculumAssignment): Date | undefined =>
+  latestDateOf(
+    toDateOrNull(assignment.updatedAt),
+    toDateOrNull(assignment.createdAt),
+    toDateOrNull(assignment.endDate),
+    toDateOrNull(assignment.startDate)
+  );
 
 const toMembershipMillis = (value: any) => {
   if (!value) return 0;
@@ -490,14 +787,14 @@ class CoachService {
           const self = (this as CoachService | undefined) || coachService;
           const athleteStats = await self.getAthleteStats(athleteUserId);
 
-          // Last active should prioritize most recent conversation; fallback to PulseCheck membership timestamps.
-          const conversationDate = athleteStats.lastConversationDate;
-          const linkUpdated = convertFirestoreTimestamp(
+          // Last active should reflect the athlete's own PulseCheck history,
+          // not when this team membership was created.
+          const linkUpdated = toDateOrNull(
             connection.athleteMembership.updatedAt || connection.athleteMembership.grantedAt || connection.athleteMembership.createdAt
           );
-          const lastActive = conversationDate && !isNaN(conversationDate.getTime())
-            ? conversationDate
-            : linkUpdated;
+          const lastActive =
+            latestDateOf(athleteStats.lastCheckInDate, athleteStats.lastConversationDate) ||
+            linkUpdated;
           
           athletes.push({
             id: athleteUserId,
@@ -529,120 +826,98 @@ class CoachService {
     weeklyGoalProgress: number;
     sentimentScore: number;
     lastConversationDate?: Date;
+    lastCheckInDate?: Date;
+    lastTrainingDate?: Date;
   }> {
     try {
-      console.log(`[CoachService] Fetching real stats for athlete: ${athleteUserId}`);
+      console.log(`[CoachService] Fetching PulseCheck lifetime stats for athlete: ${athleteUserId}`);
 
-      // 1. Get conversation count and messages for sentiment analysis
-      const conversationsRef = collection(db, 'conversations');
-      const conversationQuery = query(conversationsRef, where('userId', '==', athleteUserId));
-      const conversationSnapshot = await getDocs(conversationQuery);
-      
-      let totalMessages = 0;
-      let lastConversationDate: Date | undefined;
-      let allMessageContent: string[] = [];
+      const [
+        conversationSnapshot,
+        noraConversationSnapshot,
+        mentalCheckInSnapshot,
+        morningCheckInSnapshot,
+        simCompletionSnapshot,
+        iosCompletionSnapshot,
+        simSessionSnapshot,
+        streakSnapshot,
+        history,
+      ] = await Promise.all([
+        getDocs(query(collection(db, 'conversations'), where('userId', '==', athleteUserId))).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION), where('athleteUserId', '==', athleteUserId))).catch(() => null),
+        getDocs(collection(db, MENTAL_CHECKINS_ROOT, athleteUserId, 'check-ins')).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION), where('athleteUserId', '==', athleteUserId))).catch(() => null),
+        getDocs(collection(db, SIM_COMPLETIONS_ROOT, athleteUserId, 'completions')).catch(() => null),
+        getDocs(collection(db, IOS_MENTAL_COMPLETIONS_ROOT, athleteUserId, 'completions')).catch(() => null),
+        getDocs(collection(db, SIM_SESSIONS_ROOT, athleteUserId, 'sessions')).catch(() => null),
+        getDoc(doc(db, MENTAL_TRAINING_STREAKS_COLLECTION, athleteUserId)).catch(() => null),
+        this.getDailySentimentHistory(athleteUserId, 28).catch(() => []),
+      ]);
 
-      // Process each conversation document
-      for (const conversationDoc of conversationSnapshot.docs) {
-        const conversationData = conversationDoc.data();
-        
-        // Count messages in this conversation
-        if (conversationData.messages && Array.isArray(conversationData.messages)) {
-          totalMessages += conversationData.messages.length;
-          
-          // Extract message content for sentiment analysis
-          conversationData.messages.forEach((message: any) => {
-            if (message.content && typeof message.content === 'string') {
-              allMessageContent.push(message.content);
-            }
-          });
-        }
-        
-        // Track most recent conversation
-        if (conversationData.updatedAt || conversationData.createdAt) {
-          const conversationDate = convertFirestoreTimestamp(conversationData.updatedAt || conversationData.createdAt);
-          if (!lastConversationDate || conversationDate > lastConversationDate) {
-            lastConversationDate = conversationDate;
-          }
-        }
-      }
+      const conversationDates: Date[] = [];
+      const addConversationDate = (data: Record<string, any>) => {
+        const date = toDateOrNull(data.updatedAt || data.createdAt || data.lastTurnAt);
+        if (date) conversationDates.push(date);
+      };
 
-      console.log(`[CoachService] Found ${conversationSnapshot.docs.length} conversations with ${totalMessages} total messages`);
+      conversationSnapshot?.docs.forEach((docSnapshot) => addConversationDate(docSnapshot.data()));
+      noraConversationSnapshot?.docs.forEach((docSnapshot) => addConversationDate(docSnapshot.data()));
+      const lastConversationDate = latestDateOf(...conversationDates);
 
-      // 2. Get workout sessions (you might have a different collection name)
-      // For now, we'll check if you have workout-related collections
-      let totalSessions = 0;
-      try {
-        // Try to query common workout collection names
-        const workoutCollections = ['workouts', 'sessions', 'exercises', 'detailed-workouts'];
-        
-        for (const collectionName of workoutCollections) {
-          try {
-            const workoutRef = collection(db, collectionName);
-            const workoutQuery = query(workoutRef, where('userId', '==', athleteUserId));
-            const workoutSnapshot = await getDocs(workoutQuery);
-            
-            if (workoutSnapshot.docs.length > 0) {
-              totalSessions += workoutSnapshot.docs.length;
-              console.log(`[CoachService] Found ${workoutSnapshot.docs.length} documents in ${collectionName}`);
-              break; // Use the first collection that has data
-            }
-          } catch (_collectionError) {
-            // Collection might not exist, continue to next one
-            continue;
-          }
-        }
-      } catch (_workoutError) {
-        console.log('[CoachService] No workout data found, using 0 sessions');
-      }
+      const checkInDates = new Set<string>();
+      const checkInDateValues: Date[] = [];
+      const addCheckIn = (data: Record<string, any>) => {
+        const dateKey = resolveDayKey(data);
+        if (dateKey) checkInDates.add(dateKey);
+        const date = toDateOrNull(data.createdAt || data.updatedAt) || (dateKey ? new Date(`${dateKey}T12:00:00`) : null);
+        if (date) checkInDateValues.push(date);
+      };
+      mentalCheckInSnapshot?.docs.forEach((docSnapshot) => addCheckIn(docSnapshot.data()));
+      morningCheckInSnapshot?.docs.forEach((docSnapshot) => addCheckIn(docSnapshot.data()));
+      const lastCheckInDate = latestDateOf(...checkInDateValues);
 
-      // 3. Calculate weekly goal progress: Track Nora check-ins (7 conversations per week)
-      let weeklyGoalProgress = 0;
-      try {
-        const now = new Date();
-        const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
-        weekStart.setHours(0, 0, 0, 0);
-        
-        // Get all conversations for this user
-        const conversationsRef = collection(db, 'conversations');
-        const conversationQuery = query(conversationsRef, where('userId', '==', athleteUserId));
-        const conversationSnapshot = await getDocs(conversationQuery);
-        
-        // Count unique days with conversations this week
-        const checkInDates = new Set<string>();
-        conversationSnapshot.docs.forEach(doc => {
-          const conversationData = doc.data();
-          const conversationDate = convertFirestoreTimestamp(conversationData.createdAt || conversationData.updatedAt);
-          
-          // Check if conversation is within this week
-          if (conversationDate >= weekStart) {
-            const dateStr = conversationDate.toISOString().split('T')[0]; // YYYY-MM-DD
-            checkInDates.add(dateStr);
-          }
-        });
-        
-        const checkInsThisWeek = checkInDates.size;
-        const targetCheckIns = 7; // Daily check-ins with Nora
-        weeklyGoalProgress = Math.min(100, Math.round((checkInsThisWeek / targetCheckIns) * 100));
-        
-        console.log(`[CoachService] Weekly goal: ${checkInsThisWeek}/${targetCheckIns} check-ins = ${weeklyGoalProgress}%`);
-      } catch (weeklyGoalError) {
-        console.log('[CoachService] Error calculating weekly goal progress:', weeklyGoalError);
-      }
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const rolling7Start = new Date(todayStart);
+      rolling7Start.setDate(todayStart.getDate() - 6);
+      const checkInsLast7 = Array.from(checkInDates).filter((dateKey) => {
+        const date = new Date(`${dateKey}T12:00:00`);
+        return date >= rolling7Start && date <= new Date(todayStart.getTime() + 86_399_999);
+      }).length;
+      const weeklyGoalProgress = Math.min(100, Math.round((checkInsLast7 / 7) * 100));
 
-      // 4. Basic sentiment analysis (temporary fallback)
-      let sentimentScore = 0;
-      if (allMessageContent.length > 0) {
-        sentimentScore = this.calculateBasicSentiment(allMessageContent);
-      }
+      const trainingDates: Date[] = [];
+      const addTrainingDate = (data: Record<string, any>) => {
+        const date = toDateOrNull(data.completedAt || data.updatedAt || data.createdAt);
+        if (date) trainingDates.push(date);
+      };
+      simCompletionSnapshot?.docs.forEach((docSnapshot) => addTrainingDate(docSnapshot.data()));
+      iosCompletionSnapshot?.docs.forEach((docSnapshot) => addTrainingDate(docSnapshot.data()));
+      simSessionSnapshot?.docs.forEach((docSnapshot) => addTrainingDate(docSnapshot.data()));
+      const lastTrainingDate = latestDateOf(...trainingDates);
+
+      const completionTotal =
+        countCompletedDocs(simCompletionSnapshot?.docs || []) +
+        countCompletedDocs(iosCompletionSnapshot?.docs || []) +
+        countCompletedDocs(simSessionSnapshot?.docs || []);
+      const streakTotal = Number(streakSnapshot?.exists() ? streakSnapshot.data()?.totalExercisesCompleted : 0);
+      const totalSessions = Math.max(completionTotal, Number.isFinite(streakTotal) ? streakTotal : 0);
+
+      const conversationCount =
+        (conversationSnapshot?.docs.length || 0) +
+        (noraConversationSnapshot?.docs.length || 0);
+
+      const latestHistoryRow = history.find((record) => record.messageCount > 0);
+      const sentimentScore = latestHistoryRow?.sentimentScore ?? 0;
 
       const stats = {
-        conversationCount: totalMessages,
+        conversationCount,
         totalSessions,
         weeklyGoalProgress,
         sentimentScore,
-        lastConversationDate
+        lastConversationDate,
+        lastCheckInDate,
+        lastTrainingDate,
       };
 
       console.log(`[CoachService] Calculated stats for ${athleteUserId}:`, stats);
@@ -655,6 +930,146 @@ class CoachService {
         totalSessions: 0,
         weeklyGoalProgress: 0,
         sentimentScore: 0
+      };
+    }
+  }
+
+  /**
+   * Get the athlete's real PulseCheck curriculum/assignment state for the coach profile drawer.
+   * This mirrors the iOS read paths instead of synthesizing placeholder modules.
+   */
+  async getAthleteCurriculumSnapshot(athleteUserId: string): Promise<CoachAthleteCurriculumSnapshot> {
+    try {
+      const [dailySnapshot, curriculumSnapshot, progressSnapshot] = await Promise.all([
+        getDocs(query(collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION), where('athleteId', '==', athleteUserId))).catch(() => null),
+        getDocs(query(collection(db, MENTAL_CURRICULUM_ASSIGNMENTS_COLLECTION), where('athleteId', '==', athleteUserId))).catch(() => null),
+        getDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, athleteUserId)).catch(() => null),
+      ]);
+
+      const progress = progressSnapshot?.exists()
+        ? athleteProgressFromFirestore(athleteUserId, progressSnapshot.data() as Record<string, any>)
+        : null;
+
+      const dailyItems: CoachAthleteCurriculumItem[] = (dailySnapshot?.docs || [])
+        .map((docSnapshot) => pulseCheckDailyAssignmentFromFirestore(docSnapshot.id, docSnapshot.data() as Record<string, any>))
+        .filter(isDailyCurriculumRecord)
+        .filter(
+          (assignment) =>
+            assignment.status !== PulseCheckDailyAssignmentStatus.Superseded &&
+            assignment.status !== PulseCheckDailyAssignmentStatus.Overridden
+        )
+        .map((assignment) => ({
+          id: assignment.id,
+          kind: dailyAssignmentKind(assignment),
+          source: 'daily-assignment' as const,
+          title: dailyAssignmentTitle(assignment),
+          detail: dailyAssignmentDetail(assignment),
+          status: dailyAssignmentStatus(assignment),
+          progressPct: dailyAssignmentProgressPct(assignment),
+          dueToday: assignment.curriculumIsDueToday,
+          updatedAt: dailyAssignmentUpdatedAt(assignment),
+        }));
+
+      const curriculumItems: CoachAthleteCurriculumItem[] = (curriculumSnapshot?.docs || [])
+        .map((docSnapshot) => {
+          const raw = docSnapshot.data() as Record<string, any>;
+          const assignment = curriculumAssignmentFromFirestore(docSnapshot.id, raw);
+          const title = compactText(
+            assignment.exercise?.name ||
+              raw.exerciseName ||
+              raw.exercise?.name ||
+              assignment.exerciseId,
+            80
+          ) || 'Assigned practice';
+
+          return {
+            id: assignment.id,
+            kind: 'curriculum' as const,
+            source: 'curriculum-assignment' as const,
+            title,
+            detail: curriculumAssignmentDetail(assignment),
+            status: curriculumAssignmentStatus(assignment),
+            progressPct: curriculumAssignmentProgressPct(assignment),
+            dueToday: assignment.status === CurriculumAssignmentStatus.Active || assignment.status === CurriculumAssignmentStatus.Extended,
+            updatedAt: curriculumAssignmentUpdatedAt(assignment),
+          };
+        });
+
+      const activeAssignmentId = progress?.activeAssignmentId;
+      const hasActiveAssignmentRow = Boolean(
+        activeAssignmentId &&
+          curriculumItems.some((item) => item.id === activeAssignmentId && item.status !== 'completed')
+      );
+      const activeProgramTitle = progressProgramTitle(progress);
+      const progressItem: CoachAthleteCurriculumItem | null =
+        activeProgramTitle && !hasActiveAssignmentRow
+          ? {
+              id: `athlete-progress:${athleteUserId}`,
+              kind: 'program',
+              source: 'athlete-progress',
+              title: activeProgramTitle,
+              detail: [
+                humanizeToken(progress?.currentPathway) || 'Current pathway',
+                typeof progress?.pathwayStep === 'number' && progress.pathwayStep > 0 ? `Step ${progress.pathwayStep}` : '',
+                typeof progress?.currentStreak === 'number' && progress.currentStreak > 0 ? `${progress.currentStreak}-day streak` : '',
+              ]
+                .filter(Boolean)
+                .join(' • '),
+              status: 'in-progress',
+              progressPct: 0,
+              dueToday: true,
+              updatedAt: toDateOrNull(progress?.updatedAt) || undefined,
+            }
+          : null;
+
+      const sortByUpdatedAt = (left: CoachAthleteCurriculumItem, right: CoachAthleteCurriculumItem) =>
+        (right.updatedAt?.getTime() || 0) - (left.updatedAt?.getTime() || 0);
+
+      const activeDaily = dailyItems
+        .filter((item) => item.status !== 'completed' && item.status !== 'paused')
+        .sort((left, right) => Number(right.dueToday) - Number(left.dueToday) || sortByUpdatedAt(left, right));
+      const activeCurriculum = curriculumItems
+        .filter((item) => item.status !== 'completed' && item.status !== 'paused')
+        .sort(sortByUpdatedAt);
+      const recentCompleted = [...dailyItems, ...curriculumItems]
+        .filter((item) => item.status === 'completed')
+        .sort(sortByUpdatedAt);
+      const paused = [...dailyItems, ...curriculumItems]
+        .filter((item) => item.status === 'paused')
+        .sort(sortByUpdatedAt);
+
+      const seen = new Set<string>();
+      const items = [...activeDaily, ...activeCurriculum, ...(progressItem ? [progressItem] : []), ...recentCompleted, ...paused]
+        .filter((item) => {
+          const key = `${item.source}:${item.id}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, 6);
+
+      return {
+        athleteId: athleteUserId,
+        items,
+        completedCount: items.filter((item) => item.status === 'completed').length,
+        totalCount: items.length,
+        currentPathway: progress?.currentPathway,
+        pathwayStep: progress?.pathwayStep,
+        totalAssignmentsCompleted: progress?.totalAssignmentsCompleted,
+        totalExercisesMastered: progress?.totalExercisesMastered,
+        activeProgramTitle: activeProgramTitle || undefined,
+        lastUpdatedAt: latestDateOf(
+          ...items.map((item) => item.updatedAt),
+          toDateOrNull(progress?.updatedAt)
+        ),
+      };
+    } catch (error) {
+      console.error('[CoachService] Error fetching athlete curriculum snapshot:', error);
+      return {
+        athleteId: athleteUserId,
+        items: [],
+        completedCount: 0,
+        totalCount: 0,
       };
     }
   }
@@ -1060,11 +1475,13 @@ class CoachService {
   }
 
   /**
-   * Get existing sentiment history for a user
+   * Get sentiment history for a user. This is intentionally athlete-history
+   * scoped, not team-membership scoped: once a coach can see the athlete, the
+   * chart backfills the athlete's PulseCheck check-ins and Nora sessions.
    */
   async getDailySentimentHistory(userId: string, days: number = 28, coachId?: string): Promise<DailySentimentRecord[]> {
     try {
-      console.log(`📊 [CoachService] Loading existing sentiment history for user: ${userId}`);
+      console.log(`📊 [CoachService] Loading PulseCheck sentiment history for user: ${userId}`);
       
       // Check privacy settings if coachId is provided
       if (coachId) {
@@ -1074,51 +1491,137 @@ class CoachService {
           return []; // Return empty array if no permission
         }
       }
-      
-      const sentimentRef = collection(db, 'dailySentimentAnalysis');
-      const q = query(
-        sentimentRef,
-        where('userId', '==', userId),
-        orderBy('date', 'desc'),
-        limit(days)
-      );
-      
-      const snapshot = await getDocs(q);
-      console.log(`📄 [CoachService] Found ${snapshot.docs.length} existing sentiment records`);
-      
-      const sentimentHistory: DailySentimentRecord[] = [];
-      
-      snapshot.docs.forEach((docSnapshot, index) => {
+
+      const now = new Date();
+      const oldest = new Date(now);
+      oldest.setHours(0, 0, 0, 0);
+      oldest.setDate(oldest.getDate() - Math.max(0, days - 1));
+      const aggregates = new Map<string, DailySignalAggregate>();
+
+      const addAggregate = (dateKey: string | null, sentimentScore: number, messageCount = 1, at?: Date | null) => {
+        if (!dateKey || messageCount <= 0) return;
+        const date = new Date(`${dateKey}T12:00:00`);
+        if (!Number.isFinite(date.getTime()) || date < oldest) return;
+        const latestAt = at && Number.isFinite(at.getTime()) ? at : date;
+        const existing = aggregates.get(dateKey) || {
+          scoreSum: 0,
+          scoreCount: 0,
+          messageCount: 0,
+          latestAt,
+        };
+        existing.scoreSum += clampSentiment(sentimentScore);
+        existing.scoreCount += 1;
+        existing.messageCount += messageCount;
+        if (latestAt > existing.latestAt) existing.latestAt = latestAt;
+        aggregates.set(dateKey, existing);
+      };
+
+      const [
+        existingSentimentSnapshot,
+        mentalCheckInSnapshot,
+        morningCheckInSnapshot,
+        conversationSnapshot,
+        noraConversationSnapshot,
+      ] = await Promise.all([
+        getDocs(
+          query(
+            collection(db, 'dailySentimentAnalysis'),
+            where('userId', '==', userId),
+            orderBy('date', 'desc'),
+            limit(days)
+          )
+        ).catch(() => null),
+        getDocs(collection(db, MENTAL_CHECKINS_ROOT, userId, 'check-ins')).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION), where('athleteUserId', '==', userId))).catch(() => null),
+        getDocs(query(collection(db, 'conversations'), where('userId', '==', userId))).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION), where('athleteUserId', '==', userId))).catch(() => null),
+      ]);
+
+      existingSentimentSnapshot?.docs.forEach((docSnapshot) => {
         const data = docSnapshot.data();
-        
-        // 🚨 Special logging for Aug 11 records
-        if (data.date === '2025-08-11') {
-          console.log(`🚨 FOUND EXISTING AUG 11 SENTIMENT RECORD:`, {
-            id: data.id,
-            date: data.date,
-            sentimentScore: data.sentimentScore,
-            messageCount: data.messageCount,
-            lastAnalyzedAt: data.lastAnalyzedAt,
-            createdAt: data.createdAt
-          });
+        const messageCount = Number(data.messageCount || 0);
+        if (messageCount > 0) {
+          addAggregate(
+            String(data.date || '').trim(),
+            Number(data.sentimentScore || 0),
+            messageCount,
+            toDateOrNull(data.updatedAt || data.lastAnalyzedAt || data.createdAt)
+          );
         }
-        
-        console.log(`   📊 Record ${index + 1}: ${data.date} → sentiment: ${data.sentimentScore}, messages: ${data.messageCount}`);
-        
-        sentimentHistory.push({
-          id: data.id,
-          userId: data.userId,
-          date: data.date,
-          sentimentScore: data.sentimentScore,
-          messageCount: data.messageCount,
-          lastAnalyzedAt: data.lastAnalyzedAt?.toDate?.() || new Date(data.lastAnalyzedAt),
-          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
-          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
-        });
       });
-      
-      console.log(`📊 [CoachService] Loaded ${sentimentHistory.length} sentiment records, dates: ${sentimentHistory.map(r => r.date).join(', ')}`);
-      
+
+      mentalCheckInSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        addAggregate(
+          resolveDayKey(data),
+          resolveCheckInSentiment(data),
+          1,
+          toDateOrNull(data.createdAt || data.updatedAt)
+        );
+      });
+
+      morningCheckInSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        addAggregate(
+          resolveDayKey(data),
+          resolveCheckInSentiment(data),
+          1,
+          toDateOrNull(data.createdAt || data.updatedAt)
+        );
+      });
+
+      conversationSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const messages = Array.isArray(data.messages)
+          ? data.messages
+              .filter((message: any) => {
+                const sender = String(message?.sender || message?.role || '').toLowerCase();
+                return message?.isFromUser === true || sender === 'user' || sender === 'athlete';
+              })
+              .map((message: any) => String(message?.content || '').trim())
+              .filter(Boolean)
+          : [];
+        const dateKey = resolveDayKey({ ...data, createdAt: data.createdAt || data.updatedAt });
+        addAggregate(
+          dateKey,
+          messages.length ? this.calculateBasicSentiment(messages) : 0,
+          messages.length,
+          toDateOrNull(data.updatedAt || data.createdAt)
+        );
+      });
+
+      noraConversationSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const turns = Array.isArray(data.turns) ? data.turns : [];
+        const texts = extractPulseCheckConversationTexts(turns);
+        const messageCount = countPulseCheckConversationTurns(turns);
+        addAggregate(
+          resolveDayKey({ ...data, createdAt: data.createdAt || data.updatedAt }),
+          texts.length ? this.calculateBasicSentiment(texts) : 0,
+          messageCount,
+          toDateOrNull(data.updatedAt || data.createdAt)
+        );
+      });
+
+      const sentimentHistory = Array.from(aggregates.entries())
+        .map(([date, aggregate]) => {
+          const score = aggregate.scoreCount > 0 ? aggregate.scoreSum / aggregate.scoreCount : 0;
+          return {
+            id: `${userId}_${date}`,
+            userId,
+            date,
+            sentimentScore: clampSentiment(score),
+            messageCount: aggregate.messageCount,
+            lastAnalyzedAt: aggregate.latestAt,
+            createdAt: aggregate.latestAt,
+            updatedAt: aggregate.latestAt,
+          };
+        })
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, days);
+
+      console.log(`📊 [CoachService] Loaded ${sentimentHistory.length} PulseCheck history rows, dates: ${sentimentHistory.map(r => r.date).join(', ')}`);
+
       return sentimentHistory; // Return in reverse chronological order (newest first)
     } catch (error) {
       console.error('[CoachService] Error fetching sentiment history:', error);

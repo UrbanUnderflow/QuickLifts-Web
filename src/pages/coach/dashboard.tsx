@@ -41,11 +41,8 @@ import {
   HeartPulse,
   CheckCircle2,
   Lock,
-  Moon,
   ClipboardList,
-  Eye,
   Zap,
-  Star,
   TrendingDown,
   Mail,
   CalendarDays,
@@ -63,7 +60,11 @@ import { useUser } from '../../hooks/useUser';
 import { setUser } from '../../redux/userSlice';
 import { showToast } from '../../redux/toastSlice';
 import { userService, User as UserModel } from '../../api/firebase/user';
-import { coachService } from '../../api/firebase/coach';
+import {
+  coachService,
+  type CoachAthleteCurriculumItem,
+  type CoachAthleteCurriculumSnapshot,
+} from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import { auth } from '../../api/firebase/config';
 import { signOut } from 'firebase/auth';
@@ -280,55 +281,28 @@ export const alertsFromEscalationRecords = (
     });
 
 // ---------------------------------------------------------------------------
-// Mental-readiness curriculum (self-guided PulseCheck modules)
+// Mental-readiness curriculum (real PulseCheck assignments/progress)
 // ---------------------------------------------------------------------------
 // When an athlete is on the clinical watch list (a Tier 3 escalation), the
-// self-guided modules are AUTO-PAUSED and the athlete is walled off from the
+// assignment surface is AUTO-PAUSED and the athlete is walled off from the
 // curriculum — clinical care leads, not self-serve content. The coach sees this
 // as a locked, read-only state.
 
-type CurriculumModule = {
-  id: string;
-  name: string;
-  detail: string;
-  icon: React.ElementType;
-  color: string;
+const CURRICULUM_ITEM_META: Record<
+  CoachAthleteCurriculumItem['kind'],
+  { icon: React.ElementType; color: string }
+> = {
+  protocol: { icon: Wind, color: '#22D3EE' },
+  simulation: { icon: Brain, color: '#8B5CF6' },
+  curriculum: { icon: ClipboardList, color: '#E0FE10' },
+  program: { icon: Zap, color: '#10B981' },
 };
 
-const MENTAL_READINESS_MODULES: CurriculumModule[] = [
-  { id: 'breath', name: 'Breath & Regulation', detail: 'Box breathing and in-the-moment resets', icon: Wind, color: '#22D3EE' },
-  { id: 'routine', name: 'Pre-Competition Routine', detail: 'A repeatable, calming game-day warm-up', icon: ClipboardList, color: '#E0FE10' },
-  { id: 'confidence', name: 'Confidence Anchoring', detail: 'Anchor words and highlight-reel recall', icon: Star, color: '#10B981' },
-  { id: 'focus', name: 'Focus & Reset', detail: 'Interrupt rumination, refocus under pressure', icon: Zap, color: '#F59E0B' },
-  { id: 'visualize', name: 'Visualization', detail: 'Mental rehearsal of key game scenarios', icon: Eye, color: '#8B5CF6' },
-  { id: 'recovery', name: 'Sleep & Recovery', detail: 'Wind-down habits and recovery tracking', icon: Moon, color: '#3B82F6' },
-];
-
-type ModuleStatus = 'completed' | 'in-progress' | 'locked';
-type ModuleProgress = { module: CurriculumModule; status: ModuleStatus; pct: number };
-
-const strHash = (s: string): number => {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-};
-
-// Deterministic demo progress — further along the more sessions logged and the
-// healthier the sentiment. A real curriculum service would replace this.
-const buildCurriculum = (a: CoachAthlete): ModuleProgress[] => {
-  const reach = Math.max(
-    0,
-    Math.min(
-      MENTAL_READINESS_MODULES.length,
-      Math.round(a.totalSessions / 24 + ((a.sentimentScore ?? 0) + 0.7))
-    )
-  );
-  const base = strHash(a.id);
-  return MENTAL_READINESS_MODULES.map((m, i) => {
-    if (i < reach) return { module: m, status: 'completed' as const, pct: 100 };
-    if (i === reach) return { module: m, status: 'in-progress' as const, pct: 20 + ((base >> i) % 65) };
-    return { module: m, status: 'locked' as const, pct: 0 };
-  });
+const CURRICULUM_STATUS_LABEL: Record<CoachAthleteCurriculumItem['status'], string> = {
+  assigned: 'Assigned',
+  'in-progress': 'In progress',
+  completed: 'Complete',
+  paused: 'Paused',
 };
 
 // Sentiment band → coach-friendly mood label + color.
@@ -2751,9 +2725,14 @@ const AthleteProfileDrawer: React.FC<{
 }> = ({ athlete, alerts, canSeeTier3 = true, onClose }) => {
   const [history, setHistory] = useState<{ score: number; messages: number }[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [curriculumSnapshot, setCurriculumSnapshot] = useState<CoachAthleteCurriculumSnapshot | null>(null);
+  const [loadingCurriculum, setLoadingCurriculum] = useState(false);
 
   useEffect(() => {
-    if (!athlete) return;
+    if (!athlete) {
+      setHistory([]);
+      return;
+    }
     let cancelled = false;
     setLoadingHistory(true);
     setHistory([]);
@@ -2767,6 +2746,30 @@ const AthleteProfileDrawer: React.FC<{
       .catch(() => {})
       .finally(() => {
         if (!cancelled) setLoadingHistory(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [athlete?.id]);
+
+  useEffect(() => {
+    if (!athlete) {
+      setCurriculumSnapshot(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingCurriculum(true);
+    setCurriculumSnapshot(null);
+    coachService
+      .getAthleteCurriculumSnapshot(athlete.id)
+      .then((snapshot) => {
+        if (!cancelled) setCurriculumSnapshot(snapshot);
+      })
+      .catch(() => {
+        if (!cancelled) setCurriculumSnapshot(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingCurriculum(false);
       });
     return () => {
       cancelled = true;
@@ -2795,8 +2798,9 @@ const AthleteProfileDrawer: React.FC<{
   const recentScores = history.map((h) => h.score);
   const trend = trendOf(recentScores);
   const checkinsLast7 = history.slice(0, 7).filter((h) => h.messages > 0).length;
-  const curriculum = athlete ? buildCurriculum(athlete) : [];
-  const completedModules = curriculum.filter((c) => c.status === 'completed').length;
+  const curriculum = curriculumSnapshot?.items || [];
+  const completedModules = curriculumSnapshot?.completedCount ?? curriculum.filter((c) => c.status === 'completed').length;
+  const totalModules = curriculumSnapshot?.totalCount ?? curriculum.length;
 
   const trendMeta: Record<SentimentTrend, { label: string; color: string; icon: React.ElementType }> = {
     improving: { label: 'Improving', color: '#22C55E', icon: TrendingUp },
@@ -2974,52 +2978,77 @@ const AthleteProfileDrawer: React.FC<{
                     </span>
                   ) : (
                     <span className="text-[10px] text-zinc-500">
-                      {completedModules}/{curriculum.length} complete
+                      {loadingCurriculum
+                        ? 'Loading...'
+                        : totalModules > 0
+                        ? `${completedModules}/${totalModules} complete`
+                        : 'No active work'}
                     </span>
                   )}
                 </div>
                 <div className={`space-y-2 ${walledOff ? 'opacity-50 pointer-events-none select-none' : ''}`}>
-                  {curriculum.map(({ module: m, status: ms, pct }) => {
-                    const Icon = m.icon;
-                    const effectiveStatus: ModuleStatus = walledOff ? 'locked' : ms;
-                    return (
-                      <div
-                        key={m.id}
-                        className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
-                      >
+                  {loadingCurriculum ? (
+                    <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-xs text-zinc-500">
+                      Loading real assignments...
+                    </div>
+                  ) : curriculum.length === 0 ? (
+                    <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-xs text-zinc-500">
+                      No PulseCheck curriculum assignments are active for {first} yet.
+                    </div>
+                  ) : (
+                    curriculum.map((item) => {
+                      const meta = CURRICULUM_ITEM_META[item.kind];
+                      const Icon = meta.icon;
+                      const effectiveStatus = walledOff ? 'paused' : item.status;
+                      const pct = Math.max(0, Math.min(100, Math.round(item.progressPct || 0)));
+                      return (
                         <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: `${m.color}15` }}
+                          key={`${item.source}:${item.id}`}
+                          className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
                         >
-                          <Icon className="w-4 h-4" style={{ color: m.color }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium text-white">{m.name}</div>
-                          <div className="text-[10px] text-zinc-500 truncate">{m.detail}</div>
-                          {!walledOff && effectiveStatus === 'in-progress' && (
-                            <div className="mt-1.5 h-1 bg-zinc-700/50 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: m.color }} />
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: `${meta.color}15` }}
+                          >
+                            <Icon className="w-4 h-4" style={{ color: meta.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="text-xs font-medium text-white truncate">{item.title}</div>
+                              {item.dueToday && !walledOff && (
+                                <span className="flex-shrink-0 rounded-full bg-[#E0FE10]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#E0FE10]">
+                                  Due today
+                                </span>
+                              )}
                             </div>
-                          )}
+                            <div className="text-[10px] text-zinc-500 truncate">{item.detail || CURRICULUM_STATUS_LABEL[item.status]}</div>
+                            {!walledOff && effectiveStatus === 'in-progress' && pct > 0 && (
+                              <div className="mt-1.5 h-1 bg-zinc-700/50 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta.color }} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-shrink-0">
+                            {walledOff ? (
+                              <Lock className="w-4 h-4 text-zinc-600" />
+                            ) : effectiveStatus === 'completed' ? (
+                              <CheckCircle2 className="w-4 h-4 text-green-400" />
+                            ) : effectiveStatus === 'in-progress' ? (
+                              <span className="text-[10px] text-zinc-400 font-medium">{pct > 0 ? `${pct}%` : 'Active'}</span>
+                            ) : effectiveStatus === 'paused' ? (
+                              <Lock className="w-4 h-4 text-zinc-600" />
+                            ) : (
+                              <span className="text-[10px] text-zinc-500 font-medium">{CURRICULUM_STATUS_LABEL[effectiveStatus]}</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-shrink-0">
-                          {walledOff ? (
-                            <Lock className="w-4 h-4 text-zinc-600" />
-                          ) : effectiveStatus === 'completed' ? (
-                            <CheckCircle2 className="w-4 h-4 text-green-400" />
-                          ) : effectiveStatus === 'in-progress' ? (
-                            <span className="text-[10px] text-zinc-400 font-medium">{pct}%</span>
-                          ) : (
-                            <Lock className="w-4 h-4 text-zinc-700" />
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
                 {walledOff && (
                   <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">
-                    Modules resume automatically once {first} is cleared from clinical care.
+                    Assignments resume automatically once {first} is cleared from clinical care.
                   </p>
                 )}
               </div>
@@ -3089,6 +3118,9 @@ const AthleteInviteSection: React.FC<{
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  // Opt-in: email this coach when the athlete accepts. hello@fitwithpulse.ai is
+  // always notified regardless; this just CCs the inviting coach.
+  const [notifyOnAccept, setNotifyOnAccept] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState('https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete');
@@ -3167,6 +3199,7 @@ const AthleteInviteSection: React.FC<{
   const openInvite = () => {
     setName('');
     setEmail('');
+    setNotifyOnAccept(false);
     setCopied(false);
     setInviteOpen(true);
   };
@@ -3256,6 +3289,8 @@ const AthleteInviteSection: React.FC<{
         recipientName: n,
         createdByUserId: coachId,
         createdByEmail: coachEmail || '',
+        createdByName: coachName,
+        notifyCoachOnAccept: notifyOnAccept,
       });
 
       const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
@@ -3611,6 +3646,19 @@ const AthleteInviteSection: React.FC<{
                     Athletes get set up in the PulseCheck app. Email is optional — you can share a link instead.
                   </p>
                 </div>
+
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={notifyOnAccept}
+                    onChange={(e) => setNotifyOnAccept(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-zinc-600 bg-zinc-900 text-[#E0FE10] accent-[#E0FE10] focus:outline-none focus:ring-1 focus:ring-[#E0FE10]/40"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-zinc-200">Email me when this athlete accepts</span>
+                    <span className="block text-[11px] text-zinc-600">Otherwise only our team is notified.</span>
+                  </span>
+                </label>
 
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
                   <div className="min-w-0">

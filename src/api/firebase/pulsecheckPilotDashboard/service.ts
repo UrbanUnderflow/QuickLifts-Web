@@ -36,13 +36,19 @@ import {
   isRescuedAdherenceCompletion,
   resolveAthleteDayAdherenceState,
 } from './adherenceOrchestrator';
+import {
+  getDefaultPulseCheckIntakeForm,
+} from '../pulsecheckProvisioning/types';
 import type {
+  PulseCheckIntakeResponses,
   PulseCheckPilot,
   PulseCheckPilotCohort,
   PulseCheckPilotEnrollment,
   PulseCheckRequiredConsentDocument,
+  PulseCheckTeam,
   PulseCheckTeamMembership,
 } from '../pulsecheckProvisioning/types';
+import type { SurveyQuestion } from '../creatorPages/service';
 import type {
   PilotDashboardAthleteDetail,
   PilotDashboardAthleteProfileSummary,
@@ -54,6 +60,9 @@ import type {
   PilotDashboardOutcomeOperationalDiagnostics,
   PilotDashboardOutcomeSurveyDiagnostics,
   PilotDashboardAthleteSummary,
+  PilotDashboardAthleteIntakeAnswer,
+  PilotDashboardAthleteRosterEntry,
+  PilotDashboardAthleteRosterFilter,
   PilotDashboardRosterAthleteSummary,
   PilotDashboardCohortSummary,
   PilotDashboardDetail,
@@ -1787,6 +1796,106 @@ async function loadAthleteTimelineItems(athleteId: string) {
   };
 }
 
+const humanizeIntakeQuestionId = (questionId: string): string => {
+  const normalized = normalizeString(questionId);
+  if (!normalized) return 'Question';
+  return normalized
+    .replace(/^athlete[-_]/i, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .trim() || 'Question';
+};
+
+const formatIntakeAnswerValue = (value: string | number | string[] | undefined | null): string => {
+  if (value === undefined || value === null) return '';
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeString(typeof entry === 'string' ? entry : String(entry ?? ''))).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  return normalizeString(typeof value === 'string' ? value : String(value));
+};
+
+const resolveTeamAthleteIntakeQuestions = (team: PulseCheckTeam | null | undefined): SurveyQuestion[] => {
+  const overrideQuestions = team?.intake?.athlete?.questions;
+  if (Array.isArray(overrideQuestions) && overrideQuestions.length > 0) {
+    return overrideQuestions;
+  }
+  return getDefaultPulseCheckIntakeForm('athlete').questions;
+};
+
+const buildAthleteIntakeAnswers = (
+  responses: PulseCheckIntakeResponses | undefined | null,
+  questions: SurveyQuestion[]
+): PilotDashboardAthleteIntakeAnswer[] => {
+  const safeResponses = responses && typeof responses === 'object' ? responses : {};
+  const questionLabelById = new Map<string, string>();
+  questions.forEach((question) => {
+    const questionId = normalizeString(question?.id);
+    if (!questionId) return;
+    questionLabelById.set(questionId, normalizeString(question?.question) || humanizeIntakeQuestionId(questionId));
+  });
+
+  const answers: PilotDashboardAthleteIntakeAnswer[] = [];
+  const consumedIds = new Set<string>();
+
+  // Preserve canonical question-set ordering first.
+  questions.forEach((question) => {
+    const questionId = normalizeString(question?.id);
+    if (!questionId || consumedIds.has(questionId)) return;
+    if (!(questionId in safeResponses)) return;
+    consumedIds.add(questionId);
+    answers.push({
+      questionId,
+      questionText: questionLabelById.get(questionId) || humanizeIntakeQuestionId(questionId),
+      answer: formatIntakeAnswerValue(safeResponses[questionId]),
+    });
+  });
+
+  // Append any answered ids that are not in the question set, at the end.
+  Object.keys(safeResponses).forEach((rawId) => {
+    const questionId = normalizeString(rawId);
+    if (!questionId || consumedIds.has(questionId)) return;
+    consumedIds.add(questionId);
+    answers.push({
+      questionId,
+      questionText: questionLabelById.get(questionId) || humanizeIntakeQuestionId(questionId),
+      answer: formatIntakeAnswerValue(safeResponses[questionId]),
+    });
+  });
+
+  return answers;
+};
+
+const resolveAthleteEnrollmentStatus = (
+  enrollment: PulseCheckPilotEnrollment | null | undefined
+): PilotDashboardAthleteRosterEntry['enrollmentStatus'] => {
+  if (!enrollment) return 'none';
+  const status = normalizeString(enrollment.status);
+  if (status === 'active') return 'active';
+  if (status === 'withdrawn' || !status) return 'none';
+  return 'pending';
+};
+
+// Picks the most relevant membership/enrollment pairing for a single athlete who
+// may appear across multiple teams: active enrollment > has intake > most recent.
+const scoreAthleteCandidate = (
+  membership: PulseCheckTeamMembership | null,
+  enrollment: PulseCheckPilotEnrollment | null
+): number => {
+  let score = 0;
+  if (enrollment && normalizeString(enrollment.status) === 'active') score += 1000;
+  if (enrollment && normalizeString(enrollment.status) && normalizeString(enrollment.status) !== 'withdrawn') score += 200;
+  if (coerceTimestampMs(membership?.athleteOnboarding?.intakeCompletedAt)) score += 100;
+  const recencyMs = Math.max(
+    coerceTimestampMs(enrollment?.updatedAt),
+    coerceTimestampMs(membership?.updatedAt),
+    coerceTimestampMs(membership?.createdAt)
+  );
+  // Normalize recency into a small additive tiebreaker (days since epoch).
+  score += recencyMs ? recencyMs / 1e11 : 0;
+  return score;
+};
+
 export const pulseCheckPilotDashboardService = {
   isDemoModeEnabled(): boolean {
     return pilotDashboardDemoMode.isEnabled();
@@ -2363,6 +2472,202 @@ export const pulseCheckPilotDashboardService = {
           left.team.displayName.localeCompare(right.team.displayName) ||
           left.pilot.name.localeCompare(right.pilot.name)
       );
+  },
+
+  async getPilotDashboardAthletes(
+    filter: PilotDashboardAthleteRosterFilter = {}
+  ): Promise<PilotDashboardAthleteRosterEntry[]> {
+    const normalizedOrganizationId = normalizeString(filter.organizationId);
+    const normalizedTeamId = normalizeString(filter.teamId);
+    const normalizedStudyMode = normalizeString(filter.studyMode);
+
+    const [organizations, teams, pilots, cohorts, enrollments] = await Promise.all([
+      pulseCheckProvisioningService.listOrganizations(),
+      pulseCheckProvisioningService.listTeams(),
+      pulseCheckProvisioningService.listPilots(),
+      pulseCheckProvisioningService.listPilotCohorts(),
+      pulseCheckProvisioningService.listPilotEnrollments(),
+    ]);
+
+    const organizationMap = new Map(organizations.map((organization) => [organization.id, organization]));
+    const teamMap = new Map(teams.map((team) => [team.id, team]));
+    const cohortMap = new Map(cohorts.map((cohort) => [cohort.id, cohort]));
+
+    const cohortsByPilot = new Map<string, PulseCheckPilotCohort[]>();
+    cohorts.forEach((cohort) => {
+      const current = cohortsByPilot.get(cohort.pilotId) || [];
+      current.push(cohort);
+      cohortsByPilot.set(cohort.pilotId, current);
+    });
+
+    const enrollmentsByPilot = new Map<string, PulseCheckPilotEnrollment[]>();
+    enrollments.forEach((enrollment) => {
+      const current = enrollmentsByPilot.get(enrollment.pilotId) || [];
+      current.push(enrollment);
+      enrollmentsByPilot.set(enrollment.pilotId, current);
+    });
+
+    // Scope to the same operationally-active pilots the directory surfaces, then
+    // honor the page-level org/team/study-mode filters.
+    const inScopePilots = pilots.filter((pilot) => {
+      const pilotCohorts = cohortsByPilot.get(pilot.id) || [];
+      const pilotEnrollments = enrollmentsByPilot.get(pilot.id) || [];
+      if (!isPilotOperationallyActive(pilot, pilotCohorts, pilotEnrollments)) return false;
+      if (!organizationMap.has(pilot.organizationId) || !teamMap.has(pilot.teamId)) return false;
+      if (normalizedOrganizationId && pilot.organizationId !== normalizedOrganizationId) return false;
+      if (normalizedTeamId && pilot.teamId !== normalizedTeamId) return false;
+      if (normalizedStudyMode && normalizeString(pilot.studyMode) !== normalizedStudyMode) return false;
+      return true;
+    });
+
+    // In-scope teams = teams that own at least one in-scope pilot.
+    const inScopeTeamIds = new Set<string>();
+    const primaryPilotByTeamId = new Map<string, PulseCheckPilot>();
+    inScopePilots.forEach((pilot) => {
+      inScopeTeamIds.add(pilot.teamId);
+      if (!primaryPilotByTeamId.has(pilot.teamId)) {
+        primaryPilotByTeamId.set(pilot.teamId, pilot);
+      }
+    });
+
+    if (inScopeTeamIds.size === 0) return [];
+
+    const scopedTeamIds = Array.from(inScopeTeamIds);
+
+    // Map team -> enrollments by athlete (latest wins) so team-only athletes and
+    // enrolled athletes can be unioned.
+    const enrollmentByTeamAndAthlete = new Map<string, Map<string, PulseCheckPilotEnrollment>>();
+    inScopePilots.forEach((pilot) => {
+      const teamEnrollments = enrollmentByTeamAndAthlete.get(pilot.teamId) || new Map<string, PulseCheckPilotEnrollment>();
+      (enrollmentsByPilot.get(pilot.id) || []).forEach((enrollment) => {
+        const athleteId = normalizeString(enrollment.userId);
+        if (!athleteId) return;
+        const existing = teamEnrollments.get(athleteId);
+        const existingIsActive = existing && normalizeString(existing.status) === 'active';
+        const candidateIsActive = normalizeString(enrollment.status) === 'active';
+        if (
+          !existing ||
+          (candidateIsActive && !existingIsActive) ||
+          coerceTimestampMs(enrollment.updatedAt) >= coerceTimestampMs(existing.updatedAt)
+        ) {
+          teamEnrollments.set(athleteId, enrollment);
+        }
+      });
+      enrollmentByTeamAndAthlete.set(pilot.teamId, teamEnrollments);
+    });
+
+    const membershipsByTeam = await Promise.all(
+      scopedTeamIds.map((teamId) => pulseCheckProvisioningService.listTeamMemberships(teamId))
+    );
+
+    interface RosterCandidate {
+      athleteId: string;
+      teamId: string;
+      membership: PulseCheckTeamMembership | null;
+      enrollment: PulseCheckPilotEnrollment | null;
+    }
+
+    const candidates: RosterCandidate[] = [];
+    scopedTeamIds.forEach((teamId, index) => {
+      const memberships = membershipsByTeam[index] || [];
+      const teamEnrollments = enrollmentByTeamAndAthlete.get(teamId) || new Map<string, PulseCheckPilotEnrollment>();
+      const seenAthleteIds = new Set<string>();
+
+      memberships
+        .filter((membership) => normalizeString(membership.role) === 'athlete')
+        .forEach((membership) => {
+          const athleteId = normalizeString(membership.userId);
+          if (!athleteId) return;
+          seenAthleteIds.add(athleteId);
+          candidates.push({
+            athleteId,
+            teamId,
+            membership,
+            enrollment: teamEnrollments.get(athleteId) || null,
+          });
+        });
+
+      // Union enrolled athletes who have no athlete membership on this team.
+      teamEnrollments.forEach((enrollment, athleteId) => {
+        if (seenAthleteIds.has(athleteId)) return;
+        seenAthleteIds.add(athleteId);
+        candidates.push({
+          athleteId,
+          teamId,
+          membership: null,
+          enrollment,
+        });
+      });
+    });
+
+    // Dedupe by athlete user id, keeping the most relevant candidate.
+    const bestCandidateByAthleteId = new Map<string, RosterCandidate>();
+    candidates.forEach((candidate) => {
+      const existing = bestCandidateByAthleteId.get(candidate.athleteId);
+      if (
+        !existing ||
+        scoreAthleteCandidate(candidate.membership, candidate.enrollment) >
+          scoreAthleteCandidate(existing.membership, existing.enrollment)
+      ) {
+        bestCandidateByAthleteId.set(candidate.athleteId, candidate);
+      }
+    });
+
+    const dedupedCandidates = Array.from(bestCandidateByAthleteId.values());
+
+    // Batch user-doc reads (one per unique athlete).
+    const profileContexts = await Promise.all(
+      dedupedCandidates.map((candidate) => loadAthleteProfileSummary(candidate.athleteId, candidate.membership))
+    );
+
+    const entries: PilotDashboardAthleteRosterEntry[] = dedupedCandidates.map((candidate, index) => {
+      const team = teamMap.get(candidate.teamId) || null;
+      const organization = team ? organizationMap.get(team.organizationId) || null : null;
+      const enrollment = candidate.enrollment;
+      const pilot = enrollment
+        ? pilots.find((entry) => entry.id === enrollment.pilotId) || primaryPilotByTeamId.get(candidate.teamId) || null
+        : primaryPilotByTeamId.get(candidate.teamId) || null;
+      const cohort = enrollment && normalizeString(enrollment.cohortId)
+        ? cohortMap.get(normalizeString(enrollment.cohortId)) || null
+        : null;
+      const profile = profileContexts[index]?.profile;
+      const athleteOnboarding = candidate.membership?.athleteOnboarding;
+      const intakeCompleted = Boolean(coerceTimestampMs(athleteOnboarding?.intakeCompletedAt));
+      const intake = buildAthleteIntakeAnswers(
+        athleteOnboarding?.intakeResponses,
+        resolveTeamAthleteIntakeQuestions(team)
+      );
+
+      return {
+        athleteUserId: candidate.athleteId,
+        displayName: buildAthleteLabel(candidate.membership, candidate.athleteId, enrollment, profile),
+        email: normalizeString(candidate.membership?.email) || normalizeString(profile?.email),
+        profileImageUrl:
+          normalizeString(profile?.profileImageUrl) ||
+          normalizeString((candidate.membership as Record<string, any> | null)?.prefilledProfileImageUrl) ||
+          undefined,
+        teamId: candidate.teamId,
+        teamName: normalizeString(team?.displayName),
+        organizationId: normalizeString(organization?.id) || normalizeString(team?.organizationId),
+        organizationName: normalizeString(organization?.displayName),
+        pilotId: pilot ? pilot.id : undefined,
+        pilotName: pilot ? normalizeString(pilot.name) || undefined : undefined,
+        cohortName: cohort ? normalizeString(cohort.name) || undefined : undefined,
+        enrollmentStatus: resolveAthleteEnrollmentStatus(enrollment),
+        onboardingStatus: normalizeString(candidate.membership?.onboardingStatus) || undefined,
+        intakeCompleted,
+        phone: normalizeString(candidate.membership?.phone),
+        role: normalizeString(candidate.membership?.role) || 'athlete',
+        intake,
+      };
+    });
+
+    return entries.sort(
+      (left, right) =>
+        left.organizationName.localeCompare(right.organizationName) ||
+        left.teamName.localeCompare(right.teamName) ||
+        left.displayName.localeCompare(right.displayName)
+    );
   },
 
   async getPilotDashboardDetail(pilotId: string): Promise<PilotDashboardDetail | null> {

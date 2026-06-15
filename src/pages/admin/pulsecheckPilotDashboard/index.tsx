@@ -9,10 +9,12 @@ import {
   FlaskConical,
   Layers3,
   MonitorPlay,
+  Phone,
   RefreshCcw,
   Search,
   ShieldAlert,
   Users2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
@@ -20,7 +22,10 @@ import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboa
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
-import type { PilotDashboardDirectoryEntry } from '../../../api/firebase/pulsecheckPilotDashboard/types';
+import type {
+  PilotDashboardAthleteRosterEntry,
+  PilotDashboardDirectoryEntry,
+} from '../../../api/firebase/pulsecheckPilotDashboard/types';
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
@@ -89,6 +94,35 @@ const getMetricValueClassName = (value: number, tone: MetricTone) => {
   }
 };
 
+const getAthleteInitials = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'PC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+};
+
+const getEnrollmentChipClassName = (status: PilotDashboardAthleteRosterEntry['enrollmentStatus']) => {
+  switch (status) {
+    case 'active':
+      return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200';
+    case 'pending':
+      return 'border-amber-400/25 bg-amber-400/10 text-amber-200';
+    default:
+      return 'border-white/15 bg-white/[0.04] text-white/55';
+  }
+};
+
+const getEnrollmentChipLabel = (status: PilotDashboardAthleteRosterEntry['enrollmentStatus']) => {
+  switch (status) {
+    case 'active':
+      return 'Enrolled';
+    case 'pending':
+      return 'Pending';
+    default:
+      return 'Team only';
+  }
+};
+
 const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const router = useRouter();
   const [entries, setEntries] = useState<PilotDashboardDirectoryEntry[]>([]);
@@ -101,7 +135,12 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [activeSidebarItem, setActiveSidebarItem] = useState('Active Pilots');
+  const [athletes, setAthletes] = useState<PilotDashboardAthleteRosterEntry[]>([]);
+  const [athletesLoading, setAthletesLoading] = useState(true);
+  const [athletesError, setAthletesError] = useState<string | null>(null);
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const loadRequestIdRef = useRef(0);
+  const athletesRequestIdRef = useRef(0);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     const requestId = ++loadRequestIdRef.current;
@@ -126,6 +165,32 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, []);
+
+  const loadAthletes = async () => {
+    const requestId = ++athletesRequestIdRef.current;
+    setAthletesLoading(true);
+    setAthletesError(null);
+    try {
+      const nextAthletes = await pulseCheckPilotDashboardService.getPilotDashboardAthletes({
+        organizationId: organizationId || undefined,
+        teamId: teamId || undefined,
+        studyMode: studyMode || undefined,
+      });
+      if (requestId !== athletesRequestIdRef.current) return;
+      setAthletes(nextAthletes);
+    } catch (athletesLoadError: any) {
+      if (requestId !== athletesRequestIdRef.current) return;
+      setAthletesError(athletesLoadError?.message || 'Failed to load athletes.');
+    } finally {
+      if (requestId !== athletesRequestIdRef.current) return;
+      setAthletesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadAthletes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, teamId, studyMode, demoModeEnabled]);
 
   const toggleDemoMode = () => {
     const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
@@ -226,6 +291,31 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           : 0,
     }),
     [filteredEntries]
+  );
+
+  const filteredAthletes = useMemo(() => {
+    const normalizedQuery = pilotSearchQuery.trim().toLowerCase();
+    if (!normalizedQuery) return athletes;
+    return athletes.filter((athlete) => {
+      const searchableText = [
+        athlete.displayName,
+        athlete.email,
+        athlete.teamName,
+        athlete.organizationName,
+        athlete.pilotName,
+        athlete.cohortName,
+        athlete.phone,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return searchableText.includes(normalizedQuery);
+    });
+  }, [athletes, pilotSearchQuery]);
+
+  const selectedAthlete = useMemo(
+    () => filteredAthletes.find((athlete) => athlete.athleteUserId === selectedAthleteId) || null,
+    [filteredAthletes, selectedAthleteId]
   );
 
   const operationalWatchListSummary = useMemo(
@@ -449,7 +539,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       label: 'Monitoring',
       items: [
         { label: 'Active Pilots', value: summary.activePilots, icon: Activity, destination: { type: 'section', id: 'pilot-directory' } },
-        { label: 'Athletes', value: summary.activeAthletes, icon: Users2, destination: { type: 'section', id: 'aggregate-summary' } },
+        { label: 'Athletes', value: filteredAthletes.length, icon: Users2, destination: { type: 'section', id: 'athletes-directory' } },
         { label: 'Hypotheses', value: summary.hypothesisCount, icon: Layers3, destination: { type: 'section', id: 'aggregate-summary' } },
         { label: 'Watch List', value: operationalWatchListSummary.stateCount, icon: ShieldAlert, destination: { type: 'section', id: 'watch-list-summary' } },
       ],

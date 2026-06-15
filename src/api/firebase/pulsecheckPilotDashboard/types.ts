@@ -439,6 +439,40 @@ export interface PilotDashboardRosterAthleteSummary {
   operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }
 
+export type PilotDashboardAthleteEnrollmentStatus = 'active' | 'pending' | 'none';
+
+export interface PilotDashboardAthleteIntakeAnswer {
+  questionId: string;
+  questionText: string;
+  answer: string;
+}
+
+export interface PilotDashboardAthleteRosterEntry {
+  athleteUserId: string;
+  displayName: string;
+  email: string;
+  profileImageUrl?: string;
+  teamId: string;
+  teamName: string;
+  organizationId: string;
+  organizationName: string;
+  pilotId?: string;
+  pilotName?: string;
+  cohortName?: string;
+  enrollmentStatus: PilotDashboardAthleteEnrollmentStatus;
+  onboardingStatus?: string;
+  intakeCompleted: boolean;
+  phone: string;
+  role: string;
+  intake: PilotDashboardAthleteIntakeAnswer[];
+}
+
+export interface PilotDashboardAthleteRosterFilter {
+  organizationId?: string;
+  teamId?: string;
+  studyMode?: PulseCheckPilot['studyMode'] | '';
+}
+
 export interface PilotDashboardAthleteProfileSummary {
   displayName: string;
   onboardingName: string;
