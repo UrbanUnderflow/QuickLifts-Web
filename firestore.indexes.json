@@ -1,6 +1,24 @@
 {
   "indexes": [
     {
+      "collectionGroup": "health-context-source-records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "athleteUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "observedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "oneOnOneTrainings",
       "queryScope": "COLLECTION",
       "fields": [

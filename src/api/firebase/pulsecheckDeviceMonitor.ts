@@ -32,6 +32,24 @@ import type { User } from './user/types';
 /** Coarse connection state an operator can act on at a glance. */
 export type AthleteDeviceConnectionStatus = 'synced' | 'stale' | 'not_connected';
 
+/**
+ * Per-source device status. An athlete can have several wearables connected at
+ * once (e.g. Oura + Fitbit + Polar); each gets its own coverage + freshness so
+ * the coach dashboard can show a dead device alongside a healthy one instead of
+ * collapsing everything into a single "current device".
+ */
+export interface AthleteDevicePerSourceStatus {
+  sourceFamily: HealthContextSourceFamily;
+  label: string;
+  connectionStatus: AthleteDeviceConnectionStatus;
+  lastObservedAt: number | null;
+  lastSyncedAt: number | null;
+  wearDaysCovered: number;
+  windowDays: number;
+  wearCoveragePct: number;
+  dailyPresence: boolean[];
+}
+
 export interface AthleteDeviceStatus {
   athleteUserId: string;
   displayName: string;
@@ -55,6 +73,12 @@ export interface AthleteDeviceStatus {
   dailyPresence: boolean[];
   /** Count of wearable records pulled for this athlete in the window. */
   totalRecords: number;
+  /**
+   * Every wearable source seen for this athlete (records or a connected
+   * source-status), each with its own coverage + freshness. Sorted by most
+   * recent data first. The top-level summary fields above mirror devices[0].
+   */
+  devices: AthleteDevicePerSourceStatus[];
 }
 
 export interface TeamDeviceStatusResult {
@@ -295,71 +319,113 @@ export const deriveAthleteDeviceStatus = ({
   windowDays,
 }: DeriveInput): AthleteDeviceStatus => {
   const wearableRecords = records.filter((record) => WEARABLE_FAMILIES.has(record.sourceFamily));
-  const connectedStatus = sourceStatuses
-    .filter(isConnectedSourceStatus)
-    .sort((left, right) => sourceStatusTime(right) - sourceStatusTime(left))[0] || null;
+  const connectedStatuses = sourceStatuses.filter(isConnectedSourceStatus);
 
-  // Most-recent wearable record (records arrive observedAt-desc, but be defensive).
-  let latest: HealthContextSourceRecord | null = null;
-  let lastObservedAt: number | null = null;
-  let lastSyncedAt: number | null = null;
-  const presentDays = new Set<number>();
-
-  for (const record of wearableRecords) {
-    if (typeof record.observedAt === 'number') {
-      if (lastObservedAt === null || record.observedAt > lastObservedAt) {
-        lastObservedAt = record.observedAt;
-        latest = record;
-      }
-      const dayIndex = Math.floor((record.observedAt - windowStart) / SECONDS_PER_DAY);
-      if (dayIndex >= 0 && dayIndex < windowDays) {
-        presentDays.add(dayIndex);
-      }
-    }
-    if (typeof record.ingestedAt === 'number' && (lastSyncedAt === null || record.ingestedAt > lastSyncedAt)) {
-      lastSyncedAt = record.ingestedAt;
+  // Pick the freshest connected source-status per family (an athlete can have
+  // several status writes for the same family across the status collections).
+  const connectedStatusByFamily = new Map<HealthContextSourceFamily, HealthContextSourceStatus>();
+  for (const status of connectedStatuses) {
+    const existing = connectedStatusByFamily.get(status.sourceFamily);
+    if (!existing || sourceStatusTime(status) > sourceStatusTime(existing)) {
+      connectedStatusByFamily.set(status.sourceFamily, status);
     }
   }
 
-  const currentDeviceFamily = latest?.sourceFamily ?? connectedStatus?.sourceFamily ?? null;
-  const statusObservedAt = connectedStatus ? toUnixSeconds(connectedStatus.lastObservedRecordAt) : null;
-  const statusSyncedAt = connectedStatus
-    ? toUnixSeconds(connectedStatus.lastSuccessfulSyncAt)
-      || toUnixSeconds(connectedStatus.lastSyncedAt)
-      || toUnixSeconds(connectedStatus.lastAttemptedSyncAt)
-    : null;
-  lastObservedAt = lastObservedAt ?? statusObservedAt;
-  lastSyncedAt = lastSyncedAt ?? statusSyncedAt;
+  // Families to surface = every family that produced records UNION every family
+  // with a connected source-status (so a connected-but-no-data-yet device shows).
+  const families = new Set<HealthContextSourceFamily>();
+  for (const record of wearableRecords) families.add(record.sourceFamily);
+  for (const family of connectedStatusByFamily.keys()) families.add(family);
 
-  let connectionStatus: AthleteDeviceConnectionStatus;
-  if (!currentDeviceFamily || (lastObservedAt === null && !connectedStatus)) {
-    connectionStatus = 'not_connected';
-  } else if (lastObservedAt !== null && now - lastObservedAt <= STALE_AFTER_SEC) {
-    connectionStatus = 'synced';
-  } else if (connectedStatus) {
-    connectionStatus = 'synced';
-  } else {
-    connectionStatus = 'stale';
-  }
+  const devices: AthleteDevicePerSourceStatus[] = Array.from(families).map((family) => {
+    const familyRecords = wearableRecords.filter((record) => record.sourceFamily === family);
+    const status = connectedStatusByFamily.get(family) || null;
 
-  const dailyPresence = Array.from({ length: windowDays }, (_, day) => presentDays.has(day));
-  const wearDaysCovered = presentDays.size;
-  const wearCoveragePct = windowDays > 0 ? Math.round((wearDaysCovered / windowDays) * 100) : 0;
+    let lastObservedAt: number | null = null;
+    let lastSyncedAt: number | null = null;
+    const presentDays = new Set<number>();
+
+    for (const record of familyRecords) {
+      if (typeof record.observedAt === 'number') {
+        if (lastObservedAt === null || record.observedAt > lastObservedAt) {
+          lastObservedAt = record.observedAt;
+        }
+        const dayIndex = Math.floor((record.observedAt - windowStart) / SECONDS_PER_DAY);
+        if (dayIndex >= 0 && dayIndex < windowDays) {
+          presentDays.add(dayIndex);
+        }
+      }
+      if (typeof record.ingestedAt === 'number' && (lastSyncedAt === null || record.ingestedAt > lastSyncedAt)) {
+        lastSyncedAt = record.ingestedAt;
+      }
+    }
+
+    if (lastObservedAt === null && status) {
+      lastObservedAt = toUnixSeconds(status.lastObservedRecordAt);
+    }
+    if (lastSyncedAt === null && status) {
+      lastSyncedAt = toUnixSeconds(status.lastSuccessfulSyncAt)
+        || toUnixSeconds(status.lastSyncedAt)
+        || toUnixSeconds(status.lastAttemptedSyncAt);
+    }
+
+    let connectionStatus: AthleteDeviceConnectionStatus;
+    if (lastObservedAt !== null && now - lastObservedAt <= STALE_AFTER_SEC) {
+      connectionStatus = 'synced';
+    } else if (status) {
+      // Connected source, but data is old or none has arrived yet.
+      connectionStatus = 'stale';
+    } else {
+      connectionStatus = 'not_connected';
+    }
+
+    const dailyPresence = Array.from({ length: windowDays }, (_, day) => presentDays.has(day));
+    const wearDaysCovered = presentDays.size;
+    const wearCoveragePct = windowDays > 0 ? Math.round((wearDaysCovered / windowDays) * 100) : 0;
+
+    return {
+      sourceFamily: family,
+      label: getDeviceFamilyLabel(family),
+      connectionStatus,
+      lastObservedAt,
+      lastSyncedAt,
+      wearDaysCovered,
+      windowDays,
+      wearCoveragePct,
+      dailyPresence,
+    };
+  });
+
+  // Best device first: most-recent data (nulls last), then synced before stale.
+  const connectionRank: Record<AthleteDeviceConnectionStatus, number> = {
+    synced: 0,
+    stale: 1,
+    not_connected: 2,
+  };
+  devices.sort((left, right) => {
+    const leftObs = left.lastObservedAt ?? -1;
+    const rightObs = right.lastObservedAt ?? -1;
+    if (leftObs !== rightObs) return rightObs - leftObs;
+    return connectionRank[left.connectionStatus] - connectionRank[right.connectionStatus];
+  });
+
+  const best = devices[0] ?? null;
 
   return {
     athleteUserId: membership.userId,
     displayName: resolveDisplayName(membership, user),
     email: user?.email || membership.email,
-    currentDeviceFamily,
-    currentDeviceLabel: getDeviceFamilyLabel(currentDeviceFamily),
-    connectionStatus,
-    lastObservedAt,
-    lastSyncedAt,
-    wearDaysCovered,
+    currentDeviceFamily: best?.sourceFamily ?? null,
+    currentDeviceLabel: best ? best.label : getDeviceFamilyLabel(null),
+    connectionStatus: best?.connectionStatus ?? 'not_connected',
+    lastObservedAt: best?.lastObservedAt ?? null,
+    lastSyncedAt: best?.lastSyncedAt ?? null,
+    wearDaysCovered: best?.wearDaysCovered ?? 0,
     windowDays,
-    wearCoveragePct,
-    dailyPresence,
+    wearCoveragePct: best?.wearCoveragePct ?? 0,
+    dailyPresence: best?.dailyPresence ?? Array.from({ length: windowDays }, () => false),
     totalRecords: wearableRecords.length,
+    devices,
   };
 };
 

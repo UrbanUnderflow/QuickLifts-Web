@@ -58,6 +58,7 @@ import { getCategoryLabel, EscalationCategory } from '../../api/firebase/escalat
 import {
   loadAthleteDeviceStatuses,
   type AthleteDeviceStatus,
+  type AthleteDevicePerSourceStatus,
 } from '../../api/firebase/pulsecheckDeviceMonitor';
 import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
@@ -127,6 +128,31 @@ type CoachAthlete = {
   deviceStatus?: AthleteDeviceStatus;
 };
 
+type AthleteProfileHistoryRow = {
+  date: string;
+  score: number;
+  messages: number;
+};
+
+type DailyCheckInPoint = {
+  date: Date;
+  dateKey: string;
+  score: number;
+  messages: number;
+  hasCheckIn: boolean;
+};
+
+type CheckInWindowSummary = {
+  days: number;
+  checked: number;
+  missed: number;
+  rate: number;
+  state: string;
+  toneClass: string;
+  detail: string;
+  presence: boolean[];
+};
+
 type StatusKey = 'optimal' | 'flagged' | 'elevated' | 'escalated' | 'pending';
 
 const STATUS_META: Record<StatusKey, { dot: string; text: string; label: string }> = {
@@ -143,6 +169,9 @@ const daysSince = (d?: Date): number | null => {
 };
 
 const firstNameOf = (name?: string): string => (name ? name.trim().split(/\s+/)[0] : 'Your athlete');
+
+const localDayKey = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 const relativeWhen = (d?: Date): string => {
   const days = daysSince(d);
@@ -2749,6 +2778,65 @@ const DevicePresenceStrip: React.FC<{ presence?: boolean[]; compact?: boolean }>
   );
 };
 
+// Per-source variants of the tone/label helpers above, so each connected
+// wearable on an athlete renders its own coverage + freshness + status chip.
+const deviceSourceToneClass = (device: AthleteDevicePerSourceStatus): string => {
+  if (device.connectionStatus === 'not_connected') return 'text-zinc-500';
+  if (device.connectionStatus === 'stale') return 'text-amber-300';
+  if (device.wearCoveragePct >= 70) return 'text-emerald-300';
+  if (device.wearCoveragePct > 0) return 'text-emerald-300';
+  return 'text-zinc-300';
+};
+
+const deviceSourceChipLabel = (device: AthleteDevicePerSourceStatus): string => {
+  if (device.connectionStatus === 'synced') return 'Synced';
+  if (device.connectionStatus === 'stale') {
+    return device.wearCoveragePct === 0 ? 'Connected · waiting for data' : 'Stale · no recent data';
+  }
+  return 'Not connected';
+};
+
+const deviceSourceChipTone = (device: AthleteDevicePerSourceStatus): string => {
+  if (device.connectionStatus === 'synced') return 'text-emerald-300';
+  if (device.connectionStatus === 'stale') {
+    return device.wearCoveragePct === 0 ? 'text-zinc-400' : 'text-amber-300';
+  }
+  return 'text-zinc-500';
+};
+
+const DeviceSourceCard: React.FC<{ device: AthleteDevicePerSourceStatus }> = ({ device }) => (
+  <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-white truncate">{device.label}</div>
+        <div className="text-[10px] text-zinc-500 mt-0.5">
+          {device.wearDaysCovered}/{device.windowDays} days with wearable data
+        </div>
+        <span className={`mt-1 inline-block text-[10px] font-semibold ${deviceSourceChipTone(device)}`}>
+          {deviceSourceChipLabel(device)}
+        </span>
+      </div>
+      <div className="text-right">
+        <div className={`text-lg font-bold ${deviceSourceToneClass(device)}`}>{device.wearCoveragePct}%</div>
+        <div className="text-[10px] uppercase tracking-wide text-zinc-600">coverage</div>
+      </div>
+    </div>
+
+    <div className="mt-3">
+      <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
+        <span>{device.windowDays} days ago</span>
+        <span>Today</span>
+      </div>
+      <DevicePresenceStrip presence={device.dailyPresence} />
+    </div>
+
+    <div className="grid grid-cols-2 gap-3 mt-3">
+      <ProfileStat label="Last data" value={formatDeviceTime(device.lastObservedAt)} />
+      <ProfileStat label="Last sync" value={formatDeviceTime(device.lastSyncedAt)} />
+    </div>
+  </div>
+);
+
 const ProfileStat: React.FC<{ label: string; value: React.ReactNode; sub?: string; color?: string }> = ({
   label,
   value,
@@ -2764,13 +2852,230 @@ const ProfileStat: React.FC<{ label: string; value: React.ReactNode; sub?: strin
   </div>
 );
 
+type CurriculumAdherenceState = 'new' | 'due' | 'on-track' | 'behind' | 'completed' | 'paused' | 'assigned';
+
+const CURRICULUM_ADHERENCE_META: Record<
+  CurriculumAdherenceState,
+  { label: string; color: string; bg: string; border: string; action: string }
+> = {
+  new: {
+    label: 'New today',
+    color: '#E0FE10',
+    bg: 'rgba(224,254,16,0.10)',
+    border: 'rgba(224,254,16,0.24)',
+    action: 'No nudge yet',
+  },
+  due: {
+    label: 'Due today',
+    color: '#E0FE10',
+    bg: 'rgba(224,254,16,0.10)',
+    border: 'rgba(224,254,16,0.24)',
+    action: 'Check tomorrow',
+  },
+  'on-track': {
+    label: 'On track',
+    color: '#22C55E',
+    bg: 'rgba(34,197,94,0.10)',
+    border: 'rgba(34,197,94,0.24)',
+    action: 'No action',
+  },
+  behind: {
+    label: 'Behind',
+    color: '#F97316',
+    bg: 'rgba(249,115,22,0.12)',
+    border: 'rgba(249,115,22,0.28)',
+    action: 'Nudge today',
+  },
+  completed: {
+    label: 'Completed',
+    color: '#22C55E',
+    bg: 'rgba(34,197,94,0.10)',
+    border: 'rgba(34,197,94,0.24)',
+    action: 'Celebrate',
+  },
+  paused: {
+    label: 'Paused',
+    color: '#A78BFA',
+    bg: 'rgba(167,139,250,0.10)',
+    border: 'rgba(167,139,250,0.24)',
+    action: 'No action',
+  },
+  assigned: {
+    label: 'Assigned',
+    color: '#A1A1AA',
+    bg: 'rgba(255,255,255,0.05)',
+    border: 'rgba(255,255,255,0.10)',
+    action: 'Watch',
+  },
+};
+
+const plural = (count: number, singular: string, pluralLabel = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : pluralLabel}`;
+
+const shortDate = (date?: Date): string =>
+  date && Number.isFinite(date.getTime())
+    ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : '';
+
+const isToday = (date?: Date): boolean => !!date && daysSince(date) === 0;
+
+const buildDailyCheckInPoints = (rows: AthleteProfileHistoryRow[], days = 30): DailyCheckInPoint[] => {
+  const byDate = new Map(rows.filter((row) => row.date).map((row) => [row.date, row]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - index);
+    const dateKey = localDayKey(date);
+    const row = byDate.get(dateKey);
+    const messages = Math.max(0, Number(row?.messages ?? 0));
+    return {
+      date,
+      dateKey,
+      score: row?.score ?? 0,
+      messages,
+      hasCheckIn: messages > 0,
+    };
+  });
+};
+
+const summarizeCheckInWindow = (daily: DailyCheckInPoint[], days: number): CheckInWindowSummary => {
+  const window = daily.slice(0, days);
+  const checked = window.filter((day) => day.hasCheckIn).length;
+  const missed = Math.max(0, days - checked);
+  const rate = Math.round((checked / Math.max(1, days)) * 100);
+  const latestMiss = window.find((day) => !day.hasCheckIn);
+  const state =
+    checked >= days
+      ? 'On track'
+      : checked >= Math.ceil(days * 0.75)
+      ? 'Mostly steady'
+      : checked > 0
+      ? 'Needs nudge'
+      : 'No check-ins';
+  const toneClass =
+    checked >= days
+      ? 'text-emerald-300'
+      : checked >= Math.ceil(days * 0.75)
+      ? 'text-[#E0FE10]'
+      : checked > 0
+      ? 'text-orange-300'
+      : 'text-zinc-500';
+  const latestMissLabel = latestMiss
+    ? isToday(latestMiss.date)
+      ? 'today'
+      : shortDate(latestMiss.date)
+    : '';
+  const detail =
+    missed === 0
+      ? `No missed days in last ${days}`
+      : `${plural(missed, 'missed day')} in last ${days}${latestMissLabel ? `; latest ${latestMissLabel}` : ''}`;
+
+  return {
+    days,
+    checked,
+    missed,
+    rate,
+    state,
+    toneClass,
+    detail,
+    presence: window.map((day) => day.hasCheckIn),
+  };
+};
+
+const deriveCurriculumAdherence = (item: CoachAthleteCurriculumItem) => {
+  const completedCount = Math.max(0, item.completedCount ?? (item.status === 'completed' ? 1 : 0));
+  const targetCount = Math.max(0, item.targetCount ?? 0);
+  const expectedCount = Math.max(0, item.expectedCount ?? 0);
+  const missedCount = Math.max(0, item.missedCount ?? 0);
+  const progressPct = targetCount > 0
+    ? Math.max(0, Math.min(100, Math.round((completedCount / targetCount) * 100)))
+    : Math.max(0, Math.min(100, Math.round(item.progressPct || 0)));
+
+  let state: CurriculumAdherenceState = 'assigned';
+  if (item.status === 'completed') state = 'completed';
+  else if (item.status === 'paused') state = 'paused';
+  else if (missedCount > 0) state = 'behind';
+  else if ((item.assignedAt && isToday(item.assignedAt)) && completedCount === 0) state = 'new';
+  else if (item.dueToday || isToday(item.dueAt)) state = 'due';
+  else if (completedCount > 0 || item.status === 'in-progress') state = 'on-track';
+
+  const meta = CURRICULUM_ADHERENCE_META[state];
+  const countText = targetCount > 0
+    ? `${completedCount} of ${targetCount} practices completed`
+    : CURRICULUM_STATUS_LABEL[item.status];
+  const assignedText = item.assignedAt ? `assigned ${isToday(item.assignedAt) ? 'today' : shortDate(item.assignedAt)}` : '';
+  const dueText = item.dueAt ? `due ${isToday(item.dueAt) ? 'today' : shortDate(item.dueAt)}` : item.dueToday ? 'due today' : '';
+  const expectedText = expectedCount > 0 ? `expected ${expectedCount} by now` : '';
+  const expectedSentence = expectedText ? `${expectedText.charAt(0).toUpperCase()}${expectedText.slice(1)}.` : '';
+  const missedText = missedCount > 0 ? `${plural(missedCount, 'missed practice', 'missed practices')}` : 'no missed work yet';
+  const remainingText = typeof item.daysRemaining === 'number' && item.daysRemaining > 0 ? `${plural(item.daysRemaining, 'day')} left` : '';
+
+  const evidence = [countText, assignedText, dueText, state === 'behind' ? expectedText : remainingText || missedText]
+    .filter(Boolean)
+    .join(' · ');
+
+  const explanation =
+    state === 'behind'
+      ? `${missedText}. ${expectedSentence}`.trim()
+      : state === 'new'
+      ? 'Assigned today; no missed work yet.'
+      : state === 'due'
+      ? 'Due today; do not count it as missed yet.'
+      : state === 'on-track'
+      ? 'Meeting the expected pace.'
+      : state === 'completed'
+      ? 'Finished this assignment.'
+      : state === 'paused'
+      ? 'Paused while care or curriculum routing changes.'
+      : 'Assigned; waiting for the next completed practice.';
+
+  return { state, meta, progressPct, completedCount, targetCount, expectedCount, missedCount, evidence, explanation };
+};
+
+const AdherencePill: React.FC<{ label: string; color: string; bg: string; border: string }> = ({ label, color, bg, border }) => (
+  <span
+    className="flex-shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold"
+    style={{ color, background: bg, border: `1px solid ${border}` }}
+  >
+    {label}
+  </span>
+);
+
+const CheckInWindowRow: React.FC<{ summary: CheckInWindowSummary }> = ({ summary }) => (
+  <div className="rounded-md border border-white/5 bg-white/[0.03] px-2 py-1.5">
+    <div className="flex items-center justify-between gap-2 text-[10px]">
+      <span className="font-medium text-zinc-400">Last {summary.days} days</span>
+      <span className="font-semibold text-white">
+        {summary.checked}/{summary.days} <span className="text-zinc-600">·</span>{' '}
+        <span className={summary.missed > 0 ? 'text-orange-300' : 'text-emerald-300'}>
+          {summary.missed === 0 ? 'no missed days' : `${summary.missed} missed`}
+        </span>
+      </span>
+    </div>
+    <div
+      className="mt-1.5 flex gap-0.5"
+      aria-label={`${summary.checked} check-ins in the last ${summary.days} days`}
+      title={summary.detail}
+    >
+      {[...summary.presence].reverse().map((hasCheckIn, index) => (
+        <span
+          key={`${summary.days}-${index}`}
+          className={`h-1.5 min-w-0 flex-1 rounded-full ${hasCheckIn ? 'bg-emerald-400/80' : 'bg-zinc-700/70'}`}
+        />
+      ))}
+    </div>
+  </div>
+);
+
 const AthleteProfileDrawer: React.FC<{
   athlete: CoachAthlete | null;
   alerts: AthleteAlert[];
   canSeeTier3?: boolean;
   onClose: () => void;
 }> = ({ athlete, alerts, canSeeTier3 = true, onClose }) => {
-  const [history, setHistory] = useState<{ score: number; messages: number }[]>([]);
+  const [history, setHistory] = useState<AthleteProfileHistoryRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [curriculumSnapshot, setCurriculumSnapshot] = useState<CoachAthleteCurriculumSnapshot | null>(null);
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
@@ -2784,11 +3089,18 @@ const AthleteProfileDrawer: React.FC<{
     setLoadingHistory(true);
     setHistory([]);
     coachService
-      .getDailySentimentHistory(athlete.id, 28)
+      .getDailySentimentHistory(athlete.id, 30)
       .then((rows: any[]) => {
         if (cancelled) return;
-        // Service returns newest-first; keep that order for trend math.
-        setHistory(rows.map((r) => ({ score: r.sentimentScore ?? 0, messages: r.messageCount ?? 0 })));
+        // Service returns available rows newest-first; the drawer normalizes
+        // those rows into a true 30-day calendar window below.
+        setHistory(
+          rows.map((r) => ({
+            date: String(r.date || ''),
+            score: r.sentimentScore ?? 0,
+            messages: r.messageCount ?? 0,
+          }))
+        );
       })
       .catch(() => {})
       .finally(() => {
@@ -2842,9 +3154,29 @@ const AthleteProfileDrawer: React.FC<{
 
   const status = athlete ? deriveStatus(athlete) : 'pending';
   const mood = moodMeta(athlete?.sentimentScore ?? 0);
-  const recentScores = history.map((h) => h.score);
+  const dailyCheckInHistory = useMemo(() => buildDailyCheckInPoints(history, 30), [history]);
+  const checkInWindows = useMemo(
+    () => [7, 14, 30].map((days) => summarizeCheckInWindow(dailyCheckInHistory, days)),
+    [dailyCheckInHistory]
+  );
+  const checkInLast7 = checkInWindows[0] ?? summarizeCheckInWindow(dailyCheckInHistory, 7);
+  const checkInLast14 = checkInWindows[1] ?? summarizeCheckInWindow(dailyCheckInHistory, 14);
+  const checkInLast30 = checkInWindows[2] ?? summarizeCheckInWindow(dailyCheckInHistory, 30);
+  const latestCheckInDay = dailyCheckInHistory.find((day) => day.hasCheckIn);
+  const latestCheckInRelative = latestCheckInDay ? relativeWhen(latestCheckInDay.date) : '';
+  const latestCheckInStat = latestCheckInDay
+    ? isToday(latestCheckInDay.date)
+      ? 'Today'
+      : latestCheckInRelative
+    : 'No data';
+  const latestCheckInAction = latestCheckInDay
+    ? isToday(latestCheckInDay.date)
+      ? 'Checked in today'
+      : `Checked in ${latestCheckInRelative}`
+    : 'No check-ins in last 30 days';
+  const recentScores = dailyCheckInHistory.slice(0, 28).map((h) => (h.hasCheckIn ? h.score : 0));
   const trend = trendOf(recentScores);
-  const checkinsLast7 = history.slice(0, 7).filter((h) => h.messages > 0).length;
+  const checkinsLast7 = checkInLast7.checked;
   const curriculum = curriculumSnapshot?.items || [];
   const completedModules = curriculumSnapshot?.completedCount ?? curriculum.filter((c) => c.status === 'completed').length;
   const totalModules = curriculumSnapshot?.totalCount ?? curriculum.length;
@@ -2853,7 +3185,7 @@ const AthleteProfileDrawer: React.FC<{
   const deviceCoveragePct = deviceStatus?.wearCoveragePct ?? athlete?.deviceCoveragePct ?? 0;
   const deviceDaysCovered = deviceStatus?.wearDaysCovered ?? athlete?.deviceDailyPresence?.filter(Boolean).length ?? 0;
   const deviceWindowDays = deviceStatus?.windowDays ?? athlete?.deviceDailyPresence?.length ?? 14;
-  const deviceLabel = deviceStatus?.currentDeviceLabel || (deviceConnected ? 'Connected source' : 'No device');
+  const deviceList = deviceStatus?.devices ?? [];
 
   const trendMeta: Record<SentimentTrend, { label: string; color: string; icon: React.ElementType }> = {
     improving: { label: 'Improving', color: '#22C55E', icon: TrendingUp },
@@ -2862,6 +3194,41 @@ const AthleteProfileDrawer: React.FC<{
   };
   const TrendIcon = trendMeta[trend].icon;
   const first = firstNameOf(athlete?.displayName);
+  const curriculumAdherence = useMemo(
+    () => curriculum.map((item) => ({ item, adherence: deriveCurriculumAdherence(item) })),
+    [curriculum]
+  );
+  const activeCurriculumAdherence = curriculumAdherence.filter(
+    ({ item }) => item.status !== 'completed' && item.status !== 'paused'
+  );
+  const curriculumBehindCount = curriculumAdherence.filter(({ adherence }) => adherence.state === 'behind').length;
+  const curriculumDueTodayCount = curriculumAdherence.filter(({ adherence }) => adherence.state === 'due' || adherence.state === 'new').length;
+  const curriculumStartedCount = curriculumAdherence.filter(
+    ({ adherence, item }) => adherence.completedCount > 0 || item.status === 'in-progress' || item.status === 'completed'
+  ).length;
+  const curriculumSnapshotLabel = loadingCurriculum
+    ? 'Loading'
+    : curriculum.length === 0
+    ? 'No active work'
+    : curriculumBehindCount > 0
+    ? `${curriculumBehindCount} behind`
+    : curriculumDueTodayCount > 0
+    ? `${curriculumDueTodayCount} due today`
+    : 'On track';
+  const curriculumSnapshotSub = loadingCurriculum
+    ? 'Reading assignments'
+    : curriculum.length === 0
+    ? 'No assigned curriculum'
+    : `${curriculumStartedCount}/${curriculum.length} started`;
+  const checkinState = checkInLast7.state;
+  const deviceSnapshotLabel = deviceConnected
+    ? deviceDaysCovered > 0
+      ? `${deviceCoveragePct}% coverage`
+      : 'Connected, no data'
+    : 'Not connected';
+  const deviceSnapshotSub = deviceConnected
+    ? `${deviceDaysCovered}/${deviceWindowDays} days with data`
+    : 'Ask about setup';
 
   return (
     <AnimatePresence>
@@ -2997,60 +3364,105 @@ const AthleteProfileDrawer: React.FC<{
                 <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Engagement</h3>
                 <div className="grid grid-cols-3 gap-3">
                   <ProfileStat label="Sessions" value={athlete.totalSessions} />
-                  <ProfileStat label="Weekly goal" value={`${athlete.weeklyGoalProgress}%`} />
+                  <ProfileStat label="7-day rate" value={`${checkInLast7.rate}%`} />
                   <ProfileStat
                     label="Last check-in"
-                    value={daysSince(athlete.lastActiveDate) === 0 ? 'Today' : relativeWhen(athlete.lastActiveDate)}
+                    value={latestCheckInStat}
                   />
                 </div>
               </div>
 
-              {/* Device adherence */}
+              {/* Adherence snapshot */}
+              <div>
+                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Adherence snapshot</h3>
+                <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="rounded-lg bg-black/20 border border-white/5 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wide text-zinc-500">Check-ins</span>
+                        <span className={`text-[10px] font-semibold ${checkInLast7.toneClass}`}>
+                          {checkinState}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-white">{checkinsLast7}/7</div>
+                      <div className="mt-0.5 text-[10px] text-zinc-500">
+                        {checkInLast7.detail}
+                      </div>
+                      <div className="mt-2 space-y-1.5">
+                        <CheckInWindowRow summary={checkInLast7} />
+                        <CheckInWindowRow summary={checkInLast14} />
+                        <CheckInWindowRow summary={checkInLast30} />
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-black/20 border border-white/5 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wide text-zinc-500">Curriculum</span>
+                        <span className={`text-[10px] font-semibold ${curriculumBehindCount > 0 ? 'text-orange-300' : curriculumDueTodayCount > 0 ? 'text-[#E0FE10]' : 'text-emerald-300'}`}>
+                          {curriculumSnapshotLabel}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-white">
+                        {loadingCurriculum ? '—' : `${completedModules}/${totalModules || 0}`}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-zinc-500">{curriculumSnapshotSub}</div>
+                    </div>
+                    <div className="rounded-lg bg-black/20 border border-white/5 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wide text-zinc-500">Device</span>
+                        <span className={`text-[10px] font-semibold ${deviceConnected ? deviceToneClass(deviceStatus) : 'text-zinc-500'}`}>
+                          {deviceSnapshotLabel}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm font-bold text-white">{deviceDaysCovered}/{deviceWindowDays}</div>
+                      <div className="mt-0.5 text-[10px] text-zinc-500">{deviceSnapshotSub}</div>
+                    </div>
+                    <div className="rounded-lg bg-black/20 border border-white/5 p-2.5">
+                      <div className="text-[10px] uppercase tracking-wide text-zinc-500">Last action</div>
+                      <div className="mt-1 text-sm font-bold text-white">
+                        {latestCheckInAction}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-zinc-500">
+                        {curriculumBehindCount > 0 ? 'Curriculum nudge recommended' : 'No urgent adherence action'}
+                      </div>
+                    </div>
+                  </div>
+                  {activeCurriculumAdherence.length > 0 && (
+                    <div className="rounded-lg border border-white/5 bg-white/[0.03] px-2.5 py-2 text-[10px] leading-4 text-zinc-400">
+                      Curriculum read: {curriculumBehindCount > 0
+                        ? `${plural(curriculumBehindCount, 'assignment')} behind expected pace.`
+                        : curriculumDueTodayCount > 0
+                        ? `${plural(curriculumDueTodayCount, 'assignment')} due today; not missed yet.`
+                        : 'assigned work is on pace.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Device adherence — one card per connected source */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Device adherence</h3>
                   <span className={`text-[10px] font-semibold ${deviceToneClass(deviceStatus)}`}>
-                    {deviceConnectionLabel(deviceStatus)}
+                    {deviceList.length > 0
+                      ? deviceList.length === 1
+                        ? deviceConnectionLabel(deviceStatus)
+                        : `${deviceList.length} sources`
+                      : 'Not connected'}
                   </span>
                 </div>
-                <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white truncate">{deviceLabel}</div>
-                      <div className="text-[10px] text-zinc-500 mt-0.5">
-                        {deviceDaysCovered}/{deviceWindowDays} days with wearable data
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-lg font-bold ${deviceToneClass(deviceStatus)}`}>{deviceCoveragePct}%</div>
-                      <div className="text-[10px] uppercase tracking-wide text-zinc-600">coverage</div>
-                    </div>
+                {deviceList.length > 0 ? (
+                  <div className="space-y-3">
+                    {deviceList.map((device) => (
+                      <DeviceSourceCard key={device.sourceFamily} device={device} />
+                    ))}
                   </div>
-
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
-                      <span>{deviceWindowDays} days ago</span>
-                      <span>Today</span>
-                    </div>
-                    <DevicePresenceStrip presence={deviceStatus?.dailyPresence || athlete.deviceDailyPresence} />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mt-3">
-                    <ProfileStat label="Last data" value={formatDeviceTime(deviceStatus?.lastObservedAt)} />
-                    <ProfileStat label="Last sync" value={formatDeviceTime(deviceStatus?.lastSyncedAt)} />
-                  </div>
-
-                  {!deviceConnected && (
-                    <p className="text-[10px] text-zinc-500 mt-3 leading-relaxed">
+                ) : (
+                  <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                    <p className="text-[10px] text-zinc-500 leading-relaxed">
                       No connected wearable or health source was found for {first}.
                     </p>
-                  )}
-                  {deviceConnected && deviceDaysCovered === 0 && (
-                    <p className="text-[10px] text-zinc-500 mt-3 leading-relaxed">
-                      {first} has a connected source, but no wearable data arrived in this window.
-                    </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Care detail — what's being done (Tier 2 or Tier 3) */}
@@ -3082,7 +3494,7 @@ const AthleteProfileDrawer: React.FC<{
                       {loadingCurriculum
                         ? 'Loading...'
                         : totalModules > 0
-                        ? `${completedModules}/${totalModules} complete`
+                        ? `${completedModules}/${totalModules} completed`
                         : 'No active work'}
                     </span>
                   )}
@@ -3097,50 +3509,65 @@ const AthleteProfileDrawer: React.FC<{
                       No PulseCheck curriculum assignments are active for {first} yet.
                     </div>
                   ) : (
-                    curriculum.map((item) => {
+                    curriculumAdherence.map(({ item, adherence }) => {
                       const meta = CURRICULUM_ITEM_META[item.kind];
                       const Icon = meta.icon;
                       const effectiveStatus = walledOff ? 'paused' : item.status;
-                      const pct = Math.max(0, Math.min(100, Math.round(item.progressPct || 0)));
+                      const pct = adherence.progressPct;
+                      const statusMeta = walledOff ? CURRICULUM_ADHERENCE_META.paused : adherence.meta;
                       return (
                         <div
                           key={`${item.source}:${item.id}`}
-                          className="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-800/40 border border-zinc-700/30"
+                          className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3"
                         >
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: `${meta.color}15` }}
-                          >
-                            <Icon className="w-4 h-4" style={{ color: meta.color }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <div className="text-xs font-medium text-white truncate">{item.title}</div>
-                              {item.dueToday && !walledOff && (
-                                <span className="flex-shrink-0 rounded-full bg-[#E0FE10]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#E0FE10]">
-                                  Due today
-                                </span>
-                              )}
+                          <div className="flex items-start gap-3">
+                            <div
+                              className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                              style={{ backgroundColor: `${meta.color}15` }}
+                            >
+                              <Icon className="w-4 h-4" style={{ color: meta.color }} />
                             </div>
-                            <div className="text-[10px] text-zinc-500 truncate">{item.detail || CURRICULUM_STATUS_LABEL[item.status]}</div>
-                            {!walledOff && effectiveStatus === 'in-progress' && pct > 0 && (
-                              <div className="mt-1.5 h-1 bg-zinc-700/50 rounded-full overflow-hidden">
-                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta.color }} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-white truncate">{item.title}</div>
+                                  <div className="mt-0.5 text-[10px] text-zinc-500 truncate">
+                                    {item.detail || CURRICULUM_STATUS_LABEL[item.status]}
+                                  </div>
+                                </div>
+                                <AdherencePill
+                                  label={walledOff ? 'Paused' : statusMeta.label}
+                                  color={statusMeta.color}
+                                  bg={statusMeta.bg}
+                                  border={statusMeta.border}
+                                />
                               </div>
-                            )}
-                          </div>
-                          <div className="flex-shrink-0">
-                            {walledOff ? (
-                              <Lock className="w-4 h-4 text-zinc-600" />
-                            ) : effectiveStatus === 'completed' ? (
-                              <CheckCircle2 className="w-4 h-4 text-green-400" />
-                            ) : effectiveStatus === 'in-progress' ? (
-                              <span className="text-[10px] text-zinc-400 font-medium">{pct > 0 ? `${pct}%` : 'Active'}</span>
-                            ) : effectiveStatus === 'paused' ? (
-                              <Lock className="w-4 h-4 text-zinc-600" />
-                            ) : (
-                              <span className="text-[10px] text-zinc-500 font-medium">{CURRICULUM_STATUS_LABEL[effectiveStatus]}</span>
-                            )}
+
+                              <div className="mt-2 rounded-lg bg-black/20 border border-white/5 px-2.5 py-2">
+                                <div className="text-[11px] font-medium text-zinc-200">{adherence.evidence}</div>
+                                <div className="mt-1 text-[10px] leading-4 text-zinc-500">{adherence.explanation}</div>
+                                {adherence.targetCount > 0 && (
+                                  <div className="mt-2">
+                                    <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-600">
+                                      <span>Completed practices</span>
+                                      <span>{adherence.completedCount}/{adherence.targetCount}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
+                                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: statusMeta.color }} />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
+                                <span className="text-zinc-500">
+                                  Coach action: <span className="font-semibold text-zinc-300">{statusMeta.action}</span>
+                                </span>
+                                <span className="text-zinc-600">
+                                  {effectiveStatus === 'completed' ? 'Finished' : pct > 0 ? `${pct}%` : CURRICULUM_STATUS_LABEL[effectiveStatus]}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );
