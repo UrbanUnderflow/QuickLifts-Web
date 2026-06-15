@@ -900,6 +900,113 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 </div>
               </section>
 
+              <section id="athletes-directory" className="pilot-slide-up scroll-mt-24 border-b border-white/10 px-4 py-6 sm:px-8 sm:py-8" style={{ animationDelay: '120ms' }}>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">
+                      Athletes - in-scope roster
+                    </div>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+                      Every athlete on an in-scope team, including team-only members without an active pilot enrollment.
+                      Open an athlete to review roster info and PulseCheck intake answers.
+                    </p>
+                  </div>
+                  <span className="pilot-font-mono rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-white/70">
+                    {athletesLoading ? 'Loading...' : `${filteredAthletes.length} athlete${filteredAthletes.length === 1 ? '' : 's'}`}
+                  </span>
+                </div>
+
+                <div className="mt-5">
+                  {athletesLoading ? (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-8 text-sm text-white/50">
+                      Loading athletes...
+                    </div>
+                  ) : athletesError ? (
+                    <div className="rounded-[24px] border border-rose-400/25 bg-rose-400/10 p-8">
+                      <div className="text-sm text-rose-100">{athletesError}</div>
+                      <button
+                        type="button"
+                        onClick={() => void loadAthletes()}
+                        className="mt-4 inline-flex items-center gap-2 rounded-xl border border-rose-300/20 bg-black/20 px-4 py-2 text-sm text-rose-100 transition hover:bg-black/30"
+                      >
+                        <RefreshCcw className="h-4 w-4" />
+                        Try again
+                      </button>
+                    </div>
+                  ) : filteredAthletes.length === 0 ? (
+                    <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-8">
+                      <div className="pilot-font-display text-lg font-semibold text-white">No athletes in scope</div>
+                      <p className="mt-2 max-w-xl text-sm leading-6 text-white/50">
+                        Athletes appear here once they join an in-scope team. Adjust the organization, team, or study mode
+                        filters to widen the roster.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.02]">
+                      <div className="divide-y divide-white/[0.06]">
+                        {filteredAthletes.map((athlete) => (
+                          <button
+                            key={athlete.athleteUserId}
+                            type="button"
+                            onClick={() => setSelectedAthleteId(athlete.athleteUserId)}
+                            className="flex w-full items-center gap-4 px-4 py-3.5 text-left transition hover:bg-white/[0.04] sm:px-5"
+                          >
+                            {athlete.profileImageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={athlete.profileImageUrl}
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-full border border-white/10 object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-xs font-semibold text-cyan-100">
+                                {getAthleteInitials(athlete.displayName)}
+                              </span>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate text-sm font-medium text-white">{athlete.displayName}</span>
+                              </div>
+                              <div className="mt-0.5 truncate text-xs text-white/45">
+                                {athlete.email || 'No email on file'}
+                              </div>
+                            </div>
+
+                            <div className="hidden min-w-0 flex-1 sm:block">
+                              <div className="truncate text-sm text-white/70">{athlete.teamName || 'Unassigned team'}</div>
+                              <div className="mt-0.5 truncate text-xs text-white/40">
+                                {[athlete.pilotName, athlete.cohortName].filter(Boolean).join(' - ') || 'No pilot enrollment'}
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getEnrollmentChipClassName(
+                                  athlete.enrollmentStatus
+                                )}`}
+                              >
+                                {getEnrollmentChipLabel(athlete.enrollmentStatus)}
+                              </span>
+                              <span
+                                className={`hidden rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] sm:inline-flex ${
+                                  athlete.intakeCompleted
+                                    ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
+                                    : 'border-white/15 bg-white/[0.04] text-white/45'
+                                }`}
+                              >
+                                {athlete.intakeCompleted ? 'Intake done' : 'No intake'}
+                              </span>
+                              <ArrowRight className="h-4 w-4 text-white/30" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+
               <section id="pilot-directory" className="scroll-mt-24 px-4 py-6 sm:px-8 sm:py-8">
                 {loading ? (
                   <div className="pilot-fade-in rounded-[28px] border border-white/10 bg-white/[0.03] p-8 text-sm text-white/50">
@@ -1086,6 +1193,157 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
             </main>
           </div>
         </div>
+
+        {selectedAthlete ? (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <button
+              type="button"
+              aria-label="Close athlete detail"
+              onClick={() => setSelectedAthleteId(null)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <div className="pilot-drawer relative ml-auto flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-[rgba(9,12,19,0.98)] shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[rgba(9,12,19,0.98)] px-5 py-4 backdrop-blur-xl">
+                <div className="flex min-w-0 items-center gap-3">
+                  {selectedAthlete.profileImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selectedAthlete.profileImageUrl}
+                      alt=""
+                      className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
+                      {getAthleteInitials(selectedAthlete.displayName)}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate pilot-font-display text-base font-bold tracking-[-0.02em] text-white">
+                      {selectedAthlete.displayName}
+                    </div>
+                    <div className="truncate text-xs text-white/45">{selectedAthlete.email || 'No email on file'}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAthleteId(null)}
+                  className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] p-1.5 text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-5 px-5 py-5">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">Roster</div>
+                  <dl className="mt-3 space-y-2.5 text-sm">
+                    {[
+                      { label: 'Organization', value: selectedAthlete.organizationName || '—' },
+                      { label: 'Team', value: selectedAthlete.teamName || '—' },
+                      { label: 'Pilot', value: selectedAthlete.pilotName || 'No pilot enrollment' },
+                      { label: 'Cohort', value: selectedAthlete.cohortName || 'Unassigned' },
+                      { label: 'Role', value: selectedAthlete.role || 'athlete' },
+                    ].map((row) => (
+                      <div key={row.label} className="flex items-start justify-between gap-4">
+                        <dt className="text-white/40">{row.label}</dt>
+                        <dd className="max-w-[60%] text-right text-white/85">{row.value}</dd>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-white/40">Enrollment</dt>
+                      <dd>
+                        <span
+                          className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getEnrollmentChipClassName(
+                            selectedAthlete.enrollmentStatus
+                          )}`}
+                        >
+                          {getEnrollmentChipLabel(selectedAthlete.enrollmentStatus)}
+                        </span>
+                      </dd>
+                    </div>
+                    {selectedAthlete.onboardingStatus ? (
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-white/40">Onboarding</dt>
+                        <dd className="text-right text-white/85">{selectedAthlete.onboardingStatus}</dd>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-white/40">Phone</dt>
+                      <dd className="flex items-center gap-1.5 text-right text-white/85">
+                        {selectedAthlete.phone ? (
+                          <>
+                            <Phone className="h-3.5 w-3.5 text-white/40" />
+                            <span className="pilot-font-mono">{selectedAthlete.phone}</span>
+                          </>
+                        ) : (
+                          <span className="text-white/40">Not provided</span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">
+                      PulseCheck intake answers
+                    </div>
+                    <span
+                      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                        selectedAthlete.intakeCompleted
+                          ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
+                          : 'border-white/15 bg-white/[0.04] text-white/45'
+                      }`}
+                    >
+                      {selectedAthlete.intakeCompleted ? 'Completed' : 'Not completed'}
+                    </span>
+                  </div>
+
+                  {!selectedAthlete.intakeCompleted && selectedAthlete.intake.length === 0 ? (
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-5 text-sm text-white/45">
+                      Intake not completed yet.
+                    </div>
+                  ) : selectedAthlete.intake.length === 0 ? (
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-5 text-sm text-white/45">
+                      No intake answers on record.
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-2.5">
+                      {selectedAthlete.intake.map((answer) => (
+                        <div
+                          key={answer.questionId}
+                          className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3"
+                        >
+                          <div className="text-xs font-medium text-white/55">{answer.questionText}</div>
+                          <div className="mt-1.5 text-sm leading-6 text-white/90">
+                            {answer.answer ? answer.answer : <span className="text-white/35">No answer</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <style jsx global>{`
+          .pilot-drawer {
+            animation: pilotDrawerIn 0.28s ease forwards;
+          }
+
+          @keyframes pilotDrawerIn {
+            from {
+              transform: translateX(24px);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+        `}</style>
 
         <style jsx global>{`
           .pilot-dashboard-theme {

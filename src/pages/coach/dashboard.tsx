@@ -48,13 +48,17 @@ import {
   CalendarDays,
   Copy,
   Pencil,
+  Database,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
 import AthleteReadinessCard from '../../components/AthleteReadinessCard';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { getCategoryLabel, EscalationCategory } from '../../api/firebase/escalation/types';
-import { loadTeamDeviceStatuses } from '../../api/firebase/pulsecheckDeviceMonitor';
+import {
+  loadAthleteDeviceStatuses,
+  type AthleteDeviceStatus,
+} from '../../api/firebase/pulsecheckDeviceMonitor';
 import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
 import { setUser } from '../../redux/userSlice';
@@ -66,7 +70,13 @@ import {
   type CoachAthleteCurriculumSnapshot,
 } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
-import { auth } from '../../api/firebase/config';
+import {
+  auth,
+  getActiveFirebaseProjectId,
+  isLocalFirebaseRuntime,
+  isUsingDevFirebase,
+  setPreferredFirebaseMode,
+} from '../../api/firebase/config';
 import { signOut } from 'firebase/auth';
 import {
   deriveMembershipAccessFromCapabilities,
@@ -114,6 +124,7 @@ type CoachAthlete = {
   deviceCoveragePct?: number;
   deviceConnected?: boolean;
   deviceDailyPresence?: boolean[];
+  deviceStatus?: AthleteDeviceStatus;
 };
 
 type StatusKey = 'optimal' | 'flagged' | 'elevated' | 'escalated' | 'pending';
@@ -428,7 +439,7 @@ interface CoachDashboardShellProps {
   /** Profile photo URL for the sidebar presence tile. */
   coachAvatarUrl?: string;
   /** Persist edits made in the profile modal. Omitted in demo (edits stay local). */
-  onSaveProfile?: (next: { name: string; title: string; bio: string; avatarUrl: string }) => Promise<void>;
+  onSaveProfile?: (next: { name: string; email: string; title: string; bio: string; avatarUrl: string }) => Promise<void>;
   isDemo?: boolean;
   /** Earnings tab is shown only when this team has referral kickback on AND the
    *  current user is the configured revenue recipient. */
@@ -472,6 +483,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   // sidebar tile (and demo edits have somewhere to live).
   const [profile, setProfile] = useState({
     name: coachName,
+    email: coachEmail || '',
     title: coachTitle || 'Head Coach',
     bio: coachBio || '',
     avatarUrl: coachAvatarUrl || '',
@@ -481,16 +493,17 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     if (!profileOpen) {
       setProfile({
         name: coachName,
+        email: coachEmail || '',
         title: coachTitle || 'Head Coach',
         bio: coachBio || '',
         avatarUrl: coachAvatarUrl || '',
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coachName, coachTitle, coachBio, coachAvatarUrl]);
+  }, [coachName, coachEmail, coachTitle, coachBio, coachAvatarUrl]);
 
   const handleSaveProfile = useCallback(
-    async (next: { name: string; title: string; bio: string; avatarUrl: string }) => {
+    async (next: { name: string; email: string; title: string; bio: string; avatarUrl: string }) => {
       // Demo mode is a no-op: the editor is fully interactive for walkthroughs,
       // but Save changes nothing (no local update, no Firebase write).
       if (isDemo) return;
@@ -875,38 +888,28 @@ const CoachDashboard: React.FC = () => {
         // single batch queries; best-effort so a failure never blocks the board.
         let enriched = list;
         try {
-          const [escalations, memberships] = await Promise.all([
+          const [escalations, deviceResult] = await Promise.all([
             escalationRecordsService.getActiveForCoach(currentUser.id).catch(() => []),
-            pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id).catch(() => []),
+            loadAthleteDeviceStatuses(list.map((athlete) => athlete.id)).catch(() => null),
           ]);
           const tierByAthlete = new Map<string, number>();
           for (const r of escalations) {
             const prev = tierByAthlete.get(r.userId) ?? 0;
             if ((r.tier ?? 0) > prev) tierByAthlete.set(r.userId, r.tier ?? 0);
           }
-          const coachTeamIds = Array.from(
-            new Set(memberships.filter((m) => m.role !== 'athlete').map((m) => m.teamId))
-          );
-          const deviceByAthlete = new Map<string, { pct: number; connected: boolean; presence: boolean[] }>();
-          const deviceResults = await Promise.all(
-            coachTeamIds.map((t) => loadTeamDeviceStatuses(t).catch(() => null))
-          );
-          for (const res of deviceResults) {
-            if (!res) continue;
-            for (const s of res.statuses) {
-              deviceByAthlete.set(s.athleteUserId, {
-                pct: s.wearCoveragePct,
-                connected: s.connectionStatus === 'synced',
-                presence: s.dailyPresence,
-              });
-            }
+          const deviceByAthlete = new Map<string, AthleteDeviceStatus>();
+          for (const s of deviceResult?.statuses || []) {
+            deviceByAthlete.set(s.athleteUserId, s);
           }
           enriched = list.map((a) => ({
             ...a,
             activeEscalationTier: tierByAthlete.get(a.id) ?? 0,
-            deviceCoveragePct: deviceByAthlete.get(a.id)?.pct,
-            deviceConnected: deviceByAthlete.get(a.id)?.connected,
-            deviceDailyPresence: deviceByAthlete.get(a.id)?.presence,
+            deviceCoveragePct: deviceByAthlete.get(a.id)?.wearCoveragePct,
+            deviceConnected: deviceByAthlete.has(a.id)
+              ? deviceByAthlete.get(a.id)?.connectionStatus !== 'not_connected'
+              : false,
+            deviceDailyPresence: deviceByAthlete.get(a.id)?.dailyPresence,
+            deviceStatus: deviceByAthlete.get(a.id),
           }));
           // Tier 2/3 alerts for the Athlete Alerts tab. The service query already
           // filters to records where coachId === this coach, so every Tier 2 here
@@ -1000,11 +1003,12 @@ const CoachDashboard: React.FC = () => {
   // Persist coach profile edits to the user doc and refresh Redux so the change
   // shows everywhere (sidebar tile, etc.) without a reload.
   const handleSaveProfile = useCallback(
-    async (next: { name: string; title: string; bio: string; avatarUrl: string }) => {
+    async (next: { name: string; email: string; title: string; bio: string; avatarUrl: string }) => {
       if (!currentUser?.id) return;
       try {
         await userService.updateUser(currentUser.id, {
           displayName: next.name,
+          email: next.email,
           coachTitle: next.title,
           bio: next.bio,
           profileImage: {
@@ -1019,6 +1023,7 @@ const CoachDashboard: React.FC = () => {
           setUser({
             ...dict,
             displayName: next.name,
+            email: next.email,
             coachTitle: next.title,
             bio: next.bio,
             profileImage: { ...(dict.profileImage || {}), profileImageURL: next.avatarUrl || '' },
@@ -1147,6 +1152,7 @@ const HomeSection: React.FC<{
           checkIn={adherence.checkIn}
           device={adherence.device}
           modules={adherence.modules}
+          athletes={athletes}
         />
       </div>
 
@@ -1193,6 +1199,7 @@ const HomeSection: React.FC<{
                   deviceCoveragePct: a.deviceCoveragePct,
                   deviceConnected: a.deviceConnected,
                   deviceDailyPresence: a.deviceDailyPresence,
+                  deviceStatus: a.deviceStatus,
                 }}
               />
             </div>
@@ -2702,6 +2709,46 @@ const Sparkline: React.FC<{ values: number[]; color: string }> = ({ values, colo
   );
 };
 
+const formatDeviceTime = (seconds?: number | null): string => {
+  if (!seconds) return 'No data yet';
+  const date = new Date(seconds * 1000);
+  if (Number.isNaN(date.getTime())) return 'No data yet';
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 14) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const deviceConnectionLabel = (status?: AthleteDeviceStatus): string => {
+  if (!status || status.connectionStatus === 'not_connected') return 'Not connected';
+  if (status.wearDaysCovered === 0) return 'Connected, waiting for data';
+  if (status.connectionStatus === 'stale') return 'Connected, stale';
+  return 'Synced';
+};
+
+const deviceToneClass = (status?: AthleteDeviceStatus): string => {
+  if (!status || status.connectionStatus === 'not_connected') return 'text-zinc-500';
+  if (status.wearCoveragePct >= 70) return 'text-emerald-300';
+  if (status.wearCoveragePct > 0) return 'text-amber-300';
+  return 'text-zinc-300';
+};
+
+const DevicePresenceStrip: React.FC<{ presence?: boolean[]; compact?: boolean }> = ({ presence, compact }) => {
+  const days = presence && presence.length > 0 ? presence : Array.from({ length: 14 }, () => false);
+  return (
+    <div className="flex items-center gap-1">
+      {days.map((present, idx) => (
+        <span
+          key={idx}
+          className={`${compact ? 'h-2' : 'h-3'} flex-1 rounded-[2px]`}
+          style={{ background: present ? 'rgba(16,185,129,0.9)' : 'rgba(63,63,70,0.85)' }}
+        />
+      ))}
+    </div>
+  );
+};
+
 const ProfileStat: React.FC<{ label: string; value: React.ReactNode; sub?: string; color?: string }> = ({
   label,
   value,
@@ -2801,6 +2848,12 @@ const AthleteProfileDrawer: React.FC<{
   const curriculum = curriculumSnapshot?.items || [];
   const completedModules = curriculumSnapshot?.completedCount ?? curriculum.filter((c) => c.status === 'completed').length;
   const totalModules = curriculumSnapshot?.totalCount ?? curriculum.length;
+  const deviceStatus = athlete?.deviceStatus;
+  const deviceConnected = deviceStatus ? deviceStatus.connectionStatus !== 'not_connected' : !!athlete?.deviceConnected;
+  const deviceCoveragePct = deviceStatus?.wearCoveragePct ?? athlete?.deviceCoveragePct ?? 0;
+  const deviceDaysCovered = deviceStatus?.wearDaysCovered ?? athlete?.deviceDailyPresence?.filter(Boolean).length ?? 0;
+  const deviceWindowDays = deviceStatus?.windowDays ?? athlete?.deviceDailyPresence?.length ?? 14;
+  const deviceLabel = deviceStatus?.currentDeviceLabel || (deviceConnected ? 'Connected source' : 'No device');
 
   const trendMeta: Record<SentimentTrend, { label: string; color: string; icon: React.ElementType }> = {
     improving: { label: 'Improving', color: '#22C55E', icon: TrendingUp },
@@ -2949,6 +3002,54 @@ const AthleteProfileDrawer: React.FC<{
                     label="Last check-in"
                     value={daysSince(athlete.lastActiveDate) === 0 ? 'Today' : relativeWhen(athlete.lastActiveDate)}
                   />
+                </div>
+              </div>
+
+              {/* Device adherence */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Device adherence</h3>
+                  <span className={`text-[10px] font-semibold ${deviceToneClass(deviceStatus)}`}>
+                    {deviceConnectionLabel(deviceStatus)}
+                  </span>
+                </div>
+                <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white truncate">{deviceLabel}</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">
+                        {deviceDaysCovered}/{deviceWindowDays} days with wearable data
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-lg font-bold ${deviceToneClass(deviceStatus)}`}>{deviceCoveragePct}%</div>
+                      <div className="text-[10px] uppercase tracking-wide text-zinc-600">coverage</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-600 mb-1">
+                      <span>{deviceWindowDays} days ago</span>
+                      <span>Today</span>
+                    </div>
+                    <DevicePresenceStrip presence={deviceStatus?.dailyPresence || athlete.deviceDailyPresence} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <ProfileStat label="Last data" value={formatDeviceTime(deviceStatus?.lastObservedAt)} />
+                    <ProfileStat label="Last sync" value={formatDeviceTime(deviceStatus?.lastSyncedAt)} />
+                  </div>
+
+                  {!deviceConnected && (
+                    <p className="text-[10px] text-zinc-500 mt-3 leading-relaxed">
+                      No connected wearable or health source was found for {first}.
+                    </p>
+                  )}
+                  {deviceConnected && deviceDaysCovered === 0 && (
+                    <p className="text-[10px] text-zinc-500 mt-3 leading-relaxed">
+                      {first} has a connected source, but no wearable data arrived in this window.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -4855,6 +4956,93 @@ const ScheduleSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coa
   <ScheduleBoard coachId={coachId} isDemo={isDemo} />
 );
 
+const LocalFirebaseEnvironmentPanel: React.FC = () => {
+  const [mounted, setMounted] = useState(false);
+  const [isLocal, setIsLocal] = useState(false);
+  const [isDev, setIsDev] = useState(false);
+  const [projectId, setProjectId] = useState('');
+  const [switchingTo, setSwitchingTo] = useState<'dev' | 'prod' | null>(null);
+
+  useEffect(() => {
+    const local = isLocalFirebaseRuntime();
+    setMounted(true);
+    setIsLocal(local);
+    if (local) {
+      setIsDev(isUsingDevFirebase());
+      setProjectId(getActiveFirebaseProjectId());
+    }
+  }, []);
+
+  if (!mounted || !isLocal) return null;
+
+  const selectMode = (nextIsDev: boolean) => {
+    if (nextIsDev === isDev || switchingTo) return;
+    const nextMode = nextIsDev ? 'dev' : 'prod';
+    setPreferredFirebaseMode(nextIsDev);
+    setIsDev(nextIsDev);
+    setProjectId(getActiveFirebaseProjectId());
+    setSwitchingTo(nextMode);
+    window.setTimeout(() => window.location.reload(), 250);
+  };
+
+  const optionClass = (selected: boolean, tone: 'dev' | 'prod') =>
+    [
+      'h-9 flex-1 rounded-md px-3 text-xs font-semibold transition border',
+      selected
+        ? tone === 'dev'
+          ? 'bg-amber-400/18 border-amber-300/40 text-amber-100'
+          : 'bg-emerald-400/18 border-emerald-300/40 text-emerald-100'
+        : 'bg-transparent border-transparent text-zinc-400 hover:text-white hover:bg-white/5',
+    ].join(' ');
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white">
+            <Database className="h-4 w-4 text-[#E0FE10]" />
+            <span>Firebase environment</span>
+            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+              Local
+            </span>
+          </div>
+          <div className="mt-2 text-xs text-zinc-500">
+            Project <span className="font-mono text-zinc-300">{projectId || '—'}</span>
+          </div>
+        </div>
+
+        <div className="flex w-full max-w-sm items-center gap-1 rounded-lg border border-white/10 bg-black/25 p-1">
+          <button
+            type="button"
+            aria-pressed={isDev}
+            disabled={!!switchingTo}
+            onClick={() => selectMode(true)}
+            className={optionClass(isDev, 'dev')}
+          >
+            Development
+          </button>
+          <button
+            type="button"
+            aria-pressed={!isDev}
+            disabled={!!switchingTo}
+            onClick={() => selectMode(false)}
+            className={optionClass(!isDev, 'prod')}
+          >
+            Production
+          </button>
+        </div>
+      </div>
+
+      {switchingTo && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          <span>Reloading into {switchingTo === 'dev' ? 'development' : 'production'}...</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coachName, email }) => (
   <div className="space-y-4">
     <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Settings</div>
@@ -4868,6 +5056,7 @@ const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coac
         <div className="bg-zinc-800/60 rounded-lg px-3 py-2 text-sm break-all">{email || '—'}</div>
       </div>
     </div>
+    <LocalFirebaseEnvironmentPanel />
   </div>
 );
 
@@ -4900,15 +5089,28 @@ const AdherenceTile: React.FC<{
   checkIn: number;
   device: number;
   modules?: number;
-}> = ({ id, checkIn, device, modules }) => {
+  athletes?: CoachAthlete[];
+}> = ({ id, checkIn, device, modules, athletes = [] }) => {
   const rows: { label: string; value: number }[] = [
     { label: 'Checked in', value: checkIn },
     { label: 'Device worn', value: device },
     ...(modules !== undefined ? [{ label: 'Modules done', value: modules }] : []),
   ];
   const overall = Math.round(rows.reduce((s, r) => s + r.value, 0) / rows.length);
+  const deviceStatuses = athletes.map((athlete) => ({
+    athlete,
+    status: athlete.deviceStatus,
+  }));
+  const connectedCount = deviceStatuses.filter(({ status }) => status && status.connectionStatus !== 'not_connected').length;
+  const withDataCount = deviceStatuses.filter(({ status }) => (status?.wearDaysCovered ?? 0) > 0).length;
+  const staleCount = deviceStatuses.filter(({ status }) => status?.connectionStatus === 'stale').length;
+  const sortedDeviceStatuses = [...deviceStatuses].sort((left, right) => {
+    const leftPct = left.status?.wearCoveragePct ?? -1;
+    const rightPct = right.status?.wearCoveragePct ?? -1;
+    return leftPct - rightPct;
+  });
   return (
-    <div id={id} className="rounded-xl bg-zinc-900/50 border border-white/5 p-4">
+    <div id={id} className="group relative rounded-xl bg-zinc-900/50 border border-white/5 p-4">
       <div className="flex items-center gap-2 mb-1">
         <span className="w-2 h-2 rounded-full bg-[#E0FE10]" />
         <span className="text-xs text-zinc-500">Adherence</span>
@@ -4928,6 +5130,54 @@ const AdherenceTile: React.FC<{
           </div>
         ))}
       </div>
+      {athletes.length > 0 && (
+        <div className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-white/10 bg-zinc-950/95 p-3 opacity-0 shadow-2xl backdrop-blur transition group-hover:opacity-100">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
+            <div>
+              <div className="text-xs font-semibold text-white">Device adherence</div>
+              <div className="text-[10px] text-zinc-500">Visible athletes, last 14 days</div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-bold text-white">{device}%</div>
+              <div className="text-[10px] text-zinc-600">avg coverage</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 py-2">
+            <MetricTile label="Connected" value={`${connectedCount}/${athletes.length}`} />
+            <MetricTile label="With data" value={`${withDataCount}/${athletes.length}`} />
+            <MetricTile label="Stale" value={staleCount} />
+          </div>
+
+          <div className="space-y-2">
+            {sortedDeviceStatuses.slice(0, 6).map(({ athlete, status }) => {
+              const label = status?.currentDeviceLabel || 'No device';
+              const pct = status?.wearCoveragePct ?? athlete.deviceCoveragePct ?? 0;
+              return (
+                <div key={athlete.id} className="rounded-lg border border-white/5 bg-white/[0.03] p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-[11px] font-semibold text-zinc-200">{athlete.displayName}</div>
+                      <div className="truncate text-[10px] text-zinc-500">
+                        {label} · {deviceConnectionLabel(status)}
+                      </div>
+                    </div>
+                    <div className={`text-[11px] font-bold ${deviceToneClass(status)}`}>{pct}%</div>
+                  </div>
+                  <div className="mt-1.5">
+                    <DevicePresenceStrip presence={status?.dailyPresence || athlete.deviceDailyPresence} compact />
+                  </div>
+                </div>
+              );
+            })}
+            {sortedDeviceStatuses.length > 6 && (
+              <div className="text-center text-[10px] text-zinc-500">
+                +{sortedDeviceStatuses.length - 6} more athletes
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

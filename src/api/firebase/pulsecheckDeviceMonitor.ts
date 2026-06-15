@@ -13,6 +13,8 @@
 // nightly server aggregator that writes a status doc the dashboard can read.
 // =============================================================================
 
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from './config';
 import {
   listHealthContextSourceRecordsForWindow,
   type HealthContextSourceFamily,
@@ -77,18 +79,43 @@ const QUERY_CONCURRENCY = 6;
  * coach-entered lanes are excluded from "current device" / wear-coverage so an
  * athlete who only self-reports doesn't read as "synced".
  */
-const WEARABLE_FAMILIES = new Set<HealthContextSourceFamily>([
+const WEARABLE_FAMILY_LIST: HealthContextSourceFamily[] = [
   'oura',
   'apple_health',
+  'healthkit',
+  'health_kit',
+  'apple_watch',
+  'healthconnect',
   'polar',
   'fitbit',
   'whoop',
   'garmin',
+];
+
+const WEARABLE_FAMILIES = new Set<HealthContextSourceFamily>(WEARABLE_FAMILY_LIST);
+
+const CONNECTED_SOURCE_STATES = new Set([
+  'connected_synced',
+  'connectedsynced',
+  'connected_waiting_data',
+  'connectedwaitingdata',
+  'connected_waiting_for_data',
+  'connected_stale',
+  'connectedstale',
+  'connected_error',
+  'connectederror',
+  'connected',
+  'synced',
+  'stale',
 ]);
 
 const DEVICE_FAMILY_LABELS: Record<HealthContextSourceFamily, string> = {
   oura: 'Oura Ring',
   apple_health: 'Apple Watch / Health',
+  healthkit: 'Apple Watch / HealthKit',
+  health_kit: 'Apple Watch / HealthKit',
+  apple_watch: 'Apple Watch',
+  healthconnect: 'Health Connect',
   polar: 'Polar',
   fitbit: 'Fitbit',
   whoop: 'Whoop',
@@ -121,20 +148,156 @@ interface DeriveInput {
   membership: PulseCheckTeamMembership;
   user: User | undefined;
   records: HealthContextSourceRecord[];
+  sourceStatuses?: HealthContextSourceStatus[];
   now: number;
   windowStart: number;
   windowDays: number;
 }
 
+interface HealthContextSourceStatus {
+  sourceFamily: HealthContextSourceFamily;
+  lifecycleState?: string;
+  status?: string;
+  connectionState?: string;
+  lastObservedRecordAt?: number;
+  lastSuccessfulSyncAt?: number;
+  lastSyncedAt?: number;
+  lastAttemptedSyncAt?: number;
+}
+
+const toUnixSeconds = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 10_000_000_000 ? Math.round(value / 1000) : Math.round(value);
+  }
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return Math.round(value.getTime() / 1000);
+  }
+  if (value && typeof value === 'object') {
+    const maybeTimestamp = value as { seconds?: number; toDate?: () => Date };
+    if (typeof maybeTimestamp.seconds === 'number') return maybeTimestamp.seconds;
+    if (typeof maybeTimestamp.toDate === 'function') {
+      const date = maybeTimestamp.toDate();
+      return date instanceof Date && Number.isFinite(date.getTime()) ? Math.round(date.getTime() / 1000) : null;
+    }
+  }
+  return null;
+};
+
+const sourceStatusTime = (status: HealthContextSourceStatus): number =>
+  toUnixSeconds(status.lastObservedRecordAt) ||
+  toUnixSeconds(status.lastSuccessfulSyncAt) ||
+  toUnixSeconds(status.lastSyncedAt) ||
+  toUnixSeconds(status.lastAttemptedSyncAt) ||
+  0;
+
+const normalizeLifecycleState = (value: string): string =>
+  value.trim().replace(/-/g, '_').toLowerCase();
+
+const isConnectedSourceStatus = (status: HealthContextSourceStatus): boolean => {
+  const raw = String(status.lifecycleState || status.status || status.connectionState || '').trim();
+  if (!raw) return false;
+  const normalized = normalizeLifecycleState(raw);
+  return CONNECTED_SOURCE_STATES.has(normalized) || normalized.startsWith('connected_');
+};
+
+const buildSourceStatusFromEntry = (
+  family: HealthContextSourceFamily,
+  entry: unknown,
+): HealthContextSourceStatus | null => {
+  if (!entry) return null;
+  if (typeof entry === 'string') {
+    return { sourceFamily: family, lifecycleState: entry, status: entry };
+  }
+  if (typeof entry !== 'object') return null;
+  const data = entry as Record<string, unknown>;
+  return {
+    sourceFamily: (data.sourceFamily || family) as HealthContextSourceFamily,
+    lifecycleState: data.lifecycleState as string | undefined,
+    status: data.status as string | undefined,
+    connectionState: data.connectionState as string | undefined,
+    lastObservedRecordAt: toUnixSeconds(data.lastObservedRecordAt) || undefined,
+    lastSuccessfulSyncAt: toUnixSeconds(data.lastSuccessfulSyncAt) || undefined,
+    lastSyncedAt: toUnixSeconds(data.lastSyncedAt) || undefined,
+    lastAttemptedSyncAt: toUnixSeconds(data.lastAttemptedSyncAt) || undefined,
+  };
+};
+
+const loadSharedSourceStatusMap = async (athleteUserId: string): Promise<HealthContextSourceStatus[]> => {
+  try {
+    const snap = await getDoc(doc(db, 'health-context-source-status', athleteUserId));
+    if (!snap.exists()) return [];
+    const data = snap.data() as Record<string, unknown>;
+    const sourceStatuses = (data.sourceStatuses && typeof data.sourceStatuses === 'object')
+      ? data.sourceStatuses as Record<string, unknown>
+      : data;
+    return WEARABLE_FAMILY_LIST
+      .map((family) => buildSourceStatusFromEntry(family, sourceStatuses[family]))
+      .filter((entry): entry is HealthContextSourceStatus => !!entry);
+  } catch {
+    return [];
+  }
+};
+
+const loadNestedAthleteSourceStatus = async (athleteUserId: string): Promise<HealthContextSourceStatus[]> => {
+  try {
+    const snap = await getDoc(doc(db, 'athletes', athleteUserId, 'health-context-source-status', 'current'));
+    if (!snap.exists()) return [];
+    const data = snap.data() as Record<string, unknown>;
+    return WEARABLE_FAMILY_LIST
+      .map((family) => buildSourceStatusFromEntry(family, data[family]))
+      .filter((entry): entry is HealthContextSourceStatus => !!entry);
+  } catch {
+    return [];
+  }
+};
+
+const loadWearableSourceStatuses = async (athleteUserId: string): Promise<HealthContextSourceStatus[]> => {
+  const [sharedEntries, nestedEntries, familyEntries] = await Promise.all([
+    loadSharedSourceStatusMap(athleteUserId),
+    loadNestedAthleteSourceStatus(athleteUserId),
+    Promise.all(
+      WEARABLE_FAMILY_LIST.map(async (family): Promise<HealthContextSourceStatus | null> => {
+        try {
+          const snap = await getDoc(doc(db, 'health-context-source-status', `${athleteUserId}_${family}`));
+          if (!snap.exists()) return null;
+          const data = snap.data() as Record<string, unknown>;
+          const status: HealthContextSourceStatus = {
+            sourceFamily: (data.sourceFamily || family) as HealthContextSourceFamily,
+            lifecycleState: data.lifecycleState as string | undefined,
+            status: data.status as string | undefined,
+            connectionState: data.connectionState as string | undefined,
+            lastObservedRecordAt: toUnixSeconds(data.lastObservedRecordAt) || undefined,
+            lastSuccessfulSyncAt: toUnixSeconds(data.lastSuccessfulSyncAt) || undefined,
+            lastSyncedAt: toUnixSeconds(data.lastSyncedAt) || undefined,
+            lastAttemptedSyncAt: toUnixSeconds(data.lastAttemptedSyncAt) || undefined,
+          };
+          return status;
+        } catch {
+          return null;
+        }
+      })
+    ),
+  ]);
+  return [
+    ...sharedEntries,
+    ...nestedEntries,
+    ...familyEntries.filter((entry): entry is HealthContextSourceStatus => !!entry),
+  ];
+};
+
 export const deriveAthleteDeviceStatus = ({
   membership,
   user,
   records,
+  sourceStatuses = [],
   now,
   windowStart,
   windowDays,
 }: DeriveInput): AthleteDeviceStatus => {
   const wearableRecords = records.filter((record) => WEARABLE_FAMILIES.has(record.sourceFamily));
+  const connectedStatus = sourceStatuses
+    .filter(isConnectedSourceStatus)
+    .sort((left, right) => sourceStatusTime(right) - sourceStatusTime(left))[0] || null;
 
   // Most-recent wearable record (records arrive observedAt-desc, but be defensive).
   let latest: HealthContextSourceRecord | null = null;
@@ -158,12 +321,22 @@ export const deriveAthleteDeviceStatus = ({
     }
   }
 
-  const currentDeviceFamily = latest?.sourceFamily ?? null;
+  const currentDeviceFamily = latest?.sourceFamily ?? connectedStatus?.sourceFamily ?? null;
+  const statusObservedAt = connectedStatus ? toUnixSeconds(connectedStatus.lastObservedRecordAt) : null;
+  const statusSyncedAt = connectedStatus
+    ? toUnixSeconds(connectedStatus.lastSuccessfulSyncAt)
+      || toUnixSeconds(connectedStatus.lastSyncedAt)
+      || toUnixSeconds(connectedStatus.lastAttemptedSyncAt)
+    : null;
+  lastObservedAt = lastObservedAt ?? statusObservedAt;
+  lastSyncedAt = lastSyncedAt ?? statusSyncedAt;
 
   let connectionStatus: AthleteDeviceConnectionStatus;
-  if (!currentDeviceFamily || lastObservedAt === null) {
+  if (!currentDeviceFamily || (lastObservedAt === null && !connectedStatus)) {
     connectionStatus = 'not_connected';
-  } else if (now - lastObservedAt <= STALE_AFTER_SEC) {
+  } else if (lastObservedAt !== null && now - lastObservedAt <= STALE_AFTER_SEC) {
+    connectionStatus = 'synced';
+  } else if (connectedStatus) {
     connectionStatus = 'synced';
   } else {
     connectionStatus = 'stale';
@@ -212,35 +385,51 @@ const mapWithConcurrency = async <TIn, TOut>(
   return results;
 };
 
-/**
- * Load the live device + wear status for every athlete on a team.
- * Pulls the roster from team memberships (role === 'athlete'), resolves names
- * from the users collection, then derives each athlete's status from their
- * health-context-source-records inside the rolling window.
- */
-export const loadTeamDeviceStatuses = async (
-  teamId: string,
-  windowDays: number = DEVICE_MONITOR_DEFAULT_WINDOW_DAYS,
-): Promise<TeamDeviceStatusResult> => {
-  const safeWindowDays = Math.max(1, Math.min(Math.floor(windowDays), 90));
-  const memberships = await pulseCheckProvisioningService.listTeamMemberships(teamId);
-  const athletes = memberships.filter((membership) => membership.role === 'athlete');
+const safeWindow = (windowDays: number): number => Math.max(1, Math.min(Math.floor(windowDays), 90));
 
+const loadDeviceStatusesForMemberships = async (
+  athletes: PulseCheckTeamMembership[],
+  windowDays: number,
+  preloadedUserById?: Map<string, User>,
+): Promise<TeamDeviceStatusResult> => {
+  const safeWindowDays = safeWindow(windowDays);
   const now = Math.round(Date.now() / 1000);
   const windowStart = now - safeWindowDays * SECONDS_PER_DAY;
 
   const athleteIds = athletes.map((membership) => membership.userId);
-  const users = athleteIds.length ? await userService.getUsersByIds(athleteIds) : [];
-  const userById = new Map(users.map((user) => [user.id, user]));
+  const userById = preloadedUserById || new Map(
+    (athleteIds.length ? await userService.getUsersByIds(athleteIds) : []).map((user) => [user.id, user])
+  );
 
   const statuses = await mapWithConcurrency(athletes, QUERY_CONCURRENCY, async (membership) => {
-    const records = await listHealthContextSourceRecordsForWindow(membership.userId, windowStart, now, {
-      max: MAX_RECORDS_PER_ATHLETE,
-    });
+    // Each lane is independently non-fatal: a failing HCSR window query (e.g. a
+    // missing composite index) must NOT blank out device status for the athlete —
+    // the simple source-status point-reads still detect a connected/fresh device.
+    // Previously either throw rejected the whole load and the dashboard's
+    // catch(() => null) reported "No device" for EVERY athlete.
+    const [records, sourceStatuses] = await Promise.all([
+      listHealthContextSourceRecordsForWindow(membership.userId, windowStart, now, {
+        max: MAX_RECORDS_PER_ATHLETE,
+      }).catch((error) => {
+        console.warn(
+          `[pulsecheckDeviceMonitor] health-context-source-records query failed for ${membership.userId}; falling back to source-status`,
+          error,
+        );
+        return [] as HealthContextSourceRecord[];
+      }),
+      loadWearableSourceStatuses(membership.userId).catch((error) => {
+        console.warn(
+          `[pulsecheckDeviceMonitor] source-status load failed for ${membership.userId}`,
+          error,
+        );
+        return [] as HealthContextSourceStatus[];
+      }),
+    ]);
     return deriveAthleteDeviceStatus({
       membership,
       user: userById.get(membership.userId),
       records,
+      sourceStatuses,
       now,
       windowStart,
       windowDays: safeWindowDays,
@@ -256,6 +445,41 @@ export const loadTeamDeviceStatuses = async (
     computedAt: now,
     athleteCount: athletes.length,
   };
+};
+
+/**
+ * Load the live device + wear status for every athlete on a team.
+ * Pulls the roster from team memberships (role === 'athlete'), resolves names
+ * from the users collection, then derives each athlete's status from their
+ * health-context-source-records inside the rolling window.
+ */
+export const loadTeamDeviceStatuses = async (
+  teamId: string,
+  windowDays: number = DEVICE_MONITOR_DEFAULT_WINDOW_DAYS,
+): Promise<TeamDeviceStatusResult> => {
+  const memberships = await pulseCheckProvisioningService.listTeamMemberships(teamId);
+  const athletes = memberships.filter((membership) => membership.role === 'athlete');
+  return loadDeviceStatusesForMemberships(athletes, windowDays);
+};
+
+/**
+ * Load device + wear status for a known visible athlete set. Coach surfaces use
+ * this after roster access is already resolved, so newly-added athletes can
+ * backfill from their own PulseCheck history without re-discovering the team.
+ */
+export const loadAthleteDeviceStatuses = async (
+  athleteUserIds: string[],
+  windowDays: number = DEVICE_MONITOR_DEFAULT_WINDOW_DAYS,
+): Promise<TeamDeviceStatusResult> => {
+  const athleteIds = Array.from(new Set(athleteUserIds.map((id) => id.trim()).filter(Boolean)));
+  const users = athleteIds.length ? await userService.getUsersByIds(athleteIds) : [];
+  const userById = new Map(users.map((user) => [user.id, user]));
+  const athletes = athleteIds.map((athleteUserId) => ({
+    userId: athleteUserId,
+    role: 'athlete',
+    email: userById.get(athleteUserId)?.email,
+  } as PulseCheckTeamMembership));
+  return loadDeviceStatusesForMemberships(athletes, windowDays, userById);
 };
 
 export interface TeamDeviceStatusSummary {

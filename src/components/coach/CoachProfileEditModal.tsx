@@ -5,6 +5,7 @@ import { firebaseStorageService, UploadImageType } from '../../api/firebase/stor
 
 export interface CoachProfileFormData {
   name: string;
+  email: string;
   title: string;
   bio: string;
   avatarUrl: string;
@@ -34,6 +35,7 @@ const CoachProfileEditModal: React.FC<CoachProfileEditModalProps> = ({
   isDemo = false,
 }) => {
   const [name, setName] = useState(initial.name);
+  const [email, setEmail] = useState(initial.email);
   const [title, setTitle] = useState(initial.title);
   const [bio, setBio] = useState(initial.bio);
   const [avatarUrl, setAvatarUrl] = useState(initial.avatarUrl);
@@ -47,6 +49,7 @@ const CoachProfileEditModal: React.FC<CoachProfileEditModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setName(initial.name);
+      setEmail(initial.email);
       setTitle(initial.title);
       setBio(initial.bio);
       setAvatarUrl(initial.avatarUrl);
@@ -90,11 +93,21 @@ const CoachProfileEditModal: React.FC<CoachProfileEditModalProps> = ({
       setError('Name is required.');
       return;
     }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError('Email is required.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await onSave({
         name: trimmedName,
+        email: trimmedEmail,
         title: title.trim(),
         bio: bio.trim(),
         avatarUrl,
@@ -191,6 +204,18 @@ const CoachProfileEditModal: React.FC<CoachProfileEditModalProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Full name"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#E0FE10]/50"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="coach@example.com"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#E0FE10]/50"
                 />
               </div>

@@ -41,7 +41,8 @@ import { db } from './config';
  *
  * Active families (writing to HCSR today):
  *   - oura
- *   - apple_health (HealthKit / Apple Watch — iOS adapter rewrite in flight)
+ *   - healthkit / apple_health (HealthKit / Apple Watch)
+ *   - healthconnect (Android Health Connect)
  *   - pulsecheck_self_report
  *   - coach_entered
  *
@@ -54,6 +55,10 @@ import { db } from './config';
 export type HealthContextSourceFamily =
   | 'oura'
   | 'apple_health'
+  | 'healthkit'
+  | 'health_kit'
+  | 'apple_watch'
+  | 'healthconnect'
   | 'polar'
   | 'fitbit'
   | 'whoop'

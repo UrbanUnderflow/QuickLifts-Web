@@ -56,6 +56,16 @@ export interface CoachAthleteCurriculumItem {
   status: CoachAthleteCurriculumItemStatus;
   progressPct: number;
   dueToday?: boolean;
+  assignedAt?: Date;
+  dueAt?: Date;
+  completedCount?: number;
+  targetCount?: number;
+  expectedCount?: number;
+  missedCount?: number;
+  daysElapsed?: number;
+  daysRemaining?: number;
+  windowDays?: number;
+  lastCompletedAt?: Date;
   updatedAt?: Date;
 }
 
@@ -211,6 +221,24 @@ const dateFromDateKey = (dateKey?: string): Date | null => {
   return Number.isFinite(date.getTime()) ? date : null;
 };
 
+const startOfDayMillis = (date: Date): number => {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy.getTime();
+};
+
+const daysBetween = (left: Date, right: Date): number =>
+  Math.floor((startOfDayMillis(left) - startOfDayMillis(right)) / 86400000);
+
+const sanitizeCoachCopy = (value: any): string =>
+  compactText(value, 140)
+    .replace(/\bReps\b/g, 'Practices')
+    .replace(/\breps\b/g, 'practices')
+    .replace(/\bRep\b/g, 'Practice')
+    .replace(/\brep\b/g, 'practice');
+
+const dateFromUnixSecondsOrMillis = (value: any): Date | null => toDateOrNull(value);
+
 const isDailyCurriculumRecord = (assignment: PulseCheckDailyAssignment): boolean =>
   assignment.assignedBy === 'curriculum-engine' || Boolean(assignment.curriculumIntent);
 
@@ -261,7 +289,8 @@ const dailyAssignmentProgressPct = (assignment: PulseCheckDailyAssignment): numb
   if (isDailyAssignmentComplete(assignment)) return 100;
   const intent = assignment.curriculumIntent;
   if (intent && Number.isFinite(intent.currentRep) && Number.isFinite(intent.targetReps) && intent.targetReps > 0) {
-    return Math.max(0, Math.min(99, Math.round((intent.currentRep / intent.targetReps) * 100)));
+    const completed = Math.max(0, (isDailyAssignmentComplete(assignment) ? intent.currentRep : intent.currentRep - 1));
+    return Math.max(0, Math.min(99, Math.round((completed / intent.targetReps) * 100)));
   }
   const phases = assignment.phaseProgress || assignment.completionSummary?.phaseProgress;
   if (phases && phases.totalPhases > 0) {
@@ -274,9 +303,39 @@ const dailyAssignmentDetail = (assignment: PulseCheckDailyAssignment): string =>
   const kindLabel = dailyAssignmentKind(assignment) === 'protocol' ? 'Protocol' : dailyAssignmentKind(assignment) === 'simulation' ? 'Simulation' : 'Curriculum';
   const dateLabel = dateKeyToCoachLabel(assignment.sourceDate);
   const intentDetail = assignment.curriculumIntent?.progressLabel || assignment.curriculumIntent?.whyThisToday;
-  return [kindLabel, dateLabel, compactText(intentDetail || assignment.plannerSummary || assignment.rationale, 90)]
+  return [kindLabel, dateLabel, sanitizeCoachCopy(intentDetail || assignment.plannerSummary || assignment.rationale)]
     .filter(Boolean)
     .join(' • ');
+};
+
+const dailyAssignmentCompletionCounts = (
+  assignment: PulseCheckDailyAssignment
+): Pick<CoachAthleteCurriculumItem, 'completedCount' | 'targetCount' | 'expectedCount' | 'missedCount' | 'windowDays' | 'assignedAt' | 'dueAt' | 'lastCompletedAt'> => {
+  const intent = assignment.curriculumIntent as Record<string, any> | undefined;
+  const targetCount = Number.isFinite(intent?.targetReps) && intent!.targetReps > 0 ? Math.round(intent!.targetReps) : 1;
+  const currentPlanned = Number.isFinite(intent?.currentRep) && intent!.currentRep > 0 ? Math.round(intent!.currentRep) : 1;
+  const completed = isDailyAssignmentComplete(assignment);
+  const completedCount = targetCount > 1 ? Math.max(0, completed ? currentPlanned : currentPlanned - 1) : completed ? 1 : 0;
+  const dueAt = dateFromDateKey(assignment.sourceDate);
+  const assignedAt =
+    dateFromUnixSecondsOrMillis(assignment.materializedAt) ||
+    dateFromUnixSecondsOrMillis((assignment as any).createdAt) ||
+    dueAt ||
+    undefined;
+  const lastCompletedAt = dateFromUnixSecondsOrMillis(assignment.completedAt) || undefined;
+  const dueDayPassed = dueAt ? daysBetween(new Date(), dueAt) > 0 : false;
+  const expectedCount = dueDayPassed || completed ? Math.min(targetCount, currentPlanned) : Math.max(0, currentPlanned - 1);
+  const missedCount = completed ? 0 : Math.max(0, expectedCount - completedCount);
+  return {
+    assignedAt,
+    dueAt: dueAt || undefined,
+    completedCount,
+    targetCount,
+    expectedCount,
+    missedCount,
+    windowDays: Number.isFinite(intent?.windowDays) ? Math.round(intent!.windowDays) : undefined,
+    lastCompletedAt,
+  };
 };
 
 const curriculumAssignmentStatus = (assignment: CurriculumAssignment): CoachAthleteCurriculumItemStatus => {
@@ -308,6 +367,34 @@ const curriculumAssignmentDetail = (assignment: CurriculumAssignment): string =>
     assignment.status === CurriculumAssignmentStatus.Extended ? 'Extended' : '',
   ];
   return parts.filter(Boolean).join(' • ');
+};
+
+const curriculumAssignmentCompletionCounts = (
+  assignment: CurriculumAssignment
+): Pick<CoachAthleteCurriculumItem, 'assignedAt' | 'dueAt' | 'completedCount' | 'targetCount' | 'expectedCount' | 'missedCount' | 'daysElapsed' | 'daysRemaining'> => {
+  const assignedAt = dateFromUnixSecondsOrMillis(assignment.startDate) || undefined;
+  const dueAt = dateFromUnixSecondsOrMillis(assignment.endDate) || undefined;
+  const targetCount = Math.max(0, Math.round(assignment.targetDays || assignment.durationDays || 0));
+  const completedCount = Math.max(0, Math.round(assignment.completedDays || 0));
+  const today = new Date();
+  const daysElapsed = assignedAt ? Math.max(0, Math.min(targetCount || 999, daysBetween(today, assignedAt) + 1)) : assignment.currentDayNumber || 0;
+  const expectedCount = assignedAt
+    ? Math.max(0, Math.min(targetCount, daysBetween(today, assignedAt)))
+    : Math.max(0, Math.min(targetCount, (assignment.currentDayNumber || 1) - 1));
+  const missedCount = assignment.status === CurriculumAssignmentStatus.Completed
+    ? 0
+    : Math.max(0, expectedCount - completedCount);
+  const daysRemaining = dueAt ? Math.max(0, daysBetween(dueAt, today)) : undefined;
+  return {
+    assignedAt,
+    dueAt,
+    completedCount,
+    targetCount,
+    expectedCount,
+    missedCount,
+    daysElapsed,
+    daysRemaining,
+  };
 };
 
 const progressProgramTitle = (progress?: AthleteMentalProgress | null): string => {
@@ -796,11 +883,23 @@ class CoachService {
             latestDateOf(athleteStats.lastCheckInDate, athleteStats.lastConversationDate) ||
             linkUpdated;
           
+          // Honor the athlete's own profile image first (stored nested on the
+          // User doc); fall back to the coach-preloaded invite image carried onto
+          // the membership at redeem time. The flat `userData.profileImageUrl`
+          // never existed, so every athlete fell through to initials.
+          const membership = connection.athleteMembership as Record<string, any> | undefined;
+          const ownProfileImage =
+            userData.profileImage?.profileImageURL || userData.profileImageUrl || '';
+          const preloadedInviteImage =
+            membership?.prefilledProfileImageUrl ||
+            membership?.athleteOnboarding?.prefilledProfileImageUrl ||
+            '';
+
           athletes.push({
             id: athleteUserId,
             displayName: userData.displayName || userData.username || 'Unknown User',
             email: userData.email || '',
-            profileImageUrl: userData.profileImageUrl,
+            profileImageUrl: ownProfileImage || preloadedInviteImage || undefined,
             linkedAt: connection.linkedAt,
             lastActiveDate: lastActive,
             ...athleteStats
@@ -958,17 +1057,21 @@ class CoachService {
             assignment.status !== PulseCheckDailyAssignmentStatus.Superseded &&
             assignment.status !== PulseCheckDailyAssignmentStatus.Overridden
         )
-        .map((assignment) => ({
-          id: assignment.id,
-          kind: dailyAssignmentKind(assignment),
-          source: 'daily-assignment' as const,
-          title: dailyAssignmentTitle(assignment),
-          detail: dailyAssignmentDetail(assignment),
-          status: dailyAssignmentStatus(assignment),
-          progressPct: dailyAssignmentProgressPct(assignment),
-          dueToday: assignment.curriculumIsDueToday,
-          updatedAt: dailyAssignmentUpdatedAt(assignment),
-        }));
+        .map((assignment) => {
+          const counts = dailyAssignmentCompletionCounts(assignment);
+          return {
+            id: assignment.id,
+            kind: dailyAssignmentKind(assignment),
+            source: 'daily-assignment' as const,
+            title: dailyAssignmentTitle(assignment),
+            detail: dailyAssignmentDetail(assignment),
+            status: dailyAssignmentStatus(assignment),
+            progressPct: dailyAssignmentProgressPct(assignment),
+            dueToday: assignment.curriculumIsDueToday,
+            updatedAt: dailyAssignmentUpdatedAt(assignment),
+            ...counts,
+          };
+        });
 
       const curriculumItems: CoachAthleteCurriculumItem[] = (curriculumSnapshot?.docs || [])
         .map((docSnapshot) => {
@@ -992,6 +1095,7 @@ class CoachService {
             progressPct: curriculumAssignmentProgressPct(assignment),
             dueToday: assignment.status === CurriculumAssignmentStatus.Active || assignment.status === CurriculumAssignmentStatus.Extended,
             updatedAt: curriculumAssignmentUpdatedAt(assignment),
+            ...curriculumAssignmentCompletionCounts(assignment),
           };
         });
 

@@ -37,7 +37,18 @@ import { db } from './config';
 // list in `healthContextSourceRecord.ts`.
 // ──────────────────────────────────────────────────────────────────────────────
 
-const WEARABLE_SOURCE_FAMILIES = ['oura', 'apple_health', 'polar', 'fitbit', 'whoop', 'garmin'];
+const WEARABLE_SOURCE_FAMILIES = [
+  'oura',
+  'apple_health',
+  'healthkit',
+  'health_kit',
+  'apple_watch',
+  'healthconnect',
+  'polar',
+  'fitbit',
+  'whoop',
+  'garmin',
+];
 
 const HEALTH_CONTEXT_SOURCE_RECORDS_COLLECTION = 'health-context-source-records';
 const MENTAL_CHECKINS_ROOT_COLLECTION = 'mental-check-ins';

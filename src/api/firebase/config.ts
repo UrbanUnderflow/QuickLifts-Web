@@ -296,6 +296,7 @@ export const getFirebaseModeRequestHeaders = (): Record<string, string> => {
 export const setPreferredFirebaseMode = (isDev: boolean) => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem('devMode', isDev ? 'true' : 'false');
+  window.localStorage.setItem('dopplerConfig', isDev ? 'dev_backend' : 'prd_backend');
   if (!isDev) {
     window.localStorage.removeItem('forceDevFirebase');
   }

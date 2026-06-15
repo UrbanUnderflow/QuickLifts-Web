@@ -11,6 +11,7 @@ import {
   Check,
 } from 'lucide-react';
 import { coachService, DailySentimentRecord } from '../api/firebase/coach/service';
+import type { AthleteDeviceStatus } from '../api/firebase/pulsecheckDeviceMonitor';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
 import { useUser } from '../hooks/useUser';
 
@@ -32,6 +33,7 @@ interface AthleteData {
   deviceCoveragePct?: number;
   deviceConnected?: boolean;
   deviceDailyPresence?: boolean[];
+  deviceStatus?: AthleteDeviceStatus;
 }
 
 // Trend-level theme extraction from a day's check-in messages (no transcripts).
@@ -68,6 +70,24 @@ const STATUS: Record<StatusKey, { label: string; dot: string; text: string; line
 const daysSince = (d?: Date): number | null => {
   if (!d || isNaN(d.getTime())) return null;
   return Math.floor((Date.now() - d.getTime()) / 86400000);
+};
+
+const formatDeviceTime = (seconds?: number | null): string => {
+  if (!seconds) return 'No data yet';
+  const date = new Date(seconds * 1000);
+  if (Number.isNaN(date.getTime())) return 'No data yet';
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 14) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const deviceConnectionLabel = (status?: AthleteDeviceStatus): string => {
+  if (!status || status.connectionStatus === 'not_connected') return 'Not connected';
+  if (status.wearDaysCovered === 0) return 'Connected, waiting for data';
+  if (status.connectionStatus === 'stale') return 'Connected, stale';
+  return 'Synced';
 };
 
 const deriveStatus = (a: AthleteData): StatusKey => {
@@ -208,6 +228,7 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
   // Per-day hover tooltip state. On live, the day's themes are fetched lazily
   // from that day's check-in messages (trend-level keywords only).
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
+  const [deviceHover, setDeviceHover] = useState<{ x: number; y: number } | null>(null);
   const [dayTopics, setDayTopics] = useState<Record<string, string[]>>({});
   const fetchedDaysRef = useRef<Set<string>>(new Set());
   const onDayEnter = useCallback(
@@ -230,6 +251,17 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
     [demo, last14, athlete.id]
   );
   const onDayLeave = useCallback(() => setHover(null), []);
+
+  const onDeviceEnter = useCallback((e: React.MouseEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const half = 128;
+    const x = Math.max(
+      half + 8,
+      Math.min((typeof window !== 'undefined' ? window.innerWidth : 1280) - half - 8, r.left + r.width / 2)
+    );
+    setDeviceHover({ x, y: r.top });
+  }, []);
+  const onDeviceLeave = useCallback(() => setDeviceHover(null), []);
 
   // Escalation banner hover → shows what's being done about it.
   const [escHover, setEscHover] = useState<{ x: number; y: number } | null>(null);
@@ -291,11 +323,36 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
     return stale != null ? `No check-in · seen ${stale}d ago` : 'No check-ins yet';
   }, [last14, stale]);
 
-  // Device: real (deviceConnected) on live, synth in demo. Modules has no real
-  // per-athlete source yet, so it's demo-only (hidden on live).
-  const deviceWorn = demo
+  // Device: real connection + wear coverage on live, synthesized in demo.
+  // Modules has no real per-athlete source yet, so it's demo-only (hidden on live).
+  const deviceConnected = demo
     ? (athlete.conversationCount ?? 0) > 0 || (athlete.weeklyGoalProgress ?? 0) > 10
+    : athlete.deviceStatus
+    ? athlete.deviceStatus.connectionStatus !== 'not_connected'
     : !!athlete.deviceConnected;
+  const deviceCoveragePct = demo
+    ? (deviceConnected ? 86 : 0)
+    : athlete.deviceStatus?.wearCoveragePct ?? athlete.deviceCoveragePct ?? 0;
+  const deviceWindowDays = athlete.deviceStatus?.windowDays ?? athlete.deviceDailyPresence?.length ?? 14;
+  const deviceDaysCovered = athlete.deviceStatus?.wearDaysCovered
+    ?? athlete.deviceDailyPresence?.filter(Boolean).length
+    ?? 0;
+  const devicePresence = athlete.deviceStatus?.dailyPresence
+    || athlete.deviceDailyPresence
+    || Array.from({ length: deviceWindowDays }, () => false);
+  const deviceLabel = demo ? 'Demo device' : athlete.deviceStatus?.currentDeviceLabel || 'No device';
+  const deviceSummary = demo
+    ? `Device ${deviceCoveragePct}%`
+    : deviceConnected
+    ? `${deviceLabel} · ${deviceCoveragePct}%`
+    : 'No device connected';
+  const deviceTone = !deviceConnected
+    ? 'text-zinc-500'
+    : deviceCoveragePct >= 70
+    ? 'text-emerald-300'
+    : deviceCoveragePct > 0
+    ? 'text-amber-300'
+    : 'text-zinc-300';
   const modulesDone: number | null = demo
     ? Math.max(0, Math.min(3, Math.round(((athlete.weeklyGoalProgress ?? 0) / 100) * 3)))
     : null;
@@ -427,10 +484,16 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           </span>
         </div>
 
-        {/* Adherence (proxies for now) */}
+        {/* Adherence */}
         <div className="mt-2 flex items-center gap-3 text-[11px] text-zinc-500">
-          <span className="inline-flex items-center gap-1">
-            <Watch className="h-3.5 w-3.5" /> Device {deviceWorn ? <span className="text-zinc-300">✓</span> : <span className="text-zinc-600">—</span>}
+          <span
+            className="inline-flex max-w-full cursor-help items-center gap-1"
+            onMouseEnter={onDeviceEnter}
+            onMouseLeave={onDeviceLeave}
+          >
+            <Watch className="h-3.5 w-3.5 flex-none" />
+            <span className="flex-none">Device</span>
+            <span className={`truncate ${deviceTone}`}>{deviceSummary}</span>
           </span>
           {modulesDone !== null && (
             <span className="inline-flex items-center gap-1">
@@ -470,6 +533,72 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           </button>
         </div>
       </div>
+
+      {/* Device hover detail */}
+      {deviceHover && (
+        <div
+          className="pointer-events-none fixed z-[70]"
+          style={{ left: deviceHover.x, top: deviceHover.y, transform: 'translate(-50%, calc(-100% - 10px))' }}
+        >
+          <div className="w-64 rounded-xl border border-white/10 bg-zinc-900/[0.98] p-3 shadow-2xl backdrop-blur">
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
+              <span className="min-w-0 truncate text-xs font-semibold text-white">{deviceLabel}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${deviceTone} bg-white/[0.05]`}>
+                {deviceCoveragePct}%
+              </span>
+            </div>
+            <div className="mt-2 space-y-1.5 text-[11px]">
+              <div className="flex justify-between gap-3">
+                <span className="text-zinc-500">Connection</span>
+                <span className="text-right text-zinc-200">{demo ? 'Demo signal' : deviceConnectionLabel(athlete.deviceStatus)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-zinc-500">Days with data</span>
+                <span className="text-zinc-200">{deviceDaysCovered}/{deviceWindowDays}</span>
+              </div>
+              {!demo && (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-zinc-500">Last data</span>
+                    <span className="text-right text-zinc-200">{formatDeviceTime(athlete.deviceStatus?.lastObservedAt)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-zinc-500">Last sync</span>
+                    <span className="text-right text-zinc-200">{formatDeviceTime(athlete.deviceStatus?.lastSyncedAt)}</span>
+                  </div>
+                </>
+              )}
+              <div className="pt-1">
+                <div className="mb-1 flex items-center justify-between text-[10px] text-zinc-600">
+                  <span>{deviceWindowDays} days ago</span>
+                  <span>Today</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {devicePresence.map((present, idx) => (
+                    <span
+                      key={idx}
+                      className="h-2.5 flex-1 rounded-[2px]"
+                      style={{
+                        background: present ? 'rgba(16,185,129,0.9)' : 'rgba(63,63,70,0.8)',
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+              {!deviceConnected && (
+                <p className="pt-1 text-[10px] leading-4 text-zinc-500">
+                  No connected wearable or health source was found for this athlete.
+                </p>
+              )}
+              {deviceConnected && deviceDaysCovered === 0 && (
+                <p className="pt-1 text-[10px] leading-4 text-zinc-500">
+                  The source is connected, but no wearable data arrived in this window.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Per-day hover detail (mood squares + check-in dots share this) */}
       {hover &&

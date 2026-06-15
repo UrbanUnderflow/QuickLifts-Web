@@ -59,6 +59,10 @@ import {
 const FAMILY_TO_SNAPSHOT_SOURCE: Record<HealthContextSourceFamily, SnapshotSourceId> = {
   oura: 'oura',
   apple_health: 'health_kit',
+  healthkit: 'health_kit',
+  health_kit: 'health_kit',
+  apple_watch: 'apple_watch',
+  healthconnect: 'health_kit',
   polar: 'polar',
   fitbit: 'fitbit',
   whoop: 'whoop',
@@ -87,13 +91,13 @@ const familyToSnapshotSource = (family: HealthContextSourceFamily): SnapshotSour
 // and ahead of Oura/Polar for biometrics when Apple Health is absent.
 const DOMAIN_PRECEDENCE: Record<HealthContextDomain, HealthContextSourceFamily[]> = {
   identity: ['fit_with_pulse', 'macra', 'coach_entered'],
-  training: ['fit_with_pulse', 'apple_health', 'polar', 'fitbit', 'oura'],
-  recovery: ['polar', 'oura', 'fitbit', 'apple_health', 'pulsecheck_self_report'],
-  activity: ['apple_health', 'polar', 'fitbit', 'oura', 'pulsecheck_self_report'],
+  training: ['fit_with_pulse', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'fitbit', 'oura'],
+  recovery: ['polar', 'oura', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'pulsecheck_self_report'],
+  activity: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'fitbit', 'oura', 'pulsecheck_self_report'],
   nutrition: ['macra', 'pulsecheck_self_report', 'fit_with_pulse'],
-  biometrics: ['apple_health', 'fitbit', 'polar', 'oura', 'coach_entered'],
+  biometrics: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fitbit', 'polar', 'oura', 'coach_entered'],
   behavioral: ['pulsecheck_self_report', 'macra', 'coach_entered'],
-  summary: ['oura', 'polar', 'fitbit', 'apple_health', 'fit_with_pulse', 'macra'],
+  summary: ['oura', 'polar', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fit_with_pulse', 'macra'],
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
