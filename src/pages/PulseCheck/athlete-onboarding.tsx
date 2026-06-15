@@ -230,6 +230,8 @@ export default function PulseCheckAthleteOnboardingPage() {
   const currentUserLoading = useUserLoading();
   const organizationId = typeof router.query.organizationId === 'string' ? router.query.organizationId : '';
   const teamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
+  const rawReturnTo = typeof router.query.returnTo === 'string' ? router.query.returnTo : '';
+  const returnTo = rawReturnTo.startsWith('/PulseCheck') ? rawReturnTo : '';
   // Dev-only preview: staff can see the athlete-facing form sourced straight
   // from the team config, without needing a real athlete membership.
   const previewMode = (router.query.preview === '1' || router.query.preview === 'true') && isDevAuthBypassEnabled();
@@ -537,7 +539,7 @@ export default function PulseCheckAthleteOnboardingPage() {
       }
 
       setMessage({ type: 'success', text: 'You are set. Your team access is ready.' });
-      router.push(`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
+      router.push(returnTo || `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
     } catch (error) {
       console.error('[PulseCheck athlete onboarding] Failed to save onboarding:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'We could not finish setup right now.' });
@@ -1031,10 +1033,10 @@ export default function PulseCheckAthleteOnboardingPage() {
 
                 {/* Secondary */}
                 <Link
-                  href={`/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                  href={returnTo || '/PulseCheck?web=1'}
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-zinc-300 transition-all duration-300 hover:border-white/20 hover:text-white hover:bg-white/[0.06] backdrop-blur-sm"
                 >
-                  Back to Team
+                  Back to teams
                   <ChevronRight className="h-4 w-4" />
                 </Link>
               </motion.div>

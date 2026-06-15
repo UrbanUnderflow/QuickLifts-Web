@@ -29,7 +29,7 @@ import {
 } from '../mentaltraining/collections';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
-import { athleteHasSatisfiedAccessRequirements } from '../pulsecheckProvisioning/accessState';
+import { athleteHasSatisfiedAccessRequirements, getAssignedIntakeQuestions } from '../pulsecheckProvisioning/accessState';
 import { pilotDashboardDemoMode } from './demoMode';
 import {
   buildPilotAdherenceOrchestratorByCohort,
@@ -2690,10 +2690,16 @@ export const pulseCheckPilotDashboardService = {
             normalizeString(enrollment?.cohortId) || normalizeString(candidate.membership?.athleteOnboarding?.targetCohortId);
           const cohort = cohortId ? cohortMap.get(cohortId) || null : null;
           const athleteOnboarding = candidate.membership?.athleteOnboarding;
+          const assignedTeamIntakeQuestions = Array.isArray(team?.intake?.athlete?.questions)
+            ? team.intake.athlete.questions
+            : [];
+          const assignedIntakeQuestions = getAssignedIntakeQuestions(assignedTeamIntakeQuestions);
           const intakeCompleted = Boolean(coerceTimestampMs(athleteOnboarding?.intakeCompletedAt));
           const intake = buildAthleteIntakeAnswers(
             athleteOnboarding?.intakeResponses,
-            resolveTeamAthleteIntakeQuestions(team)
+            assignedIntakeQuestions.length > 0
+              ? assignedTeamIntakeQuestions
+              : resolveTeamAthleteIntakeQuestions(team)
           );
 
           return {
@@ -2714,6 +2720,8 @@ export const pulseCheckPilotDashboardService = {
             consentStatus: resolveAthleteConsentStatus(candidate.membership, enrollment, pilot),
             onboardingStatus: normalizeString(candidate.membership?.onboardingStatus) || undefined,
             intakeCompleted,
+            intakeQuestionCount: assignedIntakeQuestions.length,
+            intakeRequiredQuestionCount: assignedIntakeQuestions.filter((question) => question.required).length,
             phone: normalizeString(candidate.membership?.phone),
             role: normalizeString(candidate.membership?.role) || 'athlete',
             intake,
@@ -2747,6 +2755,8 @@ export const pulseCheckPilotDashboardService = {
         enrollmentStatus: primaryContext?.enrollmentStatus || 'none',
         onboardingStatus: primaryContext?.onboardingStatus,
         intakeCompleted: Boolean(primaryContext?.intakeCompleted),
+        intakeQuestionCount: primaryContext?.intakeQuestionCount || 0,
+        intakeRequiredQuestionCount: primaryContext?.intakeRequiredQuestionCount || 0,
         phone: primaryContext?.phone || '',
         role: primaryContext?.role || 'athlete',
         intake: primaryContext?.intake || [],

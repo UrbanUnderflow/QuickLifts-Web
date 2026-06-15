@@ -183,12 +183,24 @@ const getConsentChipLabel = (status: PilotDashboardAthleteTeamContext['consentSt
   }
 };
 
-const getIntakeChipClassName = (completed: boolean) =>
-  completed
-    ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
-    : 'border-white/15 bg-white/[0.04] text-white/45';
+const hasAssignedIntake = (context: Pick<PilotDashboardAthleteTeamContext, 'intakeQuestionCount'>) =>
+  context.intakeQuestionCount > 0;
 
-const getIntakeChipLabel = (completed: boolean) => (completed ? 'Intake done' : 'No intake');
+const getIntakeChipClassName = (context: Pick<PilotDashboardAthleteTeamContext, 'intakeCompleted' | 'intakeQuestionCount'>) => {
+  if (!hasAssignedIntake(context)) {
+    return 'border-white/15 bg-white/[0.04] text-white/45';
+  }
+  if (context.intakeCompleted) {
+    return 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100';
+  }
+  return 'border-amber-400/25 bg-amber-400/10 text-amber-100';
+};
+
+const getIntakeChipLabel = (context: Pick<PilotDashboardAthleteTeamContext, 'intakeCompleted' | 'intakeQuestionCount'>) => {
+  if (!hasAssignedIntake(context)) return 'No intake assigned';
+  if (context.intakeCompleted) return 'Intake done';
+  return 'Intake pending';
+};
 
 const getTeamCountLabel = (count: number) => `${count} team${count === 1 ? '' : 's'}`;
 
@@ -214,6 +226,8 @@ const getAthleteTeamContexts = (athlete: PilotDashboardAthleteRosterEntry): Pilo
       consentStatus: 'unknown',
       onboardingStatus: athlete.onboardingStatus,
       intakeCompleted: athlete.intakeCompleted,
+      intakeQuestionCount: athlete.intakeQuestionCount || 0,
+      intakeRequiredQuestionCount: athlete.intakeRequiredQuestionCount || 0,
       phone: athlete.phone,
       role: athlete.role,
       intake: athlete.intake,
@@ -1735,10 +1749,10 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                                         </span>
                                         <span
                                           className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${getIntakeChipClassName(
-                                            context.intakeCompleted
+                                            context
                                           )}`}
                                         >
-                                          {getIntakeChipLabel(context.intakeCompleted)}
+                                          {getIntakeChipLabel(context)}
                                         </span>
                                       </div>
                                     </div>
@@ -2025,10 +2039,10 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           </span>
                           <span
                             className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getIntakeChipClassName(
-                              context.intakeCompleted
+                              context
                             )}`}
                           >
-                            {getIntakeChipLabel(context.intakeCompleted)}
+                            {getIntakeChipLabel(context)}
                           </span>
                         </div>
 
@@ -2223,16 +2237,20 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           </div>
                           <span
                             className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getIntakeChipClassName(
-                              context.intakeCompleted
+                              context
                             )}`}
                           >
-                            {context.intakeCompleted ? 'Completed' : 'Not completed'}
+                            {getIntakeChipLabel(context)}
                           </span>
                         </div>
 
-                        {!context.intakeCompleted && context.intake.length === 0 ? (
+                        {!hasAssignedIntake(context) ? (
                           <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
-                            Intake not completed yet.
+                            No athlete intake assigned for this team.
+                          </div>
+                        ) : !context.intakeCompleted && context.intake.length === 0 ? (
+                          <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
+                            Athlete intake is assigned but has not been submitted yet.
                           </div>
                         ) : context.intake.length === 0 ? (
                           <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">

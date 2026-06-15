@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Building2, Loader2, ShieldCheck, Users } from 'lucide-react';
+import {
+  athleteHasSatisfiedAccessRequirements,
+  hasCompletedAssignedIntake,
+} from '../../api/firebase/pulsecheckProvisioning/accessState';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckOrganization,
@@ -52,7 +56,7 @@ const organizationRoleLabel = (role?: PulseCheckOrganizationMembership['role']) 
     .join(' ');
 };
 
-export const teamDestinationForMembership = (membership: PulseCheckTeamMembership) => {
+export const teamDestinationForMembership = (membership: PulseCheckTeamMembership, team?: PulseCheckTeam | null) => {
   const baseQuery = `organizationId=${encodeURIComponent(membership.organizationId)}&teamId=${encodeURIComponent(membership.teamId)}`;
 
   if (membership.role === 'team-admin') {
@@ -74,12 +78,16 @@ export const teamDestinationForMembership = (membership: PulseCheckTeamMembershi
 
   if (membership.role === 'athlete') {
     const baselineComplete = membership.athleteOnboarding?.baselinePathStatus === 'complete';
+    const assignedIntakeQuestions = team?.intake?.athlete?.questions || [];
+    const accessRequirementsComplete = athleteHasSatisfiedAccessRequirements(membership.athleteOnboarding, null);
+    const intakeComplete = hasCompletedAssignedIntake(membership.athleteOnboarding, assignedIntakeQuestions);
+    const onboardingIncomplete = membership.onboardingStatus === 'pending-consent' || !accessRequirementsComplete || !intakeComplete;
 
-    return membership.onboardingStatus === 'pending-consent'
+    return onboardingIncomplete
       ? {
-          destinationHref: `/PulseCheck/athlete-onboarding?${baseQuery}`,
+          destinationHref: `/PulseCheck/athlete-onboarding?${baseQuery}&returnTo=${encodeURIComponent('/PulseCheck?web=1')}`,
           destinationLabel: 'Complete Athlete Onboarding',
-          nextStepLabel: 'Consent and baseline entry',
+          nextStepLabel: 'Consent, intake, and baseline entry',
         }
       : !baselineComplete
       ? {
@@ -182,7 +190,7 @@ export default function PulseCheckAccessHub() {
                 membership,
                 organization,
                 team: teamMap.get(membership.teamId) || null,
-                ...teamDestinationForMembership(membership),
+                ...teamDestinationForMembership(membership, teamMap.get(membership.teamId) || null),
               }))
               .sort((left, right) =>
                 String(left.team?.displayName || left.membership.teamId).localeCompare(

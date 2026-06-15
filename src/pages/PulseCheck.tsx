@@ -1,11 +1,11 @@
 import type { GetStaticProps, NextPage } from 'next';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList } from 'react-icons/fa';
+import { FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList, FaChevronRight } from 'react-icons/fa';
 import Footer from '../components/Footer/Footer';
 import PageHead from '../components/PageHead';
 import { PulseCheckWaitlistForm } from '../components/PulseCheckWaitlistForm';
-import { useUser } from '../hooks/useUser';
+import { useUser, useUserLoading } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
 import Chat from '../components/pulsecheck/Chat';
 import NoraOnboarding from '../components/pulsecheck/NoraOnboarding';
@@ -15,6 +15,18 @@ import SideNav from '../components/Navigation/SideNav';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
 import PulseCheckMarketingLanding from '../components/pulsecheck/PulseCheckMarketingLanding';
 import PulseCheckTodayView from '../components/pulsecheck/PulseCheckTodayView';
+import {
+    athleteHasSatisfiedAccessRequirements,
+    getAssignedIntakeQuestions,
+    hasCompletedAssignedIntake,
+} from '../api/firebase/pulsecheckProvisioning/accessState';
+import { pulseCheckProvisioningService } from '../api/firebase/pulsecheckProvisioning/service';
+import type {
+    PulseCheckOrganization,
+    PulseCheckPilot,
+    PulseCheckTeam,
+    PulseCheckTeamMembership,
+} from '../api/firebase/pulsecheckProvisioning/types';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 const STORAGE_KEY_NORA_ONBOARDING = 'pulsecheck_has_seen_nora_onboarding';
@@ -25,13 +37,172 @@ const PULSECHECK_URL = 'https://pulsecheckmind.ai';
 const PULSECHECK_OG_IMAGE = '/pulsecheck-og.png';
 const PULSECHECK_OG_IMAGE_URL = `${PULSECHECK_URL}${PULSECHECK_OG_IMAGE}`;
 
+type PendingAthleteTeamSetup = {
+    membership: PulseCheckTeamMembership;
+    team: PulseCheckTeam | null;
+    organization: PulseCheckOrganization | null;
+    pilot: PulseCheckPilot | null;
+    setupPending: boolean;
+    consentComplete: boolean;
+    intakeComplete: boolean;
+    consentCount: number;
+    intakeQuestionCount: number;
+};
+
+const getPendingTeamName = (setup: PendingAthleteTeamSetup) =>
+    setup.team?.displayName || setup.membership.teamId || 'PulseCheck team';
+
+const getPendingOrganizationLine = (setup: PendingAthleteTeamSetup) =>
+    [
+        setup.organization?.displayName || setup.membership.organizationId,
+        setup.pilot?.name,
+    ].filter(Boolean).join(' - ');
+
+const buildAthleteSetupUrl = (setup: PendingAthleteTeamSetup) => {
+    const organizationId = setup.membership.organizationId || setup.team?.organizationId || '';
+    const query = new URLSearchParams({
+        organizationId,
+        teamId: setup.membership.teamId,
+        returnTo: '/PulseCheck?web=1',
+    });
+    return `/PulseCheck/athlete-onboarding?${query.toString()}`;
+};
+
+const PulseCheckAppLoading: React.FC<{ label?: string }> = ({ label = 'Loading PulseCheck...' }) => (
+    <div className="flex min-h-screen items-center justify-center bg-[#05070c] px-4 text-white">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm text-zinc-300">
+            {label}
+        </div>
+    </div>
+);
+
+const PulseCheckAthleteSetupWall: React.FC<{
+    pendingSetups: PendingAthleteTeamSetup[];
+    onStartSetup: (setup: PendingAthleteTeamSetup) => void;
+}> = ({ pendingSetups, onStartSetup }) => {
+    const nextSetup = pendingSetups[0];
+
+    return (
+        <>
+            <PageHead
+                metaData={{
+                    pageId: "pulse-check-team-setup",
+                    pageTitle: "Finish Team Setup | PulseCheck",
+                    metaDescription: "Finish required PulseCheck team setup before entering the app.",
+                    lastUpdated: new Date().toISOString()
+                }}
+                pageOgUrl="https://fitwithpulse.ai/PulseCheck"
+            />
+            <main className="min-h-screen bg-[#05070c] px-4 py-8 text-white sm:px-6">
+                <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-3xl items-center">
+                    <section className="w-full rounded-[28px] border border-white/10 bg-zinc-950/80 p-5 shadow-[0_24px_100px_rgba(0,0,0,0.45)] sm:p-7">
+                        <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#E0FE10]">
+                                    Required team setup
+                                </p>
+                                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                                    Finish every team before entering PulseCheck
+                                </h1>
+                                <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
+                                    This account has team requirements that still need your consent or intake. Complete one team at a time, then PulseCheck will bring you back here for the next one.
+                                </p>
+                            </div>
+                            <div className="shrink-0 rounded-2xl border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-3 py-2 text-sm font-semibold text-[#E0FE10]">
+                                {pendingSetups.length} pending
+                            </div>
+                        </div>
+
+                        <div className="mt-5 space-y-3">
+                            {pendingSetups.map((setup, index) => (
+                                <article
+                                    key={setup.membership.id}
+                                    className="rounded-2xl border border-white/10 bg-white/[0.035] p-4"
+                                >
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                                                    Team {index + 1}
+                                                </span>
+                                                {index === 0 ? (
+                                                    <span className="rounded-full border border-[#E0FE10]/25 bg-[#E0FE10]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#E0FE10]">
+                                                        Next
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <h2 className="mt-2 truncate text-lg font-semibold text-white">
+                                                {getPendingTeamName(setup)}
+                                            </h2>
+                                            <p className="mt-1 truncate text-sm text-zinc-500">
+                                                {getPendingOrganizationLine(setup) || 'PulseCheck team'}
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {!setup.consentComplete ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100">
+                                                    <FaShieldAlt className="h-3 w-3" />
+                                                    Consent pending
+                                                </span>
+                                            ) : null}
+                                            {!setup.intakeComplete ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+                                                    <FaClipboardList className="h-3 w-3" />
+                                                    Intake pending
+                                                </span>
+                                            ) : null}
+                                            {setup.setupPending && setup.consentComplete && setup.intakeComplete ? (
+                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-3 py-1 text-xs font-semibold text-zinc-200">
+                                                    <FaCheckCircle className="h-3 w-3" />
+                                                    Setup pending
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 grid gap-2 text-xs text-zinc-500 sm:grid-cols-2">
+                                        <div className="rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2">
+                                            {setup.consentCount > 0
+                                                ? `${setup.consentCount} consent ${setup.consentCount === 1 ? 'form' : 'forms'} to review`
+                                                : 'Consent review required'}
+                                        </div>
+                                        <div className="rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2">
+                                            {setup.intakeQuestionCount > 0
+                                                ? `${setup.intakeQuestionCount} intake ${setup.intakeQuestionCount === 1 ? 'question' : 'questions'} assigned`
+                                                : 'No intake assigned'}
+                                        </div>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+
+                        {nextSetup ? (
+                            <button
+                                type="button"
+                                onClick={() => onStartSetup(nextSetup)}
+                                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#E0FE10] px-5 py-3 text-sm font-bold text-black transition hover:bg-[#ecff4a] sm:w-auto"
+                            >
+                                Complete next team
+                                <FaChevronRight className="h-3.5 w-3.5" />
+                            </button>
+                        ) : null}
+                    </section>
+                </div>
+            </main>
+        </>
+    );
+};
+
 const PulseCheckPage: NextPage = () => {
     const router = useRouter();
     const currentUser = useUser();
+    const currentUserLoading = useUserLoading();
     const [showMarketing, setShowMarketing] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
     const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
     const [showNoraOnboarding, setShowNoraOnboarding] = useState(false);
+    const [athleteGateLoading, setAthleteGateLoading] = useState(false);
+    const [athleteGateCheckedUserId, setAthleteGateCheckedUserId] = useState<string | null>(null);
+    const [pendingAthleteTeamSetups, setPendingAthleteTeamSetups] = useState<PendingAthleteTeamSetup[]>([]);
     // Add custom styles for animations
     const customStyles = `
         @keyframes fadeInScale {
@@ -165,8 +336,8 @@ const PulseCheckPage: NextPage = () => {
         const webParam = params?.get('web');
         if (webParam === '1') {
             localStorage.setItem(STORAGE_KEY_PC, 'true');
-        }
-        if (hasSeen === 'true') {
+            setShowMarketing(false);
+        } else if (hasSeen === 'true') {
             setShowMarketing(false);
         }
         setIsLoading(false);
@@ -183,6 +354,151 @@ const PulseCheckPage: NextPage = () => {
             }
         }
     }, [currentUser, showMarketing]);
+
+    useEffect(() => {
+        if (showMarketing) {
+            setAthleteGateLoading(false);
+            setAthleteGateCheckedUserId(null);
+            setPendingAthleteTeamSetups([]);
+            return;
+        }
+
+        if (currentUserLoading) {
+            setAthleteGateLoading(true);
+            return;
+        }
+
+        if (!currentUser?.id) {
+            setAthleteGateLoading(false);
+            setAthleteGateCheckedUserId(null);
+            setPendingAthleteTeamSetups([]);
+            return;
+        }
+
+        let active = true;
+        const userId = currentUser.id;
+
+        const loadAthleteGate = async () => {
+            setAthleteGateLoading(true);
+
+            try {
+                const memberships = (await pulseCheckProvisioningService.listUserTeamMemberships(userId))
+                    .filter((membership) => membership.role === 'athlete');
+
+                const teamIds = Array.from(new Set(memberships.map((membership) => membership.teamId).filter(Boolean)));
+                const teams = await Promise.all(
+                    teamIds.map(async (teamId) => {
+                        try {
+                            return await pulseCheckProvisioningService.getTeam(teamId);
+                        } catch {
+                            return null;
+                        }
+                    })
+                );
+                const teamMap = new Map(teams.filter(Boolean).map((team) => [team!.id, team!]));
+                const pilotIds = Array.from(
+                    new Set(
+                        memberships
+                            .map((membership) => membership.athleteOnboarding?.targetPilotId || '')
+                            .filter(Boolean)
+                    )
+                );
+                const pilots = await Promise.all(
+                    pilotIds.map(async (pilotId) => {
+                        try {
+                            return await pulseCheckProvisioningService.getPilot(pilotId);
+                        } catch {
+                            return null;
+                        }
+                    })
+                );
+                const pilotMap = new Map(pilots.filter(Boolean).map((pilot) => [pilot!.id, pilot!]));
+                const organizationIds = Array.from(
+                    new Set(
+                        memberships
+                            .flatMap((membership) => {
+                                const team = teamMap.get(membership.teamId) || null;
+                                const pilotId = membership.athleteOnboarding?.targetPilotId || '';
+                                const pilot = pilotId ? pilotMap.get(pilotId) || null : null;
+                                return [membership.organizationId, team?.organizationId, pilot?.organizationId];
+                            })
+                            .filter((organizationId): organizationId is string => Boolean(organizationId))
+                    )
+                );
+                const organizations = await Promise.all(
+                    organizationIds.map(async (organizationId) => {
+                        try {
+                            return await pulseCheckProvisioningService.getOrganization(organizationId);
+                        } catch {
+                            return null;
+                        }
+                    })
+                );
+                const organizationMap = new Map(organizations.filter(Boolean).map((organization) => [organization!.id, organization!]));
+
+                const nextPending = memberships
+                    .map((membership): PendingAthleteTeamSetup | null => {
+                        const team = teamMap.get(membership.teamId) || null;
+                        const pilotId = membership.athleteOnboarding?.targetPilotId || '';
+                        const pilot = pilotId ? pilotMap.get(pilotId) || null : null;
+                        const organizationId = membership.organizationId || team?.organizationId || '';
+                        const organization = organizationId ? organizationMap.get(organizationId) || null : null;
+                        const assignedIntakeQuestions = getAssignedIntakeQuestions(team?.intake?.athlete?.questions || []);
+                        const consentComplete = athleteHasSatisfiedAccessRequirements(
+                            membership.athleteOnboarding,
+                            pilot?.studyMode || null
+                        );
+                        const intakeComplete = hasCompletedAssignedIntake(
+                            membership.athleteOnboarding,
+                            team?.intake?.athlete?.questions || []
+                        );
+                        const setupPending = membership.onboardingStatus === 'pending-consent';
+
+                        if (!setupPending && consentComplete && intakeComplete) {
+                            return null;
+                        }
+
+                        return {
+                            membership,
+                            team,
+                            organization,
+                            pilot,
+                            setupPending,
+                            consentComplete,
+                            intakeComplete,
+                            consentCount: membership.athleteOnboarding?.requiredConsents?.length || 0,
+                            intakeQuestionCount: assignedIntakeQuestions.length,
+                        };
+                    })
+                    .filter((setup): setup is PendingAthleteTeamSetup => Boolean(setup))
+                    .sort(
+                        (left, right) =>
+                            getPendingOrganizationLine(left).localeCompare(getPendingOrganizationLine(right)) ||
+                            getPendingTeamName(left).localeCompare(getPendingTeamName(right))
+                    );
+
+                if (!active) return;
+                setPendingAthleteTeamSetups(nextPending);
+                setAthleteGateCheckedUserId(userId);
+            } catch (error) {
+                console.error('[PulseCheck] Failed to load athlete team setup gate:', error);
+                if (active) {
+                    setPendingAthleteTeamSetups([]);
+                    setAthleteGateCheckedUserId(userId);
+                }
+            } finally {
+                if (active) {
+                    setAthleteGateLoading(false);
+                }
+            }
+        };
+
+        void loadAthleteGate();
+
+        return () => {
+            active = false;
+        };
+    }, [currentUser?.id, currentUserLoading, showMarketing]);
 
     const handleNoraOnboardingComplete = () => {
         localStorage.setItem(STORAGE_KEY_NORA_ONBOARDING, 'true');
@@ -207,6 +523,10 @@ const PulseCheckPage: NextPage = () => {
     const handleBackToMarketing = () => {
         localStorage.removeItem(STORAGE_KEY_PC);
         setShowMarketing(true);
+    };
+
+    const handleStartAthleteTeamSetup = (setup: PendingAthleteTeamSetup) => {
+        router.push(buildAthleteSetupUrl(setup));
     };
 
     const requestedSection = typeof router.query.section === 'string' ? router.query.section : 'today';
@@ -1578,6 +1898,19 @@ const PulseCheckPage: NextPage = () => {
 
     // If user chose web app (and is logged in), show web app content
     if (!showMarketing && currentUser) {
+        if (currentUserLoading || athleteGateLoading || athleteGateCheckedUserId !== currentUser.id) {
+            return <PulseCheckAppLoading label="Checking team setup..." />;
+        }
+
+        if (pendingAthleteTeamSetups.length > 0) {
+            return (
+                <PulseCheckAthleteSetupWall
+                    pendingSetups={pendingAthleteTeamSetups}
+                    onStartSetup={handleStartAthleteTeamSetup}
+                />
+            );
+        }
+
         // Show Nora onboarding if user hasn't seen it yet
         if (showNoraOnboarding) {
             return (

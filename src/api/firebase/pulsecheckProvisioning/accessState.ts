@@ -8,6 +8,10 @@ import type {
 } from './types';
 
 type AthleteOnboardingLike = Partial<PulseCheckAthleteOnboardingState> | Record<string, unknown> | null | undefined;
+type AssignedIntakeQuestion = {
+  id: string;
+  required: boolean;
+};
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -45,6 +49,25 @@ const normalizeRequiredConsents = (value: unknown): PulseCheckRequiredConsentDoc
         return Boolean(normalizeString(candidate.id));
       })
     : [];
+
+export const getAssignedIntakeQuestions = (value: unknown): AssignedIntakeQuestion[] =>
+  Array.isArray(value)
+    ? value
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const candidate = entry as Record<string, unknown>;
+          const id = normalizeString(candidate.id);
+          if (!id) return null;
+          return {
+            id,
+            required: candidate.required === true,
+          };
+        })
+        .filter((entry): entry is AssignedIntakeQuestion => Boolean(entry))
+    : [];
+
+export const hasAssignedIntakeQuestions = (value: unknown): boolean =>
+  getAssignedIntakeQuestions(value).length > 0;
 
 export const hasCompletedEntryOnboarding = (athleteOnboarding?: AthleteOnboardingLike): boolean =>
   normalizeString(athleteOnboarding?.entryOnboardingStep) === 'complete';
@@ -100,6 +123,17 @@ export const athleteHasSatisfiedAccessRequirements = (
   Boolean(athleteOnboarding?.productConsentAccepted)
   && hasCompletedRequiredConsents(athleteOnboarding)
   && hasResolvedResearchConsent(studyMode, athleteOnboarding);
+
+export const hasCompletedAssignedIntake = (
+  athleteOnboarding?: AthleteOnboardingLike,
+  assignedQuestions?: unknown
+): boolean => {
+  if (!hasAssignedIntakeQuestions(assignedQuestions)) {
+    return true;
+  }
+
+  return Boolean(athleteOnboarding?.intakeCompletedAt);
+};
 
 export const resolveTeamMembershipOnboardingStatus = (input: {
   role: PulseCheckTeamMembershipRole;

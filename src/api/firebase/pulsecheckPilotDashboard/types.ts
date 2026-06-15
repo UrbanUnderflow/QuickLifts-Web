@@ -462,6 +462,8 @@ export interface PilotDashboardAthleteTeamContext {
   enrollmentStatus: PilotDashboardAthleteEnrollmentStatus;
   consentStatus: PilotDashboardAthleteConsentStatus;
   intakeCompleted: boolean;
+  intakeQuestionCount: number;
+  intakeRequiredQuestionCount: number;
   onboardingStatus?: string;
   phone: string;
   role: string;
@@ -483,6 +485,8 @@ export interface PilotDashboardAthleteRosterEntry {
   enrollmentStatus: PilotDashboardAthleteEnrollmentStatus;
   onboardingStatus?: string;
   intakeCompleted: boolean;
+  intakeQuestionCount: number;
+  intakeRequiredQuestionCount: number;
   phone: string;
   role: string;
   intake: PilotDashboardAthleteIntakeAnswer[];
