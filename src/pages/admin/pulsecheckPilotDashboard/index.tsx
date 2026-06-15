@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowRight,
   Building2,
+  Clipboard,
   Eye,
   Filter,
   FlaskConical,
@@ -183,22 +184,33 @@ const getConsentChipLabel = (status: PilotDashboardAthleteTeamContext['consentSt
   }
 };
 
+type IntakeStatusContext = Pick<
+  PilotDashboardAthleteTeamContext,
+  'intakeCompleted' | 'intakeQuestionCount' | 'intake'
+>;
+
 const hasAssignedIntake = (context: Pick<PilotDashboardAthleteTeamContext, 'intakeQuestionCount'>) =>
   context.intakeQuestionCount > 0;
 
-const getIntakeChipClassName = (context: Pick<PilotDashboardAthleteTeamContext, 'intakeCompleted' | 'intakeQuestionCount'>) => {
+const hasVisibleIntakeRecord = (context: IntakeStatusContext) =>
+  hasAssignedIntake(context) || context.intakeCompleted || context.intake.length > 0;
+
+const hasCompletedIntakeRecord = (context: IntakeStatusContext) =>
+  context.intakeCompleted || (!hasAssignedIntake(context) && context.intake.length > 0);
+
+const getIntakeChipClassName = (context: IntakeStatusContext) => {
+  if (hasCompletedIntakeRecord(context)) {
+    return 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100';
+  }
   if (!hasAssignedIntake(context)) {
     return 'border-white/15 bg-white/[0.04] text-white/45';
-  }
-  if (context.intakeCompleted) {
-    return 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100';
   }
   return 'border-amber-400/25 bg-amber-400/10 text-amber-100';
 };
 
-const getIntakeChipLabel = (context: Pick<PilotDashboardAthleteTeamContext, 'intakeCompleted' | 'intakeQuestionCount'>) => {
+const getIntakeChipLabel = (context: IntakeStatusContext) => {
+  if (hasCompletedIntakeRecord(context)) return 'Intake done';
   if (!hasAssignedIntake(context)) return 'No intake assigned';
-  if (context.intakeCompleted) return 'Intake done';
   return 'Intake pending';
 };
 
@@ -260,6 +272,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [showDashboardSignIn, setShowDashboardSignIn] = useState(false);
   const loadRequestIdRef = useRef(0);
   const athletesRequestIdRef = useRef(0);
+  const intakeAnswerCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const currentAccountEmail = currentUser?.email || auth.currentUser?.email || '';
   const canLoadLiveDashboardData = !currentUserLoading && Boolean(currentAccountEmail);
 
@@ -485,6 +498,13 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     if (typeof window !== 'undefined') {
       window.setTimeout(() => setInviteToast(null), 5000);
     }
+  };
+
+  const scrollToIntakeAnswers = (contextKey: string) => {
+    intakeAnswerCardRefs.current[contextKey]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
   };
 
   const resolveInviteLinkForContext = async (
@@ -2072,6 +2092,17 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           </div>
                         </dl>
 
+                        {hasVisibleIntakeRecord(context) ? (
+                          <button
+                            type="button"
+                            onClick={() => scrollToIntakeAnswers(context.key)}
+                            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                          >
+                            <Clipboard className="h-3.5 w-3.5" />
+                            View intake answers
+                          </button>
+                        ) : null}
+
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           <button
                             type="button"
@@ -2227,7 +2258,13 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
 
                   <div className="mt-3 space-y-3">
                     {selectedAthleteTeamContexts.map((context) => (
-                      <div key={`${context.key}:intake`} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                      <div
+                        key={`${context.key}:intake`}
+                        ref={(node) => {
+                          intakeAnswerCardRefs.current[context.key] = node;
+                        }}
+                        className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-4"
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-white/85">
@@ -2244,7 +2281,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           </span>
                         </div>
 
-                        {!hasAssignedIntake(context) ? (
+                        {!hasVisibleIntakeRecord(context) ? (
                           <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
                             No athlete intake assigned for this team.
                           </div>
