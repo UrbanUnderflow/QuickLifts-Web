@@ -144,10 +144,8 @@ const getEnrollmentChipClassName = (status: PilotDashboardAthleteRosterEntry['en
   switch (status) {
     case 'active':
       return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200';
-    case 'pending':
-      return 'border-amber-400/25 bg-amber-400/10 text-amber-200';
     default:
-      return 'border-white/15 bg-white/[0.04] text-white/55';
+      return 'border-amber-400/25 bg-amber-400/10 text-amber-200';
   }
 };
 
@@ -155,10 +153,8 @@ const getEnrollmentChipLabel = (status: PilotDashboardAthleteRosterEntry['enroll
   switch (status) {
     case 'active':
       return 'Enrolled';
-    case 'pending':
-      return 'Pending';
     default:
-      return 'Team only';
+      return 'Pending';
   }
 };
 
@@ -217,8 +213,9 @@ const getIntakeChipLabel = (context: IntakeStatusContext) => {
 const getTeamCountLabel = (count: number) => `${count} team${count === 1 ? '' : 's'}`;
 
 const getTeamContextSubline = (context: PilotDashboardAthleteTeamContext) =>
-  [context.organizationName, context.pilotName, context.cohortName].filter(Boolean).join(' - ') ||
-  'No pilot enrollment';
+  [context.organizationName, `Pilot bucket: ${context.pilotName || 'No pilot bucket'}`, context.cohortName]
+    .filter(Boolean)
+    .join(' - ');
 
 const getAthleteTeamContexts = (athlete: PilotDashboardAthleteRosterEntry): PilotDashboardAthleteTeamContext[] => {
   if (athlete.teamContexts?.length) return athlete.teamContexts;
@@ -1990,47 +1987,51 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
               onClick={() => setSelectedAthleteId(null)}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
-            <div className="pilot-drawer relative ml-auto flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-[rgba(9,12,19,0.98)] shadow-[0_0_80px_rgba(0,0,0,0.6)]">
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[rgba(9,12,19,0.98)] px-5 py-4 backdrop-blur-xl">
-                <div className="flex min-w-0 items-center gap-3">
-                  {selectedAthlete.profileImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={selectedAthlete.profileImageUrl}
-                      alt=""
-                      className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
-                      {getAthleteInitials(selectedAthlete.displayName)}
-                    </span>
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate pilot-font-display text-base font-bold tracking-[-0.02em] text-white">
-                      {selectedAthlete.displayName}
+            <div className="pilot-drawer relative ml-auto flex h-full w-full max-w-[74rem] flex-col overflow-hidden border-l border-white/10 bg-[rgba(9,12,19,0.98)] shadow-[0_0_80px_rgba(0,0,0,0.6)]">
+              <div className="shrink-0 border-b border-white/10 bg-[rgba(9,12,19,0.98)] px-5 py-4 backdrop-blur-xl sm:px-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {selectedAthlete.profileImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={selectedAthlete.profileImageUrl}
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-full border border-white/10 object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-400/10 text-sm font-semibold text-cyan-100">
+                        {getAthleteInitials(selectedAthlete.displayName)}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <div className="truncate pilot-font-display text-base font-bold tracking-[-0.02em] text-white">
+                        {selectedAthlete.displayName}
+                      </div>
+                      <div className="truncate text-xs text-white/45">{selectedAthlete.email || 'No email on file'}</div>
                     </div>
-                    <div className="truncate text-xs text-white/45">{selectedAthlete.email || 'No email on file'}</div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAthleteId(null)}
+                    className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] p-1.5 text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAthleteId(null)}
-                  className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] p-1.5 text-white/60 transition hover:bg-white/[0.08] hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
               </div>
 
-              <div className="flex flex-col gap-5 px-5 py-5">
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">Team contexts</div>
-                    <span className="pilot-font-mono text-xs text-white/45">{getTeamCountLabel(selectedAthleteTeamContexts.length)}</span>
-                  </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                <div className="grid gap-5 xl:grid-cols-[minmax(22rem,0.88fr)_minmax(0,1.45fr)]">
+                  <div className="space-y-5 xl:sticky xl:top-0 xl:self-start">
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">Team contexts</div>
+                        <span className="pilot-font-mono text-xs text-white/45">{getTeamCountLabel(selectedAthleteTeamContexts.length)}</span>
+                      </div>
 
-                  <div className="mt-3 space-y-3">
-                    {selectedAthleteTeamContexts.map((context) => (
-                      <div key={context.key} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                      <div className="mt-3 space-y-3">
+                        {selectedAthleteTeamContexts.map((context) => (
+                          <div key={context.key} className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate text-sm font-semibold text-white">
@@ -2124,26 +2125,26 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                        ))}
+                      </div>
+                    </div>
 
-                {inviteToast ? (
-                  <div
-                    className={`rounded-2xl border px-4 py-3 text-sm ${
-                      inviteToast.type === 'success'
-                        ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
-                        : inviteToast.type === 'error'
-                          ? 'border-rose-400/25 bg-rose-400/10 text-rose-100'
-                          : 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
-                    }`}
-                  >
-                    {inviteToast.text}
-                  </div>
-                ) : null}
+                    {inviteToast ? (
+                      <div
+                        className={`rounded-2xl border px-4 py-3 text-sm ${
+                          inviteToast.type === 'success'
+                            ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+                            : inviteToast.type === 'error'
+                              ? 'border-rose-400/25 bg-rose-400/10 text-rose-100'
+                              : 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
+                        }`}
+                      >
+                        {inviteToast.text}
+                      </div>
+                    ) : null}
 
-                {inviteEmailDraft ? (
-                  <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4">
+                    {inviteEmailDraft ? (
+                      <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-100/70">
@@ -2246,70 +2247,90 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                         {sendingInviteKey === inviteEmailDraft.contextKey ? 'Sending...' : 'Send invite email'}
                       </button>
                     </div>
-                  </div>
-                ) : null}
-
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">
-                      PulseCheck intake answers
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-3">
-                    {selectedAthleteTeamContexts.map((context) => (
-                      <div
-                        key={`${context.key}:intake`}
-                        ref={(node) => {
-                          intakeAnswerCardRefs.current[context.key] = node;
-                        }}
-                        className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-white/85">
-                              {context.teamName || 'Unassigned team'}
-                            </div>
-                            <div className="mt-1 truncate text-xs text-white/38">{context.organizationName || '—'}</div>
-                          </div>
-                          <span
-                            className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getIntakeChipClassName(
-                              context
-                            )}`}
-                          >
-                            {getIntakeChipLabel(context)}
-                          </span>
-                        </div>
-
-                        {!hasVisibleIntakeRecord(context) ? (
-                          <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
-                            No athlete intake assigned for this team.
-                          </div>
-                        ) : !context.intakeCompleted && context.intake.length === 0 ? (
-                          <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
-                            Athlete intake is assigned but has not been submitted yet.
-                          </div>
-                        ) : context.intake.length === 0 ? (
-                          <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
-                            No intake answers on record.
-                          </div>
-                        ) : (
-                          <div className="mt-3 space-y-2.5">
-                            {context.intake.map((answer) => (
-                              <div
-                                key={answer.questionId}
-                                className="rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3"
-                              >
-                                <div className="text-xs font-medium text-white/55">{answer.questionText}</div>
-                                <div className="mt-1.5 text-sm leading-6 text-white/90">
-                                  {answer.answer ? answer.answer : <span className="text-white/35">No answer</span>}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
-                    ))}
+                    ) : null}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">
+                          PulseCheck intake answers
+                        </div>
+                        <div className="mt-1 text-xs text-white/38">
+                          {selectedAthleteTeamContexts.filter(hasVisibleIntakeRecord).length} of {selectedAthleteTeamContexts.length} team contexts have intake records or assignments.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-3">
+                      {selectedAthleteTeamContexts.map((context) => (
+                        <div
+                          key={`${context.key}:intake`}
+                          ref={(node) => {
+                            intakeAnswerCardRefs.current[context.key] = node;
+                          }}
+                          className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-5"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-base font-semibold text-white/90">
+                                {context.teamName || 'Unassigned team'}
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-white/38">
+                                {[context.organizationName, context.pilotName ? `Pilot bucket: ${context.pilotName}` : 'Pilot bucket: No pilot bucket']
+                                  .filter(Boolean)
+                                  .join(' - ')}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                              <span
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getConsentChipClassName(
+                                  context.consentStatus
+                                )}`}
+                              >
+                                {getConsentChipLabel(context.consentStatus)}
+                              </span>
+                              <span
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${getIntakeChipClassName(
+                                  context
+                                )}`}
+                              >
+                                {getIntakeChipLabel(context)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {!hasVisibleIntakeRecord(context) ? (
+                            <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
+                              No athlete intake assigned for this team.
+                            </div>
+                          ) : !context.intakeCompleted && context.intake.length === 0 ? (
+                            <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
+                              Athlete intake is assigned but has not been submitted yet.
+                            </div>
+                          ) : context.intake.length === 0 ? (
+                            <div className="mt-3 rounded-xl border border-white/[0.07] bg-black/10 px-3 py-3 text-sm text-white/45">
+                              No intake answers on record.
+                            </div>
+                          ) : (
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              {context.intake.map((answer) => (
+                                <div
+                                  key={answer.questionId}
+                                  className="rounded-xl border border-white/[0.07] bg-black/10 px-4 py-3.5"
+                                >
+                                  <div className="text-xs font-medium leading-5 text-white/55">{answer.questionText}</div>
+                                  <div className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-white/90">
+                                    {answer.answer ? answer.answer : <span className="text-white/35">No answer</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

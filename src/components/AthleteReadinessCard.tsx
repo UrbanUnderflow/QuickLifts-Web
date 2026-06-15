@@ -384,18 +384,6 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
   }, []);
   const onEscLeave = useCallback(() => setEscHover(null), []);
 
-  // Last 7 days of check-ins (did they show up?).
-  const checkins = useMemo(() => last14.slice(-7).map((d) => d.checkInCompleted), [last14]);
-  const checkedCount = checkins.filter(Boolean).length;
-  const streak = useMemo(() => {
-    let n = 0;
-    for (let i = checkins.length - 1; i >= 0; i--) {
-      if (checkins[i]) n++;
-      else break;
-    }
-    return n;
-  }, [checkins]);
-
   const trend = useMemo<'improving' | 'declining' | 'steady'>(() => {
     const withData = last14.filter((d) => d.has);
     if (withData.length < 4) return 'steady';
@@ -688,38 +676,6 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           <span>Check-ins <span className="text-zinc-300">{adherenceStats.checkInPct}%</span></span>
           <span>Devices <span className="text-zinc-300">{adherenceStats.devicePct}%</span></span>
           <span>Mental modules <span className="text-zinc-300">{adherenceStats.modulePct}%</span></span>
-        </div>
-
-        {/* Daily check-ins */}
-        <div className="mt-3 flex items-center gap-2">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Check-ins</span>
-          <span className="flex items-center gap-1">
-            {last14.slice(-7).map((d, i) => {
-              const absIdx = last14.length - 7 + i;
-              const on = d.checkInCompleted;
-              const isToday = i === 6;
-              return (
-                <span
-                  key={i}
-                  data-checkin-dot
-                  onMouseEnter={(e) => onDayEnter(absIdx, e)}
-                  onMouseLeave={onDayLeave}
-                  className="h-2.5 w-2.5 cursor-pointer rounded-[3px]"
-                  style={{
-                    // Presence is its own dimension (not mood): filled = showed up,
-                    // hollow = missed. Neutral so it never reads as a mood color.
-                    background: on ? 'rgba(228,228,231,0.85)' : 'transparent',
-                    border: on ? 'none' : '1px solid rgba(255,255,255,0.15)',
-                    outline: hover?.idx === absIdx ? '1.5px solid rgba(255,255,255,0.85)' : isToday ? '1.5px solid rgba(255,255,255,0.25)' : 'none',
-                    outlineOffset: 1,
-                  }}
-                />
-              );
-            })}
-          </span>
-          <span className="ml-auto text-[11px] text-zinc-400">
-            {checkedCount}/7{streak > 1 ? <span className="ml-1.5 text-zinc-500">· 🔥{streak}</span> : null}
-          </span>
         </div>
 
         {/* Adherence */}

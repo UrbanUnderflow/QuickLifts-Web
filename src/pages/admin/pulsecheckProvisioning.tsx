@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
@@ -656,23 +657,32 @@ const CollapsibleCard: React.FC<{
   children: React.ReactNode;
 }> = ({ title, open, onToggle, preview, actions, className, id, children }) => (
   <div id={id} className={className || 'pcp-card'} style={{ scrollMarginTop: 16 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}
-      >
+    {/* Whole header row toggles (not just the title). `actions` stops propagation
+        so its own buttons still work without collapsing the card. */}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
         <ChevronDown
           style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
         />
         <span className="pcp-card-title" style={{ marginBottom: 0 }}>{title}</span>
-      </button>
-      {actions || null}
+      </div>
+      {actions ? <div onClick={(e) => e.stopPropagation()}>{actions}</div> : null}
     </div>
     {open ? (
       <div style={{ marginTop: 12 }}>{children}</div>
     ) : preview ? (
-      <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{preview}</div>
+      <div onClick={onToggle} style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>{preview}</div>
     ) : null}
   </div>
 );
@@ -1263,6 +1273,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
   // Team whose intake editor is open in the "Manage intake" modal (keeps the
   // bulky question editor out of the inline dashboard).
   const [intakeModalTeamId, setIntakeModalTeamId] = useState<string | null>(null);
+  // Which intake tab (athlete / coach) the modal is showing.
+  const [intakeModalKind, setIntakeModalKind] = useState<PulseCheckIntakeKind>('athlete');
+  // Team whose consent editor is open in the "Manage consents" modal (keeps the
+  // bulky consent editor out of the inline dashboard, mirroring intake).
+  const [consentModalTeamId, setConsentModalTeamId] = useState<string | null>(null);
+  // Active consent tab within the "Manage consents" modal (one tab per consent form).
+  const [consentModalIndex, setConsentModalIndex] = useState(0);
   useEffect(() => {
     if (loading || intakeFocusHandled || typeof window === 'undefined' || teams.length === 0) return;
     const params = new URLSearchParams(window.location.search);
@@ -3104,8 +3121,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-s-done { background: rgba(255, 255, 255, 0.05); border: 0.5px solid rgba(255, 255, 255, 0.08); color: var(--t3); }
           .pcp-ab { padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background 0.15s, color 0.15s; border: none; }
           .pcp-ab svg { width: 11px; height: 11px; }
-          .pcp-ab-g { background: rgba(255, 255, 255, 0.05); color: var(--t2); border: 0.5px solid var(--mb); }
-          .pcp-ab-g:hover { background: rgba(255, 255, 255, 0.09); color: var(--t1); }
+          .pcp-ab-g { background: rgba(255, 255, 255, 0.14); color: #fff; border: 0.5px solid rgba(255, 255, 255, 0.22); }
+          .pcp-ab-g:hover { background: rgba(255, 255, 255, 0.22); color: #fff; }
           .pcp-ab-t { background: var(--teal-d); color: var(--teal); border: 0.5px solid var(--teal-b); }
           .pcp-ab-t:hover { background: rgba(0, 212, 170, 0.16); }
           .pcp-ab:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -4102,7 +4119,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           padding: '8px 10px',
                                           fontSize: 13,
                                         };
+                                        const consentModalOpen = consentModalTeamId === team.id;
                                         return (
+                                          <>
                                           <CollapsibleCard
                                             title="Consent Forms"
                                             open={teamConsentCardOpen}
@@ -4113,56 +4132,132 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
                                               Every athlete on this team accepts these during intake. Signing here means the app will not ask again. Bumping a version re-prompts anyone who signed the older one. Research-study consents are added automatically when a pilot runs in research mode.
                                             </div>
-                                            {consentDraft.length === 0 ? (
-                                              <div className="pcp-c-empty">No consents yet. Add one or seed a preset package below.</div>
-                                            ) : (
-                                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                                {consentDraft.map((consent, index) => (
-                                                  <div key={consent.id} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
-                                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                                                      <input
-                                                        value={consent.title}
-                                                        placeholder="Consent title"
-                                                        onChange={(event) => handleTeamConsentFieldChange(team, index, 'title', event.target.value)}
-                                                        style={{ flex: 1, ...consentInputStyle }}
-                                                      />
-                                                      <input
-                                                        value={consent.version}
-                                                        placeholder="v1"
-                                                        onChange={(event) => handleTeamConsentFieldChange(team, index, 'version', event.target.value)}
-                                                        style={{ width: 56, textAlign: 'center', ...consentInputStyle }}
-                                                      />
-                                                      <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleBumpTeamConsentVersion(team, index)}>Bump</button>
-                                                      <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove consent" onClick={() => handleRemoveTeamConsent(team, index)}><X /></button>
-                                                    </div>
-                                                    <textarea
-                                                      value={consent.body}
-                                                      placeholder="Full consent text shown to the athlete…"
-                                                      rows={4}
-                                                      onChange={(event) => handleTeamConsentFieldChange(team, index, 'body', event.target.value)}
-                                                      style={{ width: '100%', resize: 'vertical', ...consentInputStyle }}
-                                                    />
-                                                    <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>id: {consent.id}</div>
-                                                  </div>
-                                                ))}
-                                              </div>
-                                            )}
-
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 12 }}>
-                                              <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleAddTeamConsent(team)}><Plus /> Add consent</button>
-                                              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Seed preset:</span>
-                                              {(['operational', 'pilot', 'research'] as PulseCheckPilotStudyMode[]).map((mode) => (
-                                                <button key={mode} type="button" className="pcp-ab pcp-ab-t" onClick={() => handleSeedTeamConsents(team, mode)}>{mode}</button>
-                                              ))}
-                                              <div style={{ flex: 1 }} />
-                                              {consentDirty ? (
-                                                <button type="button" className="pcp-ab pcp-ab-t" disabled={consentSaving} onClick={() => handleResetTeamConsentDraft(team.id)}>Discard</button>
-                                              ) : null}
-                                              <button type="button" className="pcp-ab pcp-ab-g" disabled={!consentDirty || consentSaving} onClick={() => void handleSaveTeamConsents(team)}>
-                                                {consentSaving ? 'Saving…' : 'Save consents'}
-                                              </button>
+                                            <div style={{ marginTop: 12, fontSize: 13, color: '#fff' }}>
+                                              {consentDraft.length} consent{consentDraft.length === 1 ? '' : 's'}
+                                              {consentDirty ? <span style={{ color: 'rgba(255,255,255,0.55)' }}> · unsaved changes</span> : null}
+                                            </div>
+                                            <div style={{ marginTop: 12 }}>
+                                              <button type="button" className="pcp-ab pcp-ab-g" onClick={() => { setConsentModalIndex(0); setConsentModalTeamId(team.id); }}>Manage consents</button>
                                             </div>
                                           </CollapsibleCard>
+
+                                          {consentModalOpen && typeof document !== 'undefined' ? (() => {
+                                            const draft = getTeamConsentDraft(team);
+                                            const activeIndex = draft.length > 0 ? Math.min(Math.max(consentModalIndex, 0), draft.length - 1) : 0;
+                                            const activeConsent = draft[activeIndex];
+                                            return createPortal(
+                                            <div
+                                              style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+                                              onClick={() => setConsentModalTeamId(null)}
+                                            >
+                                              <div
+                                                onClick={(event) => event.stopPropagation()}
+                                                style={{ maxWidth: 1080, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: '#0d0d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}
+                                              >
+                                                {/* HEADER */}
+                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>Manage consents — {team.displayName ?? team.id}</div>
+                                                    <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={() => setConsentModalTeamId(null)}><X /></button>
+                                                  </div>
+                                                  <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                                                    Athletes accept these at intake; bumping a version re-prompts anyone who signed the old one.
+                                                  </div>
+                                                </div>
+
+                                                {/* TABS — one per consent form */}
+                                                {draft.length > 0 ? (
+                                                  <div style={{ display: 'flex', overflowX: 'auto', whiteSpace: 'nowrap', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                                    {draft.map((consent, i) => {
+                                                      const active = i === activeIndex;
+                                                      const tabLabel = consent.title?.trim() ? consent.title : `Consent ${i + 1}`;
+                                                      return (
+                                                        <button
+                                                          key={consent.id}
+                                                          type="button"
+                                                          onClick={() => setConsentModalIndex(i)}
+                                                          style={{
+                                                            flexShrink: 0,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: 8,
+                                                            padding: '13px 14px',
+                                                            background: active ? 'rgba(167,139,250,0.14)' : 'transparent',
+                                                            border: 'none',
+                                                            borderBottom: active ? '2px solid #A78BFA' : '2px solid transparent',
+                                                            color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+                                                            fontSize: 13,
+                                                            fontWeight: active ? 700 : 500,
+                                                            cursor: 'pointer',
+                                                            transition: 'background 0.15s, color 0.15s',
+                                                          }}
+                                                        >
+                                                          <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tabLabel}</span>
+                                                        </button>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                ) : null}
+
+                                                {/* BODY (scrolling) — only the active consent's editor */}
+                                                <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                                                  {draft.length === 0 || !activeConsent ? (
+                                                    <div className="pcp-c-empty">No consents yet — add one or seed a preset.</div>
+                                                  ) : (
+                                                    <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
+                                                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                                        <input
+                                                          value={activeConsent.title}
+                                                          placeholder="Consent title"
+                                                          onChange={(event) => handleTeamConsentFieldChange(team, activeIndex, 'title', event.target.value)}
+                                                          style={{ flex: 1, ...consentInputStyle }}
+                                                        />
+                                                        <input
+                                                          value={activeConsent.version}
+                                                          placeholder="v1"
+                                                          onChange={(event) => handleTeamConsentFieldChange(team, activeIndex, 'version', event.target.value)}
+                                                          style={{ width: 56, textAlign: 'center', ...consentInputStyle }}
+                                                        />
+                                                        <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleBumpTeamConsentVersion(team, activeIndex)}>Bump</button>
+                                                        <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove consent" onClick={() => handleRemoveTeamConsent(team, activeIndex)}><X /></button>
+                                                      </div>
+                                                      <textarea
+                                                        value={activeConsent.body}
+                                                        placeholder="Full consent text shown to the athlete…"
+                                                        rows={8}
+                                                        onChange={(event) => handleTeamConsentFieldChange(team, activeIndex, 'body', event.target.value)}
+                                                        style={{ width: '100%', resize: 'vertical', ...consentInputStyle }}
+                                                      />
+                                                      <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>id: {activeConsent.id}</div>
+                                                    </div>
+                                                  )}
+
+                                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 12 }}>
+                                                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Seed preset:</span>
+                                                    {(['operational', 'pilot', 'research'] as PulseCheckPilotStudyMode[]).map((mode) => (
+                                                      <button key={mode} type="button" className="pcp-ab pcp-ab-t" onClick={() => handleSeedTeamConsents(team, mode)}>{mode}</button>
+                                                    ))}
+                                                  </div>
+                                                </div>
+
+                                                {/* FOOTER */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 18, borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                  <button type="button" className="pcp-ab pcp-ab-g" onClick={() => { const next = draft.length; handleAddTeamConsent(team); setConsentModalIndex(next); }}><Plus /> Add consent</button>
+                                                  <div style={{ flex: 1 }} />
+                                                  {consentDirty ? (
+                                                    <button type="button" className="pcp-ab pcp-ab-t" disabled={consentSaving} onClick={() => handleResetTeamConsentDraft(team.id)}>Discard</button>
+                                                  ) : null}
+                                                  <button type="button" className="pcp-ab pcp-ab-g" disabled={!consentDirty || consentSaving} onClick={() => void handleSaveTeamConsents(team)}>
+                                                    {consentSaving ? 'Saving…' : 'Save consents'}
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>,
+                                            document.body,
+                                            );
+                                          })() : null}
+                                          </>
                                         );
                                       })()}
 
@@ -4179,72 +4274,159 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           padding: '8px 10px',
                                           fontSize: 13,
                                         };
+                                        const intakeModalOpen = intakeModalTeamId === team.id;
                                         return (
+                                          <>
                                           <CollapsibleCard
                                             id={`pcp-intake-${team.id}`}
                                             title="Intake Surveys"
                                             open={teamIntakeCardOpen}
                                             onToggle={() => toggleOrgCard(`${team.id}:intakecard`)}
-                                            preview="Athlete & coach intake questions. Open to edit."
+                                            preview="Athlete & coach intake questions. Open to manage."
                                             className="pcp-card pcp-tracker-card"
                                           >
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
                                               Questions each athlete and coach answers during onboarding. Athletes answer theirs alongside the consent block, so they sign once and the app will not ask again.
                                             </div>
-                                            {intakeKinds.map(({ kind, label }) => {
-                                              const draft = getIntakeDraft(team, kind);
-                                              const dirty = isIntakeDirty(team, kind);
-                                              const saving = teamIntakeSavingKey === `${team.id}:${kind}`;
-                                              return (
-                                                <div key={kind} style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                                    <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
-                                                      {label}
-                                                      <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}> · {draft.length} question{draft.length === 1 ? '' : 's'}</span>
-                                                    </div>
+                                            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                              {intakeKinds.map(({ kind, label }) => {
+                                                const draft = getIntakeDraft(team, kind);
+                                                const dirty = isIntakeDirty(team, kind);
+                                                return (
+                                                  <div key={kind} style={{ fontSize: 13, color: '#fff' }}>
+                                                    {label}
+                                                    <span style={{ color: 'rgba(255,255,255,0.4)' }}> · {draft.length} question{draft.length === 1 ? '' : 's'}</span>
+                                                    {dirty ? <span style={{ color: 'rgba(255,255,255,0.55)' }}> · unsaved changes</span> : null}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                            <div style={{ marginTop: 12 }}>
+                                              <button type="button" className="pcp-ab pcp-ab-g" onClick={() => { setIntakeModalKind('athlete'); setIntakeModalTeamId(team.id); }}>Manage intake</button>
+                                            </div>
+                                          </CollapsibleCard>
+
+                                          {intakeModalOpen && typeof document !== 'undefined' ? (() => {
+                                            const kind = intakeModalKind;
+                                            const draft = getIntakeDraft(team, kind);
+                                            const dirty = isIntakeDirty(team, kind);
+                                            const saving = teamIntakeSavingKey === `${team.id}:${kind}`;
+                                            return createPortal(
+                                            <div
+                                              style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+                                              onClick={() => setIntakeModalTeamId(null)}
+                                            >
+                                              <div
+                                                onClick={(event) => event.stopPropagation()}
+                                                style={{ maxWidth: 1080, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: '#0d0d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}
+                                              >
+                                                {/* HEADER */}
+                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>Manage intake — {team.displayName ?? team.id}</div>
+                                                    <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={() => setIntakeModalTeamId(null)}><X /></button>
+                                                  </div>
+                                                  <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                                                    Athletes answer during onboarding, alongside consent — asked once.
+                                                  </div>
+                                                </div>
+
+                                                {/* TABS */}
+                                                <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                                  {intakeKinds.map(({ kind: tabKind, label }) => {
+                                                    const active = intakeModalKind === tabKind;
+                                                    const tabCount = getIntakeDraft(team, tabKind).length;
+                                                    const tabDirty = isIntakeDirty(team, tabKind);
+                                                    return (
+                                                      <button
+                                                        key={tabKind}
+                                                        type="button"
+                                                        onClick={() => setIntakeModalKind(tabKind)}
+                                                        style={{
+                                                          flex: 1,
+                                                          display: 'flex',
+                                                          alignItems: 'center',
+                                                          justifyContent: 'center',
+                                                          gap: 8,
+                                                          padding: '13px 12px',
+                                                          background: active ? 'rgba(167,139,250,0.14)' : 'transparent',
+                                                          border: 'none',
+                                                          borderBottom: active ? '2px solid #A78BFA' : '2px solid transparent',
+                                                          color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+                                                          fontSize: 13,
+                                                          fontWeight: active ? 700 : 500,
+                                                          cursor: 'pointer',
+                                                          transition: 'background 0.15s, color 0.15s',
+                                                        }}
+                                                      >
+                                                        <span>{label}</span>
+                                                        <span style={{
+                                                          fontSize: 11,
+                                                          fontWeight: 600,
+                                                          padding: '1px 7px',
+                                                          borderRadius: 999,
+                                                          background: active ? 'rgba(167,139,250,0.3)' : 'rgba(255,255,255,0.08)',
+                                                          color: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                                                        }}>{tabCount}</span>
+                                                        {tabDirty ? (
+                                                          <span style={{ width: 6, height: 6, borderRadius: 999, background: '#A78BFA', display: 'inline-block' }} />
+                                                        ) : null}
+                                                      </button>
+                                                    );
+                                                  })}
+                                                </div>
+
+                                                {/* BODY (scrolling) */}
+                                                <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                                                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.45)' }}>{draft.length} question{draft.length === 1 ? '' : 's'}</div>
                                                     <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleLoadStarterIntake(team, kind)}>Load starter</button>
                                                   </div>
 
                                                   {draft.length === 0 ? (
-                                                    <div className="pcp-c-empty">No questions yet. Add one or load the starter set.</div>
+                                                    <div className="pcp-c-empty">No questions yet — add one or load the starter set.</div>
                                                   ) : (
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                                       {draft.map((question, index) => (
-                                                        <div key={question.id} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
-                                                          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                                                            <textarea
-                                                              value={question.question}
-                                                              placeholder="Question text"
-                                                              rows={2}
-                                                              onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, question: event.target.value }))}
-                                                              style={{ flex: 1, resize: 'vertical', ...fieldStyle }}
-                                                            />
+                                                        <div key={question.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 14 }}>
+                                                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                                            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>Q{index + 1}</span>
                                                             <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove question" onClick={() => handleRemoveIntakeQuestion(team, kind, index)}><X /></button>
                                                           </div>
-                                                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-                                                            <select
-                                                              value={question.type}
-                                                              onChange={(event) => handleIntakeQuestionTypeChange(team, kind, index, event.target.value as SurveyQuestion['type'])}
-                                                              style={{ ...fieldStyle, padding: '6px 8px' }}
-                                                            >
-                                                              <option value="text">Text</option>
-                                                              <option value="multiple_choice">Multiple choice</option>
-                                                              <option value="number">Number</option>
-                                                              <option value="yes_no">Yes / No</option>
-                                                            </select>
+                                                          <textarea
+                                                            value={question.question}
+                                                            placeholder="Question text"
+                                                            rows={2}
+                                                            onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, question: event.target.value }))}
+                                                            style={{ width: '100%', resize: 'vertical', ...fieldStyle }}
+                                                          />
+                                                          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                              <span>Type</span>
+                                                              <select
+                                                                value={question.type}
+                                                                onChange={(event) => handleIntakeQuestionTypeChange(team, kind, index, event.target.value as SurveyQuestion['type'])}
+                                                                style={{ ...fieldStyle, padding: '6px 8px' }}
+                                                              >
+                                                                <option value="text">Text</option>
+                                                                <option value="multiple_choice">Multiple choice</option>
+                                                                <option value="number">Number</option>
+                                                                <option value="yes_no">Yes / No</option>
+                                                              </select>
+                                                            </label>
                                                             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
                                                               <input type="checkbox" checked={!!question.required} onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, required: event.target.checked }))} />
                                                               Required
                                                             </label>
                                                             {question.type === 'number' ? (
-                                                              <>
-                                                                <input type="number" value={question.minValue ?? ''} placeholder="min" onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, minValue: event.target.value === '' ? undefined : Number(event.target.value) }))} style={{ width: 70, ...fieldStyle, padding: '6px 8px' }} />
-                                                                <input type="number" value={question.maxValue ?? ''} placeholder="max" onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, maxValue: event.target.value === '' ? undefined : Number(event.target.value) }))} style={{ width: 70, ...fieldStyle, padding: '6px 8px' }} />
-                                                              </>
+                                                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                                <input type="number" value={question.minValue ?? ''} placeholder="min" onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, minValue: event.target.value === '' ? undefined : Number(event.target.value) }))} style={{ width: 72, ...fieldStyle, padding: '6px 8px' }} />
+                                                                <input type="number" value={question.maxValue ?? ''} placeholder="max" onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, maxValue: event.target.value === '' ? undefined : Number(event.target.value) }))} style={{ width: 72, ...fieldStyle, padding: '6px 8px' }} />
+                                                              </div>
                                                             ) : null}
                                                           </div>
                                                           {question.type === 'multiple_choice' ? (
-                                                            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                               {(question.options || []).map((option, optionIndex) => (
                                                                 <div key={option.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                                                   <input value={option.text} placeholder={`Option ${optionIndex + 1}`} onChange={(event) => handleIntakeOptionChange(team, kind, index, optionIndex, event.target.value)} style={{ flex: 1, ...fieldStyle, padding: '6px 8px' }} />
@@ -4258,21 +4440,25 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                       ))}
                                                     </div>
                                                   )}
-
-                                                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
-                                                    <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleAddIntakeQuestion(team, kind)}><Plus /> Add question</button>
-                                                    <div style={{ flex: 1 }} />
-                                                    {dirty ? (
-                                                      <button type="button" className="pcp-ab pcp-ab-t" disabled={saving} onClick={() => handleDiscardIntakeDraft(team, kind)}>Discard</button>
-                                                    ) : null}
-                                                    <button type="button" className="pcp-ab pcp-ab-g" disabled={!dirty || saving} onClick={() => void handleSaveIntake(team, kind)}>
-                                                      {saving ? 'Saving…' : 'Save'}
-                                                    </button>
-                                                  </div>
                                                 </div>
-                                              );
-                                            })}
-                                          </CollapsibleCard>
+
+                                                {/* FOOTER */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 18, borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                  <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleAddIntakeQuestion(team, kind)}><Plus /> Add question</button>
+                                                  <div style={{ flex: 1 }} />
+                                                  {dirty ? (
+                                                    <button type="button" className="pcp-ab pcp-ab-t" disabled={saving} onClick={() => handleDiscardIntakeDraft(team, kind)}>Discard</button>
+                                                  ) : null}
+                                                  <button type="button" className="pcp-ab pcp-ab-g" disabled={!dirty || saving} onClick={() => void handleSaveIntake(team, kind)}>
+                                                    {saving ? 'Saving…' : 'Save'}
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>,
+                                            document.body,
+                                            );
+                                          })() : null}
+                                          </>
                                         );
                                       })()}
                                     </div>

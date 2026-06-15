@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, Check, RotateCcw, X, Volume2 } from 'lucide-react';
 
 // A Nora-guided, click-through training overlay for the coach dashboard.
-// Each step plays a narration clip and shows a grounding card (bottom-right)
+// Each step plays a narration clip and shows a grounding card above the
+// bottom-right Ask Nora control.
 // with a Next button. Advancement is user-driven (not auto-chained), so the
 // coach moves at their own pace.
 //
@@ -533,7 +534,7 @@ const NoraDashboardTraining: React.FC<{ onComplete?: () => void }> = ({ onComple
           z-index: 5;
         }
       `}</style>
-      <div className="pointer-events-none fixed bottom-5 right-5 z-[60] w-[360px] max-w-[calc(100vw-2.5rem)]">
+      <div className="pointer-events-none fixed bottom-20 right-5 z-[60] w-[360px] max-w-[calc(100vw-2.5rem)]">
         <div className="pointer-events-auto overflow-hidden rounded-2xl border border-white/10 bg-[#0d0d1a]/95 shadow-[0_24px_70px_rgba(0,0,0,0.6)] backdrop-blur">
           {/* Header */}
           <div className="flex items-center gap-2.5 border-b border-white/10 px-4 py-3">

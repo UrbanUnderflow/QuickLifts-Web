@@ -65,6 +65,9 @@ export interface CoachAthleteCurriculumItem {
   source: CoachAthleteCurriculumItemSource;
   title: string;
   detail: string;
+  /** Library identifier (protocolId / exerciseId / simSpecId) used to resolve
+   *  the per-module accent color. See utils/pulseCheckModuleVisuals. */
+  moduleKey?: string;
   status: CoachAthleteCurriculumItemStatus;
   progressPct: number;
   dueToday?: boolean;
@@ -270,6 +273,48 @@ const dateFromUnixSecondsOrMillis = (value: any): Date | null => toDateOrNull(va
 
 const isDailyCurriculumRecord = (assignment: PulseCheckDailyAssignment): boolean =>
   assignment.assignedBy === 'curriculum-engine' || Boolean(assignment.curriculumIntent);
+
+// A curriculum module (e.g. "4-7-8 Relaxation Breathing") is re-materialized as
+// a fresh daily-assignment doc each day it's pinned, so an athlete accumulates
+// many docs per module over time. The coach panel wants ONE row per module —
+// the current slate, mirroring the athlete's "Active toolkit" — not one row per
+// day. This collapses docs that refer to the same curriculum slot / module,
+// keeping the most recent (latest sourceDate, then due-today, then revision).
+const dailyAssignmentModuleDedupKey = (assignment: PulseCheckDailyAssignment): string => {
+  if (assignment.curriculumSlotId) return `slot:${assignment.curriculumSlotId}`;
+  if (assignment.lineageId) return `lineage:${assignment.lineageId}`;
+  const moduleId =
+    assignment.protocolId || assignment.legacyExerciseId || assignment.simSpecId || assignment.id;
+  return `module:${assignment.actionType}:${moduleId}`;
+};
+
+const dailyAssignmentSlateRank = (assignment: PulseCheckDailyAssignment): number =>
+  Number((assignment.sourceDate || '').replace(/-/g, '')) || 0;
+
+const dedupeDailyAssignmentsByModule = (
+  assignments: PulseCheckDailyAssignment[]
+): PulseCheckDailyAssignment[] => {
+  const bestByModule = new Map<string, PulseCheckDailyAssignment>();
+  for (const assignment of assignments) {
+    const key = dailyAssignmentModuleDedupKey(assignment);
+    const current = bestByModule.get(key);
+    if (!current) {
+      bestByModule.set(key, assignment);
+      continue;
+    }
+    const incomingRank = dailyAssignmentSlateRank(assignment);
+    const currentRank = dailyAssignmentSlateRank(current);
+    const isMoreRecent =
+      incomingRank > currentRank ||
+      (incomingRank === currentRank &&
+        Number(Boolean(assignment.curriculumIsDueToday)) - Number(Boolean(current.curriculumIsDueToday)) > 0) ||
+      (incomingRank === currentRank &&
+        Boolean(assignment.curriculumIsDueToday) === Boolean(current.curriculumIsDueToday) &&
+        (assignment.revision || 0) > (current.revision || 0));
+    if (isMoreRecent) bestByModule.set(key, assignment);
+  }
+  return Array.from(bestByModule.values());
+};
 
 const isDailyAssignmentComplete = (assignment: PulseCheckDailyAssignment): boolean => {
   if (assignment.status === PulseCheckDailyAssignmentStatus.Completed || typeof assignment.completedAt === 'number') return true;
@@ -1093,14 +1138,18 @@ class CoachService {
         ? athleteProgressFromFirestore(athleteUserId, progressSnapshot.data() as Record<string, any>)
         : null;
 
-      const dailyItems: CoachAthleteCurriculumItem[] = (dailySnapshot?.docs || [])
+      const dailyAssignmentRecords = (dailySnapshot?.docs || [])
         .map((docSnapshot) => pulseCheckDailyAssignmentFromFirestore(docSnapshot.id, docSnapshot.data() as Record<string, any>))
         .filter(isDailyCurriculumRecord)
         .filter(
           (assignment) =>
             assignment.status !== PulseCheckDailyAssignmentStatus.Superseded &&
             assignment.status !== PulseCheckDailyAssignmentStatus.Overridden
-        )
+        );
+
+      // Collapse to one row per curriculum module (current slate), so a module
+      // re-pinned across days doesn't show twice and crowd out other modules.
+      const dailyItems: CoachAthleteCurriculumItem[] = dedupeDailyAssignmentsByModule(dailyAssignmentRecords)
         .map((assignment) => {
           const counts = dailyAssignmentCompletionCounts(assignment);
           return {
@@ -1109,6 +1158,7 @@ class CoachService {
             source: 'daily-assignment' as const,
             title: dailyAssignmentTitle(assignment),
             detail: dailyAssignmentDetail(assignment),
+            moduleKey: assignment.legacyExerciseId || assignment.protocolId || assignment.simSpecId || undefined,
             status: dailyAssignmentStatus(assignment),
             progressPct: dailyAssignmentProgressPct(assignment),
             dueToday: assignment.curriculumIsDueToday,
@@ -1135,6 +1185,7 @@ class CoachService {
             source: 'curriculum-assignment' as const,
             title,
             detail: curriculumAssignmentDetail(assignment),
+            moduleKey: assignment.exerciseId || undefined,
             status: curriculumAssignmentStatus(assignment),
             progressPct: curriculumAssignmentProgressPct(assignment),
             dueToday: assignment.status === CurriculumAssignmentStatus.Active || assignment.status === CurriculumAssignmentStatus.Extended,

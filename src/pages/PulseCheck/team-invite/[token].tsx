@@ -197,6 +197,10 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
   const isGeneralInvite = invite.redemptionMode === 'general';
+  // Athlete is the only non-staff role; everything else (coach, team-admin,
+  // performance/support staff, clinician) uses the staff wizard.
+  const isStaffInvite = invite.teamMembershipRole !== 'athlete';
+  const staffRoleTitle = invite.invitedTitle?.trim() || roleLabel[invite.teamMembershipRole];
   const teamPlanBypassesPaywall = invite.commercialSnapshot?.teamPlanBypassesPaywall === true;
   const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
   const shouldShowDownloadFirst = shouldPreferAppDownload && !showWebOnboarding && !redeemedState;
@@ -473,14 +477,30 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     setMessage(null);
 
     try {
-      const usernameAvailable = await isUsernameAvailable(username);
-      if (!usernameAvailable) {
-        throw new Error('Username already taken.');
+      // Create the auth user FIRST so every Firestore read/write below runs
+      // authenticated. The username-availability check reads usernames/{name},
+      // which the security rules only allow for signed-in users — running it
+      // pre-auth was the source of the "Missing or insufficient permissions"
+      // error new staff hit when onboarding.
+      const credential = await createUserWithEmailAndPassword(auth, email, createForm.password);
+      await credential.user.getIdToken(); // ensure the token is live for Firestore
+
+      // Claim a unique username (now authenticated). If the requested one is
+      // taken, auto-suffix rather than dead-end — the account already exists.
+      let finalUsername = username;
+      if (!(await isUsernameAvailable(finalUsername))) {
+        for (let suffix = 2; suffix < 1000; suffix += 1) {
+          const candidate = normalizeUsername(`${username}${suffix}`);
+          // eslint-disable-next-line no-await-in-loop
+          if (await isUsernameAvailable(candidate)) {
+            finalUsername = candidate;
+            break;
+          }
+        }
       }
 
-      const credential = await createUserWithEmailAndPassword(auth, email, createForm.password);
-      await claimUsername(credential.user.uid, username);
-      await createTeamInviteUser(credential.user, username);
+      await claimUsername(credential.user.uid, finalUsername);
+      await createTeamInviteUser(credential.user, finalUsername);
       await completeRedeem('new-account');
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to create account:', error);
@@ -614,6 +634,309 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     return () => window.clearTimeout(timeoutId);
   }, [completionHref, redeemedState, redirectingAfterRedeem, router]);
 
+  // Staff wizard step is derived purely from auth/redeem state.
+  // 1 = account (signed out), 2 = review & accept (signed in, not redeemed), 3 = done.
+  const staffStep: 1 | 2 | 3 = redeemedState ? 3 : authUser ? 2 : 1;
+
+  const renderStaffWizard = () => {
+    const steps: Array<{ index: 1 | 2 | 3; label: string }> = [
+      { index: 1, label: 'Account' },
+      { index: 2, label: 'Review' },
+      { index: 3, label: 'Done' },
+    ];
+
+    return (
+      <div className="mx-auto w-full max-w-[520px]">
+        {/* Slim progress indicator */}
+        <div className="mb-8 flex items-center justify-center gap-2">
+          {steps.map((step, idx) => {
+            const isActive = step.index === staffStep;
+            const isComplete = step.index < staffStep;
+            return (
+              <React.Fragment key={step.index}>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition ${
+                      isActive
+                        ? 'bg-[#A78BFA] text-black'
+                        : isComplete
+                          ? 'bg-[#A78BFA]/30 text-[#A78BFA]'
+                          : 'border border-zinc-700 text-zinc-500'
+                    }`}
+                  >
+                    {isComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : step.index}
+                  </span>
+                  <span
+                    className={`text-xs font-semibold tracking-wide transition ${
+                      isActive ? 'text-white' : 'text-zinc-500'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+                {idx < steps.length - 1 ? (
+                  <span className={`h-px w-6 ${step.index < staffStep ? 'bg-[#A78BFA]/50' : 'bg-zinc-800'}`} />
+                ) : null}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        <div className="rounded-[32px] border border-white/10 bg-[#0B0B1C] p-8 shadow-2xl">
+          {message ? (
+            <div
+              className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+                message.type === 'success'
+                  ? 'border-green-500/20 bg-green-500/[0.06] text-green-200'
+                  : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
+              }`}
+            >
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{message.text}</span>
+            </div>
+          ) : null}
+
+          {!authReady ? (
+            <div className="flex min-h-[420px] items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+            </div>
+          ) : staffStep === 3 && redeemedState ? (
+            /* STEP 3 — Done */
+            <div className="space-y-6">
+              <div className="inline-flex rounded-2xl border border-green-500/25 bg-green-500/10 p-3">
+                <CheckCircle2 className="h-6 w-6 text-green-300" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Access Ready</p>
+                <h2 className="mt-2 text-3xl font-semibold text-white">
+                  You&apos;re on the {redeemedState.teamName} staff
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-zinc-300">
+                  {redeemedState.organizationName} attached your{' '}
+                  {roleLabel[redeemedState.teamMembershipRole].toLowerCase()} access to{' '}
+                  <span className="font-medium text-white">{redeemedState.teamName}</span>. Taking you into your
+                  workspace now — use Continue if nothing happens.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href={completionHref}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                >
+                  Continue
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/PulseCheck"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
+                >
+                  Back to PulseCheck
+                </Link>
+              </div>
+            </div>
+          ) : staffStep === 2 && authUser ? (
+            /* STEP 2 — Review & accept */
+            <div className="space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Review &amp; accept</p>
+                <h2 className="mt-2 text-3xl font-semibold text-white">Confirm your team access</h2>
+                <p className="mt-3 text-sm leading-7 text-zinc-300">
+                  Accepting adds you to <span className="font-medium text-white">{invite.teamName}</span> as{' '}
+                  <span className="font-medium text-white">{staffRoleTitle}</span> and opens your team workspace —
+                  no separate athlete setup.
+                </p>
+              </div>
+
+              <div className="space-y-px overflow-hidden rounded-2xl border border-zinc-800">
+                <div className="flex items-center justify-between bg-black/20 px-4 py-3 text-sm">
+                  <span className="text-zinc-500">Team</span>
+                  <span className="font-medium text-white">{invite.teamName}</span>
+                </div>
+                <div className="flex items-center justify-between bg-black/20 px-4 py-3 text-sm">
+                  <span className="text-zinc-500">Organization</span>
+                  <span className="font-medium text-white">{invite.organizationName}</span>
+                </div>
+                <div className="flex items-center justify-between bg-black/20 px-4 py-3 text-sm">
+                  <span className="text-zinc-500">Role</span>
+                  <span className="font-medium text-white">{staffRoleTitle}</span>
+                </div>
+              </div>
+
+              {!authEmailMatchesInvite ? (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm leading-7 text-amber-100">
+                    This invite was sent to <span className="font-medium">{invite.targetEmail}</span>, but you&apos;re
+                    signed in as <span className="font-medium">{authUser.email}</span>. Sign out and sign back in with{' '}
+                    <span className="font-medium">{invite.targetEmail}</span> to join your team.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out &amp; switch account
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleRedeemSignedInUser}
+                    disabled={submitting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                    {submitting ? 'Joining...' : 'Accept invite'}
+                  </button>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-500">Signed in as {authUser.email}</span>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 transition hover:text-white"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      Use a different account
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* STEP 1 — Account (signed out) */
+            <div className="space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Team Invite</p>
+                <h2 className="mt-2 text-3xl font-semibold text-white">
+                  You&apos;ve been invited to {invite.teamName} as {staffRoleTitle}
+                </h2>
+                <p className="mt-3 text-sm leading-7 text-zinc-300">
+                  Sign in or create your Pulse account to join{' '}
+                  <span className="font-medium text-white">{invite.organizationName}</span>.
+                </p>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-6 border-b border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setMode('sign-in')}
+                  className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition ${
+                    mode === 'sign-in'
+                      ? 'border-[#A78BFA] text-white'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('create-account')}
+                  className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition ${
+                    mode === 'create-account'
+                      ? 'border-[#A78BFA] text-white'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  Create account
+                </button>
+              </div>
+
+              {mode === 'create-account' ? (
+                <form className="space-y-4" onSubmit={handleCreateAccount}>
+                  <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Email</span>
+                    <input
+                      type="email"
+                      value={createForm.email}
+                      onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
+                      disabled={!!invite.targetEmail}
+                      className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Username</span>
+                    <input
+                      type="text"
+                      value={createForm.username}
+                      onChange={(event) => setCreateForm((current) => ({ ...current, username: event.target.value }))}
+                      className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Password</span>
+                    <input
+                      type="password"
+                      value={createForm.password}
+                      onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
+                      className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Confirm Password</span>
+                    <input
+                      type="password"
+                      value={createForm.confirmPassword}
+                      onChange={(event) =>
+                        setCreateForm((current) => ({ ...current, confirmPassword: event.target.value }))
+                      }
+                      className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                    {submitting ? 'Creating Account...' : 'Create account and continue'}
+                  </button>
+                </form>
+              ) : (
+                <form className="space-y-4" onSubmit={handleSignIn}>
+                  <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Email</span>
+                    <input
+                      type="email"
+                      value={signInForm.email}
+                      onChange={(event) => setSignInForm((current) => ({ ...current, email: event.target.value }))}
+                      disabled={!!invite.targetEmail}
+                      className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
+                    />
+                  </label>
+
+                  <label className="block space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Password</span>
+                    <input
+                      type="password"
+                      value={signInForm.password}
+                      onChange={(event) => setSignInForm((current) => ({ ...current, password: event.target.value }))}
+                      className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
+                    />
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                    {submitting ? 'Signing In...' : 'Sign in and continue'}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden text-white" style={{ background: '#070711', fontFamily: 'Switzer, sans-serif' }}>
       <Head>
@@ -649,6 +972,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
           <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
           <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
         </div>
+        {isStaffInvite ? (
+          renderStaffWizard()
+        ) : (
         <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           <div className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.14),_transparent_42%),#0B0B1C] p-8 shadow-2xl">
               <div className="space-y-5">
@@ -720,7 +1046,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
                   {isGeneralInvite ? (
                     <div className="rounded-2xl border border-[#7C3AED]/20 bg-[#7C3AED]/[0.06] p-4 text-sm leading-7 text-[#a78bfa]">
-                      This is a reusable pilot access link. Each athlete who opens it can join this pilot from the same QR code or shared URL.
+                      {isStaffInvite
+                        ? 'This is a reusable team access link. Each invited team member who opens it can join from the same QR code or shared URL.'
+                        : 'This is a reusable pilot access link. Each athlete who opens it can join this pilot from the same QR code or shared URL.'}
                     </div>
                   ) : null}
 
@@ -742,8 +1070,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <p className="font-medium text-white">What happens on redemption</p>
                     <p className="mt-2 leading-7">
                       Your team membership is created
-                      {isGeneralInvite ? ' and this general invite stays active for additional athletes.' : ' and this invite is marked redeemed.'}
-                      {invite.cohortId
+                      {isGeneralInvite
+                        ? isStaffInvite
+                          ? ' and this general invite stays active for additional team members.'
+                          : ' and this general invite stays active for additional athletes.'
+                        : ' and this invite is marked redeemed.'}
+                      {invite.cohortId && !isStaffInvite
                         ? ' Because this link is cohort-linked, the athlete is attached directly to that pilot scope and the next-steps page explains whether onboarding is needed.'
                         : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
                     </p>
@@ -1109,6 +1441,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
             ) : null}
           </div>
         </section>
+        )}
       </main>
     </div>
   );

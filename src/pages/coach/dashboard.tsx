@@ -72,6 +72,7 @@ import {
   type CoachAthleteCurriculumItem,
   type CoachAthleteCurriculumSnapshot,
 } from '../../api/firebase/coach';
+import { resolveCurriculumItemAccent } from '../../utils/pulseCheckModuleVisuals';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
   auth,
@@ -3717,11 +3718,16 @@ const AthleteProfileDrawer: React.FC<{
                       {loadingCurriculum
                         ? 'Loading...'
                         : totalModules > 0
-                        ? `${completedModules}/${totalModules} completed`
+                        ? `${completedModules}/${totalModules} modules mastered`
                         : 'No active work'}
                     </span>
                   )}
                 </div>
+                {!walledOff && !loadingCurriculum && curriculum.length > 0 && (
+                  <p className="text-[10px] leading-4 text-zinc-500 mb-2">
+                    Target pace is about <span className="text-zinc-300 font-medium">2 a day</span> — one protocol + one simulation. All six stay assigned, but they're not meant to be done in a single day. Each module runs its own 30-day window, so &ldquo;behind&rdquo; means missed practices, not unfinished modules.
+                  </p>
+                )}
                 <div className={`space-y-2 ${walledOff ? 'opacity-50 pointer-events-none select-none' : ''}`}>
                   {loadingCurriculum ? (
                     <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-xs text-zinc-500">
@@ -3735,6 +3741,9 @@ const AthleteProfileDrawer: React.FC<{
                     curriculumAdherence.map(({ item, adherence }) => {
                       const meta = CURRICULUM_ITEM_META[item.kind];
                       const Icon = meta.icon;
+                      // Per-module library accent (e.g. 4-7-8 = #A78BFA); falls
+                      // back to the TYPE color when there's no library match.
+                      const accent = resolveCurriculumItemAccent(item.kind, item.moduleKey, item.title) ?? meta.color;
                       const effectiveStatus = walledOff ? 'paused' : item.status;
                       const pct = adherence.progressPct;
                       const statusMeta = walledOff ? CURRICULUM_ADHERENCE_META.paused : adherence.meta;
@@ -3746,9 +3755,9 @@ const AthleteProfileDrawer: React.FC<{
                           <div className="flex items-start gap-3">
                             <div
                               className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                              style={{ backgroundColor: `${meta.color}15` }}
+                              style={{ backgroundColor: `${accent}15` }}
                             >
-                              <Icon className="w-4 h-4" style={{ color: meta.color }} />
+                              <Icon className="w-4 h-4" style={{ color: accent }} />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
@@ -3760,14 +3769,14 @@ const AthleteProfileDrawer: React.FC<{
                                       aria-label={`${meta.label}: ${meta.description}`}
                                       className="group/modulekind relative inline-flex cursor-help items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide focus:outline-none"
                                       style={{
-                                        color: meta.color,
-                                        borderColor: `${meta.color}44`,
-                                        backgroundColor: `${meta.color}14`,
+                                        color: accent,
+                                        borderColor: `${accent}44`,
+                                        backgroundColor: `${accent}14`,
                                       }}
                                     >
                                       {meta.label}
                                       <span className="pointer-events-none absolute left-0 top-full z-50 mt-2 hidden w-96 max-w-[min(24rem,calc(100vw-3rem))] rounded-xl border border-white/10 bg-zinc-950/95 p-4 text-left normal-case tracking-normal text-zinc-300 shadow-2xl backdrop-blur group-hover/modulekind:block group-focus/modulekind:block">
-                                        <span className="block text-xs font-semibold uppercase tracking-wide" style={{ color: meta.color }}>
+                                        <span className="block text-xs font-semibold uppercase tracking-wide" style={{ color: accent }}>
                                           {meta.label}
                                         </span>
                                         <span className="mt-2 block text-sm font-medium leading-6 text-zinc-200">
@@ -5199,9 +5208,9 @@ const NoraChatPanel: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Floating "Ask Nora" bubble — persistent chat entry point, bottom-left so it
-// never collides with the bottom-right training card. Opens the same Nora chat
-// panel in a popover.
+// Floating "Ask Nora" bubble — persistent chat entry point. It lives on the
+// bottom-right rail so it stays clear of the sidebar footer controls.
+// Opens the same Nora chat panel in a popover above the trigger.
 // ---------------------------------------------------------------------------
 
 const NoraChatFab: React.FC<{
@@ -5219,7 +5228,7 @@ const NoraChatFab: React.FC<{
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.18 }}
-            className="fixed bottom-24 left-5 z-[58] w-[370px] max-w-[calc(100vw-2.5rem)]"
+            className="fixed bottom-20 right-5 z-[58] w-[370px] max-w-[calc(100vw-2.5rem)]"
           >
             <NoraChatPanel
               coachId={coachId}
@@ -5236,7 +5245,7 @@ const NoraChatFab: React.FC<{
         data-nora-chat-fab
         onClick={() => setOpen((o) => !o)}
         aria-label="Ask Nora"
-        className="fixed bottom-5 left-5 z-[58] flex items-center gap-2.5 rounded-full border border-purple-400/30 bg-[#0d0d1a]/90 py-2 pl-2 pr-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur transition-colors hover:border-purple-400/60"
+        className="fixed bottom-5 right-5 z-[58] flex items-center gap-2.5 rounded-full border border-purple-400/30 bg-[#0d0d1a]/90 py-2 pl-2 pr-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur transition-colors hover:border-purple-400/60"
       >
         <span className="relative flex h-8 w-8 flex-none items-center justify-center">
           <span

@@ -29,7 +29,12 @@ import {
 } from '../mentaltraining/collections';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
-import { athleteHasSatisfiedAccessRequirements, getAssignedIntakeQuestions } from '../pulsecheckProvisioning/accessState';
+import {
+  athleteHasSatisfiedAccessRequirements,
+  getAssignedIntakeQuestions,
+  hasCompletedAssignedIntake,
+  hasCompletedEntryOnboarding,
+} from '../pulsecheckProvisioning/accessState';
 import { pilotDashboardDemoMode } from './demoMode';
 import {
   buildPilotAdherenceOrchestratorByCohort,
@@ -1879,6 +1884,28 @@ const resolveAthleteEnrollmentStatus = (
   return 'pending';
 };
 
+const resolveAthleteActivationStatus = (
+  membership: PulseCheckTeamMembership | null,
+  enrollment: PulseCheckPilotEnrollment | null | undefined,
+  pilot: PulseCheckPilot | null | undefined,
+  assignedIntakeQuestions: unknown
+): PilotDashboardAthleteRosterEntry['enrollmentStatus'] => {
+  const enrollmentStatus = resolveAthleteEnrollmentStatus(enrollment);
+  if (enrollmentStatus === 'active') return 'active';
+
+  const athleteOnboarding = membership?.athleteOnboarding;
+  if (
+    athleteOnboarding &&
+    athleteHasSatisfiedAccessRequirements(athleteOnboarding, pilot?.studyMode || null) &&
+    hasCompletedEntryOnboarding(athleteOnboarding) &&
+    hasCompletedAssignedIntake(athleteOnboarding, assignedIntakeQuestions)
+  ) {
+    return 'active';
+  }
+
+  return enrollmentStatus;
+};
+
 const normalizeStringList = (value: string[] | null | undefined): string[] =>
   Array.isArray(value)
     ? value.map((entry) => normalizeString(entry)).filter((entry, index, values) => entry && values.indexOf(entry) === index)
@@ -1906,6 +1933,8 @@ const resolveAthleteConsentStatus = (
   enrollment: PulseCheckPilotEnrollment | null,
   pilot: PulseCheckPilot | null | undefined
 ): PilotDashboardAthleteConsentStatus => {
+  if (normalizeString(enrollment?.status) === 'active') return 'complete';
+
   if (membership?.athleteOnboarding) {
     return athleteHasSatisfiedAccessRequirements(membership.athleteOnboarding, pilot?.studyMode || null)
       ? 'complete'
@@ -2682,7 +2711,7 @@ export const pulseCheckPilotDashboardService = {
           const enrollment = candidate.enrollment;
           const pilot = enrollment
             ? pilotMap.get(enrollment.pilotId) || pilotMap.get(targetedPilotId) || primaryPilotByTeamId.get(candidate.teamId) || null
-            : pilotMap.get(targetedPilotId) || primaryPilotByTeamId.get(candidate.teamId) || null;
+            : targetedPilotId ? pilotMap.get(targetedPilotId) || null : null;
           const organizationId =
             normalizeString(team?.organizationId) || normalizeString(pilot?.organizationId) || normalizeString(enrollment?.organizationId);
           const organization = organizationId ? organizationMap.get(organizationId) || null : null;
@@ -2716,7 +2745,7 @@ export const pulseCheckPilotDashboardService = {
             pilotName: pilot ? normalizeString(pilot.name) || undefined : undefined,
             cohortId: cohort ? cohort.id : undefined,
             cohortName: cohort ? normalizeString(cohort.name) || undefined : undefined,
-            enrollmentStatus: resolveAthleteEnrollmentStatus(enrollment),
+            enrollmentStatus: resolveAthleteActivationStatus(candidate.membership, enrollment, pilot, assignedIntakeQuestions),
             consentStatus: resolveAthleteConsentStatus(candidate.membership, enrollment, pilot),
             onboardingStatus: normalizeString(candidate.membership?.onboardingStatus) || undefined,
             intakeCompleted,

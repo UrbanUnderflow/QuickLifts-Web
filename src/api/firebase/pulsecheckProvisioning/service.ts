@@ -1208,6 +1208,13 @@ const applyLatestConsentStateToEnrollment = (
     completedConsentIds,
     completedConsentVersions,
   };
+  const hydratedStatus =
+    enrollment.status === 'withdrawn' || enrollment.status === 'active'
+      ? enrollment.status
+      : resolvePilotEnrollmentStatus({
+          athleteOnboarding,
+          studyMode: pilot.studyMode || null,
+        });
 
   return {
     ...enrollment,
@@ -1215,12 +1222,7 @@ const applyLatestConsentStateToEnrollment = (
     requiredConsentIds: requiredConsents.map((consent) => consent.id),
     completedConsentIds,
     completedConsentVersions,
-    status: enrollment.status === 'withdrawn'
-      ? 'withdrawn'
-      : resolvePilotEnrollmentStatus({
-          athleteOnboarding,
-          studyMode: pilot.studyMode || null,
-        }),
+    status: hydratedStatus,
   };
 };
 
