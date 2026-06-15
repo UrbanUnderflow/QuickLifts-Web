@@ -276,16 +276,49 @@ const isDailyCurriculumRecord = (assignment: PulseCheckDailyAssignment): boolean
 
 // A curriculum module (e.g. "4-7-8 Relaxation Breathing") is re-materialized as
 // a fresh daily-assignment doc each day it's pinned, so an athlete accumulates
-// many docs per module over time. The coach panel wants ONE row per module —
-// the current slate, mirroring the athlete's "Active toolkit" — not one row per
+// many docs per module over time. The coach panel wants ONE row per module -
+// the current slate, mirroring the athlete's "Active toolkit" - not one row per
 // day. This collapses docs that refer to the same curriculum slot / module,
 // keeping the most recent (latest sourceDate, then due-today, then revision).
+const normalizeCurriculumModuleKeyPart = (value?: string | null): string =>
+  compactText(value, 120)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const dailyAssignmentModuleKindKey = (assignment: PulseCheckDailyAssignment): CoachAthleteCurriculumItemKind => {
+  if (assignment.actionType === 'protocol') return 'protocol';
+  if (assignment.actionType === 'sim' || assignment.actionType === 'simulation' || assignment.actionType === 'lighter_sim') {
+    return 'simulation';
+  }
+  return assignment.curriculumIntent?.artifactKind === 'protocol' ? 'protocol' : 'curriculum';
+};
+
+const dailyAssignmentModuleIdentity = (assignment: PulseCheckDailyAssignment): string => {
+  const intent = assignment.curriculumIntent as Record<string, any> | undefined;
+  return normalizeCurriculumModuleKeyPart(
+    assignment.protocolLabel ||
+      assignment.protocolVariantLabel ||
+      assignment.simName ||
+      assignment.simFamilyLabel ||
+      assignment.trainingPlanStepLabel ||
+      intent?.badgeLabel ||
+      intent?.focusName ||
+      assignment.protocolId ||
+      assignment.legacyExerciseId ||
+      assignment.simSpecId ||
+      intent?.moduleId ||
+      intent?.targetId ||
+      intent?.assetId
+  );
+};
+
 const dailyAssignmentModuleDedupKey = (assignment: PulseCheckDailyAssignment): string => {
+  const moduleIdentity = dailyAssignmentModuleIdentity(assignment);
+  if (moduleIdentity) return `module:${dailyAssignmentModuleKindKey(assignment)}:${moduleIdentity}`;
   if (assignment.curriculumSlotId) return `slot:${assignment.curriculumSlotId}`;
   if (assignment.lineageId) return `lineage:${assignment.lineageId}`;
-  const moduleId =
-    assignment.protocolId || assignment.legacyExerciseId || assignment.simSpecId || assignment.id;
-  return `module:${assignment.actionType}:${moduleId}`;
+  return `assignment:${assignment.id}`;
 };
 
 const dailyAssignmentSlateRank = (assignment: PulseCheckDailyAssignment): number =>
@@ -343,6 +376,11 @@ const dailyAssignmentTitle = (assignment: PulseCheckDailyAssignment): string =>
       humanizeToken(assignment.legacyExerciseId || assignment.protocolId || assignment.simSpecId || assignment.actionType),
     80
   ) || 'Assigned practice';
+
+const curriculumItemDedupKey = (item: CoachAthleteCurriculumItem): string => {
+  const moduleIdentity = normalizeCurriculumModuleKeyPart(item.title || item.moduleKey);
+  return moduleIdentity ? `module:${item.kind}:${moduleIdentity}` : `${item.source}:${item.id}`;
+};
 
 const dailyAssignmentStatus = (assignment: PulseCheckDailyAssignment): CoachAthleteCurriculumItemStatus => {
   if (isDailyAssignmentComplete(assignment)) return 'completed';
@@ -1240,7 +1278,7 @@ class CoachService {
       const seen = new Set<string>();
       const items = [...activeDaily, ...activeCurriculum, ...(progressItem ? [progressItem] : []), ...recentCompleted, ...paused]
         .filter((item) => {
-          const key = `${item.source}:${item.id}`;
+          const key = curriculumItemDedupKey(item);
           if (seen.has(key)) return false;
           seen.add(key);
           return true;

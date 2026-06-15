@@ -6,7 +6,7 @@ import { speakStep, stopNarration } from '../../../utils/tts';
 import { buildNoraOnboardingWelcome } from '../../../lib/noraOnboardingVoice';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { browserPopupRedirectResolver, createUserWithEmailAndPassword, fetchSignInMethodsForEmail, GoogleAuthProvider, OAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
-import { AlertTriangle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2, LogOut, Sparkles, Users, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2, LogOut, Sparkles } from 'lucide-react';
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 import { auth } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
@@ -38,18 +38,6 @@ const PC = {
   cardBg: 'rgba(255,255,255,0.045)',
   cardBorder: 'rgba(255,255,255,0.10)',
 };
-
-const ValueRow = ({ icon: Icon, title, body }: { icon: LucideIcon; title: string; body: string }) => (
-  <div className="flex items-start gap-3">
-    <div className="mt-0.5 inline-flex h-8 w-8 flex-none items-center justify-center rounded-xl" style={{ background: 'rgba(124,58,237,0.14)' }}>
-      <Icon className="h-4 w-4" style={{ color: PC.purpleSoft }} />
-    </div>
-    <div>
-      <p className="text-sm font-semibold text-white">{title}</p>
-      <p className="mt-0.5 text-[13px] leading-6 text-zinc-400">{body}</p>
-    </div>
-  </div>
-);
 
 const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const router = useRouter();
@@ -224,14 +212,30 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     setMessage(null);
 
     try {
-      const usernameAvailable = await isUsernameAvailable(username);
-      if (!usernameAvailable) {
-        throw new Error('Username already taken.');
+      // Create the auth user FIRST so every Firestore read/write below runs
+      // authenticated. The username-availability check reads usernames/{name},
+      // which the rules only allow for signed-in users — running it pre-auth was
+      // the source of the "Missing or insufficient permissions" error new
+      // admins hit during activation.
+      const credential = await createUserWithEmailAndPassword(auth, email, createForm.password);
+      await credential.user.getIdToken(); // ensure the token is live for Firestore
+
+      // Claim a unique username (now authenticated). If the requested one is
+      // taken, auto-suffix rather than dead-end — the account already exists.
+      let finalUsername = username;
+      if (!(await isUsernameAvailable(finalUsername))) {
+        for (let suffix = 2; suffix < 1000; suffix += 1) {
+          const candidate = `${username}${suffix}`;
+          // eslint-disable-next-line no-await-in-loop
+          if (await isUsernameAvailable(candidate)) {
+            finalUsername = candidate;
+            break;
+          }
+        }
       }
 
-      const credential = await createUserWithEmailAndPassword(auth, email, createForm.password);
-      await claimUsername(credential.user.uid, username);
-      await createPulseCheckAdminUser(credential.user, username);
+      await claimUsername(credential.user.uid, finalUsername);
+      await createPulseCheckAdminUser(credential.user, finalUsername);
       await completeRedeem();
     } catch (error) {
       console.error('[pulsecheck-admin-activation] Failed to create account:', error);
@@ -428,7 +432,6 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     'w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-70';
   const primaryBtnStyle: React.CSSProperties = { background: PC.purple };
   const displayFont: React.CSSProperties = { fontFamily: 'Switzer, sans-serif' };
-  const serifAccent: React.CSSProperties = { fontFamily: 'Fraunces, serif', fontStyle: 'italic' };
   const coachFirstName = (invite.targetName || '').trim().split(/\s+/)[0] || '';
 
   // Nora greets the coach by name when they open the link. Browsers block audio
@@ -453,6 +456,17 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       stopNarration();
     };
   }, [coachFirstName, invite.status]);
+
+  // Wizard step is derived purely from auth/redeem state.
+  // 1 = account (signed out), 2 = review & activate (signed in, not redeemed), 3 = done.
+  // In demo mode the auth gate is bypassed, so we hold on step 1 until the demo
+  // redirect fires.
+  const step: 1 | 2 | 3 = redeemedState ? 3 : authUser && !isDemo ? 2 : 1;
+  const wizardSteps: Array<{ index: 1 | 2 | 3; label: string }> = [
+    { index: 1, label: 'Account' },
+    { index: 2, label: 'Review' },
+    { index: 3, label: 'Done' },
+  ];
 
   return (
     <div className="relative min-h-screen overflow-hidden text-white" style={{ background: PC.pageBg, fontFamily: 'Switzer, sans-serif' }}>
@@ -479,72 +493,56 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.22) 0%, transparent 70%)' }} />
       <div className="pointer-events-none absolute -bottom-40 right-[-10%] h-[460px] w-[460px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.12) 0%, transparent 70%)' }} />
 
-      <main className="relative mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-10 md:px-6">
-        <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          {/* Left: brand + warm welcome */}
-          <div className="rounded-[28px] border p-8 shadow-2xl" style={{ background: PC.cardBg, borderColor: PC.cardBorder }}>
-            <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={44} height={44} className="rounded-[12px]" />
-                <span className="text-lg font-bold tracking-tight" style={displayFont}>PulseCheck</span>
-              </div>
-
-              <div className="space-y-3">
-                <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}>
-                  <Sparkles className="h-3.5 w-3.5" /> You're invited
-                </span>
-                {/* Grotesque + serif-italic accent on one clean baseline — the
-                    Switzer/Fraunces + color contrast, kept composed and serious. */}
-                <h1
-                  className="text-4xl font-extrabold leading-[1.04] tracking-tight text-white md:text-5xl [overflow-wrap:anywhere]"
-                  style={displayFont}
-                >
-                  <span>Welcome</span>{' '}
-                  <span
-                    style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.purpleSoft }}
-                  >
-                    Coach
-                  </span>{' '}
-                  {coachFirstName ? <span>{coachFirstName}</span> : null}
-                </h1>
-                <p className="max-w-xl text-sm leading-7 text-zinc-300">
-                  <span className="text-[1.08em] text-white" style={serifAccent}>{invite.organizationName}</span> invited you to lead{' '}
-                  <span className="text-[1.08em] text-white" style={serifAccent}>{invite.teamName}</span>. Let's get you set up — it only takes a minute.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <ValueRow
-                  icon={Sparkles}
-                  title="See how your athletes are really doing"
-                  body="Daily readiness and mental-performance signals, in plain language."
-                />
-                <ValueRow
-                  icon={Users}
-                  title="Bring your staff and athletes in"
-                  body="Invite coaches and athletes with a tap once you're set up."
-                />
-                <ValueRow
-                  icon={CheckCircle2}
-                  title="Built for coaches, not spreadsheets"
-                  body="Clear cards and reports — no data-science degree required."
-                />
-              </div>
-
-              {invite.targetEmail ? (
-                <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-zinc-300" style={{ borderColor: PC.cardBorder }}>
-                  <CheckCircle2 className="h-3.5 w-3.5" style={{ color: PC.purpleSoft }} />
-                  Invited as <span className="font-medium text-white">{invite.targetEmail}</span>
-                </div>
-              ) : null}
-            </div>
+      <main className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 md:px-6">
+        <div className="mx-auto w-full max-w-[520px]">
+          {/* Brand lockup */}
+          <div className="mb-7 flex items-center justify-center gap-3">
+            <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
+            <span className="text-base font-bold tracking-tight" style={displayFont}>PulseCheck</span>
           </div>
 
-          {/* Right: the action */}
+          {/* Slim progress indicator */}
+          <div className="mb-8 flex items-center justify-center gap-2">
+            {wizardSteps.map((wizardStep, idx) => {
+              const isActive = wizardStep.index === step;
+              const isComplete = wizardStep.index < step;
+              return (
+                <React.Fragment key={wizardStep.index}>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition"
+                      style={
+                        isActive
+                          ? { background: PC.purpleSoft, color: '#000' }
+                          : isComplete
+                            ? { background: 'rgba(167,139,250,0.3)', color: PC.purpleSoft }
+                            : { border: `1px solid ${PC.cardBorder}`, color: '#71717a' }
+                      }
+                    >
+                      {isComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : wizardStep.index}
+                    </span>
+                    <span
+                      className="text-xs font-semibold tracking-wide transition"
+                      style={{ color: isActive ? '#fff' : '#71717a' }}
+                    >
+                      {wizardStep.label}
+                    </span>
+                  </div>
+                  {idx < wizardSteps.length - 1 ? (
+                    <span
+                      className="h-px w-6"
+                      style={{ background: wizardStep.index < step ? 'rgba(167,139,250,0.5)' : 'rgba(255,255,255,0.10)' }}
+                    />
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </div>
+
           <div className="rounded-[28px] border p-8 shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
             {message ? (
               <div
-                className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
+                className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
                   message.type === 'success'
                     ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200'
                     : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
@@ -555,17 +553,24 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               </div>
             ) : null}
 
-            {redeemedState ? (
+            {!authReady && !isDemo ? (
+              <div className="flex min-h-[420px] items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin" style={{ color: PC.purpleSoft }} />
+              </div>
+            ) : step === 3 && redeemedState ? (
+              /* STEP 3 — Done */
               <div className="space-y-6">
                 <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
                   <CheckCircle2 className="h-7 w-7" style={{ color: PC.purpleSoft }} />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>You're in</p>
-                  <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>Welcome aboard, Coach 🎉</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>You&apos;re set up</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>
+                    {redeemedState.organizationName} is active 🎉
+                  </h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    <span className="font-semibold text-white">{redeemedState.teamName}</span> is live. Next, set up your profile and
-                    bring your team in — we'll walk you through it.
+                    <span className="font-semibold text-white">{redeemedState.teamName}</span> is live and your admin access is in place.
+                    Next, set up your profile and bring your staff and athletes in — we&apos;ll walk you through it.
                   </p>
                 </div>
 
@@ -587,37 +592,51 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   </Link>
                 </div>
               </div>
-            ) : !authReady && !isDemo ? (
-              <div className="flex min-h-[420px] items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin" style={{ color: PC.purpleSoft }} />
-              </div>
-            ) : authUser && !isDemo ? (
+            ) : step === 2 && authUser && !isDemo ? (
+              /* STEP 2 — Review & activate */
               <div className="space-y-6">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Almost there</p>
-                  <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>Finish setting up</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Review &amp; activate</p>
+                  <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>Confirm your admin access</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    You're signed in as <span className="font-medium text-white">{authUser.email}</span>.
+                    Activating claims your admin access and turns on the{' '}
+                    <span className="font-medium text-white">{invite.organizationName}</span> workspace.
                   </p>
+                </div>
+
+                <div className="space-y-px overflow-hidden rounded-2xl border" style={{ borderColor: PC.cardBorder }}>
+                  <div className="flex items-center justify-between px-4 py-3 text-sm" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                    <span className="text-zinc-500">Organization</span>
+                    <span className="font-medium text-white">{invite.organizationName}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 text-sm" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                    <span className="text-zinc-500">Team</span>
+                    <span className="font-medium text-white">{invite.teamName}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 text-sm" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                    <span className="text-zinc-500">Role</span>
+                    <span className="font-medium text-white">Team Admin</span>
+                  </div>
                 </div>
 
                 {!authEmailMatchesInvite ? (
                   <div className="space-y-4">
                     <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm leading-7 text-red-200">
-                      This invite was sent to <span className="font-medium">{invite.targetEmail}</span>. Switch to that account to continue.
+                      This invite was sent to <span className="font-medium">{invite.targetEmail}</span>, but you&apos;re signed in as{' '}
+                      <span className="font-medium">{authUser.email}</span>. Switch to that account to continue.
                     </div>
                     <button
                       type="button"
                       onClick={handleSignOut}
-                      className="inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
                       style={{ borderColor: PC.cardBorder }}
                     >
                       <LogOut className="h-4 w-4" />
-                      Sign out
+                      Sign out &amp; switch account
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <button
                       type="button"
                       onClick={handleRedeemSignedInUser}
@@ -626,40 +645,85 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       style={primaryBtnStyle}
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      {submitting ? 'Joining…' : `Join ${invite.teamName}`}
+                      {submitting ? 'Activating…' : 'Activate admin access'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleSignOut}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
-                      style={{ borderColor: PC.cardBorder }}
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Use a different account
-                    </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-500">Signed in as {authUser.email}</span>
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 transition hover:text-white"
+                      >
+                        <LogOut className="h-3.5 w-3.5" />
+                        Use a different account
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             ) : (
+              /* STEP 1 — Account (signed out) */
               <div className="space-y-6">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Let's get you in</p>
-                  <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>
-                    {mode === 'create-account' ? 'Create your sign-in' : 'Welcome back'}
+                  <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}>
+                    <Sparkles className="h-3.5 w-3.5" /> You&apos;re invited
+                  </span>
+                  <h2 className="mt-3 text-3xl font-bold leading-tight text-white" style={displayFont}>
+                    {coachFirstName ? (
+                      <>
+                        Welcome{' '}
+                        <span style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.purpleSoft }}>
+                          Coach
+                        </span>{' '}
+                        {coachFirstName}
+                      </>
+                    ) : (
+                      <>Set up {invite.organizationName}</>
+                    )}
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    {mode === 'create-account'
-                      ? "Set a password and you're ready. Already used Pulse before? "
-                      : 'Sign in with your Pulse account to continue. New here? '}
-                    <button
-                      type="button"
-                      onClick={() => setMode(mode === 'create-account' ? 'sign-in' : 'create-account')}
-                      className="font-semibold underline-offset-2 hover:underline"
-                      style={{ color: PC.purpleSoft }}
-                    >
-                      {mode === 'create-account' ? 'Sign in instead' : 'Create an account'}
-                    </button>
+                    You&apos;ve been invited to set up{' '}
+                    <span className="font-medium text-white">{invite.organizationName}</span>
+                    {invite.teamName ? (
+                      <>
+                        {' · '}
+                        <span className="font-medium text-white">{invite.teamName}</span>
+                      </>
+                    ) : null}
+                    . Activate your admin access to get started.
                   </p>
+                  {invite.targetEmail ? (
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-zinc-300" style={{ borderColor: PC.cardBorder }}>
+                      <CheckCircle2 className="h-3.5 w-3.5" style={{ color: PC.purpleSoft }} />
+                      Invited as <span className="font-medium text-white">{invite.targetEmail}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Tabs */}
+                <div className="flex gap-6 border-b" style={{ borderColor: PC.cardBorder }}>
+                  <button
+                    type="button"
+                    onClick={() => setMode('sign-in')}
+                    className="-mb-px border-b-2 pb-3 text-sm font-semibold transition"
+                    style={{
+                      borderColor: mode === 'sign-in' ? PC.purpleSoft : 'transparent',
+                      color: mode === 'sign-in' ? '#fff' : '#71717a',
+                    }}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('create-account')}
+                    className="-mb-px border-b-2 pb-3 text-sm font-semibold transition"
+                    style={{
+                      borderColor: mode === 'create-account' ? PC.purpleSoft : 'transparent',
+                      color: mode === 'create-account' ? '#fff' : '#71717a',
+                    }}
+                  >
+                    Create account
+                  </button>
                 </div>
 
                 {mode === 'create-account' ? (
@@ -812,7 +876,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               </div>
             )}
           </div>
-        </section>
+        </div>
       </main>
 
       {/* Email-routing choice after social sign-in with a non-institutional email */}

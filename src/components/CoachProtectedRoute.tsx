@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../hooks/useUser';
 import { CoachModel } from '../types/Coach';
-import { db } from '../api/firebase/config';
+import { auth, db } from '../api/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import { pulseCheckProvisioningService } from '../api/firebase/pulsecheckProvisioning/service';
 
@@ -28,7 +28,10 @@ const CoachProtectedRoute: React.FC<Props> = ({
         return;
       }
       // If no user, send them to the coach login and return them here after.
-      if (!currentUser) {
+      // `!auth.currentUser` also catches the sign-out race where Redux still
+      // holds a stale user but Firebase auth has already cleared — without it,
+      // the coach-doc read below throws and bounces to the marketing home.
+      if (!currentUser || !auth.currentUser) {
         const dest = router.asPath || '/coach/dashboard';
         router.replace(`/coach/login?redirect=${encodeURIComponent(dest)}`);
         return;
@@ -86,6 +89,13 @@ const CoachProtectedRoute: React.FC<Props> = ({
         setLoading(false);
       } catch (error) {
         console.error('Error checking coach access:', error);
+        // On sign-out, Firebase auth clears before the Redux `currentUser` flips
+        // to null, so the coach-doc read fails with permission-denied here. Don't
+        // bounce to the marketing home — send them to the coach login.
+        if (!auth.currentUser) {
+          router.replace('/coach/login');
+          return;
+        }
         if (await hasPulseCheckStaffAccess()) {
           setLoading(false);
           return;
