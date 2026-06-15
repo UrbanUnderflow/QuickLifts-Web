@@ -27,6 +27,18 @@ export interface DailySentimentRecord {
   updatedAt: Date;
 }
 
+export interface AthleteReadinessDailyDetail {
+  date: string; // YYYY-MM-DD
+  checkInCompleted: boolean;
+  checkInCount: number;
+  noraChatCount: number;
+  noraMessageCount: number;
+  noraSentimentScore: number | null;
+  moduleAssignedCount: number;
+  moduleCompletedCount: number;
+  moduleDurationSeconds: number;
+}
+
 export interface ConversationMessage {
   id: string;
   content: string;
@@ -126,6 +138,23 @@ const toDateOrNull = (value: any): Date | null => {
   if (millis == null) return null;
   const date = new Date(millis);
   return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const toFiniteNumber = (value: any): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const positiveDurationSeconds = (...values: any[]): number => {
+  for (const value of values) {
+    const parsed = toFiniteNumber(value);
+    if (parsed !== null && parsed > 0) return Math.round(parsed);
+  }
+  return 0;
 };
 
 const latestDateOf = (...dates: Array<Date | null | undefined>): Date | undefined => {
@@ -300,10 +329,9 @@ const dailyAssignmentProgressPct = (assignment: PulseCheckDailyAssignment): numb
 };
 
 const dailyAssignmentDetail = (assignment: PulseCheckDailyAssignment): string => {
-  const kindLabel = dailyAssignmentKind(assignment) === 'protocol' ? 'Protocol' : dailyAssignmentKind(assignment) === 'simulation' ? 'Simulation' : 'Curriculum';
   const dateLabel = dateKeyToCoachLabel(assignment.sourceDate);
   const intentDetail = assignment.curriculumIntent?.progressLabel || assignment.curriculumIntent?.whyThisToday;
-  return [kindLabel, dateLabel, sanitizeCoachCopy(intentDetail || assignment.plannerSummary || assignment.rationale)]
+  return [dateLabel, sanitizeCoachCopy(intentDetail || assignment.plannerSummary || assignment.rationale)]
     .filter(Boolean)
     .join(' • ');
 };
@@ -416,6 +444,22 @@ const dailyAssignmentUpdatedAt = (assignment: PulseCheckDailyAssignment): Date |
     toDateOrNull(assignment.createdAt),
     dateFromDateKey(assignment.sourceDate)
   );
+
+const dailyAssignmentCompletionDurationSeconds = (assignment: PulseCheckDailyAssignment): number => {
+  const session = assignment.protocolPracticeSession as Record<string, any> | undefined;
+  const direct = positiveDurationSeconds(
+    assignment.completionSummary?.durationSeconds,
+    assignment.durationSeconds,
+  );
+  if (direct > 0) return direct;
+
+  const startedAt = toMillis(session?.practiceStartedAt || assignment.startedAt);
+  const completedAt = toMillis(session?.completedAt || assignment.completedAt);
+  if (startedAt !== null && completedAt !== null && completedAt > startedAt) {
+    return Math.round((completedAt - startedAt) / 1000);
+  }
+  return 0;
+};
 
 const curriculumAssignmentUpdatedAt = (assignment: CurriculumAssignment): Date | undefined =>
   latestDateOf(
@@ -1175,6 +1219,227 @@ class CoachService {
         completedCount: 0,
         totalCount: 0,
       };
+    }
+  }
+
+  async getAthleteReadinessDailyDetails(athleteUserId: string, days: number = 14): Promise<AthleteReadinessDailyDetail[]> {
+    try {
+      const windowDays = Math.max(1, Math.min(60, Math.round(days || 14)));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const dateKeys = Array.from({ length: windowDays }, (_, index) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() - (windowDays - 1 - index));
+        return ymd(date);
+      });
+      const allowedDates = new Set(dateKeys);
+
+      type DailyAccumulator = AthleteReadinessDailyDetail & {
+        noraTexts: string[];
+        completedDailyAssignmentIds: Set<string>;
+        countedCompletionKeys: Set<string>;
+      };
+
+      const byDate = new Map<string, DailyAccumulator>(
+        dateKeys.map((date): [string, DailyAccumulator] => [
+          date,
+          {
+            date,
+            checkInCompleted: false,
+            checkInCount: 0,
+            noraChatCount: 0,
+            noraMessageCount: 0,
+            noraSentimentScore: null,
+            moduleAssignedCount: 0,
+            moduleCompletedCount: 0,
+            moduleDurationSeconds: 0,
+            noraTexts: [],
+            completedDailyAssignmentIds: new Set<string>(),
+            countedCompletionKeys: new Set<string>(),
+          },
+        ])
+      );
+
+      const getDay = (dateKey: string | null): DailyAccumulator | null => {
+        if (!dateKey || !allowedDates.has(dateKey)) return null;
+        return byDate.get(dateKey) || null;
+      };
+
+      const markCheckIn = (data: Record<string, any>) => {
+        const detail = getDay(resolveDayKey(data));
+        if (!detail) return;
+        detail.checkInCompleted = true;
+        detail.checkInCount += 1;
+      };
+
+      const addNoraMessages = (dateKey: string | null, messages: string[]) => {
+        const detail = getDay(dateKey);
+        if (!detail || messages.length === 0) return;
+        detail.noraChatCount += 1;
+        detail.noraMessageCount += messages.length;
+        detail.noraTexts.push(...messages);
+      };
+
+      const isCompletedActivity = (data: Record<string, any>): boolean => {
+        const status = String(data.status || data.sessionOutcome || '').toLowerCase();
+        if (status && ['aborted', 'cancelled', 'canceled', 'queued', 'assigned', 'pending'].includes(status)) {
+          return false;
+        }
+        if (status && ['completed', 'complete', 'done', 'finished', 'success', 'succeeded', 'passed'].includes(status)) {
+          return true;
+        }
+        if (data.completed === true || data.isCompleted === true) return true;
+        return toMillis(data.completedAt || data.endedAt || data.finishedAt) !== null;
+      };
+
+      const addStandaloneCompletion = (
+        dateKey: string | null,
+        source: string,
+        rawId: string,
+        data: Record<string, any>
+      ) => {
+        const detail = getDay(dateKey);
+        if (!detail) return;
+
+        const dailyAssignmentId = String(data.dailyAssignmentId || data.assignmentId || data.pulseCheckDailyAssignmentId || '').trim();
+        if (dailyAssignmentId && detail.completedDailyAssignmentIds.has(dailyAssignmentId)) return;
+
+        const key = `${source}:${rawId || dailyAssignmentId || detail.countedCompletionKeys.size}`;
+        if (detail.countedCompletionKeys.has(key)) return;
+        detail.countedCompletionKeys.add(key);
+
+        detail.moduleCompletedCount += 1;
+        detail.moduleDurationSeconds += positiveDurationSeconds(
+          data.durationSeconds,
+          data.completionSummary?.durationSeconds,
+          data.elapsedSeconds,
+        );
+      };
+
+      const [
+        mentalCheckInSnapshot,
+        morningCheckInSnapshot,
+        conversationSnapshot,
+        noraConversationSnapshot,
+        dailyAssignmentSnapshot,
+        simCompletionSnapshot,
+        iosCompletionSnapshot,
+        simSessionSnapshot,
+      ] = await Promise.all([
+        getDocs(collection(db, MENTAL_CHECKINS_ROOT, athleteUserId, 'check-ins')).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION), where('athleteUserId', '==', athleteUserId))).catch(() => null),
+        getDocs(query(collection(db, 'conversations'), where('userId', '==', athleteUserId))).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION), where('athleteUserId', '==', athleteUserId))).catch(() => null),
+        getDocs(query(collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION), where('athleteId', '==', athleteUserId))).catch(() => null),
+        getDocs(collection(db, SIM_COMPLETIONS_ROOT, athleteUserId, 'completions')).catch(() => null),
+        getDocs(collection(db, IOS_MENTAL_COMPLETIONS_ROOT, athleteUserId, 'completions')).catch(() => null),
+        getDocs(collection(db, SIM_SESSIONS_ROOT, athleteUserId, 'sessions')).catch(() => null),
+      ]);
+
+      mentalCheckInSnapshot?.docs.forEach((docSnapshot) => markCheckIn(docSnapshot.data()));
+      morningCheckInSnapshot?.docs.forEach((docSnapshot) => markCheckIn(docSnapshot.data()));
+
+      conversationSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const messages = Array.isArray(data.messages)
+          ? data.messages
+              .filter((message: any) => {
+                const sender = String(message?.sender || message?.role || '').toLowerCase();
+                return message?.isFromUser === true || sender === 'user' || sender === 'athlete';
+              })
+              .map((message: any) => String(message?.content || '').trim())
+              .filter(Boolean)
+          : [];
+        addNoraMessages(
+          resolveDayKey({ ...data, createdAt: data.createdAt || data.updatedAt || data.lastTurnAt }),
+          messages
+        );
+      });
+
+      noraConversationSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const turns = Array.isArray(data.turns) ? data.turns : [];
+        addNoraMessages(
+          resolveDayKey({ ...data, createdAt: data.createdAt || data.updatedAt || data.lastTurnAt }),
+          extractPulseCheckConversationTexts(turns)
+        );
+      });
+
+      dailyAssignmentSnapshot?.docs.forEach((docSnapshot) => {
+        const assignment = pulseCheckDailyAssignmentFromFirestore(
+          docSnapshot.id,
+          docSnapshot.data() as Record<string, any>
+        );
+        if (!isDailyCurriculumRecord(assignment)) return;
+        if (
+          assignment.status === PulseCheckDailyAssignmentStatus.Superseded ||
+          assignment.status === PulseCheckDailyAssignmentStatus.Overridden
+        ) {
+          return;
+        }
+
+        const detail = getDay(assignment.sourceDate || resolveDayKey(assignment as unknown as Record<string, any>));
+        if (!detail) return;
+        detail.moduleAssignedCount += 1;
+        if (isDailyAssignmentComplete(assignment)) {
+          detail.moduleCompletedCount += 1;
+          detail.completedDailyAssignmentIds.add(assignment.id);
+          if (assignment.lineageId) detail.completedDailyAssignmentIds.add(assignment.lineageId);
+          detail.moduleDurationSeconds += dailyAssignmentCompletionDurationSeconds(assignment);
+        }
+      });
+
+      simCompletionSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        if (!isCompletedActivity(data)) return;
+        addStandaloneCompletion(
+          resolveDayKey({ ...data, completedAt: data.completedAt || data.updatedAt || data.createdAt }),
+          'sim-completion',
+          docSnapshot.id,
+          data
+        );
+      });
+
+      iosCompletionSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        if (!isCompletedActivity(data)) return;
+        addStandaloneCompletion(
+          resolveDayKey({ ...data, completedAt: data.completedAt || data.updatedAt || data.createdAt }),
+          'exercise-completion',
+          docSnapshot.id,
+          data
+        );
+      });
+
+      simSessionSnapshot?.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        if (!isCompletedActivity(data)) return;
+        addStandaloneCompletion(
+          resolveDayKey({ ...data, completedAt: data.completedAt || data.endedAt || data.updatedAt || data.createdAt }),
+          'sim-session',
+          docSnapshot.id,
+          data
+        );
+      });
+
+      return dateKeys.map((date) => {
+        const detail = byDate.get(date)!;
+        return {
+          date,
+          checkInCompleted: detail.checkInCompleted,
+          checkInCount: detail.checkInCount,
+          noraChatCount: detail.noraChatCount,
+          noraMessageCount: detail.noraMessageCount,
+          noraSentimentScore: detail.noraTexts.length ? this.calculateBasicSentiment(detail.noraTexts) : null,
+          moduleAssignedCount: detail.moduleAssignedCount,
+          moduleCompletedCount: detail.moduleCompletedCount,
+          moduleDurationSeconds: detail.moduleDurationSeconds,
+        };
+      });
+    } catch (error) {
+      console.error('[CoachService] Error fetching athlete readiness daily details:', error);
+      return [];
     }
   }
 

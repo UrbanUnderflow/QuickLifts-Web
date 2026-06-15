@@ -21,7 +21,13 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     recipientName: str(q.recipientName) || 'Jordan',
     organizationName: str(q.organizationName) || 'Riverside Athletics',
     teamName: str(q.teamName) || "Men's Track & Field",
+    pilotName: str(q.pilotName) || '',
     senderName: str(q.senderName) || 'Coach Taylor',
+    inviteSource: str(q.inviteSource) === 'admin' ? 'admin' : 'coach',
+    subjectOverride: str(q.subjectOverride) || '',
+    introText: str(q.introText) || '',
+    detailText: str(q.detailText) || '',
+    buttonLabel: str(q.buttonLabel) || '',
     activationUrl: str(q.activationUrl) || 'https://fitwithpulse.ai/PulseCheck/team-invite/preview-token',
   });
 

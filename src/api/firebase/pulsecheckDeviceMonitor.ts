@@ -33,6 +33,27 @@ import type { User } from './user/types';
 export type AthleteDeviceConnectionStatus = 'synced' | 'stale' | 'not_connected';
 
 /**
+ * A single day's data snapshot for one wearable source, surfaced on hover over a
+ * presence-bar cell in the coach dashboard. Built only from days that actually
+ * produced ≥1 record for that source family.
+ */
+export interface AthleteDeviceDayDetail {
+  dayIndex: number;
+  dateLabel: string;
+  /** Merged measured observation time for this source on the day, in seconds. */
+  observedSeconds: number;
+  recordCount: number;
+  domains: string[];
+  metrics: Array<{ label: string; value: string }>;
+  /**
+   * Short wear-context note inferred from which metric families landed that day
+   * (overnight recovery vs daytime activity) — e.g. "Daytime only · not worn
+   * overnight". Null when the pattern is ambiguous.
+   */
+  wearNote: string | null;
+}
+
+/**
  * Per-source device status. An athlete can have several wearables connected at
  * once (e.g. Oura + Fitbit + Polar); each gets its own coverage + freshness so
  * the coach dashboard can show a dead device alongside a healthy one instead of
@@ -47,7 +68,21 @@ export interface AthleteDevicePerSourceStatus {
   wearDaysCovered: number;
   windowDays: number;
   wearCoveragePct: number;
+  /** Days with OVERNIGHT recovery data (sleep stages, HRV, resting HR…). */
+  overnightDaysCovered: number;
+  overnightCoveragePct: number;
+  overnightPresence: boolean[];
+  /** Days with DAYTIME activity data (steps, active calories, avg HR). */
+  daytimeDaysCovered: number;
+  daytimeCoveragePct: number;
+  daytimePresence: boolean[];
   dailyPresence: boolean[];
+  /**
+   * Per-day data snapshot aligned 1:1 with `dailyPresence` (oldest→newest, length
+   * === windowDays). `null` for a day with no records; non-null exactly where
+   * `dailyPresence[i] === true`.
+   */
+  dailyDetails: (AthleteDeviceDayDetail | null)[];
 }
 
 export interface AthleteDeviceStatus {
@@ -152,6 +187,198 @@ const DEVICE_FAMILY_LABELS: Record<HealthContextSourceFamily, string> = {
 
 export const getDeviceFamilyLabel = (family: HealthContextSourceFamily | null): string =>
   family ? DEVICE_FAMILY_LABELS[family] || family : 'No device';
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Per-day metric extraction (drives the presence-bar hover snapshot)
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Format decimal hours as "Xh Ym" (e.g. 6.27 → "6h 16m"). */
+const formatHoursToHm = (hours: number): string => {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${h}h ${m}m`;
+};
+
+/** Coerce an unknown payload value to a finite number, or null. */
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const humanizeDomain = (domain: string): string => {
+  const trimmed = String(domain || '').trim();
+  if (!trimmed) return '';
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+};
+
+/**
+ * Merge a day's records (later `observedAt` wins per universal payload key) then
+ * emit the ordered metric label/value list. Only keys actually present are
+ * emitted — no invented values.
+ */
+const extractDayMetrics = (
+  records: HealthContextSourceRecord[],
+): Array<{ label: string; value: string }> => {
+  const merged: Record<string, unknown> = {};
+  const ordered = [...records].sort(
+    (left, right) => (left.observedAt ?? 0) - (right.observedAt ?? 0),
+  );
+  for (const record of ordered) {
+    const payload = (record.payload && typeof record.payload === 'object')
+      ? record.payload as Record<string, unknown>
+      : {};
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== undefined && value !== null) merged[key] = value;
+    }
+  }
+
+  const metrics: Array<{ label: string; value: string }> = [];
+  const push = (label: string, value: string) => metrics.push({ label, value });
+
+  const sleepDuration = toFiniteNumber(merged.sleepDuration);
+  if (sleepDuration !== null) push('Sleep', formatHoursToHm(sleepDuration));
+
+  const sleepEfficiency = toFiniteNumber(merged.sleepEfficiency);
+  if (sleepEfficiency !== null) push('Sleep efficiency', `${Math.round(sleepEfficiency)}%`);
+
+  const heartRateResting = toFiniteNumber(merged.heartRateResting);
+  if (heartRateResting !== null) push('Resting HR', `${Math.round(heartRateResting)} bpm`);
+
+  const averageHeartRate = toFiniteNumber(
+    merged.averageHeartRate ?? merged.avgHeartRate ?? merged.heartRateAverage ?? merged.averageHr,
+  );
+  if (averageHeartRate !== null) push('Avg HR', `${Math.round(averageHeartRate)} bpm`);
+
+  const heartRateVariability = toFiniteNumber(merged.heartRateVariability);
+  if (heartRateVariability !== null) push('HRV', `${Math.round(heartRateVariability)} ms`);
+
+  const respiratoryRate = toFiniteNumber(merged.respiratoryRate);
+  if (respiratoryRate !== null) push('Respiratory', `${respiratoryRate.toFixed(1)} /min`);
+
+  const readinessScore = toFiniteNumber(merged.readinessScore);
+  if (readinessScore !== null) push('Readiness', `${Math.round(readinessScore)}`);
+
+  const deepSleepDuration = toFiniteNumber(merged.deepSleepDuration);
+  if (deepSleepDuration !== null) push('Deep sleep', formatHoursToHm(deepSleepDuration));
+
+  const remSleepDuration = toFiniteNumber(merged.remSleepDuration);
+  if (remSleepDuration !== null) push('REM', formatHoursToHm(remSleepDuration));
+
+  const steps = toFiniteNumber(merged.steps);
+  if (steps !== null) push('Steps', Math.round(steps).toLocaleString());
+
+  const activeCalories = toFiniteNumber(merged.activeCalories);
+  if (activeCalories !== null) push('Active cal', `${Math.round(activeCalories)}`);
+
+  return metrics;
+};
+
+/**
+ * True only when a record carries at least one MEASURED value. A day whose only
+ * records have empty payloads (e.g. an Oura record written when the ring wasn't
+ * worn, or a placeholder training/summary record) is NOT "worn" — those must not
+ * light a presence cell green or count toward coverage.
+ */
+const recordHasMeasuredData = (record: HealthContextSourceRecord): boolean =>
+  extractDayMetrics([record]).length > 0;
+
+const observedSecondsForRecords = (records: HealthContextSourceRecord[]): number => {
+  const intervals = records
+    .filter(recordHasMeasuredData)
+    .map((record) => ({
+      start: typeof record.observedWindowStart === 'number' ? record.observedWindowStart : null,
+      end: typeof record.observedWindowEnd === 'number' ? record.observedWindowEnd : null,
+    }))
+    .filter((interval): interval is { start: number; end: number } =>
+      interval.start !== null &&
+      interval.end !== null &&
+      Number.isFinite(interval.start) &&
+      Number.isFinite(interval.end) &&
+      interval.end > interval.start
+    )
+    .sort((left, right) => left.start - right.start);
+
+  let total = 0;
+  let mergedStart: number | null = null;
+  let mergedEnd: number | null = null;
+
+  for (const interval of intervals) {
+    if (mergedStart === null || mergedEnd === null) {
+      mergedStart = interval.start;
+      mergedEnd = interval.end;
+      continue;
+    }
+    if (interval.start <= mergedEnd) {
+      mergedEnd = Math.max(mergedEnd, interval.end);
+      continue;
+    }
+    total += mergedEnd - mergedStart;
+    mergedStart = interval.start;
+    mergedEnd = interval.end;
+  }
+
+  if (mergedStart !== null && mergedEnd !== null) {
+    total += mergedEnd - mergedStart;
+  }
+
+  return Math.max(0, Math.min(SECONDS_PER_DAY, Math.round(total)));
+};
+
+/**
+ * Infer a short wear-context note from which metric families a day produced.
+ * Overnight recovery (sleep stages, HRV) vs daytime activity (steps, active cal)
+ * lets the coach see *why* a metric is missing — "not worn overnight" — instead
+ * of the sleep block silently disappearing.
+ */
+// "Worn overnight" means actual SLEEP was tracked — only sleep-stage metrics
+// prove the device was on the body through the night. Secondary readings like
+// resting HR / respiratory / readiness can show up from a daytime-only day on
+// some devices (e.g. Fitbit), so they must NOT, on their own, imply overnight
+// wear. Daytime wear shows up as activity. Drives the hover note + coverage split.
+const OVERNIGHT_METRIC_LABELS = new Set([
+  'Sleep', 'Deep sleep', 'REM', 'Sleep efficiency',
+]);
+const DAYTIME_METRIC_LABELS = new Set(['Steps', 'Active cal', 'Avg HR']);
+
+const classifyDayWear = (
+  metrics: Array<{ label: string; value: string }>,
+): { hasOvernight: boolean; hasDaytime: boolean } => {
+  let hasOvernight = false;
+  let hasDaytime = false;
+  for (const metric of metrics) {
+    if (OVERNIGHT_METRIC_LABELS.has(metric.label)) hasOvernight = true;
+    if (DAYTIME_METRIC_LABELS.has(metric.label)) hasDaytime = true;
+  }
+  return { hasOvernight, hasDaytime };
+};
+
+const deriveWearNote = (metrics: Array<{ label: string; value: string }>): string | null => {
+  const { hasOvernight, hasDaytime } = classifyDayWear(metrics);
+  if (hasOvernight && hasDaytime) return 'Worn day & night';
+  if (hasDaytime && !hasOvernight) return 'Daytime only · not worn overnight';
+  if (hasOvernight && !hasDaytime) return 'Overnight only · little daytime wear';
+  return null;
+};
+
+/** Format a unix-seconds instant as "Mon D" (e.g. "Jun 13"), honoring a tz if given. */
+const formatDayLabel = (unixSeconds: number, timezone?: string): string => {
+  const date = new Date(unixSeconds * 1000);
+  if (Number.isNaN(date.getTime())) return '';
+  try {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      ...(timezone ? { timeZone: timezone } : {}),
+    });
+  } catch {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Derivation
@@ -343,16 +570,25 @@ export const deriveAthleteDeviceStatus = ({
 
     let lastObservedAt: number | null = null;
     let lastSyncedAt: number | null = null;
-    const presentDays = new Set<number>();
+    // Bucket this family's records by day index within the window so we can build
+    // a per-day data snapshot for the presence-bar hover tooltip.
+    const recordsByDay = new Map<number, HealthContextSourceRecord[]>();
 
     for (const record of familyRecords) {
       if (typeof record.observedAt === 'number') {
-        if (lastObservedAt === null || record.observedAt > lastObservedAt) {
+        // "Last data" must reflect the most recent record that actually carried
+        // measured values — not an empty placeholder/sync record.
+        if (
+          recordHasMeasuredData(record) &&
+          (lastObservedAt === null || record.observedAt > lastObservedAt)
+        ) {
           lastObservedAt = record.observedAt;
         }
         const dayIndex = Math.floor((record.observedAt - windowStart) / SECONDS_PER_DAY);
         if (dayIndex >= 0 && dayIndex < windowDays) {
-          presentDays.add(dayIndex);
+          const bucket = recordsByDay.get(dayIndex);
+          if (bucket) bucket.push(record);
+          else recordsByDay.set(dayIndex, [record]);
         }
       }
       if (typeof record.ingestedAt === 'number' && (lastSyncedAt === null || record.ingestedAt > lastSyncedAt)) {
@@ -379,9 +615,48 @@ export const deriveAthleteDeviceStatus = ({
       connectionStatus = 'not_connected';
     }
 
-    const dailyPresence = Array.from({ length: windowDays }, (_, day) => presentDays.has(day));
-    const wearDaysCovered = presentDays.size;
+    // A day is only "worn"/present when its records actually produced measured
+    // values — empty-payload records don't light the cell green or count toward
+    // coverage. dailyDetails is the source of truth; presence mirrors it.
+    const dailyDetails: (AthleteDeviceDayDetail | null)[] = Array.from(
+      { length: windowDays },
+      (_, day): AthleteDeviceDayDetail | null => {
+        const dayRecords = recordsByDay.get(day);
+        if (!dayRecords || dayRecords.length === 0) return null;
+        const metrics = extractDayMetrics(dayRecords);
+        if (metrics.length === 0) return null;
+        const maxObservedAt = dayRecords.reduce(
+          (max, record) => (typeof record.observedAt === 'number' && record.observedAt > max ? record.observedAt : max),
+          0,
+        );
+        const latestRecord = dayRecords.find((record) => record.observedAt === maxObservedAt);
+        const domains = Array.from(
+          new Set(dayRecords.map((record) => humanizeDomain(record.domain)).filter(Boolean)),
+        );
+        return {
+          dayIndex: day,
+          dateLabel: formatDayLabel(maxObservedAt, latestRecord?.timezone),
+          observedSeconds: observedSecondsForRecords(dayRecords),
+          recordCount: dayRecords.length,
+          domains,
+          metrics,
+          wearNote: deriveWearNote(metrics),
+        };
+      },
+    );
+
+    const dailyPresence = dailyDetails.map((detail) => detail !== null);
+    const wearDaysCovered = dailyPresence.reduce((sum, present) => sum + (present ? 1 : 0), 0);
     const wearCoveragePct = windowDays > 0 ? Math.round((wearDaysCovered / windowDays) * 100) : 0;
+
+    // Split wear into overnight (recovery) vs daytime (activity) so a device that
+    // logs steps all day but is taken off at night reads honestly.
+    const overnightPresence = dailyDetails.map((detail) => (detail ? classifyDayWear(detail.metrics).hasOvernight : false));
+    const daytimePresence = dailyDetails.map((detail) => (detail ? classifyDayWear(detail.metrics).hasDaytime : false));
+    const overnightDaysCovered = overnightPresence.reduce((sum, present) => sum + (present ? 1 : 0), 0);
+    const daytimeDaysCovered = daytimePresence.reduce((sum, present) => sum + (present ? 1 : 0), 0);
+    const overnightCoveragePct = windowDays > 0 ? Math.round((overnightDaysCovered / windowDays) * 100) : 0;
+    const daytimeCoveragePct = windowDays > 0 ? Math.round((daytimeDaysCovered / windowDays) * 100) : 0;
 
     return {
       sourceFamily: family,
@@ -392,7 +667,14 @@ export const deriveAthleteDeviceStatus = ({
       wearDaysCovered,
       windowDays,
       wearCoveragePct,
+      overnightDaysCovered,
+      overnightCoveragePct,
+      overnightPresence,
+      daytimeDaysCovered,
+      daytimeCoveragePct,
+      daytimePresence,
       dailyPresence,
+      dailyDetails,
     };
   });
 

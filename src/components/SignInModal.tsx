@@ -178,7 +178,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const { roundIdRedirect, loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
   const isPulseCheckPage = router.pathname === '/PulseCheck' || router.asPath === '/PulseCheck' || router.asPath.startsWith('/PulseCheck?') || router.asPath.startsWith('/PulseCheck/');
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
-  const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage;
+  const isOnAdminPage = router.pathname.startsWith('/admin/') || router.asPath.startsWith('/admin/');
+  const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage;
 
   // Detect if the user is on an iPhone and component mount
   useEffect(() => {

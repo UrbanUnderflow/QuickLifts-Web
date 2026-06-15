@@ -447,6 +447,27 @@ export interface PilotDashboardAthleteIntakeAnswer {
   answer: string;
 }
 
+export type PilotDashboardAthleteConsentStatus = 'complete' | 'pending' | 'unknown';
+
+export interface PilotDashboardAthleteTeamContext {
+  key: string;
+  teamId: string;
+  teamName: string;
+  organizationId: string;
+  organizationName: string;
+  pilotId?: string;
+  pilotName?: string;
+  cohortId?: string;
+  cohortName?: string;
+  enrollmentStatus: PilotDashboardAthleteEnrollmentStatus;
+  consentStatus: PilotDashboardAthleteConsentStatus;
+  intakeCompleted: boolean;
+  onboardingStatus?: string;
+  phone: string;
+  role: string;
+  intake: PilotDashboardAthleteIntakeAnswer[];
+}
+
 export interface PilotDashboardAthleteRosterEntry {
   athleteUserId: string;
   displayName: string;
@@ -465,6 +486,7 @@ export interface PilotDashboardAthleteRosterEntry {
   phone: string;
   role: string;
   intake: PilotDashboardAthleteIntakeAnswer[];
+  teamContexts: PilotDashboardAthleteTeamContext[];
 }
 
 export interface PilotDashboardAthleteRosterFilter {

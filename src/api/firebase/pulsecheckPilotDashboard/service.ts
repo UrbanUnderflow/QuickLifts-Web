@@ -29,6 +29,7 @@ import {
 } from '../mentaltraining/collections';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
+import { athleteHasSatisfiedAccessRequirements } from '../pulsecheckProvisioning/accessState';
 import { pilotDashboardDemoMode } from './demoMode';
 import {
   buildPilotAdherenceOrchestratorByCohort,
@@ -51,7 +52,9 @@ import type {
 import type { SurveyQuestion } from '../creatorPages/service';
 import type {
   PilotDashboardAthleteDetail,
+  PilotDashboardAthleteConsentStatus,
   PilotDashboardAthleteProfileSummary,
+  PilotDashboardAthleteTeamContext,
   PilotDashboardAthleteAdherenceDay,
   PilotDashboardAthleteAdherenceSummary,
   PilotDashboardAthleteEscalationDetail,
@@ -1876,6 +1879,47 @@ const resolveAthleteEnrollmentStatus = (
   return 'pending';
 };
 
+const normalizeStringList = (value: string[] | null | undefined): string[] =>
+  Array.isArray(value)
+    ? value.map((entry) => normalizeString(entry)).filter((entry, index, values) => entry && values.indexOf(entry) === index)
+    : [];
+
+const hasCompletedEnrollmentConsents = (
+  enrollment: PulseCheckPilotEnrollment,
+  pilot: PulseCheckPilot | null | undefined
+): boolean => {
+  if (!enrollment.productConsentAccepted) return false;
+  if (pilot?.studyMode === 'research') {
+    const researchStatus = normalizeString(enrollment.researchConsentStatus);
+    if (researchStatus !== 'accepted' && researchStatus !== 'declined') return false;
+  }
+
+  const requiredIds = normalizeStringList(enrollment.requiredConsentIds);
+  if (requiredIds.length === 0) return true;
+
+  const completedIds = new Set(normalizeStringList(enrollment.completedConsentIds));
+  return requiredIds.every((id) => completedIds.has(id));
+};
+
+const resolveAthleteConsentStatus = (
+  membership: PulseCheckTeamMembership | null,
+  enrollment: PulseCheckPilotEnrollment | null,
+  pilot: PulseCheckPilot | null | undefined
+): PilotDashboardAthleteConsentStatus => {
+  if (membership?.athleteOnboarding) {
+    return athleteHasSatisfiedAccessRequirements(membership.athleteOnboarding, pilot?.studyMode || null)
+      ? 'complete'
+      : 'pending';
+  }
+
+  if (enrollment) {
+    if (normalizeString(enrollment.status) === 'withdrawn') return 'unknown';
+    return hasCompletedEnrollmentConsents(enrollment, pilot) ? 'complete' : 'pending';
+  }
+
+  return 'unknown';
+};
+
 // Picks the most relevant membership/enrollment pairing for a single athlete who
 // may appear across multiple teams: active enrollment > has intake > most recent.
 const scoreAthleteCandidate = (
@@ -2491,6 +2535,7 @@ export const pulseCheckPilotDashboardService = {
 
     const organizationMap = new Map(organizations.map((organization) => [organization.id, organization]));
     const teamMap = new Map(teams.map((team) => [team.id, team]));
+    const pilotMap = new Map(pilots.map((pilot) => [pilot.id, pilot]));
     const cohortMap = new Map(cohorts.map((cohort) => [cohort.id, cohort]));
 
     const cohortsByPilot = new Map<string, PulseCheckPilotCohort[]>();
@@ -2600,65 +2645,112 @@ export const pulseCheckPilotDashboardService = {
       });
     });
 
-    // Dedupe by athlete user id, keeping the most relevant candidate.
-    const bestCandidateByAthleteId = new Map<string, RosterCandidate>();
+    // Group by athlete user id. Keep all matching team contexts, but still pick
+    // one primary context for the legacy top-level roster fields.
+    const candidatesByAthleteId = new Map<string, RosterCandidate[]>();
     candidates.forEach((candidate) => {
-      const existing = bestCandidateByAthleteId.get(candidate.athleteId);
-      if (
-        !existing ||
-        scoreAthleteCandidate(candidate.membership, candidate.enrollment) >
-          scoreAthleteCandidate(existing.membership, existing.enrollment)
-      ) {
-        bestCandidateByAthleteId.set(candidate.athleteId, candidate);
-      }
+      const current = candidatesByAthleteId.get(candidate.athleteId) || [];
+      current.push(candidate);
+      candidatesByAthleteId.set(candidate.athleteId, current);
     });
 
-    const dedupedCandidates = Array.from(bestCandidateByAthleteId.values());
+    const groupedCandidates = Array.from(candidatesByAthleteId.entries()).map(([athleteId, athleteCandidates]) => {
+      const sortedCandidates = [...athleteCandidates].sort(
+        (left, right) =>
+          scoreAthleteCandidate(right.membership, right.enrollment) -
+          scoreAthleteCandidate(left.membership, left.enrollment)
+      );
+      return {
+        athleteId,
+        candidates: sortedCandidates,
+        primaryCandidate: sortedCandidates[0]!,
+      };
+    });
 
     // Batch user-doc reads (one per unique athlete).
     const profileContexts = await Promise.all(
-      dedupedCandidates.map((candidate) => loadAthleteProfileSummary(candidate.athleteId, candidate.membership))
+      groupedCandidates.map((group) => loadAthleteProfileSummary(group.athleteId, group.primaryCandidate.membership))
     );
 
-    const entries: PilotDashboardAthleteRosterEntry[] = dedupedCandidates.map((candidate, index) => {
-      const team = teamMap.get(candidate.teamId) || null;
-      const organization = team ? organizationMap.get(team.organizationId) || null : null;
-      const enrollment = candidate.enrollment;
-      const pilot = enrollment
-        ? pilots.find((entry) => entry.id === enrollment.pilotId) || primaryPilotByTeamId.get(candidate.teamId) || null
-        : primaryPilotByTeamId.get(candidate.teamId) || null;
-      const cohort = enrollment && normalizeString(enrollment.cohortId)
-        ? cohortMap.get(normalizeString(enrollment.cohortId)) || null
-        : null;
+    const entries: PilotDashboardAthleteRosterEntry[] = groupedCandidates.map((group, index) => {
+      const primaryCandidate = group.primaryCandidate;
       const profile = profileContexts[index]?.profile;
-      const athleteOnboarding = candidate.membership?.athleteOnboarding;
-      const intakeCompleted = Boolean(coerceTimestampMs(athleteOnboarding?.intakeCompletedAt));
-      const intake = buildAthleteIntakeAnswers(
-        athleteOnboarding?.intakeResponses,
-        resolveTeamAthleteIntakeQuestions(team)
-      );
+      const teamContexts: PilotDashboardAthleteTeamContext[] = group.candidates
+        .map((candidate) => {
+          const team = teamMap.get(candidate.teamId) || null;
+          const targetedPilotId = normalizeString(candidate.membership?.athleteOnboarding?.targetPilotId);
+          const enrollment = candidate.enrollment;
+          const pilot = enrollment
+            ? pilotMap.get(enrollment.pilotId) || pilotMap.get(targetedPilotId) || primaryPilotByTeamId.get(candidate.teamId) || null
+            : pilotMap.get(targetedPilotId) || primaryPilotByTeamId.get(candidate.teamId) || null;
+          const organizationId =
+            normalizeString(team?.organizationId) || normalizeString(pilot?.organizationId) || normalizeString(enrollment?.organizationId);
+          const organization = organizationId ? organizationMap.get(organizationId) || null : null;
+          const cohortId =
+            normalizeString(enrollment?.cohortId) || normalizeString(candidate.membership?.athleteOnboarding?.targetCohortId);
+          const cohort = cohortId ? cohortMap.get(cohortId) || null : null;
+          const athleteOnboarding = candidate.membership?.athleteOnboarding;
+          const intakeCompleted = Boolean(coerceTimestampMs(athleteOnboarding?.intakeCompletedAt));
+          const intake = buildAthleteIntakeAnswers(
+            athleteOnboarding?.intakeResponses,
+            resolveTeamAthleteIntakeQuestions(team)
+          );
+
+          return {
+            key: [
+              candidate.teamId,
+              normalizeString(pilot?.id) || 'team',
+              normalizeString(candidate.membership?.id) || normalizeString(enrollment?.id) || group.athleteId,
+            ].join(':'),
+            teamId: candidate.teamId,
+            teamName: normalizeString(team?.displayName),
+            organizationId,
+            organizationName: normalizeString(organization?.displayName),
+            pilotId: pilot ? pilot.id : undefined,
+            pilotName: pilot ? normalizeString(pilot.name) || undefined : undefined,
+            cohortId: cohort ? cohort.id : undefined,
+            cohortName: cohort ? normalizeString(cohort.name) || undefined : undefined,
+            enrollmentStatus: resolveAthleteEnrollmentStatus(enrollment),
+            consentStatus: resolveAthleteConsentStatus(candidate.membership, enrollment, pilot),
+            onboardingStatus: normalizeString(candidate.membership?.onboardingStatus) || undefined,
+            intakeCompleted,
+            phone: normalizeString(candidate.membership?.phone),
+            role: normalizeString(candidate.membership?.role) || 'athlete',
+            intake,
+          };
+        })
+        .sort(
+          (left, right) =>
+            left.organizationName.localeCompare(right.organizationName) ||
+            left.teamName.localeCompare(right.teamName) ||
+            (left.pilotName || '').localeCompare(right.pilotName || '')
+        );
+
+      const primaryContext =
+        teamContexts.find((context) => context.teamId === primaryCandidate.teamId) || teamContexts[0];
 
       return {
-        athleteUserId: candidate.athleteId,
-        displayName: buildAthleteLabel(candidate.membership, candidate.athleteId, enrollment, profile),
-        email: normalizeString(candidate.membership?.email) || normalizeString(profile?.email),
+        athleteUserId: group.athleteId,
+        displayName: buildAthleteLabel(primaryCandidate.membership, group.athleteId, primaryCandidate.enrollment, profile),
+        email: normalizeString(primaryCandidate.membership?.email) || normalizeString(profile?.email),
         profileImageUrl:
           normalizeString(profile?.profileImageUrl) ||
-          normalizeString((candidate.membership as Record<string, any> | null)?.prefilledProfileImageUrl) ||
+          normalizeString((primaryCandidate.membership as Record<string, any> | null)?.prefilledProfileImageUrl) ||
           undefined,
-        teamId: candidate.teamId,
-        teamName: normalizeString(team?.displayName),
-        organizationId: normalizeString(organization?.id) || normalizeString(team?.organizationId),
-        organizationName: normalizeString(organization?.displayName),
-        pilotId: pilot ? pilot.id : undefined,
-        pilotName: pilot ? normalizeString(pilot.name) || undefined : undefined,
-        cohortName: cohort ? normalizeString(cohort.name) || undefined : undefined,
-        enrollmentStatus: resolveAthleteEnrollmentStatus(enrollment),
-        onboardingStatus: normalizeString(candidate.membership?.onboardingStatus) || undefined,
-        intakeCompleted,
-        phone: normalizeString(candidate.membership?.phone),
-        role: normalizeString(candidate.membership?.role) || 'athlete',
-        intake,
+        teamId: primaryContext?.teamId || primaryCandidate.teamId,
+        teamName: primaryContext?.teamName || '',
+        organizationId: primaryContext?.organizationId || '',
+        organizationName: primaryContext?.organizationName || '',
+        pilotId: primaryContext?.pilotId,
+        pilotName: primaryContext?.pilotName,
+        cohortName: primaryContext?.cohortName,
+        enrollmentStatus: primaryContext?.enrollmentStatus || 'none',
+        onboardingStatus: primaryContext?.onboardingStatus,
+        intakeCompleted: Boolean(primaryContext?.intakeCompleted),
+        phone: primaryContext?.phone || '',
+        role: primaryContext?.role || 'athlete',
+        intake: primaryContext?.intake || [],
+        teamContexts,
       };
     });
 

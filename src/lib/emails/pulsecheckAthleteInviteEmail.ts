@@ -21,22 +21,70 @@ export function escapeHtml(input: string) {
     .replace(/'/g, '&#039;');
 }
 
-export function renderAthleteInviteEmail(opts: {
+export type AthleteInviteEmailSource = 'coach' | 'admin';
+
+export function buildAthleteInviteEmailDraft(opts: {
   recipientName?: string;
   organizationName?: string;
   teamName?: string;
-  activationUrl: string;
+  pilotName?: string;
   senderName?: string;
+  inviteSource?: AthleteInviteEmailSource;
 }) {
   const name = (opts.recipientName || '').trim() || 'there';
   const organizationName = (opts.organizationName || 'your team').trim();
   const teamName = (opts.teamName || '').trim();
-  const activationUrl = opts.activationUrl;
+  const pilotName = (opts.pilotName || '').trim();
   const senderName = (opts.senderName || 'your coach').trim();
+  const inviteSource: AthleteInviteEmailSource = opts.inviteSource === 'admin' ? 'admin' : 'coach';
+  const targetName = teamName || organizationName;
 
   const subject = teamName
     ? `You're invited to join ${teamName} on PulseCheck`
     : `You're invited to join ${organizationName} on PulseCheck`;
+
+  if (inviteSource === 'admin') {
+    return {
+      subject,
+      introText: `Hey ${name}, PulseCheck invited you to join ${targetName}${pilotName ? ` for ${pilotName}` : ''}.`,
+      detailText:
+        'Use this email when you sign in so we can connect you to the right team, consent forms, intake, and onboarding tasks.',
+      buttonLabel: 'JOIN PULSECHECK',
+      preheader: 'Download the PulseCheck app and sign in with this email to join your team on PulseCheck.',
+    };
+  }
+
+  return {
+    subject,
+    introText: `Hey ${name}, ${senderName} invited you to join ${targetName} on PulseCheck.`,
+    detailText: 'Use this email when you sign in so your coach can connect you to the team.',
+    buttonLabel: 'JOIN YOUR TEAM',
+    preheader: 'Download the PulseCheck app and sign in with this email to join your team on PulseCheck.',
+  };
+}
+
+const formatTextForEmailHtml = (input: string) => escapeHtml(input).replace(/\n/g, '<br/>');
+
+export function renderAthleteInviteEmail(opts: {
+  recipientName?: string;
+  organizationName?: string;
+  teamName?: string;
+  pilotName?: string;
+  activationUrl: string;
+  senderName?: string;
+  inviteSource?: AthleteInviteEmailSource;
+  subjectOverride?: string;
+  introText?: string;
+  detailText?: string;
+  buttonLabel?: string;
+}) {
+  const activationUrl = opts.activationUrl;
+  const draft = buildAthleteInviteEmailDraft(opts);
+
+  const subject = (opts.subjectOverride || '').trim() || draft.subject;
+  const introText = (opts.introText || '').trim() || draft.introText;
+  const detailText = (opts.detailText || '').trim() || draft.detailText;
+  const buttonLabel = (opts.buttonLabel || '').trim() || draft.buttonLabel;
 
   const html = `
   <!doctype html>
@@ -48,7 +96,7 @@ export function renderAthleteInviteEmail(opts: {
     </head>
     <body style="margin:0;padding:0;background:#ffffff;">
       <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-        Download the PulseCheck app and sign in with this email to join your team on PulseCheck.
+        ${escapeHtml(draft.preheader)}
       </div>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#ffffff;padding:24px 0;">
         <tr>
@@ -73,13 +121,13 @@ export function renderAthleteInviteEmail(opts: {
                           You're invited to PulseCheck
                         </h1>
                         <p style="margin:0 0 8px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:16px;line-height:1.6;color:#000000;">
-                          Hey ${escapeHtml(name)}, ${escapeHtml(senderName)} invited you to join ${teamName ? `<span style="font-weight:700;">${escapeHtml(teamName)}</span>` : `<span style="font-weight:700;">${escapeHtml(organizationName)}</span>`} on PulseCheck.
+                          ${formatTextForEmailHtml(introText)}
                         </p>
                         <p style="margin:0 0 28px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:13px;line-height:1.6;color:#52525B;">
-                          Use this email when you sign in so your coach can connect you to the team.
+                          ${formatTextForEmailHtml(detailText)}
                         </p>
-                        <a href="${activationUrl}" style="display:inline-block;background:#000000;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:900;font-size:14px;text-decoration:none;padding:14px 32px;border-radius:12px;">
-                          JOIN YOUR TEAM
+                        <a href="${escapeHtml(activationUrl)}" style="display:inline-block;background:#000000;color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:900;font-size:14px;text-decoration:none;padding:14px 32px;border-radius:12px;">
+                          ${escapeHtml(buttonLabel)}
                         </a>
                         <p style="margin:20px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:12px;line-height:1.6;color:#52525B;">
                           Already have the PulseCheck app? Open it and sign in with this email.

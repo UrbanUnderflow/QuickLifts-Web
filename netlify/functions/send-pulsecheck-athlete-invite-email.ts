@@ -18,13 +18,18 @@ import { renderAthleteInviteEmail } from '../../src/lib/emails/pulsecheckAthlete
  *   organizationName (optional) – org context
  *   teamName         (optional) – team context
  *   senderName       (optional) – the coach issuing the invite
+ *   inviteSource     (optional) – coach or admin copy posture
+ *   subjectOverride  (optional) – admin-edited subject
+ *   introText        (optional) – admin-edited intro copy
+ *   detailText       (optional) – admin-edited helper copy
+ *   buttonLabel      (optional) – admin-edited CTA copy
  *
  * GET ?preview=1 renders the real template (no send) for viewing.
  */
 export const handler: Handler = async (event) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
@@ -40,7 +45,13 @@ export const handler: Handler = async (event) => {
       recipientName: q.recipientName || 'Jordan',
       organizationName: q.organizationName || 'Riverside Athletics',
       teamName: q.teamName || "Men's Track & Field",
+      pilotName: q.pilotName || '',
       senderName: q.senderName || 'Coach Taylor',
+      inviteSource: q.inviteSource === 'admin' ? 'admin' : 'coach',
+      subjectOverride: q.subjectOverride || '',
+      introText: q.introText || '',
+      detailText: q.detailText || '',
+      buttonLabel: q.buttonLabel || '',
       activationUrl: q.activationUrl || 'https://fitwithpulse.ai/PulseCheck/team-invite/preview-token',
     });
     return {
@@ -61,7 +72,20 @@ export const handler: Handler = async (event) => {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ success: false, error: 'Invalid JSON body' }) };
   }
 
-  const { toEmail, activationUrl, recipientName, organizationName, teamName, senderName } = body;
+  const {
+    toEmail,
+    activationUrl,
+    recipientName,
+    organizationName,
+    teamName,
+    pilotName,
+    senderName,
+    inviteSource,
+    subjectOverride,
+    introText,
+    detailText,
+    buttonLabel,
+  } = body;
 
   if (!toEmail || !activationUrl) {
     return {
@@ -76,8 +100,14 @@ export const handler: Handler = async (event) => {
       recipientName,
       organizationName,
       teamName,
+      pilotName,
       activationUrl,
       senderName,
+      inviteSource,
+      subjectOverride,
+      introText,
+      detailText,
+      buttonLabel,
     });
 
     const result = await sendBrevoTransactionalEmail({

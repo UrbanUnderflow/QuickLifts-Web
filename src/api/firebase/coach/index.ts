@@ -1,5 +1,6 @@
 export { coachService } from './service';
 export type {
+  AthleteReadinessDailyDetail,
   CoachAthleteCurriculumItem,
   CoachAthleteCurriculumSnapshot,
 } from './service';
