@@ -1260,6 +1260,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   // pre-load default questions if none exist yet and scroll to that team's
   // intake editor.
   const [intakeFocusHandled, setIntakeFocusHandled] = useState(false);
+  // Team whose intake editor is open in the "Manage intake" modal (keeps the
+  // bulky question editor out of the inline dashboard).
+  const [intakeModalTeamId, setIntakeModalTeamId] = useState<string | null>(null);
   useEffect(() => {
     if (loading || intakeFocusHandled || typeof window === 'undefined' || teams.length === 0) return;
     const params = new URLSearchParams(window.location.search);

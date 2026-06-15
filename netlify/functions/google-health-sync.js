@@ -104,6 +104,22 @@ function firstNumeric(...values) {
   return null;
 }
 
+function unixSecondsValue(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+    const parsedDate = Date.parse(value);
+    return Number.isFinite(parsedDate) ? parsedDate / 1000 : null;
+  }
+  if (value instanceof Date) return value.getTime() / 1000;
+  if (typeof value.toMillis === 'function') return value.toMillis() / 1000;
+  if (typeof value.seconds === 'number') return value.seconds;
+  if (typeof value._seconds === 'number') return value._seconds;
+  return null;
+}
+
 function secondsToHours(value) {
   const numeric = numberValue(value);
   if (numeric === null) return null;
@@ -780,15 +796,37 @@ async function fetchGoogleHealthData(connection, dateKey, timezone) {
   };
 }
 
-function buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError, fetchWarnings = [] }) {
+function buildSourceStatusDocument({
+  userId,
+  hasPayload,
+  observedAt,
+  syncAt,
+  lastError,
+  fetchWarnings = [],
+  previousSourceStatus = {},
+}) {
+  const previousObservedAt = unixSecondsValue(previousSourceStatus.lastObservedRecordAt);
+  const previousSuccessfulSyncAt = unixSecondsValue(previousSourceStatus.lastSuccessfulSyncAt);
+  const effectiveObservedAt = unixSecondsValue(observedAt) || previousObservedAt || null;
+  const effectiveSuccessfulSyncAt = hasPayload
+    ? syncAt
+    : previousSuccessfulSyncAt || null;
+  const lifecycleState = lastError
+    ? 'connected_error'
+    : hasPayload
+      ? 'connected_synced'
+      : effectiveObservedAt
+        ? 'connected_stale'
+        : 'connected_waiting_data';
+
   return {
     id: `${userId}_fitbit`,
     athleteUserId: userId,
     sourceFamily: 'fitbit',
-    lifecycleState: lastError ? 'connected_error' : hasPayload ? 'connected_synced' : 'connected_waiting_data',
+    lifecycleState,
     lastAttemptedSyncAt: syncAt,
-    lastSuccessfulSyncAt: hasPayload ? syncAt : null,
-    lastObservedRecordAt: observedAt || null,
+    ...(effectiveSuccessfulSyncAt ? { lastSuccessfulSyncAt: effectiveSuccessfulSyncAt } : {}),
+    ...(effectiveObservedAt ? { lastObservedRecordAt: effectiveObservedAt } : {}),
     lastErrorCode: lastError ? 'google_health_sync_failed' : null,
     lastErrorCategory: lastError ? 'google_health_sync' : null,
     // Optional-lane fetch failures from the most recent sync. Empty on a
@@ -837,6 +875,35 @@ function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, payload 
       confidenceLabel: 'stable',
     },
   };
+}
+
+async function findLatestFitbitObservedAt({ firestore, userId, dateKey, timezone, lookbackDays = 30 }) {
+  const domains = ['recovery', 'biometrics', 'activity', 'training'];
+  const refs = [];
+
+  for (let offset = 0; offset <= lookbackDays; offset += 1) {
+    const candidateDateKey = shiftDateKey(dateKey, -offset);
+    for (const domain of domains) {
+      refs.push(
+        firestore
+          .collection(HEALTH_CONTEXT_COLLECTIONS.sourceRecords)
+          .doc(`${userId}_fitbit_${domain}_${candidateDateKey}`)
+      );
+    }
+  }
+
+  const snapshots = refs.length ? await firestore.getAll(...refs) : [];
+  const observedTimes = snapshots
+    .filter((snapshot) => snapshot.exists)
+    .map((snapshot) => {
+      const data = snapshot.data() || {};
+      return unixSecondsValue(data.observedAt)
+        || unixSecondsValue(data.observedWindowEnd)
+        || unixSecondsValue(buildDayWindow(data.provenance?.rawDate || data.dateKey || dateKey, timezone).endAt);
+    })
+    .filter((value) => value !== null);
+
+  return observedTimes.length ? Math.max(...observedTimes) : null;
 }
 
 function existingWinner(existingSnapshot, domain) {
@@ -1026,14 +1093,36 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
   const hasPayload = Object.values(payloads).some((payload) => Object.keys(payload).length > 0);
   const observedAt = hasPayload ? buildDayWindow(requestedDateKey, timezone).endAt : null;
   const fetchWarnings = Array.isArray(googleHealthData.fetchWarnings) ? googleHealthData.fetchWarnings : [];
-  const sourceStatusDoc = buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError: null, fetchWarnings });
+  const firestore = admin.firestore();
+  const sourceStatusRef = firestore.collection(HEALTH_CONTEXT_COLLECTIONS.sourceStatus).doc(`${userId}_fitbit`);
+  const existingSourceStatusSnap = await sourceStatusRef.get();
+  const existingSourceStatus = existingSourceStatusSnap.data() || {};
+  const repairedObservedAt = observedAt
+    ? null
+    : await findLatestFitbitObservedAt({
+      firestore,
+      userId,
+      dateKey: requestedDateKey,
+      timezone,
+    });
+  const sourceStatusDoc = buildSourceStatusDocument({
+    userId,
+    hasPayload,
+    observedAt,
+    syncAt,
+    lastError: null,
+    fetchWarnings,
+    previousSourceStatus: {
+      ...existingSourceStatus,
+      lastObservedRecordAt: existingSourceStatus.lastObservedRecordAt || repairedObservedAt,
+    },
+  });
   const importedDomains = Object.entries(payloads)
     .filter(([, payload]) => Object.keys(payload).length > 0)
     .map(([domain]) => domain);
 
-  const firestore = admin.firestore();
   const batch = firestore.batch();
-  batch.set(firestore.collection(HEALTH_CONTEXT_COLLECTIONS.sourceStatus).doc(sourceStatusDoc.id), sourceStatusDoc, { merge: true });
+  batch.set(sourceStatusRef, sourceStatusDoc, { merge: true });
   batch.set(connectionRef, {
     lastSyncAttemptAt: admin.firestore.FieldValue.serverTimestamp(),
     lastRequestedSnapshotDateKey: requestedDateKey,
