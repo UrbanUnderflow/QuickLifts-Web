@@ -182,10 +182,10 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
   variants: [
     {
       id: 'baseline',
-      name: 'Baseline',
-      description: 'Current long paywall with standard onboarding.',
-      isEnabled: true,
-      weight: 34,
+      name: 'Baseline (long paywall)',
+      description: 'Retired control 2026-06-16. Long paywall with standard onboarding.',
+      isEnabled: false,
+      weight: 0,
       parameters: {
         macra_paywall_default_plan: 'annual',
         macra_paywall_layout_variant: 'trial_confidence_control',
@@ -194,10 +194,10 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
     },
     {
       id: 'variant_a',
-      name: 'Trial prep compact',
-      description: 'Current compact trial education and plan selection flow.',
+      name: 'Monthly + annual, both with trial',
+      description: 'Active flow 2026-06-16. Compact trial-prep + plan selection showing BOTH monthly and annual, each with the 3-day free trial (monthly trial added in ASC 2026-06-15).',
       isEnabled: true,
-      weight: 33,
+      weight: 100,
       parameters: {
         macra_paywall_default_plan: 'annual',
         macra_paywall_layout_variant: 'trial_confidence',
@@ -208,8 +208,8 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
       id: 'variant_b',
       name: 'Nora guided onboarding',
       description: 'Adds the early intent question, Nora prompt bubbles, simpler reminder copy, and compact paywall.',
-      isEnabled: true,
-      weight: 33,
+      isEnabled: false,
+      weight: 0,
       parameters: {
         macra_paywall_default_plan: 'annual',
         macra_paywall_layout_variant: 'trial_confidence',
@@ -219,7 +219,7 @@ const DEFAULT_EXPERIMENT: ExperimentDocument = {
     {
       id: 'variant_c',
       name: 'Hard paywall monthly',
-      description: 'Monthly-only value paywall with Nora guided onboarding, focused on paid conversion instead of free-trial starts.',
+      description: 'Retired 2026-06-16 — monthly-only, no trial. Converted ~1% with ~95% Apple-sheet cancels.',
       isEnabled: false,
       weight: 0,
       parameters: {

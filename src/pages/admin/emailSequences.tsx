@@ -87,6 +87,24 @@ type MacraScoreboardTier =
   | 'curiosity'
   | 'excluded';
 
+type MacraRetargetingEmailSend = {
+  sequenceId: string;
+  stateKey: string;
+  label: string;
+  sentAt: number;
+  deliveredAt: number | null;
+  openedAt: number | null;
+  clickedAt: number | null;
+  lastEventAt: number | null;
+  emailIssueAt: number | null;
+  status: string;
+  reason: string;
+  dueAt: number | null;
+  eligibilityAnchorAt: number | null;
+  openCount: number;
+  clickCount: number;
+};
+
 type MacraScoreboardSignals = {
   ageYears: number | null;
   completedOnboarding: boolean;
@@ -110,6 +128,9 @@ type MacraScoreboardSignals = {
   webOfferPaidAmount: number | null;
   webOfferPaidCurrency: string;
   webOfferPlan: string;
+  retargetingEmailSentAt: number | null;
+  retargetingEmailSentCount: number;
+  retargetingEmailSends: MacraRetargetingEmailSend[];
   stripeRetargetClickedAt: number | null;
   trialStartedAt: number | null;
   paidAt: number | null;
@@ -285,6 +306,38 @@ const MACRA_RETARGETING_FUNNEL_STEPS = {
     defaultDelayHours: 24,
   },
 };
+const MACRA_RETARGETING_SEQUENCE_REPORT_STEPS = [
+  {
+    sequenceId: MACRA_WEB_OFFER_SEQUENCE_ID,
+    stateKey: 'webOffer24h',
+    label: '24h web offer',
+  },
+  {
+    sequenceId: MACRA_RETARGETING_FUNNEL_STEPS.paywallCancelTrust.sequenceId,
+    stateKey: MACRA_RETARGETING_FUNNEL_STEPS.paywallCancelTrust.stateKey,
+    label: MACRA_RETARGETING_FUNNEL_STEPS.paywallCancelTrust.label,
+  },
+  {
+    sequenceId: MACRA_RETARGETING_FUNNEL_STEPS.webOfferProof.sequenceId,
+    stateKey: MACRA_RETARGETING_FUNNEL_STEPS.webOfferProof.stateKey,
+    label: MACRA_RETARGETING_FUNNEL_STEPS.webOfferProof.label,
+  },
+  {
+    sequenceId: MACRA_RETARGETING_FUNNEL_STEPS.paywallViewValue.sequenceId,
+    stateKey: MACRA_RETARGETING_FUNNEL_STEPS.paywallViewValue.stateKey,
+    label: MACRA_RETARGETING_FUNNEL_STEPS.paywallViewValue.label,
+  },
+  {
+    sequenceId: MACRA_RETARGETING_FUNNEL_STEPS.noTrial7dChallenge.sequenceId,
+    stateKey: MACRA_RETARGETING_FUNNEL_STEPS.noTrial7dChallenge.stateKey,
+    label: MACRA_RETARGETING_FUNNEL_STEPS.noTrial7dChallenge.label,
+  },
+  {
+    sequenceId: MACRA_RETARGETING_FUNNEL_STEPS.trialActivation.sequenceId,
+    stateKey: MACRA_RETARGETING_FUNNEL_STEPS.trialActivation.stateKey,
+    label: MACRA_RETARGETING_FUNNEL_STEPS.trialActivation.label,
+  },
+];
 const MACRA_QUALIFIED_TIERS = new Set<MacraScoreboardTier>([
   'paid',
   'trial_started',
@@ -1159,6 +1212,7 @@ const MACRA_SCOREBOARD_ACTIVITY_SIGNAL_KEYS: Array<keyof MacraScoreboardSignals>
   'checkoutStartedAt',
   'appleCancelAt',
   'webOfferSentAt',
+  'retargetingEmailSentAt',
   'webOfferOpenedAt',
   'webOfferCheckoutStartedAt',
   'webOfferConvertedAt',
@@ -1171,7 +1225,14 @@ const MACRA_SCOREBOARD_ACTIVITY_SIGNAL_KEYS: Array<keyof MacraScoreboardSignals>
 ];
 
 const macraScoreboardUserHasDateRangeActivity = (user: MacraScoreboardUser, range: MacraScoreboardDateRange): boolean =>
-  MACRA_SCOREBOARD_ACTIVITY_SIGNAL_KEYS.some((key) => scoreMillisInDateRange(user.signals[key], range));
+  MACRA_SCOREBOARD_ACTIVITY_SIGNAL_KEYS.some((key) => scoreMillisInDateRange(user.signals[key], range)) ||
+  user.signals.retargetingEmailSends.some(
+    (send) =>
+      scoreMillisInDateRange(send.sentAt, range) ||
+      scoreMillisInDateRange(send.openedAt, range) ||
+      scoreMillisInDateRange(send.clickedAt, range) ||
+      scoreMillisInDateRange(send.emailIssueAt, range)
+  );
 
 const mergeScoreboardNumberMap = (target: Record<string, number>, source: Record<string, any> | null | undefined) => {
   Object.entries(source || {}).forEach(([key, value]) => {
@@ -2159,6 +2220,51 @@ const buildMacraScoreboardUser = (args: {
       ['clickedAt', 'lastClickAt', 'lastEventAt']
     )
   );
+  const retargetingEmailSends = MACRA_RETARGETING_SEQUENCE_REPORT_STEPS.flatMap((step): MacraRetargetingEmailSend[] => {
+    const matchesSequence = (log: Record<string, any>) =>
+      normalizeScoreboardString(log.sequenceId || log.campaignId || log.templateDocId || log.templateId) === step.sequenceId;
+    const sentAt = maxScoreMillis(
+      state[`${step.stateKey}SentAt`],
+      latestEmailMillis(retargetingLogs, matchesSequence, ['sentAt', 'createdAt', 'updatedAt'])
+    );
+    if (!sentAt) return [];
+
+    return [
+      {
+        sequenceId: step.sequenceId,
+        stateKey: step.stateKey,
+        label: step.label,
+        sentAt,
+        deliveredAt: maxScoreMillis(
+          state[`${step.stateKey}DeliveredAt`],
+          latestEmailMillis(retargetingLogs, matchesSequence, ['deliveredAt'])
+        ),
+        openedAt: maxScoreMillis(
+          state[`${step.stateKey}OpenedAt`],
+          latestEmailMillis(retargetingLogs, matchesSequence, ['openedAt', 'lastOpenedAt'])
+        ),
+        clickedAt: maxScoreMillis(
+          state[`${step.stateKey}ClickedAt`],
+          latestEmailMillis(retargetingLogs, matchesSequence, ['clickedAt', 'lastClickAt', 'lastClickedAt'])
+        ),
+        lastEventAt: maxScoreMillis(
+          state[`${step.stateKey}LastEmailEventAt`],
+          latestEmailMillis(retargetingLogs, matchesSequence, ['lastEventAt', 'updatedAt'])
+        ),
+        emailIssueAt: maxScoreMillis(
+          state[`${step.stateKey}EmailIssueAt`],
+          latestEmailMillis(retargetingLogs, matchesSequence, ['emailIssueAt'])
+        ),
+        status: normalizeScoreboardString(state[`${step.stateKey}Status`]),
+        reason: normalizeScoreboardString(state[`${step.stateKey}ScheduledReason`]),
+        dueAt: maxScoreMillis(state[`${step.stateKey}DueAt`]),
+        eligibilityAnchorAt: maxScoreMillis(state[`${step.stateKey}EligibilityAnchorAt`]),
+        openCount: scoreNumber(state[`${step.stateKey}OpenCount`]) || 0,
+        clickCount: scoreNumber(state[`${step.stateKey}ClickCount`]) || 0,
+      },
+    ];
+  }).sort((a, b) => b.sentAt - a.sentAt);
+  const retargetingEmailSentAt = maxScoreMillis(...retargetingEmailSends.map((send) => send.sentAt));
   const appsFlyerStartTrialEvents = appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
   const appsFlyerPurchaseEvents = appsFlyerEventCount(appsFlyer, MACRA_APPSFLYER_PURCHASE_EVENT_NAMES);
   const appsFlyerTrialStartedAt = appsFlyerLatestEventAt(appsFlyer, MACRA_APPSFLYER_TRIAL_EVENT_NAMES);
@@ -2246,7 +2352,10 @@ const buildMacraScoreboardUser = (args: {
   else if (onboardingCompletedAt && Date.now() - onboardingCompletedAt >= 7 * 24 * 60 * 60 * 1000) suggestedLane = '7-day meal challenge';
 
   const nowMs = Date.now();
-  const latestRetargetingSentAt = maxScoreMillis(...MACRA_RETARGETING_SENT_STATE_FIELDS.map((field) => state[field]));
+  const latestRetargetingSentAt = maxScoreMillis(
+    retargetingEmailSentAt,
+    ...MACRA_RETARGETING_SENT_STATE_FIELDS.map((field) => state[field])
+  );
   const webOfferEngagedAt = maxScoreMillis(state.webOffer24hClickedAt, state.webOffer24hOpenedAt, stripeRetargetClickedAt, webOfferOpenedAt);
   const nextRetargetingEmail = (() => {
     if (paidAt || trialStartedAt || excluded || ageYears === null || data.macraEmailPreferences?.retargeting === false) return null;
@@ -2324,6 +2433,9 @@ const buildMacraScoreboardUser = (args: {
     webOfferPaidAmount,
     webOfferPaidCurrency,
     webOfferPlan,
+    retargetingEmailSentAt,
+    retargetingEmailSentCount: retargetingEmailSends.length,
+    retargetingEmailSends,
     stripeRetargetClickedAt,
     trialStartedAt,
     paidAt,
@@ -2638,6 +2750,7 @@ const EmailSequencesAdmin: React.FC = () => {
   const [lastTestCheckoutUrl, setLastTestCheckoutUrl] = useState('');
   const [sending, setSending] = useState(false);
     const [copyingScoreboard, setCopyingScoreboard] = useState(false);
+    const [copyingRetargetingBehaviorReport, setCopyingRetargetingBehaviorReport] = useState(false);
     const [sendingRetargetingNowUserId, setSendingRetargetingNowUserId] = useState<string | null>(null);
     const [runningRetargetingScheduler, setRunningRetargetingScheduler] = useState(false);
 
@@ -3773,6 +3886,108 @@ const EmailSequencesAdmin: React.FC = () => {
       .filter((user) => user.isQualified && (signalInRange(user.signals.webOfferConvertedAt) || signalInRange(user.signals.webOfferPaidAt)))
       .sort((a, b) => Math.max(b.signals.webOfferPaidAt || 0, b.signals.webOfferConvertedAt || 0) - Math.max(a.signals.webOfferPaidAt || 0, a.signals.webOfferConvertedAt || 0))
       .slice(0, 12);
+    const retargetingSendsInRange = (user: MacraScoreboardUser) =>
+      user.signals.retargetingEmailSends.filter((send) => signalInRange(send.sentAt));
+    const latestRetargetingSentAtInRange = (user: MacraScoreboardUser): number =>
+      Math.max(0, ...retargetingSendsInRange(user).map((send) => send.sentAt));
+    const retargetingSentUsers = users
+      .filter((user) => retargetingSendsInRange(user).length > 0)
+      .sort((a, b) => latestRetargetingSentAtInRange(b) - latestRetargetingSentAtInRange(a));
+    const retargetingEmailSendCount = retargetingSentUsers.reduce(
+      (total, user) => total + retargetingSendsInRange(user).length,
+      0
+    );
+    const firstRetargetingSentAtInRange = (user: MacraScoreboardUser): number | null => {
+      const sentAtValues = retargetingSendsInRange(user).map((send) => send.sentAt);
+      return sentAtValues.length ? Math.min(...sentAtValues) : null;
+    };
+    const userSignalAfterRetargetingSend = (user: MacraScoreboardUser, value: number | null): boolean => {
+      const firstSentAt = firstRetargetingSentAtInRange(user);
+      return Boolean(firstSentAt && value && value >= firstSentAt);
+    };
+    const retargetingSentOpenedUsers = retargetingSentUsers.filter((user) =>
+      user.signals.retargetingEmailSends.some((send) => signalInRange(send.sentAt) && send.openedAt)
+    ).length;
+    const retargetingSentClickedUsers = retargetingSentUsers.filter((user) =>
+      user.signals.retargetingEmailSends.some((send) => signalInRange(send.sentAt) && send.clickedAt) ||
+      userSignalAfterRetargetingSend(user, user.signals.stripeRetargetClickedAt)
+    ).length;
+    const retargetingSentCheckoutStarts = retargetingSentUsers.filter((user) =>
+      userSignalAfterRetargetingSend(user, user.signals.webOfferCheckoutStartedAt) ||
+      userSignalAfterRetargetingSend(user, user.signals.checkoutStartedAt)
+    ).length;
+    const retargetingSentTrialStarts = retargetingSentUsers.filter((user) =>
+      userSignalAfterRetargetingSend(user, user.signals.webOfferConvertedAt) ||
+      userSignalAfterRetargetingSend(user, user.signals.trialStartedAt)
+    ).length;
+    const retargetingSentPaidConversions = retargetingSentUsers.filter((user) =>
+      userSignalAfterRetargetingSend(user, user.signals.webOfferPaidAt) ||
+      userSignalAfterRetargetingSend(user, user.signals.paidAt)
+    ).length;
+    const retargetingSentNoTrackedBehavior = retargetingSentUsers.filter((user) => {
+      const opened = user.signals.retargetingEmailSends.some((send) => signalInRange(send.sentAt) && send.openedAt);
+      const clicked = user.signals.retargetingEmailSends.some((send) => signalInRange(send.sentAt) && send.clickedAt);
+      return !(
+        opened ||
+        clicked ||
+        userSignalAfterRetargetingSend(user, user.signals.paywallLastViewedAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.ctaTappedAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.appleCancelAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.stripeRetargetClickedAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.webOfferCheckoutStartedAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.webOfferConvertedAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.trialStartedAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.webOfferPaidAt) ||
+        userSignalAfterRetargetingSend(user, user.signals.paidAt)
+      );
+    }).length;
+    const retargetingSentByLaneRows = MACRA_RETARGETING_SEQUENCE_REPORT_STEPS.map((step) => {
+      const sentRows = retargetingSentUsers.flatMap((user) =>
+        user.signals.retargetingEmailSends
+          .filter((send) => send.sequenceId === step.sequenceId && signalInRange(send.sentAt))
+          .map((send) => ({ user, send }))
+      );
+      const usersForLane = new Set(sentRows.map((row) => row.user.id));
+      const openedUsers = new Set(sentRows.filter((row) => row.send.openedAt).map((row) => row.user.id));
+      const clickedUsers = new Set(sentRows.filter((row) => row.send.clickedAt).map((row) => row.user.id));
+      const checkoutUsers = new Set(
+        sentRows
+          .filter((row) =>
+            Boolean(
+              (row.user.signals.webOfferCheckoutStartedAt && row.user.signals.webOfferCheckoutStartedAt >= row.send.sentAt) ||
+                (row.user.signals.checkoutStartedAt && row.user.signals.checkoutStartedAt >= row.send.sentAt)
+            )
+          )
+          .map((row) => row.user.id)
+      );
+      const convertedUsers = new Set(
+        sentRows
+          .filter((row) =>
+            Boolean(
+              (row.user.signals.webOfferConvertedAt && row.user.signals.webOfferConvertedAt >= row.send.sentAt) ||
+                (row.user.signals.trialStartedAt && row.user.signals.trialStartedAt >= row.send.sentAt) ||
+                (row.user.signals.webOfferPaidAt && row.user.signals.webOfferPaidAt >= row.send.sentAt) ||
+                (row.user.signals.paidAt && row.user.signals.paidAt >= row.send.sentAt)
+            )
+          )
+          .map((row) => row.user.id)
+      );
+
+      return {
+        sequenceId: step.sequenceId,
+        label: step.label,
+        sentEmails: sentRows.length,
+        sentUsers: usersForLane.size,
+        openedUsers: openedUsers.size,
+        clickedUsers: clickedUsers.size,
+        checkoutStarts: checkoutUsers.size,
+        conversions: convertedUsers.size,
+        openRate: formatScoreboardPercent(openedUsers.size, usersForLane.size),
+        clickRate: formatScoreboardPercent(clickedUsers.size, usersForLane.size),
+        checkoutStartRate: formatScoreboardPercent(checkoutUsers.size, usersForLane.size),
+        conversionRate: formatScoreboardPercent(convertedUsers.size, usersForLane.size),
+      };
+    }).filter((row) => row.sentEmails > 0);
 
     const tierRows = MACRA_TIER_ORDER.map((tier) => ({
       tier,
@@ -3840,6 +4055,15 @@ const EmailSequencesAdmin: React.FC = () => {
       retargetingRecoveredRevenue,
       recoveryPool,
       recoveredUsers,
+      retargetingSentUsers,
+      retargetingEmailSendCount,
+      retargetingSentOpenedUsers,
+      retargetingSentClickedUsers,
+      retargetingSentCheckoutStarts,
+      retargetingSentTrialStarts,
+      retargetingSentPaidConversions,
+      retargetingSentNoTrackedBehavior,
+      retargetingSentByLaneRows,
       tierRows,
       disqualifierRows,
       lastScanSummary,
@@ -4086,6 +4310,18 @@ const EmailSequencesAdmin: React.FC = () => {
       webOfferTrialEndAtIso: user.signals.webOfferTrialEndAt ? new Date(user.signals.webOfferTrialEndAt).toISOString() : null,
       webOfferPaidAtIso: user.signals.webOfferPaidAt ? new Date(user.signals.webOfferPaidAt).toISOString() : null,
       stripeRetargetClickedAtIso: user.signals.stripeRetargetClickedAt ? new Date(user.signals.stripeRetargetClickedAt).toISOString() : null,
+      retargetingEmailSentAtIso: user.signals.retargetingEmailSentAt ? new Date(user.signals.retargetingEmailSentAt).toISOString() : null,
+      retargetingEmailSends: user.signals.retargetingEmailSends.map((send) => ({
+        ...send,
+        sentAtIso: new Date(send.sentAt).toISOString(),
+        deliveredAtIso: send.deliveredAt ? new Date(send.deliveredAt).toISOString() : null,
+        openedAtIso: send.openedAt ? new Date(send.openedAt).toISOString() : null,
+        clickedAtIso: send.clickedAt ? new Date(send.clickedAt).toISOString() : null,
+        lastEventAtIso: send.lastEventAt ? new Date(send.lastEventAt).toISOString() : null,
+        emailIssueAtIso: send.emailIssueAt ? new Date(send.emailIssueAt).toISOString() : null,
+        dueAtIso: send.dueAt ? new Date(send.dueAt).toISOString() : null,
+        eligibilityAnchorAtIso: send.eligibilityAnchorAt ? new Date(send.eligibilityAnchorAt).toISOString() : null,
+      })),
       trialStartedAtIso: user.signals.trialStartedAt ? new Date(user.signals.trialStartedAt).toISOString() : null,
       paidAtIso: user.signals.paidAt ? new Date(user.signals.paidAt).toISOString() : null,
       appsFlyerTrialStartedAtIso: user.signals.appsFlyerTrialStartedAt ? new Date(user.signals.appsFlyerTrialStartedAt).toISOString() : null,
@@ -4094,6 +4330,124 @@ const EmailSequencesAdmin: React.FC = () => {
       latestIntentAtIso: user.signals.latestIntentAt ? new Date(user.signals.latestIntentAt).toISOString() : null,
     },
   });
+
+  const buildRetargetingBehaviorUserExport = (user: MacraScoreboardUser, index: number) => {
+    const sendsInRange = user.signals.retargetingEmailSends.filter((send) => scoreMillisInDateRange(send.sentAt, selectedMacraScoreboardRange));
+    const firstSentAt = sendsInRange.length ? Math.min(...sendsInRange.map((send) => send.sentAt)) : null;
+    const latestSentAt = sendsInRange.length ? Math.max(...sendsInRange.map((send) => send.sentAt)) : null;
+    const signalAfterSend = (value: number | null) => Boolean(firstSentAt && value && value >= firstSentAt);
+    const behaviorEvents = [
+      sendsInRange.some((send) => send.openedAt) ? 'email_opened' : '',
+      sendsInRange.some((send) => send.clickedAt) || signalAfterSend(user.signals.stripeRetargetClickedAt) ? 'email_or_offer_clicked' : '',
+      signalAfterSend(user.signals.paywallLastViewedAt) ? 'paywall_viewed' : '',
+      signalAfterSend(user.signals.ctaTappedAt) ? 'paywall_cta_tapped' : '',
+      signalAfterSend(user.signals.appleCancelAt) ? 'apple_sheet_cancelled' : '',
+      signalAfterSend(user.signals.webOfferCheckoutStartedAt) || signalAfterSend(user.signals.checkoutStartedAt) ? 'checkout_started' : '',
+      signalAfterSend(user.signals.webOfferConvertedAt) || signalAfterSend(user.signals.trialStartedAt) ? 'trial_started' : '',
+      signalAfterSend(user.signals.webOfferPaidAt) || signalAfterSend(user.signals.paidAt) ? 'paid' : '',
+    ].filter(Boolean);
+
+    return {
+      row: index + 1,
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      tier: user.tier,
+      tierLabel: user.tierLabel,
+      suggestedLane: user.suggestedLane,
+      firstRetargetingSentAt: firstSentAt,
+      firstRetargetingSentAtIso: firstSentAt ? new Date(firstSentAt).toISOString() : null,
+      latestRetargetingSentAt: latestSentAt,
+      latestRetargetingSentAtIso: latestSentAt ? new Date(latestSentAt).toISOString() : null,
+      sentEmailCount: sendsInRange.length,
+      sentEmails: sendsInRange.map((send) => ({
+        sequenceId: send.sequenceId,
+        label: send.label,
+        status: send.status || 'sent',
+        reason: send.reason,
+        sentAt: send.sentAt,
+        sentAtIso: new Date(send.sentAt).toISOString(),
+        deliveredAt: send.deliveredAt,
+        deliveredAtIso: send.deliveredAt ? new Date(send.deliveredAt).toISOString() : null,
+        openedAt: send.openedAt,
+        openedAtIso: send.openedAt ? new Date(send.openedAt).toISOString() : null,
+        clickedAt: send.clickedAt,
+        clickedAtIso: send.clickedAt ? new Date(send.clickedAt).toISOString() : null,
+        openCount: send.openCount,
+        clickCount: send.clickCount,
+        emailIssueAt: send.emailIssueAt,
+        emailIssueAtIso: send.emailIssueAt ? new Date(send.emailIssueAt).toISOString() : null,
+      })),
+      behaviorAfterFirstSend: {
+        events: behaviorEvents,
+        hasTrackedBehavior: behaviorEvents.length > 0,
+        paywallViewCount: user.signals.paywallViewCount,
+        paywallLastViewedAt: signalAfterSend(user.signals.paywallLastViewedAt) ? user.signals.paywallLastViewedAt : null,
+        paywallLastViewedAtIso:
+          signalAfterSend(user.signals.paywallLastViewedAt) && user.signals.paywallLastViewedAt
+            ? new Date(user.signals.paywallLastViewedAt).toISOString()
+            : null,
+        ctaTappedAt: signalAfterSend(user.signals.ctaTappedAt) ? user.signals.ctaTappedAt : null,
+        ctaTappedAtIso: signalAfterSend(user.signals.ctaTappedAt) && user.signals.ctaTappedAt ? new Date(user.signals.ctaTappedAt).toISOString() : null,
+        appleCancelAt: signalAfterSend(user.signals.appleCancelAt) ? user.signals.appleCancelAt : null,
+        appleCancelAtIso:
+          signalAfterSend(user.signals.appleCancelAt) && user.signals.appleCancelAt ? new Date(user.signals.appleCancelAt).toISOString() : null,
+        offerOpenedAt: signalAfterSend(user.signals.webOfferOpenedAt) ? user.signals.webOfferOpenedAt : null,
+        offerOpenedAtIso:
+          signalAfterSend(user.signals.webOfferOpenedAt) && user.signals.webOfferOpenedAt
+            ? new Date(user.signals.webOfferOpenedAt).toISOString()
+            : null,
+        offerClickedAt: signalAfterSend(user.signals.stripeRetargetClickedAt) ? user.signals.stripeRetargetClickedAt : null,
+        offerClickedAtIso:
+          signalAfterSend(user.signals.stripeRetargetClickedAt) && user.signals.stripeRetargetClickedAt
+            ? new Date(user.signals.stripeRetargetClickedAt).toISOString()
+            : null,
+        checkoutStartedAt: signalAfterSend(user.signals.webOfferCheckoutStartedAt) ? user.signals.webOfferCheckoutStartedAt : null,
+        checkoutStartedAtIso:
+          signalAfterSend(user.signals.webOfferCheckoutStartedAt) && user.signals.webOfferCheckoutStartedAt
+            ? new Date(user.signals.webOfferCheckoutStartedAt).toISOString()
+            : null,
+        trialStartedAt:
+          signalAfterSend(user.signals.webOfferConvertedAt) || signalAfterSend(user.signals.trialStartedAt)
+            ? user.signals.webOfferConvertedAt || user.signals.trialStartedAt
+            : null,
+        trialStartedAtIso:
+          signalAfterSend(user.signals.webOfferConvertedAt) && user.signals.webOfferConvertedAt
+            ? new Date(user.signals.webOfferConvertedAt).toISOString()
+            : signalAfterSend(user.signals.trialStartedAt) && user.signals.trialStartedAt
+              ? new Date(user.signals.trialStartedAt).toISOString()
+              : null,
+        paidAt:
+          signalAfterSend(user.signals.webOfferPaidAt) || signalAfterSend(user.signals.paidAt)
+            ? user.signals.webOfferPaidAt || user.signals.paidAt
+            : null,
+        paidAtIso:
+          signalAfterSend(user.signals.webOfferPaidAt) && user.signals.webOfferPaidAt
+            ? new Date(user.signals.webOfferPaidAt).toISOString()
+            : signalAfterSend(user.signals.paidAt) && user.signals.paidAt
+              ? new Date(user.signals.paidAt).toISOString()
+              : null,
+      },
+      profile: {
+        ageYears: user.signals.ageYears,
+        completedOnboarding: user.signals.completedOnboarding,
+        goalDirection: user.signals.goalDirection,
+        pace: user.signals.pace,
+        activityLevel: user.signals.activityLevel,
+        biggestStruggle: user.signals.biggestStruggle,
+        currentWeightKg: user.signals.currentWeightKg,
+        goalWeightKg: user.signals.goalWeightKg,
+        macroCalories: user.signals.macroCalories,
+      },
+      nextRetargetingEmail: user.nextRetargetingEmail
+        ? {
+            ...user.nextRetargetingEmail,
+            dueAtIso: new Date(user.nextRetargetingEmail.dueAt).toISOString(),
+            anchorAtIso: new Date(user.nextRetargetingEmail.anchorAt).toISOString(),
+          }
+        : null,
+    };
+  };
 
   const copyMacraScoreboardReport = async () => {
     setCopyingScoreboard(true);
@@ -4243,7 +4597,70 @@ const EmailSequencesAdmin: React.FC = () => {
     }
   };
 
+  const copyMacraRetargetingBehaviorReport = async () => {
+    setCopyingRetargetingBehaviorReport(true);
+    try {
+      const sentUsers = macraScoreboardSummary.retargetingSentUsers;
+      const payload = serializeScoreboardValue({
+        reportType: 'macra-retargeted-user-behavior',
+        generatedAt: new Date().toISOString(),
+        refreshedAt: macraScoreboard.loadedAt,
+        dateRange: {
+          preset: selectedMacraScoreboardRange.preset,
+          label: selectedMacraScoreboardRangeLabel,
+          start: selectedMacraScoreboardRange.start,
+          end: selectedMacraScoreboardRange.end,
+          daysBack: selectedMacraScoreboardRange.daysBack,
+        },
+        sourceCounts: {
+          loadedUsers: macraScoreboard.users.length,
+          loadedUserLimit: macraScoreboard.userLimit,
+          emailLogsLoaded: macraScoreboard.emailLogCount,
+          purchaseLogsLoaded: macraScoreboard.purchaseLogCount,
+        },
+        sentAudienceSummary: {
+          sentUsers: sentUsers.length,
+          sentEmails: macraScoreboardSummary.retargetingEmailSendCount,
+          openedUsers: macraScoreboardSummary.retargetingSentOpenedUsers,
+          clickedUsers: macraScoreboardSummary.retargetingSentClickedUsers,
+          checkoutStartsAfterSend: macraScoreboardSummary.retargetingSentCheckoutStarts,
+          trialStartsAfterSend: macraScoreboardSummary.retargetingSentTrialStarts,
+          paidConversionsAfterSend: macraScoreboardSummary.retargetingSentPaidConversions,
+          noTrackedBehaviorAfterSend: macraScoreboardSummary.retargetingSentNoTrackedBehavior,
+          openRate: formatScoreboardPercent(macraScoreboardSummary.retargetingSentOpenedUsers, sentUsers.length),
+          clickRate: formatScoreboardPercent(macraScoreboardSummary.retargetingSentClickedUsers, sentUsers.length),
+          checkoutStartRate: formatScoreboardPercent(macraScoreboardSummary.retargetingSentCheckoutStarts, sentUsers.length),
+          trialStartRate: formatScoreboardPercent(macraScoreboardSummary.retargetingSentTrialStarts, sentUsers.length),
+          paidConversionRate: formatScoreboardPercent(macraScoreboardSummary.retargetingSentPaidConversions, sentUsers.length),
+        },
+        sentByLane: macraScoreboardSummary.retargetingSentByLaneRows,
+        highestIntentRecoveryPool: macraScoreboardSummary.recoveryPool.map(buildScoreboardUserExport),
+        recoveredPeople: macraScoreboardSummary.recoveredUsers.map(buildScoreboardUserExport),
+        sentPeople: sentUsers.map(buildRetargetingBehaviorUserExport),
+      });
+      const report = [
+        'Macra Retargeted User Behavior Report',
+        `Generated: ${new Date().toLocaleString()}`,
+        `Range: ${selectedMacraScoreboardRangeLabel}`,
+        `Sent users: ${sentUsers.length}`,
+        '',
+        '```json',
+        JSON.stringify(payload, null, 2),
+        '```',
+      ].join('\n');
+
+      await navigator.clipboard.writeText(report);
+      setMessage({ type: 'success', text: 'Retargeting behavior report copied to clipboard.' });
+      dispatch(showToast({ message: 'Retargeting behavior report copied.', type: 'success' }));
+    } catch (_error) {
+      setMessage({ type: 'error', text: 'Failed to copy retargeting behavior report.' });
+    } finally {
+      setCopyingRetargetingBehaviorReport(false);
+    }
+  };
+
   const canCopyMacraScoreboard = Boolean(macraScoreboard.loadedAt || macraScoreboard.users.length || macraScoreboard.appsFlyerSummary);
+  const canCopyRetargetingBehaviorReport = Boolean(macraScoreboard.loadedAt || macraScoreboardSummary.retargetingSentUsers.length);
   const adminTabs = [
     {
       id: 'scoreboard' as const,
@@ -4831,8 +5248,24 @@ const EmailSequencesAdmin: React.FC = () => {
             <div className="mt-4 rounded-lg border border-zinc-800 bg-[#1a1e24] overflow-hidden">
               <div className="flex flex-col gap-1 border-b border-zinc-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-sm font-semibold text-zinc-200">Highest-Intent Recovery Pool</h3>
-                <div className="text-xs text-zinc-500">
-                  Email logs loaded: {macraScoreboard.emailLogCount} · Purchase logs loaded: {macraScoreboard.purchaseLogCount}
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={copyMacraRetargetingBehaviorReport}
+                    disabled={copyingRetargetingBehaviorReport || !canCopyRetargetingBehaviorReport}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                      copyingRetargetingBehaviorReport || !canCopyRetargetingBehaviorReport
+                        ? 'cursor-not-allowed bg-zinc-800 text-zinc-500'
+                        : 'border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800'
+                    }`}
+                    title="Copy behavior report for users sent retargeting emails"
+                  >
+                    {copyingRetargetingBehaviorReport ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+                    Copy report
+                  </button>
+                  <div className="text-xs text-zinc-500">
+                    Sent users: {macraScoreboardSummary.retargetingSentUsers.length} · Email logs loaded: {macraScoreboard.emailLogCount} · Purchase logs loaded: {macraScoreboard.purchaseLogCount}
+                  </div>
                 </div>
               </div>
               <div className="overflow-x-auto">
