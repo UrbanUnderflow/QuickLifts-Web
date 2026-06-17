@@ -2,10 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ClipboardList, ShieldAlert, ShieldCheck, MonitorPlay } from 'lucide-react';
-import { useDispatch } from 'react-redux';
-import { toggleDevMode } from '../../redux/devModeSlice';
-import { initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ClipboardList, ShieldAlert, ShieldCheck, MonitorPlay } from 'lucide-react';
 
 interface AdminCardProps {
   title: string;
@@ -552,120 +549,6 @@ const adminCardsData = [
   }
 ];
 
-const EnvironmentSwitcher: React.FC = () => {
-  const dispatch = useDispatch();
-  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
-  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  // Reflect the actual Firebase mode so the switcher can't drift from what
-  // Firebase is actually connected to (Redux state defaults to false even
-  // when resolveClientFirebaseMode returns true on fresh localhost visits).
-  const [isDevelopment, setIsDevelopment] = React.useState<boolean>(false);
-
-  React.useEffect(() => {
-    const actualMode = isUsingDevFirebase();
-    setIsDevelopment(actualMode);
-    const savedMode = window.localStorage.getItem('devMode');
-    if (savedMode !== String(actualMode)) {
-      window.localStorage.setItem('devMode', String(actualMode));
-    }
-  }, []);
-
-  const handleEnvironmentSwitch = (newMode: boolean) => {
-    if (newMode === isDevelopment) {
-      setIsDropdownOpen(false);
-      return; // No change needed
-    }
-
-    console.log('[Admin Environment Switch] Switching environment:', {
-      from: isDevelopment ? 'development' : 'production',
-      to: newMode ? 'development' : 'production',
-      isLocalhost,
-      source: isLocalhost ? '.env.local' : (newMode ? 'firebaseConfigs' : 'Netlify'),
-      timestamp: new Date().toISOString()
-    });
-
-    window.localStorage.setItem('devMode', String(newMode));
-    dispatch(toggleDevMode());
-    initializeFirebase(newMode);
-
-    setIsDropdownOpen(false);
-
-    // Add a slight delay before reloading to ensure Firebase initialization completes
-    setTimeout(() => {
-      window.location.reload();
-    }, 300);
-  };
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-[#1a1e24] text-white hover:bg-[#262a30] transition-colors"
-        title={`Currently using ${isDevelopment ? 'development' : 'production'} configuration`}
-      >
-        <Server className="w-4 h-4" />
-        <span className="text-sm font-medium">
-          {isDevelopment ? 'Dev Environment' : 'Production Environment'}
-        </span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isDropdownOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsDropdownOpen(false)}
-          />
-
-          {/* Dropdown */}
-          <div className="absolute top-full mt-1 right-0 w-64 bg-[#1a1e24] border border-zinc-700 rounded-lg shadow-xl z-20">
-            <div className="p-2">
-              <button
-                onClick={() => handleEnvironmentSwitch(false)}
-                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${!isDevelopment
-                  ? 'bg-[#E0FE10] text-black font-medium'
-                  : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
-                  }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${!isDevelopment ? 'bg-black' : 'bg-zinc-600'}`} />
-                  <div>
-                    <div className="font-medium">Production</div>
-                    <div className="text-xs opacity-75">Live Firebase project</div>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleEnvironmentSwitch(true)}
-                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${isDevelopment
-                  ? 'bg-[#E0FE10] text-black font-medium'
-                  : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
-                  }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isDevelopment ? 'bg-black' : 'bg-zinc-600'}`} />
-                  <div>
-                    <div className="font-medium">Development</div>
-                    <div className="text-xs opacity-75">Dev Firebase project</div>
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <div className="border-t border-zinc-700 p-2">
-              <div className="text-xs text-zinc-500 px-3 py-1">
-                Config source: {isLocalhost ? '.env.local' : (isDevelopment ? 'firebaseConfigs' : 'Netlify')}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
 const AdminHome: React.FC = () => {
   const [cardSearch, setCardSearch] = React.useState('');
 
@@ -697,8 +580,6 @@ const AdminHome: React.FC = () => {
               </span>
               Admin Dashboard
             </h1>
-
-            <EnvironmentSwitcher />
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-6">

@@ -17,7 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { auth, db } from '../../api/firebase/config';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
 
@@ -526,6 +526,39 @@ const ExperimentsPage: React.FC = () => {
   const [backfilling, setBackfilling] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [rcBackfill, setRcBackfill] = useState<{ loading: boolean; result: string | null; error: string | null }>({
+    loading: false,
+    result: null,
+    error: null,
+  });
+
+  // Admin-gated backfill of `registrationComplete` for existing Macra users.
+  // Goes through the Admin SDK (server) because users/{uid} rules are
+  // owner-only — the client SDK can't write other users' docs.
+  const runRegistrationBackfill = async (commit: boolean) => {
+    setRcBackfill({ loading: true, result: null, error: null });
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Not signed in');
+      const res = await fetch('/.netlify/functions/backfill-macra-registration-complete', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${idToken}`,
+          ...(auth.currentUser?.email ? { 'x-admin-email': auth.currentUser.email } : {}),
+        },
+        body: JSON.stringify({ commit }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
+      const summary = data.dryRun
+        ? `Dry run: ${data.eligible} of ${data.scanned} Macra users would be updated.`
+        : `Updated ${data.updated} of ${data.scanned} Macra users (registrationComplete = true).`;
+      setRcBackfill({ loading: false, result: summary, error: null });
+    } catch (e) {
+      setRcBackfill({ loading: false, result: null, error: e instanceof Error ? e.message : String(e) });
+    }
+  };
 
   const enabledWeight = useMemo(
     () => experiment.variants
@@ -1148,6 +1181,36 @@ const ExperimentsPage: React.FC = () => {
 
           {activeTab === 'setup' ? (
             <>
+          <section className="mb-6 rounded-2xl border border-zinc-800 bg-[#11151b] p-5">
+            <div className="mb-3">
+              <h3 className="text-sm font-black uppercase tracking-wide text-zinc-200">User maintenance</h3>
+              <p className="mt-1 text-xs text-zinc-400">
+                Backfill <code className="text-zinc-300">registrationComplete</code> for Macra users who finished
+                onboarding before iOS wrote the flag. New users self-heal, so this is for one-off cleanups.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => runRegistrationBackfill(false)}
+                disabled={rcBackfill.loading}
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm font-bold text-zinc-200 transition hover:border-zinc-500 disabled:opacity-50"
+              >
+                {rcBackfill.loading ? 'Working…' : 'Preview (dry run)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => runRegistrationBackfill(true)}
+                disabled={rcBackfill.loading}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#E0FE10] px-3 py-2 text-sm font-black text-black transition hover:bg-[#c9e70e] disabled:opacity-50"
+              >
+                {rcBackfill.loading ? 'Working…' : 'Run backfill'}
+              </button>
+            </div>
+            {rcBackfill.result && <p className="mt-3 text-sm text-emerald-200">{rcBackfill.result}</p>}
+            {rcBackfill.error && <p className="mt-3 text-sm text-red-300">{rcBackfill.error}</p>}
+          </section>
+
           <section className="mb-6 rounded-2xl border border-zinc-800 bg-[#11151b] p-5">
             <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>

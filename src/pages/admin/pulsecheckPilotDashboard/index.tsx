@@ -26,7 +26,6 @@ import {
 import { signOut } from 'firebase/auth';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import SignInModal from '../../../components/SignInModal';
-import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { auth } from '../../../api/firebase/config';
@@ -1251,8 +1250,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-2.5 xl:justify-end">
-                    <LocalFirebaseModeButton />
-
                     {demoModeEnabled ? (
                       <button
                         type="button"

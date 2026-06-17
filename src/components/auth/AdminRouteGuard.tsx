@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { isDevAuthBypassEnabled } from '../../utils/devAuthBypass';
+import AdminNavBanner from '../admin/AdminNavBanner';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -11,9 +11,14 @@ interface AdminRouteGuardProps {
 const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
   const user = useUser();
   const userLoading = useUserLoading();
-  const router = useRouter();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const renderAdminSurface = (content: React.ReactNode) => (
+    <>
+      <AdminNavBanner />
+      {content}
+    </>
+  );
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -36,37 +41,56 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
     checkAdmin();
   }, [user, userLoading]);
 
-  useEffect(() => {
-    if (loading) return;
-    if (user && isAdmin === false) {
-      router.replace('/');
-    }
-  }, [isAdmin, loading, router, user]);
-
   // Local-only escape hatch: when running the dev server with the bypass flag
   // set, render admin content without requiring a signed-in admin. Hard-gated
   // against production builds inside isDevAuthBypassEnabled().
   if (isDevAuthBypassEnabled()) {
-    return <>{children}</>;
+    return renderAdminSurface(children);
   }
 
   if (loading || userLoading) {
-    return <div className="text-center mt-10">Checking admin access...</div>;
+    return renderAdminSurface(
+      <div className="min-h-[55vh] bg-[#111417] px-4 py-10 text-center text-sm text-zinc-400">
+        Checking admin access...
+      </div>
+    );
   }
 
   if (!user) {
-    return <div className="text-center mt-10">Sign in to continue.</div>;
+    return renderAdminSurface(
+      <div className="min-h-[55vh] bg-[#111417] px-4 py-12 text-white">
+        <div className="mx-auto max-w-md rounded-xl border border-zinc-800 bg-[#1a1e24] p-6 text-center shadow-xl">
+          <div className="text-lg font-semibold">Sign in to continue</div>
+          <p className="mt-2 text-sm text-zinc-400">
+            Use the admin banner to sign in, then this page will continue after your account is verified.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (isAdmin === null) {
-    return <div className="text-center mt-10">Checking admin access...</div>;
+    return renderAdminSurface(
+      <div className="min-h-[55vh] bg-[#111417] px-4 py-10 text-center text-sm text-zinc-400">
+        Checking admin access...
+      </div>
+    );
   }
 
   if (!isAdmin) {
-    return null;
+    return renderAdminSurface(
+      <div className="min-h-[55vh] bg-[#111417] px-4 py-12 text-white">
+        <div className="mx-auto max-w-md rounded-xl border border-rose-500/25 bg-rose-500/10 p-6 text-center shadow-xl">
+          <div className="text-lg font-semibold text-rose-100">Admin access required</div>
+          <p className="mt-2 text-sm text-rose-100/70">
+            This signed-in account is not allowed to view admin tools. Use the banner account control to sign out and switch accounts.
+          </p>
+        </div>
+      </div>
+    );
   }
 
-  return <>{children}</>;
+  return renderAdminSurface(children);
 };
 
 export default AdminRouteGuard;

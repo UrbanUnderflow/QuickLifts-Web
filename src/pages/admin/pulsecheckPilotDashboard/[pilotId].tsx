@@ -27,7 +27,6 @@ import {
   X,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
-import { LocalFirebaseModeButton } from '../../../components/admin/pilot-dashboard/LocalFirebaseModeButton';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import PilotAthleteCommunicationModal, {
   type PilotAthleteCommunicationChannel,
@@ -1809,13 +1808,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         {
           label: 'Check-in only',
           value: String(visibleAdherenceOrchestrator.checkInOnlyDays),
-          helper: 'Athletes gave Nora the signal but did not close the assigned rep.',
+          helper: 'Athletes gave Nora the signal but did not close the assigned task.',
           className: 'text-sky-100',
         },
         {
           label: 'Task only',
           value: String(visibleAdherenceOrchestrator.taskOnlyDays),
-          helper: 'Assigned rep completed without the daily check-in signal.',
+          helper: 'Assigned task completed without the daily check-in signal.',
           className: 'text-violet-100',
         },
         {
@@ -2881,7 +2880,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 >
                   {demoModeEnabled ? 'Demo dataset' : 'Live dataset'}
                 </span>
-                <LocalFirebaseModeButton />
               </div>
             </div>
           </header>
