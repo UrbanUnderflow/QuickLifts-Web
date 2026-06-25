@@ -17,3 +17,17 @@ Purchase logs, cancel reasons, user state, and retargeting state tell us why a r
 ### 3. Source quality decides what can scale
 
 AppsFlyer imports help us separate message strength from source quality. If active `variant_a` looks healthy only for part of the acquisition mix, we should not stretch that result into a broad partner claim. Source-aware reading keeps the funnel story specific, protects trust, and tells us which message is safe to scale versus which one only works under a narrower set of inputs.
+
+## Copy snippets for brands
+
+### Brand partner update — hold until the refreshed read is confirmed
+
+"Before we move any partner-facing funnel message forward, we need the active `variant_a` result refreshed against the current Scoreboard and Experiments state. If that refreshed read still supports the current trial-start story, we keep the message focused and specific. If it has shifted, we update the partner framing from the live result rather than from the prior narrative."
+
+### Brand partner update — if refreshed variant_a is holding
+
+"We refreshed active `variant_a` before reviewing this partner message, and the current read still supports the existing funnel story. The recommendation is to keep the message grounded in what the funnel is actually proving right now: what someone is starting, why the first experience is landing, and where the present conversion strength is coming from. We should not broaden the claim beyond what the refreshed data can support."
+
+### Brand partner update — if refreshed variant_a softens
+
+"We refreshed active `variant_a` before making this recommendation, and the updated read suggests the current funnel story needs tightening. Before changing the brand-facing message, we are checking purchase logs, cancel reasons, user state, retargeting state, and AppsFlyer source quality to separate a message problem from a source problem. The next move is one measured copy adjustment tied to what the refreshed readout still shows as believable and conversion-safe."
