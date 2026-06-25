@@ -382,6 +382,7 @@ Root cause:
 - the repeated failure pa..."
 - **[2026-06-25] Scout** — Step "Add a `Recommended Test` section to `docs/research/maintain-a-macra-decision-log-tying-every-operational-change-to--competitive-brief-2026-06-25.md` that defines one concrete pilot decision-log entry format and one first operational change to track, including the expected primary metric, one guardrail metric, and the review cadence." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "OpenClaw stalled: no activity for 300s"
 - **[2026-06-25] Solara** — Step "In the same file, add `## Copy snippets for gyms` and `## Copy snippets for run clubs` sections, each with audience-specific copy blocks that translate the refreshed `variant_a` readout into concrete next-step funnel messaging for that partner type." still had issues after 2 retries. Output signals: \bmissing\b. Last output: "The real failure pattern here is that previous attempts focused on *how* to patch instead of guaranteeing a final file s..."
+- **[2026-06-25] Nora** — Step "In `api/partners/onboard.ts`, import the shared `Partner` type from `server/models/partners.ts` and normalize the validated request body into that type before any Firestore write occurs." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "OpenClaw stalled: no activity for 300s"
 ---
 
 ## Operational Rules
