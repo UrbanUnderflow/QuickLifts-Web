@@ -41,6 +41,7 @@ function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestB
   const errors: { field: string; message: string }[] = [];
 
   const type = body?.type;
+  const name = body?.name;
   const contactEmail = body?.contactEmail;
   const onboardingStage = body?.onboardingStage;
   const id = body?.id;
@@ -53,6 +54,13 @@ function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestB
     });
   }
 
+  if (typeof name !== 'string' || !name.trim()) {
+    errors.push({
+      field: 'name',
+      message: 'name is required and must be a non-empty string.',
+    });
+  }
+
   if (!isValidEmail(contactEmail)) {
     errors.push({
       field: 'contactEmail',
@@ -60,10 +68,10 @@ function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestB
     });
   }
 
-  if (onboardingStage != null && typeof onboardingStage !== 'string') {
+  if (typeof onboardingStage !== 'string' || !onboardingStage.trim()) {
     errors.push({
       field: 'onboardingStage',
-      message: 'onboardingStage, if provided, must be a string.',
+      message: 'onboardingStage is required and must be a non-empty string.',
     });
   }
 
@@ -90,8 +98,9 @@ function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestB
     value: {
       id,
       type,
+      name: name.trim(),
       contactEmail,
-      onboardingStage,
+      onboardingStage: onboardingStage.trim(),
       firstRoundCreated,
     },
   };

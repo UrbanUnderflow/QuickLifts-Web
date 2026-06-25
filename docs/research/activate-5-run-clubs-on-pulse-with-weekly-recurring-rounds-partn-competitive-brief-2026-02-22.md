@@ -38,12 +38,18 @@ Which established run clubs appear most suitable for a Pulse partnership built a
 - **City / market:** Global community-run event network anchored in local parks, originally founded in Bushy Park in the UK and now active internationally. Source: <https://www.parkrun.com/>
 - **Evidence of recurring group runs:** parkrun's origin story shows an explicitly recurring weekly pattern: it began with 13 runners in Bushy Park, later grew to **378 people turning up each week**, and expanded into simultaneous recurring local events. Source: <https://www.parkrun.com/>
 - **Scale signal:** The official site says parkrun is now an international family of **over nine million registered parkrunners**, making it the clearest scale-positive example in this set. Source: <https://www.parkrun.com/>
+- **Digital stack:** parkrun runs on a centralized web platform that combines origin story, event discovery, registration identity, and local-event structure. Source: <https://www.parkrun.com/>
+- **Attendance / accountability:** The published history emphasizes weekly turnout counts and recorded finishes, indicating a strong event-results layer that tracks participation over time instead of relying only on social chatter. Source: <https://www.parkrun.com/>
+- **Social content generation:** Unverified from the fetched page, but the scale and local-event structure imply a large volume of community storytelling around weekly participation even if the homepage excerpt emphasizes participation records more than media features. Source: <https://www.parkrun.com/>
 
 ### 5. GoodGym
 - **Public URL:** <https://www.goodgym.org/>
 - **City / market:** UK-based community that combines group running with volunteering and local community projects. Source: <https://www.goodgym.org/>
 - **Evidence of recurring group runs:** GoodGym organizes around recurring city-based group activity rather than one-off events, and the platform is built for members to sign up, participate regularly, and stay involved in local community runs. Source: <https://www.goodgym.org/>
 - **Scale signal:** Exact weekly active counts were not visible in the fetched homepage, so member scale should be treated as **Unverified** at the city level; however, the organization-wide multi-city structure and dedicated member platform are a meaningful equivalent scale signal for pilot targeting. Source: <https://www.goodgym.org/>
+- **Digital stack:** GoodGym appears to operate on a custom membership platform rather than just a social page, which is notable because it means organizers already accept structured digital coordination around local activity. Source: <https://www.goodgym.org/>
+- **Attendance / accountability:** The site is built around sign-up and ongoing participation, suggesting stronger operational accountability than a pure "show up if you want" model, even though exact check-in mechanics were not visible in the fetched excerpt. Source: <https://www.goodgym.org/>
+- **Social content generation:** Unverified from the homepage alone, but GoodGym's branded platform and city structure suggest room for post-run reporting and cause-oriented storytelling tied to each recurring session. Source: <https://www.goodgym.org/>
 
 ## Differentiated Opportunities for Pulse
 
