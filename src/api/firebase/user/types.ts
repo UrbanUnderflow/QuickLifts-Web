@@ -1,4 +1,5 @@
 // src/api/firebase/user/types.ts
+import type { DocumentReference } from 'firebase/firestore';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import type { LegalAcceptanceRecord } from '../../../utils/legalAcceptance';
 import type { UserWritePatch } from './writeContract';
@@ -48,6 +49,34 @@ export class ProfileImage {
   }
 }
 
+export type PartnerSourceType = 'brand' | 'gym' | 'runClub';
+
+export interface PartnerSource {
+  type: PartnerSourceType;
+  partnerId: DocumentReference;
+}
+
+const isDocumentReference = (value: unknown): value is DocumentReference => {
+  return !!value && typeof value === 'object' && typeof (value as DocumentReference).path === 'string';
+};
+
+const normalizePartnerSource = (value: unknown): PartnerSource | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const candidate = value as Record<string, unknown>;
+  const type = candidate.type;
+  const partnerId = candidate.partnerId;
+
+  if ((type === 'brand' || type === 'gym' || type === 'runClub') && isDocumentReference(partnerId)) {
+    return {
+      type,
+      partnerId,
+    };
+  }
+
+  return undefined;
+};
+
 export class User {
   id: string;
   displayName: string;
@@ -79,6 +108,7 @@ export class User {
   subscriptionType: SubscriptionType;
   subscriptionPlatform: SubscriptionPlatform;
   referrer?: string;
+  partnerSource?: PartnerSource;
   isCurrentlyActive: boolean;
   videoCount: number;
   /** Total completed workout summaries (denormalized for club stats and dashboards). */
@@ -140,6 +170,7 @@ export class User {
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
     this.subscriptionPlatform = data.subscriptionPlatform || SubscriptionPlatform.Web;
     this.referrer = data.referrer || '';
+    this.partnerSource = normalizePartnerSource(data.partnerSource);
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
     this.workoutCount = typeof data.workoutCount === 'number' ? data.workoutCount : 0;
@@ -228,6 +259,12 @@ export class User {
       subscriptionType: this.subscriptionType,
       subscriptionPlatform: this.subscriptionPlatform,
       referrer: this.referrer,
+      partnerSource: this.partnerSource
+        ? {
+            type: this.partnerSource.type,
+            partnerId: this.partnerSource.partnerId,
+          }
+        : null,
       isCurrentlyActive: this.isCurrentlyActive,
       videoCount: this.videoCount,
       workoutCount: this.workoutCount,
