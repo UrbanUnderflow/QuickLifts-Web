@@ -64,7 +64,15 @@ Midnight Runners and Black Girls RUN! both show that the run itself is also a co
 
 ## Recommended Test
 
-_To be populated with one testable activation motion for run clubs, including target club profile, the Pulse workflow to validate, and measurable success criteria._
+### Pilot one city-hub run club with a weekly recurring round template
+- **Target club profile:** Start with a city-based club that already runs at least weekly, already produces visually social sessions, and appears to have organizer-led coordination without an overly rigid enterprise toolchain. Midnight Runners-style city crews are the clearest fit, with November Project-style chapters as a secondary fit because both already have repeat cadence and social identity. Source: <https://www.midnightrunners.com/>; <https://november-project.com/>
+- **Pulse workflow to validate:** Give one organizer a reusable Pulse round template for a four-week test: publish the weekly run, set route/theme/check-in prompts, capture attendance or self-check-in, collect one post-run recap, and publish creator-ready artifacts from the same flow. The core product question is whether Pulse can replace the fragmented combination of static web info, informal accountability, and ad hoc recap behavior with one repeatable weekly operating loop. Source: <https://www.midnightrunners.com/>; <https://november-project.com/>; <https://www.parkrun.com/>
+- **Success criteria:**
+  - **Weekly round creation rate:** organizer successfully creates **4 of 4** scheduled weekly rounds in Pulse during the pilot.
+  - **Member activation rate:** at least **25%** of the club's expected weekly participants join or check in through Pulse at least once during the four-week window.
+  - **Repeat participation signal:** at least **40%** of Pulse-activated members participate in **2 or more** weekly rounds during the test.
+  - **Creator-content output:** each weekly round produces at least **1 organizer recap** and **3 member-generated content artifacts** (photo, story, quote, or recap prompt response) that can be reused externally.
+  - **Operational trust signal:** organizer reports that Pulse reduced coordination friction versus the prior workflow and is willing to continue for another month without manual concierge support. 
 
 ## Sources
 

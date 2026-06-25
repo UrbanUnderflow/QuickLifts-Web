@@ -1,18 +1,20 @@
 export type PartnerType = 'brand' | 'gym' | 'runClub';
 
+export interface FirestoreTimestampObject {
+  toDate?: () => Date;
+  seconds?: number;
+  nanoseconds?: number;
+  _seconds?: number;
+  _nanoseconds?: number;
+}
+
 export type FirestoreTimestampLike =
   | Date
   | number
   | string
   | null
   | undefined
-  | {
-      toDate?: () => Date;
-      seconds?: number;
-      nanoseconds?: number;
-      _seconds?: number;
-      _nanoseconds?: number;
-    };
+  | FirestoreTimestampObject;
 
 export interface Partner {
   id: string;
