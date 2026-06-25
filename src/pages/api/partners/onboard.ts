@@ -51,6 +51,12 @@ interface ValidationResult<T> {
   errors?: { field: string; message: string }[];
 }
 
+interface OnboardPartnerResponseBody {
+  success: true;
+  partnerId: string;
+  partner: Partner;
+}
+
 function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestBody> {
   const errors: { field: string; message: string }[] = [];
 
@@ -122,7 +128,7 @@ function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestB
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse
+  res: NextApiResponse<OnboardPartnerResponseBody | { success: false; error: string; details?: { field: string; message: string }[] }>
 ) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
