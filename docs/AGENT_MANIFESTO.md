@@ -380,6 +380,7 @@ Root cause:
 - not a missing-tool issue
 - the scaffold file already exists
 - the repeated failure pa..."
+- **[2026-06-25] Scout** — Step "Add a `Recommended Test` section to `docs/research/maintain-a-macra-decision-log-tying-every-operational-change-to--competitive-brief-2026-06-25.md` that defines one concrete pilot decision-log entry format and one first operational change to track, including the expected primary metric, one guardrail metric, and the review cadence." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "OpenClaw stalled: no activity for 300s"
 ---
 
 ## Operational Rules
