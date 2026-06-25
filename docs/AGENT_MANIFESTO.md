@@ -374,6 +374,12 @@ Root cause:
 - the content was already present
 - the failure pattern ap..."
 - **[2026-06-25] Solara** — Step "In the same file, add `## Copy snippets for gyms` and `## Copy snippets for run clubs` sections, each with audience-specific copy blocks that translate the refreshed active `variant_a` experiment readout into next-step funnel messaging for that partner type." still had issues after 2 retries. Output signals: \bmissing\b. Last output: "The failure wasn’t a missing tool. It was that prior attempts kept mixing diagnosis, status narration, and partial outpu..."
+- **[2026-06-25] Sage** — Step "Create `docs/research/macra-event-semantics-trust-2026-06-25.md` with fixed sections for `af_start_trial`, `af_purchase`, `af_subscribe`, `purchase_cancelled`, `web_checkout_started`, `StoreKit cancel`, `age eligibility`, `missing birthdate blocks`, `trial activation`, `Ambiguities`, and `Trust Guardrails`." still had issues after 2 retries. Output signals: \bmissing\b. Last output: "Step 1 is complete.
+
+Root cause:
+- not a missing-tool issue
+- the scaffold file already exists
+- the repeated failure pa..."
 ---
 
 ## Operational Rules
