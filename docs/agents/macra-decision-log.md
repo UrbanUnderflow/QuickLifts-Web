@@ -24,9 +24,9 @@ selectedAction: Hold Apple Search Ads spend at the current level and refine the 
 
 whyNow: The first daily snapshot shows the bottleneck is downstream, not top-of-funnel: **533 onboarding starts** became **317 paywall CTA presses**, **94 initiated checkouts**, and only **5 trial starts**, while **74 StoreKit purchase cancels** indicate trust or fit pressure. Apple Search Ads quality is directionally stronger than organic, but the snapshot explicitly says the active `variant_a` experiment layer is **mixed / operationally stale for decisioning**, so scaling acquisition now would amplify noise faster than value. Source: `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
-expectedMetricMovement:
+expectedMetricMovement: Improve the trial-start path downstream of traffic acquisition, with the next acceptable win defined as a higher **initiated checkout → trial start** conversion rate than today’s **5.3%** (5 trials from 94 initiated checkouts), while also improving the broader **start → trial** rate above today’s **0.9%** only if that lift comes from a cleaner paywall / checkout path rather than more top-of-funnel volume. Source: `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
-guardrails:
+guardrails: Hold the move inside trust constraints surfaced by the snapshot: **74 StoreKit purchase cancels** already create cancel-pressure risk; organic traffic carries most of that burden (**65 organic vs 9 Apple Search Ads**). Treat paywall dismissal / post-CTA friction as unresolved because the current bundle shows **448 paywall reached → 317 CTA pressed → 94 initiated checkouts** without a fully segmented dismissal-reason artifact. Treat retargeting pressure as **unverified**, not safe, because there is no standalone retargeting-state breakout in today’s source set. Do not use blended checkout totals as if they were deduped user counts because the snapshot explicitly warns that `macra_subscription_web_checkout_started` and `af_initiated_checkout` cannot be combined as unique checkout users without person-level dedupe. Treat AppsFlyer source coverage as sufficient for directional Apple Search Ads vs Organic quality, but insufficient for full source-state attribution or clean checkout dedupe. Source: `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
 owner:
 
