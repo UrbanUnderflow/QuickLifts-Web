@@ -20,9 +20,9 @@ Status: Active.
 
 ## 2026-06-25 - First Operating Cycle
 
-selectedAction:
+selectedAction: Hold Apple Search Ads spend at the current level and refine the paywall / checkout trust path before scaling. Do not approve a broader acquisition increase off the current `variant_a` read. Source: `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
-whyNow:
+whyNow: The first daily snapshot shows the bottleneck is downstream, not top-of-funnel: **533 onboarding starts** became **317 paywall CTA presses**, **94 initiated checkouts**, and only **5 trial starts**, while **74 StoreKit purchase cancels** indicate trust or fit pressure. Apple Search Ads quality is directionally stronger than organic, but the snapshot explicitly says the active `variant_a` experiment layer is **mixed / operationally stale for decisioning**, so scaling acquisition now would amplify noise faster than value. Source: `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
 expectedMetricMovement:
 
@@ -32,7 +32,7 @@ owner:
 
 followUpDate:
 
-status: Pending first snapshot decision.
+status: Pending remaining first-cycle fields.
 
 ## Template
 
