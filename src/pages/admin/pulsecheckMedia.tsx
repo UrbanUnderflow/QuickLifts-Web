@@ -14,7 +14,7 @@ interface MediaItem {
   src: string;
   title: string;
   caption: string;
-  group: 'App Store' | 'Daily & Biometrics' | 'Nora & Training';
+  group: 'App Store' | 'Daily & Biometrics' | 'Nora & Training' | 'Recovery & Safety';
 }
 
 const MEDIA: MediaItem[] = [
@@ -66,9 +66,27 @@ const MEDIA: MediaItem[] = [
     caption: 'Athlete profile, “Private by default” privacy hero, connected devices, settings & coach/team.',
     group: 'Nora & Training',
   },
+  {
+    src: '/pulsecheck-media/08-box-breathing.png',
+    title: 'Box breathing',
+    caption: 'Guided regulation rep with breathing cadence, stress trend, and Nora context.',
+    group: 'Recovery & Safety',
+  },
+  {
+    src: '/pulsecheck-media/09-critical-signal.png',
+    title: 'Critical signal',
+    caption: 'Critical signal review with safety routing, escalation context, and coach visibility boundaries.',
+    group: 'Recovery & Safety',
+  },
+  {
+    src: '/pulsecheck-media/10-welfare-check.png',
+    title: 'Welfare check',
+    caption: 'Follow-up welfare check screen for support staff handoff and athlete care continuity.',
+    group: 'Recovery & Safety',
+  },
 ];
 
-const GROUPS: MediaItem['group'][] = ['App Store', 'Daily & Biometrics', 'Nora & Training'];
+const GROUPS: MediaItem['group'][] = ['App Store', 'Daily & Biometrics', 'Nora & Training', 'Recovery & Safety'];
 
 const PulseCheckMediaPage: React.FC = () => {
   const [active, setActive] = useState<MediaItem | null>(null);
@@ -125,7 +143,6 @@ const PulseCheckMediaPage: React.FC = () => {
                       className="group text-left"
                     >
                       <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#161618] shadow-xl transition-transform duration-300 group-hover:-translate-y-1 group-hover:border-[#8B5CF6]/40">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={item.src}
                           alt={item.title}
@@ -156,7 +173,6 @@ const PulseCheckMediaPage: React.FC = () => {
               <X size={20} />
             </button>
             <div className="flex max-h-full flex-col items-center" onClick={(e) => e.stopPropagation()}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={active.src}
                 alt={active.title}

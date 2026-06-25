@@ -67,6 +67,12 @@ const adminCardsData = [
     link: "/admin/pulsecheckMedia"
   },
   {
+    title: "Macra Media",
+    description: "Every generated Macra App Store screenshot and product surface — food journal, AI meal scan, label scanner, Ask Nora, meal planning, and Macra Plus.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/admin/macraMedia"
+  },
+  {
     title: "Group Meet",
     description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
     icon: <Calendar className="w-5 h-5" />,
