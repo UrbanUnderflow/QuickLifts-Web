@@ -31,3 +31,23 @@ AppsFlyer imports help separate message performance from source quality. If refr
 ### Brand partner update — if refreshed variant_a softens
 
 "We refreshed active `variant_a` before making this recommendation, and the updated read suggests the current partner-facing story needs to tighten. Before changing the message, we are checking cancel reasons, user state, retargeting state, purchase logs, and AppsFlyer imports to separate a true message problem from a source-quality problem. The next move should be one measured adjustment tied to what the refreshed inputs still show as believable and conversion-safe."
+
+## Copy snippets for gyms
+
+### Gym partner update — if refreshed variant_a is holding
+
+"We refreshed active `variant_a` before changing any gym-facing funnel message, and the current read still supports the existing trial-start path. The next-step message should stay concrete: what a new member starts with, what support they get in the first stretch, and why the opening experience feels doable instead of vague. If the refreshed result is holding, the job is not to add hype. It is to make the first yes easier."
+
+### Gym partner update — if refreshed variant_a softens
+
+"We refreshed active `variant_a` before making this gym recommendation, and the updated read suggests the current funnel message is losing trust too early. Before rewriting the story, we are checking purchase logs, cancel reasons, user state, and retargeting state to confirm whether the problem is the promise, the follow-up, or the handoff after signup. The next move is one clearer message about the first-step value, not a broader claim about the whole gym experience."
+
+## Copy snippets for run clubs
+
+### Run club update — if refreshed variant_a is holding
+
+"We refreshed active `variant_a` before recommending any run-club funnel change, and the strongest signal is still the clearest one: tell runners exactly what they are joining, what the first block looks like, and what kind of support they get at the start. If the refreshed read is holding, the message should stay rooted in the real first-week experience rather than drifting into generic motivation."
+
+### Run club update — if refreshed variant_a softens
+
+"We refreshed active `variant_a` before changing this run-club message, and the updated performance suggests the current framing may be too broad for the runners entering right now. Before changing the funnel story, we are checking purchase logs, cancel reasons, retargeting state, and AppsFlyer imports to separate a message-fit problem from a source-quality problem. The next-step message should narrow the promise, make the opening run block more specific, and earn the next test from the refreshed readout."
