@@ -4,23 +4,21 @@
 
 How does Apple Search Ads compare with Organic on Macra's source-level funnel quality across starts, paywall views, CTA progression, `af_initiated_checkout`, trial starts, cancels, and checkout-to-trial conversion, and should the team increase, hold, or refine ASA focus?
 
-## Source Inputs
+## Input Artifacts
 
 - **AppsFlyer aggregate CSV filename/path used for the comparison:** `2026-06-25 AppsFlyer aggregate CSV`, as named in `docs/agents/macra-operating-runbook.md`. The exact uploaded CSV filesystem path is **Unverified** in the repo — there is no checked-in raw CSV file with a more specific path or filename to cite safely. Source path: `docs/agents/macra-operating-runbook.md`
 - **Exact Scoreboard source-split surface used for the comparison:** `Macra Scoreboard` at `/admin/emailSequences` → `scoreboard` tab, documented in `docs/agents/macra-operating-runbook.md` and referenced again in `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`. Source paths: `docs/agents/macra-operating-runbook.md`; `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
 - **Exact Scoreboard query/export identifier available in-repo:** Firestore collection query on `appsflyer-aggregate-periods` with `where('product', '==', 'macra')`, rendered by the Macra scoreboard code in `src/pages/admin/emailSequences.tsx`. This is the most exact export/query reference present in the codebase for the source split used to build the comparison. Source path: `src/pages/admin/emailSequences.tsx`
+- **Exact source-level funnel metrics input used for this read:** the `Current Data Read` tables in `docs/agents/macra-operating-runbook.md`, which enumerate source-split counts and rates for `Onboarding starts`, `Paywall reached`, `Paywall CTA pressed`, `af_initiated_checkout`, `Trial starts`, and the derived rates `Start to trial` and `af_initiated_checkout to trial` for `Organic` and `Apple Search Ads`. Source path: `docs/agents/macra-operating-runbook.md`
 
-## Variant Context
+## Active Experiment
 
-- **`starts`** = onboarding starts from the Macra Scoreboard source split, sourced from the 2026-06-25 AppsFlyer aggregate CSV summarized in `docs/agents/macra-operating-runbook.md`. Source path: `docs/agents/macra-operating-runbook.md`
-- **`paywall`** = paywall reached count from the same Macra Scoreboard source split backed by the 2026-06-25 AppsFlyer aggregate CSV. Source path: `docs/agents/macra-operating-runbook.md`
-- **`CTA`** = paywall CTA pressed count from the same Scoreboard source split. Source path: `docs/agents/macra-operating-runbook.md`
-- **`af_initiated_checkout`** = AppsFlyer checkout-initiation event count from the same source split; per the runbook, this should not be merged with overlapping checkout events without dedupe. Source path: `docs/agents/macra-operating-runbook.md`
-- **`trial starts`** = trial-start count from the same source split, using the Macra Scoreboard operating read of the 2026-06-25 AppsFlyer aggregate CSV. Source path: `docs/agents/macra-operating-runbook.md`
-- **`cancels`** = StoreKit purchase cancel count from the same source split. Source path: `docs/agents/macra-operating-runbook.md`
-- **`checkout-to-trial`** = calculated as `trial starts / af_initiated_checkout`, using the rates reported in the runbook (`2.5%` Organic, `20.0%` Apple Search Ads). Source path: `docs/agents/macra-operating-runbook.md`
+- **Active experiment surface to refresh before funnel decisions:** `/admin/experiments`, as named in the Macra operating runbook and implemented in the admin experiments surface. Source paths: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/experiments.tsx`
+- **Active `variant_a` identifier:** `variant_a` on the `macra-experiments/macra_paywall_onboarding` experiment. The runbook states the live config should be `variant_a`, and the experiments tooling shows `variant_a` as the enabled variant. Source paths: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/experiments.tsx`; `scripts/setMacraExperimentFlow.js`
+- **Active `variant_a` label / posture being refreshed:** `Monthly + annual, both with trial`, described in the runbook as the live config and in the experiments tooling as the only enabled live variant. Source paths: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/experiments.tsx`; `scripts/setMacraExperimentFlow.js`
+- **Refresh caveat before using variant performance:** the runbook explicitly notes that saved `/admin/experiments` result snapshots can be stale and that the first operational task is to backfill/refresh experiment results before using variant performance for decisions. Source path: `docs/agents/macra-operating-runbook.md`
 
-## Channel Funnel Table
+## ASA vs Organic Funnel Table
 
 | Source | starts | paywall | CTA | af_initiated_checkout | trial starts | cancels | checkout-to-trial |
 |---|---:|---:|---:|---:|---:|---:|---:|
