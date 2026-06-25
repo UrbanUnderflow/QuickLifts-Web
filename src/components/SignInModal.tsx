@@ -37,6 +37,7 @@ import {
   TERMS_PATH,
 } from '../utils/legalAcceptance';
 import { dateToUnixTimestamp } from '../utils/formatDate';
+import { buildPartnerSourceFromQuery, extractPartnerInviteCodeFromQuery } from '../utils/partnerAttribution';
 
 interface SignInModalProps {
   isVisible: boolean;
