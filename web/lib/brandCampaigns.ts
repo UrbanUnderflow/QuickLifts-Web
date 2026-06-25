@@ -1,5 +1,20 @@
-import { BrandCommunityPageProps, BrandKpiStats } from "../components/partners/BrandCommunityPage";
+import { collection, getDocs, query, type DocumentData, type QueryDocumentSnapshot } from "firebase/firestore";
+
+import { db } from "../../src/api/firebase/config";
 import { BrandCampaignBannerProps } from "../components/BrandCampaignBanner";
+import { BrandCommunityPageProps, BrandKpiStats } from "../components/partners/BrandCommunityPage";
+
+const BRAND_CAMPAIGNS_COLLECTION = "brandCampaigns";
+const TIER_ONE_BRANDS = new Set(["nike", "gymshark", "oner active", "on running"]);
+
+export type TimestampLike =
+  | Date
+  | string
+  | number
+  | { toDate?: () => Date }
+  | { seconds?: number; nanoseconds?: number }
+  | null
+  | undefined;
 
 export type BrandCampaign = {
   slug: string;
@@ -12,10 +27,158 @@ export type BrandCampaign = {
   contactCtaHref: string;
 };
 
-// Temporary in-memory campaign definitions for partner demos. In a
-// future iteration this will be wired to Firestore or an API, but the
-// shape should remain stable so the landing route and banner helpers
-// don’t need to change.
+export type BrandCampaignBannerRecord = {
+  id: string;
+  brandName: string;
+  logoUrl: string;
+  campaignTitle: string;
+  ctaText: string;
+  ctaLink: string;
+  activeFrom: Date | null;
+  activeTo: Date | null;
+};
+
+function normalizeString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeBrandKey(value: string): string {
+  return normalizeString(value).toLowerCase().replace(/\s+/g, " ");
+}
+
+export function toDate(value: TimestampLike): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (typeof value === "object") {
+    const timestampCandidate = value as {
+      toDate?: () => Date;
+      seconds?: number;
+      nanoseconds?: number;
+    };
+
+    if (typeof timestampCandidate.toDate === "function") {
+      const parsed = timestampCandidate.toDate();
+      return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+    }
+
+    if (typeof timestampCandidate.seconds === "number") {
+      const millis =
+        timestampCandidate.seconds * 1000 +
+        Math.floor((timestampCandidate.nanoseconds || 0) / 1_000_000);
+      const parsed = new Date(millis);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+  }
+
+  return null;
+}
+
+export function isTierOneBrand(brandName: string): boolean {
+  return TIER_ONE_BRANDS.has(normalizeBrandKey(brandName));
+}
+
+export function isActiveWithinWindow(input: {
+  activeFrom: Date | null;
+  activeTo: Date | null;
+  now?: Date;
+}): boolean {
+  const now = input.now || new Date();
+  const startsOnOrBeforeNow = !input.activeFrom || input.activeFrom.getTime() <= now.getTime();
+  const endsOnOrAfterNow = !input.activeTo || input.activeTo.getTime() >= now.getTime();
+
+  return startsOnOrBeforeNow && endsOnOrAfterNow;
+}
+
+export function mapBrandCampaignSnapshot(
+  snapshot: QueryDocumentSnapshot<DocumentData>
+): BrandCampaignBannerRecord | null {
+  const data = snapshot.data() || {};
+  const brandName = normalizeString(data.brandName);
+  const campaignTitle = normalizeString(data.campaignTitle);
+  const ctaText = normalizeString(data.ctaText);
+  const ctaLink = normalizeString(data.ctaLink);
+  const logoUrl = normalizeString(data.logoUrl);
+  const activeFrom = toDate(data.activeFrom);
+  const activeTo = toDate(data.activeTo);
+
+  if (!brandName || !campaignTitle || !ctaText || !ctaLink) {
+    return null;
+  }
+
+  return {
+    id: snapshot.id,
+    brandName,
+    logoUrl,
+    campaignTitle,
+    ctaText,
+    ctaLink,
+    activeFrom,
+    activeTo,
+  };
+}
+
+export function pickActiveTierOneBrandCampaign(
+  campaigns: BrandCampaignBannerRecord[],
+  now: Date = new Date()
+): BrandCampaignBannerRecord | null {
+  const activeTierOneCampaigns = campaigns
+    .filter((campaign) => isTierOneBrand(campaign.brandName))
+    .filter((campaign) =>
+      isActiveWithinWindow({
+        activeFrom: campaign.activeFrom,
+        activeTo: campaign.activeTo,
+        now,
+      })
+    )
+    .sort((left, right) => {
+      const leftStart = left.activeFrom?.getTime() ?? 0;
+      const rightStart = right.activeFrom?.getTime() ?? 0;
+      return rightStart - leftStart;
+    });
+
+  return activeTierOneCampaigns[0] || null;
+}
+
+export async function listBrandCampaigns(): Promise<BrandCampaignBannerRecord[]> {
+  const snapshot = await getDocs(query(collection(db, BRAND_CAMPAIGNS_COLLECTION)));
+
+  return snapshot.docs
+    .map((docSnapshot) => mapBrandCampaignSnapshot(docSnapshot))
+    .filter((entry): entry is BrandCampaignBannerRecord => Boolean(entry));
+}
+
+export async function getActiveTierOneBrandCampaign(): Promise<BrandCampaignBannerProps | null> {
+  const campaigns = await listBrandCampaigns();
+  const activeCampaign = pickActiveTierOneBrandCampaign(campaigns);
+
+  if (!activeCampaign) {
+    return null;
+  }
+
+  return {
+    brandName: activeCampaign.brandName,
+    logoUrl: activeCampaign.logoUrl,
+    campaignTitle: activeCampaign.campaignTitle,
+    ctaText: activeCampaign.ctaText,
+    ctaLink: activeCampaign.ctaLink,
+    activeFrom: activeCampaign.activeFrom,
+    activeTo: activeCampaign.activeTo,
+  };
+}
+
+// Temporary in-memory campaign definitions for partner demos. These remain
+// separate from the home-feed campaign banner so partner landing pages can
+// keep their narrative copy while the in-app surface reads real campaign
+// windows from Firestore.
 const mockBrandCampaigns: BrandCampaign[] = [
   {
     slug: "gymshark",
@@ -91,7 +254,7 @@ export async function getBrandCampaignBySlug(
     contactCtaHref,
   } = campaign;
 
-  const props: BrandCommunityPageProps = {
+  return {
     brandName,
     brandLogoUrl,
     heroHeadline,
@@ -100,49 +263,4 @@ export async function getBrandCampaignBySlug(
     contactCtaLabel,
     contactCtaHref,
   };
-
-  return props;
-}
-
-/**
- * getActiveTierOneBrandCampaign
- *
- * Intended behavior (once Firestore wiring is added):
- *  - Query the `brandCampaigns` collection
- *  - Filter to campaigns where:
- *      - brandName is in the tier-1 whitelist (e.g., Nike, Gymshark, Oner Active, On Running)
- *      - activeFrom/activeTo contain the current timestamp
- *  - Return the first active campaign mapped into BrandCampaignBannerProps.
- *
- * For now, this returns a mock campaign mapped into the banner shape so the
- * home surface can be developed and styled before the Firestore integration
- * is finalized.
- */
-export async function getActiveTierOneBrandCampaign(): Promise<
-  BrandCampaignBannerProps | null
-> {
-  // TODO: Replace this mock implementation with a real Firestore query
-  // against the `brandCampaigns` collection once the shared db client for
-  // the web app is finalized.
-
-  const tierOneSlugs = new Set(["gymshark", "on-running", "oner-active"]);
-  const now = new Date();
-
-  const candidate = mockBrandCampaigns.find((c) => tierOneSlugs.has(c.slug));
-
-  if (!candidate) return null;
-
-  const banner: BrandCampaignBannerProps = {
-    brandName: candidate.brandName,
-    logoUrl: candidate.brandLogoUrl,
-    campaignTitle: candidate.heroHeadline,
-    ctaLink: `/partners/brands/${candidate.slug}`,
-    // In a real implementation, these would come from Firestore timestamp
-    // fields activeFrom/activeTo. For now we omit them so the banner shows
-    // as "Live" without a concrete date range.
-    activeFrom: now,
-    activeTo: undefined,
-  };
-
-  return banner;
 }

@@ -1,34 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+
 import {
-  collection,
-  getDocs,
-  query,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-
-import { db } from "../../src/api/firebase/config";
-
-const BRAND_CAMPAIGNS_COLLECTION = "brandCampaigns";
-const TIER_ONE_BRANDS = new Set([
-  "nike",
-  "gymshark",
-  "oner active",
-  "on running",
-]);
-
-export type BrandCampaignBannerRecord = {
-  id: string;
-  brandName: string;
-  logoUrl: string;
-  campaignTitle: string;
-  ctaText: string;
-  ctaLink: string;
-  activeFrom: Date | null;
-  activeTo: Date | null;
-};
+  type BrandCampaignBannerRecord,
+  listBrandCampaigns,
+  pickActiveTierOneBrandCampaign,
+  toDate,
+  type TimestampLike,
+} from "../lib/brandCampaigns";
 
 export type BrandCampaignBannerProps = {
   className?: string;
@@ -42,121 +22,8 @@ export type BrandCampaignBannerProps = {
   activeTo?: TimestampLike;
 };
 
-type TimestampLike =
-  | Date
-  | string
-  | number
-  | { toDate?: () => Date }
-  | { seconds?: number; nanoseconds?: number }
-  | null
-  | undefined;
-
 function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeBrandKey(value: string): string {
-  return normalizeString(value).toLowerCase().replace(/\s+/g, " ");
-}
-
-function toDate(value: TimestampLike): Date | null {
-  if (!value) return null;
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value;
-  }
-
-  if (typeof value === "string" || typeof value === "number") {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  if (typeof value === "object") {
-    const timestampCandidate = value as {
-      toDate?: () => Date;
-      seconds?: number;
-      nanoseconds?: number;
-    };
-
-    if (typeof timestampCandidate.toDate === "function") {
-      const parsed = timestampCandidate.toDate();
-      return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
-    }
-
-    if (typeof timestampCandidate.seconds === "number") {
-      const millis =
-        timestampCandidate.seconds * 1000 +
-        Math.floor((timestampCandidate.nanoseconds || 0) / 1_000_000);
-      const parsed = new Date(millis);
-      return Number.isNaN(parsed.getTime()) ? null : parsed;
-    }
-  }
-
-  return null;
-}
-
-function isTierOneBrand(brandName: string): boolean {
-  return TIER_ONE_BRANDS.has(normalizeBrandKey(brandName));
-}
-
-function isActiveWithinWindow(input: {
-  activeFrom: Date | null;
-  activeTo: Date | null;
-  now?: Date;
-}): boolean {
-  const now = input.now || new Date();
-  const startsOnOrBeforeNow = !input.activeFrom || input.activeFrom.getTime() <= now.getTime();
-  const endsOnOrAfterNow = !input.activeTo || input.activeTo.getTime() >= now.getTime();
-
-  return startsOnOrBeforeNow && endsOnOrAfterNow;
-}
-
-export function mapBrandCampaignSnapshot(
-  snapshot: QueryDocumentSnapshot<DocumentData>
-): BrandCampaignBannerRecord | null {
-  const data = snapshot.data() || {};
-  const brandName = normalizeString(data.brandName);
-  const campaignTitle = normalizeString(data.campaignTitle);
-  const ctaText = normalizeString(data.ctaText);
-  const ctaLink = normalizeString(data.ctaLink);
-  const logoUrl = normalizeString(data.logoUrl);
-  const activeFrom = toDate(data.activeFrom);
-  const activeTo = toDate(data.activeTo);
-
-  if (!brandName || !campaignTitle || !ctaText || !ctaLink) {
-    return null;
-  }
-
-  return {
-    id: snapshot.id,
-    brandName,
-    logoUrl,
-    campaignTitle,
-    ctaText,
-    ctaLink,
-    activeFrom,
-    activeTo,
-  };
-}
-
-export function pickActiveTierOneBrandCampaign(
-  campaigns: BrandCampaignBannerRecord[],
-  now: Date = new Date()
-): BrandCampaignBannerRecord | null {
-  const activeTierOneCampaigns = campaigns
-    .filter((campaign) => isTierOneBrand(campaign.brandName))
-    .filter((campaign) => isActiveWithinWindow({
-      activeFrom: campaign.activeFrom,
-      activeTo: campaign.activeTo,
-      now,
-    }))
-    .sort((left, right) => {
-      const leftStart = left.activeFrom?.getTime() ?? 0;
-      const rightStart = right.activeFrom?.getTime() ?? 0;
-      return rightStart - leftStart;
-    });
-
-  return activeTierOneCampaigns[0] || null;
 }
 
 function formatCampaignWindow(activeFrom: Date | null, activeTo: Date | null): string | null {
@@ -223,12 +90,8 @@ export function BrandCampaignBanner({
       try {
         setIsLoading(true);
 
-        const snapshot = await getDocs(query(collection(db, BRAND_CAMPAIGNS_COLLECTION)));
+        const campaigns = await listBrandCampaigns();
         if (!isMounted) return;
-
-        const campaigns = snapshot.docs
-          .map((docSnapshot) => mapBrandCampaignSnapshot(docSnapshot))
-          .filter((entry): entry is BrandCampaignBannerRecord => Boolean(entry));
 
         setCampaign(pickActiveTierOneBrandCampaign(campaigns));
       } catch (error) {
