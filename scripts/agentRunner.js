@@ -137,6 +137,10 @@ const GROUP_CHAT_CONTEXT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_CONTEXT_
 const GROUP_CHAT_RECENT_FULL_COUNT = parseInt(process.env.GROUP_CHAT_RECENT_FULL_COUNT || '2', 10);
 const GROUP_CHAT_RESPONSE_SNIPPET_CHARS = parseInt(process.env.GROUP_CHAT_RESPONSE_SNIPPET_CHARS || '320', 10);
 const ENABLE_MISSION_CHAT_UPDATES = process.env.ENABLE_MISSION_CHAT_UPDATES !== 'false'; // Mission-mode progress updates in Agent Chat
+const META_PATTERNS = [
+    /summary/i, /action.?items/i, /notification/i, /checklist/i,
+    /preflight/i, /meeting.?minutes/i, /team.?notification/i,
+];
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
@@ -1994,12 +1998,7 @@ function hasVerifiableArtifacts(steps) {
     const allFiles = getChangedFilesFromSteps(steps);
     if (allFiles.length === 0) return false;
 
-    // Filter out meta-documents (summaries, action items, notifications)
-    const META_PATTERNS = [
-        /summary/i, /action.?items/i, /notification/i, /checklist/i,
-        /preflight/i, /meeting.?minutes/i, /team.?notification/i,
-    ];
-
+    // Filter out meta-documents (summaries, action items, notifications).
     const substantiveFiles = allFiles.filter(f => {
         const basename = (f.split('/').pop() || '').toLowerCase();
         return !META_PATTERNS.some(rx => rx.test(basename));
