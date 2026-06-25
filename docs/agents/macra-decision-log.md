@@ -32,7 +32,7 @@ owner: Nora.
 
 followUpDate: 2026-06-26 — refresh the active `variant_a` experiment snapshot against the latest scoreboard inputs, then re-check whether the paywall / checkout trust path improved enough to revisit an Apple Search Ads scale decision.
 
-status: Pending final verification.
+status: Verified complete — first-cycle decision logged with action, rationale, metric target, guardrails, owner, and follow-up date; tied to `docs/ops/macra-operating-snapshot-2026-06-25.md`.
 
 ## Template
 
