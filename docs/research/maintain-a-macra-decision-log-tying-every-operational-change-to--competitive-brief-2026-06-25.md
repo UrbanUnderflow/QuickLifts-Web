@@ -48,7 +48,14 @@ What decision-log structure should Macra use to tie each operational change to a
 
 ## Differentiated Opportunities
 
-_To be populated with exactly 3 opportunity subsections that map observed patterns onto Macra's existing artifacts: Scoreboard, Experiments, purchase logs, cancel reasons, user state, retargeting state, and AppsFlyer imports._
+### 1. Turn Macra's Scoreboard + Experiments into a single decision-entry backbone
+The strongest repeated pattern across Statsig, Optimizely, LaunchDarkly, Amplitude, and Microsoft ExP is that teams do not treat metrics as passive dashboards — they attach a proposed change to a named success metric before rollout and review the result against a defined frame. For Macra, the immediate opportunity is to pair **Scoreboard** with **Experiments** so every operational change gets logged with: hypothesis, owner, date launched, expected primary metric movement, and experiment status. That would let the team stop debating changes in narrative-only form and instead compare decisions against a stable before/after record.
+
+### 2. Use purchase logs, cancel reasons, and user state as Macra's native guardrail layer
+The public frameworks all emphasize guardrails, but Macra already has unusually concrete internal signals for them: **purchase logs**, **cancel reasons**, and **user state**. That creates a differentiated opportunity to define guardrails in customer-trust terms instead of only conversion terms. For example, a paywall or acquisition change could target improved trial starts as the primary metric while watching downstream cancel-reason mix, subscription conversion quality, refund-like patterns in purchase logs, and state transitions that suggest low-quality activation. This is stronger than generic experimentation because Macra can evaluate not just whether a metric rises, but whether it rises with durable intent.
+
+### 3. Make source-quality decisions legible by joining retargeting state and AppsFlyer imports to the log
+A repeated pattern in the external examples is that teams need one place to evaluate whether a change should scale. For Macra, the most differentiated version of that is a decision log that explicitly joins **retargeting state** and **AppsFlyer imports** to source-level operating decisions, especially ASA versus organic quality. Instead of logging "increase ASA" as a loose action item, Macra can log the channel change, expected primary movement, and guardrails tied to post-checkout quality, retargeting saturation, and attribution coverage. That would directly support the current operating need to separate channel quality from funnel quality before increasing paid focus.
 
 ## Recommended Test
 
