@@ -69,4 +69,8 @@ A repeated pattern in the external examples is that teams need one place to eval
 
 ## Sources
 
-_To be populated with the public URLs used in this brief._
+- <https://www.statsig.com/perspectives/guardrail-metrics-experimentation>
+- <https://www.optimizely.com/optimization-glossary/guardrail-metrics/>
+- <https://launchdarkly.com/docs/home/experimentation/metrics>
+- <https://amplitude.com/explore/experiment/guardrail-metrics>
+- <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
