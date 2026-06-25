@@ -5018,6 +5018,14 @@ async function unblockTasks() {
         let count = 0;
         for (const doc of blockedDocs) {
             const data = doc.data();
+            if (data.deferredByMacraMissionReset === true) {
+                console.log(`   ⏭️ Keeping Macra-deferred task parked: "${data.name}"`);
+                continue;
+            }
+            if (String(data.status || '').toLowerCase() === 'needs-review') {
+                console.log(`   ⏭️ Keeping needs-review task parked: "${data.name}"`);
+                continue;
+            }
             // Skip tasks that failed very recently (within 2 minutes) to avoid immediate retry loops
             const failedAt = data.runnerFailureAt?.toDate?.();
             if (failedAt && (Date.now() - failedAt.getTime()) < 120_000) {

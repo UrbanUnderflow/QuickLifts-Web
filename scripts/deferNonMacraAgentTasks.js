@@ -25,9 +25,7 @@ const OPEN_STATUSES = ['todo', 'in-progress'];
 function isMacraTask(task) {
   return (
     task.source === MACRA_SOURCE ||
-    task.missionId === MACRA_MISSION_ID ||
-    task.project === 'Macra' ||
-    String(task.name || '').toLowerCase().includes('macra')
+    (task.missionId === MACRA_MISSION_ID && task.project === 'Macra')
   );
 }
 
