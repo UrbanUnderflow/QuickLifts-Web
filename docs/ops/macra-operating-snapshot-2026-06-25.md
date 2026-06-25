@@ -111,14 +111,12 @@ Source basis:
 
 ## Agent Findings
 
-> Add exactly one explicit finding per operating input owner/source.
-
-- **Scoreboard:**
-- **Experiments:**
-- **Purchase Logs:**
-- **Cancel Reasons:**
-- **Retargeting State:**
-- **AppsFlyer Coverage:**
+- **Scoreboard:** Top-of-funnel volume is not the primary constraint today; the bigger break is lower in the funnel, where **533 onboarding starts** become only **5 trial starts** and **3 paid conversions**, with the sharpest collapse happening from **317 paywall CTA presses** to **94 initiated checkouts**.
+- **Experiments:** `variant_a` remains directionally interesting but not decision-ready; the current experiment read is fresh enough for observation, not fresh enough for a winner call or a scale decision.
+- **Purchase Logs:** Checkout completion is still the system bottleneck; only **94 initiated checkouts** produced **5 trials**, which means the purchase-log layer is confirming a severe post-CTA drop rather than a top-of-funnel shortage.
+- **Cancel Reasons:** Trust pressure is real even at low conversion volume, with **74 StoreKit purchase cancels** already recorded; that means any funnel move that increases starts without improving clarity or fit will likely amplify churn noise rather than durable progress.
+- **Retargeting State:** Retargeting is still operationally under-instrumented in the daily snapshot; there is no standalone retargeting-state breakout in the current source bundle, so pressure and effectiveness remain unverified rather than safe.
+- **AppsFlyer Coverage:** AppsFlyer is strong enough to separate **Apple Search Ads** from **Organic** and shows that Apple Search Ads traffic is materially higher quality today, but coverage is still incomplete for deduped checkout interpretation and full source-state attribution.
 
 ## Nora Decision
 
