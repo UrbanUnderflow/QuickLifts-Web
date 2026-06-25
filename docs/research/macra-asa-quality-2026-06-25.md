@@ -6,7 +6,9 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 
 ## Data Inputs
 
-_To be populated in the next step with the exact AppsFlyer aggregate CSV filename and the exact Scoreboard source-split input used for this analysis._
+- **AppsFlyer aggregate input:** `2026-06-25 AppsFlyer aggregate CSV` — this is the exact artifact name preserved in `docs/agents/macra-operating-runbook.md` for the source-level funnel read used in this analysis. The exact uploaded CSV filename is **Unverified** in the repo, so I am not laundering a guessed filename into fact. The runbook ties this aggregate import to the Macra AppsFlyer ingestion/aggregate surfaces `appsflyer-aggregate-periods` and `appsflyer-scoreboards`. Source: `docs/agents/macra-operating-runbook.md`
+- **Scoreboard source-split input:** `Macra Scoreboard` → `/admin/emailSequences` → `scoreboard` tab. This is the exact admin surface named in the runbook and in the prior KPI evidence memo as the source split used to compare `Organic` versus `Apple Search Ads`. Source: `docs/agents/macra-operating-runbook.md`; `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
+- **Query/export identifier for the Scoreboard aggregate read:** Firestore collection query on `appsflyer-aggregate-periods` with `where('product', '==', 'macra')`, rendered by the Macra scoreboard surface in `src/pages/admin/emailSequences.tsx`. This is the most exact machine-readable identifier present in the repo for the aggregate source split backing the scoreboard read. Source: `src/pages/admin/emailSequences.tsx`
 
 ## Source Split Table
 
