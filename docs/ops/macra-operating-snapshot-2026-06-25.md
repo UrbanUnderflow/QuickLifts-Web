@@ -120,9 +120,7 @@ Source basis:
 
 ## Nora Decision
 
-> Record the single operating decision for the day, including hold/increase/refine posture and the metric/guardrail expectation tied to that choice.
-
-- Decision:
-- Why now:
-- Expected metric movement:
-- Guardrail to watch next:
+- Decision: **Hold Apple Search Ads spend at the current level and refine the paywall / checkout trust path before scaling.** Do not approve a broader acquisition increase off the current `variant_a` read.
+- Why now: The current operating bundle says the bottleneck is downstream, not top-of-funnel. We already have **533 onboarding starts** and a materially better Apple Search Ads trial rate than organic, but the system still collapses from **317 CTA presses** to **94 initiated checkouts** to only **5 trial starts**, while **74 purchase cancels** signal trust or fit pressure. Scaling traffic before reducing that post-CTA break would amplify noise faster than value.
+- Expected metric movement: Near term, the correct win is **better CTA → checkout and checkout → trial conversion**, not more starts. The next acceptable movement would be a higher initiated-checkout-to-trial rate than today’s **5.3%**, with no corresponding increase in cancel pressure.
+- Guardrail to watch next: **Checkout trust + cancel pressure.** If initiated checkout rises without trial-start lift, or if StoreKit purchase cancels climb above the current burden while volume stays low, pause any scale conversation and treat the trust path as unresolved.
