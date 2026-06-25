@@ -35,8 +35,14 @@ export interface PartnerFirestoreData {
   firstRoundCreatedAt?: FirestoreTimestampLike;
 }
 
+function isFirestoreTimestampObject(value: FirestoreTimestampLike): value is FirestoreTimestampObject {
+  return Boolean(value) && typeof value === 'object' && !(value instanceof Date);
+}
+
 export function convertPartnerTimestamp(value: FirestoreTimestampLike): Date {
-  if (value && typeof value === 'object') {
+  if (value instanceof Date) return value;
+
+  if (isFirestoreTimestampObject(value)) {
     if (typeof value.toDate === 'function') {
       return value.toDate();
     }
@@ -58,8 +64,6 @@ export function convertPartnerTimestamp(value: FirestoreTimestampLike): Date {
       return new Date(secondsCandidate * 1000 + Math.floor(nanosCandidate / 1000000));
     }
   }
-
-  if (value instanceof Date) return value;
   if (value == null) return new Date();
 
   const numericValue = typeof value === 'string' ? Number.parseFloat(value) : value;
