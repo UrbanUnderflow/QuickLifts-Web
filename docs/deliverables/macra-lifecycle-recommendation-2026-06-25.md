@@ -11,3 +11,9 @@ Recommend exactly one **copy change**: replace broad paywall and lifecycle langu
 - **Retargeting state signal:** Retargeting state shows whether the current message is forcing recovery work after the first exposure. If retargeting has to do too much of the persuasion, the cleaner interpretation is that the initial message is underspecified. That supports sharpening the first message rather than adding a second intervention type.
 
 Taken together, these three artifacts support the same single change: make the copy more specific about the user’s immediate first-week experience.
+
+## Proposed user-facing change
+
+**Ship-ready copy text:**
+
+"Start with a clear first week — not a blank slate. Macra gives you a focused plan, a simple next step, and enough structure to know what to do when you open the app. You won’t be guessing how to start. You’ll start with something real."
