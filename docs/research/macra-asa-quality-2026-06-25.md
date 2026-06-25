@@ -4,13 +4,13 @@
 
 How does Apple Search Ads compare with Organic on Macra's source-level funnel quality across starts, paywall views, CTA progression, `af_initiated_checkout`, trial starts, cancels, and checkout-to-trial conversion, and should the team increase, hold, or refine ASA focus?
 
-## Inputs
+## Source Artifacts
 
 - **AppsFlyer aggregate CSV filename/path used for the comparison:** `2026-06-25 AppsFlyer aggregate CSV`, as named in `docs/agents/macra-operating-runbook.md`. The exact uploaded CSV filesystem path is **Unverified** in the repo — there is no checked-in raw CSV file with a more specific path or filename to cite safely. Source path: `docs/agents/macra-operating-runbook.md`
 - **Exact Scoreboard source-split surface used for the comparison:** `Macra Scoreboard` at `/admin/emailSequences` → `scoreboard` tab, documented in `docs/agents/macra-operating-runbook.md` and referenced again in `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`. Source paths: `docs/agents/macra-operating-runbook.md`; `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
 - **Exact Scoreboard query/export identifier available in-repo:** Firestore collection query on `appsflyer-aggregate-periods` with `where('product', '==', 'macra')`, rendered by the Macra scoreboard code in `src/pages/admin/emailSequences.tsx`. This is the most exact export/query reference present in the codebase for the source split used to build the comparison. Source path: `src/pages/admin/emailSequences.tsx`
 
-## Method
+## Metric Definitions
 
 - **`starts`** = onboarding starts from the Macra Scoreboard source split, sourced from the 2026-06-25 AppsFlyer aggregate CSV summarized in `docs/agents/macra-operating-runbook.md`. Source path: `docs/agents/macra-operating-runbook.md`
 - **`paywall`** = paywall reached count from the same Macra Scoreboard source split backed by the 2026-06-25 AppsFlyer aggregate CSV. Source path: `docs/agents/macra-operating-runbook.md`
@@ -20,7 +20,7 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 - **`cancels`** = StoreKit purchase cancel count from the same source split. Source path: `docs/agents/macra-operating-runbook.md`
 - **`checkout-to-trial`** = calculated as `trial starts / af_initiated_checkout`, using the rates reported in the runbook (`2.5%` Organic, `20.0%` Apple Search Ads). Source path: `docs/agents/macra-operating-runbook.md`
 
-## Channel Comparison
+## Organic vs Apple Search Ads
 
 | Source | starts | paywall | CTA | af_initiated_checkout | trial starts | cancels | checkout-to-trial |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -36,7 +36,7 @@ Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for
 - **The current data argues against the simplistic claim that “ASA is better everywhere.”** ASA underperforms Organic in upper-funnel volume and early progression, so its advantage is narrower and more specific: post-checkout trial conversion quality, not broad funnel dominance. Source: `docs/agents/macra-operating-runbook.md`
 - **Cancel burden is visibly heavier on Organic, but still a system-wide guardrail issue.** The source split shows `65` cancels for Organic versus `9` for Apple Search Ads; even without a clean per-person cancel-rate denominator, that still indicates Organic is carrying more current cancellation stress while the broader checkout/trial system remains fragile. Source: `docs/agents/macra-operating-runbook.md`; `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
-## Recommendation
+## Decision
 
 **Verdict: `refine`** Apple Search Ads focus.
 
