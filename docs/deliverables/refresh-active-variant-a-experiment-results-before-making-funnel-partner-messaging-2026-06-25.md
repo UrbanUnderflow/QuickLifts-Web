@@ -17,3 +17,17 @@ Purchase logs, cancel reasons, user state, and retargeting state turn a result i
 ### 3. Source quality changes the message we can responsibly scale
 
 AppsFlyer imports help separate source quality from message quality. If active `variant_a` looks strong but only for certain acquisition sources, we should not stretch that result into a universal funnel claim. We pair AppsFlyer source reads with Scoreboard, Experiments, and purchase logs so the next message reflects who is converting well, who is hesitating, and which story is safe to scale without breaking trust.
+
+## Copy snippets for brands
+
+### Brand partner update — hold until the refreshed read is in
+
+"Before we approve any funnel or campaign message change on the brand side, we need the current active `variant_a` read refreshed across the Scoreboard, Experiments view, and purchase logs. If the refreshed result still supports the existing trial-start story, we stay with the current message. If it has shifted, we update the recommendation from the live readout — not from last week's assumption."
+
+### Brand partner update — if refreshed variant_a is holding
+
+"We refreshed the active `variant_a` results before reviewing this campaign recommendation, and the current read still supports the existing trial-start direction. The recommendation is to keep the partner message specific: show what someone is starting, why the opening experience is working, and let the campaign reinforce the path that the refreshed data is already validating."
+
+### Brand partner update — if refreshed variant_a softens
+
+"We refreshed active `variant_a` before making this brand recommendation, and the updated result suggests the current funnel story needs to tighten. Before changing campaign framing, we are checking cancel reasons, user state, retargeting state, and AppsFlyer source quality to confirm whether the issue is trust, follow-up, or acquisition fit. The next message change should be one clear adjustment tied to what the refreshed readout says is still believable."
