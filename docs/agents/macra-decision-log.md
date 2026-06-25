@@ -28,11 +28,11 @@ expectedMetricMovement: Improve the trial-start path downstream of traffic acqui
 
 guardrails: Hold the move inside trust constraints surfaced by the snapshot: **74 StoreKit purchase cancels** already create cancel-pressure risk; organic traffic carries most of that burden (**65 organic vs 9 Apple Search Ads**). Treat paywall dismissal / post-CTA friction as unresolved because the current bundle shows **448 paywall reached → 317 CTA pressed → 94 initiated checkouts** without a fully segmented dismissal-reason artifact. Treat retargeting pressure as **unverified**, not safe, because there is no standalone retargeting-state breakout in today’s source set. Do not use blended checkout totals as if they were deduped user counts because the snapshot explicitly warns that `macra_subscription_web_checkout_started` and `af_initiated_checkout` cannot be combined as unique checkout users without person-level dedupe. Treat AppsFlyer source coverage as sufficient for directional Apple Search Ads vs Organic quality, but insufficient for full source-state attribution or clean checkout dedupe. Source: `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
-owner:
+owner: Nora.
 
-followUpDate:
+followUpDate: 2026-06-26 — refresh the active `variant_a` experiment snapshot against the latest scoreboard inputs, then re-check whether the paywall / checkout trust path improved enough to revisit an Apple Search Ads scale decision.
 
-status: Pending remaining first-cycle fields.
+status: Pending final verification.
 
 ## Template
 
