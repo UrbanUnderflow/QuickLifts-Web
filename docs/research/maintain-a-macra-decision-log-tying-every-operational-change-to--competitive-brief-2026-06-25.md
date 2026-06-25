@@ -25,10 +25,18 @@ What decision-log structure should Macra use to tie each operational change to a
 ### 3. LaunchDarkly — Experimentation Metrics
 - **Public URL:** <https://launchdarkly.com/docs/home/experimentation/metrics>
 - **Short note on structure:** LaunchDarkly treats metrics as first-class experiment objects so changes can be tied to explicit success criteria, monitored in rollout, and evaluated before broader release.
+- **Operational change mechanism:** Teams define metrics before or alongside a flag-based change, then use the experiment and rollout system to connect operational release decisions to measured outcomes. Source: <https://launchdarkly.com/docs/home/experimentation/metrics>
+- **Expected metric movement:** The expected movement is captured in the metric attached to the rollout or experiment, making success criteria explicit rather than implied. Source: <https://launchdarkly.com/docs/home/experimentation/metrics>
+- **Guardrail metric:** Additional metrics can be attached to watch for side effects during rollout, giving teams a way to stop or refine a release when collateral damage appears. Source: <https://launchdarkly.com/docs/home/experimentation/metrics>
+- **Decision cadence / owner:** The natural owner is the feature or experiment owner reviewing flag performance during rollout checkpoints, though exact governance cadence is Unverified in the doc excerpt. Source: <https://launchdarkly.com/docs/home/experimentation/metrics>
 
 ### 4. Amplitude — Guardrail Metrics / Experiment Measurement
 - **Public URL:** <https://amplitude.com/explore/experiment/guardrail-metrics>
 - **Short note on structure:** Amplitude's experimentation guidance emphasizes choosing the primary metric you expect to move while defining guardrails that protect the user experience and overall business health.
+- **Operational change mechanism:** A team proposes a change, maps it to the behavioral metric it expects to improve, and reviews that change through experiment analysis instead of treating analytics as post-hoc reporting. Source: <https://amplitude.com/explore/experiment/guardrail-metrics>
+- **Expected metric movement:** The framework expects a preselected primary metric to move in a positive direction if the intervention is actually working. Source: <https://amplitude.com/explore/experiment/guardrail-metrics>
+- **Guardrail metric:** Guardrails are the metrics that protect overall product health by catching friction, degraded user experience, or business harm while the primary metric is being optimized. Source: <https://amplitude.com/explore/experiment/guardrail-metrics>
+- **Decision cadence / owner:** Unverified in the excerpt, but the operating assumption is a product/growth owner reviewing experiment readouts before scaling the change. Source: <https://amplitude.com/explore/experiment/guardrail-metrics>
 
 ### 5. Microsoft ExP / OEC A/B Testing Guidance
 - **Public URL:** <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
