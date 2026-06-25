@@ -110,6 +110,7 @@ function getAgentIdForTier(tier) {
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
+const OPENCLAW_MODEL_SYNC_TIMEOUT_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_TIMEOUT_MS || '20000', 10);
 const MAX_FOLLOW_UP_DEPTH = parseInt(process.env.MAX_FOLLOW_UP_DEPTH || '7', 10); // Deeper back-and-forth keeps strategy chats alive
 const MAX_FOLLOW_UP_DEPTH_EXEC = parseInt(process.env.MAX_FOLLOW_UP_DEPTH_EXEC || '1', 10); // Execution mode should converge quickly
 const ENABLE_ORGANIC_FOLLOW_UPS = process.env.ENABLE_ORGANIC_FOLLOW_UPS === 'true'; // Off by default; only explicit @mentions continue threads
@@ -828,12 +829,12 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
 
     if (agentId === 'nora') {
         return {
-            name: `Queue operations audit: ${focusLabel}`,
+            name: `Macra operating snapshot: ${focusLabel}`,
             description:
-                `Audit ` +
-                `project/kanban/board.md and active ${KANBAN_COLLECTION} cards for blockers tied to "${focusLabel}". ` +
-                `Publish findings + concrete next actions in docs/ops/${focusSlug}-queue-audit-${dateStamp}.md.`,
-            priority: 'medium',
+                `Create docs/ops/macra-operating-snapshot-${dateStamp}.md from /admin/emailSequences, /admin/experiments, ` +
+                `/admin/purchaseLogs, /admin/macraCancelReasons, and AppsFlyer imports. Include funnel counts, source split, ` +
+                `experiment snapshot freshness, guardrails, and one decision-log recommendation tied to "${focusLabel}".`,
+            priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
             objectiveCode: focusLabel,
         };
@@ -841,10 +842,10 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
 
     if (agentId === 'scout') {
         return {
-            name: `Research sprint: ${focusLabel}`,
+            name: `Macra ASA quality read: ${focusLabel}`,
             description:
-                `Create docs/research/${focusSlug}-competitive-brief-${dateStamp}.md with ` +
-                `5 concrete examples (with URLs), 3 differentiated opportunities for Pulse, and one recommended test.`,
+                `Create docs/research/macra-asa-quality-${dateStamp}.md using AppsFlyer scoreboard data and source-level funnel metrics. ` +
+                `Separate Apple Search Ads from organic, compute start-to-trial and checkout-to-trial, and recommend increase, hold, or refine with one concrete reason.`,
             priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
             objectiveCode: focusLabel,
@@ -853,10 +854,10 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
 
     if (agentId === 'solara') {
         return {
-            name: `Messaging build: ${focusLabel}`,
+            name: `Macra lifecycle conversion read: ${focusLabel}`,
             description:
-                `Create docs/deliverables/${focusSlug}-partner-messaging-${dateStamp}.md with a core narrative, ` +
-                `3 messaging pillars, and copy snippets for brands, gyms, and run clubs.`,
+                `Create docs/deliverables/macra-lifecycle-conversion-${dateStamp}.md from /admin/macraCancelReasons, paywall dismissal signals, and retargeting state. ` +
+                `Propose exactly one copy, proof, or offer change and name the metric it should move.`,
             priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
             objectiveCode: focusLabel,
@@ -864,10 +865,11 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
     }
 
     return {
-        name: `Evidence memo: ${focusLabel}`,
+        name: `Macra event semantics and trust audit: ${focusLabel}`,
         description:
-            `Create docs/research/${focusSlug}-health-evidence-${dateStamp}.md with ` +
-            `at least 5 cited findings relevant to engagement/retention and a recommended evidence-backed intervention.`,
+            `Create docs/research/macra-event-semantics-trust-${dateStamp}.md auditing ` +
+            `af_start_trial, af_purchase, af_subscribe, purchase_cancelled, web_checkout_started, StoreKit cancel, age eligibility, and activation-quality signals. ` +
+            `Flag any ambiguity that could make the team scale a misleading growth signal.`,
         priority: options.fromManager ? 'high' : 'medium',
         focusObjective: focusLabel,
         objectiveCode: focusLabel,
@@ -1494,7 +1496,7 @@ async function maybeSyncModelFromOpenClaw(force = false) {
                 var timeout = setTimeout(function () {
                     child.kill('SIGTERM');
                     reject(new Error('openclaw agents list timed out'));
-                }, 7_000);
+                }, OPENCLAW_MODEL_SYNC_TIMEOUT_MS);
 
                 child.stdout.on('data', function (d) { out += d.toString(); });
                 child.stderr.on('data', function (d) { err += d.toString(); });

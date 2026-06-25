@@ -321,6 +321,15 @@ export type PulseCheckIntakeResponses = Record<string, string | number | string[
 
 export const PULSECHECK_INTAKE_FORM_VERSION = 'pulsecheck-intake-v1';
 
+const buildSurveyOptions = (labels: string[]): NonNullable<SurveyQuestion['options']> =>
+  labels.map((text) => ({
+    id: text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, ''),
+    text,
+  }));
+
 // Starter question sets staff can load and then edit. Kept in athlete/coach
 // voice — supportive and plain, not clinical.
 const DEFAULT_PULSECHECK_INTAKE_QUESTIONS: Record<PulseCheckIntakeKind, SurveyQuestion[]> = {
@@ -329,18 +338,82 @@ const DEFAULT_PULSECHECK_INTAKE_QUESTIONS: Record<PulseCheckIntakeKind, SurveyQu
     { id: 'athlete-experience', type: 'text', question: 'How long have you played, and at what level?', required: false },
     { id: 'athlete-physical', type: 'text', question: 'Anything going on physically we should know about?', required: false },
     { id: 'athlete-sleep', type: 'number', question: 'On a normal night, about how many hours do you sleep?', required: false, minValue: 0, maxValue: 14 },
-    { id: 'athlete-load', type: 'number', question: 'How heavy does your training and life feel right now? (1 = light, 5 = a lot)', required: false, minValue: 1, maxValue: 5 },
+    { id: 'athlete-life-load', type: 'number', question: 'How heavy does life feel right now? (1 = light, 5 = very heavy)', required: false, minValue: 1, maxValue: 5 },
+    { id: 'athlete-training-load', type: 'number', question: 'How heavy does training feel right now? (1 = light, 5 = very heavy)', required: false, minValue: 1, maxValue: 5 },
     { id: 'athlete-good-day', type: 'text', question: 'What does a good day feel like for you?', required: false },
     { id: 'athlete-coach-note', type: 'text', question: 'Anything you want your coach to know?', required: false },
   ],
   coach: [
-    { id: 'coach-role', type: 'text', question: 'What is your role or title with the team?', required: false },
-    { id: 'coach-context', type: 'text', question: 'Tell us about your team and where you are in the season.', required: false },
-    { id: 'coach-learn', type: 'text', question: 'What do you most want to learn about your team this season?', required: false },
-    { id: 'coach-concerns', type: 'text', question: 'What are your biggest concerns right now?', required: false },
-    { id: 'coach-wellbeing', type: 'text', question: 'How do you track how your athletes are doing today?', required: false },
-    { id: 'coach-recipients', type: 'text', question: 'Who else should receive reports? (names and roles)', required: false },
-    { id: 'coach-contact', type: 'text', question: 'How would you like us to reach you, and how often?', required: false },
+    {
+      id: 'coach-role',
+      type: 'multiple_choice',
+      question: 'What is your role on the team?',
+      required: false,
+      options: buildSurveyOptions([
+        'Head coach',
+        'Assistant coach',
+        'Associate head coach',
+        'Position coach',
+        'Strength & conditioning',
+        'Athletic trainer',
+        'Sports medicine',
+        'Performance staff',
+        'Team administrator',
+        'Mental performance coach',
+        'Other',
+      ]),
+    },
+    { id: 'coach-role-other', type: 'text', question: 'If you selected other, what is your role?', required: false },
+    { id: 'coach-context', type: 'text', question: 'Tell us about your team.', required: false },
+    {
+      id: 'coach-season-phase',
+      type: 'multiple_choice',
+      question: 'Where are you in the season?',
+      required: false,
+      options: buildSurveyOptions([
+        'Pre-season',
+        'In-season',
+        'Championship / playoffs',
+        'Post-season',
+        'Off-season',
+        'Return to play / rehab block',
+        'Other',
+      ]),
+    },
+    { id: 'coach-season-phase-other', type: 'text', question: 'If you selected other, where are you in the season?', required: false },
+    { id: 'coach-learn', type: 'text', question: 'What more do you want to know about your team?', required: false },
+    {
+      id: 'coach-concerns',
+      type: 'text',
+      question: 'What mental health or wellbeing concern feels most important for your athletes right now?',
+      required: false,
+    },
+    {
+      id: 'coach-wellbeing',
+      type: 'text',
+      question: 'How do you currently track your athletes\' performance, readiness, and wellbeing?',
+      required: false,
+    },
+    { id: 'coach-point-person', type: 'text', question: 'Who is the main coach or point person?', required: false },
+    { id: 'coach-included-staff', type: 'text', question: 'Who else needs to be included? Any other support staff?', required: false },
+    { id: 'coach-pilot-group', type: 'text', question: 'What team or group is piloting PulseCheck?', required: false },
+    { id: 'coach-challenges', type: 'text', question: 'What specific challenges are you hoping PulseCheck helps solve?', required: false },
+    { id: 'coach-pilot-success', type: 'text', question: 'What would success look like after the pilot?', required: false },
+    { id: 'coach-check-in-timing', type: 'text', question: 'When will athletes check in?', required: false },
+    { id: 'coach-review-cadence', type: 'text', question: 'How often will coaches review data?', required: false },
+    {
+      id: 'coach-concerning-patterns',
+      type: 'text',
+      question: 'What normally happens when concerning patterns show up with your athletes or team?',
+      required: false,
+    },
+    { id: 'coach-team-routines', type: 'text', question: 'What existing team routines can PulseCheck plug into?', required: false },
+    {
+      id: 'coach-access',
+      type: 'text',
+      question: 'What support staff should be looped in, and who should have access in PulseCheck?',
+      required: false,
+    },
   ],
 };
 

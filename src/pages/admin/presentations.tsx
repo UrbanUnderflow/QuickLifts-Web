@@ -27,6 +27,15 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     description: 'Patriots-focused PulseCheck walkthrough for mental performance and escalation flow.',
   },
   {
+    id: 'pulse-check-tech-demo',
+    title: 'PulseCheck Tech Demo',
+    href: '/pulse-check-tech-demo',
+    category: 'Interactive Demos',
+    typeLabel: 'Tech demo',
+    accessLabel: 'Live route',
+    description: 'Focused reviewer and investor tech demo page with the PulseCheck product video, stakeholder deck, and visit tracking.',
+  },
+  {
     id: 'box-breathing-simulator',
     title: 'Box Breathing Simulator',
     href: '/box-breathing-simulator',

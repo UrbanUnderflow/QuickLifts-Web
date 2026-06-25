@@ -58,10 +58,10 @@ const MISSION_DOC = 'company-config/mission-status';
 const NORTH_STAR_DOC = 'company-config/north-star';
 
 const AGENTS = [
-    { id: 'nora', name: 'Nora', emoji: '⚡', role: 'Engineering & Operations Lead — builds, deploys, maintains systems' },
-    { id: 'scout', name: 'Scout', emoji: '🔭', role: 'Data & Research Lead — finds insights, tracks metrics, analyzes trends' },
-    { id: 'solara', name: 'Solara', emoji: '☀️', role: 'Brand & Content Lead — crafts voice, messaging, community content' },
-    { id: 'sage', name: 'Sage', emoji: '🌿', role: 'Health Science Lead — synthesizes research, guides product health logic' },
+    { id: 'nora', name: 'Nora', emoji: '⚡', role: 'Macra Operator/CEO — owns Scoreboard refresh, experiment freshness, task priority, and decision log' },
+    { id: 'scout', name: 'Scout', emoji: '🔭', role: 'Macra Growth/Acquisition Lead — owns Apple Search Ads vs organic quality and paid acquisition hypotheses' },
+    { id: 'solara', name: 'Solara', emoji: '☀️', role: 'Macra Lifecycle/Conversion Lead — owns onboarding, paywall, retargeting, cancel-reason synthesis, and proof copy' },
+    { id: 'sage', name: 'Sage', emoji: '🌿', role: 'Macra Product Quality/Trust Lead — owns nutrition safety, age eligibility, activation quality, claims, and event semantics' },
 ];
 
 const FORCE_MODE = process.argv.includes('--force');
@@ -312,8 +312,9 @@ async function generateMissionPlan(northStar, primaryObjectives, approvedPropose
     }).join('\n');
 
     const systemPrompt = [
-        `You are the Mission Director for Pulse (FitWithPulse.ai).`,
+        `You are the Mission Director for Macra, the standalone nutrition app in the Pulse ecosystem.`,
         `Your job is to create a CONCRETE autonomous work plan where each agent owns a specific objective and immediately generates real, executable tasks.`,
+        `Macra already has admin surfaces for Scoreboard, Experiments, User Management, Cancel Reasons, Purchase Logs, and AppsFlyer CSV ingestion. Use those surfaces before inventing new infrastructure.`,
         ``,
         `NORTH STAR: ${northStar.title}`,
         northStar.description ? `Context: ${northStar.description}` : '',
@@ -340,6 +341,7 @@ async function generateMissionPlan(northStar, primaryObjectives, approvedPropose
         `11. If the mission mode is execute, every task must include a concrete artifactSpec and at least 2 acceptanceChecks: one artifact existence check and one impact/behavior check.`,
         `12. taskClass should be one of execute-unit, dependency-unblocker, correction, delivery, or explore-brief.`,
         `13. verificationPolicy should default to automatedAuthority=true with humanSpotCheck="exceptions-and-sample" unless the task obviously requires manual review.`,
+        `14. Macra operating posture is observe, recommend, decide, log. Do not assign broad funnel changes until experiment results are fresh and the decision log states the expected metric and guardrails.`,
     ].filter(Boolean).join('\n');
 
     const result = await callGPT(systemPrompt, `Generate the mission plan. Return JSON with shape:
