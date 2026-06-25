@@ -197,11 +197,115 @@ Source: `src/pages/admin/macraCancelReasons.tsx`
 
 ## Retargeting
 
-_To be populated with cited re-engagement and retargeting-state evidence._
+### Source surface used
+- **Dashboard / report:** `Macra Scoreboard` in `/admin/emailSequences`, scoreboard tab
+- **Retargeting state source in code:** `src/pages/admin/emailSequences.tsx`
+- **Named sequence/report sources used by the scoreboard:**
+  - `macra-web-offer-24h-v1`
+  - `macra-paywall-cancel-trust-v1`
+  - `macra-web-offer-proof-v1`
+  - `macra-paywall-view-value-v1`
+  - `macra-no-trial-7d-challenge-v1`
+  - `macra-trial-no-activation-24h-v1`
+
+Source: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/emailSequences.tsx`
+
+### Retargeting-state evidence
+The Macra Scoreboard model includes user-level retargeting state directly in `MacraScoreboardSignals` and `MacraNextRetargetingEmail`. The surface tracks:
+
+- `retargetingEmailSentAt`
+- `retargetingEmailSentCount`
+- `retargetingEmailSends[]`
+- `stripeRetargetClickedAt`
+- `webOfferSentAt`
+- `webOfferOpenedAt`
+- `webOfferCheckoutStartedAt`
+- `webOfferConvertedAt`
+- `webOfferTrialEndAt`
+- `webOfferPaidAt`
+- `nextRetargetingEmail.reason`
+- `nextRetargetingEmail.status`
+- `nextRetargetingEmail.canSendNow`
+
+The scoreboard also classifies users into retargeting-relevant operating tiers:
+
+- `high_intent_recovery`
+- `serious_plan_completer`
+- `trial_started`
+- `paid`
+- `onboarding_completer`
+- `curiosity`
+- `excluded`
+
+Source: `src/pages/admin/emailSequences.tsx`
+
+### Retargeting evidence notes
+1. Retargeting in Macra is already modeled as a **state machine**, not a one-off email blast. The scoreboard knows whether a user was sent an offer, opened it, clicked back into checkout, converted, or still has a next email due. That means the daily KPI snapshot can identify whether recovery failure is due to **coverage gaps**, **message weakness**, or **post-click breakdown**. Source: `src/pages/admin/emailSequences.tsx`
+2. The presence of dedicated steps like `macra-paywall-cancel-trust-v1` and `macra-trial-no-activation-24h-v1` shows the system already distinguishes **checkout hesitation** from **trial non-activation**. That is important for retention because those are different behavioral moments and should not be treated as the same lifecycle problem. Source: `src/pages/admin/emailSequences.tsx`
+3. The runbook explicitly expects the Scoreboard to read across **retargeting, purchase logs, and recovery pools** in one place. So the retargeting state is part of the primary operating picture for trial-start repeatability, not a downstream CRM-only metric. Source: `docs/agents/macra-operating-runbook.md`
 
 ## AppsFlyer Coverage
 
-_To be populated with cited AppsFlyer import and event-coverage evidence._
+### Source surface used
+- **Import / report used:** `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- **App ID:** `id6463771067`
+- **Named output collections:**
+  - `appsflyer-scoreboards`
+  - `appsflyer-aggregate-periods`
+  - `appsflyer-macra-raw-rows`
+  - `appsflyer-macra-users`
+  - `appsflyer-import-runs`
+
+Source: `docs/agents/macra-operating-runbook.md`; `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+
+### AppsFlyer coverage evidence
+The AppsFlyer ingestion layer is designed to preserve both aggregate and person-linked evidence:
+
+- aggregate scoreboard docs in `appsflyer-scoreboards`
+- period-level snapshots in `appsflyer-aggregate-periods`
+- raw event/install rows in `appsflyer-macra-raw-rows`
+- user-level attribution/event aggregates in `appsflyer-macra-users`
+- import-level run tracking in `appsflyer-import-runs`
+
+The importer’s default Macra event coverage includes:
+
+- `af_complete_registration`
+- `macra_onboarding_started`
+- `macra_onboarding_profile_completed`
+- `macra_onboarding_paywall_reached`
+- `macra_onboarding_completed`
+- `macra_paywall_viewed_standalone`
+- `macra_paywall_primary_button_pressed`
+- `af_initiated_checkout`
+- `macra_subscription_purchase_cancelled`
+- `macra_paywall_cancel_feedback_submitted`
+- `macra_subscription_web_checkout_started`
+- `macra_subscription_web_checkout_returned`
+- `af_start_trial`
+- `af_subscribe`
+- `af_purchase`
+
+The importer summary structure explicitly tracks:
+
+- `rows`
+- `duplicateRows`
+- `reports`
+- install totals and splits
+- event totals by name and media source
+- revenue totals by event name and media source
+- `matchedCustomerUserRows`
+- `unmatchedRows`
+- `importedUserDocs`
+- `topMediaSources`
+- `topCampaigns`
+- `topEvents`
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+
+### AppsFlyer coverage notes
+1. The AppsFlyer ingestion stack is strong enough to support both **daily topline reporting** and **person-level reconciliation**. Because it writes aggregate periods, raw rows, and user-linked aggregates, the team can inspect funnel rates without losing the ability to dedupe or audit edge cases later. Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+2. Coverage is broad, but there is an explicit semantic hazard in the current read: both `af_initiated_checkout` and `macra_subscription_web_checkout_started` are tracked, and the runbook warns not to combine them as unique checkouts without person-level dedupe. That means checkout counts in the daily KPI snapshot must be labeled carefully, or the team risks overstating intent volume. Source: `docs/agents/macra-operating-runbook.md`; `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+3. The importer’s summary fields `matchedCustomerUserRows`, `unmatchedRows`, and `importedUserDocs` are part of the real coverage story. If unmatched rows rise, the growth signal can look healthy in aggregate while becoming less trustworthy for retention analysis at the user level. Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
 
 ## Findings
 
@@ -212,7 +316,32 @@ _To be populated with cited AppsFlyer import and event-coverage evidence._
 5. **Historical evidence argues against reintroducing a hard paywall stance.** The documented retirement note for `variant_c` (~1% conversion, ~95% Apple-sheet cancels) suggests that harsher monetization framing can degrade the activation moment badly enough to poison trial-start quality. Source: `src/pages/admin/experiments.tsx`; `scripts/setMacraExperimentFlow.js`
 6. **Macra already has the instrumentation to separate transaction failure from voluntary abandonment, so the next retention read should stop lumping them together.** The `Macra-purchase-logs` surface distinguishes `failed` from `canceled/cancelled` and preserves error fields plus cancel-reason fields on the same purchase records. That means one daily KPI snapshot can isolate whether trial-start loss is being driven by broken checkout mechanics, user hesitation, or both. Source: `src/pages/admin/macraPurchaseLogs.tsx`
 7. **Cancellation feedback can be tied back to onboarding and offer context, which makes it a usable retention-risk predictor rather than just qualitative noise.** The `Macrafeedbackreason` export includes selected plan, trigger, source, onboarding completion, and registration entry point, so repeated patterns there should be treated as evidence about trial-start trust quality and not merely post-hoc comments. Source: `src/pages/admin/macraCancelReasons.tsx`
+8. **Macra’s recovery system is mature enough to target specific failure moments, so broad generic follow-up is the wrong next move.** The scoreboard tracks dedicated retargeting flows for paywall cancel trust, proof follow-up, paywall value, web offer recovery, and trial activation. That means the most evidence-aligned intervention is to strengthen the weakest trust breakpoint, not to send more undifferentiated messages. Source: `src/pages/admin/emailSequences.tsx`
+9. **AppsFlyer coverage is wide, but the checkout layer still needs semantic discipline.** Because both `af_initiated_checkout` and `macra_subscription_web_checkout_started` are imported, and the runbook explicitly warns against combining them without person-level dedupe, Macra should treat checkout totals as a guarded measure rather than a single clean intent number. Source: `docs/agents/macra-operating-runbook.md`; `netlify/functions/sync-macra-appsflyer-raw-data.ts`
 
 ## Recommended Intervention
 
-_To be populated with one evidence-backed intervention tied to the strongest cross-source pattern._
+**Intervention:** Strengthen the **post-checkout trust recovery path** instead of changing acquisition or reworking the whole paywall again.
+
+Specifically, prioritize one lifecycle intervention on the existing recovery rail:
+- use the dedicated `macra-paywall-cancel-trust-v1` retargeting path for users who reached checkout or triggered Apple purchase cancellation,
+- tighten the message around trial clarity, what happens during the 3-day free trial, and what the user can expect immediately after start,
+- and judge it against guarded metrics rather than raw checkout volume alone.
+
+### Why this is the strongest next move
+- The Scoreboard shows that users are getting deep into the funnel (`533` starts, `448` paywall reaches, `317` CTAs, `94` checkout starts) but only `5` trial starts emerge. Source: `docs/agents/macra-operating-runbook.md`
+- Apple Search Ads is materially stronger **after checkout** than organic (`20.0%` checkout → trial vs `2.5%`), which suggests the biggest problem is not pure top-of-funnel traffic quantity but what happens at the activation boundary. Source: `docs/agents/macra-operating-runbook.md`
+- Purchase logs and cancel-reason surfaces already distinguish **technical failure**, **voluntary cancellation**, **trigger context**, and **selected plan context**, so Macra has enough instrumentation to target trust friction specifically. Source: `src/pages/admin/macraPurchaseLogs.tsx`; `src/pages/admin/macraCancelReasons.tsx`
+- The retargeting system already has a named trust-recovery lane (`macra-paywall-cancel-trust-v1`), which is a better first intervention than inventing a new broad lifecycle program. Source: `src/pages/admin/emailSequences.tsx`
+- Historical experiment evidence warns against reverting to harsher paywall pressure because the retired hard-paywall treatment produced roughly `~1%` conversion and `~95%` Apple-sheet cancels. Source: `src/pages/admin/experiments.tsx`; `scripts/setMacraExperimentFlow.js`
+
+### Guardrails for this intervention
+- Do **not** judge success by combining `af_initiated_checkout` and `macra_subscription_web_checkout_started` as if they were unique checkouts.
+- Track impact on:
+  - trial starts
+  - checkout → trial conversion
+  - StoreKit purchase cancels
+  - cancel-feedback mix
+  - paid conversion after trial
+
+Source: `docs/agents/macra-operating-runbook.md`; `netlify/functions/sync-macra-appsflyer-raw-data.ts`
