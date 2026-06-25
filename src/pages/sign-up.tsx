@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { browserPopupRedirectResolver, createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
-import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
+import { User, SubscriptionType, SubscriptionPlatform, UserLevel, type PartnerSource, type PartnerSourceType } from '../api/firebase/user';
 import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -16,9 +16,52 @@ import {
 } from '../utils/legalAcceptance';
 // import { FaGoogle, FaApple } from 'react-icons/fa';
 
+const PARTNER_SOURCE_TYPES: PartnerSourceType[] = ['brand', 'gym', 'runClub'];
+
+const normalizeQueryValue = (value: string | string[] | undefined): string => {
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0].trim() : '';
+  }
+
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const parsePartnerSourceType = (value: string): PartnerSourceType | null => {
+  return PARTNER_SOURCE_TYPES.includes(value as PartnerSourceType) ? (value as PartnerSourceType) : null;
+};
+
+const buildPartnerSourceFromQuery = (query: Record<string, string | string[] | undefined>): PartnerSource | undefined => {
+  const directType = parsePartnerSourceType(normalizeQueryValue(query.partnerType));
+  const directPartnerId = normalizeQueryValue(query.partnerId);
+
+  if (directType && directPartnerId) {
+    return {
+      type: directType,
+      partnerId: doc(db, 'partners', directPartnerId),
+    };
+  }
+
+  const utmDerivedType = parsePartnerSourceType(
+    normalizeQueryValue(query.utm_partner_type) || normalizeQueryValue(query.utm_partnerType)
+  );
+  const utmDerivedPartnerId =
+    normalizeQueryValue(query.utm_partner_id) ||
+    normalizeQueryValue(query.utm_partnerId) ||
+    normalizeQueryValue(query.utm_partner);
+
+  if (utmDerivedType && utmDerivedPartnerId) {
+    return {
+      type: utmDerivedType,
+      partnerId: doc(db, 'partners', utmDerivedPartnerId),
+    };
+  }
+
+  return undefined;
+};
+
 const SignUpPage: React.FC = () => {
   const router = useRouter();
-  const { type, redirect, partnerType, partnerId } = router.query; // Get the type, redirect, and partner attribution parameters
+  const { type, redirect } = router.query; // Get the type, redirect, and partner attribution parameters
   
   const [formData, setFormData] = useState({
     email: '',
@@ -52,6 +95,7 @@ const SignUpPage: React.FC = () => {
   const [usernameFormatError, setUsernameFormatError] = useState<string | null>(null);
 
   const isCoachSignUp = type === 'coach';
+  const partnerSource = useMemo(() => buildPartnerSourceFromQuery(router.query), [router.query]);
 
   // Clear error when user starts typing
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

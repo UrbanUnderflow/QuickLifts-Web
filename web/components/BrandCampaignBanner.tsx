@@ -33,6 +33,13 @@ export type BrandCampaignBannerRecord = {
 export type BrandCampaignBannerProps = {
   className?: string;
   emptyState?: React.ReactNode;
+  brandName?: string;
+  logoUrl?: string;
+  campaignTitle?: string;
+  ctaText?: string;
+  ctaLink?: string;
+  activeFrom?: TimestampLike;
+  activeTo?: TimestampLike;
 };
 
 type TimestampLike =
@@ -164,11 +171,44 @@ function formatCampaignWindow(activeFrom: Date | null, activeTo: Date | null): s
   return null;
 }
 
-export function BrandCampaignBanner({ className = "", emptyState = null }: BrandCampaignBannerProps) {
-  const [campaign, setCampaign] = useState<BrandCampaignBannerRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function BrandCampaignBanner({
+  className = "",
+  emptyState = null,
+  brandName,
+  logoUrl,
+  campaignTitle,
+  ctaText,
+  ctaLink,
+  activeFrom,
+  activeTo,
+}: BrandCampaignBannerProps) {
+  const providedCampaign = useMemo<BrandCampaignBannerRecord | null>(() => {
+    if (!brandName || !campaignTitle || !ctaLink) {
+      return null;
+    }
+
+    return {
+      id: "provided-campaign",
+      brandName: normalizeString(brandName),
+      logoUrl: normalizeString(logoUrl),
+      campaignTitle: normalizeString(campaignTitle),
+      ctaText: normalizeString(ctaText) || "Learn more",
+      ctaLink: normalizeString(ctaLink),
+      activeFrom: toDate(activeFrom),
+      activeTo: toDate(activeTo),
+    };
+  }, [activeFrom, activeTo, brandName, campaignTitle, ctaLink, ctaText, logoUrl]);
+
+  const [campaign, setCampaign] = useState<BrandCampaignBannerRecord | null>(providedCampaign);
+  const [isLoading, setIsLoading] = useState(!providedCampaign);
 
   useEffect(() => {
+    if (providedCampaign) {
+      setCampaign(providedCampaign);
+      setIsLoading(false);
+      return;
+    }
+
     let isMounted = true;
 
     async function loadCampaign() {
@@ -199,7 +239,7 @@ export function BrandCampaignBanner({ className = "", emptyState = null }: Brand
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [providedCampaign]);
 
   const activeRangeLabel = useMemo(() => {
     if (!campaign) return null;
