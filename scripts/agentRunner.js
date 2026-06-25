@@ -26,7 +26,7 @@
 const { initializeApp, cert } = require('firebase-admin/app');
 const { resolveAdminCredential } = require('./lib/resolveAdminCredential');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { execSync, spawn } = require('child_process');
+const { execFileSync, execSync, spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -496,11 +496,11 @@ async function proposeSoulEvolution(task, steps, outcome) {
 
             // Auto-commit the evolved soul
             try {
-                execSync(`git add "${path.join('docs', 'agents', AGENT_ID, 'soul.md')}"`, {
+                execFileSync('git', ['add', path.join('docs', 'agents', AGENT_ID, 'soul.md')], {
                     cwd: projectDir,
                     timeout: 10_000,
                 });
-                execSync(`git commit -m "[${AGENT_ID}] 🧬 soul evolved: ${learning.substring(0, 60).replace(/"/g, '\\"')}"`, {
+                execFileSync('git', ['commit', '-m', `[${AGENT_ID}] 🧬 soul evolved: ${learning.substring(0, 60)}`], {
                     cwd: projectDir,
                     encoding: 'utf-8',
                     timeout: 10_000,
@@ -5563,11 +5563,11 @@ function autoCommitStep(stepDescription, taskName) {
         if (changes.length === 0) return null;
 
         // Stage all changes
-        execSync('git add -A', { cwd: projectDir, timeout: 10_000 });
+        execFileSync('git', ['add', '-A'], { cwd: projectDir, timeout: 10_000 });
 
         // Commit with a descriptive message
         const msg = `[${AGENT_ID}] ${stepDescription}\n\nTask: ${taskName}`;
-        execSync(`git commit -m "${msg.replace(/"/g, '\\"')}"`, {
+        execFileSync('git', ['commit', '-m', msg], {
             cwd: projectDir,
             encoding: 'utf-8',
             timeout: 30_000,
