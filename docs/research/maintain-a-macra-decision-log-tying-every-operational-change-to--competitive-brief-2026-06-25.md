@@ -9,10 +9,18 @@ What decision-log structure should Macra use to tie each operational change to a
 ### 1. Statsig — Guardrail Metrics Framework
 - **Public URL:** <https://www.statsig.com/perspectives/guardrail-metrics-experimentation>
 - **Short note on structure:** Statsig explicitly frames decision-making around a primary success metric plus supporting guardrail metrics so teams can ship changes only when the upside holds without hidden harm elsewhere.
+- **Operational change mechanism:** Teams launch a feature or product change through an experiment and evaluate it against a predefined success metric plus companion guardrails rather than shipping on intuition alone. Source: <https://www.statsig.com/perspectives/guardrail-metrics-experimentation>
+- **Expected metric movement:** The expected movement is improvement in the core success metric the team is trying to drive, while still interpreting the result in the broader product context. Source: <https://www.statsig.com/perspectives/guardrail-metrics-experimentation>
+- **Guardrail metric:** Statsig's guidance is to watch adjacent metrics that would reveal hidden user harm, regressions, or unhealthy tradeoffs if the primary metric rises for the wrong reason. Source: <https://www.statsig.com/perspectives/guardrail-metrics-experimentation>
+- **Decision cadence / owner:** Unverified at the team-operating level, but the article clearly assumes an experimentation owner or product team reviews experiment outcomes before rollout. Source: <https://www.statsig.com/perspectives/guardrail-metrics-experimentation>
 
 ### 2. Optimizely — Guardrail Metrics
 - **Public URL:** <https://www.optimizely.com/optimization-glossary/guardrail-metrics/>
 - **Short note on structure:** Optimizely documents a classic experiment structure where teams define a main target metric and monitor guardrails to catch negative side effects before operationalizing a win.
+- **Operational change mechanism:** A product, marketing, or experience change is tested as a deliberate intervention, with the main decision framed around whether the tested variant should ship. Source: <https://www.optimizely.com/optimization-glossary/guardrail-metrics/>
+- **Expected metric movement:** The intended outcome is movement in the target conversion or engagement metric associated with the change being tested. Source: <https://www.optimizely.com/optimization-glossary/guardrail-metrics/>
+- **Guardrail metric:** Optimizely defines guardrails as the secondary metrics that ensure a "win" does not come with damage to retention, satisfaction, or other important outcomes. Source: <https://www.optimizely.com/optimization-glossary/guardrail-metrics/>
+- **Decision cadence / owner:** Unverified at the organizational level, but the framework assumes experiment owners review results after a test window before rollout or rejection. Source: <https://www.optimizely.com/optimization-glossary/guardrail-metrics/>
 
 ### 3. LaunchDarkly — Experimentation Metrics
 - **Public URL:** <https://launchdarkly.com/docs/home/experimentation/metrics>
