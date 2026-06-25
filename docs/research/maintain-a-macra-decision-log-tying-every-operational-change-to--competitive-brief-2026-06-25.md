@@ -46,7 +46,7 @@ What decision-log structure should Macra use to tie each operational change to a
 - **Guardrail metric:** The article warns against local wins and misleading metrics, implying the need for additional checks so a treatment does not improve one number while harming the broader system. Source: <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
 - **Decision cadence / owner:** The guidance points to a disciplined experimentation practice owned by teams running repeated tests, with review occurring at the end of each valid experiment window rather than ad hoc. Source: <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
 
-## Differentiated Opportunities
+## 3 Differentiated Opportunities for Macra
 
 ### 1. Turn Macra's Scoreboard + Experiments into a single decision-entry backbone
 The strongest repeated pattern across Statsig, Optimizely, LaunchDarkly, Amplitude, and Microsoft ExP is that teams do not treat metrics as passive dashboards — they attach a proposed change to a named success metric before rollout and review the result against a defined frame. For Macra, the immediate opportunity is to pair **Scoreboard** with **Experiments** so every operational change gets logged with: hypothesis, owner, date launched, expected primary metric movement, and experiment status. That would let the team stop debating changes in narrative-only form and instead compare decisions against a stable before/after record.
