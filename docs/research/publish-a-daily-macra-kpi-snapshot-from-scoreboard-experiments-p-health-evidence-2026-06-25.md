@@ -197,7 +197,63 @@ Source: `src/pages/admin/macraCancelReasons.tsx`
 
 ## User State
 
-_To be populated with cited user-state evidence from `/admin/users` and `/admin/userOnboarding` in a later step._
+### Source surfaces used
+- **Dashboard / report:** `/admin/users`
+- **Dashboard / report:** `/admin/userOnboarding`
+- **Relevant code surfaces:**
+  - `src/pages/admin/users.tsx`
+  - `src/pages/admin/userOnboarding.tsx`
+
+Source: `src/pages/admin/users.tsx`; `src/pages/admin/userOnboarding.tsx`
+
+### User-state evidence
+The admin user-management surface explicitly models Macra-relevant user state fields in the main user row shape, including:
+
+- `subscriptionType`
+- `registrationEntryPoint`
+- `hasCompletedMacraOnboarding`
+- `macraOnboardingCompletedAt`
+- `macraNotificationPreferences`
+- `macraEmailPreferences`
+- `macraLatestPaywallCancelFeedback`
+- `macraLatestPaywallCancelFeedbackAt`
+- `macraPaywallCancelFeedbackCount`
+- `macraProfile`
+- `athleteSport`
+- `athleteSportName`
+- `athleteSportPosition`
+
+The same surface also normalizes registration origin into operating buckets:
+
+- `fit_with_pulse`
+- `macra`
+- `pulse_check`
+- `pulse_ritual`
+- `unknown`
+
+and uses those values to segment users by origin tab in `/admin/users`.
+
+Source: `src/pages/admin/users.tsx`
+
+The dedicated onboarding-admin surface tracks recent onboarding link creation state via `onboarding-tokens` and displays:
+
+- `userId`
+- `email`
+- `username`
+- `token`
+- `used`
+- `createdAt`
+- `expiresAt`
+- `adminNotes`
+
+That means the operating system already has a source for whether a provisioned user has merely been invited versus actually moving through onboarding.
+
+Source: `src/pages/admin/userOnboarding.tsx`
+
+### User-state evidence notes
+1. The `/admin/users` surface already contains the fields needed to distinguish **acquisition origin**, **Macra onboarding completion**, **profile readiness**, and **paywall-cancel history** at the user level. That is important because retention analysis is weaker when these states are inferred from events alone instead of checked against user state. Source: `src/pages/admin/users.tsx`
+2. `registrationEntryPoint` is normalized into explicit origin buckets, including `macra`, so Macra-origin user cohorts can be separated from other product entry paths in the admin surface before deeper funnel analysis is layered on top. Source: `src/pages/admin/users.tsx`
+3. The `/admin/userOnboarding` surface makes onboarding-token lifecycle visible (`used`, `createdAt`, `expiresAt`), which matters because an apparent acquisition win is not the same thing as a reachable, activated user. Source: `src/pages/admin/userOnboarding.tsx`
 
 ## Retargeting
 
