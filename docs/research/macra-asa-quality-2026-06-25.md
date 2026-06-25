@@ -35,5 +35,6 @@ Concrete reason: Apple Search Ads materially outperforms Organic on both core fu
 
 ## Sources
 
-- _To be populated with the named AppsFlyer aggregate CSV artifact._
-- _To be populated with the named Scoreboard source-split artifact._
+- `2026-06-25 AppsFlyer aggregate CSV` — named in `docs/agents/macra-operating-runbook.md`; exact raw filesystem path remains **Unverified** in the repo.
+- `Macra Scoreboard` source split at `/admin/emailSequences` → `scoreboard` tab, backed by Firestore `appsflyer-aggregate-periods` with `where('product', '==', 'macra')`, as referenced in `src/pages/admin/emailSequences.tsx`.
+- `Current Data Read` tables in `docs/agents/macra-operating-runbook.md`, used as the exact source-level funnel metrics artifact for `starts`, `af_initiated_checkout`, `trial starts`, `start-to-trial`, and `checkout-to-trial`.
