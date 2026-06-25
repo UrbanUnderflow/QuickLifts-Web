@@ -1065,12 +1065,16 @@ const ExperimentsPage: React.FC = () => {
         configSnapshot: experiment,
       };
 
+      const snapshotWritePayload = {
+        ...snapshot,
+        generatedAt: serverTimestamp(),
+        loadedUsers: userDocs.length,
+        updatedAt: serverTimestamp(),
+      };
+
       await setDoc(
         doc(db, EXPERIMENT_RESULTS_COLLECTION, EXPERIMENT_ID),
-        {
-          ...snapshot,
-          updatedAt: serverTimestamp(),
-        },
+        snapshotWritePayload,
         { merge: true }
       );
 

@@ -18,6 +18,22 @@ Follow-up: Refresh `/admin/experiments` results for active `variant_a`, then pub
 
 Status: Active.
 
+## 2026-06-25 - First Operating Cycle
+
+selectedAction:
+
+whyNow:
+
+expectedMetricMovement:
+
+guardrails:
+
+owner:
+
+followUpDate:
+
+status: Pending first snapshot decision.
+
 ## Template
 
 Decision:
