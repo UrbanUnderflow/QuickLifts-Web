@@ -213,22 +213,26 @@ export default async function handler(
 
     // Re-read the document so timestamps come back as Firestore Timestamp objects
     const finalSnap = await getDoc(partnerRef);
+    if (!finalSnap.exists()) {
+      throw new Error(`Partner document was not found after write: ${partnerId}`);
+    }
+
     const finalData = finalSnap.data() as PartnerFirestoreData;
     const model = new PartnerModel(partnerId, finalData);
+    const partner: Partner = {
+      id: model.id,
+      type: model.type,
+      name: model.name,
+      contactEmail: model.contactEmail,
+      onboardingStage: model.onboardingStage,
+      invitedAt: model.invitedAt,
+      firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
+    };
 
     return res.status(200).json({
       success: true,
       partnerId,
-      partner: {
-        id: model.id,
-        type: model.type,
-        contactEmail: model.contactEmail,
-        onboardingStage: model.onboardingStage,
-        invitedAt: model.invitedAt,
-        firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
-        // Expose playbook snapshot as part of the response when present
-        playbook: (finalData as any).playbook ?? null,
-      },
+      partner,
     });
   } catch (error) {
     console.error('Error in /api/partners/onboard:', error);
