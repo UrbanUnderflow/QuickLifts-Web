@@ -59,7 +59,13 @@ A repeated pattern in the external examples is that teams need one place to eval
 
 ## Recommended Test
 
-_To be populated with one concrete decision-log pilot, including the entry format, the first operational change to track, the expected primary metric, the guardrail metric, and the review cadence._
+### Pilot a one-change-per-entry Macra decision log for paywall refinement
+- **Log entry format:** `date`, `owner`, `operational change`, `why now`, `expected primary metric`, `guardrail metric`, `supporting artifacts`, `review date`, `decision outcome`, and `next action`.
+- **First operational change to track:** Log the next paywall or initiated-checkout refinement as a single decision entry — for example, one copy/proof/order-of-information change tied to the active funnel rather than a bundle of edits.
+- **Expected primary metric:** `trial starts per paywall viewer` or `trial starts per initiated checkout`, depending on where the exact change is introduced.
+- **Guardrail metric:** `early cancel rate / negative cancel-reason mix among newly acquired subscribers`, with purchase-log quality checks used to catch low-intent lift.
+- **Review cadence:** Review the entry on a fixed weekly cadence, with an earlier check if Scoreboard or Experiments show an abnormal movement in either the primary metric or the guardrail.
+- **Why this pilot fits Macra now:** It uses existing artifacts already named in the operating system — Scoreboard, Experiments, purchase logs, cancel reasons, user state, and AppsFlyer imports — and forces the team to separate one operational change from surrounding noise before deciding to scale, revert, or refine.
 
 ## Sources
 
