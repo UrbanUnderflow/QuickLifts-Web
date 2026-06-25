@@ -17,3 +17,17 @@ The daily snapshot starts with **Scoreboard** and **Experiments** because they d
 ### 3. AppsFlyer coverage keeps acquisition context attached to the snapshot
 
 **AppsFlyer coverage** keeps the daily KPI snapshot honest about traffic mix and source visibility. A strong day should not be framed as a broad partner signal if source coverage is partial or if quality is being carried by a narrower acquisition slice. Keeping AppsFlyer coverage in the pillar ensures the daily message stays tied to what we can actually attribute, not just what we want the numbers to mean.
+
+## Copy snippets for brands
+
+### Brand snapshot update — daily read is assembled and ready
+
+"Today’s Macra partner snapshot is built from the current Scoreboard, Experiments, purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage before any message is sent. That means this update reflects the live operating picture, not a recycled summary. We are sharing only what the current daily read can support."
+
+### Brand snapshot update — if the daily picture is holding
+
+"The current daily Macra snapshot shows a stable enough operating picture to keep the existing partner story intact. Scoreboard and Experiments still align with the present funnel direction, and the supporting read across purchase logs and retargeting does not suggest a reason to overstate or rewrite the story today. The right message is the honest one: the system is holding, and we are continuing to read it day by day."
+
+### Brand snapshot update — if the daily picture is mixed
+
+"Today’s Macra snapshot is directionally useful, but not clean enough to turn into a bigger partner claim. We are reading Scoreboard and Experiments alongside purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage to separate real momentum from partial visibility or downstream friction. The appropriate partner message today is measured: we have a live read, we are watching the right operating artifacts, and we are not stretching the signal beyond what the snapshot supports."
