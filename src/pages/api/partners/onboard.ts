@@ -180,8 +180,8 @@ export default async function handler(
         updatePayload.playbook = (existingData as any).playbook;
       }
 
-      // Only set firstRoundCreatedAt when flag is true AND it hasn't been set before
-      if (firstRoundCreated && !existingData.firstRoundCreatedAt) {
+      // Only set firstRoundCreatedAt once, either from the explicit flag or when the stage reaches the first-round milestone
+      if (shouldSetFirstRoundCreatedAt && !existingData.firstRoundCreatedAt) {
         updatePayload.firstRoundCreatedAt = serverTimestamp();
       }
     } else {
@@ -197,8 +197,8 @@ export default async function handler(
       updatePayload.onboardingStage = normalizedPartner.onboardingStage;
       updatePayload.invitedAt = serverTimestamp();
 
-      // Optionally allow firstRoundCreatedAt on creation if firstRoundCreated is passed
-      if (firstRoundCreated) {
+      // Optionally set firstRoundCreatedAt on creation from the explicit flag or when the stage already represents first-round completion
+      if (shouldSetFirstRoundCreatedAt) {
         updatePayload.firstRoundCreatedAt = serverTimestamp();
       }
     }

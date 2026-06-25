@@ -5,9 +5,7 @@ import { browserPopupRedirectResolver, createUserWithEmailAndPassword, GoogleAut
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
- import {
-  buildPartnerSourceFromQuery,
-} from '../utils/partnerAttribution';
+import { buildPartnerSourceFromQuery } from '../utils/partnerAttribution';
 import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';

@@ -1181,6 +1181,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 legalAcceptance: buildCurrentLegalAcceptance('web-modal-signup-email'),
                 createdAt: new Date(), // Add createdAt
                 updatedAt: new Date(),  // Add updatedAt
+                ...(partnerSource ? { partnerSource } : {}),
                 // If a gym inviteCode was provided, persist it so backend can resolve it
                 ...(inviteCode ? { gymInviteCode: inviteCode } : {})
                 // Other fields will be default/null
