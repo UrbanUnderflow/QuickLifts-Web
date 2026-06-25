@@ -1,14 +1,20 @@
 import React from "react";
 
-import BrandCampaignBanner from "../components/BrandCampaignBanner";
+import BrandCampaignBanner, {
+  type BrandCampaignBannerProps,
+} from "../components/BrandCampaignBanner";
 
 // App home surface that can host a co-branded hero for active
 // tier-1 brand campaigns.
 
-export default function HomePage() {
+type HomePageProps = {
+  initialCampaign?: BrandCampaignBannerProps | null;
+};
+
+export default function HomePage({ initialCampaign = null }: HomePageProps) {
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 lg:px-8">
-      <BrandCampaignBanner />
+      <BrandCampaignBanner {...(initialCampaign || {})} />
 
       {/* Existing home content will live here. For now we render a simple */}
       {/* placeholder so this route can be wired into the app shell. */}
