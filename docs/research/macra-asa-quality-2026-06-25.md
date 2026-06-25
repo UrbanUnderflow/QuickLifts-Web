@@ -27,7 +27,7 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 
 Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for the 2026-06-25 AppsFlyer aggregate CSV surfaced through the Macra Scoreboard source split at `/admin/emailSequences`, scoreboard tab)
 
-## Decision
+## Recommendation
 
 **Verdict: `refine`** Apple Search Ads focus.
 
