@@ -1,4 +1,4 @@
-import { doc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import type { ParsedUrlQuery } from 'querystring';
 import { db } from '../api/firebase/config';
 import type { PartnerSource, PartnerSourceType } from '../api/firebase/user';
