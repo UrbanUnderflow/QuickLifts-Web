@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 
 import type { GetServerSideProps } from 'next';
@@ -18,8 +19,11 @@ type HomeRouteProps = {
 
 function getAdminDb() {
   if (!getApps().length) {
+    const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+
     initializeApp({
-      credential: cert(require(path.join(process.cwd(), 'serviceAccountKey.json'))),
+      credential: cert(serviceAccount),
     });
   }
 
