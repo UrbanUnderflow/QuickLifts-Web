@@ -100,15 +100,62 @@ Source: `docs/agents/macra-operating-runbook.md`
 
 ## StoreKit cancel
 
-_To be populated with cited StoreKit cancellation semantics and relationship to purchase/trial progression._
+### Source artifacts
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/emailSequences.tsx`
+- `src/pages/admin/macraCancelReasons.tsx`
+- `docs/agents/macra-operating-runbook.md`
+
+### Observed semantics
+The Macra AppsFlyer import function explicitly includes `macra_subscription_purchase_cancelled` in the default event allowlist. The Scoreboard/email-sequences surface also maintains a dedicated cancellation event family under `MACRA_APPSFLYER_PURCHASE_CANCEL_EVENT_NAMES`, and the runbook surfaces StoreKit purchase cancels as a first-class daily KPI guardrail.
+
+The cancel-reasons admin surface further stores cancellation feedback context separately from successful purchase/trial events, reinforcing that StoreKit cancel is treated as a **negative purchase-boundary signal** rather than an activation milestone.
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/emailSequences.tsx`; `src/pages/admin/macraCancelReasons.tsx`; `docs/agents/macra-operating-runbook.md`
+
+### Progression effect
+**Effect on trial progression:** reverses or invalidates purchase-boundary progression as an operating signal; it should not count as a successful trial start, and in practice it functions as a reversal/abandonment marker rather than a benign annotation.
+
+Source: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/emailSequences.tsx`
 
 ## age eligibility
 
-_To be populated with cited age-eligibility rules, enforcement points, and blocking behavior._
+### Source artifacts
+- `src/api/firebase/user/types.ts`
+- `src/pages/sign-up.tsx`
+- `src/pages/admin/users.tsx`
+
+### Observed semantics
+The user model includes age-adjacent profile fields such as `dateOfBirth` plus related profile state stored on the user document. The sign-up flow and admin user surface both operate on user-profile creation and profile completeness, but this pass did **not** find a dedicated Macra-only analytics event named for age eligibility in the import layer.
+
+That means age eligibility currently appears to live primarily as **user/profile state and form data**, not as an explicit trust event in the same class as `af_start_trial` or `web_checkout_started`.
+
+Source: `src/api/firebase/user/types.ts`; `src/pages/sign-up.tsx`; `src/pages/admin/users.tsx`
+
+### Progression effect
+**Effect on trial progression:** currently best understood as a potential profile/state gate or compliance prerequisite rather than a counted event. Based on the available source artifacts in this pass, age eligibility is more likely to **block** progression when enforced upstream than to annotate it after the fact, but the exact enforcement threshold should be verified in the next step if the team wants a stronger compliance claim.
+
+Source: `src/pages/sign-up.tsx`; `src/pages/admin/users.tsx`
 
 ## missing birthdate blocks
 
-_To be populated with cited birthdate requirement behavior and whether missing birthdate blocks trial progression or only annotates it._
+### Source artifacts
+- `src/api/firebase/user/types.ts`
+- `src/pages/sign-up.tsx`
+- `src/pages/admin/users.tsx`
+- `src/pages/admin/userOnboarding.tsx`
+
+### Observed semantics
+Birthdate is represented in the user model (`dateOfBirth`) and visible through admin user-management state, but this pass did not find a dedicated AppsFlyer event whose sole job is to mark “missing birthdate blocked.” The onboarding/admin surfaces are capable of showing whether a user exists, whether onboarding tokens were issued/used, and whether profile state is complete enough for downstream use.
+
+So missing birthdate currently appears to be tracked implicitly through **incomplete user state / onboarding completeness**, not through a standalone analytics event.
+
+Source: `src/api/firebase/user/types.ts`; `src/pages/admin/users.tsx`; `src/pages/admin/userOnboarding.tsx`
+
+### Progression effect
+**Effect on trial progression:** best classified as a likely **block** or incomplete-state prerequisite when enforced, not a reversal event. Where enforcement is absent, it may degrade trust by allowing partially qualified users to proceed; where enforcement is present, it behaves as a pre-trial blocker rather than a post-trial annotation.
+
+Source: `src/api/firebase/user/types.ts`; `src/pages/admin/users.tsx`
 
 ## trial activation
 
