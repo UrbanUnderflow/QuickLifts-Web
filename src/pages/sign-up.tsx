@@ -314,15 +314,8 @@ const SignUpPage: React.FC = () => {
           updatedAt: new Date(),
         };
 
-        if (
-          typeof partnerType === 'string' &&
-          typeof partnerId === 'string' &&
-          ['brand', 'gym', 'runClub'].includes(partnerType)
-        ) {
-          userData.partnerSource = {
-            type: partnerType as 'brand' | 'gym' | 'runClub',
-            partnerId,
-          };
+        if (partnerSource) {
+          userData.partnerSource = partnerSource;
         }
 
         const user = new User(firebaseUser.uid, userData);
@@ -443,16 +436,9 @@ const SignUpPage: React.FC = () => {
         updatedAt: new Date()
       };
 
-      // Optional partner attribution from query params
-      if (
-        typeof partnerType === 'string' &&
-        typeof partnerId === 'string' &&
-        ['brand', 'gym', 'runClub'].includes(partnerType)
-      ) {
-        userData.partnerSource = {
-          type: partnerType as 'brand' | 'gym' | 'runClub',
-          partnerId: partnerId,
-        };
+      // Optional partner attribution from query params / UTM-derived mapping
+      if (partnerSource) {
+        userData.partnerSource = partnerSource;
       }
       
       // Create User instance and save to Firestore
