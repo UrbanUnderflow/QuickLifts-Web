@@ -30,7 +30,8 @@ AppsFlyer imports help separate a real messaging win from a source-quality illus
 
 ### Brand partner update — if refreshed variant_a softens
 
-"We refreshed active `variant_a` before making this recommendation, and the updated read suggests the current partner-facing story needs to tighten. Before changing the message, we are checking cancel reasons, user state, retargeting state, purchase logs, and AppsFlyer imports to separate a real message problem from a source-quality problem. The next move should be one measured adjustment tied to what the refreshed inputs still support."
+"We refreshed active `variant_a` before making this recommendation, and the updated read suggests the current partner-facing story needs to tighten. Before changing the message, we are checking cancel reasons, user state, retargeting state, purchase logs, and AppsFlyer imports to separate a true message problem from a source-quality problem. The next move should be one measured adjustment tied to what the refreshed inputs still show as believable and conversion-safe."
+
 ## Copy snippets for gyms
 
 ### Gym partner update — if refreshed variant_a is holding
