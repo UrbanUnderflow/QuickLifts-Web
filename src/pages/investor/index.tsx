@@ -2766,7 +2766,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
           <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
           <meta property="og:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
-          <meta property="og:image:secure_url" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
           <meta property="og:image:type" content="image/png" />
           <meta property="og:image:width" content="1200" />
           <meta property="og:image:height" content="630" />
@@ -2873,7 +2872,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
         <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
         <meta property="og:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
-        <meta property="og:image:secure_url" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
         <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />

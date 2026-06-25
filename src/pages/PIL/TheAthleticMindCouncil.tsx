@@ -540,7 +540,6 @@ const AthleticMindCouncilPage: NextPage = () => {
         <meta property="og:url" content={META_URL} />
         <meta property="og:type" content="website" />
         <meta property="og:image" content={META_OG_IMAGE} key="og:image" />
-        <meta property="og:image:secure_url" content={META_OG_IMAGE} />
         <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />

@@ -21,8 +21,8 @@ import RouterErrorBoundary from '../components/RouterErrorBoundary';
 // ─── Default OG fallback ───────────────────────────────────────────
 // These are rendered on EVERY page via _app. If a page sets its own
 // og:title / og:image via <PageHead> or raw <Head>, Next.js will
-// append both — but crawlers pick the LAST occurrence, so page-level
-// tags win. Pages that set nothing get this baseline.
+// share the same keys, so the page-level tags replace this baseline instead
+// of creating multiple image candidates for link-preview clients.
 //
 // The default image is the Pulse Intelligence Labs splash — a pre-rendered
 // static PNG (dark gradient, soft orbs, "PIL" wordmark in white→lime
@@ -31,8 +31,8 @@ import RouterErrorBoundary from '../components/RouterErrorBoundary';
 // librsvg has no access to system fonts and renders text as tofu. The image
 // is generated locally via scripts/generate-pil-og.js where macOS fonts work.
 const DEFAULT_OG_IMAGE = 'https://fitwithpulse.ai/pil-og.png';
-const DEFAULT_TITLE = 'Pulse Community Fitness';
-const DEFAULT_DESCRIPTION = 'Real workouts, Real people, move together.';
+const DEFAULT_TITLE = 'Pulse Intelligence Labs';
+const DEFAULT_DESCRIPTION = 'The company behind PulseCheck, Fit With Pulse, Fit Club, and Macra.';
 
 // Pages that deserve a hand-picked fallback title when they don't set ogMeta.
 // Everything else is derived from the URL path.
@@ -216,7 +216,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   const ogImage = ogMeta?.image || DEFAULT_OG_IMAGE;
   const ogUrl = ogMeta?.url || '';
   const ogType = ogMeta?.type || (ogMeta ? 'article' : 'website');
-  const ogSiteName = ogMeta?.siteName || 'Pulse Fitness';
+  const ogSiteName = ogMeta?.siteName || 'Pulse Intelligence Labs';
 
   return (
     <>
@@ -225,16 +225,15 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
           come from ogMeta in pageProps (set by getServerSideProps). */}
       <Head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" key="viewport" />
-        <meta property="og:site_name" content={ogSiteName} />
-        <meta property="og:type" content={ogType} />
+        <meta property="og:site_name" content={ogSiteName} key="og:site_name" />
+        <meta property="og:type" content={ogType} key="og:type" />
         <meta property="og:title" content={ogTitle} key="og:title" />
         <meta property="og:description" content={ogDescription} key="og:description" />
         <meta property="og:image" content={ogImage} key="og:image" />
-        <meta property="og:image:secure_url" content={ogImage} />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        {ogUrl && <meta property="og:url" content={ogUrl} />}
-        <meta name="twitter:card" content="summary_large_image" />
+        <meta property="og:image:width" content="1200" key="og:image:width" />
+        <meta property="og:image:height" content="630" key="og:image:height" />
+        {ogUrl && <meta property="og:url" content={ogUrl} key="og:url" />}
+        <meta name="twitter:card" content="summary_large_image" key="twitter:card" />
         <meta name="twitter:title" content={ogTitle} key="twitter:title" />
         <meta name="twitter:description" content={ogDescription} key="twitter:description" />
         <meta name="twitter:image" content={ogImage} key="twitter:image" />

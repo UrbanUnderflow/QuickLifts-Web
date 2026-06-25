@@ -19,8 +19,9 @@ interface PageHeadProps {
   appleItunesAppArgument?: string;
 }
 
-const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
-const GLOBAL_DEFAULT_DESCRIPTION = "Real workouts, Real people, move together.";
+const GLOBAL_DEFAULT_TITLE = 'Pulse Intelligence Labs';
+const GLOBAL_DEFAULT_DESCRIPTION =
+  'The company behind PulseCheck, Fit With Pulse, Fit Club, and Macra.';
 
 /**
  * Generate a dynamic OG image URL via the /og-image.png Netlify function.
@@ -114,35 +115,34 @@ const PageHead: React.FC<PageHeadProps> = ({
   return (
     <Head>
       <title>{title}</title>
-      <meta name="description" content={description} />
+      <meta name="description" content={description} key="description" />
 
       {/* OpenGraph Meta Tags (same keys as _app so page-level overrides defaults) */}
       <meta property="og:title" content={ogTitle} key="og:title" />
       <meta property="og:description" content={ogDescription} key="og:description" />
       {ogImage && <meta property="og:image" content={ogImage} key="og:image" />}
-      {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
-      {ogImage && <meta property="og:image:type" content="image/png" />}
-      {ogImage && <meta property="og:image:width" content="1200" />}
-      {ogImage && <meta property="og:image:height" content="630" />}
-      {ogImage && <meta property="og:image:alt" content={ogTitle} />}
-      <meta property="og:url" content={ogUrl} />
-      <meta property="og:type" content={ogType} />
-      <meta property="og:site_name" content="Pulse Fitness" />
+      {ogImage && <meta property="og:image:type" content="image/png" key="og:image:type" />}
+      {ogImage && <meta property="og:image:width" content="1200" key="og:image:width" />}
+      {ogImage && <meta property="og:image:height" content="630" key="og:image:height" />}
+      {ogImage && <meta property="og:image:alt" content={ogTitle} key="og:image:alt" />}
+      <meta property="og:url" content={ogUrl} key="og:url" />
+      <meta property="og:type" content={ogType} key="og:type" />
+      <meta property="og:site_name" content="Pulse Intelligence Labs" key="og:site_name" />
 
       {/* Twitter Card Tags (same keys as _app so page-level overrides defaults) */}
-      <meta name="twitter:card" content={twitterCard} />
+      <meta name="twitter:card" content={twitterCard} key="twitter:card" />
       <meta name="twitter:title" content={twitterTitle} key="twitter:title" />
       <meta name="twitter:description" content={twitterDescription} key="twitter:description" />
       {twitterImage && <meta name="twitter:image" content={twitterImage} key="twitter:image" />}
-      {twitterImage && <meta name="twitter:image:alt" content={twitterTitle} />}
+      {twitterImage && <meta name="twitter:image:alt" content={twitterTitle} key="twitter:image:alt" />}
 
       {/* Additional Meta Tags */}
-      <link rel="canonical" href={ogUrl} />
+      <link rel="canonical" href={ogUrl} key="canonical" />
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" key="viewport" />
       <meta name="theme-color" content={resolvedThemeColor} key="theme-color" />
 
       {/* Apple Smart App Banner - prompts iOS users to open/download the app */}
-      <meta name="apple-itunes-app" content={appleItunesApp} />
+      <meta name="apple-itunes-app" content={appleItunesApp} key="apple-itunes-app" />
     </Head>
   );
 };

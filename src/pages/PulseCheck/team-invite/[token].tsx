@@ -491,7 +491,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       if (!(await isUsernameAvailable(finalUsername))) {
         for (let suffix = 2; suffix < 1000; suffix += 1) {
           const candidate = normalizeUsername(`${username}${suffix}`);
-          // eslint-disable-next-line no-await-in-loop
           if (await isUsernameAvailable(candidate)) {
             finalUsername = candidate;
             break;
@@ -946,7 +945,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         <meta property="og:title" content={invite.previewTitle} />
         <meta property="og:description" content={invite.previewDescription} />
         <meta property="og:image" content={invite.previewImageUrl} />
-        <meta property="og:image:secure_url" content={invite.previewImageUrl} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:url" content={invite.pageUrl} />

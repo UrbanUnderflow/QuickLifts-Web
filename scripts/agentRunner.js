@@ -137,6 +137,7 @@ const GROUP_CHAT_CONTEXT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_CONTEXT_
 const GROUP_CHAT_RECENT_FULL_COUNT = parseInt(process.env.GROUP_CHAT_RECENT_FULL_COUNT || '2', 10);
 const GROUP_CHAT_RESPONSE_SNIPPET_CHARS = parseInt(process.env.GROUP_CHAT_RESPONSE_SNIPPET_CHARS || '320', 10);
 const ENABLE_MISSION_CHAT_UPDATES = process.env.ENABLE_MISSION_CHAT_UPDATES !== 'false'; // Mission-mode progress updates in Agent Chat
+const ENABLE_OPERATOR_UPDATES = process.env.ENABLE_OPERATOR_UPDATES !== 'false'; // Structured agent-to-operator updates for PulseCommand
 const META_PATTERNS = [
     /summary/i, /action.?items/i, /notification/i, /checklist/i,
     /preflight/i, /meeting.?minutes/i, /team.?notification/i,
@@ -2353,6 +2354,26 @@ async function extractAndPostInsight(stepOutput, task, stepIndex, totalSteps) {
         lensTag: 'insight',
     });
 
+    if (ENABLE_OPERATOR_UPDATES) {
+        await sendProactiveMessage(
+            [
+                `Finding from "${task.name}":`,
+                insight,
+                ``,
+                `Evidence context: step ${stepIndex + 1}/${totalSteps}.`,
+            ].join('\n'),
+            'finding',
+            {
+                taskId: task.id || '',
+                taskName: task.name || '',
+                missionId: task.missionId || '',
+                operatorSummary: insight,
+                evidenceRefs: extractEvidenceRefs(bestMatch),
+                requiresReply: false,
+            }
+        );
+    }
+
     console.log(`🔍 Insight surfaced to timeline: "${insight.substring(0, 80)}..."`);
 }
 
@@ -4251,13 +4272,97 @@ async function processCommands() {
 /**
  * Send a message TO another agent (for escalation, help requests, etc.)
  */
+function normalizeMessageMetadata(metadata = {}) {
+    const safe = {};
+    for (const [key, value] of Object.entries(metadata || {})) {
+        if (value === undefined || value === null) continue;
+        if (Array.isArray(value)) {
+            safe[key] = value.map((item) => String(item)).join(', ');
+        } else if (typeof value === 'object') {
+            try {
+                safe[key] = JSON.stringify(value).slice(0, 1000);
+            } catch (_) {
+                safe[key] = String(value).slice(0, 1000);
+            }
+        } else {
+            safe[key] = String(value);
+        }
+    }
+    return safe;
+}
+
+function normalizeStringList(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+        return value.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+    return String(value)
+        .split(/\n|,/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function extractEvidenceRefs(text) {
+    const raw = String(text || '');
+    const matches = raw.match(/\b(?:docs|src|scripts|netlify|functions|PulseCommand|QuickLifts-Web)\/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|\b\/admin\/[A-Za-z0-9_/-]+|\b(?:af_start_trial|af_purchase|af_subscribe|purchase_cancelled|web_checkout_started|StoreKit cancel|AppsFlyer|Scoreboard|Experiments)\b/g) || [];
+    return Array.from(new Set(matches.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
+}
+
+function summarizeOperatorMessage(content) {
+    const lines = String(content || '')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    return (lines[0] || String(content || '').trim()).slice(0, 180);
+}
+
+function inferOperatorPriority(proactiveType, metadata = {}) {
+    const explicit = String(metadata.operatorPriority || metadata.priority || '').trim();
+    if (explicit) return explicit;
+    const type = String(proactiveType || '').toLowerCase();
+    if (['failed', 'needs-review', 'intervention', 'warning'].includes(type)) return type;
+    if (['mission-complete', 'completed', 'result'].includes(type)) return 'result';
+    if (['finding', 'signal-spike', 'suggestion'].includes(type)) return 'decision';
+    return 'update';
+}
+
+function buildOperatorMessageFields(content, type, metadata = {}) {
+    const proactiveType = String(metadata.proactiveType || type || 'chat');
+    const evidenceRefs = Array.from(new Set([
+        ...normalizeStringList(metadata.evidenceRefs),
+        ...extractEvidenceRefs(content),
+    ])).slice(0, 12);
+    const artifactUrls = Array.from(new Set([
+        ...normalizeStringList(metadata.artifactUrls),
+        ...normalizeStringList(metadata.artifactUrl),
+    ])).slice(0, 8);
+
+    return {
+        proactiveType,
+        operatorEvent: String(metadata.operatorEvent || proactiveType),
+        operatorPriority: inferOperatorPriority(proactiveType, metadata),
+        operatorSummary: String(metadata.operatorSummary || summarizeOperatorMessage(content)),
+        evidenceRefs,
+        artifactUrls,
+        taskId: String(metadata.taskId || ''),
+        taskName: String(metadata.taskName || ''),
+        missionId: String(metadata.missionId || ''),
+        requiresReply: metadata.requiresReply === true || String(metadata.requiresReply || '').toLowerCase() === 'true',
+    };
+}
+
 async function sendMessage(toAgent, content, type = 'chat', metadata = {}) {
+    const safeMetadata = normalizeMessageMetadata(metadata);
+    const operatorFields = toAgent === 'admin'
+        ? buildOperatorMessageFields(content, type, { ...metadata, ...safeMetadata })
+        : {};
     const msgRef = await db.collection(COMMANDS_COLLECTION).add({
         from: AGENT_ID,
         to: toAgent,
         type,
         content,
-        metadata,
+        metadata: safeMetadata,
+        ...operatorFields,
         status: 'completed', // agent-initiated messages are born complete
         createdAt: FieldValue.serverTimestamp(),
         completedAt: FieldValue.serverTimestamp(),
@@ -4281,7 +4386,6 @@ async function loadMissionRuntimeContext(task) {
         const missionSnap = await db.doc('company-config/mission-status').get();
         if (!missionSnap.exists) return null;
         const mission = missionSnap.data() || {};
-        if (mission.status !== 'active') return null;
 
         const source = String(task?.source || '').toLowerCase();
         const isMissionTask = Boolean(
@@ -4293,7 +4397,8 @@ async function loadMissionRuntimeContext(task) {
         if (!isMissionTask) return null;
 
         return {
-            missionId: mission.missionId || '',
+            missionId: task?.missionId || mission.missionId || '',
+            missionStatus: mission.status || '',
             missionPhase: mission.missionPhase || '',
             northStarTitle: mission.northStarTitle || '',
             objective: String(task?.northStarObjective || mission?.agentObjectives?.[AGENT_ID] || '').trim(),
@@ -4330,6 +4435,39 @@ async function maybeSendMissionKickoffUpdate(task, steps, missionContext) {
         missionId: missionContext.missionId || '',
         missionPhase: missionContext.missionPhase || '',
         taskId: task.id || '',
+        taskName: task.name || '',
+        operatorSummary: `${AGENT_NAME} ${isResumed ? 'resumed' : 'started'}: ${task.name}`,
+        evidenceRefs: [
+            ...normalizeStringList(task?.artifactSpec?.targets),
+            ...normalizeStringList((task?.acceptanceChecks || []).map((check) => check.commandOrPath)),
+        ],
+    });
+}
+
+async function maybeSendOperatorTaskStartUpdate(task, steps, missionContext) {
+    if (!ENABLE_OPERATOR_UPDATES) return;
+    if (missionContext) {
+        await maybeSendMissionKickoffUpdate(task, steps, missionContext);
+        return;
+    }
+
+    const planPreview = summarizeLines((steps || []).map((s) => s.description).filter(Boolean), 3);
+    const message = [
+        `Starting "${task.name}".`,
+        task.description ? `Why: ${String(task.description).slice(0, 260)}` : '',
+        planPreview ? `First moves:\n${planPreview}` : '',
+        `I’ll send findings, blockers, and evidence as I work.`,
+    ].filter(Boolean).join('\n\n');
+
+    await sendProactiveMessage(message, 'task-start', {
+        taskId: task.id || '',
+        taskName: task.name || '',
+        missionId: task.missionId || '',
+        operatorSummary: `${AGENT_NAME} started: ${task.name}`,
+        evidenceRefs: [
+            ...normalizeStringList(task?.artifactSpec?.targets),
+            ...normalizeStringList((task?.acceptanceChecks || []).map((check) => check.commandOrPath)),
+        ],
     });
 }
 
@@ -4360,7 +4498,11 @@ async function maybeSendMissionCompletionUpdate(task, steps, missionContext, nsG
         missionId: missionContext.missionId || '',
         missionPhase: missionContext.missionPhase || '',
         taskId: task.id || '',
-        northStarScore: Number.isFinite(alignmentScore) ? alignmentScore : 0,
+        taskName: task.name || '',
+        northStarScore: Number.isFinite(alignmentScore) ? String(alignmentScore) : '0',
+        operatorSummary: `${AGENT_NAME} completed: ${task.name}`,
+        evidenceRefs: deliverables,
+        artifactUrls: deliverables,
     });
 }
 
@@ -4382,6 +4524,31 @@ async function maybeSendMissionMidpointUpdate(task, missionContext, completedCou
         missionId: missionContext.missionId || '',
         missionPhase: missionContext.missionPhase || '',
         taskId: task.id || '',
+        taskName: task.name || '',
+        operatorSummary: `${AGENT_NAME} checkpoint: ${task.name}`,
+    });
+}
+
+async function maybeSendOperatorMidpointUpdate(task, missionContext, completedCount, totalSteps, failedCount) {
+    if (!ENABLE_OPERATOR_UPDATES) return;
+    if (missionContext) {
+        await maybeSendMissionMidpointUpdate(task, missionContext, completedCount, totalSteps, failedCount);
+        return;
+    }
+
+    const progressPct = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
+    const message = [
+        `Checkpoint on "${task.name}".`,
+        `Progress: ${completedCount}/${totalSteps} steps complete (${progressPct}%).`,
+        failedCount > 0 ? `Friction: ${failedCount} failed step${failedCount === 1 ? '' : 's'} so far.` : `No blockers yet.`,
+    ].join('\n\n');
+
+    await sendProactiveMessage(message, 'task-checkpoint', {
+        taskId: task.id || '',
+        taskName: task.name || '',
+        missionId: task.missionId || '',
+        operatorSummary: `${AGENT_NAME} checkpoint: ${task.name}`,
+        operatorPriority: failedCount > 0 ? 'warning' : 'update',
     });
 }
 
@@ -5694,6 +5861,9 @@ ${smokeOutput}`.substring(0, 2000);
                         `=== WORK OUTPUT RULES ===`,
                         `All deliverables (research, analysis, docs, code) MUST be saved as files in the project repo.`,
                         `Research and analysis → save as .md files in the appropriate directory (e.g., docs/research/, docs/deliverables/).`,
+                        `Any recommendation must include the evidence behind it: cite the source artifact, Firestore collection/doc, admin surface, file path, URL, or metric calculation used.`,
+                        `Separate observed facts from inference. Label uncertain or stale data clearly instead of presenting it as settled truth.`,
+                        `For research-backed recommendations, include one clear recommendation plus the primary metric and guardrail unless the task explicitly asks for more.`,
                         `For lead/prospect/partnership claims, cite canonical IDs from ${LEAD_SOURCE_OF_TRUTH_REL_PATH} as [SOT: LEAD-####, EVID-####].`,
                         `If a lead claim is not present in the source-of-truth file, mark it Unverified and do not present it as fact.`,
                         `Run a final source-of-truth cross-check before marking lead/prospect deliverables complete.`,
@@ -6481,7 +6651,7 @@ async function run() {
                 objectiveCode: task.objectiveCode || '',
                 objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
             });
-            await maybeSendMissionKickoffUpdate(task, steps, missionContext);
+            await maybeSendOperatorTaskStartUpdate(task, steps, missionContext);
 
             steps[0].status = 'in-progress';
             steps[0].startedAt = new Date();
@@ -6615,7 +6785,7 @@ async function run() {
                         _isValidatedResult: true,
                     });
                     if (!midpointMissionUpdateSent) {
-                        await maybeSendMissionMidpointUpdate(task, missionContext, completedCount, steps.length, failedCount);
+                        await maybeSendOperatorMidpointUpdate(task, missionContext, completedCount, steps.length, failedCount);
                         midpointMissionUpdateSent = true;
                     }
                 }
@@ -7261,7 +7431,13 @@ async function run() {
                             `Generated a ${stepsCompleted}-step execution plan in ${durationStr}.\n\n` +
                             `Planned steps:\n${stepSummary}\n\n` +
                             `To execute for real, run the agent on the Mac Mini with USE_OPENCLAW=true.`,
-                            'completed'
+                            'completed',
+                            {
+                                taskId: task.id || '',
+                                taskName: task.name || '',
+                                missionId: task.missionId || '',
+                                operatorSummary: `${AGENT_NAME} completed plan: ${task.name}`,
+                            }
                         );
                     }
                 } else {
@@ -7302,7 +7478,15 @@ async function run() {
                             (commits ? `Git commits:\n${commits}\n` : '') +
                             pushStatus +
                             `\n\nReady for the next task!`,
-                            'completed'
+                            'completed',
+                            {
+                                taskId: task.id || '',
+                                taskName: task.name || '',
+                                missionId: task.missionId || '',
+                                operatorSummary: `${AGENT_NAME} completed: ${task.name}`,
+                                evidenceRefs: allFiles,
+                                artifactUrls: allFiles,
+                            }
                         );
                     }
                 }
@@ -7336,7 +7520,15 @@ async function run() {
                     `Error: ${failedStep?.output || 'Unknown error'}\n\n` +
                     `This task has been blocked from auto-retry to prevent loops.\n` +
                     `Would you like me to retry this task or skip it?`,
-                    'failed'
+                    'failed',
+                    {
+                        taskId: task.id || '',
+                        taskName: task.name || '',
+                        missionId: task.missionId || '',
+                        operatorSummary: `${AGENT_NAME} failed: ${task.name}`,
+                        operatorPriority: 'urgent',
+                        requiresReply: true,
+                    }
                 );
             }
 

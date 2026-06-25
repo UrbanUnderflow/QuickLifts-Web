@@ -61,7 +61,6 @@ const MacraBuddyInvitePage: NextPage<MacraBuddyInvitePageProps> = ({ token }) =>
         <meta property="og:url" content={pageUrl} />
         <meta property="og:site_name" content="Macra" />
         <meta property="og:image" content={OG_IMAGE_URL} />
-        <meta property="og:image:secure_url" content={OG_IMAGE_URL} />
         <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />

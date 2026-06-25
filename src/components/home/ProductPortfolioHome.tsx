@@ -18,10 +18,15 @@ import { appLinks } from '../../utils/platformDetection';
 
 type ProductPortfolioHomeProps = {
   metaData: React.ComponentProps<typeof PageHead>['metaData'];
+  pageOgUrl?: string;
   onUseWebApp: () => void;
   isSignInModalOpen: boolean;
   setIsSignInModalOpen: (open: boolean) => void;
   isAuthenticated: boolean;
+  showAuthActions?: boolean;
+  primaryActionLabel?: string;
+  finalCtaHeading?: string;
+  finalCtaBody?: string;
 };
 
 type ProductLink = {
@@ -55,7 +60,7 @@ const CONTACT_EMAIL = 'tre@fitwithpulse.ai';
 const PULSECHECK_APP_STORE_URL = 'https://apps.apple.com/us/app/pulsecheck-mindset-coaching/id6747253393';
 const MACRA_APP_STORE_URL = 'https://apps.apple.com/us/app/macra-ai-calorie/id6463771067';
 
-const homeMeta = (metaData: ProductPortfolioHomeProps['metaData']) => ({
+const homeMeta = (metaData: ProductPortfolioHomeProps['metaData'], pageOgUrl: string) => ({
   ...(metaData || {}),
   pageId: 'index',
   pageTitle: 'Pulse Intelligence Labs — PulseCheck, Fit With Pulse, Fit Club, and Macra',
@@ -65,6 +70,13 @@ const homeMeta = (metaData: ProductPortfolioHomeProps['metaData']) => ({
   ogDescription:
     'The company behind PulseCheck, Fit With Pulse, Fit Club, and Macra.',
   ogImage: '/pil-og.png',
+  ogUrl: pageOgUrl,
+  ogType: 'website',
+  twitterCard: 'summary_large_image',
+  twitterTitle: 'Pulse Intelligence Labs',
+  twitterDescription:
+    'The company behind PulseCheck, Fit With Pulse, Fit Club, and Macra.',
+  twitterImage: '/pil-og.png',
   lastUpdated: metaData?.lastUpdated || HOME_META_LAST_UPDATED,
 });
 
@@ -93,7 +105,7 @@ const productSections: ProductSection[] = [
     links: [
       { name: 'App Store', href: appLinks.appStoreUrl, label: 'Download Fit With Pulse on iOS' },
       { name: 'Google Play', href: appLinks.playStoreUrl, label: 'Download Fit With Pulse on Android' },
-      { name: 'Media', href: '/admin/fwpMedia', label: 'Open Fit With Pulse media' },
+      { name: 'Media', href: 'https://fitwithpulse.ai/admin/fwpMedia', label: 'Open Fit With Pulse media' },
     ],
     proof: ['AI-built workouts', 'Recovery heat map', 'Mover-powered training'],
   },
@@ -112,8 +124,8 @@ const productSections: ProductSection[] = [
       { src: '/fitclub-media/10-event-detail-rsvp.png', alt: 'Fit Club event RSVP screen' },
     ],
     links: [
-      { name: 'Open Fit Club', href: '/FWB', label: 'Open Fit Club' },
-      { name: 'Media', href: '/admin/fitclubMedia', label: 'Open Fit Club media' },
+      { name: 'Open Fit Club', href: 'https://fitwithpulse.ai/FWB', label: 'Open Fit Club' },
+      { name: 'Media', href: 'https://fitwithpulse.ai/admin/fitclubMedia', label: 'Open Fit Club media' },
     ],
     proof: ['Club home', 'Events and RSVP', 'Challenge cycles'],
   },
@@ -134,7 +146,7 @@ const productSections: ProductSection[] = [
     links: [
       { name: 'App Store', href: MACRA_APP_STORE_URL, label: 'Download Macra on iOS' },
       { name: 'Website', href: 'https://eatwithmacra.ai', label: 'Open Macra website' },
-      { name: 'Media', href: '/admin/macraMedia', label: 'Open Macra media' },
+      { name: 'Media', href: 'https://fitwithpulse.ai/admin/macraMedia', label: 'Open Macra media' },
     ],
     proof: ['Food journal', 'AI meal scan', 'Ask Nora nutrition'],
   },
@@ -183,13 +195,20 @@ const ProductPill: React.FC<{ children: React.ReactNode; icon?: React.ReactNode 
 
 const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
   metaData,
+  pageOgUrl = 'https://fitwithpulse.ai',
   onUseWebApp,
   isSignInModalOpen,
   setIsSignInModalOpen,
   isAuthenticated,
+  showAuthActions = true,
+  primaryActionLabel,
+  finalCtaHeading = 'Use fitwithpulse.ai as the front door for the whole portfolio.',
+  finalCtaBody =
+    'The email domain can point people to the company first, then route them to the product that matches their job: athlete readiness, training, club building, or nutrition.',
 }) => {
   const heroVideoRef = useRef<HTMLVideoElement | null>(null);
   const [heroVideoIsPlaying, setHeroVideoIsPlaying] = useState(false);
+  const resolvedPrimaryActionLabel = primaryActionLabel || (isAuthenticated ? 'Use Web App' : 'Get Started');
 
   useEffect(() => {
     const video = heroVideoRef.current;
@@ -233,8 +252,8 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
   return (
     <div className="min-h-screen overflow-x-hidden bg-black text-white selection:bg-white/20">
       <PageHead
-        metaData={homeMeta(metaData)}
-        pageOgUrl="https://fitwithpulse.ai"
+        metaData={homeMeta(metaData, pageOgUrl)}
+        pageOgUrl={pageOgUrl}
         pageOgImage="/pil-og.png"
         themeColor="#050505"
       />
@@ -254,7 +273,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
           </nav>
 
           <div className="flex items-center gap-2">
-            {!isAuthenticated && (
+            {showAuthActions && !isAuthenticated && (
               <button
                 type="button"
                 onClick={() => setIsSignInModalOpen(true)}
@@ -268,7 +287,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
               onClick={onUseWebApp}
               className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
             >
-              {isAuthenticated ? 'Use Web App' : 'Get Started'}
+              {resolvedPrimaryActionLabel}
               <ArrowUpRight className="h-4 w-4" />
             </button>
           </div>
@@ -488,10 +507,10 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
             <div>
               <p className="text-sm font-semibold text-zinc-500">One company, clearer doors</p>
               <h2 className="mt-3 text-4xl font-semibold leading-tight">
-                Use fitwithpulse.ai as the front door for the whole portfolio.
+                {finalCtaHeading}
               </h2>
               <p className="mt-4 max-w-2xl text-lg leading-relaxed text-zinc-600">
-                The email domain can point people to the company first, then route them to the product that matches their job: athlete readiness, training, club building, or nutrition.
+                {finalCtaBody}
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row md:flex-col">
@@ -500,7 +519,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
                 onClick={onUseWebApp}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
               >
-                {isAuthenticated ? 'Use Web App' : 'Get Started'}
+                {resolvedPrimaryActionLabel}
                 <Activity className="h-4 w-4" />
               </button>
               <a
@@ -528,18 +547,20 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
         </div>
       </footer>
 
-      <SignInModal
-        isVisible={isSignInModalOpen}
-        onClose={() => setIsSignInModalOpen(false)}
-        onSignInSuccess={() => {
-          setIsSignInModalOpen(false);
-          onUseWebApp();
-        }}
-        onSignUpSuccess={() => {
-          setIsSignInModalOpen(false);
-          onUseWebApp();
-        }}
-      />
+      {showAuthActions && (
+        <SignInModal
+          isVisible={isSignInModalOpen}
+          onClose={() => setIsSignInModalOpen(false)}
+          onSignInSuccess={() => {
+            setIsSignInModalOpen(false);
+            onUseWebApp();
+          }}
+          onSignUpSuccess={() => {
+            setIsSignInModalOpen(false);
+            onUseWebApp();
+          }}
+        />
+      )}
     </div>
   );
 };

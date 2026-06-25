@@ -16,6 +16,14 @@ interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpda
 
 interface HomePageProps {
   metaData: SerializablePageMetaData | null;
+  ogMeta?: {
+    title: string;
+    description: string;
+    image: string;
+    url: string;
+    type: string;
+    siteName: string;
+  };
 }
 
 const STORAGE_KEY = 'pulse_has_seen_marketing';
@@ -24,6 +32,17 @@ const PULSECHECK_HOSTS = new Set(['pulsecheckmind.ai', 'www.pulsecheckmind.ai'])
 const MACRA_OG_IMAGE = '/macra-og.png';
 const MACRA_APP_STORE_ID = '6463771067';
 const PULSECHECK_OG_IMAGE = '/pulsecheck-og.png';
+const HOME_META_TITLE = 'Pulse Intelligence Labs — PulseCheck, Fit With Pulse, Fit Club, and Macra';
+const HOME_META_DESCRIPTION =
+  'Pulse Intelligence Labs builds products for mental performance, fitness communities, clubs, and nutrition: PulseCheck, Fit With Pulse, Fit Club, and Macra.';
+const HOME_OG_META = {
+  title: HOME_META_TITLE,
+  description: HOME_META_DESCRIPTION,
+  image: 'https://fitwithpulse.ai/pil-og.png',
+  url: 'https://fitwithpulse.ai',
+  type: 'website',
+  siteName: 'Pulse Intelligence Labs',
+};
 
 const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   const currentUser = useUser();
@@ -171,6 +190,7 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
       return {
         props: {
           metaData: serializedMetaData,
+          ogMeta: HOME_OG_META,
         },
         revalidate: 3600,
       };
@@ -179,6 +199,7 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
     return {
       props: {
         metaData: null,
+        ogMeta: HOME_OG_META,
       },
       revalidate: 3600,
     };
@@ -188,6 +209,7 @@ export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
     return {
       props: {
         metaData: null,
+        ogMeta: HOME_OG_META,
       },
       revalidate: 3600,
     };

@@ -32,30 +32,29 @@ const Meta: React.FC<MetaProps> = ({ title, description, url, image }) => {
     <Head>
       {/* Primary Meta Tags */}
       <title>{title}</title>
-      <meta name="description" content={description} />
+      <meta name="description" content={description} key="description" />
 
       {/* Open Graph / Facebook Meta Tags */}
-      <meta property="og:title" content={title} />
-      <meta property="og:description" content={description} />
-      {ogImage && <meta property="og:image" content={ogImage} />}
-      {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
-      {ogImage && <meta property="og:image:type" content="image/png" />}
-      {ogImage && <meta property="og:image:width" content="1200" />}
-      {ogImage && <meta property="og:image:height" content="630" />}
-      {ogImage && <meta property="og:image:alt" content={title} />}
-      <meta property="og:url" content={url} />
-      <meta property="og:type" content="website" />
-      <meta property="og:site_name" content="Pulse Fitness" />
+      <meta property="og:title" content={title} key="og:title" />
+      <meta property="og:description" content={description} key="og:description" />
+      {ogImage && <meta property="og:image" content={ogImage} key="og:image" />}
+      {ogImage && <meta property="og:image:type" content="image/png" key="og:image:type" />}
+      {ogImage && <meta property="og:image:width" content="1200" key="og:image:width" />}
+      {ogImage && <meta property="og:image:height" content="630" key="og:image:height" />}
+      {ogImage && <meta property="og:image:alt" content={title} key="og:image:alt" />}
+      <meta property="og:url" content={url} key="og:url" />
+      <meta property="og:type" content="website" key="og:type" />
+      <meta property="og:site_name" content="Pulse Intelligence Labs" key="og:site_name" />
 
       {/* Twitter Meta Tags */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={title} />
-      <meta name="twitter:description" content={description} />
-      {ogImage && <meta name="twitter:image" content={ogImage} />}
-      {ogImage && <meta name="twitter:image:alt" content={title} />}
+      <meta name="twitter:card" content="summary_large_image" key="twitter:card" />
+      <meta name="twitter:title" content={title} key="twitter:title" />
+      <meta name="twitter:description" content={description} key="twitter:description" />
+      {ogImage && <meta name="twitter:image" content={ogImage} key="twitter:image" />}
+      {ogImage && <meta name="twitter:image:alt" content={title} key="twitter:image:alt" />}
 
       {/* Additional Meta Tags */}
-      <link rel="canonical" href={url} />
+      <link rel="canonical" href={url} key="canonical" />
       <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
       <meta name="theme-color" content="#E0FE10" />
     </Head>

@@ -39,7 +39,6 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta key="og:url" property="og:url" content={pageUrl} />
       <meta key="og:site_name" property="og:site_name" content="Pulse Fitness" />
       <meta key="og:image" property="og:image" content={previewImageUrl} />
-      <meta key="og:image:secure_url" property="og:image:secure_url" content={previewImageUrl} />
       <meta key="og:image:type" property="og:image:type" content="image/png" />
       <meta key="og:image:width" property="og:image:width" content="1200" />
       <meta key="og:image:height" property="og:image:height" content="630" />
