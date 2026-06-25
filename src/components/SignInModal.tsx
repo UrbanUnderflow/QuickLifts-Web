@@ -181,6 +181,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
   const isOnAdminPage = router.pathname.startsWith('/admin/') || router.asPath.startsWith('/admin/');
   const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage;
+  const partnerSource = useMemo(() => buildPartnerSourceFromQuery(router.query), [router.query]);
 
   // Detect if the user is on an iPhone and component mount
   useEffect(() => {
@@ -190,6 +191,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsIphone(/iPhone/i.test(ua));
     }
   }, []);
+
+  useEffect(() => {
+    const inviteCodeFromQuery = extractPartnerInviteCodeFromQuery(router.query);
+    if (inviteCodeFromQuery && !inviteCode) {
+      setInviteCode(inviteCodeFromQuery);
+    }
+  }, [router.query, inviteCode]);
 
   const clearLegalError = () => {
     setErrors((prev) => ({ ...prev, legal: undefined }));
