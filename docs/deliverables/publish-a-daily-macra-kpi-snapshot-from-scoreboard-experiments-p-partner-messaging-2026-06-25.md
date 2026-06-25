@@ -31,3 +31,23 @@ The daily snapshot starts with **Scoreboard** and **Experiments** because they d
 ### Brand snapshot update — if the daily picture is mixed
 
 "Today’s Macra snapshot is directionally useful, but not clean enough to turn into a bigger partner claim. We are reading Scoreboard and Experiments alongside purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage to separate real momentum from partial visibility or downstream friction. The appropriate partner message today is measured: we have a live read, we are watching the right operating artifacts, and we are not stretching the signal beyond what the snapshot supports."
+
+## Copy snippets for gyms
+
+### Gym snapshot update — if the daily picture is holding
+
+"Today’s Macra gym update is grounded in the live daily snapshot, not a generic growth recap. Scoreboard and Experiments still support the current direction, and the read across purchase logs and retargeting does not suggest a sharp break in trust. For gyms, the message should stay practical: the intake path is holding, the early funnel story is coherent, and we are continuing to monitor the daily operating signals before changing the ask."
+
+### Gym snapshot update — if the daily picture is mixed
+
+"Today’s gym-facing Macra snapshot is useful, but it is not a reason to broaden the promise. We are reading purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage alongside Scoreboard and Experiments to understand whether the friction is happening in the message, the handoff, or the traffic mix. The right gym update today is specific and grounded: we see the current state, we know where to keep watching, and we are not overselling what the daily read has not yet proven."
+
+## Copy snippets for run clubs
+
+### Run club snapshot update — if the daily picture is holding
+
+"Today’s Macra run-club snapshot shows enough consistency to keep the current partner story steady. Scoreboard and Experiments still support the present direction, while purchase logs and retargeting read as stable enough to avoid a reactive message shift. For run clubs, the right update is concrete: the opening path remains credible, the system is being read daily, and we are keeping the story as specific as the operating signals allow."
+
+### Run club snapshot update — if the daily picture is mixed
+
+"Today’s run-club snapshot has signal, but it is not clean enough to turn into a bigger narrative. We are using cancel reasons, purchase logs, retargeting state, and AppsFlyer coverage to separate real partner-facing momentum from noise, lag, or partial attribution. The right run-club message today is restrained and specific: we have a current read, we know what is supporting it, and we are waiting for a clearer daily pattern before expanding the claim."
