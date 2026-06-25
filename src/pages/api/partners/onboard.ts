@@ -21,6 +21,20 @@ function isValidEmail(email: any): email is string {
   return emailRegex.test(trimmed);
 }
 
+function stageReachedFirstRoundMilestone(stage: string): boolean {
+  const normalized = stage.trim().toLowerCase();
+  return [
+    'first-round-created',
+    'first_round_created',
+    'first round created',
+    'round-created',
+    'round_created',
+    'round created',
+    'active',
+    'live',
+  ].includes(normalized);
+}
+
 interface OnboardPartnerRequestBody {
   id?: string; // optional explicit ID override
   type: PartnerType;
@@ -144,6 +158,8 @@ export default async function handler(
 
     const partnerRef = doc(db, 'partners', partnerId);
     const existingSnap = await getDoc(partnerRef);
+    const shouldSetFirstRoundCreatedAt =
+      Boolean(firstRoundCreated) || stageReachedFirstRoundMilestone(normalizedPartner.onboardingStage);
 
     const updatePayload: Record<string, any> = {
       type: normalizedPartner.type,

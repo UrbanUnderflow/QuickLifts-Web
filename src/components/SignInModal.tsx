@@ -490,6 +490,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               legalAcceptance: isSignUp
                 ? buildCurrentLegalAcceptance('web-modal-social-signup-apple')
                 : null,
+              ...(partnerSource ? { partnerSource } : {}),
             });
             await userService.createUser(user.uid, firestoreUser);
           }
@@ -576,6 +577,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             legalAcceptance: isSignUp
               ? buildCurrentLegalAcceptance('web-modal-social-signup-google')
               : null,
+            ...(partnerSource ? { partnerSource } : {}),
           });
           await userService.createUser(user.uid, firestoreUser);
           console.log('Google Sign In - Created New User:', firestoreUser);
@@ -781,6 +783,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             email: user.email,
             displayName: user.displayName || "",
             legalAcceptance: null,
+            ...(partnerSource ? { partnerSource } : {}),
           });
           await userService.createUser(user.uid, firestoreUser);
           addLog(`Created new Firestore user: ${firestoreUser.id}`);
