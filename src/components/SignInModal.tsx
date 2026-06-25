@@ -1161,6 +1161,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           }
           
           try {
+            const partnerSource = await resolvePartnerSourceFromQuery(router.query);
             // Create the Firebase Auth user
             const { user } = await createUserWithEmailAndPassword(auth, email, password);
             console.log('[SignInModal] Auth User created successfully:', { uid: user.uid, email: user.email, inviteCode: inviteCode || null });

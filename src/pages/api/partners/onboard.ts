@@ -130,7 +130,7 @@ export default async function handler(
   res: NextApiResponse<OnboardPartnerResponseBody | { success: false; error: string; details?: { field: string; message: string }[] }>
 ) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
   }
 
   try {
