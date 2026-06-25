@@ -17,3 +17,17 @@ The daily snapshot is not just volume reporting. **Purchase logs** show whether 
 ### 3. Retargeting state and AppsFlyer coverage keep attribution and follow-up honest
 
 **Retargeting state** shows whether follow-up is active, stale, or mismatched to the user moment, and **AppsFlyer coverage** helps show whether the day’s results are broad-based or concentrated in a narrower traffic mix. Together, they keep the snapshot honest about what was influenced by messaging, what was influenced by acquisition mix, and what still needs cleaner attribution before it becomes a partner claim.
+
+## Copy snippets for brands
+
+### Brand KPI update — operating view first
+
+"Today’s Macra KPI snapshot is assembled from the current Scoreboard, Experiments, purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage before any partner readout is shared. That means this update reflects the live operating view rather than a single metric or recycled summary."
+
+### Brand KPI update — if the day is stable
+
+"Today’s snapshot suggests the funnel story is holding within the current operating range. Scoreboard and Experiments are setting the top-line read, purchase logs are supporting the quality of that movement, and the attribution picture remains grounded in current retargeting state and AppsFlyer coverage. The recommendation is to keep partner messaging specific and factual rather than turning a stable day into an oversized claim."
+
+### Brand KPI update — if the day needs caution
+
+"Today’s snapshot shows enough movement to warrant a tighter read before we broaden the story. We are looking at purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage alongside the daily Scoreboard and Experiments view to separate a real operating shift from noise, follow-up drift, or traffic-mix distortion. Until that read is clean, partner messaging should stay measured and avoid overinterpreting a single day."
