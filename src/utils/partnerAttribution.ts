@@ -26,16 +26,16 @@ export const extractPartnerInviteCodeFromQuery = (query: ParsedUrlQuery | Record
   );
 };
 
-export const buildPartnerSourceFromQuery = (
+export const readPartnerIdentifierFromQuery = (
   query: ParsedUrlQuery | Record<string, string | string[] | undefined>
-): PartnerSource | undefined => {
+): { type: PartnerSourceType; partnerIdentifier: string } | undefined => {
   const directType = parsePartnerSourceType(normalizeQueryValue(query.partnerType));
   const directPartnerId = normalizeQueryValue(query.partnerId);
 
   if (directType && directPartnerId) {
     return {
       type: directType,
-      partnerId: doc(db, 'partners', directPartnerId),
+      partnerIdentifier: directPartnerId,
     };
   }
 
@@ -50,9 +50,50 @@ export const buildPartnerSourceFromQuery = (
   if (utmDerivedType && utmDerivedPartnerId) {
     return {
       type: utmDerivedType,
-      partnerId: doc(db, 'partners', utmDerivedPartnerId),
+      partnerIdentifier: utmDerivedPartnerId,
     };
   }
 
   return undefined;
+};
+
+export const buildPartnerSourceFromQuery = (
+  query: ParsedUrlQuery | Record<string, string | string[] | undefined>
+): PartnerSource | undefined => {
+  const partnerIdentity = readPartnerIdentifierFromQuery(query);
+
+  if (!partnerIdentity) {
+    return undefined;
+  }
+
+  return {
+    type: partnerIdentity.type,
+    partnerId: doc(db, 'partners', partnerIdentity.partnerIdentifier),
+  };
+};
+
+export const resolvePartnerSourceFromQuery = async (
+  query: ParsedUrlQuery | Record<string, string | string[] | undefined>
+): Promise<PartnerSource | undefined> => {
+  const partnerIdentity = readPartnerIdentifierFromQuery(query);
+
+  if (!partnerIdentity) {
+    return undefined;
+  }
+
+  const partnerRef = doc(db, 'partners', partnerIdentity.partnerIdentifier);
+  const partnerSnap = await getDoc(partnerRef);
+
+  if (!partnerSnap.exists()) {
+    console.warn('[partnerAttribution] Ignoring unresolved partner attribution', {
+      partnerType: partnerIdentity.type,
+      partnerIdentifier: partnerIdentity.partnerIdentifier,
+    });
+    return undefined;
+  }
+
+  return {
+    type: partnerIdentity.type,
+    partnerId: partnerRef,
+  };
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   getRedirectResult,
   signInWithPopup,
@@ -37,7 +37,7 @@ import {
   TERMS_PATH,
 } from '../utils/legalAcceptance';
 import { dateToUnixTimestamp } from '../utils/formatDate';
-import { buildPartnerSourceFromQuery, extractPartnerInviteCodeFromQuery } from '../utils/partnerAttribution';
+import { extractPartnerInviteCodeFromQuery, resolvePartnerSourceFromQuery } from '../utils/partnerAttribution';
 
 interface SignInModalProps {
   isVisible: boolean;
@@ -181,7 +181,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
   const isOnAdminPage = router.pathname.startsWith('/admin/') || router.asPath.startsWith('/admin/');
   const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage;
-  const partnerSource = useMemo(() => buildPartnerSourceFromQuery(router.query), [router.query]);
 
   // Detect if the user is on an iPhone and component mount
   useEffect(() => {
@@ -466,6 +465,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsLoading(true);
       setError(null);
       setActiveProvider(provider);
+      const partnerSource = await resolvePartnerSourceFromQuery(router.query);
    
       if (provider === "apple") {
         // Initialize Apple OAuth provider

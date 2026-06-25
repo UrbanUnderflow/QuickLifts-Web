@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { browserPopupRedirectResolver, createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
-import { buildPartnerSourceFromQuery } from '../utils/partnerAttribution';
+import { resolvePartnerSourceFromQuery } from '../utils/partnerAttribution';
 import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -53,7 +53,6 @@ const SignUpPage: React.FC = () => {
   const [usernameFormatError, setUsernameFormatError] = useState<string | null>(null);
 
   const isCoachSignUp = type === 'coach';
-  const partnerSource = useMemo(() => buildPartnerSourceFromQuery(router.query), [router.query]);
 
   // Clear error when user starts typing
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,6 +224,7 @@ const SignUpPage: React.FC = () => {
       }
 
       const legalSource = provider === 'google' ? 'web-signup-social-google' : 'web-signup-social-apple';
+      const partnerSource = await resolvePartnerSourceFromQuery(router.query);
 
       // Only create a Firestore doc the first time this account is seen.
       const existing = await userService.fetchUserFromFirestore(firebaseUser.uid).catch(() => null);
@@ -319,6 +319,8 @@ const SignUpPage: React.FC = () => {
     setError(null);
     
     try {
+      const partnerSource = await resolvePartnerSourceFromQuery(router.query);
+
       // Final username availability check before creating user
       const uname = normalizedUsername(formData.username);
       const available = await checkUsernameAvailability(uname);
