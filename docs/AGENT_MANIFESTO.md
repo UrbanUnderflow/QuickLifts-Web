@@ -373,6 +373,7 @@ Root cause:
 - not a missing-tool problem
 - the content was already present
 - the failure pattern ap..."
+- **[2026-06-25] Solara** — Step "In the same file, add `## Copy snippets for gyms` and `## Copy snippets for run clubs` sections, each with audience-specific copy blocks that translate the refreshed active `variant_a` experiment readout into next-step funnel messaging for that partner type." still had issues after 2 retries. Output signals: \bmissing\b. Last output: "The failure wasn’t a missing tool. It was that prior attempts kept mixing diagnosis, status narration, and partial outpu..."
 ---
 
 ## Operational Rules

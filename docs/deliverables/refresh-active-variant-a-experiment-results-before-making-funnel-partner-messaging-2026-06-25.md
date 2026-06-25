@@ -34,6 +34,8 @@ AppsFlyer imports help separate source quality from message quality. If active `
 
 ## Copy snippets for gyms
 
+These gym-facing snippets assume the active `variant_a` read has been refreshed before any message is sent.
+
 ### Gym partner update — if refreshed variant_a is holding
 
 "We refreshed the active `variant_a` read before changing any gym-facing funnel message, and the current result still supports the existing trial-start path. The recommendation is to keep the gym story practical and specific: show what a new member starts with this week, what coaching structure they get immediately, and why the first step feels manageable instead of vague. If the refreshed result is still working, the right move is not a louder claim — it is a clearer first-step promise."
@@ -43,6 +45,8 @@ AppsFlyer imports help separate source quality from message quality. If active `
 "We refreshed active `variant_a` before making this gym messaging recommendation, and the updated read suggests the current funnel story is losing trust too early. Before we change the message, we are checking purchase logs, cancel reasons, user state, and retargeting state to confirm whether the drop is happening at the offer, follow-up, or onboarding stage. The next step is one copy adjustment that makes the opening value more concrete and reduces how much faith a new member has to front-load."
 
 ## Copy snippets for run clubs
+
+These run-club snippets translate the refreshed `variant_a` read into a simpler, more believable start-line message.
 
 ### Run club update — if refreshed variant_a is holding
 
