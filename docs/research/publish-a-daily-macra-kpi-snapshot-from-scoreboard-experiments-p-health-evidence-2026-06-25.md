@@ -103,11 +103,97 @@ Source: `src/pages/admin/experiments.tsx`
 
 ## Purchase Logs
 
-_To be populated with cited conversion and purchase-flow evidence from purchase log sources._
+### Source surface used
+- **Dashboard / report:** `/admin/macraPurchaseLogs`
+- **Dataset / collection used for Macra:** `Macra-purchase-logs`
+- **Related operating surface named in runbook:** `/admin/purchaseLogs` and `/admin/macraPurchaseLogs`
+- **Relevant code surface:** `src/pages/admin/macraPurchaseLogs.tsx`
+
+Source: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/macraPurchaseLogs.tsx`
+
+### Purchase-log schema evidence
+The Macra purchase-log admin surface explicitly loads Macra records from the Firestore collection **`Macra-purchase-logs`** and summarizes them using these status buckets:
+
+- `attempted`
+- `success`
+- `failed`
+- `canceled` / `cancelled`
+
+The same surface also exposes the fields needed to analyze conversion risk at the purchase boundary:
+
+- `plan`
+- `source`
+- `failureReason`
+- `errorDomain`
+- `errorCode`
+- `readableErrorCode`
+- `errorDescription`
+- `cancelReasonCode`
+- `cancelReasonLabel`
+- `cancelFeedbackTrigger`
+- `cancelFeedbackMetadata`
+
+It computes a **Resolved success rate** as:
+
+- `success / (success + failed + canceled)`
+
+and displays summary cards for:
+
+- `Total logs`
+- `Success`
+- `Failed`
+- `Canceled`
+- `Attempted`
+- `Resolved success rate`
+
+Source: `src/pages/admin/macraPurchaseLogs.tsx`
+
+### Purchase-log evidence notes
+1. The Macra purchase-log surface is not just a receipt table; it is the canonical evidence surface for where conversion breaks at the transaction layer. Because it separately tracks `failed` versus `canceled`, Macra can distinguish **technical checkout failure** from **user-initiated abandonment**, which matters because those imply very different retention fixes. Source: `src/pages/admin/macraPurchaseLogs.tsx`
+2. The purchase-log schema preserves **plan**, **channel/source**, and **cancel feedback metadata** on each row. That means the daily KPI snapshot can and should connect conversion outcomes to the specific monetization context users saw, rather than treating all purchase friction as one blob. Source: `src/pages/admin/macraPurchaseLogs.tsx`
+3. The runbook explicitly places Purchase Logs in the core source-of-truth set for the daily Macra operating loop, alongside Scoreboard, Experiments, Cancel Reasons, and AppsFlyer ingestion. This means purchase outcomes are part of the primary operating evidence standard, not a secondary reconciliation step. Source: `docs/agents/macra-operating-runbook.md`
 
 ## Cancel Reasons
 
-_To be populated with cited churn and cancellation evidence from cancel-reason sources._
+### Source surface used
+- **Dashboard / report:** `/admin/macraCancelReasons`
+- **Table / export used:** Firestore collection **`Macrafeedbackreason`**, enriched with `users/{userId}` profile context and exportable via the page’s **reason chart** payload.
+- **Relevant code surface:** `src/pages/admin/macraCancelReasons.tsx`
+
+Source: `docs/agents/macra-operating-runbook.md`; `src/pages/admin/macraCancelReasons.tsx`
+
+### Cancel-reason schema evidence
+The Macra cancel-reason admin surface loads cancellation feedback from **`Macrafeedbackreason`** and enriches each row with user context from the `users` collection. The exported chart/report includes:
+
+- `reason`
+- `reasonLabel`
+- `trigger`
+- `source`
+- `selectedPlanId`
+- `selectedPlanPeriod`
+- `surface`
+- `app`
+- `metadata`
+- `user.subscriptionType`
+- `user.registrationEntryPoint`
+- `user.hasCompletedMacraOnboarding`
+- `user.macraPaywallCancelFeedbackCount`
+
+The page also computes reason-level summaries across production responses:
+
+- `Production responses`
+- `Unique users`
+- `Top reason`
+- per-reason `% of responses`
+- per-reason `uniqueUsers`
+- per-reason `topPlanLabel`
+
+Source: `src/pages/admin/macraCancelReasons.tsx`
+
+### Cancel-reason evidence notes
+1. The cancel-reason surface is structurally able to separate **why users backed out** (`reason`, `reasonLabel`) from **when/how they backed out** (`trigger`, `surface`, `source`) and **what offer they were considering** (`selectedPlanId`, `selectedPlanPeriod`). That is exactly the evidence needed to tell whether Macra has a price problem, a trust problem, or a timing problem at the paywall. Source: `src/pages/admin/macraCancelReasons.tsx`
+2. Because the cancel-reason export enriches responses with `user.hasCompletedMacraOnboarding` and `user.registrationEntryPoint`, the team can connect cancellation behavior to onboarding completion state and acquisition path. That matters for trial-start retention because a cancellation pattern coming from partially onboarded users implies different remediation than a pattern coming from fully activated users. Source: `src/pages/admin/macraCancelReasons.tsx`
+3. The runbook explicitly lists Cancel Reasons as a required source-of-truth surface and expects the daily snapshot to include **top cancel reasons** as guardrails. So cancellation feedback is not anecdotal voice-of-customer data; it is a first-class operating input for whether the trial-start system is trustworthy enough to scale. Source: `docs/agents/macra-operating-runbook.md`
 
 ## Retargeting
 
@@ -124,6 +210,8 @@ _To be populated with cited AppsFlyer import and event-coverage evidence._
 3. **StoreKit cancellation pressure is big enough to deserve daily guardrail status.** With 74 StoreKit purchase cancels in the same read window as 94 `af_initiated_checkout` events, cancellation behavior is not a side metric. It is part of the operating core for trial-start quality and should be read alongside starts, CTAs, and trials every day. Source: `docs/agents/macra-operating-runbook.md`
 4. **The experiment surface is structurally capable of measuring the right funnel moments, but the evidence can expire.** `/admin/experiments` explicitly tracks `paywallViews`, `planSelections`, `checkoutStarts`, `trialStarts`, and `paidConversions`, yet the runbook warns the saved result snapshots can be stale. The operational risk is making product decisions off an old snapshot that no longer reflects active `variant_a`. Source: `src/pages/admin/experiments.tsx`; `docs/agents/macra-operating-runbook.md`
 5. **Historical evidence argues against reintroducing a hard paywall stance.** The documented retirement note for `variant_c` (~1% conversion, ~95% Apple-sheet cancels) suggests that harsher monetization framing can degrade the activation moment badly enough to poison trial-start quality. Source: `src/pages/admin/experiments.tsx`; `scripts/setMacraExperimentFlow.js`
+6. **Macra already has the instrumentation to separate transaction failure from voluntary abandonment, so the next retention read should stop lumping them together.** The `Macra-purchase-logs` surface distinguishes `failed` from `canceled/cancelled` and preserves error fields plus cancel-reason fields on the same purchase records. That means one daily KPI snapshot can isolate whether trial-start loss is being driven by broken checkout mechanics, user hesitation, or both. Source: `src/pages/admin/macraPurchaseLogs.tsx`
+7. **Cancellation feedback can be tied back to onboarding and offer context, which makes it a usable retention-risk predictor rather than just qualitative noise.** The `Macrafeedbackreason` export includes selected plan, trigger, source, onboarding completion, and registration entry point, so repeated patterns there should be treated as evidence about trial-start trust quality and not merely post-hoc comments. Source: `src/pages/admin/macraCancelReasons.tsx`
 
 ## Recommended Intervention
 
