@@ -77,22 +77,37 @@ Source basis:
 
 ## Experiment Freshness
 
-> Fill from the current Macra Experiments artifact, especially active `variant_a` reads and last-refresh timing.
+Source basis:
 
-- Active experiments:
-- Last refresh timestamp:
-- Fresh vs stale assessment:
-- Decision risk from stale reads:
+- Macra experiment-health evidence bundle in `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
+- Macra operating runbook current read in `docs/agents/macra-operating-runbook.md`
+
+Current freshness call:
+
+- Active experiment family in scope: **`variant_a`**
+- Last experiment snapshot used in the current operating bundle: **2026-06-25 research + runbook refresh**
+- Fresh vs stale assessment: **Mixed / operationally stale for decisioning**
+- Why mixed: the score bundle is fresh enough to describe top-of-funnel behavior today, but the experiment layer is **not fresh enough to approve a new funnel move with confidence** because the active `variant_a` read is still being interpreted through blended aggregate evidence rather than a clean, current, experiment-isolated scoreboard refresh.
+- Decision risk from stale reads: **High enough to block expansion decisions** — especially any paid scaling or paywall copy winner call that assumes `variant_a` is a proven lift rather than an in-progress signal.
+
+Practical freshness posture for today:
+
+- Treat current experiment output as **observe-only**, not **ship-the-winner** evidence.
+- Do **not** declare a winning funnel move from the current `variant_a` read until the experiment snapshot is refreshed against the latest scoreboard inputs and acquisition split.
 
 ## Guardrails
 
-> Fill from cancel reasons, paywall dismissal behavior, retargeting pressure, user-state checks, and AppsFlyer coverage gaps.
+Source basis:
 
-- Cancel-signal guardrail:
-- Paywall-dismissal guardrail:
-- Retargeting-pressure guardrail:
-- Event-semantics / trust guardrail:
-- AppsFlyer coverage guardrail:
+- Macra health evidence bundle in `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
+- Macra decision-log / risk brief in `docs/research/maintain-a-macra-decision-log-tying-every-operational-change-to--competitive-brief-2026-06-25.md`
+- Current operating aggregate in `docs/agents/macra-operating-runbook.md`
+
+- Cancel-signal guardrail: **Holding, but stressed.** The current source bundle shows **74 StoreKit purchase cancels**, with the burden materially heavier on organic traffic (**65 organic vs 9 Apple Search Ads**). That is not a stop-ship event by itself, but it is too large to ignore when trial starts are only **5**.
+- Paywall-dismissal guardrail: **Partially observable, not fully green.** The current bundle gives a strong paywall drop pattern (**448 paywall reached → 317 CTA pressed → 94 initiated checkout**), which is enough to flag friction, but today’s source set does **not** give a fully segmented dismissal-reason artifact. Treat this as a caution flag rather than a cleared guardrail.
+- Retargeting-pressure guardrail: **Not yet verified.** The current aggregate read does not provide a standalone retargeting-state breakout, so frequency / pressure cannot be marked safe from this step alone. Until the retargeting-state source is pulled in, assume pressure is **unverified** rather than acceptable.
+- Event-semantics / trust guardrail: **Not holding cleanly enough to scale.** The operating bundle explicitly warns against combining `macra_subscription_web_checkout_started` with `af_initiated_checkout` as unique checkout users without person-level dedupe. That means checkout-stage event semantics are still noisy enough that scaling on raw checkout totals would overstate certainty.
+- AppsFlyer coverage guardrail: **Partial coverage only.** AppsFlyer is good enough today to separate **Apple Search Ads vs Organic** at the aggregate level, but not good enough to support every source-state question in the operating system. Coverage is sufficient for directional source quality, insufficient for full retargeting and perfect checkout dedupe.
 
 ## Agent Findings
 
