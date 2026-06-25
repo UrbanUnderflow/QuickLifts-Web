@@ -20,7 +20,7 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 - **`cancels`** = StoreKit purchase cancel count from the same source split. Source path: `docs/agents/macra-operating-runbook.md`
 - **`checkout-to-trial`** = calculated as `trial starts / af_initiated_checkout`, using the rates reported in the runbook (`2.5%` Organic, `20.0%` Apple Search Ads). Source path: `docs/agents/macra-operating-runbook.md`
 
-## Organic vs Apple Search Ads Table
+## Channel Metrics Table
 
 | Source | starts | paywall | CTA | af_initiated_checkout | trial starts | cancels | checkout-to-trial |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -29,7 +29,7 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 
 Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for the 2026-06-25 AppsFlyer aggregate CSV surfaced through the Macra Scoreboard source split at `/admin/emailSequences`, scoreboard tab)
 
-## Quality Analysis
+## Interpretation
 
 - **Organic wins on volume and earlier funnel continuity, but not on downstream quality.** Organic contributes more starts (`406` vs `127`), paywall reaches (`350` vs `98`), and CTA presses (`253` vs `64`) than Apple Search Ads, and it also beats ASA on start→paywall (`86.2%` vs `77.2%`), paywall→CTA (`72.3%` vs `65.3%`), and CTA→`af_initiated_checkout` (`31.2%` vs `23.4%`). Source: `docs/agents/macra-operating-runbook.md`
 - **Apple Search Ads is materially better after checkout initiation.** ASA converts `3` trial starts from `15` `af_initiated_checkout` events, or `20.0%` checkout-to-trial, while Organic converts `2` trial starts from `79` checkouts, or `2.5%`. That is the clearest signal that ASA traffic is currently higher intent or better matched once users cross the checkout threshold. Source: `docs/agents/macra-operating-runbook.md`; `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
