@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../../api/firebase/config';
+import admin, { getFirebaseAdminApp } from '../../../lib/firebase-admin';
 import type { Partner, PartnerType, PartnerFirestoreData } from '../../../../server/models/partners';
 import { PartnerModel } from '../../../../server/models/partners';
 import { getPlaybookForType } from '../../../../server/partners/playbookConfig';
@@ -162,8 +161,11 @@ export default async function handler(
     // Determine document ID: prefer explicit id, fall back to normalized email
     const partnerId = normalizedPartner.id;
 
-    const partnerRef = doc(db, 'partners', partnerId);
-    const existingSnap = await getDoc(partnerRef);
+    const forceDevFirebase =
+      req.headers['x-force-dev-firebase'] === 'true' || req.headers['x-force-dev-firebase'] === '1';
+    const firestore = getFirebaseAdminApp(forceDevFirebase).firestore();
+    const partnerRef = firestore.collection('partners').doc(partnerId);
+    const existingSnap = await partnerRef.get();
     const shouldSetFirstRoundCreatedAt =
       Boolean(firstRoundCreated) || stageReachedFirstRoundMilestone(normalizedPartner.onboardingStage);
 
@@ -174,7 +176,7 @@ export default async function handler(
       onboardingStage: normalizedPartner.onboardingStage,
     };
 
-    if (existingSnap.exists()) {
+    if (existingSnap.exists) {
       const existingData = existingSnap.data() as PartnerFirestoreData;
 
       // Preserve existing invitedAt; do not overwrite on updates
@@ -188,7 +190,7 @@ export default async function handler(
 
       // Only set firstRoundCreatedAt once, either from the explicit flag or when the stage reaches the first-round milestone
       if (shouldSetFirstRoundCreatedAt && !existingData.firstRoundCreatedAt) {
-        updatePayload.firstRoundCreatedAt = serverTimestamp();
+        updatePayload.firstRoundCreatedAt = admin.firestore.FieldValue.serverTimestamp();
       }
     } else {
       // New partner: attach playbook template based on type
@@ -201,19 +203,19 @@ export default async function handler(
 
       // New partner: set invitedAt using serverTimestamp so we can measure time-to-active accurately
       updatePayload.onboardingStage = normalizedPartner.onboardingStage;
-      updatePayload.invitedAt = serverTimestamp();
+      updatePayload.invitedAt = admin.firestore.FieldValue.serverTimestamp();
 
       // Optionally set firstRoundCreatedAt on creation from the explicit flag or when the stage already represents first-round completion
       if (shouldSetFirstRoundCreatedAt) {
-        updatePayload.firstRoundCreatedAt = serverTimestamp();
+        updatePayload.firstRoundCreatedAt = admin.firestore.FieldValue.serverTimestamp();
       }
     }
 
-    await setDoc(partnerRef, updatePayload, { merge: true });
+    await partnerRef.set(updatePayload, { merge: true });
 
     // Re-read the document so timestamps come back as Firestore Timestamp objects
-    const finalSnap = await getDoc(partnerRef);
-    if (!finalSnap.exists()) {
+    const finalSnap = await partnerRef.get();
+    if (!finalSnap.exists) {
       throw new Error(`Partner document was not found after write: ${partnerId}`);
     }
 

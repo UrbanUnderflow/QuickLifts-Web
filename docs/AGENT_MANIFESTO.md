@@ -361,6 +361,12 @@ My previous replies for Step 4 failed because I on..."
 - **[2026-04-04] Sage** — Step "Research and plan: Verify the activation proof path and downstream invite readiness contract" failed even after rewrite. Original error: "Force recovery: Mission paused in Mission Control.". Rewrite error: "Force recovery: Mission paused in Mission Control."
 - **[2026-04-04] Solara** — Step "Create the first admin activation invite artifact in the source that issues it — e.g., add/execute the server function or admin script that writes a new document in Firestore collection `/adminActivationInvites/{inviteId}` for the selected coach/admin, with fields for `organizationId`, `teamId`, `email`, `role=org_admin`, `teamRole=team_admin`, `token`, `expiresAt`, and `status=pending`." failed even after rewrite. Original error: "Force recovery: Mission paused in Mission Control.". Rewrite error: "Force recovery: Mission paused in Mission Control."
 - **[2026-06-25] Nora** — Step "Create or update the shared data model in `server/models/partners.ts` to export a `Partner` type (or interface) with the Firestore-backed fields `type: 'brand' | 'gym' | 'runClub'`, `name`, `contactEmail`, `onboardingStage`, `invitedAt`, and optional `firstRoundCreatedAt`, plus any persisted document id field already used by the codebase." still had issues after 2 retries. Output signals: \bfailed\b, \bmissing\b, \bblocked\b. Last output: "Root cause: the prior attempts weren’t blocked by missing system tools or by the partner model implementation. They fail..."
+- **[2026-06-25] Sage** — Step "Add cited evidence in the same file from the purchase-log and cancel-reason sources, naming the exact purchase log dataset/report and cancel-reason table or export used, and write at least two findings that connect conversion or churn behavior to Macra trial-start retention risk." still had issues after 2 retries. Output signals: \bfailed\b, \bmissing\b. Last output: "Step 3 is complete.
+
+Root cause:
+- Not a missing-tool issue.
+- The file content and commit were already in place.
+- The ..."
 ---
 
 ## Operational Rules

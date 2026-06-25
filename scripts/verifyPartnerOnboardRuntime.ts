@@ -1,9 +1,13 @@
-import handler from '../src/pages/api/partners/onboard';
+import path from 'path';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import serviceAccount from '../serviceAccountKey.json';
 
 async function main() {
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'serviceAccountKey.json');
+
+  const { default: handler } = await import('../src/pages/api/partners/onboard');
+
   if (!getApps().length) {
     initializeApp({ credential: cert(serviceAccount as any) });
   }
@@ -21,6 +25,7 @@ async function main() {
 
   const req: any = {
     method: 'POST',
+    headers: {},
     body,
   };
 
