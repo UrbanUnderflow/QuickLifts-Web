@@ -112,7 +112,24 @@ _To be populated with cited birthdate requirement behavior and whether missing b
 
 ## trial activation
 
-_To be populated with cited definition of trial activation and any state/event distinction from raw trial start._
+### Source artifacts
+- `src/pages/admin/emailSequences.tsx`
+- `docs/agents/macra-operating-runbook.md`
+- `src/pages/admin/users.tsx`
+
+### Observed semantics
+Macra distinguishes between a **trial start** and a **trial user who still needs activation or recovery handling**. The email-sequences/Scoreboard surface includes a dedicated recovery sequence named `macra-trial-no-activation-24h-v1`, which implies that a user can have entered trial state while still failing to activate in the desired way.
+
+On the user-state side, `/admin/users` exposes fields such as `hasCompletedMacraOnboarding` and `macraOnboardingCompletedAt`, which are relevant to whether a trial user has progressed into a more complete activated state.
+
+The runbook also explicitly separates growth-signal review from trust/quality review, reinforcing that raw trial starts are not the same thing as fully trustworthy activation.
+
+Source: `src/pages/admin/emailSequences.tsx`; `src/pages/admin/users.tsx`; `docs/agents/macra-operating-runbook.md`
+
+### Trust note
+For Macra operations, “trial activation” behaves like a **post-trial-start quality state**, not a synonym for `af_start_trial`. That distinction matters because the team could otherwise scale a funnel that produces nominal trials without producing genuinely activated users.
+
+Source: `src/pages/admin/emailSequences.tsx`; `docs/agents/macra-operating-runbook.md`
 
 ## Ambiguities
 
