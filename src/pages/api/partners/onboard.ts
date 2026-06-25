@@ -125,21 +125,31 @@ export default async function handler(
       });
     }
 
-    const { id, type, contactEmail, onboardingStage, firstRoundCreated } =
+    const { id, type, name, contactEmail, onboardingStage, firstRoundCreated } =
       validation.value;
 
     const normalizedEmail = contactEmail.trim().toLowerCase();
+    const normalizedName = name.trim();
+
+    const normalizedPartner: Pick<Partner, 'id' | 'type' | 'name' | 'contactEmail' | 'onboardingStage'> = {
+      id: (id && id.trim()) || normalizedEmail,
+      type,
+      name: normalizedName,
+      contactEmail: normalizedEmail,
+      onboardingStage,
+    };
 
     // Determine document ID: prefer explicit id, fall back to normalized email
-    const partnerId = (id && id.trim()) || normalizedEmail;
+    const partnerId = normalizedPartner.id;
 
     const partnerRef = doc(db, 'partners', partnerId);
     const existingSnap = await getDoc(partnerRef);
 
     const updatePayload: Record<string, any> = {
-      type,
-      contactEmail: normalizedEmail,
-      onboardingStage: onboardingStage || 'invited',
+      type: normalizedPartner.type,
+      name: normalizedPartner.name,
+      contactEmail: normalizedPartner.contactEmail,
+      onboardingStage: normalizedPartner.onboardingStage,
     };
 
     if (existingSnap.exists()) {
@@ -147,7 +157,7 @@ export default async function handler(
 
       // Preserve existing invitedAt; do not overwrite on updates
       updatePayload.onboardingStage =
-        onboardingStage || existingData.onboardingStage || 'invited';
+        normalizedPartner.onboardingStage || existingData.onboardingStage || 'invited';
 
       // Preserve existing playbook if present; do not overwrite on updates
       if (existingData && (existingData as any).playbook) {
@@ -168,7 +178,7 @@ export default async function handler(
       };
 
       // New partner: set invitedAt using serverTimestamp so we can measure time-to-active accurately
-      updatePayload.onboardingStage = onboardingStage || 'invited';
+      updatePayload.onboardingStage = normalizedPartner.onboardingStage;
       updatePayload.invitedAt = serverTimestamp();
 
       // Optionally allow firstRoundCreatedAt on creation if firstRoundCreated is passed

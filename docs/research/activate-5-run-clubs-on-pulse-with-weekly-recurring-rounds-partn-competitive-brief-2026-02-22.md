@@ -53,7 +53,14 @@ Which established run clubs appear most suitable for a Pulse partnership built a
 
 ## Differentiated Opportunities for Pulse
 
-_To be populated with exactly 3 opportunity subsections tied to repeated patterns observed across the documented clubs._
+### 1. Turn recurring runs into a canonical weekly round system
+Across Midnight Runners, November Project, and parkrun, the recurring behavior is already there: same-city crews, repeatable weekly formats, and identity built around showing up again next week. What is missing in at least two of those models is a lightweight owned layer that turns those recurring sessions into a structured, replayable club operating system rather than a mix of webpages, verbal norms, or broad event listings. Pulse can differentiate by giving club leaders a reusable weekly-round template — route, theme, prompts, attendance moment, recap — that makes each weekly run feel like part of a season instead of another isolated meetup. Source: <https://www.midnightrunners.com/>; <https://november-project.com/>; <https://www.parkrun.com/>
+
+### 2. Bridge attendance accountability and social proof in one workflow
+November Project leans on verbal accountability, parkrun emphasizes recorded finishes, and GoodGym appears to rely on structured sign-up and participation flows. That pattern shows a real market gap: clubs either get strong culture with weak system memory, or stronger system memory with less social-native storytelling. Pulse can win by combining simple weekly check-in, streak visibility, and organizer-facing participation views with a post-run recap that also generates social proof. That gives leaders a reason to use Pulse operationally, not just as another social surface. Source: <https://november-project.com/>; <https://www.parkrun.com/>; <https://www.goodgym.org/>
+
+### 3. Package creator content as a club growth engine, not an afterthought
+Midnight Runners and Black Girls RUN! both show that the run itself is also a content object: imagery, stories, identity, and member spotlights matter almost as much as the miles. GoodGym adds a related pattern where the meaning of the run can be larger than the workout itself. Pulse can differentiate by making each round produce creator-ready outputs by default — prompts, featured member moments, recap structure, and reusable story assets — so club leaders get member activation plus outward-facing distribution from the same weekly ritual. That is more compelling than generic event software because it turns weekly participation into organic growth media. Source: <https://amp.elperiodico.com/es/que-hacer/planes/20231124/fiestas-midnight-runners-barcelona-95017857>; <https://blackgirlsrun.com/>; <https://blackgirlsrun.com/blog/2026-bank-of-america-chicago-marathon-charity-athlete-spotlight-ronda-white/>; <https://www.goodgym.org/>
 
 ## Recommended Test
 
