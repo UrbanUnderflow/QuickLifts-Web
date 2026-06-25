@@ -367,6 +367,12 @@ Root cause:
 - Not a missing-tool issue.
 - The file content and commit were already in place.
 - The ..."
+- **[2026-06-25] Sage** — Step "Populate the `Scoreboard`, `Experiments`, and `User State` sections of `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md` with cited metrics or observations from those exact sources, and write at least 2 numbered items in `Findings` that explicitly reference those citations." still had issues after 2 retries. Output signals: \bmissing\b. Last output: "Step 2 is complete.
+
+Root cause:
+- not a missing-tool problem
+- the content was already present
+- the failure pattern ap..."
 ---
 
 ## Operational Rules
