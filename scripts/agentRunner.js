@@ -798,6 +798,10 @@ async function isMissionPaused(forceRefresh = false) {
     return String(mission?.status || '').toLowerCase() === 'paused';
 }
 
+function shouldSuppressAutoAssignment(mission) {
+    return mission?.suppressIdleAutoTasks === true || mission?.disableAutoAssignment === true;
+}
+
 function buildAssigneeVariants(displayName) {
     const raw = String(displayName || '').trim();
     if (!raw) return [];
@@ -2598,6 +2602,7 @@ async function selfAssignTask() {
     try {
         if (await isMissionPaused()) return null;
         const mission = await loadMissionStatus();
+        if (shouldSuppressAutoAssignment(mission || {})) return null;
         if (isExecuteMissionActive(mission || {})) {
             return null;
         }
@@ -2858,6 +2863,7 @@ async function noraTaskManagerSweep() {
     try {
         if (await isMissionPaused()) return;
         const mission = await loadMissionStatus();
+        if (shouldSuppressAutoAssignment(mission || {})) return;
         if (isExecuteMissionActive(mission || {})) return;
 
         const allAgents = ['nora', 'scout', 'solara', 'sage'];

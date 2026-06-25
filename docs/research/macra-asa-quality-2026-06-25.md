@@ -20,12 +20,12 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 
 ## ASA vs Organic Funnel Table
 
-| Source | starts | paywall | CTA | af_initiated_checkout | trial starts | cancels | checkout-to-trial |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Organic | 406 | 350 | 253 | 79 | 2 | 65 | 2.5% |
-| Apple Search Ads | 127 | 98 | 64 | 15 | 3 | 9 | 20.0% |
+| Source | starts | af_initiated_checkout | trial starts | start-to-trial | checkout-to-trial |
+|---|---:|---:|---:|---:|---:|
+| Apple Search Ads | 127 | 15 | 3 | 2.4% | 20.0% |
+| Organic | 406 | 79 | 2 | 0.5% | 2.5% |
 
-Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for the 2026-06-25 AppsFlyer aggregate CSV surfaced through the Macra Scoreboard source split at `/admin/emailSequences`, scoreboard tab)
+Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for the 2026-06-25 AppsFlyer aggregate CSV surfaced through the Macra Scoreboard source split at `/admin/emailSequences`, scoreboard tab). `start-to-trial` is computed from the same source-level counts as `trial starts / starts`.
 
 ## Recommendation
 
