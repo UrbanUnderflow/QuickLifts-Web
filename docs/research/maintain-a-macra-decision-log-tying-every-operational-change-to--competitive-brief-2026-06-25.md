@@ -41,6 +41,10 @@ What decision-log structure should Macra use to tie each operational change to a
 ### 5. Microsoft ExP / OEC A/B Testing Guidance
 - **Public URL:** <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
 - **Short note on structure:** Microsoft's experimentation guidance centers on an Overall Evaluation Criterion (OEC) with disciplined measurement, making it a strong public example of tying product changes to expected impact while avoiding misleading local wins.
+- **Operational change mechanism:** Microsoft describes A/B testing as a structured decision system where proposed product changes are evaluated against an Overall Evaluation Criterion instead of relying on fragmented local signals. Source: <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
+- **Expected metric movement:** The expected movement is improvement in the OEC or other carefully chosen success metrics that reflect true user and business value. Source: <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
+- **Guardrail metric:** The article warns against local wins and misleading metrics, implying the need for additional checks so a treatment does not improve one number while harming the broader system. Source: <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
+- **Decision cadence / owner:** The guidance points to a disciplined experimentation practice owned by teams running repeated tests, with review occurring at the end of each valid experiment window rather than ad hoc. Source: <https://learn.microsoft.com/en-us/archive/msdn-magazine/2017/september/cutting-edge-guidelines-for-successful-ab-testing>
 
 ## Differentiated Opportunities
 
