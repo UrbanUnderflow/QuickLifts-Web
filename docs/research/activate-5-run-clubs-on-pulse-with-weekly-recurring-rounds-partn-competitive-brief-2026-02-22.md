@@ -20,12 +20,18 @@ Which established run clubs appear most suitable for a Pulse partnership built a
 - **City / market:** Multi-city community fitness and running movement that started in Boston and now operates across multiple cities worldwide. Source: <https://november-project.com/>
 - **Evidence of recurring group runs:** November Project states its mission is to provide **free, fun, weekly workout gatherings throughout the world** and tells members to check city-specific location details and "just show up." Source: <https://november-project.com/>
 - **Scale signal:** Exact active-member counts were not exposed in the fetched page, but the official site describes a worldwide multi-city footprint and references both average weekly members and lifetime members on the homepage, which is a strong equivalent scale signal even where the rendered counters were unavailable in fetch output. Source: <https://november-project.com/>
+- **Digital stack:** November Project uses its central website as the operational directory for locations and city-specific details, rather than forcing members through a heavy signup flow. Source: <https://november-project.com/>
+- **Attendance / accountability:** The official language is explicitly "Just Show Up" and the origin story says the movement uses a simple sense of **verbal accountability** to motivate repeat participation. Source: <https://november-project.com/>
+- **Social content generation:** The homepage points members to "Follow along on social media," signaling that community storytelling and visibility live heavily on social channels outside the core site. Source: <https://november-project.com/>
 
 ### 3. Black Girls RUN!
 - **Public URL:** <https://blackgirlsrun.com/>
 - **City / market:** U.S.-wide running community focused on Black women, with a national footprint across many local markets. Source: <https://blackgirlsrun.com/>
 - **Evidence of recurring group runs:** The site frames Black Girls RUN! as a movement members can join locally and connects that movement to ongoing running participation, races, and community programming rather than a single event. Source: <https://blackgirlsrun.com/>
 - **Scale signal:** The official site says joining the movement can change the lives of **thousands of women across the country**, which is a credible equivalent scale signal well above the minimum threshold even though chapter-level active-member counts are not published on the homepage. Source: <https://blackgirlsrun.com/>
+- **Digital stack:** The national website acts as the brand and editorial hub, while the movement language implies distributed local participation rather than a single centralized event product. Source: <https://blackgirlsrun.com/>
+- **Attendance / accountability:** Unverified, but the movement appears to rely on community identity and local-group continuity more than a visible public attendance ledger. Source: <https://blackgirlsrun.com/>
+- **Social content generation:** The homepage foregrounds blog stories, athlete spotlights, and links out to participants' Instagram and Facebook profiles, showing that member storytelling is already part of the operating rhythm. Source: <https://blackgirlsrun.com/>; <https://blackgirlsrun.com/blog/2026-bank-of-america-chicago-marathon-charity-athlete-spotlight-ronda-white/>
 
 ### 4. parkrun
 - **Public URL:** <https://www.parkrun.com/>

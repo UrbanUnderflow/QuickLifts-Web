@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
-import type { PartnerType, PartnerFirestoreData } from '../../../types/Partner';
-import { PartnerModel } from '../../../types/Partner';
+import type { Partner, PartnerType, PartnerFirestoreData } from '../../../../server/models/partners';
+import { PartnerModel } from '../../../../server/models/partners';
 import { getPlaybookForType } from '../../../../server/partners/playbookConfig';
 
 // Basic runtime validation helpers for this handler (steps 2–4)
@@ -24,8 +24,9 @@ function isValidEmail(email: any): email is string {
 interface OnboardPartnerRequestBody {
   id?: string; // optional explicit ID override
   type: PartnerType;
+  name: string;
   contactEmail: string;
-  onboardingStage?: string;
+  onboardingStage: string;
   // When true, marks the moment the first Pulse round has been created for this partner
   firstRoundCreated?: boolean;
 }
