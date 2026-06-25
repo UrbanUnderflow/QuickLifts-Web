@@ -76,4 +76,10 @@ Midnight Runners and Black Girls RUN! both show that the run itself is also a co
 
 ## Sources
 
-_To be populated with the supporting public URLs used in this brief._
+- <https://www.midnightrunners.com/>
+- <https://amp.elperiodico.com/es/que-hacer/planes/20231124/fiestas-midnight-runners-barcelona-95017857>
+- <https://november-project.com/>
+- <https://blackgirlsrun.com/>
+- <https://blackgirlsrun.com/blog/2026-bank-of-america-chicago-marathon-charity-athlete-spotlight-ronda-white/>
+- <https://www.parkrun.com/>
+- <https://www.goodgym.org/>
