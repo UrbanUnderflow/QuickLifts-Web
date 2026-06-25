@@ -102,6 +102,59 @@ const getAct1AudioPath = (audioId: string | null): string | null => {
 };
 
 const NORA_THINKING_MS = 3500;
+const MEDIA_READY_STATE_HAVE_CURRENT_DATA = 2;
+const NORA_NARRATION_OUTPUT_GAIN = 1.7;
+const SILENT_AUDIO_UNLOCK_SRC =
+    'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YSADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+
+type PulseCheckDemoAudioWindow = Window &
+    typeof globalThis & {
+        webkitAudioContext?: typeof AudioContext;
+        __pulseCheckDemoAudioContext?: AudioContext;
+    };
+
+const getPulseCheckDemoAudioContext = (): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+
+    try {
+        const audioWindow = window as PulseCheckDemoAudioWindow;
+        const AudioCtx = window.AudioContext || audioWindow.webkitAudioContext;
+        if (!AudioCtx) return null;
+
+        if (
+            !audioWindow.__pulseCheckDemoAudioContext ||
+            audioWindow.__pulseCheckDemoAudioContext.state === 'closed'
+        ) {
+            audioWindow.__pulseCheckDemoAudioContext = new AudioCtx();
+        }
+
+        const ctx = audioWindow.__pulseCheckDemoAudioContext;
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => undefined);
+        }
+        return ctx;
+    } catch {
+        return null;
+    }
+};
+
+const primePulseCheckDemoAudioContext = () => {
+    const ctx = getPulseCheckDemoAudioContext();
+    if (!ctx) return;
+
+    try {
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => undefined);
+        }
+
+        const source = ctx.createBufferSource();
+        source.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+        source.connect(ctx.destination);
+        source.start(0);
+    } catch {
+        // Safari may reject duplicate unlock attempts; the demo can continue silently.
+    }
+};
 
 // ─────────────────────────────────────────────────────────
 // DEMO SCRIPT — Act 1 Conversation Flow
@@ -1398,7 +1451,8 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
     // Play critical alert sound using Web Audio API
     const playCriticalAlert = useCallback(() => {
         try {
-            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const ctx = getPulseCheckDemoAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
             const playTone = (freq: number, startTime: number, duration: number) => {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
@@ -2133,7 +2187,8 @@ const CallSimulation: React.FC<{
         // Play ringing tone
         const playRing = () => {
             try {
-                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const ctx = getPulseCheckDemoAudioContext();
+                if (!ctx || ctx.state !== 'running') return;
                 const ring = (time: number) => {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
@@ -2219,11 +2274,9 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         if (typeof window === 'undefined') return null;
         try {
             if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-                audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                audioCtxRef.current = getPulseCheckDemoAudioContext();
             }
-            if (audioCtxRef.current.state === 'suspended') {
-                audioCtxRef.current.resume();
-            }
+            if (!audioCtxRef.current || audioCtxRef.current.state !== 'running') return null;
             return audioCtxRef.current;
         } catch { return null; }
     }, []);
@@ -2303,7 +2356,9 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
 
     // Cleanup AudioContext on unmount
     useEffect(() => {
-        return () => { audioCtxRef.current?.close(); };
+        return () => {
+            audioCtxRef.current = null;
+        };
     }, []);
     // ─────────────────────────────────────────────────────────
 
@@ -3744,10 +3799,14 @@ const PulseCheckDemo: React.FC = () => {
     const [voiceOrbPitch, setVoiceOrbPitch] = useState(0.22);
     const recognitionRef = useRef<any>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const audioUnlockedRef = useRef(false);
     const narrationRunRef = useRef(0);
     const orbAudioCtxRef = useRef<AudioContext | null>(null);
     const orbAnalyserRef = useRef<AnalyserNode | null>(null);
     const orbSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+    const orbSourceElementRef = useRef<HTMLAudioElement | null>(null);
+    const orbBoostGainRef = useRef<GainNode | null>(null);
+    const orbCompressorRef = useRef<DynamicsCompressorNode | null>(null);
     const orbAnimationRef = useRef<number | null>(null);
     const orbFrequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
     const orbTimeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
@@ -3761,13 +3820,24 @@ const PulseCheckDemo: React.FC = () => {
             try {
                 orbSourceRef.current.disconnect();
             } catch {}
-            orbSourceRef.current = null;
         }
         if (orbAnalyserRef.current) {
             try {
                 orbAnalyserRef.current.disconnect();
             } catch {}
             orbAnalyserRef.current = null;
+        }
+        if (orbBoostGainRef.current) {
+            try {
+                orbBoostGainRef.current.disconnect();
+            } catch {}
+            orbBoostGainRef.current = null;
+        }
+        if (orbCompressorRef.current) {
+            try {
+                orbCompressorRef.current.disconnect();
+            } catch {}
+            orbCompressorRef.current = null;
         }
         orbFrequencyDataRef.current = null;
         orbTimeDataRef.current = null;
@@ -3781,26 +3851,40 @@ const PulseCheckDemo: React.FC = () => {
         stopVoiceOrb();
 
         try {
-            const AudioCtx =
-                window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-            if (!AudioCtx) return;
-
-            const ctx = orbAudioCtxRef.current ?? new AudioCtx();
+            const ctx = orbAudioCtxRef.current ?? getPulseCheckDemoAudioContext();
+            if (!ctx || ctx.state !== 'running') return;
             orbAudioCtxRef.current = ctx;
-            if (ctx.state === 'suspended') {
-                ctx.resume().catch(() => undefined);
-            }
 
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 256;
             analyser.smoothingTimeConstant = 0.82;
 
-            const source = ctx.createMediaElementSource(audio);
+            let source = orbSourceRef.current;
+            if (!source || orbSourceElementRef.current !== audio) {
+                if (source) return;
+                source = ctx.createMediaElementSource(audio);
+                orbSourceRef.current = source;
+                orbSourceElementRef.current = audio;
+            }
+
             source.connect(analyser);
-            analyser.connect(ctx.destination);
+            const boostGain = ctx.createGain();
+            boostGain.gain.value = NORA_NARRATION_OUTPUT_GAIN;
+
+            const compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.value = -18;
+            compressor.knee.value = 20;
+            compressor.ratio.value = 8;
+            compressor.attack.value = 0.005;
+            compressor.release.value = 0.18;
+
+            analyser.connect(boostGain);
+            boostGain.connect(compressor);
+            compressor.connect(ctx.destination);
 
             orbAnalyserRef.current = analyser;
-            orbSourceRef.current = source;
+            orbBoostGainRef.current = boostGain;
+            orbCompressorRef.current = compressor;
             orbFrequencyDataRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
             orbTimeDataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
 
@@ -3841,6 +3925,64 @@ const PulseCheckDemo: React.FC = () => {
         }
     }, [stopVoiceOrb]);
 
+    const getNarrationAudio = useCallback((): HTMLAudioElement | null => {
+        if (typeof window === 'undefined') return null;
+
+        if (!audioRef.current) {
+            const audio = new Audio();
+            audio.preload = 'auto';
+            audio.volume = 1;
+            audio.setAttribute('playsinline', 'true');
+            audio.setAttribute('webkit-playsinline', 'true');
+            audioRef.current = audio;
+        }
+
+        return audioRef.current;
+    }, []);
+
+    const primeNarrationAudio = useCallback(() => {
+        primePulseCheckDemoAudioContext();
+
+        const audio = getNarrationAudio();
+        if (!audio || audioUnlockedRef.current) return;
+
+        try {
+            audio.pause();
+            audio.onplay = null;
+            audio.onended = null;
+            audio.onerror = null;
+            audio.src = SILENT_AUDIO_UNLOCK_SRC;
+            audio.preload = 'auto';
+            audio.currentTime = 0;
+            audio.load();
+
+            const resetSilentAudio = () => {
+                audio.pause();
+                if (audio.src === SILENT_AUDIO_UNLOCK_SRC || audio.currentSrc === SILENT_AUDIO_UNLOCK_SRC) {
+                    audio.removeAttribute('src');
+                    audio.load();
+                }
+            };
+
+            const playAttempt = audio.play();
+            if (playAttempt) {
+                playAttempt
+                    .then(() => {
+                        audioUnlockedRef.current = true;
+                        resetSilentAudio();
+                    })
+                    .catch(() => {
+                        resetSilentAudio();
+                    });
+            } else {
+                audioUnlockedRef.current = true;
+                resetSilentAudio();
+            }
+        } catch {
+            // The next explicit tap or media play attempt can retry the unlock.
+        }
+    }, [getNarrationAudio]);
+
     const stopNarration = useCallback(() => {
         narrationRunRef.current += 1;
         stopVoiceOrb();
@@ -3851,7 +3993,6 @@ const PulseCheckDemo: React.FC = () => {
             audioRef.current.onerror = null;
             audioRef.current.pause();
             audioRef.current.currentTime = 0;
-            audioRef.current = null;
         }
 
         window.speechSynthesis?.cancel();
@@ -3911,65 +4052,101 @@ const PulseCheckDemo: React.FC = () => {
             stopNarration();
             const runId = narrationRunRef.current;
             const playbackRate = speed ?? 1.0;
-            const audio = new Audio(audioPath);
+            const audio = getNarrationAudio();
+            if (!audio) return null;
+
+            const resolvedAudioPath = new URL(audioPath, window.location.href).href;
+            audio.onplay = null;
+            audio.onended = null;
+            audio.onerror = null;
             audio.preload = 'auto';
+            audio.volume = 1;
             audio.playbackRate = playbackRate;
             audio.defaultPlaybackRate = playbackRate;
+            if (audio.src !== resolvedAudioPath) {
+                audio.src = resolvedAudioPath;
+            }
+            try {
+                audio.currentTime = 0;
+            } catch {}
 
             try {
                 await new Promise<void>((resolve, reject) => {
-                    const handleReady = () => {
+                    let settled = false;
+                    let timeoutId: number | null = null;
+                    const readyEvents: Array<keyof HTMLMediaElementEventMap> = [
+                        'canplay',
+                        'loadeddata',
+                        'loadedmetadata',
+                    ];
+
+                    const settle = (done: () => void) => {
+                        if (settled) return;
+                        settled = true;
                         cleanup();
-                        resolve();
+                        done();
                     };
+                    const handleReady = () => settle(() => resolve());
                     const handleError = () => {
-                        cleanup();
-                        reject(new Error(`Failed to load demo narration: ${audioPath}`));
+                        settle(() => reject(new Error(`Failed to load demo narration: ${audioPath}`)));
                     };
                     const cleanup = () => {
-                        audio.removeEventListener('canplaythrough', handleReady);
+                        if (timeoutId !== null) {
+                            window.clearTimeout(timeoutId);
+                        }
+                        readyEvents.forEach((event) => {
+                            audio.removeEventListener(event, handleReady);
+                        });
                         audio.removeEventListener('error', handleError);
                     };
 
-                    audio.addEventListener('canplaythrough', handleReady, { once: true });
+                    if (audio.readyState >= MEDIA_READY_STATE_HAVE_CURRENT_DATA) {
+                        resolve();
+                        return;
+                    }
+
+                    readyEvents.forEach((event) => {
+                        audio.addEventListener(event, handleReady, { once: true });
+                    });
                     audio.addEventListener('error', handleError, { once: true });
+                    timeoutId = window.setTimeout(() => settle(() => resolve()), 2200);
                     audio.load();
                 });
 
-                if (narrationRunRef.current !== runId) {
+                if (narrationRunRef.current !== runId || audio.src !== resolvedAudioPath) {
                     return null;
                 }
 
                 audioRef.current = audio;
 
                 audio.onplay = () => {
+                    audioUnlockedRef.current = true;
                     setIsSpeaking(true);
                     attachVoiceOrb(audio);
                 };
                 audio.onended = () => {
                     setIsSpeaking(false);
                     stopVoiceOrb();
-                    if (audioRef.current === audio) {
-                        audioRef.current = null;
-                    }
                 };
                 audio.onerror = () => {
                     setIsSpeaking(false);
                     stopVoiceOrb();
-                    if (audioRef.current === audio) {
-                        audioRef.current = null;
-                    }
                 };
 
                 return () => {
                     if (narrationRunRef.current !== runId) return;
                     audioRef.current = audio;
+                    audio.playbackRate = playbackRate;
+                    audio.defaultPlaybackRate = playbackRate;
+                    try {
+                        audio.currentTime = 0;
+                    } catch {}
                     audio
                         .play()
+                        .then(() => {
+                            audioUnlockedRef.current = true;
+                        })
                         .catch(() => {
-                            if (audioRef.current === audio) {
-                                audioRef.current = null;
-                            }
                             setIsSpeaking(false);
                             stopVoiceOrb();
                             console.warn('[TTS] Failed to play static demo narration', audioPath);
@@ -3980,8 +4157,13 @@ const PulseCheckDemo: React.FC = () => {
                 return null;
             }
         },
-        [stopNarration, ttsEnabled]
+        [attachVoiceOrb, getNarrationAudio, stopNarration, stopVoiceOrb, ttsEnabled]
     );
+
+    const playNarrationAfterMessagePaint = useCallback((playFn: (() => void) | null) => {
+        if (!playFn || typeof window === 'undefined') return;
+        window.requestAnimationFrame(() => playFn());
+    }, []);
 
     // ── Initial Nora greeting (only after intro dismissed) ─
     useEffect(() => {
@@ -4006,11 +4188,11 @@ const PulseCheckDemo: React.FC = () => {
                 timestamp: Date.now(),
             };
             setMessages([msg]);
-            if (playFn) playFn();
+            playNarrationAfterMessagePaint(playFn);
             setScriptIndex(1);
         }, 800);
         return () => clearTimeout(timer);
-    }, [currentAct, getNarrationAudioId, messages.length, playNoraWakeup, preloadAudio, waitForNoraThinking]);
+    }, [currentAct, getNarrationAudioId, messages.length, playNarrationAfterMessagePaint, playNoraWakeup, preloadAudio, waitForNoraThinking]);
 
 
     // ── STT: speech recognition ───────────────────────────
@@ -4076,6 +4258,7 @@ const PulseCheckDemo: React.FC = () => {
     const advanceScript = useCallback(
         (userText: string) => {
             if (scriptIndex >= DEMO_SCRIPT.length) return;
+            primeNarrationAudio();
 
             // Add user message
             const userMsg: ChatMsg = {
@@ -4141,7 +4324,7 @@ const PulseCheckDemo: React.FC = () => {
                         timestamp: Date.now(),
                     };
                     setMessages((prev) => [...prev, noraMsg]);
-                    if (playFn) playFn();
+                    playNarrationAfterMessagePaint(playFn);
                     nextIdx++;
                     setScriptIndex(nextIdx);
 
@@ -4164,7 +4347,7 @@ const PulseCheckDemo: React.FC = () => {
 
             processNext();
         },
-        [getNarrationAudioId, preloadAudio, scriptIndex, waitForNoraThinking]
+        [getNarrationAudioId, playNarrationAfterMessagePaint, preloadAudio, primeNarrationAudio, scriptIndex, waitForNoraThinking]
     );
 
     // ── Handle send ───────────────────────────────────────
@@ -4211,17 +4394,16 @@ const PulseCheckDemo: React.FC = () => {
                     timestamp: Date.now(),
                 };
                 setMessages((prev) => [...prev, msg]);
-                if (playFn) playFn();
+                playNarrationAfterMessagePaint(playFn);
                 setScriptIndex((prev) => prev + 1);
             }
         }
-    }, [getNarrationAudioId, preloadAudio, scriptIndex, waitForNoraThinking]);
+    }, [getNarrationAudioId, playNarrationAfterMessagePaint, preloadAudio, scriptIndex, waitForNoraThinking]);
 
     useEffect(() => stopNarration, [stopNarration]);
     useEffect(
         () => () => {
             stopVoiceOrb();
-            orbAudioCtxRef.current?.close().catch(() => undefined);
             orbAudioCtxRef.current = null;
         },
         [stopVoiceOrb]
@@ -4283,8 +4465,11 @@ const PulseCheckDemo: React.FC = () => {
                             {/* TTS Toggle */}
                             <button
                                 onClick={() => {
-                                    setTtsEnabled(!ttsEnabled);
-                                    if (ttsEnabled) {
+                                    const nextTtsEnabled = !ttsEnabled;
+                                    setTtsEnabled(nextTtsEnabled);
+                                    if (nextTtsEnabled) {
+                                        primeNarrationAudio();
+                                    } else {
                                         stopNarration();
                                     }
                                 }}
@@ -4412,6 +4597,7 @@ const PulseCheckDemo: React.FC = () => {
                                         transition={{ delay: 1.5, duration: 0.5, type: 'spring', stiffness: 300, damping: 25 }}
                                         onClick={(e) => {
                                             if (introTapped) return;
+                                            primeNarrationAudio();
                                             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                             setTapPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
                                             setIntroTapped(true);
