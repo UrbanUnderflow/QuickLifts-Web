@@ -7,23 +7,96 @@
 
 ## af_start_trial
 
-_To be populated with cited event definition, firing path, and trust implications._
+### Source artifacts
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+- `docs/agents/macra-operating-runbook.md`
+
+### Observed semantics
+The AppsFlyer import function includes `af_start_trial` in the default Macra event allowlist and stores it into the Macra aggregate and raw-row collections. In the experiment admin surface, `af_start_trial` is one of the canonical event names counted in the **trial-start evidence set**, alongside `start_trial`, `trial_started`, and `macra_trial_started`.
+
+That means `af_start_trial` is treated in the operating system as a **trial-start signal**, not merely a checkout-intent signal.
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx`
+
+### Trust note
+Because `af_start_trial` is grouped with multiple synonymous trial-start events in the experiment surface, it is operationally important but not uniquely authoritative on its own. The team should treat it as evidence of trial start only in the context of the full event-group mapping.
+
+Source: `src/pages/admin/experiments.tsx`
 
 ## af_purchase
 
-_To be populated with cited event definition, firing path, and trust implications._
+### Source artifacts
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+
+### Observed semantics
+The AppsFlyer import layer explicitly includes `af_purchase` in the Macra event allowlist. The experiment admin surface counts `af_purchase` inside the **paid-conversion evidence set**, alongside `af_subscribe`, `subscribe`, `purchase`, and `macra_subscription_started`.
+
+This means `af_purchase` is being interpreted in Macra operations as one of the accepted signals for a **paid conversion outcome** after the funnel has already progressed beyond trial intent.
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx`
+
+### Trust note
+`af_purchase` is not modeled as a distinct Macra-only terminal state. It is one member of a broader paid-conversion bundle, which means reporting should avoid pretending it is the sole definition of a successful paid state.
+
+Source: `src/pages/admin/experiments.tsx`
 
 ## af_subscribe
 
-_To be populated with cited event definition, firing path, and trust implications._
+### Source artifacts
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+
+### Observed semantics
+The AppsFlyer import function also includes `af_subscribe` in the Macra event allowlist. In `/admin/experiments`, `af_subscribe` is grouped together with `af_purchase`, `subscribe`, `purchase`, and `macra_subscription_started` as evidence for **paid conversion**.
+
+Operationally, `af_subscribe` is therefore treated as another accepted route into the same paid-conversion bucket rather than a fully separate business outcome.
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx`
+
+### Trust note
+Because `af_subscribe` and `af_purchase` both land in the same paid-conversion grouping, the team should be careful not to double-tell the story by implying they represent separate end states unless deduped at the user level.
+
+Source: `src/pages/admin/experiments.tsx`
 
 ## purchase_cancelled
 
-_To be populated with cited event definition, firing path, and trust implications._
+### Source artifacts
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/emailSequences.tsx`
+- `docs/agents/macra-operating-runbook.md`
+
+### Observed semantics
+The Macra AppsFlyer import layer includes `macra_subscription_purchase_cancelled` in the event allowlist. The Scoreboard/admin email-sequences surface treats cancellation as a first-class monitored event by defining a dedicated cancellation event set under `MACRA_APPSFLYER_PURCHASE_CANCEL_EVENT_NAMES`.
+
+The runbook’s operating read also surfaces StoreKit purchase cancels as part of the daily KPI picture, showing that cancellation is not a backend-only detail but a visible operating guardrail.
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/emailSequences.tsx`; `docs/agents/macra-operating-runbook.md`
+
+### Trust note
+`purchase_cancelled` semantics are clearly intended to mean **reversal/abandonment pressure at the purchase boundary**, not successful activation. Any topline trial-start read that ignores cancellation volume risks overstating durable intent.
+
+Source: `docs/agents/macra-operating-runbook.md`
 
 ## web_checkout_started
 
-_To be populated with cited event definition, firing path, and trust implications._
+### Source artifacts
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+- `docs/agents/macra-operating-runbook.md`
+
+### Observed semantics
+The AppsFlyer import layer includes `macra_subscription_web_checkout_started` in the Macra event allowlist. The experiment admin surface also counts it alongside `af_initiated_checkout` in the **checkout-start evidence set**.
+
+The runbook explicitly treats checkout start as an operational KPI, but warns that `af_initiated_checkout` and `macra_subscription_web_checkout_started` should not be combined as if they are unique starts without person-level dedupe.
+
+Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx`; `docs/agents/macra-operating-runbook.md`
+
+### Trust note
+`web_checkout_started` is a **high-intent signal**, not proof of trial start. It sits upstream of `af_start_trial` and is explicitly subject to overlap with other checkout events.
+
+Source: `docs/agents/macra-operating-runbook.md`
 
 ## StoreKit cancel
 
