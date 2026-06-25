@@ -17,3 +17,17 @@ Purchase logs show whether the funnel is converting, while cancel reasons, user 
 ### 3. AppsFlyer imports tell us what can scale without distortion
 
 AppsFlyer imports help separate message performance from source quality. If refreshed active `variant_a` results are strong only for certain acquisition sources, we should not stretch that outcome into a broad partner claim. Source-aware reading keeps the funnel story precise and shows which message is safe to scale versus which one only works under a narrower mix of traffic.
+
+## Copy snippets for brands
+
+### Brand partner update — wait for the refreshed read
+
+"Before we move any partner-facing funnel message forward, we need the active `variant_a` result refreshed from the live operating inputs. That means checking the current Scoreboard and Experiments state first, then using purchase logs and source-quality context to confirm what the funnel is actually supporting right now. If that refreshed read is not in hand, the message should not move."
+
+### Brand partner update — if refreshed variant_a is holding
+
+"We refreshed active `variant_a` before reviewing this partner message, and the current read still supports the existing funnel story. The recommendation is to keep the brand message specific: what someone is starting, why the first experience is working, and what the present funnel is proving without overextending the claim. We should keep the story inside what the refreshed Scoreboard, Experiments view, and purchase behavior can actually support."
+
+### Brand partner update — if refreshed variant_a softens
+
+"We refreshed active `variant_a` before making this recommendation, and the updated read suggests the current partner-facing story needs to tighten. Before changing the message, we are checking cancel reasons, user state, retargeting state, purchase logs, and AppsFlyer imports to separate a true message problem from a source-quality problem. The next move should be one measured adjustment tied to what the refreshed inputs still show as believable and conversion-safe."
