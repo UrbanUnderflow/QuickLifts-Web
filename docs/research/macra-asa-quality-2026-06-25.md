@@ -37,7 +37,11 @@ Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for
 
 ## Recommendation
 
-_To be populated with exactly one verdict — `increase`, `hold`, or `refine` — plus supporting bullets tied to the documented funnel metrics and cancel behavior._
+**Verdict: `refine`** Apple Search Ads focus.
+
+- Apple Search Ads has the strongest current **post-checkout quality signal** in the source split: `3` of `5` total trial starts and `20.0%` checkout-to-trial versus organic at `2.5%`. That is strong enough to protect and study, but not strong enough to justify blind scaling because the absolute sample is still tiny (`15` ASA checkouts). Source: `docs/agents/macra-operating-runbook.md`; `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
+- Apple Search Ads is **not outperforming organic at the upper funnel**. Organic beats ASA on starts (`406` vs `127`), paywall (`350` vs `98`), CTA (`253` vs `64`), and every early conversion step before checkout. That means the current ASA edge looks more like downstream intent quality than broad funnel superiority, so the right move is to refine keyword/creative/source matching instead of simply buying more traffic. Source: `docs/agents/macra-operating-runbook.md`
+- The system-level **guardrail is still stressed**: the aggregate read shows `74` StoreKit purchase cancels overall, including `9` tied to Apple Search Ads and `65` to organic. Even though ASA looks less risky than organic on the visible cancel burden, the broader checkout/trial trust layer is not healthy enough to support an "increase" decision yet. Source: `docs/agents/macra-operating-runbook.md`; `docs/ops/macra-operating-snapshot-2026-06-25.md`
 
 ## Sources
 

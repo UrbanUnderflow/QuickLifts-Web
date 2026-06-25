@@ -17,3 +17,17 @@ Purchase logs show whether the funnel is actually converting, while cancel reaso
 ### 3. AppsFlyer imports tell us what can scale safely
 
 AppsFlyer imports help separate a real messaging win from a source-quality illusion. If refreshed active `variant_a` performance looks strong only for a narrow slice of traffic, we should not stretch that into a broad partner claim. Using AppsFlyer imports alongside the live experiment read keeps the funnel story precise and shows which message can scale safely versus which one only works under a thinner acquisition mix.
+
+## Copy snippets for brands
+
+### Brand partner update — wait for the refreshed read
+
+"Before we move any partner-facing funnel message forward, we need the active `variant_a` result refreshed against the current Scoreboard and Experiments records. From there, we use purchase behavior and source-quality context to understand what the funnel is actually supporting right now. If that refreshed read is not in hand, the message should wait."
+
+### Brand partner update — if refreshed variant_a is holding
+
+"We refreshed active `variant_a` before reviewing this partner message, and the current read still supports the existing funnel story. The recommendation is to keep the message specific: what someone is starting, why the opening experience is landing, and what the present funnel is proving without stretching beyond the current Scoreboard, experiment state, and purchase behavior."
+
+### Brand partner update — if refreshed variant_a softens
+
+"We refreshed active `variant_a` before making this recommendation, and the updated read suggests the current partner-facing story needs to tighten. Before changing the message, we are checking cancel reasons, user state, retargeting state, purchase logs, and AppsFlyer imports to separate a real message problem from a source-quality problem. The next move should be one measured adjustment tied to what the refreshed inputs still support."
