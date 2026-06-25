@@ -31,3 +31,23 @@ The daily snapshot is not just volume reporting. **Purchase logs** show whether 
 ### Brand KPI update — if the day needs caution
 
 "Today’s snapshot shows enough movement to warrant a tighter read before we broaden the story. We are looking at purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage alongside the daily Scoreboard and Experiments view to separate a real operating shift from noise, follow-up drift, or traffic-mix distortion. Until that read is clean, partner messaging should stay measured and avoid overinterpreting a single day."
+
+## Copy snippets for gyms
+
+### Gym KPI update — if the day is stable
+
+"Today’s Macra KPI snapshot suggests the current gym-facing funnel is operating within range. Scoreboard and Experiments set the top-line read, purchase logs support the quality behind that movement, and retargeting state helps confirm whether follow-up is matching the member moment. The partner message should stay practical: what someone can start now, what support they get early, and why the first step feels manageable."
+
+### Gym KPI update — if the day needs caution
+
+"Today’s snapshot suggests we should tighten the gym-facing story before reading too much into the day. We are checking purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage alongside the daily Scoreboard and Experiments view to see whether the issue is trust, clarity, follow-up timing, or traffic mix. Until that read is clean, the message should stay narrow, concrete, and focused on the first-value moment rather than the broadest possible promise."
+
+## Copy snippets for run clubs
+
+### Run club KPI update — if the day is stable
+
+"Today’s Macra KPI snapshot shows the run-club story holding within the current operating picture. Scoreboard and Experiments provide the top-line movement, purchase logs help confirm that interest is turning into real starts, and retargeting state helps show whether follow-up is supporting that momentum. The partner message should keep the promise specific: what runners are joining, how the first block begins, and what kind of early support they can expect."
+
+### Run club KPI update — if the day needs caution
+
+"Today’s snapshot suggests the run-club funnel needs a more careful read before the story gets expanded. We are looking at cancel reasons, purchase logs, retargeting state, and AppsFlyer coverage alongside the daily Scoreboard and Experiments view to separate a true message shift from attribution noise or a narrower traffic mix. Until that picture is clearer, partner messaging should stay grounded in the real starting experience and avoid turning one uneven day into a sweeping conclusion."
