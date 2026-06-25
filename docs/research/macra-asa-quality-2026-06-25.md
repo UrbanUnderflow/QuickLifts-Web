@@ -10,7 +10,7 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 - **Exact Scoreboard source-split surface used for the comparison:** `Macra Scoreboard` at `/admin/emailSequences` → `scoreboard` tab, documented in `docs/agents/macra-operating-runbook.md` and referenced again in `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`. Source paths: `docs/agents/macra-operating-runbook.md`; `docs/research/publish-a-daily-macra-kpi-snapshot-from-scoreboard-experiments-p-health-evidence-2026-06-25.md`
 - **Exact Scoreboard query/export identifier available in-repo:** Firestore collection query on `appsflyer-aggregate-periods` with `where('product', '==', 'macra')`, rendered by the Macra scoreboard code in `src/pages/admin/emailSequences.tsx`. This is the most exact export/query reference present in the codebase for the source split used to build the comparison. Source path: `src/pages/admin/emailSequences.tsx`
 
-## Metric Logic
+## Metric Definitions
 
 - **`starts`** = onboarding starts from the Macra Scoreboard source split, sourced from the 2026-06-25 AppsFlyer aggregate CSV summarized in `docs/agents/macra-operating-runbook.md`. Source path: `docs/agents/macra-operating-runbook.md`
 - **`paywall`** = paywall reached count from the same Macra Scoreboard source split backed by the 2026-06-25 AppsFlyer aggregate CSV. Source path: `docs/agents/macra-operating-runbook.md`
@@ -20,7 +20,7 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 - **`cancels`** = StoreKit purchase cancel count from the same source split. Source path: `docs/agents/macra-operating-runbook.md`
 - **`checkout-to-trial`** = calculated as `trial starts / af_initiated_checkout`, using the rates reported in the runbook (`2.5%` Organic, `20.0%` Apple Search Ads). Source path: `docs/agents/macra-operating-runbook.md`
 
-## Organic vs Apple Search Ads
+## Organic vs Apple Search Ads Comparison
 
 | Source | starts | paywall | CTA | af_initiated_checkout | trial starts | cancels | checkout-to-trial |
 |---|---:|---:|---:|---:|---:|---:|---:|
