@@ -195,6 +195,10 @@ Source: `src/pages/admin/macraCancelReasons.tsx`
 2. Because the cancel-reason export enriches responses with `user.hasCompletedMacraOnboarding` and `user.registrationEntryPoint`, the team can connect cancellation behavior to onboarding completion state and acquisition path. That matters for trial-start retention because a cancellation pattern coming from partially onboarded users implies different remediation than a pattern coming from fully activated users. Source: `src/pages/admin/macraCancelReasons.tsx`
 3. The runbook explicitly lists Cancel Reasons as a required source-of-truth surface and expects the daily snapshot to include **top cancel reasons** as guardrails. So cancellation feedback is not anecdotal voice-of-customer data; it is a first-class operating input for whether the trial-start system is trustworthy enough to scale. Source: `docs/agents/macra-operating-runbook.md`
 
+## User State
+
+_To be populated with cited user-state evidence from `/admin/users` and `/admin/userOnboarding` in a later step._
+
 ## Retargeting
 
 ### Source surface used

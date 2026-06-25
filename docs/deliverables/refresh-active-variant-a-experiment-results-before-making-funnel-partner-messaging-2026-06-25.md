@@ -31,3 +31,23 @@ AppsFlyer imports and purchase logs tell us whether `variant_a` is performing th
 ### Brand Update — If Refreshed Variant A Softens
 
 "We refreshed the active `variant_a` results before making a messaging call, and the updated read suggests the current funnel story needs adjustment. Before we change partner-facing copy, we will validate the drop with cancel reasons, user state, retargeting state, and AppsFlyer source quality so we solve the real trust gap instead of reacting to noise. The recommendation is one message change at a time, only after the refreshed data tells us which promise is still believable."
+
+## Gym Copy Snippets
+
+### Gym Partner Message — Stay With the Current Story
+
+"We refreshed active `variant_a` before recommending any gym-facing funnel change, and the latest read still supports the current trial-start direction. That means we should keep the message simple and specific: show prospective members exactly what they are starting, what structure they get in the first stretch, and why that path is already converting. If the refreshed result is holding, the job is not to add noise — it is to make the winning path easier to understand."
+
+### Gym Partner Message — Adjust for a Trust Gap
+
+"We refreshed the active `variant_a` results before making this gym messaging recommendation, and the updated read suggests the current framing is asking for trust too early. Before we rewrite the funnel, we are checking cancel reasons, user state, and retargeting state to confirm where the drop is happening. The next move is one focused copy change: make the first-step value more concrete, reduce the leap the member feels they are being asked to take, and let the refreshed data confirm whether that improves trial starts."
+
+## Run Club Copy Snippets
+
+### Run Club Message — Lead With the Start Line
+
+"We refreshed active `variant_a` performance before making a run club messaging recommendation, and the current read says the strongest story is still the clearest one: what a new runner joins, what the first block looks like, and why it feels manageable to start now. We should keep the copy grounded in the real first-week experience, because refreshed trial-start data is more useful than a louder promise."
+
+### Run Club Message — Tighten the Promise if Performance Slips
+
+"We refreshed the active `variant_a` results before changing the run club funnel message, and the latest read says the current framing may be too broad for the runners we are bringing in. Before we push a new story live, we will cross-check purchase logs, cancel reasons, retargeting state, and AppsFlyer source quality to see whether the issue is message fit or source fit. The recommendation is to narrow the promise, make the opening experience more specific, and only scale that message if the refreshed variant data improves from there."
