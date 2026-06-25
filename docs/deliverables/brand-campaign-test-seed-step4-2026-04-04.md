@@ -47,6 +47,17 @@ Any real Gymshark partnership status is **Unverified** and should not be present
 
 The seed script writes the document and immediately reads it back from Firestore to confirm the persisted fields.
 
+Verified live from Firestore on this run:
+
+- `id = gymshark-tier1-test-campaign`
+- `brandName = Gymshark`
+- `campaignTitle = Gymshark Summer Strength Drop — Test Campaign`
+- `ctaText = Open the co-branded challenge`
+- `ctaLink = /partners/brands/gymshark`
+- `activeFrom` is already in the past
+- `activeTo` is still in the future
+- `testMode = true`
+
 ## Files
 
 - `scripts/seedBrandCampaignTestCampaign.js`
