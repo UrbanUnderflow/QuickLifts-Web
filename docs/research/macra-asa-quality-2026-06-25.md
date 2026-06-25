@@ -14,8 +14,10 @@ How does Apple Search Ads compare with Organic on Macra's source-level funnel qu
 
 | Source | starts | paywall | CTA | af_initiated_checkout | trial starts | cancels | checkout-to-trial |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Organic | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
-| Apple Search Ads | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| Organic | 406 | 350 | 253 | 79 | 2 | 65 | 2.5% |
+| Apple Search Ads | 127 | 98 | 64 | 15 | 3 | 9 | 20.0% |
+
+Source: `docs/agents/macra-operating-runbook.md` ("Current Data Read" tables for the 2026-06-25 AppsFlyer aggregate CSV surfaced through the Macra Scoreboard source split at `/admin/emailSequences`, scoreboard tab)
 
 ## ASA vs Organic Quality Analysis
 
