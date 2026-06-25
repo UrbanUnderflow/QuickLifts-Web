@@ -72,13 +72,21 @@ function toDate(value: TimestampLike): Date | null {
   }
 
   if (typeof value === "object") {
-    if (typeof value.toDate === "function") {
-      const parsed = value.toDate();
+    const timestampCandidate = value as {
+      toDate?: () => Date;
+      seconds?: number;
+      nanoseconds?: number;
+    };
+
+    if (typeof timestampCandidate.toDate === "function") {
+      const parsed = timestampCandidate.toDate();
       return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
     }
 
-    if (typeof value.seconds === "number") {
-      const millis = value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1_000_000);
+    if (typeof timestampCandidate.seconds === "number") {
+      const millis =
+        timestampCandidate.seconds * 1000 +
+        Math.floor((timestampCandidate.nanoseconds || 0) / 1_000_000);
       const parsed = new Date(millis);
       return Number.isNaN(parsed.getTime()) ? null : parsed;
     }
