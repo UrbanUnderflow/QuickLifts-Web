@@ -730,6 +730,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
    
       try {
         setIsLoading(true);
+        const partnerSource = await resolvePartnerSourceFromQuery(router.query);
         addLog("Calling getRedirectResult...");
         const result = await getRedirectResult(auth);
         addLog(`getRedirectResult result: ${JSON.stringify(result)}`);
