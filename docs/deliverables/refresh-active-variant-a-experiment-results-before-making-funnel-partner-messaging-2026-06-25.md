@@ -34,20 +34,20 @@ AppsFlyer imports help separate source quality from message quality. If active `
 
 ## Copy snippets for gyms
 
-### Gym partner update — keep the winning first-step story
+### Gym partner update — if refreshed variant_a is holding
 
-"We refreshed the active `variant_a` results before changing any gym-facing funnel copy, and the current read still supports the existing trial-start direction. The recommendation is to keep the message concrete: show what a new member starts with, what structure they get right away, and why that opening experience is already working. If the refreshed result is holding, clarity matters more than novelty."
+"We refreshed the active `variant_a` read before changing any gym-facing funnel message, and the current result still supports the existing trial-start path. The recommendation is to keep the gym story practical and specific: show what a new member starts with this week, what coaching structure they get immediately, and why the first step feels manageable instead of vague. If the refreshed result is still working, the right move is not a louder claim — it is a clearer first-step promise."
 
-### Gym partner update — tighten the ask if the read softens
+### Gym partner update — if refreshed variant_a softens
 
-"We refreshed active `variant_a` before making this gym messaging recommendation, and the updated read suggests the current story may be asking for too much trust too early. Before changing the funnel message, we are checking purchase logs, cancel reasons, user state, and retargeting state to confirm where the drop is happening. The next step is one focused copy change that makes the first-step value clearer and easier to say yes to."
+"We refreshed active `variant_a` before making this gym messaging recommendation, and the updated read suggests the current funnel story is losing trust too early. Before we change the message, we are checking purchase logs, cancel reasons, user state, and retargeting state to confirm whether the drop is happening at the offer, follow-up, or onboarding stage. The next step is one copy adjustment that makes the opening value more concrete and reduces how much faith a new member has to front-load."
 
 ## Copy snippets for run clubs
 
-### Run club update — lead with the real first week
+### Run club update — if refreshed variant_a is holding
 
-"We refreshed active `variant_a` before recommending any run-club funnel change, and the strongest read is still the clearest one: tell people exactly what they are joining, what the first week looks like, and why it feels manageable to start now. If the refreshed result is holding, the message should stay grounded in the real opening experience instead of stretching into a broader motivational claim."
+"We refreshed active `variant_a` before recommending any run-club funnel change, and the strongest result is still the clearest one: tell runners exactly what they are joining, what the first block looks like, and what kind of support they get at the start. If the refreshed read is holding, the message should stay anchored in the real first-week experience, because that is what is earning the trial start — not a bigger motivational line."
 
-### Run club update — narrow the promise if conversion slips
+### Run club update — if refreshed variant_a softens
 
-"We refreshed active `variant_a` before changing this run-club message, and the updated performance suggests the current framing may be too broad for the runners entering the funnel. Before we rewrite the story, we are checking purchase logs, cancel reasons, retargeting state, and AppsFlyer source quality to separate a message problem from a source problem. The next move is to narrow the promise, make the opening block more specific, and only scale that message if the refreshed data improves."
+"We refreshed active `variant_a` before changing this run-club message, and the updated performance suggests the current framing may be too broad for the runners entering from the present mix of sources. Before rewriting the funnel story, we are checking purchase logs, cancel reasons, retargeting state, and AppsFlyer imports to separate a message problem from a source-quality problem. The next move is to narrow the promise, make the opening run block more specific, and only scale that version if the refreshed data turns back up."
