@@ -17,26 +17,8 @@ import PageHead from '../../components/PageHead';
 import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
 
-const PULSECHECK_PURPLE = '#8B5CF6';
-const PULSECHECK_PURPLE_SOFT = '#A78BFA';
-const PULSECHECK_PURPLE_DEEP = '#7C3AED';
-
-// ─────────────────────────────────────────────────
-// FLOATING ORB — ambient background helper
-// ─────────────────────────────────────────────────
-const FloatingOrb: React.FC<{
-  color: string;
-  size: number;
-  style: React.CSSProperties;
-  delay?: number;
-}> = ({ color, size, style, delay = 0 }) => (
-  <motion.div
-    className="absolute rounded-full blur-3xl pointer-events-none"
-    style={{ backgroundColor: color, width: size, height: size, ...style }}
-    animate={{ scale: [1, 1.2, 1], opacity: [0.15, 0.28, 0.15] }}
-    transition={{ duration: 10, repeat: Infinity, delay, ease: 'easeInOut' }}
-  />
-);
+const PULSECHECK_PURPLE = '#E0FE10';
+const PULSECHECK_PURPLE_DEEP = '#A6C900';
 
 // ─────────────────────────────────────────────────
 // GLASS SURFACE — reusable glassy container
@@ -48,16 +30,16 @@ const GlassSurface: React.FC<{
 }> = ({ children, accentColor = PULSECHECK_PURPLE, className = '' }) => (
   <div className={`relative ${className}`}>
     <div
-      className="absolute -inset-[1px] rounded-[32px] overflow-hidden pointer-events-none"
+      className="absolute -inset-[1px] rounded-2xl overflow-hidden pointer-events-none"
       style={{
         background: `linear-gradient(180deg, ${accentColor}30 0%, ${accentColor}08 40%, transparent 100%)`,
       }}
     />
     <div
-      className="relative rounded-[32px] overflow-hidden backdrop-blur-2xl border border-white/[0.08]"
+      className="relative rounded-2xl overflow-hidden backdrop-blur-2xl border border-white/[0.08]"
       style={{
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
-        boxShadow: '0 32px 100px rgba(0,0,0,0.5), 0 1px 0 inset rgba(255,255,255,0.07)',
+        background: 'linear-gradient(135deg, rgba(18,18,20,0.96) 0%, rgba(10,10,12,0.98) 100%)',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.42), 0 1px 0 inset rgba(255,255,255,0.07)',
       }}
     >
       {/* Top chromatic line */}
@@ -474,14 +456,17 @@ const PulseCheckLoginPage: NextPage = () => {
         pageOgUrl="https://fitwithpulse.ai/PulseCheck/login"
       />
 
-      <div className="relative min-h-screen flex items-center justify-center overflow-hidden" style={{ background: '#060608' }}>
+      <div className="relative min-h-screen overflow-x-hidden text-white" style={{ background: '#050506' }}>
         {/* ── DEV/PROD TOGGLE — localhost only ── */}
         {typeof window !== 'undefined' && window.location.hostname === 'localhost' && <DevModeToggle />}
 
-        {/* ── AMBIENT ORBS ── */}
-        <FloatingOrb color={PULSECHECK_PURPLE} size={600} style={{ top: '-15%', left: '-10%' }} delay={0} />
-        <FloatingOrb color="#3B82F6" size={400} style={{ bottom: '-10%', right: '-8%' }} delay={3} />
-        <FloatingOrb color={PULSECHECK_PURPLE_SOFT} size={300} style={{ top: '50%', right: '20%' }} delay={6} />
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(224,254,16,0.08) 0%, transparent 28%, rgba(59,130,246,0.09) 100%), linear-gradient(180deg, rgba(255,255,255,0.035), transparent 42%)',
+          }}
+        />
 
         {/* Noise texture */}
         <div
@@ -493,46 +478,90 @@ const PulseCheckLoginPage: NextPage = () => {
         />
 
         {/* ── CONTENT ── */}
-        <div className="relative z-10 w-full max-w-[460px] mx-auto px-5 py-8">
-          {/* LOGO + BACK */}
-          <motion.div
+        <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1440px] flex-col px-4 py-4 sm:px-6 lg:px-10 lg:py-4">
+          <motion.header
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-center mb-8"
+            className="flex w-full items-center justify-between gap-4"
           >
-            {/* Back to marketing */}
             <button
               type="button"
               onClick={() => router.push('/PulseCheck')}
-              className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-sm text-zinc-300 transition-colors hover:border-white/[0.16] hover:text-white"
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Back to PulseCheck
+              <ArrowLeft className="h-4 w-4" />
+              PulseCheck
             </button>
-
-            {/* Logo / Brand */}
-            <div className="flex items-center justify-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6A9AFA] to-[#8B5CF6] flex items-center justify-center shadow-lg shadow-[#8B5CF6]/20">
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" width="18" height="18">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                </svg>
-              </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">PulseCheck</h1>
+            <div className="hidden items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500 sm:flex">
+              <span className="h-2 w-2 rounded-full bg-[#E0FE10]" />
+              Secure access
             </div>
-            <p className="text-sm text-zinc-500">
-              The mental performance OS for elite programs
-            </p>
-          </motion.div>
+          </motion.header>
 
-          {/* ── GLASS LOGIN CARD ── */}
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-          >
-            <GlassSurface accentColor={view === 'forgot' ? '#3B82F6' : '#8B5CF6'}>
-              <div className="p-7 sm:p-8">
+          <main className="grid flex-1 items-start gap-8 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(430px,560px)] lg:items-center lg:gap-12 lg:py-4">
+            <motion.section
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="hidden min-w-0 flex-col justify-center lg:flex"
+            >
+              <div className="max-w-3xl">
+                <div className="mb-8 flex items-center gap-4">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/10 shadow-[0_18px_50px_rgba(224,254,16,0.12)]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#E0FE10" strokeWidth="2.5" width="24" height="24">
+                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#E0FE10]">PulseCheck</p>
+                    <p className="mt-1 text-sm text-zinc-500">Admin and team workspace</p>
+                  </div>
+                </div>
+
+                <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] tracking-normal text-white xl:text-6xl">
+                  Your PulseCheck workspace is ready.
+                </h1>
+                <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300">
+                  Access admin tools, coach workflows, and team support from one secure entry point.
+                </p>
+
+                <div className="mt-10 grid max-w-2xl grid-cols-3 gap-4 border-y border-white/[0.08] py-6">
+                  {[
+                    { label: 'Team access', value: 'Role-aware' },
+                    { label: 'Sign-in options', value: 'Google, Apple, email' },
+                    { label: 'Workspace', value: 'PulseCheck' },
+                  ].map((item) => (
+                    <div key={item.label}>
+                      <p className="text-sm font-semibold text-white">{item.value}</p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-600">{item.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.section>
+
+            <section className="flex min-w-0 items-start justify-center lg:items-center lg:justify-end">
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.15 }}
+                className="w-full max-w-[560px]"
+              >
+                <div className="mb-5 text-center lg:hidden">
+                  <div className="mb-3 flex items-center justify-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E0FE10]/25 bg-[#E0FE10]/10">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#E0FE10" strokeWidth="2.5" width="18" height="18">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                      </svg>
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-normal text-white">PulseCheck</h1>
+                  </div>
+                  <p className="text-sm text-zinc-500">Secure access for your team workspace</p>
+                </div>
+
+                <GlassSurface accentColor={view === 'forgot' ? '#3B82F6' : PULSECHECK_PURPLE}>
+                  <div className="p-5 sm:p-7 lg:p-8">
                 {legacyFlowMessage ? (
                   <motion.div
                     initial={{ opacity: 0, y: 8 }}
@@ -577,7 +606,7 @@ const PulseCheckLoginPage: NextPage = () => {
                     <p className="text-sm text-zinc-400 mb-6">Sign in to your PulseCheck account</p>
 
                     {/* Social buttons */}
-                    <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={handleGoogleSignIn}
@@ -634,7 +663,7 @@ const PulseCheckLoginPage: NextPage = () => {
                           value={email}
                           onChange={(e) => { setEmail(e.target.value); setError(null); }}
                           placeholder="you@program.edu"
-                          className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#8B5CF6]/50"
+                          className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
                           style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                           autoComplete="email"
                         />
@@ -650,7 +679,7 @@ const PulseCheckLoginPage: NextPage = () => {
                             value={password}
                             onChange={(e) => { setPassword(e.target.value); setError(null); }}
                             placeholder="••••••••"
-                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#8B5CF6]/50"
+                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                             autoComplete="current-password"
                           />
@@ -669,7 +698,7 @@ const PulseCheckLoginPage: NextPage = () => {
                         <button
                           type="button"
                           onClick={() => { setView('forgot'); setError(null); setResetSent(false); }}
-                          className="text-xs text-[#8B5CF6] hover:text-[#A78BFA] transition-colors font-medium"
+                          className="text-xs font-medium text-[#E0FE10] transition-colors hover:text-[#F1FF63]"
                         >
                           Forgot password?
                         </button>
@@ -679,10 +708,10 @@ const PulseCheckLoginPage: NextPage = () => {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-[#050506] transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                         style={{
                           background: `linear-gradient(135deg, ${PULSECHECK_PURPLE}, ${PULSECHECK_PURPLE_DEEP})`,
-                          boxShadow: '0 4px 20px rgba(139,92,246,0.28)',
+                          boxShadow: '0 4px 20px rgba(224,254,16,0.22)',
                         }}
                       >
                         {isLoading && !activeProvider ? (
@@ -702,7 +731,7 @@ const PulseCheckLoginPage: NextPage = () => {
                       <button
                         type="button"
                         onClick={() => { setView('signup'); setError(null); setPassword(''); setConfirmPassword(''); }}
-                        className="text-[#8B5CF6] hover:text-[#A78BFA] font-semibold transition-colors"
+                        className="font-semibold text-[#E0FE10] transition-colors hover:text-[#F1FF63]"
                       >
                         Create one
                       </button>
@@ -722,7 +751,7 @@ const PulseCheckLoginPage: NextPage = () => {
                     <p className="text-sm text-zinc-400 mb-6">Get started with PulseCheck</p>
 
                     {/* Social buttons */}
-                    <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button
                         type="button"
                         onClick={handleGoogleSignIn}
@@ -779,7 +808,7 @@ const PulseCheckLoginPage: NextPage = () => {
                           value={email}
                           onChange={(e) => { setEmail(e.target.value); setError(null); }}
                           placeholder="you@program.edu"
-                          className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#8B5CF6]/50"
+                          className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
                           style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                           autoComplete="email"
                         />
@@ -795,7 +824,7 @@ const PulseCheckLoginPage: NextPage = () => {
                             value={password}
                             onChange={(e) => { setPassword(e.target.value); setError(null); }}
                             placeholder="••••••••"
-                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#8B5CF6]/50"
+                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                             autoComplete="new-password"
                           />
@@ -843,7 +872,7 @@ const PulseCheckLoginPage: NextPage = () => {
                             value={confirmPassword}
                             onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
                             placeholder="••••••••"
-                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#8B5CF6]/50"
+                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                             autoComplete="new-password"
                           />
@@ -871,10 +900,10 @@ const PulseCheckLoginPage: NextPage = () => {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-[#050506] transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                         style={{
                           background: `linear-gradient(135deg, ${PULSECHECK_PURPLE}, ${PULSECHECK_PURPLE_DEEP})`,
-                          boxShadow: '0 4px 20px rgba(139,92,246,0.28)',
+                          boxShadow: '0 4px 20px rgba(224,254,16,0.22)',
                         }}
                       >
                         {isLoading && !activeProvider ? (
@@ -894,7 +923,7 @@ const PulseCheckLoginPage: NextPage = () => {
                       <button
                         type="button"
                         onClick={() => { setView('login'); setError(null); setPassword(''); setConfirmPassword(''); }}
-                        className="text-[#8B5CF6] hover:text-[#A78BFA] font-semibold transition-colors"
+                        className="font-semibold text-[#E0FE10] transition-colors hover:text-[#F1FF63]"
                       >
                         Sign in
                       </button>
@@ -971,21 +1000,25 @@ const PulseCheckLoginPage: NextPage = () => {
                   </motion.div>
                 )}
               </div>
-            </GlassSurface>
-          </motion.div>
+                </GlassSurface>
+              </motion.div>
+            </section>
+          </main>
 
-          {/* Footer note */}
-          <motion.p
+          <motion.footer
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="mt-6 text-center text-[11px] text-zinc-600 leading-relaxed"
+            className="flex flex-col items-center justify-between gap-3 border-t border-white/[0.06] py-3 text-center text-[11px] leading-relaxed text-zinc-600 sm:flex-row sm:text-left"
           >
-            Review Pulse&apos;s{' '}
-            <a href="/terms" className="text-zinc-500 hover:text-zinc-400 underline underline-offset-2">Terms</a>{' '}
-            and{' '}
-            <a href="/privacy" className="text-zinc-500 hover:text-zinc-400 underline underline-offset-2">Privacy Policy</a>.
-          </motion.p>
+            <span>Pulse Intelligence Labs</span>
+            <span>
+              Review Pulse&apos;s{' '}
+              <a href="/terms" className="text-zinc-500 underline underline-offset-2 hover:text-zinc-400">Terms</a>{' '}
+              and{' '}
+              <a href="/privacy" className="text-zinc-500 underline underline-offset-2 hover:text-zinc-400">Privacy Policy</a>.
+            </span>
+          </motion.footer>
         </div>
       </div>
     </>
