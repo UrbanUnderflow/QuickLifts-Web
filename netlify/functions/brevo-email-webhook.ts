@@ -13,17 +13,39 @@ const EMAIL_LOG_COLLECTION = 'email-logs';
 
 /**
  * Brevo Webhook Event Types:
+ * - request: Email was accepted by Brevo for processing
  * - delivered: Email was delivered to the recipient's mail server
- * - opened: Recipient opened the email (tracked via pixel)
+ * - opened / unique_opened / proxy_open / unique_proxy_open: Recipient opened the email (tracked via pixel)
  * - click: Recipient clicked a link in the email
  * - soft_bounce: Temporary delivery failure
  * - hard_bounce: Permanent delivery failure
  * - spam: Recipient marked email as spam
- * - unsubscribe: Recipient unsubscribed
+ * - unsubscribe / unsubscribed: Recipient unsubscribed
  */
 
 interface BrevoWebhookEvent {
-  event: 'delivered' | 'opened' | 'click' | 'soft_bounce' | 'hard_bounce' | 'spam' | 'unsubscribe' | 'blocked' | 'deferred';
+  event:
+    | 'request'
+    | 'delivered'
+    | 'opened'
+    | 'unique_opened'
+    | 'uniqueOpened'
+    | 'proxy_open'
+    | 'unique_proxy_open'
+    | 'uniqueProxyOpen'
+    | 'click'
+    | 'soft_bounce'
+    | 'softBounce'
+    | 'hard_bounce'
+    | 'hardBounce'
+    | 'spam'
+    | 'unsubscribe'
+    | 'unsubscribed'
+    | 'blocked'
+    | 'deferred'
+    | 'invalid'
+    | 'invalid_email'
+    | 'error';
   email: string;
   id: number;
   date: string;
@@ -38,23 +60,56 @@ interface BrevoWebhookEvent {
   'X-Mailin-custom'?: string; // Custom headers we set (contains friendId, signingRequestId, emailRecordId)
 }
 
-const MACRA_BREVO_EVENT_TO_MIXPANEL: Partial<Record<BrevoWebhookEvent['event'], string>> = {
+type CanonicalBrevoEmailEvent =
+  | 'request'
+  | 'delivered'
+  | 'opened'
+  | 'click'
+  | 'soft_bounce'
+  | 'hard_bounce'
+  | 'spam'
+  | 'unsubscribe'
+  | 'blocked'
+  | 'deferred'
+  | 'invalid_email'
+  | 'error';
+
+const normalizeBrevoEmailEvent = (eventType: BrevoWebhookEvent['event']): CanonicalBrevoEmailEvent => {
+  if (
+    eventType === 'unique_opened' ||
+    eventType === 'uniqueOpened' ||
+    eventType === 'proxy_open' ||
+    eventType === 'unique_proxy_open' ||
+    eventType === 'uniqueProxyOpen'
+  ) {
+    return 'opened';
+  }
+  if (eventType === 'unsubscribed') return 'unsubscribe';
+  if (eventType === 'softBounce') return 'soft_bounce';
+  if (eventType === 'hardBounce') return 'hard_bounce';
+  if (eventType === 'invalid') return 'invalid_email';
+  return eventType;
+};
+
+const MACRA_BREVO_EVENT_TO_MIXPANEL: Partial<Record<CanonicalBrevoEmailEvent, string>> = {
   delivered: MACRA_MIXPANEL_EVENTS.emailDelivered,
   opened: MACRA_MIXPANEL_EVENTS.emailOpened,
   click: MACRA_MIXPANEL_EVENTS.emailClicked,
 };
-const MACRA_BREVO_EVENT_TO_RETARGETING_MIXPANEL: Partial<Record<BrevoWebhookEvent['event'], string>> = {
+const MACRA_BREVO_EVENT_TO_RETARGETING_MIXPANEL: Partial<Record<CanonicalBrevoEmailEvent, string>> = {
   delivered: MACRA_MIXPANEL_EVENTS.retargetingEmailDelivered,
   opened: MACRA_MIXPANEL_EVENTS.retargetingEmailOpened,
   click: MACRA_MIXPANEL_EVENTS.retargetingEmailClicked,
 };
-const MACRA_BREVO_ISSUE_EVENTS = new Set<BrevoWebhookEvent['event']>([
+const MACRA_BREVO_ISSUE_EVENTS = new Set<CanonicalBrevoEmailEvent>([
   'soft_bounce',
   'hard_bounce',
   'blocked',
   'deferred',
   'spam',
   'unsubscribe',
+  'invalid_email',
+  'error',
 ]);
 const MACRA_RETARGETING_SEQUENCE_STATE_KEYS: Record<string, string> = {
   'macra-web-offer-24h-v1': 'webOffer24h',
@@ -86,7 +141,8 @@ const getWebhookEventTime = (webhookEvent: BrevoWebhookEvent, fallback: Date) =>
 
 const updateEmailLogFromBrevoEvent = async (args: {
   webhookEvent: BrevoWebhookEvent;
-  eventType: BrevoWebhookEvent['event'];
+  eventType: CanonicalBrevoEmailEvent;
+  rawEventType: BrevoWebhookEvent['event'];
   email: string;
   messageId?: string;
   link?: string;
@@ -102,6 +158,7 @@ const updateEmailLogFromBrevoEvent = async (args: {
     toEmail: args.email || null,
     subject: args.webhookEvent.subject || null,
     lastEvent: args.eventType,
+    lastRawEvent: args.rawEventType,
     lastEventAt: eventAt,
     updatedAt: args.now,
   };
@@ -128,6 +185,8 @@ const updateEmailLogFromBrevoEvent = async (args: {
     case 'deferred':
     case 'spam':
     case 'unsubscribe':
+    case 'invalid_email':
+    case 'error':
       updateData.status = args.eventType;
       updateData.issueAt = eventAt;
       updateData.lastError = args.eventType;
@@ -139,7 +198,7 @@ const updateEmailLogFromBrevoEvent = async (args: {
 
 const applyStatusUpdate = (
   updateData: Record<string, any>,
-  eventType: BrevoWebhookEvent['event'],
+  eventType: CanonicalBrevoEmailEvent,
   now: Date,
   link?: string,
   periodKey?: string
@@ -202,13 +261,18 @@ const applyStatusUpdate = (
       updateData.emailStatus = 'deferred';
       writePeriodField('status', 'deferred');
       break;
+    case 'invalid_email':
+    case 'error':
+      updateData.emailStatus = eventType;
+      writePeriodField('status', eventType);
+      break;
   }
 };
 
 const updateMacraRetargetingEmailSequenceStatus = async (args: {
   userId: string;
   stateKey: string;
-  eventType: BrevoWebhookEvent['event'];
+  eventType: CanonicalBrevoEmailEvent;
   email: string;
   messageId?: string;
   link?: string;
@@ -247,6 +311,8 @@ const updateMacraRetargetingEmailSequenceStatus = async (args: {
     case 'deferred':
     case 'spam':
     case 'unsubscribe':
+    case 'invalid_email':
+    case 'error':
       stateUpdate[`${stateKey}Status`] = `email_${eventType}`;
       stateUpdate[`${stateKey}EmailIssueAt`] = now;
       break;
@@ -262,7 +328,7 @@ const updateMacraRetargetingEmailSequenceStatus = async (args: {
 
 const applyPilotAthleteCommunicationStatusUpdate = (
   updateData: Record<string, any>,
-  eventType: BrevoWebhookEvent['event'],
+  eventType: CanonicalBrevoEmailEvent,
   now: Date,
   link?: string
 ) => {
@@ -287,6 +353,8 @@ const applyPilotAthleteCommunicationStatusUpdate = (
     case 'unsubscribe':
     case 'blocked':
     case 'deferred':
+    case 'invalid_email':
+    case 'error':
       updateData.status = 'failed';
       updateData.lastError = eventType;
       break;
@@ -302,7 +370,7 @@ const SIGNING_REQUEST_STATUS_RANK: Record<string, number> = {
   signed: 5,
 };
 
-const getSigningRequestStatusForEmailEvent = (eventType: BrevoWebhookEvent['event']) => {
+const getSigningRequestStatusForEmailEvent = (eventType: CanonicalBrevoEmailEvent) => {
   switch (eventType) {
     case 'delivered':
       return 'delivered';
@@ -314,6 +382,8 @@ const getSigningRequestStatusForEmailEvent = (eventType: BrevoWebhookEvent['even
     case 'spam':
     case 'unsubscribe':
     case 'blocked':
+    case 'invalid_email':
+    case 'error':
       return 'failed';
     case 'deferred':
       return 'deferred';
@@ -324,7 +394,7 @@ const getSigningRequestStatusForEmailEvent = (eventType: BrevoWebhookEvent['even
 
 const updateSigningRequestEmailStatus = async (args: {
   signingRequestId: string;
-  eventType: BrevoWebhookEvent['event'];
+  eventType: CanonicalBrevoEmailEvent;
   email: string;
   messageId?: string;
   link?: string;
@@ -374,6 +444,8 @@ const updateSigningRequestEmailStatus = async (args: {
     case 'unsubscribe':
     case 'blocked':
     case 'deferred':
+    case 'invalid_email':
+    case 'error':
       updateData.lastEmailError = args.eventType;
       break;
   }
@@ -443,14 +515,18 @@ export const handler: Handler = async (event) => {
     }
 
     for (const webhookEvent of events) {
-      const { event: eventType, email, 'message-id': messageId, link } = webhookEvent;
+      const { event: rawEventType, email, 'message-id': messageId, link } = webhookEvent;
+      const eventType = normalizeBrevoEmailEvent(rawEventType);
       const now = new Date();
       
-      console.log(`[brevo-webhook] Processing event: ${eventType} for ${email}`);
+      console.log(
+        `[brevo-webhook] Processing event: ${rawEventType}${rawEventType !== eventType ? ` as ${eventType}` : ''} for ${email}`
+      );
 
       await updateEmailLogFromBrevoEvent({
         webhookEvent,
         eventType,
+        rawEventType,
         email,
         messageId,
         link,
@@ -528,6 +604,7 @@ export const handler: Handler = async (event) => {
           checkout_campaign_id: checkoutCampaignId || null,
           brevo_message_id: messageId || null,
           brevo_event_type: eventType,
+          brevo_raw_event_type: rawEventType,
           recipient_email: email || null,
           clicked_link: eventType === 'click' ? link || null : null,
           time: webhookEvent.ts_event || webhookEvent.ts || webhookEvent.ts_epoch || Math.floor(now.getTime() / 1000),
