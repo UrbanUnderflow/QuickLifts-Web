@@ -218,7 +218,7 @@ const MACRA_WEB_OFFER_SEQUENCE_ID = 'macra-web-offer-24h-v1';
 const MACRA_RETARGETING_SEQUENCE_CONFIG_ID = 'macra-retargeting-v1';
 const CAMPAIGN_SEND_WINDOW_TIMEZONE = 'America/New_York';
 const MACRA_APPSFLYER_SCOREBOARD_DAYS_BACK = 7;
-const MACRA_APPSFLYER_RAW_SYNC_ENABLED = false;
+const MACRA_APPSFLYER_RAW_SYNC_ENABLED = process.env.NEXT_PUBLIC_MACRA_APPSFLYER_RAW_SYNC_ENABLED !== 'false';
 const MACRA_SCOREBOARD_USER_LIMIT = 300;
 const MACRA_SCOREBOARD_LOG_LIMIT = 500;
 const MACRA_SCOREBOARD_PROFILE_CHUNK_SIZE = 40;
@@ -1643,6 +1643,12 @@ const buildAppsFlyerRawRowsSummaryForRange = (
     }));
   const coverageStart = periodRows[0]?.periodStart || range.start;
   const coverageEnd = periodRows[periodRows.length - 1]?.periodEnd || range.end;
+  const attributionCoverage = {
+    totalRows: rowsInRange.length,
+    matchedCustomerUserRows,
+    unmatchedRows,
+    matchedCustomerUserRate: rowsInRange.length ? matchedCustomerUserRows / rowsInRange.length : 0,
+  };
   const aggregateCsvSummary = {
     id: 'macra',
     product: 'macra',
@@ -1658,6 +1664,7 @@ const buildAppsFlyerRawRowsSummaryForRange = (
     importedUserDocs: 0,
     matchedCustomerUserRows,
     unmatchedRows,
+    attributionCoverage,
     tokenSource: '',
     daysBack: range.daysBack,
     timezone: 'raw_row_event_dates',
@@ -1769,6 +1776,12 @@ const buildLayeredAppsFlyerSummaryForRange = (
     topMediaSources,
     topCampaigns: Array.isArray(installSource.topCampaigns) ? installSource.topCampaigns : [],
     topEvents: Array.isArray(eventSource.topEvents) ? eventSource.topEvents : [],
+    attributionCoverage:
+      rawSummary.attributionCoverage ||
+      getNestedValue(rawSummary, 'latestRunSummary.attributionCoverage') ||
+      aggregateSummary.attributionCoverage ||
+      getNestedValue(aggregateSummary, 'latestRunSummary.attributionCoverage') ||
+      null,
     latestRunSummary: eventSource.latestRunSummary || eventSource.aggregateCsvSummary || eventSource,
     aggregateCsvSummary: eventSource.aggregateCsvSummary || eventSource,
     aggregateCsvPeriods,
@@ -3552,9 +3565,20 @@ const EmailSequencesAdmin: React.FC = () => {
         throw new Error(json?.error || `AppsFlyer sync failed (HTTP ${response.status})`);
       }
       const summary = json?.summary || {};
+      const attributionCoverage = json?.attributionCoverage || summary?.attributionCoverage || {};
+      const fetchedRows = Number(json?.fetchedRows || attributionCoverage.totalRows || 0) || 0;
+      const matchedCustomerUserRows = Number(attributionCoverage.matchedCustomerUserRows || 0) || 0;
+      const matchedCustomerUserRate = fetchedRows ? Math.round((matchedCustomerUserRows / fetchedRows) * 100) : 0;
+      const reportErrors = Array.isArray(json?.reportErrors) ? json.reportErrors : [];
+      const coverageLabel = fetchedRows
+        ? ` CUID match: ${matchedCustomerUserRows}/${fetchedRows} raw rows (${matchedCustomerUserRate}%).`
+        : ' No raw rows returned.';
+      const reportErrorLabel = reportErrors.length
+        ? ` ${reportErrors.length} report${reportErrors.length === 1 ? '' : 's'} failed; check the AppsFlyer import run details.`
+        : '';
       setMessage({
-        type: 'success',
-        text: `AppsFlyer sync complete: ${Number(summary?.installs?.total || 0)} installs and ${Number(summary?.events?.total || 0)} events imported.`,
+        type: reportErrors.length || (fetchedRows > 0 && matchedCustomerUserRows === 0) ? 'info' : 'success',
+        text: `AppsFlyer sync complete: ${Number(summary?.installs?.total || 0)} installs and ${Number(summary?.events?.total || 0)} events imported.${coverageLabel}${reportErrorLabel}`,
       });
       await loadMacraScoreboard();
     } catch (e: any) {
@@ -3802,6 +3826,14 @@ const EmailSequencesAdmin: React.FC = () => {
     const appsFlyerSubscribeEvents = appsFlyerSummaryEventCount(appsFlyerSummary, ['af_subscribe', 'subscribe']);
     const appsFlyerPurchaseEvents = appsFlyerSummaryEventCount(appsFlyerSummary, ['af_purchase', 'purchase']);
     const appsFlyerMatchedRows = Number(appsFlyerSummary.matchedCustomerUserRows || 0);
+    const appsFlyerAttributionCoverage = (appsFlyerSummary.attributionCoverage ||
+      getNestedValue(appsFlyerSummary, 'latestRunSummary.attributionCoverage') ||
+      {}) as Record<string, any>;
+    const appsFlyerAttributionCoverageRows = Number(appsFlyerAttributionCoverage.totalRows || 0) || 0;
+    const appsFlyerAttributionMatchedRows = Number(appsFlyerAttributionCoverage.matchedCustomerUserRows || appsFlyerMatchedRows || 0) || 0;
+    const appsFlyerAttributionMatchRate = appsFlyerAttributionCoverageRows
+      ? appsFlyerAttributionMatchedRows / appsFlyerAttributionCoverageRows
+      : 0;
     const appsFlyerTopMediaSources = Array.isArray(appsFlyerSummary.topMediaSources) ? appsFlyerSummary.topMediaSources : [];
     const appsFlyerTopCampaigns = Array.isArray(appsFlyerSummary.topCampaigns) ? appsFlyerSummary.topCampaigns : [];
     const appsFlyerTopEvents = Array.isArray(appsFlyerSummary.topEvents) ? appsFlyerSummary.topEvents : [];
@@ -4085,6 +4117,10 @@ const EmailSequencesAdmin: React.FC = () => {
       appsFlyerPurchaseEvents,
       appsFlyerRevenue,
       appsFlyerMatchedRows,
+      appsFlyerAttributionCoverage,
+      appsFlyerAttributionCoverageRows,
+      appsFlyerAttributionMatchedRows,
+      appsFlyerAttributionMatchRate,
       appsFlyerTopMediaSources,
       appsFlyerTopCampaigns,
       appsFlyerTopEvents,
@@ -4532,6 +4568,12 @@ const EmailSequencesAdmin: React.FC = () => {
         },
         aggregateValidation: {
           source: macraScoreboardSummary.appsFlyerIsAggregateCsv ? 'appsflyer_aggregate_csv' : 'appsflyer_raw_or_layered',
+          attributionCoverageRows: macraScoreboardSummary.appsFlyerAttributionCoverageRows,
+          matchedCustomerUserRows: macraScoreboardSummary.appsFlyerAttributionMatchedRows,
+          matchedCustomerUserRate: macraScoreboardSummary.appsFlyerAttributionCoverageRows
+            ? formatScoreboardPercent(macraScoreboardSummary.appsFlyerAttributionMatchedRows, macraScoreboardSummary.appsFlyerAttributionCoverageRows)
+            : '0%',
+          attributionCoverage: macraScoreboardSummary.appsFlyerAttributionCoverage,
           ctaEvents: macraScoreboardSummary.appsFlyerCtaEvents,
           firstPartyQualifiedCtaTaps: macraScoreboardSummary.qualifiedCtaTaps,
           ctaEventGap: Math.max(0, macraScoreboardSummary.appsFlyerCtaEvents - macraScoreboardSummary.qualifiedCtaTaps),
@@ -5040,6 +5082,17 @@ const EmailSequencesAdmin: React.FC = () => {
                     {macraScoreboardSummary.appsFlyerEventIdentityLabel}
                   </div>
                 </div>
+                {macraScoreboardSummary.appsFlyerAttributionCoverageRows ? (
+                  <div className="rounded-lg bg-zinc-950/60 p-3">
+                    <div className="text-xs uppercase tracking-wider text-zinc-500">Raw CUID match</div>
+                    <div className="mt-2 text-2xl font-bold text-white">
+                      {formatScoreboardPercent(macraScoreboardSummary.appsFlyerAttributionMatchedRows, macraScoreboardSummary.appsFlyerAttributionCoverageRows)}
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {macraScoreboardSummary.appsFlyerAttributionMatchedRows}/{macraScoreboardSummary.appsFlyerAttributionCoverageRows} raw rows matched
+                    </div>
+                  </div>
+                ) : null}
                   <div className="rounded-lg bg-zinc-950/60 p-3">
                     <div className="text-xs uppercase tracking-wider text-zinc-500">{macraScoreboardSummary.appsFlyerTrialCardLabel}</div>
                     <div className="mt-2 text-2xl font-bold text-white">{macraScoreboardSummary.appsFlyerStartTrialEvents}</div>

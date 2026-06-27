@@ -120,9 +120,22 @@ type SummaryShape = {
   matchedCustomerUserRows: number;
   unmatchedRows: number;
   importedUserDocs: number;
+  attributionCoverage?: AttributionCoverageDiagnostics;
   topMediaSources: Array<{ label: string; count: number }>;
   topCampaigns: Array<{ label: string; count: number }>;
   topEvents: Array<{ label: string; count: number }>;
+};
+
+type AttributionCoverageDiagnostics = {
+  totalRows: number;
+  matchedCustomerUserRows: number;
+  unmatchedRows: number;
+  matchedCustomerUserRate: number;
+  importedUserDocs?: number;
+  customerUserIdSources: Record<string, number>;
+  keyEventCoverage: Record<string, { rows: number; matchedCustomerUserRows: number; unmatchedRows: number; matchedCustomerUserRate: number }>;
+  reports: Record<string, { rows: number; matchedCustomerUserRows: number; unmatchedRows: number; matchedCustomerUserRate: number }>;
+  missingCustomerUserIdSamples: Array<Record<string, any>>;
 };
 
 type AttributionAggregate = {
@@ -452,8 +465,29 @@ const CUSTOMER_USER_ID_KEYS = [
 
 const APPSFLYER_ID_KEYS = ['appsflyer_id', 'apps_flyer_id', 'af_id'];
 
-const getCustomerUserId = (row: NormalizedRow): string =>
-  getValue(row, CUSTOMER_USER_ID_KEYS) || getEventValue(row, CUSTOMER_USER_ID_KEYS);
+const getCustomerUserIdMatch = (row: NormalizedRow): { value: string; source: string } => {
+  for (const key of CUSTOMER_USER_ID_KEYS) {
+    const value = normalizeString(row[key]);
+    if (value) return { value, source: `column:${key}` };
+  }
+
+  const eventValue = getEventValueObject(row);
+  if (eventValue) {
+    for (const key of CUSTOMER_USER_ID_KEYS) {
+      const direct = getNestedObjectValue(eventValue, key);
+      if (direct) return { value: direct, source: `event_value:${key}` };
+
+      const normalized = normalizeHeader(key);
+      const normalizedMatch = Object.entries(eventValue).find(([eventKey]) => normalizeHeader(eventKey) === normalized);
+      const normalizedValue = normalizedMatch ? normalizeString(normalizedMatch[1]) : '';
+      if (normalizedValue) return { value: normalizedValue, source: `event_value:${normalizedMatch?.[0] || key}` };
+    }
+  }
+
+  return { value: '', source: 'missing' };
+};
+
+const getCustomerUserId = (row: NormalizedRow): string => getCustomerUserIdMatch(row).value;
 
 const getAppsFlyerId = (row: NormalizedRow): string =>
   getValue(row, APPSFLYER_ID_KEYS) || getEventValue(row, APPSFLYER_ID_KEYS);
@@ -1129,7 +1163,8 @@ const rawRowMetadata = (row: NormalizedRow, report: ReportConfig): Record<string
   const eventTime = rawRowEventTime(row);
   const parsedEventTime = Date.parse(eventTime);
   const aggregatePerformance = isAggregatedPerformanceRow(row);
-  const customerUserId = getCustomerUserId(row);
+  const customerUserIdMatch = getCustomerUserIdMatch(row);
+  const customerUserId = customerUserIdMatch.value;
   const appsFlyerId = getAppsFlyerId(row);
 
   return {
@@ -1144,8 +1179,99 @@ const rawRowMetadata = (row: NormalizedRow, report: ReportConfig): Record<string
     campaign: rawRowCampaign(row),
     campaignId: getValue(row, ['campaign_id', 'af_c_id']) || null,
     customerUserId: customerUserId || null,
+    customerUserIdSource: customerUserId ? customerUserIdMatch.source : null,
     appsFlyerId: appsFlyerId || null,
   };
+};
+
+const APPSFLYER_ATTRIBUTION_KEY_EVENT_NAMES = Array.from(
+  new Set([
+    'af_initiated_checkout',
+    'macra_subscription_web_checkout_started',
+    'macra_subscription_checkout_started',
+    ...MACRA_TRIAL_EVENT_NAMES,
+    'af_subscribe',
+    'af_purchase',
+    'subscribe',
+    'purchase',
+    'macra_subscription_started',
+  ])
+);
+
+const createCoverageBucket = () => ({
+  rows: 0,
+  matchedCustomerUserRows: 0,
+  unmatchedRows: 0,
+  matchedCustomerUserRate: 0,
+});
+
+const finalizeCoverageBucket = (bucket: ReturnType<typeof createCoverageBucket>) => {
+  bucket.unmatchedRows = Math.max(0, bucket.rows - bucket.matchedCustomerUserRows);
+  bucket.matchedCustomerUserRate = bucket.rows ? bucket.matchedCustomerUserRows / bucket.rows : 0;
+  return bucket;
+};
+
+const buildAttributionCoverageDiagnostics = (
+  rows: Array<{ row: NormalizedRow; report: ReportConfig; rawRowId?: string }>,
+  importedUserDocs?: number
+): AttributionCoverageDiagnostics => {
+  const coverage: AttributionCoverageDiagnostics = {
+    totalRows: rows.length,
+    matchedCustomerUserRows: 0,
+    unmatchedRows: 0,
+    matchedCustomerUserRate: 0,
+    importedUserDocs,
+    customerUserIdSources: {},
+    keyEventCoverage: {},
+    reports: {},
+    missingCustomerUserIdSamples: [],
+  };
+
+  rows.forEach(({ row, report }) => {
+    const customerUserIdMatch = getCustomerUserIdMatch(row);
+    const hasCustomerUserId = Boolean(customerUserIdMatch.value);
+    const eventName = rawRowEventName(row, report);
+    const reportBucket = coverage.reports[report.key] || createCoverageBucket();
+    reportBucket.rows += 1;
+
+    if (hasCustomerUserId) {
+      coverage.matchedCustomerUserRows += 1;
+      reportBucket.matchedCustomerUserRows += 1;
+      bump(coverage.customerUserIdSources, customerUserIdMatch.source);
+    } else {
+      bump(coverage.customerUserIdSources, 'missing');
+      if (coverage.missingCustomerUserIdSamples.length < 20) {
+        const eventValue = getEventValueObject(row);
+        coverage.missingCustomerUserIdSamples.push({
+          reportKey: report.key,
+          reportType: report.type,
+          eventName: eventName || null,
+          eventTime: rawRowEventTime(row) || null,
+          eventDate: rawRowEventDate(row) || null,
+          mediaSource: rawRowMediaSource(row, report),
+          campaign: rawRowCampaign(row),
+          appsFlyerIdPresent: Boolean(getAppsFlyerId(row)),
+          availableIdentityColumns: CUSTOMER_USER_ID_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(row, key)),
+          eventValueKeys: eventValue ? Object.keys(eventValue).slice(0, 20) : [],
+        });
+      }
+    }
+
+    coverage.reports[report.key] = reportBucket;
+
+    if (eventName && APPSFLYER_ATTRIBUTION_KEY_EVENT_NAMES.includes(eventName)) {
+      const eventBucket = coverage.keyEventCoverage[eventName] || createCoverageBucket();
+      eventBucket.rows += 1;
+      if (hasCustomerUserId) eventBucket.matchedCustomerUserRows += 1;
+      coverage.keyEventCoverage[eventName] = eventBucket;
+    }
+  });
+
+  coverage.unmatchedRows = Math.max(0, coverage.totalRows - coverage.matchedCustomerUserRows);
+  coverage.matchedCustomerUserRate = coverage.totalRows ? coverage.matchedCustomerUserRows / coverage.totalRows : 0;
+  Object.values(coverage.keyEventCoverage).forEach(finalizeCoverageBucket);
+  Object.values(coverage.reports).forEach(finalizeCoverageBucket);
+  return coverage;
 };
 
 const aggregateDateMs = (dateOnly: string): number => {
@@ -1791,6 +1917,9 @@ export async function runMacraAppsFlyerPullImport(args: {
     addRowToSummary(summary, row, report);
     mergeAttributionRow({ aggregateByDocId, row, report });
   }
+  const attributionCoverage = buildAttributionCoverageDiagnostics(allRows, aggregateByDocId.size);
+  const importedAttributionCoverage = buildAttributionCoverageDiagnostics(newRows, aggregateByDocId.size);
+  summary.attributionCoverage = attributionCoverage;
 
   const cumulativeSummary = await persistImport({
     db: args.db,
@@ -1813,6 +1942,8 @@ export async function runMacraAppsFlyerPullImport(args: {
       importedRows: newRows.length,
       duplicateRows,
       reportErrors,
+      attributionCoverage,
+      importedAttributionCoverage,
     },
   };
 }
@@ -2206,6 +2337,9 @@ export const handler: Handler = async (event) => {
         addRowToSummary(summary, row, report);
         mergeAttributionRow({ aggregateByDocId, row, report });
       }
+      const attributionCoverage = buildAttributionCoverageDiagnostics(allRows, aggregateByDocId.size);
+      const importedAttributionCoverage = buildAttributionCoverageDiagnostics(newRows, aggregateByDocId.size);
+      summary.attributionCoverage = attributionCoverage;
 
       const runId = `macra-appsflyer-csv-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
       const cumulativeSummary = await persistImport({
@@ -2229,6 +2363,8 @@ export const handler: Handler = async (event) => {
         topUploadedEvents: topEntries(summary.events.byName, 12),
         revenueTotal: Number(summary.revenue?.total || 0) || 0,
         topRevenueEvents: topEntries(summary.revenue?.byEventName || {}, 8),
+        attributionCoverage,
+        importedAttributionCoverage,
         sourceFiles,
         rawRowCollection: RAW_ROW_COLLECTION,
       };
@@ -2243,6 +2379,8 @@ export const handler: Handler = async (event) => {
         importedRows: newRows.length,
         duplicateRows,
         uploadDiagnostics,
+        attributionCoverage,
+        importedAttributionCoverage,
       });
     }
 
