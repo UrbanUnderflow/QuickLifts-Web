@@ -2750,6 +2750,8 @@ const EmailSequencesAdmin: React.FC = () => {
     purchaseLogCount: 0,
   });
   const [syncingAppsFlyer, setSyncingAppsFlyer] = useState(false);
+  const [appsFlyerRawApiStatus, setAppsFlyerRawApiStatus] = useState<'unknown' | 'available' | 'unavailable'>('unknown');
+  const [appsFlyerRawApiMessage, setAppsFlyerRawApiMessage] = useState('');
   const [uploadingAppsFlyerCsv, setUploadingAppsFlyerCsv] = useState(false);
   const [appsFlyerCsvPeriodPreset, setAppsFlyerCsvPeriodPreset] = useState<MacraScoreboardRangePreset>(MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET);
   const [appsFlyerCsvPeriodStart, setAppsFlyerCsvPeriodStart] = useState(() => buildMacraScoreboardDateRange(MACRA_SCOREBOARD_DEFAULT_RANGE_PRESET).start);
@@ -3562,7 +3564,11 @@ const EmailSequencesAdmin: React.FC = () => {
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(json?.error || `AppsFlyer sync failed (HTTP ${response.status})`);
+        const error = new Error(json?.error || `AppsFlyer sync failed (HTTP ${response.status})`) as Error & {
+          errorCode?: string;
+        };
+        error.errorCode = json?.errorCode;
+        throw error;
       }
       const summary = json?.summary || {};
       const attributionCoverage = json?.attributionCoverage || summary?.attributionCoverage || {};
@@ -3576,13 +3582,30 @@ const EmailSequencesAdmin: React.FC = () => {
       const reportErrorLabel = reportErrors.length
         ? ` ${reportErrors.length} report${reportErrors.length === 1 ? '' : 's'} failed; check the AppsFlyer import run details.`
         : '';
+      setAppsFlyerRawApiStatus('available');
+      setAppsFlyerRawApiMessage('');
       setMessage({
         type: reportErrors.length || (fetchedRows > 0 && matchedCustomerUserRows === 0) ? 'info' : 'success',
         text: `AppsFlyer sync complete: ${Number(summary?.installs?.total || 0)} installs and ${Number(summary?.events?.total || 0)} events imported.${coverageLabel}${reportErrorLabel}`,
       });
       await loadMacraScoreboard();
     } catch (e: any) {
-      setMessage({ type: 'error', text: e?.message || 'Failed to sync AppsFlyer raw data' });
+      const errorMessage = e?.message || 'Failed to sync AppsFlyer raw data';
+      const rawAccessError =
+        e?.errorCode === 'APPSFLYER_RAW_API_ACCESS_UNAVAILABLE' ||
+        errorMessage.includes('Every AppsFlyer Pull API report request failed') ||
+        errorMessage.includes('plan access for raw-data reports') ||
+        errorMessage.includes('AppsFlyer raw-data');
+      if (rawAccessError) {
+        setAppsFlyerRawApiStatus('unavailable');
+        setAppsFlyerRawApiMessage(errorMessage);
+        setMessage({
+          type: 'info',
+          text: 'AppsFlyer raw Pull API access is unavailable on this account right now. The scoreboard is still using first-party Firebase, Stripe, and email data for person-level funnel counts; upload AppsFlyer CSV exports for aggregate validation.',
+        });
+      } else {
+        setMessage({ type: 'error', text: errorMessage });
+      }
     } finally {
       setSyncingAppsFlyer(false);
     }
@@ -4139,6 +4162,67 @@ const EmailSequencesAdmin: React.FC = () => {
     };
   }, [macraScoreboard.appsFlyerSummary, macraScoreboard.config, macraScoreboard.users, selectedMacraScoreboardRange]);
 
+  const macraScoreboardDataQuality = useMemo(() => {
+    const hasAggregateCsv = Boolean(
+      macraScoreboardSummary.appsFlyerIsAggregateCsv ||
+        macraScoreboardSummary.appsFlyerAggregatePeriods.length ||
+        macraScoreboardSummary.appsFlyerEvents ||
+        macraScoreboardSummary.appsFlyerInstalls
+    );
+    const rawApiLabel =
+      appsFlyerRawApiStatus === 'available'
+        ? 'Raw API available'
+        : appsFlyerRawApiStatus === 'unavailable'
+          ? 'Raw API unavailable'
+          : 'Raw API not checked';
+    const aggregateLabel = hasAggregateCsv
+      ? `${macraScoreboardSummary.appsFlyerCoverageLabel}`
+      : 'Upload AppsFlyer aggregate CSV for acquisition and event-volume validation';
+    const trialSourceLabel = macraScoreboardSummary.appsFlyerStartTrialEvents
+      ? `${macraScoreboardSummary.displayedTrialStarts} displayed from first-party plus AppsFlyer validation`
+      : `${macraScoreboardSummary.qualifiedTrialStarts} first-party matched trial starts`;
+
+    return {
+      primarySource: 'First-party Firebase, Stripe, Brevo email logs',
+      primarySourceDetail: `${macraScoreboard.users.length} users · ${macraScoreboard.emailLogCount} email logs · ${macraScoreboard.purchaseLogCount} purchase logs`,
+      personLevelStatus: macraScoreboard.users.length ? 'Person-level funnel active' : 'Waiting for first-party users',
+      personLevelDetail: 'Qualified users, retargeting sends, checkout starts, trials, and paid conversions are counted from user/account evidence.',
+      rawApiLabel,
+      rawApiDetail:
+        appsFlyerRawApiStatus === 'unavailable'
+          ? 'AppsFlyer account access is blocking raw-data Pull API reports; this only affects person-level AppsFlyer attribution enrichment.'
+          : appsFlyerRawApiStatus === 'available'
+            ? 'Raw AppsFlyer rows can enrich per-user attribution when customer_user_id is present.'
+            : 'Use Sync AppsFlyer after access changes; CSV uploads keep aggregate validation current in the meantime.',
+      aggregateLabel,
+      aggregateDetail: hasAggregateCsv
+        ? 'CSV totals validate acquisition and event volume, but they do not identify individual people.'
+        : 'CSV import is the best available AppsFlyer fallback until raw report access is upgraded.',
+      trialSourceLabel,
+      notes: [
+        'Treat person-level recovery and revenue counts as the operational source of truth.',
+        'Treat AppsFlyer CSV counts as aggregate validation for total event volume and source/campaign mix.',
+        appsFlyerRawApiStatus === 'unavailable'
+          ? 'Raw AppsFlyer person-level attribution will improve after AppsFlyer enables raw-data Pull API access.'
+          : '',
+      ].filter(Boolean),
+    };
+  }, [
+    appsFlyerRawApiStatus,
+    macraScoreboard.appsFlyerSummary,
+    macraScoreboard.emailLogCount,
+    macraScoreboard.purchaseLogCount,
+    macraScoreboard.users.length,
+    macraScoreboardSummary.appsFlyerAggregatePeriods.length,
+    macraScoreboardSummary.appsFlyerCoverageLabel,
+    macraScoreboardSummary.appsFlyerEvents,
+    macraScoreboardSummary.appsFlyerInstalls,
+    macraScoreboardSummary.appsFlyerIsAggregateCsv,
+    macraScoreboardSummary.appsFlyerStartTrialEvents,
+    macraScoreboardSummary.displayedTrialStarts,
+    macraScoreboardSummary.qualifiedTrialStarts,
+  ]);
+
   const macraMetricCards = [
     {
       label: 'Qualified onboarding completions',
@@ -4502,6 +4586,11 @@ const EmailSequencesAdmin: React.FC = () => {
           start: selectedMacraScoreboardRange.start,
           end: selectedMacraScoreboardRange.end,
           daysBack: selectedMacraScoreboardRange.daysBack,
+        },
+        dataQuality: {
+          ...macraScoreboardDataQuality,
+          appsFlyerRawApiStatus,
+          appsFlyerRawApiMessage: appsFlyerRawApiMessage || null,
         },
         headlineMetrics: macraMetricCards.map((card) => ({
           label: card.label,
@@ -4932,6 +5021,56 @@ const EmailSequencesAdmin: React.FC = () => {
                 {macraScoreboard.error}
               </div>
             ) : null}
+
+            <div className="mb-4 rounded-lg border border-zinc-800 bg-[#1a1e24] p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-200">Scoreboard data sources</h3>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {macraScoreboardDataQuality.primarySourceDetail}
+                  </p>
+                </div>
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-800/60 bg-emerald-950/30 px-3 py-1 text-xs font-medium text-emerald-300">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {macraScoreboardDataQuality.personLevelStatus}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    <ShieldAlert className="h-3.5 w-3.5 text-lime-300" />
+                    Person-level funnel
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-white">{macraScoreboardDataQuality.primarySource}</div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-500">{macraScoreboardDataQuality.personLevelDetail}</div>
+                </div>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    <Upload className="h-3.5 w-3.5 text-sky-300" />
+                    AppsFlyer CSV
+                  </div>
+                  <div className="mt-2 text-sm font-medium text-white">{macraScoreboardDataQuality.aggregateLabel}</div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-500">{macraScoreboardDataQuality.aggregateDetail}</div>
+                </div>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    {appsFlyerRawApiStatus === 'unavailable' ? (
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-300" />
+                    ) : (
+                      <TrendingUp className="h-3.5 w-3.5 text-zinc-400" />
+                    )}
+                    AppsFlyer raw API
+                  </div>
+                  <div className={`mt-2 text-sm font-medium ${appsFlyerRawApiStatus === 'unavailable' ? 'text-amber-200' : 'text-white'}`}>
+                    {macraScoreboardDataQuality.rawApiLabel}
+                  </div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-500">{macraScoreboardDataQuality.rawApiDetail}</div>
+                </div>
+              </div>
+              <div className="mt-3 text-xs leading-5 text-zinc-500">
+                Trial source: {macraScoreboardDataQuality.trialSourceLabel}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               {macraMetricCards.map((card) => {

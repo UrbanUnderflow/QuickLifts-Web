@@ -1890,7 +1890,10 @@ export async function runMacraAppsFlyerPullImport(args: {
     return {
       status: 502,
       payload: {
+        errorCode: 'APPSFLYER_RAW_API_ACCESS_UNAVAILABLE',
+        recoverableWithCsvUpload: true,
         error: 'Every AppsFlyer Pull API report request failed. Check the token and plan access for raw-data reports.',
+        fallback: 'Upload AppsFlyer CSV exports to keep aggregate event validation current until raw-data Pull API access is enabled.',
         tokenSource: tokenResolution.source,
         reportErrors,
       },
