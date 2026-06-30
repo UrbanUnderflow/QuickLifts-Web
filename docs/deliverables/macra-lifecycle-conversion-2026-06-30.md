@@ -41,6 +41,23 @@ This daily Macra KPI snapshot must read the exact source artifacts below before 
 - **Retargeting state** - Retargeting configuration, eligibility, suppression, send, and recovery-lane state.
 - **AppsFlyer coverage** - AppsFlyer aggregate and import coverage dates used to decide whether Scoreboard and source-quality reads are fresh or stale.
 
+## Daily KPI Snapshot
+
+This snapshot records the latest saved Macra funnel read available for this deliverable. The funnel counts are useful as a baseline, but they are stale for June 30 decisioning unless newer AppsFlyer and Scoreboard coverage is refreshed.
+
+| KPI | Value | Source / freshness |
+| --- | ---: | --- |
+| Onboarding starts | 533 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Reached paywall | 448 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Paywall CTA presses | 317 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Checkout initiations | 94 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Trial starts | 5 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Purchases | 3 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Subscribes | 3 | `.agent/macra/state.json`, saved AppsFlyer aggregate aligned with Macra Scoreboard, `2026-05-27` through `2026-06-25`. |
+| Checkout cancels or failures | 161 canceled rows; 21 failed rows | `.agent/macra/decisions.md`, broader Firestore `Macra-purchase-logs` evidence base. Treat as guardrail context, not the same date window as the saved funnel. |
+| Apple purchase cancels | Not separately isolated in the saved KPI snapshot | Use the 161 canceled `Macra-purchase-logs` rows as purchase-cancel pressure only; do not present them as Apple-only cancels without a refreshed `/admin/purchaseLogs` breakout. |
+| AppsFlyer coverage dates | `2026-05-27` through `2026-06-25`; Scoreboard aggregate CSV coverage also noted as `2026-05-23` through `2026-06-25` | `.agent/macra/state.json` and `docs/ops/macra-operating-snapshot-2026-06-30.md`. June 28-30 AppsFlyer daily period and raw rows are unavailable in the saved read. |
+
 ## Variant A Freshness
 
 `/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The refreshed `/admin/experiments` results read must be for active `variant_a`, and `.agent/macra/state.json` names the live configuration as `monthly + annual, both with trial`, meaning monthly plus annual with trial.
