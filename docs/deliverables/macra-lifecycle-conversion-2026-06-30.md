@@ -158,6 +158,22 @@ Retargeting eligibility means a user qualifies for a lifecycle follow-up lane ba
 
 Retargeting suppression means the system intentionally skipped a user because a rule blocked sending. Suppression can reflect under-18 state, incomplete onboarding, no rule due, missing email, claim block, historical trial/subscription, or another safety or timing condition. Suppression should be treated as a guardrail signal, not automatically as campaign underperformance.
 
+## Cancel Reasons And Paywall Dismissals
+
+### Facts
+
+- `.agent/macra/decisions.md` records `69` production cancel-feedback rows in Firestore `Macrafeedbackreason`, led by price, not ready, need proof, something did not work, and Apple sheet confusion.
+- `docs/ops/macra-operating-snapshot-2026-06-30.md` reports one production `Macrafeedbackreason` row on `2026-06-28`; the top reason was `Price felt too high`, triggered by `storekit_cancelled`.
+- `.agent/macra/state.json` preserves the saved paywall chain for `2026-05-27` through `2026-06-25`: `448` paywall reaches, `317` paywall primary CTA presses, `94` initiated checkouts, and `5` trial starts.
+- `.agent/macra/decisions.md` records the broader purchase-log context as `306` Firestore `Macra-purchase-logs` rows: `161` canceled, `110` attempted, `21` failed, and `14` success.
+- The saved paywall dismissal behavior can show where users drop between paywall reach, CTA, checkout, and trial, but it does not by itself identify whether the cause was price, proof, readiness, Apple sheet confusion, or technical failure.
+
+### Inference
+
+- The clearest lifecycle leak is after paywall intent and before trial start: users are pressing the paywall CTA and some are reaching checkout, but trial starts remain low.
+- Price is a real trust objection, but the surrounding cancel-reason pattern points to broader uncertainty, especially readiness, need for proof, breakage, and Apple sheet confusion.
+- The most defensible next lifecycle move should reduce proof and expectation friction before checkout, not introduce a discount or multiple simultaneous offer tests.
+
 ## Trust Signal Read
 
 This section summarizes cancel reasons, paywall dismissal behavior, and retargeting state without treating any one signal as a complete explanation for trial-start movement.
