@@ -31,9 +31,9 @@ The next execution pass should add the trust guardrail read and, only after the 
 
 ## Variant A Freshness
 
-`/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The active Macra experiment is `variant_a`, and `.agent/macra/state.json` names the current configuration as `monthly + annual, both with trial`, meaning monthly plus annual with trial.
+`/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The refreshed active-variant record for the current Macra setup is `variant_a`, and `.agent/macra/state.json` names the live configuration as `monthly + annual, both with trial`, meaning monthly plus annual with trial.
 
-The freshness caveat is still live: `.agent/macra/state.json` records that the saved `/admin/experiments` results snapshot is stale from `2026-06-16` and still reflects the retired hard-paywall configuration. That stale hard-paywall read must not be treated as evidence for the current monthly-plus-annual-with-trial paywall state.
+The required caveat from `.agent/macra/state.json` is still live: the saved `/admin/experiments` results snapshot is stale from `2026-06-16` and still reflects the retired hard-paywall configuration. That stale hard-paywall read must not be treated as evidence for the current monthly-plus-annual-with-trial paywall state.
 
 For this deliverable, active `variant_a` can be used as the current configuration context, but not as a refreshed outcome read unless `/admin/experiments` has been refreshed or backfilled against the current Scoreboard, purchase logs, cancel reasons, retargeting state, and AppsFlyer imports.
 
