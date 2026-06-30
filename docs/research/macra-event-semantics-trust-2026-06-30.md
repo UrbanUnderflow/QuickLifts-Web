@@ -5,7 +5,7 @@
 **Status:** Scaffold created for event-semantics execution  
 **Task:** Verify that `af_start_trial`, `af_purchase`, `af_subscribe`, `purchase_cancelled`, `web_checkout_started`, and StoreKit cancel are cleanly separated, and flag any tracking ambiguity that could make the reported 2/day trial-start signal look stronger or weaker than reality.
 
-## Source Context
+## Operating Context
 
 ### Observed operating facts
 
@@ -115,37 +115,51 @@ Required source artifacts to inspect:
 
 This section must define how StoreKit cancel differs from AppsFlyer `purchase_cancelled`, whether the two can collide, and how cancellation timing affects the 2/day signal.
 
-## Signal Separation Matrix
+## age eligibility
 
 _Pending Step 4 population._
 
-| Event | Trigger | Source system | User identifier | Timestamp field | Dedupe key | Effect on qualified onboarding-start-to-trial-start metric |
-| --- | --- | --- | --- | --- | --- | --- |
-| `af_start_trial` | Pending | Pending | Pending | Pending | Pending | Pending |
-| `af_purchase` | Pending | Pending | Pending | Pending | Pending | Pending |
-| `af_subscribe` | Pending | Pending | Pending | Pending | Pending | Pending |
-| `purchase_cancelled` | Pending | Pending | Pending | Pending | Pending | Pending |
-| `web_checkout_started` | Pending | Pending | Pending | Pending | Pending | Pending |
-| StoreKit cancel | Pending | Pending | Pending | Pending | Pending | Pending |
+Required source artifacts to inspect:
 
-## Tracking Ambiguities
+- user-state collection and profile fields used by Macra
+- eligibility code paths that compute age or block under-18 users
+- missing-birthdate handling in onboarding, user management, or Macra admin surfaces
+
+This section must define whether age eligibility is a hard blocker, a profile completeness requirement, or an annotation on the trial-start path.
+
+## activation-quality signals
+
+_Pending Step 4 population._
+
+Required source artifacts to inspect:
+
+- trial activation fields and events
+- onboarding completion state
+- `/admin/macraCancelReasons` entries that imply trust or product-quality failure after checkout
+- any retargeting or recovery logic for trial users who have not activated
+
+This section must define whether a user moved from nominal trial start into a trustworthy activation state.
+
+## Ambiguities
 
 _Pending Step 5 population._
 
-This section must include ambiguities that could make the reported 2/day trial-start signal look stronger or weaker than reality, including:
+This section must include mismatches that could make the reported 2/day trial-start signal look stronger or weaker than reality, including:
 
-- possible double counting between `af_start_trial` and subscription or purchase events
+- overlap between `af_start_trial` and `af_subscribe`
+- differences between AppsFlyer purchases and `/admin/purchaseLogs`
 - checkout-start inflation from `web_checkout_started`
-- cancellation timing conflicts between `purchase_cancelled` and StoreKit cancel
-- stale or aggregate-only source data that cannot prove user-level trial starts
+- checkout starts without activation
+- StoreKit cancels after start
+- under-18 or missing-birthdate blocks
+- stale `/admin/experiments` results
 
-## Trust Verdict
+## Trust Guardrails
 
 _Pending Step 6 population._
 
 This section must end with:
 
 - pass/fail criteria for counting a valid Macra trial start
-- the primary metric protected
-- the guardrail most likely to catch misleading growth
-- one recommendation or an explicit no-change recommendation
+- guardrails for purchase cancels, checkout failure/cancel rate, age/birthdate blocks, activation after start, paid conversion after trial, and cancel reasons
+- at least one cited ambiguity that could make the growth signal misleading
