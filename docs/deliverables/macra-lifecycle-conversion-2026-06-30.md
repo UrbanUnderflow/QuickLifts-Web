@@ -121,6 +121,16 @@ This lifecycle pass must read the exact artifacts below before choosing any copy
 - **`/admin/experiments`** - Active `variant_a` experiment surface, with the stale `2026-06-16` retired hard-paywall snapshot excluded from live decisioning unless refreshed or backfilled.
 - **`.agent/macra/state.json`** - Durable operating state for the current Macra configuration, saved funnel run, source split, primary metric, guardrails, and stale-data caveats.
 
+## Decision Source Coverage
+
+This decision-log pass must tie any proposed operational change to source evidence, one expected metric, and guardrails before it can move beyond proposed-only status. This section names the required decision sources only; it does not approve a live funnel, pricing, offer, proof, copy, retargeting, experiment allocation, or acquisition change.
+
+- **`/admin/macraCancelReasons`** - Required admin surface for user-stated cancellation and paywall-friction reasons before deciding whether the proposed change addresses price, readiness, proof, breakage, or Apple sheet confusion.
+- **paywall dismissal signals** - Required behavioral evidence from paywall reach, primary CTA, checkout initiation, purchase cancel, purchase failure, and trial-start drop-off before naming the metric expected to move.
+- **retargeting state** - Required recovery-context read for eligibility, suppression, send state, and lane behavior before deciding whether the operational change belongs on paywall proof copy or follow-up messaging.
+- **`.agent/macra/state.json`** - Durable operating state for active `variant_a`, latest saved funnel run, primary metric, source split, guardrails, and stale-data caveats.
+- **`.agent/macra/decisions.md`** - Required decision log for proposed-only and approved operational changes. Any shippable change must have a matching row with owner, evidence, expected metric movement, and guardrail.
+
 ## Source Coverage
 
 This deliverable audits Macra lifecycle conversion signals before scaling the growth signal. This step only records source coverage. It does not approve a live copy, proof, offer, pricing, funnel, retargeting, experiment allocation, or acquisition change.
