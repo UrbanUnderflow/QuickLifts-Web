@@ -2,139 +2,131 @@
 
 **Date:** 2026-06-30  
 **Owner:** Sage  
-**Status:** Step 1 research plan  
+**Status:** Scaffold created for event-semantics execution  
 **Task:** Verify that `af_start_trial`, `af_purchase`, `af_subscribe`, `purchase_cancelled`, `web_checkout_started`, and StoreKit cancel are cleanly separated, and flag any tracking ambiguity that could make the reported 2/day trial-start signal look stronger or weaker than reality.
 
-## Research Question
+## Source Context
 
-Can Macra safely treat the reported 2/day trial-start signal as a clean trial-start signal, or could the current event grouping, aggregation, cancellation handling, or first-party/AppsFlyer reconciliation make that signal look stronger or weaker than the real user-level conversion state?
+_Pending Step 2 population._
 
-## Current Freshness Caveat
+Required source artifacts for this section:
 
-The durable Macra operating state currently records the latest saved run as **2026-05-27 through 2026-06-25**, sourced from an AppsFlyer aggregate report aligned with the saved Macra Scoreboard. That saved run records **5 trial starts**, **3 purchases**, and **3 subscribes**, not a directly verified 2/day trial-start pace.
+- `.agent/macra/contract.md`
+- `.agent/macra/state.json`
+- `.agent/macra/progress.md`
+- `.agent/macra/decisions.md`
+- `.agent/macra/runbook.md`
 
-For this audit, the 2/day signal is therefore treated as **unverified until Step 2 identifies its exact source artifact, date range, and unit of counting**.
+This section must separate current operating facts from stale context, including the saved 2026-06-25 run and stale `/admin/experiments` snapshot.
 
-Source: `.agent/macra/state.json`
+## af_start_trial
 
-## Source Map
+_Pending Step 3 population._
 
-### AppsFlyer import and storage
+Required source artifacts to inspect:
 
-- **Source artifact:** `netlify/functions/sync-macra-appsflyer-raw-data.ts`
-- **Collections named by the import path:** `appsflyer-scoreboards`, `appsflyer-aggregate-periods`, `appsflyer-macra-raw-rows`, `appsflyer-macra-users`, and `appsflyer-import-runs`
-- **Relevant import allowlist:** includes `af_initiated_checkout`, `macra_subscription_purchase_cancelled`, `macra_subscription_web_checkout_started`, `af_start_trial`, `af_subscribe`, and `af_purchase`
-- **Planned verification use:** confirm which event names can enter the Macra AppsFlyer pipeline and whether aggregate-period counts can be reconciled to raw/person-level rows.
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+- `src/pages/admin/emailSequences.tsx`
 
-Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+This section must define whether `af_start_trial` is trial-start evidence, how it is grouped, and what user/date/unit caveats apply.
 
-### Experiment event grouping
+## af_purchase
 
-- **Source artifact:** `src/pages/admin/experiments.tsx`
-- **Trial-start evidence set:** `af_start_trial`, `start_trial`, `trial_started`, `macra_trial_started`
-- **Paid-conversion evidence set:** `af_subscribe`, `af_purchase`, `subscribe`, `purchase`, `macra_subscription_started`
-- **Checkout-start evidence set:** `af_initiated_checkout`, `macra_subscription_web_checkout_started`
-- **Cancel evidence set:** `macra_subscription_purchase_cancelled`
-- **Activation evidence set:** `macra_trial_activation_screen_viewed`, `macra_trial_activation_primary_pressed`
-- **Planned verification use:** test whether trial starts, paid conversions, checkout starts, cancellations, and activation actions are separated in reporting or accidentally interpreted as interchangeable proof of progress.
+_Pending Step 3 population._
 
-Source: `src/pages/admin/experiments.tsx`
+Required source artifacts to inspect:
 
-### Scoreboard reconciliation
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+- `src/pages/admin/emailSequences.tsx`
 
-- **Source artifact:** `src/pages/admin/emailSequences.tsx`
-- **Relevant behavior:** the Scoreboard computes first-party qualified trial starts and AppsFlyer trial-start events, then displays trial starts using `Math.max(qualifiedTrialStarts, appsFlyerStartTrialEvents)`.
-- **Relevant event sets:** checkout events include `af_initiated_checkout`, `macra_subscription_web_checkout_started`, and `macra_subscription_checkout_started`; purchase cancel events include both `macra_subscription_purchase_cancelled` and `macra_subscription_purchase_canceled`.
-- **Planned verification use:** determine whether the displayed trial-start count is a deduped person count, an event count, or a protective max between sources. This is the highest-priority ambiguity for the 2/day signal.
+This section must define whether `af_purchase` is paid-conversion evidence, trial-start evidence, or a post-trial monetization signal.
 
-Source: `src/pages/admin/emailSequences.tsx`
+## af_subscribe
 
-### Purchase and cancellation surfaces
+_Pending Step 3 population._
 
-- **Purchase surface:** `/admin/macraPurchaseLogs`
-- **Source artifact:** `src/pages/admin/macraPurchaseLogs.tsx`
-- **Dataset:** `Macra-purchase-logs`
-- **Relevant states:** `attempted`, `success`, `failed`, `canceled`, `cancelled`
-- **Relevant metadata:** `cancelReasonCode`, `cancelReasonLabel`, `cancelFeedbackTrigger`, and `cancelFeedbackMetadata`
+Required source artifacts to inspect:
 
-Source: `src/pages/admin/macraPurchaseLogs.tsx`
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+- `src/pages/admin/emailSequences.tsx`
 
-- **Cancel-reason surface:** `/admin/macraCancelReasons`
-- **Source artifact:** `src/pages/admin/macraCancelReasons.tsx`
-- **Dataset:** `Macrafeedbackreason`
-- **Planned verification use:** separate StoreKit or purchase-sheet cancellation pressure from completed trial and paid-conversion evidence.
+This section must define whether `af_subscribe` is distinct from `af_purchase`, whether it can double count the same user journey, and how it should be reconciled.
 
-Source: `src/pages/admin/macraCancelReasons.tsx`
+## purchase_cancelled
 
-### Macra operating contract
+_Pending Step 3 population._
 
-- **Source artifacts:** `.agent/macra/contract.md`, `.agent/macra/runbook.md`, `.agent/macra/state.json`
-- **Primary metric:** qualified onboarding start to trial start
-- **Guardrails:** Apple purchase cancels, checkout failure/cancel rate, under-18 or missing-birthdate blocks, trial activation after start, paid conversion after trial, and cancel reasons.
-- **Planned verification use:** keep recommendations constrained to observe/recommend/log posture and avoid live funnel, budget, or pricing changes.
+Required source artifacts to inspect:
 
-Source: `.agent/macra/contract.md`; `.agent/macra/runbook.md`; `.agent/macra/state.json`
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/emailSequences.tsx`
+- `src/pages/admin/macraPurchaseLogs.tsx`
+- `src/pages/admin/macraCancelReasons.tsx`
 
-## Planned Verification Matrix
+This section must define whether `purchase_cancelled` decreases trial-start trust, reverses purchase-boundary progression, or merely annotates a cancelled transaction.
 
-| Signal | Source artifacts | Separation check | Risk to 2/day interpretation |
-| --- | --- | --- | --- |
-| `af_start_trial` | `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx`; `src/pages/admin/emailSequences.tsx` | Confirm it remains in the trial-start group only and is not counted as paid conversion or activation. | If aggregate events are not deduped to people, trial starts can look stronger than real qualified starts. |
-| `af_purchase` | `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx` | Confirm it is paid-conversion evidence, not trial-start evidence. | If purchase is used as a proxy for trial start, the signal can inflate trial quality. |
-| `af_subscribe` | `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx` | Confirm it is bundled with paid conversion and deduped against `af_purchase`/`purchase`. | If subscribe and purchase represent the same user journey, counting both separately can overstate conversion. |
-| `purchase_cancelled` / StoreKit cancel | `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/emailSequences.tsx`; `src/pages/admin/macraPurchaseLogs.tsx`; `src/pages/admin/macraCancelReasons.tsx` | Confirm cancellation is a negative guardrail and never success evidence. | If cancels are ignored, a trial-start signal can look cleaner than the purchase-boundary trust reality. |
-| `web_checkout_started` | `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/experiments.tsx`; `src/pages/admin/emailSequences.tsx` | Confirm it is upstream intent and not merged with `af_start_trial` without person-level dedupe. | If checkout intent is mistaken for trial start, the signal can look stronger than reality. |
-| Trial activation | `src/pages/admin/experiments.tsx`; `src/pages/admin/emailSequences.tsx`; `src/pages/admin/users.tsx` | Confirm raw trial start is separated from activation screen/action and first meaningful product use. | If activation is not checked, Macra may scale nominal starts that do not become durable users. |
+## web_checkout_started
 
-## Planned Audit Sections For Step 2
+_Pending Step 3 population._
 
-1. **Observed facts:** event groups, datasets, admin surfaces, date ranges, and known counts.
-2. **Separation verdict:** whether each required signal is cleanly separated, partially separated, or ambiguous.
-3. **2/day signal check:** source, date range, unit of count, and whether it is aggregate event count, deduped user count, first-party qualified count, or Scoreboard max.
-4. **Ambiguities:** overlaps between checkout-start, trial-start, paid-conversion, cancellation, and activation states.
-5. **Recommendation:** one evidence-backed recommendation, with primary metric and guardrail.
+Required source artifacts to inspect:
 
-## Working Hypotheses To Test
+- `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- `src/pages/admin/experiments.tsx`
+- `src/pages/admin/emailSequences.tsx`
+- `src/pages/admin/macraPurchaseLogs.tsx`
 
-### Hypothesis 1: trial-start counting may be protective but not person-deduped
+This section must define whether `web_checkout_started` is upstream intent, checkout evidence, or trial-start evidence, and whether it overlaps with `af_initiated_checkout`.
 
-The Scoreboard’s `Math.max(qualifiedTrialStarts, appsFlyerStartTrialEvents)` behavior may protect against undercounting when first-party user matching is incomplete, but it can also make a displayed trial-start number unsafe to treat as a deduped user count without raw/person-level validation.
+## StoreKit cancel
 
-Confidence: medium.  
-Source: `src/pages/admin/emailSequences.tsx`
+_Pending Step 3 population._
 
-### Hypothesis 2: paid conversion is separated from trial start, but `af_purchase` and `af_subscribe` need dedupe
+Required source artifacts to inspect:
 
-The experiment surface separates trial-start event names from paid-conversion event names, but `af_purchase` and `af_subscribe` live in the same paid-conversion bundle. They should be treated as alternative evidence for paid conversion unless person-level reconciliation proves they are separate users or separate lifecycle stages.
+- `/admin/purchaseLogs`
+- `/admin/macraPurchaseLogs`
+- `src/pages/admin/macraPurchaseLogs.tsx`
+- `src/pages/admin/macraCancelReasons.tsx`
+- `.agent/macra/state.json`
 
-Confidence: high.  
-Source: `src/pages/admin/experiments.tsx`
+This section must define how StoreKit cancel differs from AppsFlyer `purchase_cancelled`, whether the two can collide, and how cancellation timing affects the 2/day signal.
 
-### Hypothesis 3: checkout-start overlap can make intent look like conversion
+## Signal Separation Matrix
 
-Both `af_initiated_checkout` and `macra_subscription_web_checkout_started` are checkout-start evidence, not trial-start evidence. They should not be added together as unique checkout starts without person-level dedupe, and they should never be used as proof of trial start.
+_Pending Step 4 population._
 
-Confidence: high.  
-Source: `src/pages/admin/experiments.tsx`; `src/pages/admin/emailSequences.tsx`; `.agent/macra/state.json`
+| Event | Trigger | Source system | User identifier | Timestamp field | Dedupe key | Effect on qualified onboarding-start-to-trial-start metric |
+| --- | --- | --- | --- | --- | --- | --- |
+| `af_start_trial` | Pending | Pending | Pending | Pending | Pending | Pending |
+| `af_purchase` | Pending | Pending | Pending | Pending | Pending | Pending |
+| `af_subscribe` | Pending | Pending | Pending | Pending | Pending | Pending |
+| `purchase_cancelled` | Pending | Pending | Pending | Pending | Pending | Pending |
+| `web_checkout_started` | Pending | Pending | Pending | Pending | Pending | Pending |
+| StoreKit cancel | Pending | Pending | Pending | Pending | Pending | Pending |
 
-### Hypothesis 4: StoreKit cancellation is a guardrail, not a neutral annotation
+## Tracking Ambiguities
 
-Cancellation is modeled separately through AppsFlyer events, purchase-log status, and cancel-reason feedback. It should reduce trust in the purchase-boundary signal rather than sit beside trial-start reporting as a neutral diagnostic.
+_Pending Step 5 population._
 
-Confidence: high.  
-Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`; `src/pages/admin/macraPurchaseLogs.tsx`; `src/pages/admin/macraCancelReasons.tsx`
+This section must include ambiguities that could make the reported 2/day trial-start signal look stronger or weaker than reality, including:
 
-## Step 1 Plan
+- possible double counting between `af_start_trial` and subscription or purchase events
+- checkout-start inflation from `web_checkout_started`
+- cancellation timing conflicts between `purchase_cancelled` and StoreKit cancel
+- stale or aggregate-only source data that cannot prove user-level trial starts
 
-Step 2 should execute the audit by reading the source artifacts above, then filling the final sections with cited facts and a single recommendation. The recommendation should not propose a live funnel, pricing, or budget change. It should focus on signal validity, likely by requiring the daily Macra snapshot to show three separate counts side by side:
+## Trust Verdict
 
-1. AppsFlyer aggregate trial-start events.
-2. Matched first-party qualified trial-start users.
-3. Trial starts with activation evidence and no same-window StoreKit cancellation.
+_Pending Step 6 population._
 
-Primary metric to protect: qualified onboarding start to trial start.  
-Primary guardrail to watch: Apple purchase cancels and trial activation after start.
+This section must end with:
 
-## Files Planned For Step 2
+- pass/fail criteria for counting a valid Macra trial start
+- the primary metric protected
+- the guardrail most likely to catch misleading growth
+- one recommendation or an explicit no-change recommendation
 
-- `docs/research/macra-event-semantics-trust-2026-06-30.md`
