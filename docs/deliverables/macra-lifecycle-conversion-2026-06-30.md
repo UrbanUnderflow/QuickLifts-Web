@@ -132,6 +132,18 @@ This deliverable audits Macra lifecycle conversion signals before scaling the gr
 - **Retargeting caveat:** Retargeting state must be read directly before judging pressure or recovery effectiveness. Missing retargeting breakout should be treated as unverified, not safe.
 - **No live-action authorization:** This source-coverage step does not authorize live funnel, offer, pricing, retargeting, or acquisition changes.
 
+## Event Source Coverage
+
+This event-semantics pass must read the exact artifacts below before using any funnel event as evidence for scaling the Macra growth signal. This section records coverage only; it does not approve a live funnel, pricing, offer, proof, copy, retargeting, budget, acquisition, or experiment change.
+
+- **`/admin/macraCancelReasons`** - Admin surface backed by Firestore `Macrafeedbackreason`, used for explicit user-stated cancellation, price, readiness, proof, breakage, and Apple sheet confusion reasons.
+- **paywall dismissal signals** - Saved behavioral evidence from paywall reach, primary CTA press, checkout initiation, purchase cancel, purchase failure, and trial-start drop-off.
+- **retargeting state** - Retargeting eligibility, suppression, send, open, click, checkout-start, trial-start, paid-conversion, under-18 block, and missing-birthdate block state before treating follow-up messaging as active recovery evidence.
+- **`/admin/experiments`** - Required experiment surface for active `variant_a`; the stale `2026-06-16` retired hard-paywall snapshot must remain excluded from current event-semantics decisions unless refreshed or backfilled.
+- **`/admin/purchaseLogs`** - Admin purchase-log surface and Firestore `Macra-purchase-logs` evidence used to keep checkout initiation, checkout cancel, purchase cancel, purchase failure, trial start, purchase, and subscribe events separate.
+- **AppsFlyer coverage** - AppsFlyer imports, Firestore `appsflyer-scoreboards/macra`, and Firestore `appsflyer-aggregate-periods` used to verify source and event coverage dates before treating the growth signal as current.
+- **`.agent/macra/state.json`** - Durable operating state for the latest saved funnel run, active configuration, source split, primary metric, guardrails, and stale-data caveats.
+
 ## Event Semantics
 
 ### Cancel reason
