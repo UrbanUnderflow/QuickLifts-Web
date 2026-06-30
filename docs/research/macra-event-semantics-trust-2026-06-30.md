@@ -71,6 +71,13 @@ The reported 2/day trial-start signal should be treated as **unverified** until 
 
 This audit does **not** have evidence that active `variant_a` results were refreshed after the stale 2026-06-16 snapshot. Until `/admin/experiments` produces a fresh result snapshot whose `configSnapshot` reflects active `variant_a`, this memo should treat variant performance as stale/incomplete evidence and should not use it to justify a funnel decision. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`; `src/pages/admin/experiments.tsx`
 
+### Step 1 refresh plan
+
+1. In the execute step, read `macra-experiments/macra_paywall_onboarding` and `macra-experiment-results/macra_paywall_onboarding` using the Firebase Admin SDK service-account pattern documented for standalone scripts. Source: `.agent/workflows/firebase-admin.md`; `src/pages/admin/experiments.tsx`
+2. Compare the result snapshot `generatedAt` and `configSnapshot` against the active `variant_a` config. The snapshot passes freshness only if it was generated after the stale 2026-06-16 result and its config snapshot reflects `variant_a` as the enabled, 100-weight treatment. Source: `.agent/macra/state.json`; `src/pages/admin/experiments.tsx`
+3. If the snapshot is still stale, do **not** make a funnel decision from variant performance. Record stale status in this memo and leave live onboarding, paywall, pricing, experiment allocation, retargeting, and Apple Search Ads spend unchanged. Source: `.agent/macra/decisions.md`; `.agent/macra/progress.md`
+4. If a later execute step refreshes/backfills results, record the generated timestamp, config snapshot, loaded users, assignment quality, data inputs, and aggregate validation before any funnel decision is considered. Source: `src/pages/admin/experiments.tsx`; `docs/agents/macra-operating-runbook.md`
+
 ## Decision Log Contract
 
 ### Research question
