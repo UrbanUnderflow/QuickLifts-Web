@@ -43,6 +43,48 @@ For this specific event-semantics audit, the runbook assigns Sage to audit `af_s
 
 The reported 2/day trial-start signal should be treated as **unverified** until the audit identifies its exact source artifact, date range, user identifier, timestamp field, and dedupe behavior. The durable context currently available to this file supports a stale saved AppsFlyer/Scoreboard run through 2026-06-25, purchase-log evidence of 2 trial-success rows on 2026-06-29, and a known stale or inferred `/admin/experiments` snapshot. This audit should not present 2/day as settled current truth until later sections connect it to fresh AppsFlyer, Scoreboard, purchase-log, or Firestore evidence. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/runbook.md`; `.agent/macra/decisions.md`
 
+## Daily KPI Snapshot
+
+_Pending Step 2 population._
+
+This section must summarize the daily Macra KPI snapshot across Scoreboard, Experiments, purchase logs, cancel reasons, retargeting, and AppsFlyer coverage.
+
+## Scoreboard Coverage
+
+_Pending Step 2 population._
+
+This section must record Scoreboard freshness, date range, and any stale coverage caveats before the KPI snapshot is used for funnel decisions.
+
+## Experiments Coverage
+
+_Pending Step 2 population._
+
+This section must summarize `/admin/experiments` coverage, including active `variant_a` freshness and whether result snapshots are decision-fresh.
+
+## Purchase Logs
+
+_Pending Step 3 population._
+
+This section must summarize `/admin/purchaseLogs` evidence for successful trials, purchase cancels, attempted purchases, failed purchases, and checkout quality.
+
+## Cancel Reasons
+
+_Pending Step 3 population._
+
+This section must summarize `/admin/macraCancelReasons` evidence that affects trust, proof, price, readiness, or product-quality interpretation.
+
+## Retargeting Coverage
+
+_Pending Step 3 population._
+
+This section must summarize retargeting state, email sequence state, and reachability gaps that affect trial-start quality.
+
+## AppsFlyer Coverage
+
+_Pending Step 2 population._
+
+This section must summarize AppsFlyer import freshness, aggregate coverage, raw/person-level coverage, and any source-split or dedupe caveats.
+
 ## variant_a Experiment Freshness
 
 ### Verdict
@@ -126,6 +168,12 @@ I reviewed the current `.agent/macra/decisions.md` rows against the Macra operat
 - 2026-06-30 Nora no-change validation-window decision: evidence is `docs/ops/macra-operating-snapshot-2026-06-30.md`, stale AppsFlyer/Scoreboard coverage, purchase-log trial-success rows, and mostly inferred experiment results; metric is qualified onboarding start to trial start; guardrail is checkout / purchase cancel pressure and stale-source risk. Source: `.agent/macra/decisions.md`
 
 Execution result: no `.agent/macra/decisions.md` edit is required for this step because the current operational decisions already tie evidence to expected metrics and guardrails, and this audit step does not introduce a new operator-approved change. Source: `.agent/macra/contract.md`; `.agent/macra/decisions.md`
+
+## Event Semantics
+
+_Pending Step 4 population._
+
+This section must summarize how each event signal counts toward, annotates, or reverses the qualified onboarding-start-to-trial-start metric. Detailed event-level notes follow in the individual event sections.
 
 ## af_start_trial
 
@@ -228,6 +276,12 @@ Required source artifacts to inspect:
 
 This section must define whether a user moved from nominal trial start into a trustworthy activation state.
 
+## Activation and Eligibility Guardrails
+
+_Pending Step 5 population._
+
+This section must summarize age eligibility, missing-birthdate blocks, trial activation fields, and other product-quality guardrails that can block, confirm, weaken, or reverse a valid trial-start count. Detailed notes follow in `age eligibility` and `activation-quality signals`.
+
 ## Ambiguities
 
 _Pending Step 5 population._
@@ -257,6 +311,12 @@ This section must end with:
 _Pending Step 6 population._
 
 This section must state the pass/fail rule for making a Macra funnel decision after the active `variant_a` experiment freshness check and event-semantics trust guardrails are complete.
+
+## Trust Verdict
+
+_Pending Step 6 population._
+
+This section must give one pass/fail recommendation for whether the daily KPI snapshot is safe to use for Macra funnel decisions.
 
 ## Decision Log Updates
 
