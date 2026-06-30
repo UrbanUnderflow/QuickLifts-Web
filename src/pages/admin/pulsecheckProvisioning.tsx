@@ -4990,7 +4990,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         >
                           <option value="optional">Optional</option>
                           <option value="required">Required</option>
-                          <option value="none">None</option>
+                          <option value="none">988 Hotline</option>
                         </select>
                       </label>
                     </div>

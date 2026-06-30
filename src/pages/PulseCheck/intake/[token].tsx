@@ -353,22 +353,40 @@ export default function PulseCheckCoachIntakeDraftPage() {
         }
         .pci-answer {
           margin-top: 34px;
+          width: 100%;
         }
         .pci-textarea,
         .pci-input {
           width: 100%;
-          border: 0;
+          display: block;
+          box-sizing: border-box;
           outline: none;
           color: #fff;
-          background: transparent;
-          border-bottom: 2px solid rgba(255, 255, 255, 0.24);
-          font-size: clamp(24px, 4vw, 38px);
-          line-height: 1.35;
-          padding: 10px 0 18px;
+          background-color: rgba(255, 255, 255, 0.055);
+          border: 1px solid rgba(196, 181, 253, 0.24);
+          border-radius: 18px;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.18);
+          font-size: clamp(22px, 3vw, 32px);
+          line-height: 1.38;
+          padding: 20px 22px;
           resize: vertical;
+          color-scheme: dark;
+          transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .pci-textarea {
+          min-height: 170px;
+        }
+        .pci-input {
+          min-height: 78px;
+        }
+        .pci-textarea:focus,
+        .pci-input:focus {
+          background-color: rgba(255, 255, 255, 0.075);
+          border-color: rgba(216, 180, 254, 0.7);
+          box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.16), 0 20px 48px rgba(0, 0, 0, 0.24);
         }
         .pci-textarea::placeholder {
-          color: rgba(255, 255, 255, 0.3);
+          color: rgba(221, 214, 254, 0.45);
         }
         .pci-choiceGrid {
           display: grid;
