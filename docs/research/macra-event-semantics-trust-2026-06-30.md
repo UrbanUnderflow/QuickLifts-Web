@@ -225,7 +225,7 @@ Execution result: no `.agent/macra/decisions.md` edit is required for this step 
 
 ### Step 2 status
 
-Complete. This section now cites the Macra operating contract, durable state, progress log, decision log, and runbook; it records the current decision-log fields and labels stale Scoreboard, AppsFlyer, and `/admin/experiments` evidence as decision risks.
+Complete. This section now cites the Macra operating contract, durable state, progress log, decision log, and runbook; it records the current decision-log fields and labels stale Scoreboard, stale AppsFlyer, and stale /admin/experiments evidence as decision risks.
 
 ## Event Semantics
 
