@@ -14,36 +14,57 @@ type RecordViewBody = {
   referrer?: string;
   viewerName?: string;
   viewerEmail?: string;
+  viewerCompany?: string;
+  viewerRole?: string;
   source?: string;
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  timezone?: string;
+  language?: string;
+  screen?: string;
+  viewport?: string;
+  platform?: string;
+  devicePixelRatio?: string | number;
+  localTimestamp?: string;
 };
 
 function getClientIp(req: NextApiRequest): string {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string') {
-    return forwarded.split(',')[0].trim();
+    return forwarded.split(',')[0].trim().replace(/^::ffff:/, '');
   }
   if (Array.isArray(forwarded)) {
-    return forwarded[0]?.trim() ?? '';
+    return forwarded[0]?.trim().replace(/^::ffff:/, '') ?? '';
   }
   const realIp = req.headers['x-real-ip'];
-  if (typeof realIp === 'string') return realIp;
-  return (req.socket?.remoteAddress as string) ?? 'unknown';
+  if (typeof realIp === 'string') return realIp.replace(/^::ffff:/, '');
+  return ((req.socket?.remoteAddress as string) ?? 'unknown').replace(/^::ffff:/, '');
+}
+
+function getHeaderString(req: NextApiRequest, names: string[]): string | null {
+  for (const name of names) {
+    const value = req.headers[name];
+    const rawValue = Array.isArray(value) ? value[0] : value;
+    if (typeof rawValue !== 'string' || !rawValue.trim()) continue;
+
+    try {
+      return decodeURIComponent(rawValue.trim());
+    } catch {
+      return rawValue.trim();
+    }
+  }
+
+  return null;
 }
 
 function getLocationFromHeaders(req: NextApiRequest): string {
-  const country = req.headers['x-vercel-ip-country'] as string | undefined;
-  const city = req.headers['x-vercel-ip-city'] as string | undefined;
-  if (country || city) {
-    return [city, country].filter(Boolean).join(', ') || 'Unknown';
-  }
+  const city = getHeaderString(req, ['x-vercel-ip-city', 'x-city', 'cf-ipcity']);
+  const region = getHeaderString(req, ['x-vercel-ip-country-region', 'x-region', 'cf-region']);
+  const country = getHeaderString(req, ['x-vercel-ip-country', 'x-country-code', 'cf-ipcountry']);
 
-  const geoCountry = req.headers['x-country-code'] as string | undefined;
-  const geoCity = req.headers['x-city'] as string | undefined;
-  if (geoCountry || geoCity) {
-    return [geoCity, geoCountry].filter(Boolean).join(', ') || 'Unknown';
+  if (country || city || region) {
+    return [city, region, country].filter(Boolean).join(', ') || 'Unknown';
   }
 
   return 'Unknown';
@@ -56,24 +77,37 @@ function isPrivateOrLoopback(ip: string): boolean {
   return false;
 }
 
-async function getLocationFromIp(ip: string): Promise<string> {
-  if (isPrivateOrLoopback(ip)) return 'Local';
+type IpLookup = {
+  location: string;
+  org: string | null;
+  timezone: string | null;
+};
+
+async function getIpLookup(ip: string): Promise<IpLookup> {
+  if (isPrivateOrLoopback(ip)) return { location: 'Local', org: null, timezone: null };
+
   try {
     const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
       signal: AbortSignal.timeout(3000),
     });
-    if (!response.ok) return 'Unknown';
+    if (!response.ok) return { location: 'Unknown', org: null, timezone: null };
     const data = (await response.json()) as {
       city?: string;
       region?: string;
       country_name?: string;
+      org?: string;
+      timezone?: string;
       error?: boolean;
     };
-    if (data.error) return 'Unknown';
+    if (data.error) return { location: 'Unknown', org: null, timezone: null };
     const parts = [data.city, data.region, data.country_name].filter(Boolean) as string[];
-    return parts.length ? parts.join(', ') : 'Unknown';
+    return {
+      location: parts.length ? parts.join(', ') : 'Unknown',
+      org: cleanString(data.org, 180),
+      timezone: cleanString(data.timezone, 80),
+    };
   } catch {
-    return 'Unknown';
+    return { location: 'Unknown', org: null, timezone: null };
   }
 }
 
@@ -86,9 +120,10 @@ function getBody(req: NextApiRequest): RecordViewBody {
 }
 
 function cleanString(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const trimmed = String(value).trim();
   if (!trimmed) return null;
+  if (['unknown', 'undefined', 'null', 'n/a'].includes(trimmed.toLowerCase())) return null;
   return trimmed.slice(0, maxLength);
 }
 
@@ -101,13 +136,160 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function detailRow(label: string, value: string | null): string {
+function detailRow(label: string, value: string): string {
   return `
     <tr>
       <td style="padding:9px 0;color:#8b8b92;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;width:150px;vertical-align:top;">${escapeHtml(label)}</td>
-      <td style="padding:9px 0;color:#ffffff;font-size:14px;line-height:1.5;vertical-align:top;">${escapeHtml(value || 'Unknown')}</td>
+      <td style="padding:9px 0;color:#ffffff;font-size:14px;line-height:1.5;vertical-align:top;">${escapeHtml(value)}</td>
     </tr>
   `;
+}
+
+function isKnown(value: string | null | undefined): value is string {
+  if (!value) return false;
+  return !['unknown', 'direct / unknown', 'direct / none'].includes(value.trim().toLowerCase());
+}
+
+function getQueryParamFromUrl(pageUrl: string | null, names: string[]): string | null {
+  if (!pageUrl) return null;
+
+  try {
+    const params = new URL(pageUrl).searchParams;
+    for (const name of names) {
+      const value = cleanString(params.get(name), 240);
+      if (value) return value;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getReferrerHost(referrer: string | null): string | null {
+  if (!referrer) return null;
+
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, '');
+  } catch {
+    return referrer;
+  }
+}
+
+function parseUserAgent(userAgent: string | null): {
+  browser: string | null;
+  os: string | null;
+  deviceType: string | null;
+} {
+  if (!userAgent) {
+    return { browser: null, os: null, deviceType: null };
+  }
+
+  const browser =
+    userAgent.match(/Edg\/([\d.]+)/)?.[1]
+      ? `Edge ${userAgent.match(/Edg\/([\d.]+)/)?.[1]}`
+      : userAgent.match(/OPR\/([\d.]+)/)?.[1]
+        ? `Opera ${userAgent.match(/OPR\/([\d.]+)/)?.[1]}`
+        : userAgent.match(/Chrome\/([\d.]+)/)?.[1]
+          ? `Chrome ${userAgent.match(/Chrome\/([\d.]+)/)?.[1]}`
+          : userAgent.match(/Firefox\/([\d.]+)/)?.[1]
+            ? `Firefox ${userAgent.match(/Firefox\/([\d.]+)/)?.[1]}`
+            : userAgent.match(/Version\/([\d.]+).*Safari/)?.[1]
+              ? `Safari ${userAgent.match(/Version\/([\d.]+).*Safari/)?.[1]}`
+              : null;
+
+  const macVersion = userAgent.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.');
+  const iosVersion = userAgent.match(/(?:CPU iPhone OS|CPU OS) ([\d_]+)/)?.[1]?.replace(/_/g, '.');
+  const androidVersion = userAgent.match(/Android ([\d.]+)/)?.[1];
+  const windowsVersion = userAgent.match(/Windows NT ([\d.]+)/)?.[1];
+  const os = iosVersion
+    ? `iOS ${iosVersion}`
+    : androidVersion
+      ? `Android ${androidVersion}`
+      : macVersion
+        ? `macOS ${macVersion}`
+        : windowsVersion
+          ? `Windows ${windowsVersion}`
+          : userAgent.includes('Linux')
+            ? 'Linux'
+            : null;
+
+  const deviceType = /iPad|Tablet/i.test(userAgent)
+    ? 'tablet'
+    : /Mobile|iPhone|Android/i.test(userAgent)
+      ? 'mobile'
+      : 'desktop';
+
+  return { browser, os, deviceType };
+}
+
+function buildDeviceSummary(args: {
+  userAgent: string | null;
+  platform: string | null;
+  viewport: string | null;
+  screen: string | null;
+}): string | null {
+  const parsed = parseUserAgent(args.userAgent);
+  const browserOs = [parsed.browser, parsed.os].filter(Boolean).join(' on ');
+  const display = [args.viewport ? `viewport ${args.viewport}` : null, args.screen ? `screen ${args.screen}` : null]
+    .filter(Boolean)
+    .join(', ');
+  const deviceParts = [
+    browserOs || parsed.deviceType,
+    args.platform && !browserOs?.toLowerCase().includes(args.platform.toLowerCase()) ? args.platform : null,
+    display,
+  ].filter(Boolean);
+
+  return deviceParts.length ? deviceParts.join(' · ') : null;
+}
+
+function buildTrafficLabel(args: {
+  source: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  referrer: string | null;
+}): string {
+  const utmParts = [
+    args.utmSource ? `utm_source=${args.utmSource}` : null,
+    args.utmMedium ? `utm_medium=${args.utmMedium}` : null,
+    args.utmCampaign ? `utm_campaign=${args.utmCampaign}` : null,
+  ].filter(Boolean);
+  const referrerHost = getReferrerHost(args.referrer);
+
+  if (args.source && utmParts.length) return `${args.source} (${utmParts.join(', ')})`;
+  if (args.source) return args.source;
+  if (utmParts.length) return utmParts.join(', ');
+  if (referrerHost) return `Referrer: ${referrerHost}`;
+  return 'Direct visit (no referrer sent)';
+}
+
+function buildViewerLabel(args: {
+  ip: string;
+  location: string;
+  userAgent: string | null;
+  viewerName: string | null;
+  viewerEmail: string | null;
+  viewerCompany: string | null;
+}): string {
+  if (args.viewerName && args.viewerCompany) return `${args.viewerName} · ${args.viewerCompany}`;
+  if (args.viewerName) return args.viewerName;
+  if (args.viewerEmail && args.viewerCompany) return `${args.viewerEmail} · ${args.viewerCompany}`;
+  if (args.viewerEmail) return args.viewerEmail;
+
+  const parsed = parseUserAgent(args.userAgent);
+  const device = [parsed.browser, parsed.os].filter(Boolean).join(' on ');
+  if (device && isKnown(args.location)) return `Anonymous ${device} visitor from ${args.location}`;
+  if (isKnown(args.location)) return `Anonymous visitor from ${args.location}`;
+  if (device && isKnown(args.ip)) return `Anonymous ${device} visitor (${args.ip})`;
+  if (isKnown(args.ip)) return `Anonymous visitor (${args.ip})`;
+  return 'Anonymous visitor';
+}
+
+function buildRows(rows: Array<{ label: string; value: string | null; include?: boolean }>): Array<{ label: string; value: string }> {
+  return rows
+    .filter((row) => row.include !== false && isKnown(row.value))
+    .map((row) => ({ label: row.label, value: row.value as string }));
 }
 
 async function sendViewNotification(args: {
@@ -119,10 +301,20 @@ async function sendViewNotification(args: {
   referrer: string | null;
   viewerName: string | null;
   viewerEmail: string | null;
+  viewerCompany: string | null;
+  viewerRole: string | null;
   source: string | null;
   utmSource: string | null;
   utmMedium: string | null;
   utmCampaign: string | null;
+  ipOrg: string | null;
+  timezone: string | null;
+  language: string | null;
+  screen: string | null;
+  viewport: string | null;
+  platform: string | null;
+  devicePixelRatio: string | null;
+  localTimestamp: string | null;
   viewedAt: Date;
 }): Promise<{ status: string; messageId?: string | null; error?: string | null }> {
   if (!process.env.BREVO_MARKETING_KEY) {
@@ -132,51 +324,63 @@ async function sendViewNotification(args: {
   const client = new Brevo.TransactionalEmailsApi();
   client.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, process.env.BREVO_MARKETING_KEY);
 
-  const viewerLabel = args.viewerName || args.viewerEmail || 'Unknown visitor';
+  const viewerLabel = buildViewerLabel(args);
   const viewedAtLabel = args.viewedAt.toUTCString();
+  const deviceSummary = buildDeviceSummary(args);
+  const trafficLabel = buildTrafficLabel(args);
+  const technicalRows = buildRows([
+    { label: 'IP address', value: args.ip },
+    { label: 'IP network', value: args.ipOrg },
+    { label: 'Visitor ID', value: args.visitorId },
+    { label: 'User agent', value: args.userAgent },
+  ]);
+  const primaryRows = buildRows([
+    { label: 'Viewer', value: viewerLabel },
+    { label: 'Viewer email', value: args.viewerEmail },
+    { label: 'Company', value: args.viewerCompany },
+    { label: 'Role', value: args.viewerRole },
+    { label: 'Viewed at', value: viewedAtLabel },
+    { label: 'Local browser time', value: args.localTimestamp },
+    { label: 'Approx. location', value: args.location },
+    { label: 'Timezone', value: args.timezone },
+    { label: 'Language', value: args.language },
+    { label: 'Device', value: deviceSummary },
+    { label: 'Pixel ratio', value: args.devicePixelRatio },
+    { label: 'Traffic', value: trafficLabel },
+    { label: 'Source', value: args.source },
+    { label: 'UTM source', value: args.utmSource },
+    { label: 'UTM medium', value: args.utmMedium },
+    { label: 'UTM campaign', value: args.utmCampaign },
+    { label: 'Page URL', value: args.pageUrl },
+    { label: 'Referrer', value: args.referrer },
+  ]);
+  const knownIdentityLabel = args.viewerName || args.viewerEmail ? 'Tagged reviewer' : 'Anonymous visitor';
+  const locationLabel = isKnown(args.location) ? args.location : 'Location not available from headers or IP lookup';
+
   const htmlContent = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:680px;margin:0 auto;background:#080808;color:#f4f4f5;border:1px solid #242424;border-radius:14px;overflow:hidden;">
       <div style="padding:24px 26px;background:linear-gradient(135deg,rgba(200,255,0,0.14),rgba(74,217,255,0.08));border-bottom:1px solid #242424;">
         <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#c8ff00;">PulseCheck Tech Demo</div>
-        <h1 style="margin:8px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">Someone viewed the demo page</h1>
+        <h1 style="margin:8px 0 0;color:#ffffff;font-size:24px;line-height:1.25;">${escapeHtml(viewerLabel)} viewed the demo page</h1>
       </div>
       <div style="padding:22px 26px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <span style="border:1px solid rgba(200,255,0,0.32);background:rgba(200,255,0,0.1);color:#dfff38;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:700;">${escapeHtml(knownIdentityLabel)}</span>
+          <span style="border:1px solid rgba(74,217,255,0.28);background:rgba(74,217,255,0.08);color:#9cecff;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:700;">${escapeHtml(locationLabel)}</span>
+        </div>
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-          ${detailRow('Viewer', viewerLabel)}
-          ${detailRow('Viewer email', args.viewerEmail)}
-          ${detailRow('Viewed at', viewedAtLabel)}
-          ${detailRow('Location', args.location)}
-          ${detailRow('IP address', args.ip)}
-          ${detailRow('Visitor ID', args.visitorId)}
-          ${detailRow('Source', args.source)}
-          ${detailRow('UTM source', args.utmSource)}
-          ${detailRow('UTM medium', args.utmMedium)}
-          ${detailRow('UTM campaign', args.utmCampaign)}
-          ${detailRow('Page URL', args.pageUrl)}
-          ${detailRow('Referrer', args.referrer)}
-          ${detailRow('User agent', args.userAgent)}
+          ${primaryRows.map((row) => detailRow(row.label, row.value)).join('')}
+        </table>
+        <div style="margin:18px 0 8px;color:#8b8b92;font-size:12px;text-transform:uppercase;letter-spacing:0.12em;">Technical fingerprint</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+          ${technicalRows.map((row) => detailRow(row.label, row.value)).join('')}
         </table>
       </div>
     </div>
   `;
 
-  const textContent = [
-    'PulseCheck Tech Demo viewed',
-    '',
-    `Viewer: ${viewerLabel}`,
-    `Viewer email: ${args.viewerEmail || 'Unknown'}`,
-    `Viewed at: ${viewedAtLabel}`,
-    `Location: ${args.location}`,
-    `IP address: ${args.ip}`,
-    `Visitor ID: ${args.visitorId || 'Unknown'}`,
-    `Source: ${args.source || 'Unknown'}`,
-    `UTM source: ${args.utmSource || 'Unknown'}`,
-    `UTM medium: ${args.utmMedium || 'Unknown'}`,
-    `UTM campaign: ${args.utmCampaign || 'Unknown'}`,
-    `Page URL: ${args.pageUrl || 'Unknown'}`,
-    `Referrer: ${args.referrer || 'Unknown'}`,
-    `User agent: ${args.userAgent || 'Unknown'}`,
-  ].join('\n');
+  const textRows = [...primaryRows, { label: 'Identity', value: knownIdentityLabel }, ...technicalRows];
+  const textContent = ['PulseCheck Tech Demo viewed', '', ...textRows.map((row) => `${row.label}: ${row.value}`)].join('\n');
 
   try {
     const result = await client.sendTransacEmail({
@@ -205,20 +409,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const body = getBody(req);
     const ip = getClientIp(req);
     let location = getLocationFromHeaders(req);
+    let ipLookup: IpLookup = { location: 'Unknown', org: null, timezone: null };
     if (location === 'Unknown') {
-      location = await getLocationFromIp(ip);
+      ipLookup = await getIpLookup(ip);
+      location = ipLookup.location;
     }
 
     const userAgent = cleanString(req.headers['user-agent'], 1000);
     const visitorId = cleanString(body.visitorId, 128);
     const pageUrl = cleanString(body.pageUrl, 500);
     const referrer = cleanString(body.referrer, 500);
-    const viewerName = cleanString(body.viewerName, 120);
-    const viewerEmail = cleanString(body.viewerEmail, 180);
-    const source = cleanString(body.source, 120);
-    const utmSource = cleanString(body.utmSource, 120);
-    const utmMedium = cleanString(body.utmMedium, 120);
-    const utmCampaign = cleanString(body.utmCampaign, 180);
+    const viewerName =
+      cleanString(body.viewerName, 120) ||
+      getQueryParamFromUrl(pageUrl, ['viewerName', 'name', 'investor', 'viewer', 'reviewer']);
+    const viewerEmail = cleanString(body.viewerEmail, 180) || getQueryParamFromUrl(pageUrl, ['viewerEmail', 'email']);
+    const viewerCompany =
+      cleanString(body.viewerCompany, 160) ||
+      getQueryParamFromUrl(pageUrl, ['viewerCompany', 'company', 'org', 'organization']);
+    const viewerRole = cleanString(body.viewerRole, 120) || getQueryParamFromUrl(pageUrl, ['viewerRole', 'role', 'title']);
+    const source = cleanString(body.source, 120) || getQueryParamFromUrl(pageUrl, ['source', 'ref', 'channel']);
+    const utmSource = cleanString(body.utmSource, 120) || getQueryParamFromUrl(pageUrl, ['utm_source']);
+    const utmMedium = cleanString(body.utmMedium, 120) || getQueryParamFromUrl(pageUrl, ['utm_medium']);
+    const utmCampaign = cleanString(body.utmCampaign, 180) || getQueryParamFromUrl(pageUrl, ['utm_campaign']);
+    const timezone = cleanString(body.timezone, 80) || ipLookup.timezone;
+    const language = cleanString(body.language, 80);
+    const screen = cleanString(body.screen, 80);
+    const viewport = cleanString(body.viewport, 80);
+    const platform = cleanString(body.platform, 120);
+    const devicePixelRatio = cleanString(body.devicePixelRatio, 24);
+    const localTimestamp = cleanString(body.localTimestamp, 120);
+    const ipOrg = ipLookup.org;
 
     let db: FirebaseFirestore.Firestore | null = null;
     try {
@@ -237,10 +457,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       referrer,
       viewerName,
       viewerEmail,
+      viewerCompany,
+      viewerRole,
       source,
       utmSource,
       utmMedium,
       utmCampaign,
+      ipOrg,
+      timezone,
+      language,
+      screen,
+      viewport,
+      platform,
+      devicePixelRatio,
+      localTimestamp,
       viewedAt,
     });
 
@@ -254,10 +484,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         referrer,
         viewerName,
         viewerEmail,
+        viewerCompany,
+        viewerRole,
         source,
         utmSource,
         utmMedium,
         utmCampaign,
+        ipOrg,
+        timezone,
+        language,
+        screen,
+        viewport,
+        platform,
+        devicePixelRatio,
+        localTimestamp,
         notificationEmail: {
           to: NOTIFICATION_TO_EMAIL,
           status: emailResult.status,

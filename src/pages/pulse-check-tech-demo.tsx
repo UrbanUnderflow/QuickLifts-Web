@@ -125,16 +125,44 @@ const PulseCheckTechDemoPage: React.FC = () => {
     })();
 
     const params = new URLSearchParams(window.location.search);
+    const viewerName =
+      params.get('viewerName') ||
+      params.get('name') ||
+      params.get('investor') ||
+      params.get('viewer') ||
+      params.get('reviewer') ||
+      '';
+    const viewerEmail = params.get('viewerEmail') || params.get('email') || '';
+    const viewerCompany =
+      params.get('viewerCompany') || params.get('company') || params.get('org') || params.get('organization') || '';
+    const viewerRole = params.get('viewerRole') || params.get('role') || params.get('title') || '';
+    const utmSource = params.get('utm_source') || '';
+    const referrerHost = (() => {
+      try {
+        return document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, '') : '';
+      } catch {
+        return '';
+      }
+    })();
     const body = {
       ...(visitorId ? { visitorId } : {}),
       pageUrl: window.location.href,
       referrer: document.referrer || '',
-      viewerName: params.get('viewerName') || params.get('name') || params.get('investor') || '',
-      viewerEmail: params.get('viewerEmail') || params.get('email') || '',
-      source: params.get('source') || '',
-      utmSource: params.get('utm_source') || '',
+      viewerName,
+      viewerEmail,
+      viewerCompany,
+      viewerRole,
+      source: params.get('source') || params.get('ref') || params.get('channel') || utmSource || referrerHost || '',
+      utmSource,
       utmMedium: params.get('utm_medium') || '',
       utmCampaign: params.get('utm_campaign') || '',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+      language: navigator.language || '',
+      screen: `${window.screen.width}x${window.screen.height}`,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      platform: navigator.platform || '',
+      devicePixelRatio: String(window.devicePixelRatio || ''),
+      localTimestamp: new Date().toString(),
     };
 
     fetch('/api/pulse-check-tech-demo/record-view', {

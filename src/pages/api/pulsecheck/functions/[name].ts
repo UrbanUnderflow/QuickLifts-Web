@@ -33,6 +33,12 @@ const SUPPORTED_FUNCTIONS = new Set([
   'google-health-disconnect',
   'google-health-sync',
   'google-health-webhook',
+  'whoop-auth-start',
+  'whoop-callback',
+  'whoop-status',
+  'whoop-disconnect',
+  'whoop-sync',
+  'whoop-webhook',
   'scheduled-google-health-sync',
   'create-pulsecheck-oura-share',
 ]);

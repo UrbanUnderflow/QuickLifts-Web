@@ -117,9 +117,9 @@ const SEED_ROWS = [
     'oauth-rest / oauth-webhook',
     'oauth-pkce',
     'strain, recovery, sleep, hr, workouts',
-    'null',
-    'planned',
-    'Scope/partner approval pending. Registry entry should exist before adapter work begins.',
+    'whoop-sync',
+    'experimental',
+    'Backend OAuth/sync/webhook adapter is scaffolded; production enablement needs WHOOP credentials, redirect/webhook registration, and sync-job processing.',
   ],
   [
     'garmin',

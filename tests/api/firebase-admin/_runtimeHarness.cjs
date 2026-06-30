@@ -4,7 +4,7 @@ const path = require('node:path');
 const Module = require('node:module');
 const { spawnSync } = require('node:child_process');
 
-const repoRoot = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web';
+const repoRoot = path.resolve(__dirname, '../../..');
 const compiledRuntimeCache = new Map();
 
 function clone(value) {

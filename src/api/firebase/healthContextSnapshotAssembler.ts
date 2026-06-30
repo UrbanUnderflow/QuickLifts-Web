@@ -87,17 +87,17 @@ const familyToSnapshotSource = (family: HealthContextSourceFamily): SnapshotSour
 // device-strategy spec: Apple Watch (via `apple_health`) is the platform-of-
 // record for active workout windows; Polar is the strongest sleep/recovery
 // lane; Oura remains the next-best recovery source when Polar is absent.
-// Fitbit rides behind Polar/Oura for recovery, behind Apple/Polar for activity,
-// and ahead of Oura/Polar for biometrics when Apple Health is absent.
+// Fitbit rides behind Polar/Oura/WHOOP for recovery, behind Apple/Polar for
+// activity, and ahead of Oura/Polar for biometrics when Apple Health is absent.
 const DOMAIN_PRECEDENCE: Record<HealthContextDomain, HealthContextSourceFamily[]> = {
   identity: ['fit_with_pulse', 'macra', 'coach_entered'],
-  training: ['fit_with_pulse', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'fitbit', 'oura'],
-  recovery: ['polar', 'oura', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'pulsecheck_self_report'],
-  activity: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'fitbit', 'oura', 'pulsecheck_self_report'],
+  training: ['fit_with_pulse', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'whoop', 'garmin', 'fitbit', 'oura'],
+  recovery: ['polar', 'whoop', 'oura', 'garmin', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'pulsecheck_self_report'],
+  activity: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'garmin', 'whoop', 'fitbit', 'oura', 'pulsecheck_self_report'],
   nutrition: ['macra', 'pulsecheck_self_report', 'fit_with_pulse'],
-  biometrics: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fitbit', 'polar', 'oura', 'coach_entered'],
+  biometrics: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fitbit', 'polar', 'whoop', 'garmin', 'oura', 'coach_entered'],
   behavioral: ['pulsecheck_self_report', 'macra', 'coach_entered'],
-  summary: ['oura', 'polar', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fit_with_pulse', 'macra'],
+  summary: ['oura', 'whoop', 'polar', 'garmin', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fit_with_pulse', 'macra'],
 };
 
 // ──────────────────────────────────────────────────────────────────────────────

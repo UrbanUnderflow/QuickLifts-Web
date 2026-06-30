@@ -26,6 +26,7 @@
 const { initializeApp, cert } = require('firebase-admin/app');
 const { resolveAdminCredential } = require('./lib/resolveAdminCredential');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getMessaging } = require('firebase-admin/messaging');
 const { execFileSync, execSync, spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -46,6 +47,7 @@ const {
     normalizeMissionPolicy,
     recordMissionRunEvent,
 } = require('./missionOsV2');
+const { sendOperatorPush } = require('./operatorPush');
 
 /* ─── Configuration ───────────────────────────────────── */
 
@@ -116,7 +118,7 @@ const MAX_FOLLOW_UP_DEPTH_EXEC = parseInt(process.env.MAX_FOLLOW_UP_DEPTH_EXEC |
 const ENABLE_ORGANIC_FOLLOW_UPS = process.env.ENABLE_ORGANIC_FOLLOW_UPS === 'true'; // Off by default; only explicit @mentions continue threads
 const FORCE_STRATEGY_CONTINUATION = process.env.FORCE_STRATEGY_CONTINUATION !== 'false'; // Strategy rounds should keep chaining even when mentions are missed
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
-const STEP_INACTIVITY_TIMEOUT_MS = parseInt(process.env.STEP_INACTIVITY_TIMEOUT_MS || '300000', 10); // Kill step if no stdout/stderr activity for 5m
+const STEP_INACTIVITY_TIMEOUT_MS = parseInt(process.env.STEP_INACTIVITY_TIMEOUT_MS || '900000', 10); // Kill step if no stdout/stderr activity for 15m
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
 const MAX_CONSECUTIVE_FAILURES = 2; // Stop task after this many steps fail in a row
 const VALIDATION_MODEL = process.env.VALIDATION_MODEL || 'gpt-4o-mini'; // Cheap model for post-task validation
@@ -138,6 +140,7 @@ const GROUP_CHAT_RECENT_FULL_COUNT = parseInt(process.env.GROUP_CHAT_RECENT_FULL
 const GROUP_CHAT_RESPONSE_SNIPPET_CHARS = parseInt(process.env.GROUP_CHAT_RESPONSE_SNIPPET_CHARS || '320', 10);
 const ENABLE_MISSION_CHAT_UPDATES = process.env.ENABLE_MISSION_CHAT_UPDATES !== 'false'; // Mission-mode progress updates in Agent Chat
 const ENABLE_OPERATOR_UPDATES = process.env.ENABLE_OPERATOR_UPDATES !== 'false'; // Structured agent-to-operator updates for PulseCommand
+const ENABLE_OPERATOR_PUSH = process.env.ENABLE_OPERATOR_PUSH !== 'false'; // FCM push for PulseCommand operator inbox
 const META_PATTERNS = [
     /summary/i, /action.?items/i, /notification/i, /checklist/i,
     /preflight/i, /meeting.?minutes/i, /team.?notification/i,
@@ -266,6 +269,92 @@ function resetTaskTokens() {
 const projectDir = process.env.PROJECT_DIR || process.cwd();
 const LEAD_SOURCE_OF_TRUTH_REL_PATH = 'docs/partnership/lead-source-of-truth.md';
 const LEAD_SOURCE_OF_TRUTH_PATH = path.join(projectDir, LEAD_SOURCE_OF_TRUTH_REL_PATH);
+const MACRA_MISSION_ID = 'macra-growth-ops';
+const MACRA_OPERATING_LOOP_ID = 'macra-agent-os';
+const MACRA_NORTH_STAR = "Make Macra's trial-start path repeatable without breaking trust.";
+const MACRA_OBJECTIVE_CODE = 'MACRA-TRIAL-START-QUALITY';
+const MACRA_DAILY_SNAPSHOT_TEMPLATE_ID = 'macra-daily-operating-snapshot';
+const MACRA_CONTEXT_BUDGET_CHARS = parseInt(process.env.MACRA_CONTEXT_BUDGET_CHARS || '9000', 10);
+const MACRA_CONTEXT_FILES = [
+    '.agent/macra/contract.md',
+    '.agent/macra/state.json',
+    '.agent/macra/progress.md',
+    '.agent/macra/decisions.md',
+    '.agent/macra/runbook.md',
+];
+
+function truncateForPrompt(value, maxChars) {
+    const text = String(value || '');
+    if (!maxChars || text.length <= maxChars) return text;
+    return `${text.slice(0, Math.max(0, maxChars - 120)).trimEnd()}\n\n[truncated: ${text.length - maxChars} chars omitted]`;
+}
+
+function readRepoFileForPrompt(relPath, maxChars = 2200) {
+    const safeRelPath = String(relPath || '').replace(/^\/+/, '');
+    const fullPath = path.join(projectDir, safeRelPath);
+    try {
+        if (!fs.existsSync(fullPath)) return '';
+        return truncateForPrompt(fs.readFileSync(fullPath, 'utf-8'), maxChars);
+    } catch (err) {
+        console.warn(`⚠️  Could not load ${safeRelPath}: ${err.message}`);
+        return '';
+    }
+}
+
+function isMacraTask(task = {}) {
+    const tags = Array.isArray(task?.tags) ? task.tags.join(' ') : '';
+    const haystack = [
+        task?.project,
+        task?.product,
+        task?.missionId,
+        task?.operatingLoopId,
+        task?.taskTemplateId,
+        task?.name,
+        task?.description,
+        task?.northStarObjective,
+        task?.focusObjective,
+        task?.objectiveCode,
+        task?.source,
+        tags,
+    ].map((value) => String(value || '').toLowerCase()).join(' ');
+
+    return (
+        haystack.includes('macra') ||
+        haystack.includes('appsflyer') ||
+        haystack.includes('apple search ads') ||
+        /\basa\b/.test(haystack) ||
+        haystack.includes('paywall') ||
+        haystack.includes('trial-start') ||
+        haystack.includes('trial start') ||
+        haystack.includes('cancel reason') ||
+        haystack.includes('variant_a') ||
+        haystack.includes('scoreboard')
+    );
+}
+
+function loadMacraOperatingContext(task = {}, options = {}) {
+    if (!isMacraTask(task)) return '';
+
+    const perFileBudget = Math.max(1200, Math.floor((options.maxChars || MACRA_CONTEXT_BUDGET_CHARS) / MACRA_CONTEXT_FILES.length));
+    const sections = MACRA_CONTEXT_FILES
+        .map((relPath) => {
+            const content = readRepoFileForPrompt(relPath, perFileBudget);
+            if (!content) return '';
+            return `--- ${relPath} ---\n${content}`;
+        })
+        .filter(Boolean);
+
+    if (sections.length === 0) return '';
+
+    const block = [
+        `=== MACRA OPERATING CONTEXT ===`,
+        `Use this disk state as the durable contract for Macra tasks. Treat stale data as stale, separate facts from inference, and do not make live funnel/budget/pricing changes without operator approval.`,
+        ...sections,
+        `=== END MACRA OPERATING CONTEXT ===`,
+    ].join('\n\n');
+
+    return truncateForPrompt(block, options.maxChars || MACRA_CONTEXT_BUDGET_CHARS);
+}
 
 function loadManifesto() {
     const manifestoPath = path.join(projectDir, 'docs', 'AGENT_MANIFESTO.md');
@@ -811,15 +900,6 @@ function buildAssigneeVariants(displayName) {
     return Array.from(new Set([raw, titleCase, lower, `${raw} ⚡️`, `${titleCase} ⚡️`]));
 }
 
-function slugifyTaskSegment(value) {
-    const safe = String(value || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 64);
-    return safe || 'north-star';
-}
-
 function selectObjectiveFocus(agentId, northStarContext) {
     const objectives = Array.isArray(northStarContext?.objectives) ? northStarContext.objectives : [];
     if (objectives.length === 0) return sanitizeNorthStarTitle(northStarContext?.title || '');
@@ -829,60 +909,146 @@ function selectObjectiveFocus(agentId, northStarContext) {
     return sanitizeNorthStarTitle(objectives[idx]) || sanitizeNorthStarTitle(northStarContext?.title || '');
 }
 
-function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
-    const focus = selectObjectiveFocus(agentId, northStarContext);
-    const fallback = sanitizeNorthStarTitle(northStarContext?.title || '') || 'current priorities';
-    const focusLabel = focus || fallback;
-    const focusSlug = slugifyTaskSegment(focusLabel);
-    const dateStamp = new Date().toISOString().slice(0, 10);
+function buildMacraTaskBlueprint(agentId, focusLabel, dateStamp, options = {}) {
+    const priority = options.fromManager || options.dailySnapshot ? 'high' : 'medium';
+    const common = {
+        project: 'Macra',
+        product: 'Macra',
+        missionId: MACRA_MISSION_ID,
+        operatingLoopId: MACRA_OPERATING_LOOP_ID,
+        northStarObjective: MACRA_NORTH_STAR,
+        focusObjective: focusLabel,
+        objectiveCode: MACRA_OBJECTIVE_CODE,
+        priority,
+        complexity: 3,
+        tags: ['macra', 'agent-os', 'trial-start-quality'],
+        guardrails: [
+            'apple_purchase_cancels',
+            'checkout_failure_or_cancel_rate',
+            'under_18_or_missing_birthdate_blocks',
+            'trial_activation_after_start',
+            'paid_conversion_after_trial',
+            'cancel_reason_quality',
+        ],
+    };
 
     if (agentId === 'nora') {
+        const expectedArtifactPath = `docs/ops/macra-operating-snapshot-${dateStamp}.md`;
         return {
-            name: `Macra operating snapshot: ${focusLabel}`,
+            ...common,
+            taskTemplateId: MACRA_DAILY_SNAPSHOT_TEMPLATE_ID,
+            name: options.dailySnapshot
+                ? `Macra daily operating snapshot: ${dateStamp}`
+                : `Macra operating snapshot: ${focusLabel}`,
             description:
-                `Create docs/ops/macra-operating-snapshot-${dateStamp}.md from /admin/emailSequences, /admin/experiments, ` +
+                `Create ${expectedArtifactPath} from /admin/emailSequences, /admin/experiments, ` +
                 `/admin/purchaseLogs, /admin/macraCancelReasons, and AppsFlyer imports. Include funnel counts, source split, ` +
-                `experiment snapshot freshness, guardrails, and one decision-log recommendation tied to "${focusLabel}".`,
-            priority: options.fromManager ? 'high' : 'medium',
-            focusObjective: focusLabel,
-            objectiveCode: focusLabel,
+                `experiment snapshot freshness, guardrails, one operator-facing update, and one decision-log recommendation tied to "${focusLabel}". ` +
+                `If /admin/experiments is still stale from 2026-06-16, flag refresh/backfill as the first operating action before recommending funnel changes.`,
+            sourceSurfaces: [
+                '/admin/emailSequences',
+                '/admin/experiments',
+                '/admin/purchaseLogs',
+                '/admin/macraCancelReasons',
+                'AppsFlyer CSV imports',
+                'Macra Scoreboard',
+                '.agent/macra/decisions.md',
+            ],
+            requiredOutputs: [
+                expectedArtifactPath,
+                'PulseCommand operator update with type update or decision',
+                '.agent/macra/progress.md update when state changes',
+                '.agent/macra/decisions.md update for decisions or no-change decisions',
+            ],
+            expectedArtifactPath,
         };
     }
 
     if (agentId === 'scout') {
+        const expectedArtifactPath = `docs/research/macra-asa-quality-${dateStamp}.md`;
         return {
+            ...common,
+            taskTemplateId: 'macra-scout-asa-quality-read',
             name: `Macra ASA quality read: ${focusLabel}`,
             description:
-                `Create docs/research/macra-asa-quality-${dateStamp}.md using AppsFlyer scoreboard data and source-level funnel metrics. ` +
-                `Separate Apple Search Ads from organic, compute start-to-trial and checkout-to-trial, and recommend increase, hold, or refine with one concrete reason.`,
-            priority: options.fromManager ? 'high' : 'medium',
-            focusObjective: focusLabel,
-            objectiveCode: focusLabel,
+                `Create ${expectedArtifactPath} using AppsFlyer scoreboard data and source-level funnel metrics. ` +
+                `Separate Apple Search Ads from organic, compute start-to-trial and checkout-to-trial, and recommend increase, hold, or refine with one concrete reason. ` +
+                `Label the sample size and data date range so the team does not over-scale an early signal.`,
+            sourceSurfaces: [
+                'AppsFlyer CSV imports',
+                'Macra Scoreboard',
+                '/admin/purchaseLogs',
+                '.agent/macra/state.json',
+            ],
+            requiredOutputs: [
+                expectedArtifactPath,
+                'Recommendation: increase, hold, or refine Apple Search Ads',
+                'Metric: qualified onboarding start to trial start',
+                'Guardrail: checkout-to-trial quality and paid conversion after trial',
+            ],
+            expectedArtifactPath,
         };
     }
 
     if (agentId === 'solara') {
+        const expectedArtifactPath = `docs/deliverables/macra-lifecycle-conversion-${dateStamp}.md`;
         return {
+            ...common,
+            taskTemplateId: 'macra-solara-lifecycle-conversion-read',
             name: `Macra lifecycle conversion read: ${focusLabel}`,
             description:
-                `Create docs/deliverables/macra-lifecycle-conversion-${dateStamp}.md from /admin/macraCancelReasons, paywall dismissal signals, and retargeting state. ` +
-                `Propose exactly one copy, proof, or offer change and name the metric it should move.`,
-            priority: options.fromManager ? 'high' : 'medium',
-            focusObjective: focusLabel,
-            objectiveCode: focusLabel,
+                `Create ${expectedArtifactPath} from /admin/macraCancelReasons, paywall dismissal signals, and retargeting state. ` +
+                `Propose exactly one copy, proof, or offer change and name the metric it should move. Do not produce five options; choose the single most defensible next change.`,
+            sourceSurfaces: [
+                '/admin/macraCancelReasons',
+                'paywall dismissal signals',
+                'retargeting state',
+                'Macra Scoreboard',
+                '.agent/macra/state.json',
+            ],
+            requiredOutputs: [
+                expectedArtifactPath,
+                'Exactly one copy/proof/offer recommendation',
+                'Metric expected to move',
+                'Guardrail tied to cancel reasons or checkout cancels',
+            ],
+            expectedArtifactPath,
         };
     }
 
+    const expectedArtifactPath = `docs/research/macra-event-semantics-trust-${dateStamp}.md`;
     return {
+        ...common,
+        taskTemplateId: 'macra-sage-event-semantics-trust-audit',
         name: `Macra event semantics and trust audit: ${focusLabel}`,
         description:
-            `Create docs/research/macra-event-semantics-trust-${dateStamp}.md auditing ` +
+            `Create ${expectedArtifactPath} auditing ` +
             `af_start_trial, af_purchase, af_subscribe, purchase_cancelled, web_checkout_started, StoreKit cancel, age eligibility, and activation-quality signals. ` +
             `Flag any ambiguity that could make the team scale a misleading growth signal.`,
-        priority: options.fromManager ? 'high' : 'medium',
-        focusObjective: focusLabel,
-        objectiveCode: focusLabel,
+        sourceSurfaces: [
+            'AppsFlyer CSV imports',
+            '/admin/purchaseLogs',
+            '/admin/macraCancelReasons',
+            'StoreKit cancel handling',
+            'age eligibility and birthdate checks',
+            '.agent/macra/state.json',
+        ],
+        requiredOutputs: [
+            expectedArtifactPath,
+            'Event semantic separation table',
+            'Trust/compliance risk notes',
+            'Metric ambiguity or instrumentation fix recommendation',
+        ],
+        expectedArtifactPath,
     };
+}
+
+function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
+    const focus = selectObjectiveFocus(agentId, northStarContext);
+    const fallback = sanitizeNorthStarTitle(northStarContext?.title || '') || 'current priorities';
+    const focusLabel = focus || fallback;
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    return buildMacraTaskBlueprint(agentId, focusLabel, dateStamp, options);
 }
 
 async function createQueuedTask(taskInput, options = {}) {
@@ -897,6 +1063,15 @@ async function createQueuedTask(taskInput, options = {}) {
         priority: taskInput?.priority || 'medium',
         complexity: taskInput?.complexity || 3,
         project: taskInput?.project || 'General',
+        product: taskInput?.product || '',
+        taskTemplateId: taskInput?.taskTemplateId || '',
+        operatingLoopId: taskInput?.operatingLoopId || '',
+        dateKey: taskInput?.dateKey || '',
+        tags: Array.isArray(taskInput?.tags) ? taskInput.tags : [],
+        sourceSurfaces: Array.isArray(taskInput?.sourceSurfaces) ? taskInput.sourceSurfaces : [],
+        requiredOutputs: Array.isArray(taskInput?.requiredOutputs) ? taskInput.requiredOutputs : [],
+        guardrails: Array.isArray(taskInput?.guardrails) ? taskInput.guardrails : [],
+        expectedArtifactPath: taskInput?.expectedArtifactPath || '',
         subtasks: Array.isArray(taskInput?.subtasks) ? taskInput.subtasks : [],
         source,
         createdAt: FieldValue.serverTimestamp(),
@@ -1096,6 +1271,7 @@ const app = initializeApp({
     credential: resolveAdminCredential(),
 });
 const db = getFirestore(app);
+const messaging = getMessaging(app);
 
 /* ── Incoming command queue (filled by the Firestore listener) ── */
 const commandQueue = [];
@@ -2786,13 +2962,15 @@ async function selfAssignTask() {
         }
 
         const createdTask = await createQueuedTask({
+            ...taskData,
             name: taskData.name,
             description: taskData.description,
+            assignee: AGENT_NAME,
             priority: taskData.priority || 'medium',
             source: 'self-assigned-idle',
-            northStarObjective: taskData.focusObjective || nsTitle || '',
-            missionId: mission?.missionId || '',
-            objectiveCode: taskData.focusObjective || '',
+            northStarObjective: taskData.northStarObjective || taskData.focusObjective || nsTitle || '',
+            missionId: taskData.missionId || mission?.missionId || '',
+            objectiveCode: taskData.objectiveCode || taskData.focusObjective || '',
         }, {
             source: 'self-assigned-idle',
             plannerSource: 'worker-self',
@@ -2873,6 +3051,54 @@ async function proposeObjective(title, reason, opts = {}) {
 
 /* ─── Nora Task Manager Sweep ─────────────────────────── */
 
+async function maybeCreateDailyMacraSnapshotTask() {
+    if (AGENT_ID !== 'nora') return null;
+
+    try {
+        if (await isMissionPaused()) return null;
+        const mission = await loadMissionStatus();
+        if (shouldSuppressAutoAssignment(mission || {})) return null;
+        if (isExecuteMissionActive(mission || {})) return null;
+
+        const dateKey = new Date().toISOString().slice(0, 10);
+        const snap = await db.collection(KANBAN_COLLECTION)
+            .where('taskTemplateId', '==', MACRA_DAILY_SNAPSHOT_TEMPLATE_ID)
+            .limit(30)
+            .get();
+        const alreadyCreatedToday = snap.docs.some((doc) => doc.data()?.dateKey === dateKey);
+        if (alreadyCreatedToday) return null;
+
+        const nsContext = await loadNorthStarContext();
+        const taskBlueprint = buildRoleTaskBlueprint('nora', nsContext, { fromManager: true, dailySnapshot: true });
+        const createdTask = await createQueuedTask({
+            ...taskBlueprint,
+            dateKey,
+            assignee: 'Nora',
+            source: 'macra-daily-snapshot',
+            priority: 'high',
+            description: `Daily Macra operating snapshot for ${dateKey}. ${taskBlueprint.description}`,
+        }, {
+            source: 'macra-daily-snapshot',
+            plannerSource: 'worker-self',
+            taskClass: 'explore-brief',
+            statusOverride: 'todo',
+        });
+
+        console.log(`📈 [Macra Daily] Created Nora snapshot task for ${dateKey}: ${createdTask.id}`);
+        await postBeat('work-in-flight', `📈 Macra daily snapshot task created for ${dateKey}`, {
+            taskId: createdTask.id,
+            color: 'blue',
+            lensTag: 'macra',
+            objectiveCode: MACRA_OBJECTIVE_CODE,
+            objectiveCodeLabel: MACRA_NORTH_STAR,
+        });
+        return createdTask.id;
+    } catch (err) {
+        console.error('⚠️  Macra daily snapshot creation failed:', err.message);
+        return null;
+    }
+}
+
 /**
  * If this agent IS Nora, periodically check all agents' queues.
  * For any agent with zero tasks, create a North Star–aligned task.
@@ -2924,14 +3150,15 @@ async function noraTaskManagerSweep() {
             }
 
             const createdTask = await createQueuedTask({
+                ...taskBlueprint,
                 name: taskBlueprint.name,
                 description: `Auto-assigned by Nora (task manager sweep). ${taskBlueprint.description}`,
                 assignee: displayName,
                 priority: taskBlueprint.priority || 'medium',
                 source: 'nora-task-manager',
-                northStarObjective: taskBlueprint.focusObjective || nsContext.title || '',
-                missionId: mission?.missionId || '',
-                objectiveCode: taskBlueprint.focusObjective || '',
+                northStarObjective: taskBlueprint.northStarObjective || taskBlueprint.focusObjective || nsContext.title || '',
+                missionId: taskBlueprint.missionId || mission?.missionId || '',
+                objectiveCode: taskBlueprint.objectiveCode || taskBlueprint.focusObjective || '',
             }, {
                 source: 'nora-task-manager',
                 plannerSource: 'worker-self',
@@ -4304,7 +4531,7 @@ function normalizeStringList(value) {
 
 function extractEvidenceRefs(text) {
     const raw = String(text || '');
-    const matches = raw.match(/\b(?:docs|src|scripts|netlify|functions|PulseCommand|QuickLifts-Web)\/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|\b\/admin\/[A-Za-z0-9_/-]+|\b(?:af_start_trial|af_purchase|af_subscribe|purchase_cancelled|web_checkout_started|StoreKit cancel|AppsFlyer|Scoreboard|Experiments)\b/g) || [];
+    const matches = raw.match(/(?:\b(?:docs|src|scripts|netlify|functions|PulseCommand|QuickLifts-Web)|\.agent)\/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+|\b\/admin\/[A-Za-z0-9_/-]+|\b(?:af_start_trial|af_purchase|af_subscribe|purchase_cancelled|web_checkout_started|StoreKit cancel|AppsFlyer|Scoreboard|Experiments)\b/g) || [];
     return Array.from(new Set(matches.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
 }
 
@@ -4368,6 +4595,25 @@ async function sendMessage(toAgent, content, type = 'chat', metadata = {}) {
         completedAt: FieldValue.serverTimestamp(),
     });
     console.log(`📤 Sent ${type} to ${toAgent}: "${content.substring(0, 80)}..." (${msgRef.id})`);
+    if (ENABLE_OPERATOR_PUSH && toAgent === 'admin') {
+        sendOperatorPush({
+            db,
+            messaging,
+            commandId: msgRef.id,
+            agentId: AGENT_ID,
+            agentName: AGENT_NAME,
+            content,
+            operatorFields,
+        })
+            .then((result) => {
+                if (result.sent > 0 || result.failed > 0) {
+                    console.log(`📲 PulseCommand push result for ${msgRef.id}: sent=${result.sent} failed=${result.failed}`);
+                }
+            })
+            .catch((err) => {
+                console.warn(`⚠️  PulseCommand push failed for ${msgRef.id}: ${err.message}`);
+            });
+    }
     return msgRef.id;
 }
 
@@ -5414,8 +5660,11 @@ async function decomposeTask(task) {
         }
     } catch (_) { }
 
+    const macraDecomposeBlock = loadMacraOperatingContext(task, { maxChars: 5200 });
+
     var decomposePrompt = `You are ${AGENT_NAME}, a task decomposition specialist.
 ${nsDecomposeBlock}
+${macraDecomposeBlock ? `${macraDecomposeBlock}\n` : ''}
 Your job: break this task into 3-6 CONCRETE, VERIFIABLE execution steps.
 
 RULES (follow strictly):
@@ -5825,6 +6074,7 @@ ${smokeOutput}`.substring(0, 2000);
                     if (attempt === 0) cachedCodebaseMap = loadCodebaseMap();
 
                     const northStarBlock = await loadNorthStar();
+                    const macraOperatingContext = loadMacraOperatingContext(task);
 
                     // ─── SOUL-FIRST PROMPT ARCHITECTURE ──
                     // The agent's soul goes FIRST. Research ("Lost in the Middle") shows
@@ -5853,6 +6103,7 @@ ${smokeOutput}`.substring(0, 2000);
                     base.push(
                         `Project directory: ${projectDir}`,
                         northStarBlock || '',
+                        macraOperatingContext || '',
                         cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${getRelevantCodebaseMap(task.name, task.description)}\n=== END CODEBASE MAP ===\n` : '',
                         `TASK: "${task.name}"`,
                         task.description ? `Description: ${task.description}` : '',
@@ -6518,6 +6769,7 @@ async function run() {
         await postHourlySnapshot(currentTaskRef);
         maybeSyncRepoDuringHourlyTelemetry(currentTaskRef);
         await checkIdleAndNudge();
+        await maybeCreateDailyMacraSnapshotTask();
         await noraTaskManagerSweep();  // Nora checks all agents' queues
     }, 10 * 60 * 1000);  // Check every 10 minutes
 
@@ -6533,6 +6785,7 @@ async function run() {
 
     // Start command listener (real-time Firestore listener)
     const unsubCommands = startCommandListener();
+    await maybeCreateDailyMacraSnapshotTask();
 
     // Graceful shutdown
     const shutdown = async () => {
