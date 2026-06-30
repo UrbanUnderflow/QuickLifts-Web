@@ -29,6 +29,18 @@ Audit whether the current trial-start signal is trustworthy enough to inform one
 
 The next execution pass should add the trust guardrail read and, only after the evidence is assembled, name exactly one proposed copy, proof, or offer change with one metric and one guardrail. This research-and-plan pass stops before the recommendation section.
 
+## KPI Snapshot Coverage
+
+This daily Macra KPI snapshot must read the exact source artifacts below before making any lifecycle recommendation or treating a funnel signal as current:
+
+- **Macra Scoreboard** - Saved Scoreboard coverage for the daily KPI chain from onboarding start through trial start and paid outcomes.
+- **`/admin/experiments`** - Experiment surface for active `variant_a` freshness and any refreshed or backfilled result read.
+- **`/admin/purchaseLogs`** - Admin purchase-log surface for checkout initiation, cancel, failure, trial-start, purchase, and subscribe status separation.
+- **`/admin/macraCancelReasons`** - Admin cancel-reason surface for user-stated paywall and StoreKit friction.
+- **Paywall dismissal signals** - Behavioral drop-off evidence between paywall reach, primary CTA, checkout initiation, and trial start.
+- **Retargeting state** - Retargeting configuration, eligibility, suppression, send, and recovery-lane state.
+- **AppsFlyer coverage** - AppsFlyer aggregate and import coverage dates used to decide whether Scoreboard and source-quality reads are fresh or stale.
+
 ## Variant A Freshness
 
 `/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The refreshed `/admin/experiments` results read must be for active `variant_a`, and `.agent/macra/state.json` names the live configuration as `monthly + annual, both with trial`, meaning monthly plus annual with trial.
