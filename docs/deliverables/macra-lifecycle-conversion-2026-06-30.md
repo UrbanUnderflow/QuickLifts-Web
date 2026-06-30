@@ -25,9 +25,15 @@ Audit whether the current trial-start signal is trustworthy enough to inform one
 - Treat retargeting eligibility and suppression as guardrail context before judging whether follow-up messaging is working.
 - Keep the stale `/admin/experiments` snapshot from 2026-06-16 out of live funnel decisions unless it is refreshed or backfilled.
 
+### Decision Log Plan
+
+- Use `.agent/macra/decisions.md` as the approval boundary for this lifecycle read. The deliverable may recommend one proposed copy, proof, or offer change, but it must remain proposed-only unless Nora records approval there.
+- Before any operational change is treated as shippable, require one decision-log row that names the owner, source evidence, expected metric movement, and guardrail. This matches the Macra operating contract in `.agent/macra/contract.md`.
+- For this task, the research pass should only verify the decision-log requirement and identify the decision fields that later execution must preserve; it should not add a new live-change decision, change pricing, change retargeting behavior, or mark the proposed lifecycle change as approved.
+
 ### Step boundary
 
-The next execution pass should add the trust guardrail read and, only after the evidence is assembled, name exactly one proposed copy, proof, or offer change with one metric and one guardrail. This research-and-plan pass stops before the recommendation section.
+The next execution pass should add the trust guardrail read and, only after the evidence is assembled, name exactly one proposed copy, proof, or offer change with one metric and one guardrail. This research-and-plan pass stops before the recommendation section and before any decision-log approval row.
 
 ## KPI Snapshot Coverage
 
