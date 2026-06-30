@@ -175,6 +175,10 @@ The execute step performed a read-only Firebase Admin check of `macra-experiment
 
 Execution finding: active `variant_a` results were refreshed after the stale 2026-06-16 warning, with the saved result snapshot generated on **2026-06-25T10:08:00.102Z**, but they were **not refreshed during this audit step** and are **not fresh enough for a June 30 funnel decision**. Source: Firestore `macra-experiment-results/macra_paywall_onboarding`; `.agent/macra/decisions.md`
 
+### Step 2 status
+
+Complete. This section now cites `/admin/experiments`, `.agent/macra/state.json`, `.agent/macra/progress.md`, and `.agent/macra/decisions.md`; records the stale 2026-06-16 hard-paywall warning; records the later 2026-06-25 active-`variant_a` result snapshot; and states that `variant_a` is partially refreshed but still not decision-fresh for a June 30 funnel decision.
+
 ## Decision Log Contract
 
 ### Research question
