@@ -37,6 +37,15 @@ The freshness caveat is still live: `.agent/macra/state.json` records that the s
 
 For this deliverable, active `variant_a` can be used as the current configuration context, but not as a refreshed outcome read unless `/admin/experiments` has been refreshed or backfilled against the current Scoreboard, purchase logs, cancel reasons, retargeting state, and AppsFlyer imports.
 
+## Read Sources
+
+This lifecycle recommendation uses the following exact read artifacts. Stale reads stay labeled as stale; they do not become current funnel evidence just because they are available.
+
+- **Refreshed `/admin/experiments` results:** Required active `variant_a` outcome read for the current monthly-plus-annual-with-trial setup. If the only available `/admin/experiments` result is the `2026-06-16` retired hard-paywall snapshot, treat experiment results as not refreshed for decisioning.
+- **`/admin/macraCancelReasons`:** Admin surface for Macra cancellation feedback, backed by Firestore collection `Macrafeedbackreason`, used to read user-stated friction before choosing a lifecycle intervention.
+- **Paywall dismissal signals:** Paywall reached, primary CTA, checkout initiation, purchase cancel, purchase failure, and trial-start drop-off signals from saved Macra funnel reads and purchase-log context.
+- **Retargeting state:** Retargeting configuration, eligibility, suppression, and send-state evidence from Macra email sequence state before deciding whether the first lifecycle fix belongs on paywall copy, proof, offer, or follow-up messaging.
+
 ## Source Coverage
 
 This deliverable audits Macra lifecycle conversion signals before scaling the growth signal. This step only records source coverage. It does not approve a live copy, proof, offer, pricing, funnel, retargeting, experiment allocation, or acquisition change.
