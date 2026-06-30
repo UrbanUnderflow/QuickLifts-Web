@@ -194,7 +194,7 @@ Retargeting suppression means the system intentionally skipped a user because a 
 - Price is a real trust objection, but the surrounding cancel-reason pattern points to broader uncertainty, especially readiness, need for proof, breakage, and Apple sheet confusion.
 - The most defensible next lifecycle move should reduce proof and expectation friction before checkout, not introduce a discount or multiple simultaneous offer tests.
 
-## Trust Signal Read
+## Trust Guardrail Read
 
 This section summarizes cancel reasons, paywall dismissal behavior, and retargeting state without treating any one signal as a complete explanation for trial-start movement.
 
