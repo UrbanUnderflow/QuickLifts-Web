@@ -58,7 +58,7 @@ The reported 2/day trial-start signal should be treated as **unverified** until 
 
 The daily KPI snapshot should be treated as **stale operating context**, not a decision-fresh daily read. It is useful for preserving the known funnel shape and source-quality hypothesis, but it should not trigger funnel, pricing, experiment allocation, retargeting, or Apple Search Ads changes until Scoreboard, AppsFlyer, and experiment coverage are refreshed for the current decision window. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`
 
-## Scoreboard Coverage
+## Scoreboard
 
 ### Observed facts
 
@@ -72,7 +72,7 @@ The daily KPI snapshot should be treated as **stale operating context**, not a d
 
 The Scoreboard should remain the operating surface for the daily KPI snapshot, but this file should not treat the current Scoreboard coverage as fresh. Any June 30 funnel decision would need a refreshed Scoreboard read with the selected range, loaded timestamp, AppsFlyer aggregate coverage, and raw/person-level row availability recorded. Source: `.agent/macra/runbook.md`; `.agent/macra/progress.md`; `src/pages/admin/emailSequences.tsx`
 
-## Experiments Coverage
+## Experiments
 
 ### Observed facts
 
@@ -98,7 +98,7 @@ _Pending Step 3 population._
 
 This section must summarize `/admin/macraCancelReasons` evidence that affects trust, proof, price, readiness, or product-quality interpretation.
 
-## Retargeting Coverage
+## Retargeting
 
 _Pending Step 3 population._
 
@@ -285,7 +285,7 @@ Required source artifacts to inspect:
 
 This section must define how StoreKit cancel differs from AppsFlyer `purchase_cancelled`, whether the two can collide, and how cancellation timing affects the 2/day signal.
 
-## age eligibility
+## Age Eligibility
 
 _Pending Step 4 population._
 
@@ -297,7 +297,7 @@ Required source artifacts to inspect:
 
 This section must define whether age eligibility is a hard blocker, a profile completeness requirement, or an annotation on the trial-start path.
 
-## activation-quality signals
+## Activation-Quality Signals
 
 _Pending Step 4 population._
 
