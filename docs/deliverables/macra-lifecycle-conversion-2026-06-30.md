@@ -216,6 +216,20 @@ Retargeting suppression means the system intentionally skipped a user because a 
 - Price is a real trust objection, but the surrounding cancel-reason pattern points to broader uncertainty, especially readiness, need for proof, breakage, and Apple sheet confusion.
 - The most defensible next lifecycle move should reduce proof and expectation friction before checkout, not introduce a discount or multiple simultaneous offer tests.
 
+## Trust Signal Read
+
+### Facts
+
+- **Cancel reasons:** `.agent/macra/decisions.md` records `69` production cancel-feedback rows in Firestore `Macrafeedbackreason`, led by price, not ready, need proof, something did not work, and Apple sheet confusion. `docs/ops/macra-operating-snapshot-2026-06-30.md` also reports one production `Macrafeedbackreason` row on `2026-06-28`, with top reason `Price felt too high` and trigger `storekit_cancelled`.
+- **Paywall dismissal behavior:** `.agent/macra/state.json` preserves the latest reliable saved funnel read for `2026-05-27` through `2026-06-25`: `448` paywall reaches, `317` paywall primary CTA presses, `94` initiated checkouts, and `5` trial starts. `.agent/macra/decisions.md` adds purchase-log pressure from `306` Firestore `Macra-purchase-logs` rows: `161` canceled, `110` attempted, `21` failed, and `14` success.
+- **Retargeting state:** `.agent/macra/decisions.md` records retargeting config as enabled, but the latest scan sent `0`. `docs/ops/macra-operating-snapshot-2026-06-30.md` found no recent retargeting sends, opens, clicks, checkout starts, trial starts, paid conversions, under-18 blocks, or missing-birthdate blocks in common user-state fields for `2026-06-28` through `2026-06-30`.
+
+### Inference
+
+- The trust gap is strongest at the paywall-to-checkout moment, not in a confirmed retargeting recovery lane, because users show intent through paywall CTA and checkout starts while trial starts remain low.
+- Price is a visible objection, but the pattern also includes readiness, proof, breakage, and Apple sheet confusion, so the next proposed change should make the first-week proof clearer instead of changing price or offer structure.
+- Retargeting should remain guardrail context until eligibility, suppression, and send activity are refreshed; the current evidence supports a paywall proof-copy proposal more than a retargeting behavior change.
+
 ## Trust Guardrail Read
 
 This section summarizes cancel reasons, paywall dismissal behavior, and retargeting state without treating any one signal as a complete explanation for trial-start movement.
