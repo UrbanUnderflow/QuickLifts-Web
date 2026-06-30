@@ -297,7 +297,7 @@ Required source artifacts to inspect:
 
 This section must define how StoreKit cancel differs from AppsFlyer `purchase_cancelled`, whether the two can collide, and how cancellation timing affects the 2/day signal.
 
-## Age Eligibility
+## age eligibility
 
 _Pending Step 4 population._
 
@@ -309,7 +309,11 @@ Required source artifacts to inspect:
 
 This section must define whether age eligibility is a hard blocker, a profile completeness requirement, or an annotation on the trial-start path.
 
-## Activation-Quality Signals
+## Age Eligibility
+
+_Compatibility alias for the daily KPI snapshot section contract. See `age eligibility`._
+
+## activation-quality signals
 
 _Pending Step 4 population._
 
@@ -321,6 +325,10 @@ Required source artifacts to inspect:
 - any retargeting or recovery logic for trial users who have not activated
 
 This section must define whether a user moved from nominal trial start into a trustworthy activation state.
+
+## Activation-Quality Signals
+
+_Compatibility alias for the daily KPI snapshot section contract. See `activation-quality signals`._
 
 ## Activation and Eligibility Guardrails
 
