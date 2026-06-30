@@ -158,6 +158,14 @@ Paywall dismissal means the user reached a paywall state but did not continue cl
 
 Checkout initiation means the user moved beyond paywall intent into a checkout or StoreKit attempt. It is stronger intent than paywall view or CTA press, but it is not a trial start and should not be counted as conversion. It should be paired with cancellation, failure, and success statuses.
 
+### Checkout cancel or failure
+
+Checkout cancel or failure means the user entered a checkout path but did not reach a successful trial, purchase, or subscribe state. A cancel should be treated as user-aborted intent, while a failure should be treated as technical, payment, StoreKit, or processing friction until the purchase-log status and error context prove otherwise. Neither status should be blended into paywall dismissal or counted as trial conversion.
+
+### Apple purchase cancel
+
+Apple purchase cancel means the iOS or StoreKit purchase sheet was dismissed or canceled before a successful trial or purchase state. It is a high-intent trust guardrail, not proof that the user rejected Macra overall. Read it with selected plan, cancel reason, Apple sheet confusion, purchase-log status, and paywall context before assigning cause.
+
 ### Trial start
 
 Trial start is the first conversion signal that represents entry into the trial path. It must remain separate from checkout initiation, attempted purchase, purchase cancellation, purchase failure, purchase success, and subscribe events so the team does not scale a noisy proxy.
