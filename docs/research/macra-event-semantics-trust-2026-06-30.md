@@ -72,6 +72,17 @@ The Macra decision log uses one row per decision or proposed decision with these
 
 No decision-log row should be added by this research-plan step. The next step should complete the event-semantics evidence sections first, then decide whether the correct decision-log outcome is a proposed tracking/guardrail rule, a refresh/backfill task, or an explicit no-change recommendation.
 
+### Step 2 execution check
+
+I reviewed the current `.agent/macra/decisions.md` rows against the Macra operating contract. Each logged operational or proposed decision currently has an evidence field, an expected metric field, and a guardrail field:
+
+- 2026-06-29 Nora posture decision: evidence is the AppsFlyer aggregate report, saved Macra Scoreboard, and stale `/admin/experiments` snapshot; metric is qualified onboarding start to trial start; guardrail is avoiding random funnel changes while the trial-start signal is early. Source: `.agent/macra/decisions.md`
+- 2026-06-29 Nora experiment-refresh decision: evidence is the stale 2026-06-16 experiment snapshot; metric is experiment decision quality; guardrail is not deciding from stale variant data. Source: `.agent/macra/decisions.md`
+- 2026-06-30 Solara proposed copy validation: evidence is `Macrafeedbackreason`, `Macra-purchase-logs`, the saved paywall funnel, and retargeting config; metric is paywall primary CTA to initiated checkout rate; guardrail is StoreKit purchase cancel count and `paywall_cancel_feedback` volume. Source: `.agent/macra/decisions.md`
+- 2026-06-30 Nora no-change validation-window decision: evidence is `docs/ops/macra-operating-snapshot-2026-06-30.md`, stale AppsFlyer/Scoreboard coverage, purchase-log trial-success rows, and mostly inferred experiment results; metric is qualified onboarding start to trial start; guardrail is checkout / purchase cancel pressure and stale-source risk. Source: `.agent/macra/decisions.md`
+
+Execution result: no `.agent/macra/decisions.md` edit is required for this step because the current operational decisions already tie evidence to expected metrics and guardrails, and this audit step does not introduce a new operator-approved change. Source: `.agent/macra/contract.md`; `.agent/macra/decisions.md`
+
 ## af_start_trial
 
 _Pending Step 3 population._
