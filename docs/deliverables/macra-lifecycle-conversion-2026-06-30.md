@@ -53,6 +53,17 @@ This source-quality pass must read the exact artifacts below before separating A
 - **Paywall dismissal signals** - Behavioral source-quality context from paywall reach, paywall CTA, checkout initiation, purchase cancel, purchase failure, and trial-start drop-off.
 - **Retargeting state** - Retargeting eligibility, suppression, send, open, click, checkout-start, trial-start, and paid-conversion state before treating follow-up behavior as source quality.
 
+## Apple Search Ads Vs Organic
+
+The saved source split is useful for direction, but it is low-sample and stale for June 30 decisioning. AppsFlyer/Scoreboard source-level coverage for this split is `2026-05-27` through `2026-06-25`, while the broader Scoreboard aggregate CSV coverage is `2026-05-23` through `2026-06-25`. June 28-30 source movement is not confirmed in the saved read.
+
+| Source | Onboarding starts | Reached paywall | Checkout initiations | Trial starts | Purchases | Subscribes | AppsFlyer coverage dates |
+| --- | ---: | --- | ---: | ---: | --- | --- | --- |
+| Apple Search Ads | 127 | Not isolated in saved source split | 15 | 3 | Not isolated in saved source split | Not isolated in saved source split | `2026-05-27` through `2026-06-25` saved source split |
+| Organic | 406 | Not isolated in saved source split | 79 | 2 | Not isolated in saved source split | Not isolated in saved source split | `2026-05-27` through `2026-06-25` saved source split |
+
+Source notes: `.agent/macra/state.json` preserves the source split as `127` Apple Search Ads starts with `3` trials and `406` organic starts with `2` trials. `docs/research/macra-asa-quality-2026-06-30.md` preserves the matching checkout initiation counts: `15` for Apple Search Ads and `79` for organic. Reached-paywall, purchase, and subscribe counts are not safely isolated by source in the saved read, so they remain marked as unavailable rather than inferred.
+
 ## Daily KPI Snapshot
 
 This snapshot records the latest saved Macra funnel read available for this deliverable. The funnel counts are useful as a baseline, but they are stale for June 30 decisioning unless newer AppsFlyer and Scoreboard coverage is refreshed.
