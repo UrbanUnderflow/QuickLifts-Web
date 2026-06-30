@@ -15,9 +15,28 @@ const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const COACH_INTAKE_DRAFTS_COLLECTION = 'pulsecheck-coach-intake-drafts';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const normalizeIntakeResponses = (value: unknown): Record<string, string | number | string[]> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string | number | string[]>>((acc, [rawId, rawValue]) => {
+    const id = normalizeString(rawId);
+    if (!id) return acc;
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+      acc[id] = rawValue;
+    } else if (typeof rawValue === 'string') {
+      const trimmed = rawValue.trim();
+      if (trimmed) acc[id] = trimmed;
+    } else if (Array.isArray(rawValue)) {
+      const arr = rawValue.map((entry) => normalizeString(entry)).filter(Boolean);
+      if (arr.length > 0) acc[id] = arr;
+    }
+    return acc;
+  }, {});
+};
+const buildCoachIntakeDraftLookupKey = (teamId: string, targetEmail: string) => `${normalizeString(teamId)}:${normalizeEmail(targetEmail)}`;
 const normalizeRevenueRecipientRole = (value: unknown) => {
   const normalized = normalizeString(value);
   if (normalized === 'coach' || normalized === 'organization-owner') {
@@ -154,12 +173,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .where('role', '==', 'team-admin')
         .where('handoffMetadata.state', '==', 'reserved-pending-activation')
         .limit(1);
+      const coachIntakeDraftQueries = Array.from(new Set([targetEmail, notificationEmail, userEmail].filter(Boolean))).map((email) =>
+        firestore
+          .collection(COACH_INTAKE_DRAFTS_COLLECTION)
+          .where('lookupKey', '==', buildCoachIntakeDraftLookupKey(teamId, email))
+          .limit(5)
+      );
 
-      const [organizationSnap, teamSnap, reservedOrganizationMembershipQuerySnap, reservedTeamMembershipQuerySnap] = await Promise.all([
+      const [
+        organizationSnap,
+        teamSnap,
+        reservedOrganizationMembershipQuerySnap,
+        reservedTeamMembershipQuerySnap,
+        ...coachIntakeDraftQuerySnaps
+      ] = await Promise.all([
         transaction.get(organizationRef),
         transaction.get(teamRef),
         transaction.get(organizationMembershipQuery),
         transaction.get(teamMembershipQuery),
+        ...coachIntakeDraftQueries.map((draftQuery) => transaction.get(draftQuery)),
       ]);
 
       if (!organizationSnap.exists) {
@@ -173,6 +205,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const teamName = normalizeString(teamSnap.data()?.displayName) || 'Initial Team';
       const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
       const nextTeamCommercialConfig = resolveTeamAdminCommercialConfig(teamCommercialConfig, userId);
+      const coachIntakeDraftDoc =
+        coachIntakeDraftQuerySnaps
+          .flatMap((snap) => snap.docs)
+          .find((doc) => normalizeString(doc.data()?.status) === 'active') || null;
+      const coachIntakeDraft = coachIntakeDraftDoc?.data() || {};
+      const coachIntakeResponses = normalizeIntakeResponses(coachIntakeDraft.intakeResponses);
+      const hasCoachIntakeResponses = Object.keys(coachIntakeResponses).length > 0;
 
       const reservedOrganizationMembershipDoc = reservedOrganizationMembershipQuerySnap.docs[0] || null;
       const reservedTeamMembershipDoc = reservedTeamMembershipQuerySnap.docs[0] || null;
@@ -229,6 +268,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           rosterVisibilityScope: adminDerivedAccess.rosterVisibilityScope,
           allowedAthleteIds: Array.isArray(reservedTeamMembership.allowedAthleteIds) ? reservedTeamMembership.allowedAthleteIds : [],
           onboardingStatus: reservedTeamMembership.onboardingStatus || 'pending-profile',
+          ...(hasCoachIntakeResponses
+            ? {
+                coachIntakeResponses,
+                coachIntakeFormVersion: normalizeString(coachIntakeDraft.intakeFormVersion),
+                prefilledCoachIntakeDraftToken: coachIntakeDraftDoc?.id || '',
+              }
+            : {}),
           grantedByInviteToken: token,
           grantedAt: reservedTeamMembership.grantedAt || now,
           handoffMetadata: buildClaimedHandoffMetadata(reservedTeamMembership.handoffMetadata, userId, userEmail, token),
@@ -237,6 +283,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         { merge: true }
       );
+
+      if (coachIntakeDraftDoc) {
+        transaction.set(
+          coachIntakeDraftDoc.ref,
+          {
+            status: 'attached',
+            attachedToTeamMembershipId: teamMembershipRef.id,
+            attachedAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
 
       transaction.set(
         organizationRef,

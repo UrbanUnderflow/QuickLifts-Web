@@ -79,26 +79,6 @@ const pulseCheckScreens: Screen[] = [
 
 const productSections: ProductSection[] = [
   {
-    id: 'fit-with-pulse',
-    name: 'Fit With Pulse',
-    eyebrow: 'Workout app',
-    body:
-      'Fit With Pulse helps people find workouts, follow creator-led training, and choose the right workout for how their body feels that day.',
-    accent: '#E0FE10',
-    bg: 'bg-[#E0FE10]',
-    Icon: Dumbbell,
-    screens: [
-      { src: '/fwp-media/01-today-home.png', alt: 'Fit With Pulse Today screen' },
-      { src: '/fwp-media/02-recovery-heat-map.png', alt: 'Fit With Pulse recovery heat map' },
-      { src: '/fwp-media/04-immersive-player.png', alt: 'Fit With Pulse immersive workout player' },
-    ],
-    links: [
-      { name: 'Visit Fit With Pulse', href: 'https://fitwithpulse.ai/creators', label: 'Visit the Fit With Pulse website' },
-      { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20With%20Pulse%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit With Pulse' },
-    ],
-    proof: ['Personal workouts', 'Recovery guidance', 'Creator-led training'],
-  },
-  {
     id: 'fit-club',
     name: 'Fit Club',
     eyebrow: 'Club app',
@@ -113,10 +93,30 @@ const productSections: ProductSection[] = [
       { src: '/fitclub-media/10-event-detail-rsvp.png', alt: 'Fit Club event RSVP screen' },
     ],
     links: [
-      { name: 'Visit Fit Club', href: 'https://fitwithpulse.ai/CreatorClub', label: 'Visit the Fit Club website' },
+      { name: 'Visit Fit Club', href: '/fitclub', label: 'Visit the Fit Club website' },
       { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20Club%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit Club' },
     ],
     proof: ['Club pages', 'Events and RSVPs', 'Challenges'],
+  },
+  {
+    id: 'fit-with-pulse',
+    name: 'Fit With Pulse',
+    eyebrow: 'Workout app',
+    body:
+      'Fit With Pulse helps people find workouts, follow creator-led training, and choose the right workout for how their body feels that day.',
+    accent: '#E0FE10',
+    bg: 'bg-[#E0FE10]',
+    Icon: Dumbbell,
+    screens: [
+      { src: '/fwp-media/01-today-home.png', alt: 'Fit With Pulse Today screen' },
+      { src: '/fwp-media/02-recovery-heat-map.png', alt: 'Fit With Pulse recovery heat map' },
+      { src: '/fwp-media/04-immersive-player.png', alt: 'Fit With Pulse immersive workout player' },
+    ],
+    links: [
+      { name: 'Visit Fit With Pulse', href: '/FWP', label: 'Visit the Fit With Pulse website' },
+      { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20With%20Pulse%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit With Pulse' },
+    ],
+    proof: ['Personal workouts', 'Recovery guidance', 'Creator-led training'],
   },
   {
     id: 'macra',
@@ -320,8 +320,8 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
 
           <nav className="hidden items-center gap-5 text-sm text-zinc-300 md:flex" aria-label="Primary">
             <a href="#pulsecheck" className="transition-colors hover:text-white">PulseCheck</a>
-            <a href="#fit-with-pulse" className="transition-colors hover:text-white">Fit With Pulse</a>
             <a href="#fit-club" className="transition-colors hover:text-white">Fit Club</a>
+            <a href="#fit-with-pulse" className="transition-colors hover:text-white">Fit With Pulse</a>
             <a href="#macra" className="transition-colors hover:text-white">Macra</a>
           </nav>
 
@@ -548,8 +548,8 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
           <div className="font-semibold text-zinc-300">Pulse Intelligence Labs © {new Date().getFullYear()}</div>
           <div className="flex flex-wrap gap-4">
             <a href="#pulsecheck" className="hover:text-white">PulseCheck</a>
-            <a href="#fit-with-pulse" className="hover:text-white">Fit With Pulse</a>
             <a href="#fit-club" className="hover:text-white">Fit Club</a>
+            <a href="#fit-with-pulse" className="hover:text-white">Fit With Pulse</a>
             <a href="#macra" className="hover:text-white">Macra</a>
             <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white">Contact</a>
           </div>

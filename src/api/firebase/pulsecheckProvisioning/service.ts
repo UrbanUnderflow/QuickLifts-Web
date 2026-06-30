@@ -22,6 +22,7 @@ import {
 import { deriveMembershipAccessFromCapabilities, normalizeStaffCapabilities } from './staffCapabilities';
 import type {
   CompletePulseCheckAthleteOnboardingInput,
+  CreatePulseCheckCoachIntakeDraftLinkInput,
   CreatePulseCheckPilotCohortInput,
   CreatePulseCheckPilotInput,
   CreatePulseCheckTeamAccessInviteInput,
@@ -64,6 +65,7 @@ import type {
   PulseCheckTeamMembershipRole,
   PulseCheckTeamStatus,
   StaffPermission,
+  PulseCheckCoachIntakeDraftLink,
   PulseCheckInviteLink,
   PulseCheckInviteActivity,
   PulseCheckInviteActivityEmailSource,
@@ -90,6 +92,7 @@ const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const CLINICIAN_PROFILES_COLLECTION = 'pulsecheck-auntedna-clinician-profiles';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const INVITE_ACTIVITY_COLLECTION = 'pulsecheck-invite-activities';
+const COACH_INTAKE_DRAFTS_COLLECTION = 'pulsecheck-coach-intake-drafts';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const LEGACY_ROSTER_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
@@ -142,6 +145,16 @@ const getPulseCheckLinkOrigin = () =>
   typeof window !== 'undefined' && isLocalHostname(window.location.hostname)
     ? window.location.origin.replace(/\/+$/, '')
     : PULSECHECK_LINK_ORIGIN;
+const buildCoachIntakeDraftLookupKey = (teamId: string, targetEmail: string) =>
+  `${normalizeString(teamId)}:${normalizeEmail(targetEmail)}`;
+const buildCoachIntakeDraftUrl = (token: string) =>
+  `${getPulseCheckLinkOrigin()}/PulseCheck/intake/${encodeURIComponent(token)}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
+const generateCoachIntakeDraftToken = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+};
 const shouldStampDevFirebaseLinks = () =>
   typeof window !== 'undefined' &&
   (isLocalHostname(window.location.hostname) ||
@@ -939,6 +952,23 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   lastEmailMessageId: data.lastEmailMessageId || '',
   emailSendCount: Math.max(0, Number(data.emailSendCount || 0)),
   prefilledProfileImageUrl: normalizeString(data.prefilledProfileImageUrl),
+});
+
+const toCoachIntakeDraftLink = (id: string, data: Record<string, any>): PulseCheckCoachIntakeDraftLink => ({
+  token: data.token || id,
+  status: data.status === 'superseded' || data.status === 'attached' || data.status === 'revoked' ? data.status : 'active',
+  organizationId: data.organizationId || '',
+  teamId: data.teamId || '',
+  targetEmail: data.targetEmail || '',
+  lookupKey: data.lookupKey || '',
+  intakeResponses: normalizeIntakeResponses(data.intakeResponses),
+  intakeFormVersion: data.intakeFormVersion || '',
+  createdByUserId: data.createdByUserId || '',
+  createdByEmail: data.createdByEmail || '',
+  createdAt: data.createdAt || null,
+  updatedAt: data.updatedAt || null,
+  attachedToTeamMembershipId: data.attachedToTeamMembershipId || '',
+  attachedAt: data.attachedAt || null,
 });
 
 const normalizeInviteActivityEventType = (value: unknown): PulseCheckInviteActivityEventType => {
@@ -2808,6 +2838,60 @@ export const pulseCheckProvisioningService = {
       [`intake.${kind}`]: normalizedForm,
       updatedAt: serverTimestamp(),
     });
+  },
+
+  async createCoachIntakeDraftLink(
+    input: CreatePulseCheckCoachIntakeDraftLinkInput
+  ): Promise<{ token: string; url: string; draft: PulseCheckCoachIntakeDraftLink }> {
+    const organizationId = normalizeString(input.organizationId);
+    const teamId = normalizeString(input.teamId);
+    const targetEmail = normalizeEmail(input.targetEmail);
+    if (!organizationId || !teamId) {
+      throw new Error('Organization and team are required.');
+    }
+    if (!targetEmail) {
+      throw new Error('Coach email is required.');
+    }
+
+    const teamSnap = await getDoc(doc(db, TEAMS_COLLECTION, teamId));
+    if (!teamSnap.exists()) {
+      throw new Error('Team not found.');
+    }
+
+    const teamData = teamSnap.data() as Record<string, any>;
+    const intake = normalizeIntakeConfig(teamData.intake);
+    const intakeFormVersion = normalizeString(intake?.coach?.version) || PULSECHECK_INTAKE_FORM_VERSION;
+    const lookupKey = buildCoachIntakeDraftLookupKey(teamId, targetEmail);
+    const existingDraftsSnap = await getDocs(
+      query(collection(db, COACH_INTAKE_DRAFTS_COLLECTION), where('lookupKey', '==', lookupKey))
+    );
+    await Promise.all(
+      existingDraftsSnap.docs
+        .filter((docSnap) => (docSnap.data() as Record<string, any>).status === 'active')
+        .map((docSnap) => updateDoc(docSnap.ref, { status: 'superseded', updatedAt: serverTimestamp() }))
+    );
+
+    const token = generateCoachIntakeDraftToken();
+    const payload = {
+      token,
+      status: 'active',
+      organizationId,
+      teamId,
+      targetEmail,
+      lookupKey,
+      intakeResponses: {},
+      intakeFormVersion,
+      createdByUserId: normalizeString(input.createdByUserId),
+      createdByEmail: normalizeEmail(input.createdByEmail),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(doc(db, COACH_INTAKE_DRAFTS_COLLECTION, token), payload);
+    return {
+      token,
+      url: buildCoachIntakeDraftUrl(token),
+      draft: toCoachIntakeDraftLink(token, payload),
+    };
   },
 
   async createPilot(input: CreatePulseCheckPilotInput): Promise<string> {

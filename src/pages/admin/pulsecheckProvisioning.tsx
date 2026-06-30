@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Share2,
   ShieldPlus,
   Sparkles,
   Users2,
@@ -727,6 +728,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [teamConsentSavingId, setTeamConsentSavingId] = useState<string | null>(null);
   const [teamIntakeDrafts, setTeamIntakeDrafts] = useState<Record<string, SurveyQuestion[]>>({});
   const [teamIntakeSavingKey, setTeamIntakeSavingKey] = useState<string | null>(null);
+  const [coachIntakeShareTeamId, setCoachIntakeShareTeamId] = useState<string | null>(null);
+  const [coachIntakeShareEmail, setCoachIntakeShareEmail] = useState('');
+  const [coachIntakeShareUrl, setCoachIntakeShareUrl] = useState('');
+  const [coachIntakeShareGenerating, setCoachIntakeShareGenerating] = useState(false);
   const [adminTourOpen, setAdminTourOpen] = useState(false);
   const [pilotStudyModeDrafts, setPilotStudyModeDrafts] = useState<Record<string, PulseCheckPilotStudyMode>>({});
   const [pilotStudyModeSavingId, setPilotStudyModeSavingId] = useState<string | null>(null);
@@ -2181,6 +2186,42 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setMessage({ type: 'error', text: 'Failed to update intake form.' });
     } finally {
       setTeamIntakeSavingKey((current) => (current === savingKey ? null : current));
+    }
+  };
+
+  const handleOpenCoachIntakeShare = (team: PulseCheckTeam) => {
+    if (isIntakeDirty(team, 'coach')) {
+      setMessage({ type: 'error', text: 'Save the coach intake questions before generating a share link.' });
+      return;
+    }
+    setCoachIntakeShareTeamId(team.id);
+    setCoachIntakeShareEmail(team.defaultAdminEmail || '');
+    setCoachIntakeShareUrl('');
+  };
+
+  const handleGenerateCoachIntakeShareLink = async (team: PulseCheckTeam) => {
+    const email = coachIntakeShareEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setMessage({ type: 'error', text: 'Enter the coach email before generating a link.' });
+      return;
+    }
+    setCoachIntakeShareGenerating(true);
+    setMessage(null);
+    try {
+      const result = await pulseCheckProvisioningService.createCoachIntakeDraftLink({
+        organizationId: team.organizationId,
+        teamId: team.id,
+        targetEmail: email,
+        createdByUserId: currentUser?.id || '',
+        createdByEmail: currentUser?.email || '',
+      });
+      setCoachIntakeShareUrl(result.url);
+      setMessage({ type: 'success', text: 'Coach intake link generated.' });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to generate coach intake draft link:', error);
+      setMessage({ type: 'error', text: 'Failed to generate coach intake link.' });
+    } finally {
+      setCoachIntakeShareGenerating(false);
     }
   };
 
@@ -4277,6 +4318,73 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             document.body,
                                             );
                                           })() : null}
+                                          {coachIntakeShareTeamId === team.id && typeof document !== 'undefined' ? createPortal(
+                                            <div
+                                              style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+                                              onClick={() => setCoachIntakeShareTeamId(null)}
+                                            >
+                                              <div
+                                                onClick={(event) => event.stopPropagation()}
+                                                style={{ width: 'min(560px, 100%)', background: '#101017', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 18, boxShadow: '0 28px 90px rgba(0,0,0,0.5)', overflow: 'hidden' }}
+                                              >
+                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                                  <div>
+                                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Share coach intake</div>
+                                                    <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45 }}>
+                                                      Generate a private link for this coach email. Answers saved there will prefill the coach onboarding intake.
+                                                    </div>
+                                                  </div>
+                                                  <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={() => setCoachIntakeShareTeamId(null)}><X /></button>
+                                                </div>
+                                                <div style={{ padding: 20, display: 'grid', gap: 14 }}>
+                                                  <label style={{ display: 'grid', gap: 8, fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                                    Coach email
+                                                    <input
+                                                      type="email"
+                                                      value={coachIntakeShareEmail}
+                                                      onChange={(event) => {
+                                                        setCoachIntakeShareEmail(event.target.value);
+                                                        setCoachIntakeShareUrl('');
+                                                      }}
+                                                      placeholder="coach@example.com"
+                                                      style={{ width: '100%', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '12px 13px', fontSize: 14, letterSpacing: 0, textTransform: 'none' }}
+                                                    />
+                                                  </label>
+                                                  <button
+                                                    type="button"
+                                                    className="pcp-ab pcp-ab-g"
+                                                    disabled={coachIntakeShareGenerating}
+                                                    onClick={() => void handleGenerateCoachIntakeShareLink(team)}
+                                                    style={{ justifyContent: 'center', minHeight: 44 }}
+                                                  >
+                                                    {coachIntakeShareGenerating ? <Loader2 /> : <Share2 />}
+                                                    {coachIntakeShareGenerating ? 'Generating...' : 'Generate link'}
+                                                  </button>
+                                                  {coachIntakeShareUrl ? (
+                                                    <div style={{ display: 'grid', gap: 8 }}>
+                                                      <label style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Generated link</label>
+                                                      <div style={{ display: 'flex', gap: 8 }}>
+                                                        <input
+                                                          value={coachIntakeShareUrl}
+                                                          readOnly
+                                                          style={{ flex: 1, minWidth: 0, background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '12px 13px', fontSize: 13 }}
+                                                          onFocus={(event) => event.currentTarget.select()}
+                                                        />
+                                                        <button
+                                                          type="button"
+                                                          className="pcp-ab pcp-ab-t"
+                                                          onClick={() => copyInviteToClipboard(coachIntakeShareUrl, 'Coach intake link copied.')}
+                                                        >
+                                                          <Clipboard /> Copy
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            </div>,
+                                            document.body
+                                          ) : null}
                                           </>
                                         );
                                       })()}
@@ -4400,7 +4508,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
                                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
                                                     <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.45)' }}>{draft.length} question{draft.length === 1 ? '' : 's'}</div>
-                                                    <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleLoadStarterIntake(team, kind)}>Load starter</button>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                      {kind === 'coach' ? (
+                                                        <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleOpenCoachIntakeShare(team)}>
+                                                          <Share2 /> Share link
+                                                        </button>
+                                                      ) : null}
+                                                      <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleLoadStarterIntake(team, kind)}>Load starter</button>
+                                                    </div>
                                                   </div>
 
                                                   {draft.length === 0 ? (

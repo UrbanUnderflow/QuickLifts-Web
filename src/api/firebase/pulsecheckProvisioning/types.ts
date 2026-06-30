@@ -19,6 +19,7 @@ export type PulseCheckClinicianProfileSyncStatus = 'pending-sync' | 'synced' | '
 export type PulseCheckInviteLinkStatus = 'active' | 'redeemed' | 'revoked';
 export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboarding' | 'team-access';
 export type PulseCheckInviteLinkRedemptionMode = 'single-use' | 'general';
+export type PulseCheckCoachIntakeDraftStatus = 'active' | 'superseded' | 'attached' | 'revoked';
 export type PulseCheckInviteActivityEventType =
   | 'page-view'
   | 'authenticated-view'
@@ -764,6 +765,31 @@ export interface PulseCheckInviteLink {
   // Front-loaded onboarding data an admin sets before the coach activates, so the
   // post-activation flow opens pre-populated. Extensible; starts with the photo.
   prefilledProfileImageUrl?: string;
+}
+
+export interface PulseCheckCoachIntakeDraftLink {
+  token: string;
+  status: PulseCheckCoachIntakeDraftStatus;
+  organizationId: string;
+  teamId: string;
+  targetEmail: string;
+  lookupKey: string;
+  intakeResponses: PulseCheckIntakeResponses;
+  intakeFormVersion?: string;
+  createdByUserId?: string;
+  createdByEmail?: string;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+  attachedToTeamMembershipId?: string;
+  attachedAt?: Timestamp | null;
+}
+
+export interface CreatePulseCheckCoachIntakeDraftLinkInput {
+  organizationId: string;
+  teamId: string;
+  targetEmail: string;
+  createdByUserId?: string;
+  createdByEmail?: string;
 }
 
 export interface PulseCheckInviteActivity {
