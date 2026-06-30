@@ -43,6 +43,35 @@ For this specific event-semantics audit, the runbook assigns Sage to audit `af_s
 
 The reported 2/day trial-start signal should be treated as **unverified** until the audit identifies its exact source artifact, date range, user identifier, timestamp field, and dedupe behavior. The durable context currently available to this file supports a stale saved AppsFlyer/Scoreboard run through 2026-06-25, purchase-log evidence of 2 trial-success rows on 2026-06-29, and a known stale or inferred `/admin/experiments` snapshot. This audit should not present 2/day as settled current truth until later sections connect it to fresh AppsFlyer, Scoreboard, purchase-log, or Firestore evidence. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/runbook.md`; `.agent/macra/decisions.md`
 
+## Decision Log Maintenance Plan
+
+### Research question
+
+How should this audit maintain the Macra decision log so every operational change is tied to evidence, an expected metric movement, and a guardrail, without turning analysis-only findings into unauthorized funnel changes?
+
+### Observed decision-log structure
+
+The Macra decision log uses one row per decision or proposed decision with these fields: Date, Owner, Decision, Evidence, Metric Expected To Move, and Guardrail. The log explicitly says rejected decisions should also be kept with the reason they were rejected. Source: `.agent/macra/decisions.md`
+
+### Current decision-log facts
+
+- Nora's 2026-06-29 posture decision requires agents to observe, recommend, decide, and log before changing the funnel. The metric is qualified onboarding start to trial start, and the guardrail is avoiding random funnel changes while the trial-start signal is early. Source: `.agent/macra/decisions.md`
+- Nora's 2026-06-29 experiment decision says refreshing/backfilling `/admin/experiments` for active `variant_a` is the first operational task because the saved experiment snapshot is stale from 2026-06-16. Source: `.agent/macra/decisions.md`
+- Solara's 2026-06-30 copy recommendation is proposed-only, not live. It is already tied to evidence from `Macrafeedbackreason`, `Macra-purchase-logs`, the saved paywall funnel, and retargeting config; the metric is paywall primary CTA to initiated checkout rate; the guardrail is StoreKit purchase cancels plus `paywall_cancel_feedback` volume. Source: `.agent/macra/decisions.md`
+- Nora's 2026-06-30 no-change decision says not to change onboarding, paywall, pricing, experiment allocation, retargeting behavior, or Apple Search Ads spend during the 72-hour signal validation window. Its evidence is the June 30 operating snapshot, stale AppsFlyer/Scoreboard coverage ending 2026-06-25, purchase logs confirming only 2 trial-success rows on 2026-06-29, and mostly inferred experiment results generated 2026-06-25. Source: `.agent/macra/decisions.md`; `.agent/macra/progress.md`
+
+### Step 1 plan
+
+1. Treat this audit file as analysis until it produces either a concrete recommendation or an explicit no-change recommendation. Source: `.agent/macra/contract.md`; `.agent/macra/runbook.md`
+2. Do **not** add a new `.agent/macra/decisions.md` row during the planning step, because this step does not make or propose an operational change. Source: `.agent/macra/contract.md`; `.agent/macra/decisions.md`
+3. In the execution step, if the audit recommends a guardrail rule, tracking fix, refresh/backfill task, or no-change posture, add or update a decision-log row only when that recommendation becomes an operator decision or proposed decision. Source: `.agent/macra/contract.md`; `.agent/macra/runbook.md`; `.agent/macra/decisions.md`
+4. Any future decision-log row from this audit must cite at least one source-of-truth surface named in the Macra contract or runbook, such as AppsFlyer CSV imports, Macra Scoreboard, `/admin/experiments`, `/admin/purchaseLogs`, `/admin/macraCancelReasons`, retargeting state, Firestore collection/doc IDs, or committed artifact paths. Source: `.agent/macra/contract.md`; `.agent/macra/runbook.md`
+5. Any future decision-log row from this audit must name the expected metric movement and a guardrail. For this audit, the default metric is qualified onboarding start to trial start, and the default guardrails are Apple purchase cancels, checkout failure/cancel rate, under-18 or missing-birthdate blocks, trial activation after start, paid conversion after trial, and cancel reasons. Source: `.agent/macra/contract.md`; `.agent/macra/state.json`
+
+### Planning verdict
+
+No decision-log row should be added by this research-plan step. The next step should complete the event-semantics evidence sections first, then decide whether the correct decision-log outcome is a proposed tracking/guardrail rule, a refresh/backfill task, or an explicit no-change recommendation.
+
 ## af_start_trial
 
 _Pending Step 3 population._
