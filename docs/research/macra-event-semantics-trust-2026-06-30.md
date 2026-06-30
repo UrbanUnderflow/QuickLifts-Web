@@ -72,6 +72,10 @@ The daily KPI snapshot should be treated as **stale operating context**, not a d
 
 The Scoreboard should remain the operating surface for the daily KPI snapshot, but this file should not treat the current Scoreboard coverage as fresh. Any June 30 funnel decision would need a refreshed Scoreboard read with the selected range, loaded timestamp, AppsFlyer aggregate coverage, and raw/person-level row availability recorded. Source: `.agent/macra/runbook.md`; `.agent/macra/progress.md`; `src/pages/admin/emailSequences.tsx`
 
+### Step 2 status
+
+Complete. This section now cites the Macra Scoreboard operating surface, the Scoreboard implementation path, the durable saved range, and the stale-through-2026-06-25 coverage caveat required before the KPI snapshot can be used for funnel decisions.
+
 ## Experiments
 
 ### Observed facts
@@ -85,6 +89,10 @@ The Scoreboard should remain the operating surface for the daily KPI snapshot, b
 ### Freshness verdict
 
 `variant_a` is the active configuration, but experiment results are **not decision-fresh** for a June 30 funnel call. The old 2026-06-16 hard-paywall warning is still part of durable state, and the later 2026-06-25 result snapshot is still stale/inferred relative to the current operating date. Treat experiment evidence as a guardrail gap until `/admin/experiments` has a refreshed active-`variant_a` snapshot with clear assignment quality and current AppsFlyer validation. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`; `src/pages/admin/experiments.tsx`
+
+### Step 2 status
+
+Complete. This section now cites the active `variant_a` durable state, `/admin/experiments` Firestore collections and implementation path, and the stale/inferred experiment-result risk that blocks decision-fresh variant conclusions.
 
 ## Purchase Logs
 
@@ -118,6 +126,10 @@ This section must summarize retargeting state, email sequence state, and reachab
 ### Inference
 
 AppsFlyer remains the right source for source split and campaign-quality interpretation, but the current coverage is stale. The Apple Search Ads signal can be carried forward as a hypothesis, not as a spend-scaling conclusion, until AppsFlyer aggregate, raw-row, and person-level coverage are refreshed and reconciled with Scoreboard and purchase-log evidence. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+
+### Step 2 status
+
+Complete. This section now cites the AppsFlyer import destination collections, the default Macra event allowlist, the durable aggregate coverage window, and the stale source-split caveat that prevents spend-scaling conclusions.
 
 ## variant_a Experiment Freshness
 
