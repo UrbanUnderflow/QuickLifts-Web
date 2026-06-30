@@ -41,6 +41,18 @@ This daily Macra KPI snapshot must read the exact source artifacts below before 
 - **Retargeting state** - Retargeting configuration, eligibility, suppression, send, and recovery-lane state.
 - **AppsFlyer coverage** - AppsFlyer aggregate and import coverage dates used to decide whether Scoreboard and source-quality reads are fresh or stale.
 
+## Source Quality Coverage
+
+This source-quality pass must read the exact artifacts below before separating Apple Search Ads from organic or recommending `increase`, `hold`, or `refine` for paid acquisition. This section records coverage only; it does not authorize a spend, funnel, copy, pricing, offer, retargeting, or experiment change.
+
+- **AppsFlyer imports** - Firestore `appsflyer-scoreboards/macra`, Firestore `appsflyer-aggregate-periods`, imported AppsFlyer CSV artifacts, and saved source-level rows used to split Apple Search Ads from organic.
+- **Macra Scoreboard** - The Scoreboard surface under the Email Sequence admin view and saved Scoreboard aggregates used for onboarding start, paywall reach, checkout, trial, purchase, and subscribe counts.
+- **`/admin/experiments`** - Required experiment surface for active `variant_a` freshness. The known stale `2026-06-16` retired hard-paywall snapshot must remain excluded from paid acquisition decisions unless refreshed or backfilled.
+- **`/admin/purchaseLogs`** - Purchase-log surface and Firestore `Macra-purchase-logs` evidence for checkout initiation, purchase cancel, failure, trial success, purchase, and subscribe status.
+- **`/admin/macraCancelReasons`** - Cancel-reason surface and Firestore `Macrafeedbackreason` evidence for price, readiness, proof, breakage, and Apple sheet confusion signals.
+- **Paywall dismissal signals** - Behavioral source-quality context from paywall reach, paywall CTA, checkout initiation, purchase cancel, purchase failure, and trial-start drop-off.
+- **Retargeting state** - Retargeting eligibility, suppression, send, open, click, checkout-start, trial-start, and paid-conversion state before treating follow-up behavior as source quality.
+
 ## Daily KPI Snapshot
 
 This snapshot records the latest saved Macra funnel read available for this deliverable. The funnel counts are useful as a baseline, but they are stale for June 30 decisioning unless newer AppsFlyer and Scoreboard coverage is refreshed.
