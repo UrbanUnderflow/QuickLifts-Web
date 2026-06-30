@@ -29,9 +29,9 @@ Audit whether the current trial-start signal is trustworthy enough to inform one
 
 The next execution pass should add the trust guardrail read and, only after the evidence is assembled, name exactly one proposed copy, proof, or offer change with one metric and one guardrail. This research-and-plan pass stops before the recommendation section.
 
-## Variant Freshness
+## Variant A Freshness
 
-`/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The active Macra experiment is `variant_a`, and `.agent/macra/state.json` names the current configuration as `monthly + annual, both with trial`.
+`/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The active Macra experiment is `variant_a`, and `.agent/macra/state.json` names the current configuration as `monthly + annual, both with trial`, meaning monthly plus annual with trial.
 
 The freshness caveat is still live: `.agent/macra/state.json` records that the saved `/admin/experiments` results snapshot is stale from `2026-06-16` and still reflects the retired hard-paywall configuration. That stale hard-paywall read must not be treated as evidence for the current monthly-plus-annual-with-trial paywall state.
 
