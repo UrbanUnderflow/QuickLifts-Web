@@ -29,6 +29,14 @@ Audit whether the current trial-start signal is trustworthy enough to inform one
 
 The next execution pass should add the trust guardrail read and, only after the evidence is assembled, name exactly one proposed copy, proof, or offer change with one metric and one guardrail. This research-and-plan pass stops before the recommendation section.
 
+## Variant Freshness
+
+`/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The active Macra experiment is `variant_a`, and `.agent/macra/state.json` names the current configuration as `monthly + annual, both with trial`.
+
+The freshness caveat is still live: `.agent/macra/state.json` records that the saved `/admin/experiments` results snapshot is stale from `2026-06-16` and still reflects the retired hard-paywall configuration. That stale hard-paywall read must not be treated as evidence for the current monthly-plus-annual-with-trial paywall state.
+
+For this deliverable, active `variant_a` can be used as the current configuration context, but not as a refreshed outcome read unless `/admin/experiments` has been refreshed or backfilled against the current Scoreboard, purchase logs, cancel reasons, retargeting state, and AppsFlyer imports.
+
 ## Source Coverage
 
 This deliverable audits Macra lifecycle conversion signals before scaling the growth signal. This step only records source coverage. It does not approve a live copy, proof, offer, pricing, funnel, retargeting, experiment allocation, or acquisition change.
