@@ -354,6 +354,12 @@ This section must include mismatches that could make the reported 2/day trial-st
 - under-18 or missing-birthdate blocks
 - stale `/admin/experiments` results
 
+## Operational Change Rules
+
+_Pending Step 5 population._
+
+This section must define the required fields for every `.agent/macra/decisions.md` row: date, owner, decision, evidence artifact, expected metric, and guardrail. It must also state that live funnel, budget, pricing, experiment allocation, eligibility, and retargeting changes require operator approval.
+
 ## Trust Guardrails
 
 _Pending Step 6 population._
@@ -376,8 +382,12 @@ _Pending Step 6 population._
 
 This section must give one pass/fail recommendation for whether the daily KPI snapshot is safe to use for Macra funnel decisions.
 
-## Decision Log Updates
+## Decision Log Update
 
 _Pending Step 6 population._
 
 This section must record the final decision-log outcome for this audit: either a proposed/no-change decision row added to `.agent/macra/decisions.md`, or the cited reason no decision-log row was required.
+
+## Decision Log Updates
+
+_Compatibility alias for prior audit scaffolds. See `Decision Log Update`._
