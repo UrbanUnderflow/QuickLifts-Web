@@ -48,7 +48,7 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   const currentUser = useUser();
   const [showMarketing, setShowMarketing] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+  const [, setIsSignInModalOpen] = useState(false);
   const [isMacraHost, setIsMacraHost] = useState(() => (
     typeof window !== 'undefined' && MACRA_HOSTS.has(window.location.hostname.toLowerCase())
   ));
@@ -162,10 +162,6 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     return (
       <ProductPortfolioHome
         metaData={metaData}
-        onUseWebApp={handleUseWebApp}
-        isSignInModalOpen={isSignInModalOpen}
-        setIsSignInModalOpen={setIsSignInModalOpen}
-        isAuthenticated={Boolean(currentUser)}
       />
     );
   }

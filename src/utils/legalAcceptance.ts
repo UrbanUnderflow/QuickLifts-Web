@@ -49,14 +49,15 @@ const canUseBrowserStorage = () =>
 
 export const buildCurrentLegalAcceptance = (
   acceptanceMethod: string,
-  acceptedAt: Date = new Date()
+  acceptedAt: Date = new Date(),
+  paths?: { termsPath?: string; privacyPath?: string }
 ): LegalAcceptanceRecord => ({
   termsVersion: CURRENT_TERMS_VERSION,
   privacyVersion: CURRENT_PRIVACY_VERSION,
   acceptedAt,
   acceptanceMethod,
-  termsPath: TERMS_PATH,
-  privacyPath: PRIVACY_POLICY_PATH,
+  termsPath: paths?.termsPath || TERMS_PATH,
+  privacyPath: paths?.privacyPath || PRIVACY_POLICY_PATH,
 });
 
 export const readCachedLegalAcceptance = (

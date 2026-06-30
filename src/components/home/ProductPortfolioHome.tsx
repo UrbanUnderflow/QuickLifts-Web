@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Activity,
-  Apple,
   ArrowUpRight,
   Brain,
   Building2,
@@ -11,20 +9,13 @@ import {
   ShieldCheck,
   Users,
   Utensils,
+  X,
 } from 'lucide-react';
 import PageHead from '../PageHead';
-import SignInModal from '../SignInModal';
-import { appLinks } from '../../utils/platformDetection';
 
 type ProductPortfolioHomeProps = {
   metaData: React.ComponentProps<typeof PageHead>['metaData'];
   pageOgUrl?: string;
-  onUseWebApp: () => void;
-  isSignInModalOpen: boolean;
-  setIsSignInModalOpen: (open: boolean) => void;
-  isAuthenticated: boolean;
-  showAuthActions?: boolean;
-  primaryActionLabel?: string;
   finalCtaHeading?: string;
   finalCtaBody?: string;
 };
@@ -57,8 +48,7 @@ const HOME_META_LAST_UPDATED = '2026-06-25T00:00:00.000Z';
 const HERO_VIDEO_SRC = '/pil-hero.mp4';
 const HERO_VIDEO_POSTER = '/pil-og-source.jpg';
 const CONTACT_EMAIL = 'tre@fitwithpulse.ai';
-const PULSECHECK_APP_STORE_URL = 'https://apps.apple.com/us/app/pulsecheck-mindset-coaching/id6747253393';
-const MACRA_APP_STORE_URL = 'https://apps.apple.com/us/app/macra-ai-calorie/id6463771067';
+const DEMO_PRODUCT_OPTIONS = ['PulseCheck', 'Fit With Pulse', 'Fit Club', 'Macra', 'Not sure yet'];
 
 const homeMeta = (metaData: ProductPortfolioHomeProps['metaData'], pageOgUrl: string) => ({
   ...(metaData || {}),
@@ -91,9 +81,9 @@ const productSections: ProductSection[] = [
   {
     id: 'fit-with-pulse',
     name: 'Fit With Pulse',
-    eyebrow: 'Training intelligence',
+    eyebrow: 'Workout app',
     body:
-      'The consumer training app for adaptive workouts, creator-led movement, recovery-aware programming, and the fitness graph that keeps people showing up.',
+      'Fit With Pulse helps people find workouts, follow creator-led training, and choose the right workout for how their body feels that day.',
     accent: '#E0FE10',
     bg: 'bg-[#E0FE10]',
     Icon: Dumbbell,
@@ -103,18 +93,17 @@ const productSections: ProductSection[] = [
       { src: '/fwp-media/04-immersive-player.png', alt: 'Fit With Pulse immersive workout player' },
     ],
     links: [
-      { name: 'App Store', href: appLinks.appStoreUrl, label: 'Download Fit With Pulse on iOS' },
-      { name: 'Google Play', href: appLinks.playStoreUrl, label: 'Download Fit With Pulse on Android' },
-      { name: 'Media', href: 'https://fitwithpulse.ai/admin/fwpMedia', label: 'Open Fit With Pulse media' },
+      { name: 'Visit Fit With Pulse', href: 'https://fitwithpulse.ai/creators', label: 'Visit the Fit With Pulse website' },
+      { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20With%20Pulse%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit With Pulse' },
     ],
-    proof: ['AI-built workouts', 'Recovery heat map', 'Mover-powered training'],
+    proof: ['Personal workouts', 'Recovery guidance', 'Creator-led training'],
   },
   {
     id: 'fit-club',
     name: 'Fit Club',
-    eyebrow: 'Community intelligence',
+    eyebrow: 'Club app',
     body:
-      'The operating layer for clubs, hosts, events, challenges, and recurring community rituals. Fit Club turns a fitness audience into a place people return to.',
+      'Fit Club helps coaches, creators, and community leaders run groups, events, challenges, and member updates in one place.',
     accent: '#5EEAD4',
     bg: 'bg-[#5EEAD4]',
     Icon: Users,
@@ -124,17 +113,17 @@ const productSections: ProductSection[] = [
       { src: '/fitclub-media/10-event-detail-rsvp.png', alt: 'Fit Club event RSVP screen' },
     ],
     links: [
-      { name: 'Open Fit Club', href: 'https://fitwithpulse.ai/FWB', label: 'Open Fit Club' },
-      { name: 'Media', href: 'https://fitwithpulse.ai/admin/fitclubMedia', label: 'Open Fit Club media' },
+      { name: 'Visit Fit Club', href: 'https://fitwithpulse.ai/CreatorClub', label: 'Visit the Fit Club website' },
+      { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20Club%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit Club' },
     ],
-    proof: ['Club home', 'Events and RSVP', 'Challenge cycles'],
+    proof: ['Club pages', 'Events and RSVPs', 'Challenges'],
   },
   {
     id: 'macra',
     name: 'Macra',
-    eyebrow: 'Nutrition intelligence',
+    eyebrow: 'Nutrition app',
     body:
-      'The nutrition product for scanning meals, labels, and food context, then turning that evidence into macro targets, daily planning, and Nora-powered meal support.',
+      'Macra helps people understand what they eat. Scan a meal or food label, see the macros, and get simple meal ideas from Nora.',
     accent: '#6A9AFA',
     bg: 'bg-[#6A9AFA]',
     Icon: Utensils,
@@ -144,25 +133,17 @@ const productSections: ProductSection[] = [
       { src: '/system-overview/macra/app-store-screenshots/05-ask-nora.png', alt: 'Macra Ask Nora screen' },
     ],
     links: [
-      { name: 'App Store', href: MACRA_APP_STORE_URL, label: 'Download Macra on iOS' },
-      { name: 'Website', href: 'https://eatwithmacra.ai', label: 'Open Macra website' },
-      { name: 'Media', href: 'https://fitwithpulse.ai/admin/macraMedia', label: 'Open Macra media' },
+      { name: 'Visit Macra', href: 'https://eatwithmacra.ai', label: 'Visit the Macra website' },
+      { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Macra%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Macra' },
     ],
-    proof: ['Food journal', 'AI meal scan', 'Ask Nora nutrition'],
+    proof: ['Food log', 'Meal scan', 'Ask Nora'],
   },
 ];
 
 const featuredStats = [
-  { label: 'Daily check-in', value: '2 min' },
+  { label: 'Daily check-in', value: '5 min' },
   { label: 'Built for', value: 'Teams' },
-  { label: 'Signal layer', value: 'Readiness' },
-];
-
-const productTiles = [
-  { name: 'PulseCheck', icon: '/pulseCheckIcon.png', href: '#pulsecheck', status: 'Featured product' },
-  { name: 'Fit With Pulse', icon: '/fwp-app-icon.jpg', href: '#fit-with-pulse', status: 'Training app' },
-  { name: 'Fit Club', icon: '/fitclub-favicon.png', href: '#fit-club', status: 'Club layer' },
-  { name: 'Macra', icon: '/macra-icon.png', href: '#macra', status: 'Nutrition app' },
+  { label: 'Tracks', value: 'Readiness' },
 ];
 
 const ScreenshotRail: React.FC<{ screens: Screen[]; label: string }> = ({ screens, label }) => (
@@ -193,22 +174,33 @@ const ProductPill: React.FC<{ children: React.ReactNode; icon?: React.ReactNode 
   </span>
 );
 
+type DemoRequestForm = {
+  name: string;
+  email: string;
+  role: string;
+  product: string;
+};
+
+const emptyDemoRequestForm: DemoRequestForm = {
+  name: '',
+  email: '',
+  role: '',
+  product: '',
+};
+
 const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
   metaData,
   pageOgUrl = 'https://fitwithpulse.ai',
-  onUseWebApp,
-  isSignInModalOpen,
-  setIsSignInModalOpen,
-  isAuthenticated,
-  showAuthActions = true,
-  primaryActionLabel,
-  finalCtaHeading = 'Use fitwithpulse.ai as the front door for the whole portfolio.',
+  finalCtaHeading = 'Tell us what you are building. We will point you to the right product.',
   finalCtaBody =
-    'The email domain can point people to the company first, then route them to the product that matches their job: athlete readiness, training, club building, or nutrition.',
+    'Use the demo form to tell us your role and which product you want to see. We will follow up with the clearest next step.',
 }) => {
   const heroVideoRef = useRef<HTMLVideoElement | null>(null);
   const [heroVideoIsPlaying, setHeroVideoIsPlaying] = useState(false);
-  const resolvedPrimaryActionLabel = primaryActionLabel || (isAuthenticated ? 'Use Web App' : 'Get Started');
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+  const [demoForm, setDemoForm] = useState<DemoRequestForm>(emptyDemoRequestForm);
+  const [demoStatus, setDemoStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [demoError, setDemoError] = useState('');
 
   useEffect(() => {
     const video = heroVideoRef.current;
@@ -249,6 +241,67 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isDemoModalOpen) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && demoStatus !== 'sending') {
+        setIsDemoModalOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [demoStatus, isDemoModalOpen]);
+
+  const openDemoModal = (product = '') => {
+    setDemoForm((current) => ({ ...current, product }));
+    setDemoStatus('idle');
+    setDemoError('');
+    setIsDemoModalOpen(true);
+  };
+
+  const closeDemoModal = () => {
+    if (demoStatus === 'sending') return;
+    setIsDemoModalOpen(false);
+  };
+
+  const handleDemoFieldChange = (field: keyof DemoRequestForm, value: string) => {
+    setDemoForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleDemoSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!demoForm.name.trim() || !demoForm.email.trim() || !demoForm.role.trim() || !demoForm.product.trim()) {
+      setDemoStatus('error');
+      setDemoError('Please fill out your name, email, role, and product.');
+      return;
+    }
+
+    setDemoStatus('sending');
+    setDemoError('');
+
+    try {
+      const response = await fetch('/api/brevo/demo-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(demoForm),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || 'Could not send demo request.');
+      }
+
+      setDemoStatus('success');
+      setDemoForm(emptyDemoRequestForm);
+    } catch (error) {
+      setDemoStatus('error');
+      setDemoError(error instanceof Error ? error.message : 'Could not send demo request.');
+    }
+  };
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-black text-white selection:bg-white/20">
       <PageHead
@@ -258,7 +311,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
         themeColor="#050505"
       />
 
-      <header className={`fixed left-0 right-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl ${isSignInModalOpen ? 'hidden' : ''}`}>
+      <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <a href="#top" className="flex items-center gap-3" aria-label="Pulse Intelligence Labs home">
             <span className="h-2.5 w-2.5 rounded-full bg-white" />
@@ -272,30 +325,19 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
             <a href="#macra" className="transition-colors hover:text-white">Macra</a>
           </nav>
 
-          <div className="flex items-center gap-2">
-            {showAuthActions && !isAuthenticated && (
-              <button
-                type="button"
-                onClick={() => setIsSignInModalOpen(true)}
-                className="hidden rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10 sm:inline-flex"
-              >
-                Log in
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onUseWebApp}
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
-            >
-              {resolvedPrimaryActionLabel}
-              <ArrowUpRight className="h-4 w-4" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => openDemoModal()}
+            className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+          >
+            Request a Demo
+            <ArrowUpRight className="h-4 w-4" />
+          </button>
         </div>
       </header>
 
       <main id="top">
-        <section className="relative flex min-h-[86vh] overflow-hidden pt-16">
+        <section className="relative flex min-h-[82vh] overflow-hidden pt-16">
           <video
             ref={heroVideoRef}
             className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ${heroVideoIsPlaying ? 'opacity-100' : 'opacity-0'}`}
@@ -316,49 +358,24 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/35 to-black" />
           <div className="absolute inset-0 bg-gradient-to-tr from-[#E0FE10]/10 via-transparent to-[#8B5CF6]/10 mix-blend-overlay" />
 
-          <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col justify-end px-4 pb-10 pt-16 sm:px-6">
+          <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col justify-center px-4 py-20 sm:px-6 lg:justify-end lg:pb-24">
             <div className="max-w-4xl">
-              <ProductPill icon={<span className="h-2 w-2 rounded-full bg-[#E0FE10]" />}>
-                The company behind the Pulse product suite
-              </ProductPill>
               <h1 className="mt-6 max-w-4xl text-5xl font-semibold leading-none text-white">
-                Human performance products, all under one roof.
+                The Human Performance Company
               </h1>
               <p className="mt-6 max-w-2xl text-xl leading-relaxed text-zinc-200">
-                PulseCheck, Fit With Pulse, Fit Club, and Macra each solve a different part of training, mindset, community, and nutrition.
+                Using AI technology to improve human performance.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <a
-                  href="#pulsecheck"
-                  className="inline-flex items-center gap-2 rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
-                >
-                  See PulseCheck
-                  <Brain className="h-4 w-4" />
-                </a>
-                <a
-                  href={`mailto:${CONTACT_EMAIL}`}
+                <button
+                  type="button"
+                  onClick={() => openDemoModal()}
                   className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/15"
                 >
-                  Contact
+                  Request a Demo
                   <ArrowUpRight className="h-4 w-4" />
-                </a>
+                </button>
               </div>
-            </div>
-
-            <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-4">
-              {productTiles.map((tile) => (
-                <a
-                  key={tile.name}
-                  href={tile.href}
-                  className="group flex items-center gap-3 rounded-lg border border-white/10 bg-black/45 p-4 backdrop-blur-md transition-colors hover:bg-white/10"
-                >
-                  <img src={tile.icon} alt="" className="h-11 w-11 rounded-lg object-cover ring-1 ring-white/10" draggable={false} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-white">{tile.name}</span>
-                    <span className="block truncate text-xs text-zinc-400">{tile.status}</span>
-                  </span>
-                </a>
-              ))}
             </div>
           </div>
         </section>
@@ -368,10 +385,13 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
             <div>
               <ProductPill icon={<Brain className="h-4 w-4 text-[#A05EF8]" />}>Featured product</ProductPill>
               <h2 className="mt-6 text-4xl font-semibold leading-tight text-white">
-                PulseCheck is the mental performance OS for athletes and the people responsible for them.
+                <span className="bg-gradient-to-r from-[#C084FC] via-[#A05EF8] to-[#6A9AFA] bg-clip-text text-transparent">
+                  PulseCheck
+                </span>{' '}
+                is the mental performance infrastructure for athletes and the people responsible for them.
               </h2>
               <p className="mt-5 text-lg leading-relaxed text-zinc-300">
-                A two-minute daily check-in becomes readiness intelligence, Nora support, coach visibility, and safety-aware escalation when the signal requires care.
+                Athletes answer a quick daily check-in. Nora assigns mental exercises in the app to help athletes sharpen their mental skills and calm anxiety before competition. Coaches can see who may need attention, and serious concerns are flagged so the right human can step in.
               </p>
 
               <div className="mt-8 grid grid-cols-3 gap-3">
@@ -386,15 +406,15 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
               <div className="mt-8 grid gap-3">
                 <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-4">
                   <MessageCircle className="mt-1 h-5 w-5 text-[#A05EF8]" />
-                  <p className="text-sm leading-relaxed text-zinc-300">Nora turns daily state signals into private athlete support and structured follow-up.</p>
+                  <p className="text-sm leading-relaxed text-zinc-300">Nora gives athletes a private place to talk through how they feel and what they need that day.</p>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-4">
                   <Building2 className="mt-1 h-5 w-5 text-[#6A9AFA]" />
-                  <p className="text-sm leading-relaxed text-zinc-300">Coaches get roster-level visibility without forcing athletes into another reporting chore.</p>
+                  <p className="text-sm leading-relaxed text-zinc-300">Coaches can quickly see who is doing well and who may need help, without making athletes fill out long reports.</p>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-4">
                   <ShieldCheck className="mt-1 h-5 w-5 text-[#5EEAD4]" />
-                  <p className="text-sm leading-relaxed text-zinc-300">Clinical safety rails separate support signals from emergency response and keep care handoffs reviewable.</p>
+                  <p className="text-sm leading-relaxed text-zinc-300">When something looks serious, PulseCheck helps the team know who should step in and what happened.</p>
                 </div>
               </div>
 
@@ -403,17 +423,15 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
                   href="https://pulsecheckmind.ai"
                   className="inline-flex items-center gap-2 rounded-lg bg-[#A05EF8] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#8B5CF6]"
                 >
-                  Open PulseCheck
+                  Visit PulseCheck
                   <ArrowUpRight className="h-4 w-4" />
                 </a>
                 <a
-                  href={PULSECHECK_APP_STORE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`mailto:${CONTACT_EMAIL}?subject=PulseCheck%20Inquiry`}
                   className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
                 >
-                  App Store
-                  <Apple className="h-4 w-4" />
+                  Contact
+                  <ArrowUpRight className="h-4 w-4" />
                 </a>
               </div>
             </div>
@@ -426,9 +444,9 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
 
         <section className="border-t border-white/10 bg-black">
           <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-            <p className="text-sm font-semibold text-zinc-500">The rest of the company portfolio</p>
+            <p className="text-sm font-semibold text-zinc-500">More Pulse products</p>
             <h2 className="mt-3 max-w-3xl text-4xl font-semibold leading-tight text-white">
-              Training, community, and nutrition each get their own surface.
+              One app helps with workouts, one helps with clubs, and one helps with food.
             </h2>
           </div>
         </section>
@@ -462,7 +480,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
                     const content = (
                       <>
                         {link.name}
-                        {link.name === 'App Store' ? <Apple className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                        <ArrowUpRight className="h-4 w-4" />
                       </>
                     );
                     const className = isPrimary
@@ -505,7 +523,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
         <section className="border-t border-white/10 bg-white text-black">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 sm:px-6 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <p className="text-sm font-semibold text-zinc-500">One company, clearer doors</p>
+              <p className="text-sm font-semibold text-zinc-500">Need help choosing?</p>
               <h2 className="mt-3 text-4xl font-semibold leading-tight">
                 {finalCtaHeading}
               </h2>
@@ -513,23 +531,14 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
                 {finalCtaBody}
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row md:flex-col">
-              <button
-                type="button"
-                onClick={onUseWebApp}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
-              >
-                {resolvedPrimaryActionLabel}
-                <Activity className="h-4 w-4" />
-              </button>
-              <a
-                href={`mailto:${CONTACT_EMAIL}`}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-300 px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-100"
-              >
-                Contact
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
-            </div>
+            <button
+              type="button"
+              onClick={() => openDemoModal()}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-black px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-zinc-800"
+            >
+              Request a Demo
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
           </div>
         </section>
       </main>
@@ -547,19 +556,120 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
         </div>
       </footer>
 
-      {showAuthActions && (
-        <SignInModal
-          isVisible={isSignInModalOpen}
-          onClose={() => setIsSignInModalOpen(false)}
-          onSignInSuccess={() => {
-            setIsSignInModalOpen(false);
-            onUseWebApp();
-          }}
-          onSignUpSuccess={() => {
-            setIsSignInModalOpen(false);
-            onUseWebApp();
-          }}
-        />
+      {isDemoModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="demo-request-title"
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-lg border border-white/10 bg-[#09090d] shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C084FC]">Pulse Intelligence Labs</p>
+                <h2 id="demo-request-title" className="mt-2 text-2xl font-semibold text-white">Request a demo</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Tell us who you are and which product you want to see. We will follow up from hello@fitwithpulse.ai.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDemoModal}
+                className="rounded-lg border border-white/10 p-2 text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Close demo request form"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {demoStatus === 'success' ? (
+              <div className="px-6 py-8">
+                <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-5">
+                  <h3 className="text-lg font-semibold text-white">Demo request sent</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-emerald-100/80">
+                    Thanks. The request was sent to hello@fitwithpulse.ai with the subject line Demo Request.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDemoModal}
+                  className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-white px-5 py-3 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleDemoSubmit} className="grid gap-4 px-6 py-6">
+                <label className="grid gap-2 text-sm font-medium text-zinc-200">
+                  Name
+                  <input
+                    value={demoForm.name}
+                    onChange={(event) => handleDemoFieldChange('name', event.target.value)}
+                    autoComplete="name"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#A05EF8]"
+                    placeholder="Your name"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-2 text-sm font-medium text-zinc-200">
+                  Email
+                  <input
+                    type="email"
+                    value={demoForm.email}
+                    onChange={(event) => handleDemoFieldChange('email', event.target.value)}
+                    autoComplete="email"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#A05EF8]"
+                    placeholder="you@example.com"
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-2 text-sm font-medium text-zinc-200">
+                  Role
+                  <input
+                    value={demoForm.role}
+                    onChange={(event) => handleDemoFieldChange('role', event.target.value)}
+                    autoComplete="organization-title"
+                    className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3 text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-[#A05EF8]"
+                    placeholder="Coach, founder, athletic director..."
+                    required
+                  />
+                </label>
+
+                <label className="grid gap-2 text-sm font-medium text-zinc-200">
+                  Product
+                  <select
+                    value={demoForm.product}
+                    onChange={(event) => handleDemoFieldChange('product', event.target.value)}
+                    className="rounded-lg border border-white/10 bg-[#111118] px-4 py-3 text-white outline-none transition-colors focus:border-[#A05EF8]"
+                    required
+                  >
+                    <option value="">Choose a product</option>
+                    {DEMO_PRODUCT_OPTIONS.map((product) => (
+                      <option key={product} value={product}>{product}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {demoStatus === 'error' && (
+                  <div className="rounded-lg border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm text-red-100">
+                    {demoError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={demoStatus === 'sending'}
+                  className="mt-1 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-[#C084FC] via-[#A05EF8] to-[#6A9AFA] px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {demoStatus === 'sending' ? 'Sending...' : 'Send demo request'}
+                  <ArrowUpRight className="h-4 w-4" />
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

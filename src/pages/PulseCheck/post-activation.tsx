@@ -170,6 +170,7 @@ export default function PulseCheckPostActivationPage() {
   const [initializing, setInitializing] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [creatingAdultInvite, setCreatingAdultInvite] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [step, setStep] = useState(1);
 
@@ -530,6 +531,40 @@ export default function PulseCheckPostActivationPage() {
     }
   };
 
+  const handleOpenCoachDashboard = async () => {
+    setOpeningDashboard(true);
+
+    const destination = isDemo
+      ? '/coach/dashboard/demo'
+      : {
+          pathname: '/coach/dashboard',
+          query: {
+            training: '1',
+            tour: '1',
+            source: 'post-activation',
+            ...(organizationId ? { organizationId } : {}),
+            ...(teamId ? { teamId } : {}),
+          },
+        };
+
+    try {
+      await router.push(destination);
+    } catch (error) {
+      console.error('[PulseCheck post-activation] Failed to open coach dashboard:', error);
+      dispatch(showToast({ message: 'Opening the coach dashboard...', type: 'success' }));
+      if (typeof window !== 'undefined') {
+        const fallbackUrl = isDemo
+          ? '/coach/dashboard/demo'
+          : `/coach/dashboard?training=1&tour=1&source=post-activation${
+              organizationId ? `&organizationId=${encodeURIComponent(organizationId)}` : ''
+            }${teamId ? `&teamId=${encodeURIComponent(teamId)}` : ''}`;
+        window.location.assign(fallbackUrl);
+      } else {
+        setOpeningDashboard(false);
+      }
+    }
+  };
+
   if (!isDemo && (currentUserLoading || initializing)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-white" style={{ background: PC.pageBg }}>
@@ -878,7 +913,6 @@ export default function PulseCheckPostActivationPage() {
                     <div className="flex items-center gap-4">
                       <label className="relative flex h-16 w-16 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-black/20 transition hover:border-amber-300">
                         {staffPhotoPreview ? (
-                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={staffPhotoPreview} alt="" className="h-full w-full object-cover" />
                         ) : (
                           <UserRound className="h-6 w-6 text-zinc-600" />
@@ -1098,14 +1132,25 @@ export default function PulseCheckPostActivationPage() {
                   </div>
 
                   <div className="mt-7 flex items-center justify-center">
-                    <Link
-                      href={isDemo ? '/coach/dashboard/demo' : '/coach/dashboard'}
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenCoachDashboard()}
+                      disabled={openingDashboard}
                       className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                       style={{ background: PC.purple }}
                     >
-                      Confirm &amp; open the coach dashboard
-                      <ChevronRight className="h-4 w-4" />
-                    </Link>
+                      {openingDashboard ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Opening dashboard...
+                        </>
+                      ) : (
+                        <>
+                          Confirm &amp; open the coach dashboard
+                          <ChevronRight className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               )}

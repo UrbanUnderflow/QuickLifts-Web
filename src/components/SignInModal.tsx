@@ -113,7 +113,6 @@ const SignedInBadge: React.FC<{ user: { username?: string; profileImage?: { prof
       {isSignedIn ? (
         <>
           {imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={imageUrl}
               alt={username || 'profile'}
@@ -181,6 +180,45 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
   const isOnAdminPage = router.pathname.startsWith('/admin/') || router.asPath.startsWith('/admin/');
   const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage;
+  const isPulseCheckLegalContext = isOnCoachPage || router.asPath.startsWith('/PulseCheck/post-activation');
+  const legalTheme = isPulseCheckLegalContext
+    ? {
+        productName: 'PulseCheck Coach Platform',
+        companyName: 'PulseCheck',
+        termsPath: '/PulseCheck/terms',
+        privacyPath: '/PulseCheck/privacy',
+        accent: '#7C3AED',
+        accentHover: '#8B5CF6',
+        accentSoft: 'rgba(124, 58, 237, 0.16)',
+        focusRing: 'rgba(167, 139, 250, 0.45)',
+        title: 'Review PulseCheck coach terms',
+        freshCopy:
+          'Please review the PulseCheck Coach Terms and PulseCheck Coach Privacy Notice before opening the dashboard.',
+        updateCopy:
+          "We've updated the PulseCheck Coach Terms and Privacy Notice. Please review the current version before continuing.",
+        helperFresh:
+          'This acceptance covers your coach dashboard, staff invite tools, role-based team access, privacy-safe athlete visibility, and PulseCheck platform workflows.',
+        helperUpdate: 'You only need to reaccept when the current PulseCheck coach legal version changes.',
+        primaryLabel: 'Agree & open dashboard',
+      }
+    : {
+        productName: 'Pulse',
+        companyName: 'Pulse',
+        termsPath: TERMS_PATH,
+        privacyPath: PRIVACY_POLICY_PATH,
+        accent: '#E0FE10',
+        accentHover: '#c8e60e',
+        accentSoft: 'rgba(224, 254, 16, 0.12)',
+        focusRing: 'rgba(224, 254, 16, 0.45)',
+        title: 'Review our legal terms',
+        freshCopy: 'Please review our Terms of Service and Privacy Policy before continuing.',
+        updateCopy:
+          "We've updated our Terms of Service and Privacy Policy. Please review the new version before continuing.",
+        helperFresh:
+          'You only need to do this once when creating your account, unless the legal version changes later.',
+        helperUpdate: 'You only need to reaccept when the current legal version changes.',
+        primaryLabel: 'Agree & Continue',
+      };
 
   // Detect if the user is on an iPhone and component mount
   useEffect(() => {
@@ -233,7 +271,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
     acceptanceMethod: string
   ) => {
     const acceptedAt = new Date();
-    const currentLegalAcceptance = buildCurrentLegalAcceptance(acceptanceMethod, acceptedAt);
+    const currentLegalAcceptance = buildCurrentLegalAcceptance(acceptanceMethod, acceptedAt, {
+      termsPath: legalTheme.termsPath,
+      privacyPath: legalTheme.privacyPath,
+    });
     const legalAcceptance = {
       ...currentLegalAcceptance,
       acceptedAt: dateToUnixTimestamp(acceptedAt),
@@ -488,7 +529,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
               email: user.email || "",
               displayName: user.displayName || "",
               legalAcceptance: isSignUp
-                ? buildCurrentLegalAcceptance('web-modal-social-signup-apple')
+                ? buildCurrentLegalAcceptance('web-modal-social-signup-apple', new Date(), {
+                    termsPath: legalTheme.termsPath,
+                    privacyPath: legalTheme.privacyPath,
+                  })
                 : null,
               ...(partnerSource ? { partnerSource } : {}),
             });
@@ -575,7 +619,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
             registrationComplete: false,
             subscriptionType: SubscriptionType.unsubscribed,
             legalAcceptance: isSignUp
-              ? buildCurrentLegalAcceptance('web-modal-social-signup-google')
+              ? buildCurrentLegalAcceptance('web-modal-social-signup-google', new Date(), {
+                  termsPath: legalTheme.termsPath,
+                  privacyPath: legalTheme.privacyPath,
+                })
               : null,
             ...(partnerSource ? { partnerSource } : {}),
           });
@@ -1180,7 +1227,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 email: user.email,
                 subscriptionType: SubscriptionType.unsubscribed, // Default for new user
                 registrationComplete: false, // Explicitly false initially
-                legalAcceptance: buildCurrentLegalAcceptance('web-modal-signup-email'),
+                legalAcceptance: buildCurrentLegalAcceptance('web-modal-signup-email', new Date(), {
+                  termsPath: legalTheme.termsPath,
+                  privacyPath: legalTheme.privacyPath,
+                }),
                 createdAt: new Date(), // Add createdAt
                 updatedAt: new Date(),  // Add updatedAt
                 ...(partnerSource ? { partnerSource } : {}),
@@ -2227,24 +2277,27 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setShowError(false);
             }
           }}
-          className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900 text-[#E0FE10] focus:ring-[#E0FE10]"
+          className="mt-1 h-4 w-4 rounded border-zinc-600 bg-zinc-900"
+          style={{ accentColor: legalTheme.accent }}
         />
         <span className="text-sm leading-6 text-zinc-300">
-          I agree to Pulse&apos;s{' '}
+          I agree to {legalTheme.companyName}&apos;s{' '}
           <a
-            href={TERMS_PATH}
+            href={legalTheme.termsPath}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#E0FE10] hover:text-[#c8e60e] underline underline-offset-2"
+            className="underline underline-offset-2"
+            style={{ color: legalTheme.accent }}
           >
             Terms of Service
           </a>{' '}
           and{' '}
           <a
-            href={PRIVACY_POLICY_PATH}
+            href={legalTheme.privacyPath}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#E0FE10] hover:text-[#c8e60e] underline underline-offset-2"
+            className="underline underline-offset-2"
+            style={{ color: legalTheme.accent }}
           >
             Privacy Policy
           </a>
@@ -2426,43 +2479,45 @@ const SignInModal: React.FC<SignInModalProps> = ({
       </div>
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
-          Review our legal terms
+          {legalTheme.title}
         </h2>
         <p className="text-zinc-400 font-['HK Grotesk'] text-sm">
           {userHasAnyRecordedLegalAcceptance(currentUser)
-            ? "We&apos;ve updated our Terms of Service and Privacy Policy. Please review the new version before continuing."
-            : "Please review our Terms of Service and Privacy Policy before continuing."}
+            ? legalTheme.updateCopy
+            : legalTheme.freshCopy}
         </p>
       </div>
 
       <div className="space-y-4">
-        <div className="rounded-xl border border-zinc-800 bg-black/30 p-4">
+        <div className="rounded-xl border bg-black/30 p-4" style={{ borderColor: isPulseCheckLegalContext ? 'rgba(124, 58, 237, 0.28)' : undefined }}>
           <div className="space-y-3">
             <a
-              href={TERMS_PATH}
+              href={legalTheme.termsPath}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 transition-colors hover:border-[#E0FE10]/60 hover:text-white"
+              className="flex items-center justify-between rounded-lg border bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 transition-colors hover:text-white"
+              style={{ borderColor: isPulseCheckLegalContext ? 'rgba(124, 58, 237, 0.22)' : undefined }}
             >
-              <span>Open Terms of Service</span>
-              <span className="text-[#E0FE10]">View</span>
+              <span>{isPulseCheckLegalContext ? 'Open PulseCheck Coach Terms' : 'Open Terms of Service'}</span>
+              <span style={{ color: legalTheme.accent }}>View</span>
             </a>
             <a
-              href={PRIVACY_POLICY_PATH}
+              href={legalTheme.privacyPath}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 transition-colors hover:border-[#E0FE10]/60 hover:text-white"
+              className="flex items-center justify-between rounded-lg border bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200 transition-colors hover:text-white"
+              style={{ borderColor: isPulseCheckLegalContext ? 'rgba(124, 58, 237, 0.22)' : undefined }}
             >
-              <span>Open Privacy Policy</span>
-              <span className="text-[#E0FE10]">View</span>
+              <span>{isPulseCheckLegalContext ? 'Open PulseCheck Coach Privacy Notice' : 'Open Privacy Policy'}</span>
+              <span style={{ color: legalTheme.accent }}>View</span>
             </a>
           </div>
         </div>
 
         {renderLegalAcceptanceField(
           userHasAnyRecordedLegalAcceptance(currentUser)
-            ? 'You only need to reaccept when the current legal version changes.'
-            : 'You only need to do this once when creating your account, unless the legal version changes later.'
+            ? legalTheme.helperUpdate
+            : legalTheme.helperFresh
         )}
       </div>
     </>
@@ -3012,7 +3067,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
                     timestamp: new Date().toISOString()
                   });
                 }}
-                className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 rounded-lg hover:bg-[#c8e60e] transition-colors font-['HK Grotesk']"
+                className="w-full font-semibold py-3 px-4 rounded-lg transition-colors font-['HK Grotesk']"
+                style={
+                  signUpStep === 'legal'
+                    ? { background: legalTheme.accent, color: '#fff' }
+                    : { background: '#E0FE10', color: '#000' }
+                }
               >
                 {isSignUp
                   ? signUpStep === "profile"
@@ -3020,7 +3080,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                     : signUpStep === "password"
                     ? "Create Account"
                     : signUpStep === "legal"
-                    ? "Agree & Continue"
+                    ? legalTheme.primaryLabel
                     : "Continue with Email"
                   : "Sign In"}
               </button>

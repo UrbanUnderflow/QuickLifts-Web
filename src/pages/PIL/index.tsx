@@ -21,26 +21,14 @@ type PILPageProps = {
   };
 };
 
-const PILPage: NextPage<PILPageProps> = ({ metaData }) => {
-  const handleExploreApps = () => {
-    window.location.assign('/apps');
-  };
-
-  return (
+const PILPage: NextPage<PILPageProps> = ({ metaData }) => (
     <ProductPortfolioHome
       metaData={metaData}
       pageOgUrl={META_URL}
-      onUseWebApp={handleExploreApps}
-      isSignInModalOpen={false}
-      setIsSignInModalOpen={() => undefined}
-      isAuthenticated={false}
-      showAuthActions={false}
-      primaryActionLabel="Explore Apps"
-      finalCtaHeading="Use pulseintelligencelabs.com as the front door for the whole portfolio."
-      finalCtaBody="Pulse Intelligence Labs can route people to the product that matches their job: athlete readiness, training, club building, or nutrition."
+      finalCtaHeading="Tell us what you are building. We will point you to the right product."
+      finalCtaBody="Use the demo form to tell us your role and which product you want to see. We will follow up with the clearest next step."
     />
-  );
-};
+);
 
 export const getStaticProps: GetStaticProps<PILPageProps> = async () => ({
   props: {

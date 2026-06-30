@@ -193,12 +193,6 @@ const TEAM_PLAN_STATUS_OPTIONS: Array<{ value: PulseCheckTeamPlanStatus; label: 
   { value: 'active', label: 'Active' },
 ];
 
-const TEAM_REVENUE_RECIPIENT_ROLE_OPTIONS: Array<{ value: PulseCheckRevenueRecipientRole; label: string }> = [
-  { value: 'team-admin', label: 'Team Admin' },
-  { value: 'coach', label: 'Coach' },
-  { value: 'organization-owner', label: 'Organization Owner' },
-];
-
 // The revenue recipient is now a specific person; keep the legacy role field in
 // sync (best-effort) from the picked staff member's team role.
 const mapMembershipRoleToRecipientRole = (
@@ -2036,6 +2030,17 @@ const PulseCheckProvisioningPage: React.FC = () => {
     });
   };
 
+  const completeProvisioningWizard = useCallback(
+    (successText: string) => {
+      setIsProvisioningModalOpen(false);
+      setActiveWizardStep('org');
+      setSkipCohortForNow(false);
+      setMessage({ type: 'success', text: successText });
+      dispatch(showToast({ message: successText, type: 'success', duration: 3500 }));
+    },
+    [dispatch]
+  );
+
   const handleSaveTeamConsents = async (team: PulseCheckTeam) => {
     const draft = getTeamConsentDraft(team);
     if (draft.some((consent) => !consent.title.trim() || !consent.body.trim())) {
@@ -2323,13 +2328,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
       setCohortTagsInput('');
       await loadData();
       setExpandedPilotIds((current) => (current.includes(cohortForm.pilotId) ? current : [...current, cohortForm.pilotId]));
-      setIsProvisioningModalOpen(false);
-      setActiveWizardStep('org');
-      setSkipCohortForNow(false);
-      setMessage({
-        type: 'success',
-        text: `Cohort created and linked to the selected pilot. It inherited a ${inheritedStatus} status from the pilot at creation time.`,
-      });
+      completeProvisioningWizard(
+        `Provisioning complete. Cohort created and linked to the selected pilot with a ${inheritedStatus} status.`
+      );
       return true;
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create cohort:', error);
@@ -2825,18 +2826,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
     if (skipCohortForNow) {
       setCohortForm(defaultCohortForm);
       setCohortTagsInput('');
-      setIsProvisioningModalOpen(false);
-      setActiveWizardStep('org');
-      setSkipCohortForNow(false);
-      setMessage({
-        type: 'success',
-        text: 'Provisioning finished without creating a cohort. You can always add one later from the pilot hierarchy.',
-      });
+      completeProvisioningWizard(
+        'Provisioning complete. No cohort was created; you can add one later from the pilot hierarchy.'
+      );
       return;
     }
 
     cohortFormRef.current?.requestSubmit();
-  }, [activeWizardStep, skipCohortForNow]);
+  }, [activeWizardStep, completeProvisioningWizard, skipCohortForNow]);
 
   const handleWizardActivationSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -3048,7 +3045,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-main { overflow-y: auto; display: flex; flex-direction: column; }
           .pcp-main::-webkit-scrollbar { width: 3px; }
           .pcp-main::-webkit-scrollbar-thumb { background: var(--mb); border-radius: 2px; }
-          .pcp-page-head { padding: 28px 36px 22px; border-bottom: 0.5px solid var(--mb); display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+          .pcp-page-head { padding: 30px 36px 24px; border-bottom: 0.5px solid var(--mb); display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: flex-start; gap: 28px; background: radial-gradient(circle at 78% 12%, rgba(0, 212, 170, 0.045), transparent 36%); }
           .pcp-page-head-left { flex: 1; min-width: 0; }
           .pcp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
           .pcp-heading { font-family: var(--fd); font-size: 26px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 4px; }
@@ -3057,13 +3054,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-context-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9999px; background: rgba(255, 255, 255, 0.03); border: 0.5px solid rgba(255, 255, 255, 0.08); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
           .pcp-context-pill strong { font-family: var(--fm); font-size: 11px; color: var(--t1); letter-spacing: normal; text-transform: none; }
           .pcp-context-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
-          .pcp-head-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding-top: 4px; }
-          .pcp-btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: 9px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; transition: transform 0.12s, filter 0.12s, background 0.15s; letter-spacing: -0.1px; }
+          .pcp-head-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; flex-shrink: 0; padding-top: 4px; max-width: 620px; }
+          .pcp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 9px 16px; border-radius: 10px; border: none; font-size: 13px; font-weight: 650; cursor: pointer; transition: transform 0.12s, filter 0.12s, background 0.15s, border-color 0.15s; letter-spacing: 0; white-space: nowrap; }
           .pcp-btn:active { transform: scale(0.97); }
           .pcp-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
           .pcp-btn-teal { background: var(--teal); color: #07090f; }
           .pcp-btn-teal:hover { filter: brightness(1.08); }
-          .pcp-btn-ghost { background: var(--glass); border: 0.5px solid var(--mb); color: var(--t2); }
+          .pcp-btn-ghost { background: rgba(255, 255, 255, 0.032); border: 0.5px solid rgba(255, 255, 255, 0.085); color: var(--t2); }
           .pcp-btn-ghost:hover { background: var(--glassh); color: var(--t1); }
           .pcp-btn:disabled { cursor: not-allowed; opacity: 0.5; }
           .pcp-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 0.5px solid var(--mb); }
@@ -3077,71 +3074,71 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-si-p { background: var(--purple-d); border: 0.5px solid rgba(167, 139, 250, 0.2); color: var(--purple); }
           .pcp-stat-n { font-family: var(--fm); font-size: 20px; line-height: 1; }
           .pcp-stat-l { font-size: 11px; color: var(--t3); margin-top: 2px; }
-          .pcp-toolbar { padding: 12px 36px; display: flex; align-items: center; gap: 10px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 56px; z-index: 50; background: rgba(7, 9, 15, 0.85); backdrop-filter: blur(20px); }
-          .pcp-search-wrap { position: relative; flex: 1; max-width: 360px; }
+          .pcp-toolbar { padding: 13px 36px; display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr) max-content; align-items: center; gap: 12px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 56px; z-index: 50; background: rgba(7, 9, 15, 0.88); backdrop-filter: blur(20px); }
+          .pcp-search-wrap { position: relative; min-width: 0; }
           .pcp-search-input { width: 100%; padding: 8px 12px 8px 32px; background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s; }
           .pcp-search-input:focus { border-color: var(--teal-b); }
           .pcp-search-input::placeholder { color: var(--t3); }
           .pcp-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--t3); }
           .pcp-search-icon svg { width: 13px; height: 13px; }
-          .pcp-filter-pills { display: flex; gap: 5px; }
+          .pcp-filter-pills { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
           .pcp-pill { padding: 5px 12px; border-radius: 9999px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 0.5px solid transparent; color: var(--t3); background: transparent; }
           .pcp-pill:hover { color: var(--t2); background: var(--glass); }
           .pcp-pill.on { color: var(--t1); background: var(--glass2); border-color: var(--mb); }
           .pcp-pill-prov.on { color: var(--amber); background: var(--amber-d); border-color: rgba(245, 166, 35, 0.2); }
           .pcp-pill-ready.on { color: var(--blue); background: var(--blue-d); border-color: rgba(96, 165, 250, 0.2); }
           .pcp-pill-active.on { color: var(--green); background: var(--green-d); border-color: rgba(74, 222, 128, 0.2); }
-          .pcp-toolbar-right { display: flex; gap: 8px; margin-left: auto; }
+          .pcp-toolbar-right { display: flex; gap: 8px; justify-content: flex-end; }
           .pcp-message { margin: 14px 36px 0; padding: 12px 14px; border-radius: 10px; border: 0.5px solid var(--mb); display: flex; align-items: center; gap: 10px; font-size: 12px; line-height: 1.5; }
           .pcp-message svg { width: 14px; height: 14px; flex-shrink: 0; }
           .pcp-message-success { background: rgba(74, 222, 128, 0.08); border-color: rgba(74, 222, 128, 0.2); color: rgba(74, 222, 128, 0.9); }
           .pcp-message-error { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); color: rgba(248, 113, 113, 0.95); }
           .pcp-org-list { padding: 12px 36px 40px; }
-          .pcp-org-row { border: 0.5px solid var(--mb); border-radius: 14px; margin-bottom: 8px; overflow: hidden; transition: border-color 0.2s; }
-          .pcp-org-row:hover, .pcp-org-row.open { border-color: rgba(255, 255, 255, 0.1); }
+          .pcp-org-row { border: 0.5px solid var(--mb); border-radius: 14px; margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s, background 0.2s, box-shadow 0.2s; background: rgba(255, 255, 255, 0.012); }
+          .pcp-org-row:hover, .pcp-org-row.open { border-color: rgba(255, 255, 255, 0.11); background: rgba(255, 255, 255, 0.018); box-shadow: 0 18px 70px rgba(0, 0, 0, 0.18); }
           .pcp-org-title { background: var(--glass); position: relative; }
-          .pcp-org-status-tr { position: absolute; top: 12px; right: 12px; z-index: 2; }
-          .pcp-org-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; min-height: 62px; transition: background 0.15s; }
+          .pcp-org-status-tr { position: static; }
+          .pcp-org-hd { display: grid; grid-template-columns: 42px 34px minmax(220px, 1fr) auto auto; align-items: center; column-gap: 12px; padding: 12px 16px 12px 0; cursor: pointer; user-select: none; min-height: 72px; transition: background 0.15s; }
           .pcp-org-hd:hover { background: var(--glassh); }
-          .pcp-org-chev { width: 42px; height: 62px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+          .pcp-org-chev { width: 42px; min-height: 48px; display: flex; align-items: center; justify-content: center; }
           .pcp-org-chev svg { width: 13px; height: 13px; color: var(--t3); transition: transform 0.2s; }
           .pcp-org-row.open .pcp-org-chev svg { transform: rotate(90deg); }
-          .pcp-org-ico { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, rgba(0, 212, 170, 0.14), rgba(0, 212, 170, 0.04)); border: 0.5px solid var(--teal-b); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 12px; color: var(--teal); }
-          .pcp-org-info { flex: 1; min-width: 0; padding: 12px 0; }
+          .pcp-org-ico { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, rgba(0, 212, 170, 0.14), rgba(0, 212, 170, 0.04)); border: 0.5px solid var(--teal-b); display: flex; align-items: center; justify-content: center; color: var(--teal); }
+          .pcp-org-info { min-width: 0; padding: 0; }
           .pcp-level-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--teal); opacity: 0.7; margin-bottom: 3px; }
-          .pcp-org-name { font-size: 14px; font-weight: 600; letter-spacing: -0.2px; margin-bottom: 2px; }
-          .pcp-org-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
-          .pcp-org-counts { display: flex; gap: 5px; margin-right: 12px; }
+          .pcp-org-name { font-size: 14px; font-weight: 650; letter-spacing: 0; margin-bottom: 3px; line-height: 1.25; }
+          .pcp-org-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+          .pcp-org-counts { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 5px; min-width: 0; }
           .pcp-mc { display: inline-flex; align-items: center; line-height: 1; font-size: 10px; font-weight: 500; padding: 4px 7px; border-radius: 9999px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); color: var(--t3); font-family: var(--fm); white-space: nowrap; }
-          .pcp-org-actions { display: flex; align-items: center; gap: 6px; margin-left: 10px; }
+          .pcp-org-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-left: 0; flex-wrap: wrap; min-width: 190px; }
           .pcp-status { display: inline-flex; align-items: center; line-height: 1; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 9px; border-radius: 9999px; white-space: nowrap; }
           .pcp-s-prov { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
           .pcp-s-ready { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.22); color: var(--blue); }
           .pcp-s-active { background: var(--green-d); border: 0.5px solid rgba(74, 222, 128, 0.22); color: var(--green); }
           .pcp-s-done { background: rgba(255, 255, 255, 0.05); border: 0.5px solid rgba(255, 255, 255, 0.08); color: var(--t3); }
-          .pcp-ab { padding: 5px 10px; border-radius: 7px; font-size: 11px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background 0.15s, color 0.15s; border: none; }
+          .pcp-ab { min-height: 28px; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: background 0.15s, color 0.15s, border-color 0.15s; border: none; white-space: nowrap; }
           .pcp-ab svg { width: 11px; height: 11px; }
-          .pcp-ab-g { background: rgba(255, 255, 255, 0.14); color: #fff; border: 0.5px solid rgba(255, 255, 255, 0.22); }
-          .pcp-ab-g:hover { background: rgba(255, 255, 255, 0.22); color: #fff; }
+          .pcp-ab-g { background: rgba(255, 255, 255, 0.075); color: rgba(255, 255, 255, 0.9); border: 0.5px solid rgba(255, 255, 255, 0.14); }
+          .pcp-ab-g:hover { background: rgba(255, 255, 255, 0.13); color: #fff; border-color: rgba(255, 255, 255, 0.22); }
           .pcp-ab-t { background: var(--teal-d); color: var(--teal); border: 0.5px solid var(--teal-b); }
           .pcp-ab-t:hover { background: rgba(0, 212, 170, 0.16); }
           .pcp-ab:disabled { opacity: 0.45; cursor: not-allowed; }
           .pcp-org-body { display: none; padding-bottom: 16px; }
           .pcp-org-row.open .pcp-org-body { display: block; }
           .pcp-team-row { border-top: 0.5px solid var(--mb); }
-          .pcp-team-hd { display: flex; align-items: center; padding: 0 16px 0 0; cursor: pointer; user-select: none; min-height: 46px; transition: background 0.15s; }
+          .pcp-team-hd { display: grid; grid-template-columns: auto 26px minmax(0, 1fr) auto; align-items: center; column-gap: 9px; padding: 10px 14px 10px 0; cursor: pointer; user-select: none; min-height: 54px; transition: background 0.15s; }
           .pcp-team-hd:hover { background: rgba(255, 255, 255, 0.018); }
           .pcp-t-indent { width: 42px; flex-shrink: 0; }
           .pcp-t-chev { width: 26px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
           .pcp-t-chev svg { width: 11px; height: 11px; color: var(--t3); transition: transform 0.2s; }
           .pcp-team-row.open .pcp-t-chev svg { transform: rotate(90deg); }
           .pcp-t-vline { width: 1px; height: 28px; background: rgba(255, 255, 255, 0.07); margin-right: 10px; flex-shrink: 0; }
-          .pcp-t-av { width: 26px; height: 26px; border-radius: 7px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-right: 9px; color: var(--t3); }
+          .pcp-t-av { width: 26px; height: 26px; border-radius: 7px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); display: flex; align-items: center; justify-content: center; color: var(--t3); }
           .pcp-t-av svg { width: 12px; height: 12px; }
           .pcp-t-info { flex: 1; min-width: 0; }
           .pcp-t-name { font-size: 13px; font-weight: 600; }
-          .pcp-t-meta { font-size: 10px; color: var(--t3); font-family: var(--fm); }
-          .pcp-t-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+          .pcp-t-meta { font-size: 10px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .pcp-t-right { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; min-width: 0; }
           .pcp-team-body { display: none; }
           .pcp-team-row.open .pcp-team-body { display: block; }
           .pcp-pilot-row { display: flex; align-items: center; padding: 0 16px 0 0; border-top: 0.5px solid rgba(255, 255, 255, 0.04); cursor: pointer; min-height: 38px; transition: background 0.15s; }
@@ -3308,17 +3305,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-fade-in { opacity: 0; animation: pcpFadeIn 0.35s ease forwards; }
           @keyframes pcpFadeIn { to { opacity: 1; } }
           @keyframes pcpSlideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+          @media (max-width: 1180px) {
+            .pcp-page-head { grid-template-columns: 1fr; }
+            .pcp-head-right { justify-content: flex-start; max-width: none; }
+            .pcp-toolbar { grid-template-columns: minmax(240px, 1fr) max-content; }
+            .pcp-filter-pills { grid-column: 1 / -1; order: 3; }
+            .pcp-toolbar-right { grid-column: 2; grid-row: 1; }
+            .pcp-org-hd { grid-template-columns: 42px 34px minmax(0, 1fr); row-gap: 10px; }
+            .pcp-org-counts { grid-column: 3; justify-content: flex-start; }
+            .pcp-org-actions { grid-column: 3; justify-content: flex-start; min-width: 0; }
+          }
           @media (max-width: 900px) {
             .pcp-page-head,
             .pcp-toolbar,
             .pcp-org-list { padding-left: 18px; padding-right: 18px; }
             .pcp-message { margin-left: 18px; margin-right: 18px; }
-            .pcp-page-head { flex-direction: column; }
             .pcp-page-context { margin-top: 12px; }
             .pcp-stats-row { grid-template-columns: repeat(2, 1fr); }
             .pcp-stat-cell:nth-child(2) { border-right: none; }
-            .pcp-toolbar { flex-wrap: wrap; }
-            .pcp-filter-pills { flex-wrap: wrap; }
+            .pcp-toolbar { grid-template-columns: 1fr; }
+            .pcp-filter-pills,
+            .pcp-toolbar-right { grid-column: auto; grid-row: auto; justify-content: flex-start; }
+            .pcp-toolbar-right .pcp-btn { width: auto; }
             .pcp-org-grid,
             .pcp-team-grid,
             .pcp-summary-grid,
@@ -3338,12 +3346,24 @@ const PulseCheckProvisioningPage: React.FC = () => {
           }
           @media (max-width: 640px) {
             .pcp-topbar { padding: 0 16px; }
+            .pcp-topbar-left { gap: 10px; }
+            .pcp-admin-chip span { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .pcp-head-right .pcp-btn { flex: 1 1 calc(50% - 5px); }
+            .pcp-head-right .pcp-btn-teal { flex-basis: 100%; }
             .pcp-stats-row { grid-template-columns: 1fr; }
             .pcp-stat-cell { border-right: none; border-bottom: 0.5px solid var(--mb); }
             .pcp-stat-cell:last-child { border-bottom: none; }
-            .pcp-org-hd, .pcp-team-hd { flex-wrap: wrap; padding-right: 12px; }
-            .pcp-org-counts, .pcp-org-actions, .pcp-t-right { width: 100%; margin: 0 0 12px 54px; flex-wrap: wrap; }
+            .pcp-org-hd { grid-template-columns: 34px minmax(0, 1fr); padding: 14px; column-gap: 10px; }
+            .pcp-org-chev { grid-column: 1; width: 34px; min-height: 34px; }
+            .pcp-org-ico { grid-column: 1; grid-row: 2; }
+            .pcp-org-info { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+            .pcp-org-counts,
+            .pcp-org-actions { grid-column: 1 / -1; justify-content: flex-start; }
+            .pcp-org-actions .pcp-ab { flex: 1 1 auto; }
+            .pcp-team-hd { grid-template-columns: auto 26px minmax(0, 1fr); padding-right: 12px; row-gap: 8px; }
+            .pcp-t-right { grid-column: 3; justify-content: flex-start; width: 100%; }
             .pcp-org-meta { white-space: normal; }
+            .pcp-t-meta { white-space: normal; }
             .pcp-pilot-card { margin-left: 14px; }
             .pcp-pilot-panel.open { padding-left: 18px; }
             .pcp-modal-ft { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -3549,7 +3569,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         style={{ animationDelay: `${0.14 + organizationIndex * 0.05}s` }}
                       >
                         <div className="pcp-org-title">
-                        <span className={`pcp-status pcp-org-status-tr ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
                         <div className="pcp-org-hd" onClick={() => toggleOrganizationRow(organization.id)}>
                           <div className="pcp-org-chev"><ChevronDown /></div>
                           <div className="pcp-org-ico"><Building2 /></div>
@@ -3573,6 +3592,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
 
                           <div className="pcp-org-actions">
+                            <span className={`pcp-status pcp-org-status-tr ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
                             <button
                               type="button"
                               className="pcp-ab pcp-ab-g"
