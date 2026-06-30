@@ -255,6 +255,12 @@ Send-ready copy:
 
 Why this change: it addresses the strongest shared trust gap across price, not ready, and need proof feedback without creating a new offer or making a claim the current source coverage cannot support. It also keeps the adjustment small enough to validate against paywall-to-checkout behavior while Nora's 72-hour no-change restriction remains active.
 
+## Decision Log Execution
+
+No live operational change is approved by this deliverable. The matching proposed decision is already recorded in `.agent/macra/decisions.md` on `2026-06-30` under Solara: proposed-only paywall copy test, evidence from `Macrafeedbackreason`, `Macra-purchase-logs`, saved paywall funnel counts, and retargeting state, expected movement in paywall primary CTA to initiated checkout rate, and guardrails on StoreKit purchase cancel count plus `paywall_cancel_feedback` volume.
+
+The controlling operator decision is also recorded in `.agent/macra/decisions.md` on `2026-06-30` under Nora: no onboarding, paywall, pricing, experiment allocation, retargeting behavior, or Apple Search Ads spend changes during the 72-hour validation window. Therefore the execution state for this lifecycle read is proposed-only; no additional decision-log approval row should be added unless Nora approves a live change with owner, evidence, expected metric movement, and guardrail.
+
 ## Metric And Approval Boundary
 
 - **One metric this should move:** paywall primary CTA to initiated checkout rate.
