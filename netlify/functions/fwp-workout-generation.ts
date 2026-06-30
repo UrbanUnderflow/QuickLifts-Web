@@ -107,13 +107,24 @@ const buildSystemPrompt = (ctx: FwpAthleteContext, input: GenRequestInput): stri
     `HARD CONSTRAINTS:\n` +
       `- Select ONLY from the provided CANDIDATE MOVES, referencing each by its exact moveId. Never invent a move or use an id not in the list.\n` +
       `- Every chosen move must serve the requested focus / picked muscles.\n` +
-      `- "detail" is reps for rep-based moves ("8 reps" or a range "6-8 reps") and seconds for timed moves ("40 sec").`,
+      `- "detail" is reps for rep-based moves ("8 reps" or a range "6-8 reps") and seconds for timed moves ("40 sec").\n` +
+      `- The builtForYouChecks are a UI audit of YOUR chosen session. Keep each detail concrete, short, and specific to the final move list, recovery signal, prescription, volume, structure, and Movers.`,
 
     `OUTPUT — respond with ONLY this JSON object, no prose:\n` +
       `{\n` +
       `  "tagline": "<short personalized headline, <= 60 chars${ctx.nuanceDefaulted ? '; NEVER name a sport, division, or competition' : ''}>",\n` +
       `  "how": "<ONE concrete coach-voice sentence naming the actual programming decision and why (e.g. peaking, accumulation, recovery-led)>",\n` +
       `  "rationale": "<2-3 sentences of deeper reasoning the athlete can expand to read>",\n` +
+      `  "builtForYouChecks": [\n` +
+      `    { "id": "focus_accuracy", "title": "Focus accuracy", "detail": "<audit how the selected moves match the requested focus or picked muscles>", "isSatisfied": true },\n` +
+      `    { "id": "recovery_fit", "title": "Recovery fit", "detail": "<audit how recent fatigue/readiness changed the selection and order>", "isSatisfied": true },\n` +
+      `    { "id": "goal_prescription", "title": "Goal prescription", "detail": "<audit how sets/reps/seconds match the athlete goal, level, and timing>", "isSatisfied": true },\n` +
+      `    { "id": "movement_quality", "title": "Movement quality", "detail": "<audit that the lifting slots use real, useful movement patterns>", "isSatisfied": true },\n` +
+      `    { "id": "volume", "title": "Volume", "detail": "<audit move count and workload against readiness and sport load tolerance>", "isSatisfied": true },\n` +
+      `    { "id": "structure", "title": "Structure", "detail": "<audit warm-up/primary/accessory/finisher order and repeat avoidance>", "isSatisfied": true },\n` +
+      `    { "id": "mover_variety", "title": "Mover variety", "detail": "<audit the mix of selected Movers/coaches>", "isSatisfied": true }\n` +
+      `  ],\n` +
+      `  "builtForYouFooter": "<short result summary, e.g. Matched your profile on the first build>",\n` +
       `  "exercises": [ { "moveId": "<id from CANDIDATE MOVES>", "sets": <int>, "detail": "<reps or seconds>", "note": "<optional short cue or empty string>" } ]\n` +
       `}`,
   ].join('\n\n');
