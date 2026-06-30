@@ -77,7 +77,9 @@ Retargeting eligibility means a user qualifies for a lifecycle follow-up lane ba
 
 Retargeting suppression means the system intentionally skipped a user because a rule blocked sending. Suppression can reflect under-18 state, incomplete onboarding, no rule due, missing email, claim block, historical trial/subscription, or another safety or timing condition. Suppression should be treated as a guardrail signal, not automatically as campaign underperformance.
 
-## Trust Guardrail Read
+## Trust Signal Read
+
+This section summarizes cancel reasons, paywall dismissal behavior, and retargeting state without treating any one signal as a complete explanation for trial-start movement.
 
 ### Facts
 
