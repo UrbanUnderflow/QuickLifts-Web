@@ -1,0 +1,77 @@
+# Macra lifecycle conversion read: event semantics and trust guardrails
+
+## Research And Plan
+
+This pass defines how the Macra lifecycle conversion read should be researched before any growth signal is scaled. It is a planning artifact only: no live onboarding, paywall, offer, pricing, retargeting, experiment allocation, or acquisition change is approved here.
+
+### Research objective
+
+Audit whether the current trial-start signal is trustworthy enough to inform one lifecycle conversion recommendation. The read must separate observed facts from inference, keep stale data labeled as stale, and use cancel reasons, paywall dismissal behavior, purchase or checkout context, retargeting state, and the durable Macra operating files before naming any copy, proof, or offer change.
+
+### Source order
+
+1. Read `/admin/macraCancelReasons` and its backing Firestore collection `Macrafeedbackreason` for user-stated cancellation and paywall-friction reasons.
+2. Read paywall dismissal and funnel-drop evidence from `.agent/macra/state.json`, `docs/ops/macra-operating-snapshot-2026-06-25.md`, and any newer saved Macra operating snapshot if present.
+3. Read `/admin/purchaseLogs` and Firestore collection `Macra-purchase-logs` to keep checkout initiation, purchase cancel, purchase failure, trial start, purchase success, and subscribe events separate.
+4. Read retargeting configuration, eligibility, send, and suppression state from `src/pages/admin/emailSequences.tsx`, Firestore doc `email-sequence-config/macra-retargeting-v1`, recent `email-logs`, and named Macra retargeting lanes.
+5. Read `.agent/macra/state.json`, `.agent/macra/progress.md`, and `.agent/macra/decisions.md` for the current metric, guardrails, stale `/admin/experiments` caveat, and Nora approval status.
+
+### Planned analysis
+
+- Treat cancel reasons as direct user feedback, not universal causation.
+- Treat paywall dismissal as a behavioral signal that needs purchase-log and retargeting context before assigning cause.
+- Treat checkout initiation as intent, not conversion.
+- Treat trial start as the primary conversion signal for this lifecycle read.
+- Treat retargeting eligibility and suppression as guardrail context before judging whether follow-up messaging is working.
+- Keep the stale `/admin/experiments` snapshot from 2026-06-16 out of live funnel decisions unless it is refreshed or backfilled.
+
+### Step boundary
+
+The next execution pass should add the trust guardrail read and, only after the evidence is assembled, name exactly one proposed copy, proof, or offer change with one metric and one guardrail. This research-and-plan pass should not add a `Proposed Change` section.
+
+## Source Coverage
+
+This deliverable audits Macra lifecycle conversion signals before scaling the growth signal. This step only records source coverage. It does not approve a live copy, proof, offer, pricing, funnel, retargeting, experiment allocation, or acquisition change.
+
+### Required read surfaces
+
+- **`/admin/macraCancelReasons`** - Admin surface for Macra paywall cancellation feedback. The backing source is Firestore collection `Macrafeedbackreason`, surfaced in `src/pages/admin/macraCancelReasons.tsx`. Use it for cancel reason, reason label, trigger, source, selected plan, selected plan period, surface, app, metadata, timestamp, and user-context fields.
+- **Paywall dismissal signals** - Saved paywall funnel evidence is currently preserved in `.agent/macra/state.json` and `docs/ops/macra-operating-snapshot-2026-06-25.md`. These sources show the paywall chain from paywall reached to primary CTA, checkout initiation, and trial start. The saved read includes 448 paywall reaches, 317 paywall primary CTA presses, 94 initiated checkouts, and 5 trial starts for the 2026-05-27 through 2026-06-25 window.
+- **Retargeting state** - Retargeting eligibility, suppression, send state, and lane behavior should be read from `src/pages/admin/emailSequences.tsx`, Firestore doc `email-sequence-config/macra-retargeting-v1`, recent `email-logs`, and relevant retargeting lanes such as `macra-paywall-cancel-trust-v1`, `macra-web-offer-24h-v1`, `macra-web-offer-proof-v1`, `macra-paywall-view-value-v1`, `macra-no-trial-7d-challenge-v1`, and `macra-trial-no-activation-24h-v1`.
+- **`.agent/macra/state.json`** - Durable Macra operating state for active `variant_a`, latest saved AppsFlyer/Scoreboard read, source split, primary metric, and guardrail list.
+- **Purchase and checkout context** - `/admin/purchaseLogs` and Firestore collection `Macra-purchase-logs` should be used to keep checkout initiation, checkout cancel, purchase cancel, purchase failure, trial start, and purchase success semantically separate.
+- **AppsFlyer coverage** - Firestore doc `appsflyer-scoreboards/macra`, Firestore collection `appsflyer-aggregate-periods`, and related Macra AppsFlyer imports should be checked before treating paywall-event counts or source quality as current.
+
+### Stale or missing coverage flags
+
+- **Stale `/admin/experiments` caveat:** `.agent/macra/state.json` records active `variant_a`, but also says the saved `/admin/experiments` results snapshot is stale from 2026-06-16 and still reflects the retired hard-paywall configuration. Do not use that stale experiment snapshot to approve a live funnel move.
+- **AppsFlyer recency caveat:** The durable saved run currently covers 2026-05-27 through 2026-06-25. Any June 28-30 source split, funnel read, or scaling conclusion remains unconfirmed unless newer AppsFlyer imports are pulled and reconciled.
+- **Paywall dismissal caveat:** The saved funnel can show where users drop between paywall, CTA, checkout, and trial, but it does not by itself explain whether the drop is price concern, proof gap, readiness, technical friction, Apple sheet confusion, or source-quality mismatch.
+- **Retargeting caveat:** Retargeting state must be read directly before judging pressure or recovery effectiveness. Missing retargeting breakout should be treated as unverified, not safe.
+- **No live-action authorization:** This source-coverage step does not authorize live funnel, offer, pricing, retargeting, or acquisition changes.
+
+## Event Semantics
+
+### Cancel reason
+
+A cancel reason is explicit feedback captured after a paywall or purchase cancellation moment. It should be interpreted as directional trust-friction evidence tied to trigger, surface, plan, and user context. It is not a complete population survey and should not be used alone to claim why all users fail to start trials.
+
+### Paywall dismissal
+
+Paywall dismissal means the user reached a paywall state but did not continue cleanly through the next funnel step. It can reflect price concern, lack of proof, timing/readiness, unclear first value, source mismatch, Apple sheet confusion, or technical friction. It should be read with checkout and purchase logs before assigning cause.
+
+### Checkout initiation
+
+Checkout initiation means the user moved beyond paywall intent into a checkout or StoreKit attempt. It is stronger intent than paywall view or CTA press, but it is not a trial start and should not be counted as conversion. It should be paired with cancellation, failure, and success statuses.
+
+### Trial start
+
+Trial start is the first conversion signal that represents entry into the trial path. It must remain separate from checkout initiation, attempted purchase, purchase cancellation, purchase failure, purchase success, and subscribe events so the team does not scale a noisy proxy.
+
+### Retargeting eligibility
+
+Retargeting eligibility means a user qualifies for a lifecycle follow-up lane based on user state, timing, unresolved intent, and suppression rules. Eligibility is not a send, open, click, checkout, trial, or purchase event. It should be treated as a readiness state, not as evidence that the message worked.
+
+### Retargeting suppression
+
+Retargeting suppression means the system intentionally skipped a user because a rule blocked sending. Suppression can reflect under-18 state, incomplete onboarding, no rule due, missing email, claim block, historical trial/subscription, or another safety or timing condition. Suppression should be treated as a guardrail signal, not automatically as campaign underperformance.
