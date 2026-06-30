@@ -83,11 +83,17 @@ This snapshot records the latest saved Macra funnel read available for this deli
 
 ## Variant A Freshness
 
-`/admin/experiments` is the required experiment surface before this lifecycle read can inform a funnel decision. The refreshed `/admin/experiments` results read must be for active `variant_a`, and `.agent/macra/state.json` names the live configuration as `monthly + annual, both with trial`, meaning monthly plus annual with trial.
+### Facts
 
-The required caveat from `.agent/macra/state.json` is still live: the saved `/admin/experiments` results snapshot is stale from `2026-06-16` and still reflects the retired hard-paywall configuration. That stale hard-paywall read must not be treated as evidence for the current monthly-plus-annual-with-trial paywall state.
+- **Admin surface:** `/admin/experiments`, backed by Firestore `macra-experiments/macra_paywall_onboarding` and `macra-experiment-results/macra_paywall_onboarding`.
+- **Live config:** `docs/ops/macra-operating-snapshot-2026-06-30.md` records config `updatedAt` as `2026-06-17T10:31:39.693Z`, enabled live variant `variant_a`, `variant_a` name `Monthly + annual, both with trial`, weight `100`, and baseline / `variant_b` / `variant_c` disabled at weight `0`.
+- **Saved result snapshot:** `docs/ops/macra-operating-snapshot-2026-06-30.md` records results `generatedAt` as `2026-06-25T10:08:00.102Z`, `updatedAt` as `2026-06-25T10:08:00.461Z`, loaded users `692`, assigned users `692`, exact assignments `95`, inferred assignments `597`, quality label `Mostly inferred assignments`, AppsFlyer aggregate validation trial starts `7`, AppsFlyer aggregate validation events `32,241`, and AppsFlyer user docs in result inputs `0`.
+- **Active `variant_a` row:** Assignments `692`, qualified users `503`, paywall views `692`, CTA taps `40`, checkout starts `40`, trial starts `7`, paid conversions `3`, Apple cancels `107`, trial rate `1.01%`, and paid rate `0.43%`. Source: `docs/ops/macra-operating-snapshot-2026-06-30.md`.
+- **Required stale caveat:** `.agent/macra/state.json` still says the saved `/admin/experiments` results snapshot is stale from `2026-06-16` and reflects the retired hard-paywall configuration; that caveat remains part of the decision boundary even though the June 30 operating snapshot found a newer June 25 saved result.
 
-For this deliverable, active `variant_a` can be used as the current configuration context, but not as a refreshed outcome read unless `/admin/experiments` has been refreshed or backfilled against the current Scoreboard, purchase logs, cancel reasons, retargeting state, and AppsFlyer imports.
+### Inference
+
+The live config is aligned to active `variant_a` and the current monthly-plus-annual-with-trial setup, but the saved result read is still not strong enough for June 30 funnel decisioning. The June 25 result is newer than the retired `2026-06-16` hard-paywall caveat, but it remains observe-only because the assignments are mostly inferred and AppsFlyer user-doc input count is `0`. Do not use this section to approve a live paywall, pricing, offer, proof, copy, or retargeting change.
 
 ## Read Sources
 
