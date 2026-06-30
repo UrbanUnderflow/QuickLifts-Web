@@ -45,6 +45,7 @@ This lifecycle recommendation uses the following exact read artifacts. Stale rea
 - **`/admin/macraCancelReasons`:** Admin surface for Macra cancellation feedback, backed by Firestore collection `Macrafeedbackreason`, used to read user-stated friction before choosing a lifecycle intervention.
 - **Paywall dismissal signals:** Paywall reached, primary CTA, checkout initiation, purchase cancel, purchase failure, and trial-start drop-off signals from saved Macra funnel reads and purchase-log context.
 - **Retargeting state:** Retargeting configuration, eligibility, suppression, and send-state evidence from Macra email sequence state before deciding whether the first lifecycle fix belongs on paywall copy, proof, offer, or follow-up messaging.
+- **`.agent/macra/state.json`:** Durable Macra operating state for active `variant_a`, current monthly-plus-annual-with-trial configuration, latest saved funnel run, primary metric, guardrails, and stale `/admin/experiments` caveat.
 
 ## Source Coverage
 
