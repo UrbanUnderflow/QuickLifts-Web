@@ -197,7 +197,21 @@ This section summarizes cancel reasons, paywall dismissal behavior, and retarget
 - The friction pattern is not cleanly solved by discounting. Price appears in cancel feedback, but the surrounding signals also include not ready, need proof, something did not work, and Apple sheet confusion, so the safer first move is to make the trial's immediate value and first-week proof more concrete before asking for checkout.
 - Retargeting cannot be treated as a recovery engine yet. The current read shows enabled configuration but no recent send activity in the scanned state, so the recommendation should modify the paywall proof moment first, not retargeting behavior.
 
-## Proposed Change
+## Retargeting State Read
+
+### Facts
+
+- `.agent/macra/decisions.md` records Macra retargeting config as enabled, but the latest scan sent `0`.
+- `docs/ops/macra-operating-snapshot-2026-06-30.md` found no recent retargeting sends, opens, clicks, checkout starts, trial starts, paid conversions, under-18 blocks, or missing-birthdate blocks in the common user-state fields for `2026-06-28` through `2026-06-30`.
+- `## Source Coverage` in this deliverable names the retargeting lanes that must be checked before treating follow-up messaging as active recovery evidence: `macra-paywall-cancel-trust-v1`, `macra-web-offer-24h-v1`, `macra-web-offer-proof-v1`, `macra-paywall-view-value-v1`, `macra-no-trial-7d-challenge-v1`, and `macra-trial-no-activation-24h-v1`.
+
+### Inference
+
+- Eligible, suppressed, and already-contacted user states are not confirmed well enough to make retargeting copy the first lifecycle change.
+- Because the scan shows enabled configuration but no recent sends, the cleaner execution path is to keep the proposed change on the paywall proof surface where the saved funnel already shows intent and drop-off.
+- Retargeting should remain guardrail context until Nora has a refreshed read of eligibility, suppression, and send state.
+
+## Proposed Lifecycle Change
 
 Change exactly one surface: the Macra paywall proof block immediately before the primary plan CTA.
 
@@ -209,9 +223,9 @@ Send-ready copy:
 
 Why this change: it addresses the strongest shared trust gap across price, not ready, and need proof feedback without creating a new offer or making a claim the current source coverage cannot support. It also keeps the adjustment small enough to validate against paywall-to-checkout behavior while Nora's 72-hour no-change restriction remains active.
 
-## Metric And Approval Status
+## Metric And Approval Boundary
 
 - **One metric this should move:** paywall primary CTA to initiated checkout rate.
 - **Primary guardrail:** StoreKit purchase cancel count and `paywall_cancel_feedback` volume do not rise during the validation window.
 - **Secondary guardrail:** do not treat checkout initiation as trial conversion; trial starts, paid conversion after trial, and cancel/failure rows still need separate reads.
-- **Approval status:** proposed-only; no live funnel, offer, pricing, or retargeting change unless Nora logs approval in `.agent/macra/decisions.md`.
+- **Approval status:** proposed-only; no live funnel, pricing, offer, proof, copy, or retargeting change may ship unless Nora logs approval in `.agent/macra/decisions.md`.
