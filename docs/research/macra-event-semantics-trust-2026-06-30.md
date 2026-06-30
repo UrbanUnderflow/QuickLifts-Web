@@ -43,6 +43,12 @@ For this specific event-semantics audit, the runbook assigns Sage to audit `af_s
 
 The reported 2/day trial-start signal should be treated as **unverified** until the audit identifies its exact source artifact, date range, user identifier, timestamp field, and dedupe behavior. The durable context currently available to this file supports a stale saved AppsFlyer/Scoreboard run through 2026-06-25, purchase-log evidence of 2 trial-success rows on 2026-06-29, and a known stale or inferred `/admin/experiments` snapshot. This audit should not present 2/day as settled current truth until later sections connect it to fresh AppsFlyer, Scoreboard, purchase-log, or Firestore evidence. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/runbook.md`; `.agent/macra/decisions.md`
 
+## variant_a Experiment Freshness
+
+_Pending Step 2 population._
+
+This section must record whether active `variant_a` results were refreshed from `/admin/experiments` or remain stale from the 2026-06-16 snapshot before any funnel decision is allowed to proceed.
+
 ## Decision Log Contract
 
 ### Research question
@@ -207,6 +213,12 @@ This section must end with:
 - pass/fail criteria for counting a valid Macra trial start
 - guardrails for purchase cancels, checkout failure/cancel rate, age/birthdate blocks, activation after start, paid conversion after trial, and cancel reasons
 - at least one cited ambiguity that could make the growth signal misleading
+
+## Funnel Decision Gate
+
+_Pending Step 6 population._
+
+This section must state the pass/fail rule for making a Macra funnel decision after the active `variant_a` experiment freshness check and event-semantics trust guardrails are complete.
 
 ## Decision Log Updates
 
