@@ -99,6 +99,16 @@ This lifecycle recommendation uses the following exact read artifacts. Stale rea
 - **Retargeting state:** Retargeting configuration, eligibility, suppression, and send-state evidence from Macra email sequence state before deciding whether the first lifecycle fix belongs on paywall copy, proof, offer, or follow-up messaging.
 - **`.agent/macra/state.json`:** Durable Macra operating state for active `variant_a`, current monthly-plus-annual-with-trial configuration, latest saved funnel run, primary metric, guardrails, and stale `/admin/experiments` caveat.
 
+## Lifecycle Source Coverage
+
+This lifecycle pass must read the exact artifacts below before choosing any copy, proof, or offer recommendation. This section records coverage only; it does not approve a live funnel, pricing, offer, proof, copy, retargeting, experiment, budget, or acquisition change.
+
+- **`/admin/macraCancelReasons`** - Admin cancel-reason surface backed by Firestore `Macrafeedbackreason`, used for user-stated price, readiness, proof, breakage, and Apple sheet confusion signals.
+- **Paywall dismissal signals** - Saved funnel evidence between paywall reach, primary CTA, checkout initiation, purchase cancel, purchase failure, and trial start.
+- **Retargeting state** - Retargeting eligibility, suppression, send, open, click, checkout-start, trial-start, and paid-conversion state before deciding whether the lifecycle fix belongs on paywall proof or follow-up messaging.
+- **`/admin/experiments`** - Active `variant_a` experiment surface, with the stale `2026-06-16` retired hard-paywall snapshot excluded from live decisioning unless refreshed or backfilled.
+- **`.agent/macra/state.json`** - Durable operating state for the current Macra configuration, saved funnel run, source split, primary metric, guardrails, and stale-data caveats.
+
 ## Source Coverage
 
 This deliverable audits Macra lifecycle conversion signals before scaling the growth signal. This step only records source coverage. It does not approve a live copy, proof, offer, pricing, funnel, retargeting, experiment allocation, or acquisition change.
