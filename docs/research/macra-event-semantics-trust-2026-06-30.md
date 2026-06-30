@@ -45,21 +45,46 @@ The reported 2/day trial-start signal should be treated as **unverified** until 
 
 ## Daily KPI Snapshot
 
-_Pending Step 2 population._
+### Observed facts
 
-This section must summarize the daily Macra KPI snapshot across Scoreboard, Experiments, purchase logs, cancel reasons, retargeting, and AppsFlyer coverage.
+- The latest durable KPI window is **2026-05-27 through 2026-06-25**, sourced from an AppsFlyer aggregate report aligned with the saved Macra Scoreboard. Source: `.agent/macra/state.json`
+- That saved window records **533** unique onboarding starts, **448** users reaching paywall, **317** paywall primary CTA presses, **94** initiated checkouts, **5** trial starts, **3** purchases, and **3** subscribes. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`
+- The saved rates for that window are **84.1%** start-to-paywall, **70.8%** paywall-to-primary-CTA, **29.7%** CTA-to-checkout, and **5.3%** checkout-to-trial. Source: `.agent/macra/state.json`
+- The saved source split is stale but directionally important: organic produced **2** trials from **406** starts, while Apple Search Ads produced **3** trials from **127** starts. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`
+- The June 30 progress log explicitly says AppsFlyer/Scoreboard coverage is stale through **2026-06-25**, so the June 28-30 source split and full funnel cannot be confirmed from AppsFlyer yet. Source: `.agent/macra/progress.md`
+- Nora's June 30 decision log records a no-change validation window because AppsFlyer/Scoreboard coverage ends **2026-06-25**, purchase logs only confirm 2 trial-success rows on **2026-06-29**, and experiment results were generated **2026-06-25** and mostly inferred. Source: `.agent/macra/decisions.md`
+
+### Inference
+
+The daily KPI snapshot should be treated as **stale operating context**, not a decision-fresh daily read. It is useful for preserving the known funnel shape and source-quality hypothesis, but it should not trigger funnel, pricing, experiment allocation, retargeting, or Apple Search Ads changes until Scoreboard, AppsFlyer, and experiment coverage are refreshed for the current decision window. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`
 
 ## Scoreboard Coverage
 
-_Pending Step 2 population._
+### Observed facts
 
-This section must record Scoreboard freshness, date range, and any stale coverage caveats before the KPI snapshot is used for funnel decisions.
+- The Macra runbook names the **Macra Scoreboard under the Email Sequence surface** as a source-of-truth surface before proposing funnel changes. Source: `.agent/macra/runbook.md`
+- The Scoreboard implementation in `/admin/emailSequences` loads the AppsFlyer scoreboard summary from Firestore `appsflyer-scoreboards/macra`, aggregate periods from `appsflyer-aggregate-periods`, raw rows from `appsflyer-macra-raw-rows`, and person-level attribution from `appsflyer-macra-users`. Source: `src/pages/admin/emailSequences.tsx`
+- The Scoreboard implementation supports range presets and defaults the Macra AppsFlyer scoreboard window to **7 days**. Source: `src/pages/admin/emailSequences.tsx`
+- The durable saved Scoreboard-aligned read covers **2026-05-27 through 2026-06-25**. Source: `.agent/macra/state.json`
+- The June 30 progress log marks Scoreboard coverage as stale through **2026-06-25**, meaning the June 28-30 full funnel cannot yet be confirmed from the Scoreboard/AppsFlyer path. Source: `.agent/macra/progress.md`
+
+### Inference
+
+The Scoreboard should remain the operating surface for the daily KPI snapshot, but this file should not treat the current Scoreboard coverage as fresh. Any June 30 funnel decision would need a refreshed Scoreboard read with the selected range, loaded timestamp, AppsFlyer aggregate coverage, and raw/person-level row availability recorded. Source: `.agent/macra/runbook.md`; `.agent/macra/progress.md`; `src/pages/admin/emailSequences.tsx`
 
 ## Experiments Coverage
 
-_Pending Step 2 population._
+### Observed facts
 
-This section must summarize `/admin/experiments` coverage, including active `variant_a` freshness and whether result snapshots are decision-fresh.
+- The active durable experiment state is `variant_a`, configured as **monthly + annual, both with trial**. Source: `.agent/macra/state.json`
+- The durable state still carries a known issue: saved `/admin/experiments` results were stale from **2026-06-16** and still reflected the retired hard-paywall configuration, so the first task was to refresh/backfill experiment results before making decisions from variant data. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`
+- `/admin/experiments` reads the live experiment from Firestore `macra-experiments/macra_paywall_onboarding` and saved results from `macra-experiment-results/macra_paywall_onboarding`. Source: `src/pages/admin/experiments.tsx`
+- The default experiment definition marks `variant_a` as the active flow from **2026-06-16**, with monthly and annual plans both offering a 3-day trial, while the hard-paywall monthly `variant_c` is retired. Source: `src/pages/admin/experiments.tsx`
+- Nora's June 30 decision log records experiment results generated **2026-06-25** and mostly inferred as part of the evidence for holding all funnel changes during the validation window. Source: `.agent/macra/decisions.md`
+
+### Freshness verdict
+
+`variant_a` is the active configuration, but experiment results are **not decision-fresh** for a June 30 funnel call. The old 2026-06-16 hard-paywall warning is still part of durable state, and the later 2026-06-25 result snapshot is still stale/inferred relative to the current operating date. Treat experiment evidence as a guardrail gap until `/admin/experiments` has a refreshed active-`variant_a` snapshot with clear assignment quality and current AppsFlyer validation. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`; `src/pages/admin/experiments.tsx`
 
 ## Purchase Logs
 
@@ -81,9 +106,18 @@ This section must summarize retargeting state, email sequence state, and reachab
 
 ## AppsFlyer Coverage
 
-_Pending Step 2 population._
+### Observed facts
 
-This section must summarize AppsFlyer import freshness, aggregate coverage, raw/person-level coverage, and any source-split or dedupe caveats.
+- The AppsFlyer import function writes Macra summary data into `appsflyer-scoreboards/macra`, user attribution into `appsflyer-macra-users`, raw rows into `appsflyer-macra-raw-rows`, and aggregate periods into `appsflyer-aggregate-periods`. Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- The default Macra AppsFlyer event allowlist includes onboarding, paywall, checkout, purchase-cancel, web-checkout, trial, subscribe, and purchase events, including `af_initiated_checkout`, `macra_subscription_purchase_cancelled`, `macra_subscription_web_checkout_started`, `af_start_trial`, `af_subscribe`, and `af_purchase`. Source: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- The latest durable AppsFlyer aggregate coverage used for the KPI snapshot is **2026-05-27 through 2026-06-25**. Source: `.agent/macra/state.json`
+- The stale AppsFlyer source split records organic at **406** starts and **2** trials, and Apple Search Ads at **127** starts and **3** trials. Source: `.agent/macra/state.json`
+- The stored interpretation says Apple Search Ads is outperforming organic on conversion quality, but it is an early signal and **not proof of product-market fit**. Source: `.agent/macra/state.json`
+- The June 30 progress log says June 28-30 source split and full funnel cannot be confirmed from AppsFlyer yet because AppsFlyer/Scoreboard coverage remains stale through **2026-06-25**. Source: `.agent/macra/progress.md`
+
+### Inference
+
+AppsFlyer remains the right source for source split and campaign-quality interpretation, but the current coverage is stale. The Apple Search Ads signal can be carried forward as a hypothesis, not as a spend-scaling conclusion, until AppsFlyer aggregate, raw-row, and person-level coverage are refreshed and reconciled with Scoreboard and purchase-log evidence. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `netlify/functions/sync-macra-appsflyer-raw-data.ts`
 
 ## variant_a Experiment Freshness
 
