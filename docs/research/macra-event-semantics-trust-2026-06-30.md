@@ -45,9 +45,31 @@ The reported 2/day trial-start signal should be treated as **unverified** until 
 
 ## variant_a Experiment Freshness
 
-_Pending Step 2 population._
+### Verdict
 
-This section must record whether active `variant_a` results were refreshed from `/admin/experiments` or remain stale from the 2026-06-16 snapshot before any funnel decision is allowed to proceed.
+**Status: stale, not refreshed in this audit step.** The durable Macra state records active `variant_a` as the live configuration, but also records the saved `/admin/experiments` results snapshot as stale from **2026-06-16** and still reflecting the retired hard-paywall configuration. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`
+
+### Active configuration facts
+
+- The active experiment in durable state is `variant_a`, configured as **monthly + annual, both with trial**. Source: `.agent/macra/state.json`
+- The `/admin/experiments` implementation uses Firestore collection `macra-experiments`, document `macra_paywall_onboarding`, and result snapshot collection `macra-experiment-results`. Source: `src/pages/admin/experiments.tsx`
+- The default `/admin/experiments` config marks `variant_a` as enabled with weight `100`, named **Monthly + annual, both with trial**, while `variant_c` is retired with weight `0` and described as the hard-paywall monthly treatment that converted roughly 1% with about 95% Apple-sheet cancels. Source: `src/pages/admin/experiments.tsx`
+
+### Result-refresh mechanics
+
+- `/admin/experiments` loads both the live experiment config and the saved result snapshot by reading `macra-experiments/macra_paywall_onboarding` and `macra-experiment-results/macra_paywall_onboarding`. Source: `src/pages/admin/experiments.tsx`
+- The results panel displays the saved snapshot's `generatedAt` timestamp and includes a **Refresh results** action. Source: `src/pages/admin/experiments.tsx`
+- The backfill path writes a new `ExperimentResultsSnapshot` with `generatedAt`, `generatedBy`, assignment counts, variant rows, aggregate AppsFlyer validation, data input counts, and `configSnapshot` back to `macra-experiment-results/macra_paywall_onboarding`. Source: `src/pages/admin/experiments.tsx`
+
+### Decision impact
+
+- Nora's decision log already names refreshing/backfilling `/admin/experiments` for active `variant_a` as the first operational task because the experiment snapshot is stale from 2026-06-16. Source: `.agent/macra/decisions.md`
+- Nora's 2026-06-30 no-change decision says no onboarding, paywall, pricing, experiment allocation, retargeting, or Apple Search Ads spend changes should happen during the validation window; the cited evidence includes stale AppsFlyer/Scoreboard coverage, purchase logs confirming only 2 trial-success rows on 2026-06-29, and mostly inferred experiment results generated 2026-06-25. Source: `.agent/macra/decisions.md`; `.agent/macra/progress.md`
+- The Macra runbook explicitly says saved `/admin/experiments` result snapshots can be stale, the first operational task is to backfill/refresh experiment results before using variant performance for decisions, and the daily snapshot should include whether the result snapshot reflects active `variant_a`. Source: `docs/agents/macra-operating-runbook.md`
+
+### Freshness conclusion
+
+This audit does **not** have evidence that active `variant_a` results were refreshed after the stale 2026-06-16 snapshot. Until `/admin/experiments` produces a fresh result snapshot whose `configSnapshot` reflects active `variant_a`, this memo should treat variant performance as stale/incomplete evidence and should not use it to justify a funnel decision. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`; `src/pages/admin/experiments.tsx`
 
 ## Decision Log Contract
 
