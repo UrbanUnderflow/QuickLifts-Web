@@ -26,6 +26,47 @@ const readInputValue = (question: SurveyQuestion, answers: PulseCheckIntakeRespo
   if (Array.isArray(value)) return value[0] || '';
   return value || '';
 };
+const getQuestionOptions = (question: SurveyQuestion): NonNullable<SurveyQuestion['options']> => {
+  const rawOptions = question.options as unknown;
+  if (!Array.isArray(rawOptions)) return [];
+  return rawOptions.reduce<NonNullable<SurveyQuestion['options']>>((options, option, index) => {
+    if (typeof option === 'string') {
+      const text = option.trim();
+      if (text) options.push({ id: `option-${index + 1}`, text });
+      return options;
+    }
+    const candidate = option as Record<string, unknown>;
+    const text = String(candidate.text ?? candidate.label ?? candidate.value ?? '').trim();
+    if (text) {
+      options.push({ id: String(candidate.id ?? `option-${index + 1}`), text });
+    }
+    return options;
+  }, []);
+};
+const answerControlStyle: React.CSSProperties = {
+  width: '100%',
+  display: 'block',
+  boxSizing: 'border-box',
+  color: '#fff',
+  backgroundColor: 'rgba(255, 255, 255, 0.055)',
+  border: '1px solid rgba(196, 181, 253, 0.24)',
+  borderRadius: 18,
+  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.18)',
+  fontSize: 'clamp(22px, 3vw, 32px)',
+  lineHeight: 1.38,
+  padding: '20px 22px',
+  outline: 'none',
+  colorScheme: 'dark',
+};
+const textareaStyle: React.CSSProperties = {
+  ...answerControlStyle,
+  minHeight: 240,
+  resize: 'vertical',
+};
+const inputStyle: React.CSSProperties = {
+  ...answerControlStyle,
+  minHeight: 78,
+};
 
 export default function PulseCheckCoachIntakeDraftPage() {
   const router = useRouter();
@@ -133,6 +174,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
   const renderInput = () => {
     if (!activeQuestion) return null;
     const value = readInputValue(activeQuestion, answers);
+    const options = getQuestionOptions(activeQuestion);
     if (activeQuestion.type === 'yes_no') {
       return (
         <div className="pci-choiceGrid">
@@ -149,10 +191,10 @@ export default function PulseCheckCoachIntakeDraftPage() {
         </div>
       );
     }
-    if (activeQuestion.type === 'multiple_choice') {
+    if (activeQuestion.type === 'multiple_choice' || options.length > 0) {
       return (
         <div className="pci-choiceGrid">
-          {(activeQuestion.options || []).map((option) => (
+          {options.map((option) => (
             <button
               key={option.id}
               type="button"
@@ -170,6 +212,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
         <input
           className="pci-input"
           type="number"
+          style={inputStyle}
           min={activeQuestion.minValue}
           max={activeQuestion.maxValue}
           value={value}
@@ -184,9 +227,10 @@ export default function PulseCheckCoachIntakeDraftPage() {
     return (
       <textarea
         className="pci-textarea"
+        style={textareaStyle}
         value={value}
         autoFocus
-        rows={5}
+        rows={7}
         onChange={(event) => setAnswer(activeQuestion.id, event.target.value)}
         placeholder="Type the coach's answer here..."
       />

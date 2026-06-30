@@ -99,6 +99,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/onboarding/set-password',
     // PulseCheck demo (public for stakeholder demos)
     '/pulsecheckdemo',
+    '/whoop-pulsecheck-demo',
     // Pulse Sports Intelligence coach-report demos (public for stakeholder review).
     // Both the directory at /coach-report-demo and the per-sport reports at
     // /coach-report-demo/[sportId] are public. Dynamic descendants are also

@@ -35,8 +35,29 @@ const normalizeIntakeResponses = (value: unknown): PulseCheckIntakeResponses => 
   }, {});
 };
 const normalizeQuestionType = (value: unknown): SurveyQuestion['type'] => {
-  if (value === 'multiple_choice' || value === 'number' || value === 'yes_no') return value;
+  const normalized = normalizeString(value).toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'multiple_choice' || normalized === 'multiplechoice' || normalized === 'choice' || normalized === 'select') {
+    return 'multiple_choice';
+  }
+  if (normalized === 'number' || normalized === 'numeric') return 'number';
+  if (normalized === 'yes_no' || normalized === 'yesno' || normalized === 'boolean') return 'yes_no';
   return 'text';
+};
+const normalizeSurveyOptions = (value: unknown, questionIndex: number): NonNullable<SurveyQuestion['options']> => {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<NonNullable<SurveyQuestion['options']>>((options, option, optionIndex) => {
+    const candidate = option && typeof option === 'object' ? (option as Record<string, unknown>) : {};
+    const optionText =
+      typeof option === 'string'
+        ? normalizeString(option)
+        : normalizeString(candidate.text ?? candidate.label ?? candidate.value ?? candidate.name);
+    if (!optionText) return options;
+    options.push({
+      id: normalizeString(candidate.id) || `option-${questionIndex + 1}-${optionIndex + 1}`,
+      text: optionText,
+    });
+    return options;
+  }, []);
 };
 const normalizeSurveyQuestions = (value: unknown): SurveyQuestion[] => {
   if (!Array.isArray(value)) return [];
@@ -44,27 +65,22 @@ const normalizeSurveyQuestions = (value: unknown): SurveyQuestion[] => {
     const question = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
     const text = normalizeString(question.question);
     if (!text) return questions;
-    const type = normalizeQuestionType(question.type);
-    const options = Array.isArray(question.options)
-      ? question.options
-          .map((option, optionIndex) => {
-            const candidate = option && typeof option === 'object' ? (option as Record<string, unknown>) : {};
-            const optionText = normalizeString(candidate.text);
-            if (!optionText) return null;
-            return {
-              id: normalizeString(candidate.id) || `option-${index + 1}-${optionIndex + 1}`,
-              text: optionText,
-            };
-          })
-          .filter((option): option is { id: string; text: string } => Boolean(option))
-      : undefined;
+    const rawOptions =
+      question.options ??
+      question.choices ??
+      question.answerOptions ??
+      question.optionLabels ??
+      question.values ??
+      question.answers;
+    const options = normalizeSurveyOptions(rawOptions, index);
+    const type = options.length > 0 ? 'multiple_choice' : normalizeQuestionType(question.type);
 
     questions.push({
       id: normalizeString(question.id) || `question-${index + 1}`,
       question: text,
       type,
       required: Boolean(question.required),
-      options,
+      options: options.length > 0 ? options : undefined,
       minValue: typeof question.minValue === 'number' ? question.minValue : undefined,
       maxValue: typeof question.maxValue === 'number' ? question.maxValue : undefined,
     });

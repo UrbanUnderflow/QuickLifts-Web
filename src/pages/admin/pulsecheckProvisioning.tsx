@@ -2864,7 +2864,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       return;
     }
 
-    if (skipCohortForNow) {
+    if (activeWizardStep === 'cohort' && (skipCohortForNow || !cohortForm.name.trim())) {
       setCohortForm(defaultCohortForm);
       setCohortTagsInput('');
       completeProvisioningWizard(
@@ -2874,7 +2874,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
 
     cohortFormRef.current?.requestSubmit();
-  }, [activeWizardStep, completeProvisioningWizard, skipCohortForNow]);
+  }, [activeWizardStep, cohortForm.name, completeProvisioningWizard, skipCohortForNow]);
 
   const handleWizardActivationSubmit = useCallback(
     async (event: React.FormEvent) => {
