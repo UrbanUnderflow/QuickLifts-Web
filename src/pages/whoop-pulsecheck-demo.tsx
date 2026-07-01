@@ -181,96 +181,146 @@ const PhoneStatusBar = () => (
   </div>
 );
 
+// Shared 3D woven-metallic bracelet illustration (matches the PulseCheck iOS
+// device renders). Same geometry for every band; only the colorway differs —
+// Fitbit is champagne + warm orange rim, WHOOP is the black/onyx twin.
+type BandCfg = {
+  edge: string;
+  hi: string;
+  mid: string;
+  lo: string;
+  rim: string;
+  rimA: number;
+  edgeLine: string;
+  innerLine: string;
+  specA: number;
+  glintA: number;
+};
+
+const BAND_OUTER =
+  'M75 8 C95 8 108 24 108 46 L108 144 C108 166 95 182 75 182 C55 182 42 166 42 144 L42 46 C42 24 55 8 75 8 Z';
+const BAND_INNER =
+  'M75 34 C64 34 58 43 58 55 L58 135 C58 147 64 156 75 156 C86 156 92 147 92 135 L92 55 C92 43 86 34 75 34 Z';
+
+const WovenBand: React.FC<{ compact?: boolean; label: string; cfg: BandCfg }> = ({
+  compact = false,
+  label,
+  cfg,
+}) => {
+  const uid = `b${React.useId().replace(/:/g, '')}`;
+  return (
+    <svg
+      className={compact ? 'device-art device-art--compact' : 'device-art'}
+      viewBox="0 0 150 190"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label={label}
+    >
+      <defs>
+        <clipPath id={`${uid}Clip`}>
+          <path fillRule="evenodd" d={`${BAND_OUTER} ${BAND_INNER}`} />
+        </clipPath>
+        <linearGradient id={`${uid}Metal`} x1="42" y1="0" x2="108" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={cfg.edge} />
+          <stop offset="0.14" stopColor={cfg.hi} />
+          <stop offset="0.33" stopColor={cfg.mid} />
+          <stop offset="0.5" stopColor={cfg.lo} />
+          <stop offset="0.67" stopColor={cfg.mid} />
+          <stop offset="0.86" stopColor={cfg.hi} />
+          <stop offset="1" stopColor={cfg.edge} />
+        </linearGradient>
+        <linearGradient id={`${uid}Vert`} x1="0" y1="8" x2="0" y2="182" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.16" />
+          <stop offset="0.4" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.28" />
+        </linearGradient>
+        <radialGradient
+          id={`${uid}Rim`}
+          cx="0"
+          cy="0"
+          r="1"
+          gradientUnits="userSpaceOnUse"
+          gradientTransform="translate(56 120) rotate(105) scale(78 34)"
+        >
+          <stop offset="0" stopColor={cfg.rim} stopOpacity={cfg.rimA} />
+          <stop offset="1" stopColor={cfg.rim} stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${uid}Spec`} cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffffff" stopOpacity={cfg.specA} />
+          <stop offset="0.6" stopColor="#ffffff" stopOpacity={cfg.specA * 0.4} />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={`${uid}Glint`} cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffffff" stopOpacity={cfg.glintA} />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient
+          id={`${uid}Glow`}
+          cx="0"
+          cy="0"
+          r="1"
+          gradientUnits="userSpaceOnUse"
+          gradientTransform="translate(75 95) scale(72 86)"
+        >
+          <stop offset="0" stopColor={cfg.rim} stopOpacity="0.28" />
+          <stop offset="1" stopColor={cfg.rim} stopOpacity="0" />
+        </radialGradient>
+        <pattern id={`${uid}Mesh`} width="4.6" height="4.6" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
+          <path d="M0 2.3 h4.6 M2.3 0 v4.6" stroke="rgba(0,0,0,0.22)" strokeWidth="0.7" />
+          <path d="M0 0.6 h4.6" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
+        </pattern>
+      </defs>
+      <ellipse cx="75" cy="95" rx="70" ry="84" fill={`url(#${uid}Glow)`} />
+      <g transform="rotate(13 75 95)">
+        <g clipPath={`url(#${uid}Clip)`}>
+          <rect x="42" y="8" width="66" height="174" fill={`url(#${uid}Metal)`} />
+          <rect x="42" y="8" width="66" height="174" fill={`url(#${uid}Mesh)`} />
+          <rect x="42" y="8" width="66" height="174" fill={`url(#${uid}Vert)`} />
+          <ellipse cx="58" cy="118" rx="44" ry="70" fill={`url(#${uid}Rim)`} />
+          <ellipse cx="59" cy="96" rx="11" ry="66" fill={`url(#${uid}Spec)`} />
+          <ellipse cx="95" cy="104" rx="7" ry="48" fill={`url(#${uid}Spec)`} opacity="0.6" />
+          <ellipse cx="64" cy="52" rx="13" ry="8" fill={`url(#${uid}Glint)`} />
+        </g>
+        <path fill="none" stroke={cfg.edgeLine} strokeWidth="1.2" strokeOpacity="0.7" d={BAND_OUTER} />
+        <path fill="none" stroke={cfg.innerLine} strokeWidth="1" strokeOpacity="0.5" d={BAND_INNER} />
+      </g>
+    </svg>
+  );
+};
+
+const WHOOP_BAND_CFG: BandCfg = {
+  edge: '#0c0b10',
+  hi: '#6f6a79',
+  mid: '#2c2934',
+  lo: '#161419',
+  rim: '#cfd0e0',
+  rimA: 0.3,
+  edgeLine: '#9a96a8',
+  innerLine: '#413e4a',
+  specA: 0.42,
+  glintA: 0.6,
+};
+
+const FITBIT_BAND_CFG: BandCfg = {
+  edge: '#5f4e30',
+  hi: '#fdf1d8',
+  mid: '#e6cfa0',
+  lo: '#caae78',
+  rim: '#ff8a3d',
+  rimA: 0.85,
+  edgeLine: '#ffb070',
+  innerLine: '#ffa24d',
+  specA: 0.6,
+  glintA: 0.9,
+};
+
 const WhoopBand: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
-  <svg
-    className={compact ? 'device-art device-art--compact' : 'device-art'}
-    viewBox="0 0 150 180"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    role="img"
-    aria-label="WHOOP band illustration"
-  >
-    <defs>
-      <linearGradient id="whoopStrap" x1="40" y1="12" x2="112" y2="168" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#3c3743" />
-        <stop offset="0.5" stopColor="#1b1921" />
-        <stop offset="1" stopColor="#0c0b11" />
-      </linearGradient>
-      <linearGradient id="whoopSheen" x1="48" y1="20" x2="74" y2="20" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#ffffff" stopOpacity="0.16" />
-        <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-      </linearGradient>
-      <linearGradient id="whoopBezel" x1="49" y1="56" x2="101" y2="118" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#56505f" />
-        <stop offset="0.5" stopColor="#2a2733" />
-        <stop offset="1" stopColor="#141219" />
-      </linearGradient>
-      <radialGradient id="whoopFace" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 90) scale(26)">
-        <stop stopColor="#211e2a" />
-        <stop offset="1" stopColor="#0d0c12" />
-      </radialGradient>
-      <radialGradient id="whoopGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 92) scale(70 82)">
-        <stop stopColor="#e0fe10" stopOpacity="0.42" />
-        <stop offset="1" stopColor="#e0fe10" stopOpacity="0" />
-      </radialGradient>
-      <pattern id="whoopKnit" width="4" height="4" patternUnits="userSpaceOnUse">
-        <line x1="1" y1="0" x2="1" y2="4" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-        <line x1="3" y1="0" x2="3" y2="4" stroke="rgba(0,0,0,0.22)" strokeWidth="1" />
-      </pattern>
-    </defs>
-    <ellipse cx="75" cy="92" rx="66" ry="80" fill="url(#whoopGlow)" />
-    <g transform="rotate(-9 75 90)">
-      <rect x="46" y="12" width="58" height="156" rx="26" fill="url(#whoopStrap)" stroke="rgba(255,255,255,0.15)" strokeWidth="1.4" />
-      <rect x="46" y="12" width="58" height="156" rx="26" fill="url(#whoopKnit)" />
-      <rect x="50" y="15" width="16" height="150" rx="8" fill="url(#whoopSheen)" />
-      <rect x="61" y="24" width="28" height="38" rx="12" fill="#08070c" />
-      <rect x="61" y="118" width="28" height="40" rx="12" fill="#08070c" />
-      <rect x="48" y="56" width="54" height="60" rx="18" fill="url(#whoopBezel)" stroke="rgba(255,255,255,0.22)" strokeWidth="1.3" />
-      <rect x="54" y="62" width="42" height="48" rx="13" fill="url(#whoopFace)" stroke="rgba(0,0,0,0.5)" strokeWidth="1" />
-      <path d="M54 70 Q54 62 62 62 L74 62 Q60 66 58 80 Z" fill="rgba(255,255,255,0.07)" />
-      <circle cx="75" cy="99" r="11" fill="#e0fe10" opacity="0.22" />
-      <circle cx="75" cy="86" r="4.6" fill="#34d399" />
-      <circle cx="64" cy="92" r="3.4" fill="#2bb47e" />
-      <circle cx="86" cy="92" r="3.4" fill="#2bb47e" />
-      <circle cx="75" cy="99" r="5.6" fill="#e0fe10" />
-      <circle cx="72.6" cy="97" r="1.8" fill="#f4ff8a" />
-    </g>
-  </svg>
+  <WovenBand compact={compact} label="WHOOP band illustration" cfg={WHOOP_BAND_CFG} />
 );
 
 const FitbitLoop: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
-  <svg
-    className={compact ? 'device-art device-art--compact' : 'device-art'}
-    viewBox="0 0 150 180"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    role="img"
-    aria-label="Fitbit Air illustration"
-  >
-    <defs>
-      <linearGradient id="fitbitBand" x1="36" y1="14" x2="116" y2="166" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#f7eedd" />
-        <stop offset="0.5" stopColor="#e5d4b6" />
-        <stop offset="1" stopColor="#bda684" />
-      </linearGradient>
-      <radialGradient id="fitbitGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 92) scale(66 80)">
-        <stop stopColor="#ff8a3d" stopOpacity="0.5" />
-        <stop offset="1" stopColor="#ff8a3d" stopOpacity="0" />
-      </radialGradient>
-      <pattern id="fitbitWeave" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <line x1="0" y1="0" x2="0" y2="5" stroke="rgba(120,80,30,0.13)" strokeWidth="1.4" />
-      </pattern>
-    </defs>
-    <ellipse cx="75" cy="92" rx="64" ry="80" fill="url(#fitbitGlow)" />
-    <g transform="rotate(-7 75 92)">
-      <rect x="44" y="11" width="62" height="160" rx="31" stroke="#ff8a3d" strokeWidth="6" opacity="0.92" />
-      <rect x="46" y="13" width="58" height="156" rx="29" fill="url(#fitbitBand)" />
-      <rect x="46" y="13" width="58" height="156" rx="29" fill="url(#fitbitWeave)" />
-      <rect x="61" y="28" width="28" height="126" rx="14" fill="#0c0a08" />
-      <rect x="61" y="28" width="28" height="126" rx="14" stroke="#ff8a3d" strokeWidth="2.4" opacity="0.85" />
-      <rect x="50" y="17" width="13" height="148" rx="6.5" fill="rgba(255,255,255,0.3)" />
-    </g>
-  </svg>
+  <WovenBand compact={compact} label="Fitbit Air illustration" cfg={FITBIT_BAND_CFG} />
 );
 
 const PolarSensor: React.FC = () => (
