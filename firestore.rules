@@ -103,8 +103,56 @@ service cloud.firestore {
       ];
     }
 
+    function isAthleticMindHubCollection(collectionName) {
+      return collectionName in [
+        'athletic-mind-hub-contacts',
+        'athletic-mind-hub-updates',
+        'athletic-mind-hub-wiki-blocks'
+      ];
+    }
+
+    function isAthleticMindHubPermissionCollection(collectionName) {
+      return collectionName in [
+        'athletic-mind-hub-members',
+        'athletic-mind-hub-invites'
+      ];
+    }
+
+    function isAthleticMindHubFounder() {
+      return hasEmail() && request.auth.token.email == 'tre@fitwithpulse.ai';
+    }
+
+    function athleticMindHubMemberPath(userId) {
+      return /databases/$(database)/documents/athletic-mind-hub-members/$(userId);
+    }
+
+    function isAthleticMindHubMember() {
+      return isSignedIn() && exists(athleticMindHubMemberPath(request.auth.uid));
+    }
+
+    function isAthleticMindHubAdmin() {
+      return isAthleticMindHubFounder()
+        || (
+          isAthleticMindHubMember()
+          && get(athleticMindHubMemberPath(request.auth.uid)).data.permission == 'admin'
+        );
+    }
+
+    function canReadAthleticMindHub() {
+      return isAthleticMindHubAdmin() || isAthleticMindHubMember();
+    }
+
+    function canEditAthleticMindHubWiki() {
+      return isAthleticMindHubAdmin()
+        || (
+          isAthleticMindHubMember()
+          && get(athleticMindHubMemberPath(request.auth.uid)).data.permission in ['wikiEditor', 'admin']
+        );
+    }
+
     function isExplicitlyRuledCollection(collectionName) {
       return collectionName in [
+        'athletic-mind-hub-change-log',
         'beta-applications',
         'coach-nora-vault',
         'coach-team-schedule',
@@ -119,6 +167,8 @@ service cloud.firestore {
         'user-reports'
       ] || isAdminManagedPublicReadCollection(collectionName)
         || isAdminOnlyCollection(collectionName)
+        || isAthleticMindHubCollection(collectionName)
+        || isAthleticMindHubPermissionCollection(collectionName)
         || isPurchaseLogCollection(collectionName)
         || isLockedPrivateCollection(collectionName);
     }
@@ -165,6 +215,55 @@ service cloud.firestore {
 
     function isNonEmptyString(value) {
       return value is string && value.size() > 0;
+    }
+
+    function hasAthleticMindHubAuthorFields() {
+      return request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedByEmail == request.auth.token.email;
+    }
+
+    function hasAthleticMindHubCreateAuthorFields() {
+      return hasAthleticMindHubAuthorFields()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByEmail == request.auth.token.email;
+    }
+
+    function isAthleticMindHubChangeCreate() {
+      return request.resource.data.action in ['created', 'updated', 'deleted']
+        && request.resource.data.targetType in ['contact', 'update', 'wiki', 'member', 'invite']
+        && isNonEmptyString(request.resource.data.targetId)
+        && isNonEmptyString(request.resource.data.targetTitle)
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorEmail == request.auth.token.email;
+    }
+
+    function isValidAthleticMindHubPermission(value) {
+      return value in ['readOnly', 'wikiEditor', 'admin'];
+    }
+
+    function athleticMindHubInvitePath(inviteId) {
+      return /databases/$(database)/documents/athletic-mind-hub-invites/$(inviteId);
+    }
+
+    function isFounderAdminMembershipCreate(memberId) {
+      return isAthleticMindHubFounder()
+        && memberId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.permission == 'admin'
+        && hasAthleticMindHubCreateAuthorFields();
+    }
+
+    function isInviteMembershipCreate(memberId) {
+      return isSignedIn()
+        && memberId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && isNonEmptyString(request.resource.data.inviteId)
+        && exists(athleticMindHubInvitePath(request.resource.data.inviteId))
+        && get(athleticMindHubInvitePath(request.resource.data.inviteId)).data.status == 'active'
+        && request.resource.data.permission == get(athleticMindHubInvitePath(request.resource.data.inviteId)).data.permission
+        && hasAthleticMindHubCreateAuthorFields();
     }
 
     function isValidUsernameValue(value) {
@@ -449,6 +548,78 @@ service cloud.firestore {
       allow create: if isPublicDocumentNoteCreate();
       allow delete: if true;
       allow update: if false;
+    }
+
+    match /athletic-mind-hub-contacts/{contactId} {
+      allow read, create, update, delete: if isAthleticMindHubAdmin();
+    }
+
+    match /athletic-mind-hub-updates/{updateId} {
+      allow read: if canReadAthleticMindHub();
+      allow create, update, delete: if isAthleticMindHubAdmin()
+        && hasAthleticMindHubAuthorFields();
+    }
+
+    match /athletic-mind-hub-wiki-blocks/{blockId} {
+      allow read: if canReadAthleticMindHub();
+      allow create: if canEditAthleticMindHubWiki()
+        && hasAthleticMindHubCreateAuthorFields();
+      allow update: if canEditAthleticMindHubWiki()
+        && hasAthleticMindHubAuthorFields();
+      allow delete: if canEditAthleticMindHubWiki();
+    }
+
+    match /athletic-mind-hub-members/{memberId} {
+      allow read: if isAthleticMindHubAdmin()
+        || (isSignedIn() && memberId == request.auth.uid);
+      allow create: if isFounderAdminMembershipCreate(memberId)
+        || isInviteMembershipCreate(memberId)
+        || (
+          isAthleticMindHubAdmin()
+          && request.resource.data.userId == memberId
+          && isValidAthleticMindHubPermission(request.resource.data.permission)
+          && hasAthleticMindHubCreateAuthorFields()
+        );
+      allow update: if isAthleticMindHubAdmin()
+        && isValidAthleticMindHubPermission(request.resource.data.permission)
+        && hasAthleticMindHubAuthorFields();
+      allow delete: if isAthleticMindHubAdmin();
+    }
+
+    match /athletic-mind-hub-invites/{inviteId} {
+      allow get: if isSignedIn();
+      allow list: if isAthleticMindHubAdmin();
+      allow create: if isAthleticMindHubAdmin()
+        && request.resource.data.token == inviteId
+        && request.resource.data.status == 'active'
+        && isValidAthleticMindHubPermission(request.resource.data.permission)
+        && hasAthleticMindHubCreateAuthorFields();
+      allow update: if (
+          isAthleticMindHubAdmin()
+          && isValidAthleticMindHubPermission(request.resource.data.permission)
+          && hasAthleticMindHubAuthorFields()
+        ) || (
+          isSignedIn()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastRedeemedAt',
+            'lastRedeemedByUid',
+            'lastRedeemedByEmail',
+            'updatedByUid',
+            'updatedByName',
+            'updatedByEmail',
+            'updatedAt'
+          ])
+          && request.resource.data.lastRedeemedByUid == request.auth.uid
+          && request.resource.data.lastRedeemedByEmail == request.auth.token.email
+          && hasAthleticMindHubAuthorFields()
+        );
+      allow delete: if isAthleticMindHubAdmin();
+    }
+
+    match /athletic-mind-hub-change-log/{changeId} {
+      allow read: if canReadAthleticMindHub();
+      allow create: if canReadAthleticMindHub() && isAthleticMindHubChangeCreate();
+      allow update, delete: if false;
     }
 
     match /signingRequests/{requestId} {

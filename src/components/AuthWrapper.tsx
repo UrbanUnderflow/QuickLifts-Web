@@ -186,6 +186,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     const segments = normalizedPath.split('/').filter(Boolean);
 
+    if (normalizedPath === '/athletic-mind-hub' || normalizedPath.startsWith('/athletic-mind-hub/')) {
+      return false;
+    }
+
     if (isPublicClubPath(normalizedPath) || isClubCheckInPath(normalizedPath) || isLocalSystemOverviewPreviewPath(normalizedPath)) {
       return true;
     }
@@ -216,7 +220,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       const reservedPrefixes = new Set([
         'round-invitation', 'round', 'round-library', 'profile', 'challenge', 'review', 'programming', 'press', '100trainers',
         'moveandfuelatl', 'investor', 'invest', 'connect', 'coach-invite', 'coach', 'admin', 'api', 'payment',
-        'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding'
+        'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding', 'athletic-mind-hub'
       ]);
       if (!reservedPrefixes.has(segments[0])) {
         // Consider this a public landing page
@@ -230,7 +234,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       const reservedPrefixes = new Set([
         'round-invitation', 'round', 'round-library', 'profile', 'challenge', 'review', 'programming', 'press', '100trainers',
         'moveandfuelatl', 'investor', 'invest', 'connect', 'coach-invite', 'coach', 'admin', 'api', 'payment',
-        'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding'
+        'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding', 'athletic-mind-hub'
       ]);
       if (!reservedPrefixes.has(segments[0])) {
         return true;
@@ -290,6 +294,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   const checkoutBridgePath = (router.asPath || router.pathname || '').split('?')[0].split('#')[0] || '/';
   const normalizedCheckoutBridgePath = (checkoutBridgePath === '/' ? '/' : checkoutBridgePath.replace(/\/$/, '')).toLowerCase();
+  const isAthleticMindHubRoute =
+    normalizedCheckoutBridgePath === '/athletic-mind-hub' ||
+    normalizedCheckoutBridgePath.startsWith('/athletic-mind-hub/');
   const isCheckoutBridgeRoute =
     normalizedCheckoutBridgePath === '/checkout-redirect' ||
     (
@@ -638,6 +645,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       {showSignInModal && (
         <SignInModal
           isVisible={showSignInModal} // Controlled by state
+          variant={isAthleticMindHubRoute ? 'athleticMindHub' : 'default'}
           onClose={() => {
             console.log('[AuthWrapper] Closing SignInModal');
             setShowSignInModal(false);

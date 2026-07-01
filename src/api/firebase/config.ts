@@ -19,15 +19,59 @@ const FIREBASE_REQUIRED_FIELDS = [
   'appId',
 ] as const;
 
+type FirebaseConfigPrefix = 'NEXT_PUBLIC_FIREBASE_' | 'NEXT_PUBLIC_DEV_FIREBASE_';
+type FirebaseConfigField = typeof FIREBASE_REQUIRED_FIELDS[number];
+type FirebaseEnvConfig = Record<FirebaseConfigField, string | undefined>;
+
+const PRODUCTION_FIREBASE_ENV: FirebaseEnvConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+const DEVELOPMENT_FIREBASE_ENV: FirebaseEnvConfig = {
+  apiKey: process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_DEV_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_DEV_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_DEV_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_DEV_FIREBASE_APP_ID,
+};
+
 const isBrowserLocalhost = () =>
   typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-const hasFirebaseConfigForPrefix = (prefix: 'NEXT_PUBLIC_FIREBASE_' | 'NEXT_PUBLIC_DEV_FIREBASE_') =>
-  FIREBASE_REQUIRED_FIELDS.every((field) => {
-    const envKey = `${prefix}${field.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`;
-    return !!process.env[envKey];
-  });
+const getEnvKeyForFirebaseField = (prefix: FirebaseConfigPrefix, field: FirebaseConfigField) =>
+  `${prefix}${field.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`;
+
+const getFirebaseEnvConfigForPrefix = (prefix: FirebaseConfigPrefix) =>
+  prefix === 'NEXT_PUBLIC_DEV_FIREBASE_' ? DEVELOPMENT_FIREBASE_ENV : PRODUCTION_FIREBASE_ENV;
+
+const isPlaceholderFirebaseValue = (value: string | undefined) => {
+  if (!value) return true;
+
+  const normalizedValue = value.trim().toLowerCase();
+  return (
+    normalizedValue === '' ||
+    normalizedValue === 'set' ||
+    normalizedValue.includes('placeholder') ||
+    normalizedValue.includes('your_') ||
+    normalizedValue.includes('000000000000') ||
+    normalizedValue === 'local-preview.firebaseapp.com'
+  );
+};
+
+const getFirebaseConfigStatusForPrefix = (prefix: FirebaseConfigPrefix) => {
+  const envConfig = getFirebaseEnvConfigForPrefix(prefix);
+
+  return FIREBASE_REQUIRED_FIELDS.every((field) => !isPlaceholderFirebaseValue(envConfig[field]));
+};
+
+const hasUsableFirebaseConfigForPrefix = getFirebaseConfigStatusForPrefix;
 
 const getPreferredServerMode = () => {
   if (process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true') {
@@ -38,12 +82,12 @@ const getPreferredServerMode = () => {
     return false;
   }
 
-  const hasDevConfig = hasFirebaseConfigForPrefix('NEXT_PUBLIC_DEV_FIREBASE_');
+  const hasDevConfig = hasUsableFirebaseConfigForPrefix('NEXT_PUBLIC_DEV_FIREBASE_');
   if (hasDevConfig) {
     return true;
   }
 
-  const hasProdConfig = hasFirebaseConfigForPrefix('NEXT_PUBLIC_FIREBASE_');
+  const hasProdConfig = hasUsableFirebaseConfigForPrefix('NEXT_PUBLIC_FIREBASE_');
   if (hasProdConfig) {
     return false;
   }
@@ -66,9 +110,9 @@ const resolveClientFirebaseMode = () => {
   const hasExplicitDevMode = savedDevMode !== null;
   let mode = forceDevFirebase || (hasExplicitDevMode ? savedDevMode === 'true' : isLocalhost);
 
-  const hasDevKeys = !!process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY;
-  const hasProdKeys = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (mode && !hasDevKeys && hasProdKeys) {
+  const hasDevConfig = hasUsableFirebaseConfigForPrefix('NEXT_PUBLIC_DEV_FIREBASE_');
+  const hasProdConfig = hasUsableFirebaseConfigForPrefix('NEXT_PUBLIC_FIREBASE_');
+  if (mode && !hasDevConfig && hasProdConfig) {
     mode = false;
   }
 
@@ -80,44 +124,39 @@ const getFirebaseConfig = (isDev: boolean) => {
   
   // Log specific environment variables we're interested in
   const envVarsToCheck = isDev ? [
-    'NEXT_PUBLIC_DEV_FIREBASE_API_KEY',
-    'NEXT_PUBLIC_DEV_FIREBASE_AUTH_DOMAIN',
-    'NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID'
+    { key: 'NEXT_PUBLIC_DEV_FIREBASE_API_KEY', value: DEVELOPMENT_FIREBASE_ENV.apiKey },
+    { key: 'NEXT_PUBLIC_DEV_FIREBASE_AUTH_DOMAIN', value: DEVELOPMENT_FIREBASE_ENV.authDomain },
+    { key: 'NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID', value: DEVELOPMENT_FIREBASE_ENV.projectId }
   ] : [
-    'NEXT_PUBLIC_FIREBASE_API_KEY',
-    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-    'NEXT_PUBLIC_FIREBASE_PROJECT_ID'
+    { key: 'NEXT_PUBLIC_FIREBASE_API_KEY', value: PRODUCTION_FIREBASE_ENV.apiKey },
+    { key: 'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN', value: PRODUCTION_FIREBASE_ENV.authDomain },
+    { key: 'NEXT_PUBLIC_FIREBASE_PROJECT_ID', value: PRODUCTION_FIREBASE_ENV.projectId }
   ];
 
   console.log('[Firebase Config] Environment Check:', {
     isDev,
     isLocalhost,
     nodeEnv: process.env.NODE_ENV,
-    envVarsPresent: envVarsToCheck.reduce((acc, key) => {
-      acc[key] = process.env[key] ? '✓ Present' : '✗ Missing';
+    envVarsPresent: envVarsToCheck.reduce((acc, { key, value }) => {
+      acc[key] = isPlaceholderFirebaseValue(value)
+        ? '✗ Missing or placeholder'
+        : '✓ Usable';
       return acc;
     }, {} as Record<string, string>),
     timestamp: new Date().toISOString()
   });
 
   // Log the actual config we're going to use (without exposing full keys)
-  const config = {
-    apiKey: isDev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY : process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: isDev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_AUTH_DOMAIN : process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: isDev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID : process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: isDev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_STORAGE_BUCKET : process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: isDev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_MESSAGING_SENDER_ID : process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: isDev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_APP_ID : process.env.NEXT_PUBLIC_FIREBASE_APP_ID
-  };
+  const config = isDev ? DEVELOPMENT_FIREBASE_ENV : PRODUCTION_FIREBASE_ENV;
 
   console.log('[Firebase Config] Final Configuration:', {
     mode: isDev ? 'development' : 'production',
-    apiKey: config.apiKey,
+    apiKey: config.apiKey ? `${config.apiKey.slice(0, 6)}...` : undefined,
     authDomain: config.authDomain,
     projectId: config.projectId,
     storageBucket: config.storageBucket,
-    messagingSenderId: config.messagingSenderId,
-    appId: config.appId,
+    messagingSenderId: config.messagingSenderId ? 'configured' : undefined,
+    appId: config.appId ? 'configured' : undefined,
     timestamp: new Date().toISOString()
   });
 
@@ -128,13 +167,13 @@ const validateConfig = (config: any, isDev: boolean) => {
   const mode = isDev ? 'development' : 'production';
   const prefix = isDev ? 'NEXT_PUBLIC_DEV_FIREBASE_' : 'NEXT_PUBLIC_FIREBASE_';
   
-  const missingFields = FIREBASE_REQUIRED_FIELDS.filter(field => !config[field]);
+  const invalidFields = FIREBASE_REQUIRED_FIELDS.filter(field => isPlaceholderFirebaseValue(config[field]));
   
-  if (missingFields.length > 0) {
+  if (invalidFields.length > 0) {
     const errorMessage = `
-    Missing required Firebase configuration for ${mode} mode.
-    Please ensure these environment variables are available in local dev:
-    ${missingFields.map(field => `${prefix}${field.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`).join('\n')}
+    Missing or placeholder Firebase configuration for ${mode} mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    ${invalidFields.map(field => getEnvKeyForFirebaseField(prefix, field)).join('\n')}
 
     If these values live in Netlify already, make sure this machine is logged in and linked:
     1. netlify login

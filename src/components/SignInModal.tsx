@@ -42,6 +42,7 @@ import { extractPartnerInviteCodeFromQuery, resolvePartnerSourceFromQuery } from
 interface SignInModalProps {
   isVisible: boolean;
   closable?: boolean;
+  variant?: 'default' | 'athleticMindHub';
   onClose?: () => void;
   onSignInSuccess?: (user: any) => void;
   onSignInError?: (error: Error) => void;
@@ -133,6 +134,7 @@ const SignedInBadge: React.FC<{ user: { username?: string; profileImage?: { prof
 const SignInModal: React.FC<SignInModalProps> = ({
   isVisible,
   closable = false,
+  variant = 'default',
   onClose,
   onSignInSuccess,
   onSignInError,
@@ -179,6 +181,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const isPulseCheckPage = router.pathname === '/PulseCheck' || router.asPath === '/PulseCheck' || router.asPath.startsWith('/PulseCheck?') || router.asPath.startsWith('/PulseCheck/');
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
   const isOnAdminPage = router.pathname.startsWith('/admin/') || router.asPath.startsWith('/admin/');
+  const modalRoutePath = (router.asPath || router.pathname || '').split('?')[0].split('#')[0] || '/';
+  const normalizedModalRoutePath = (modalRoutePath === '/' ? '/' : modalRoutePath.replace(/\/$/, '')).toLowerCase();
+  const effectiveVariant = normalizedModalRoutePath === '/athletic-mind-hub' || normalizedModalRoutePath.startsWith('/athletic-mind-hub/')
+    ? 'athleticMindHub'
+    : variant;
   const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage;
   const isPulseCheckLegalContext = isOnCoachPage || router.asPath.startsWith('/PulseCheck/post-activation');
   const legalTheme = isPulseCheckLegalContext
@@ -2967,7 +2974,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
       } else if (loginRedirectPath) {
         // User accessed protected route directly (and is subscribed)
         console.log(`[SignInModal] Sign in success. Found loginRedirectPath. Closing modal. Path: ${loginRedirectPath}`);
-        dispatch(clearLoginRedirectPath()); 
+        dispatch(clearLoginRedirectPath());
+        if (loginRedirectPath !== router.asPath) {
+          router.push(loginRedirectPath);
+          return;
+        }
         onClose?.(); 
         return; // Return after handling
       } else if (sessionReturnPath && sessionReturnPath !== router.asPath) {
@@ -3014,6 +3025,588 @@ const SignInModal: React.FC<SignInModalProps> = ({
     </div>
   );
 
+  const submitLabel = isSignUp
+    ? signUpStep === "profile"
+      ? "Complete"
+      : signUpStep === "password"
+      ? "Create Account"
+      : signUpStep === "legal"
+      ? legalTheme.primaryLabel
+      : "Continue with Email"
+    : "Sign In";
+
+  const renderAthleticMindInitialStep = () => (
+    <div className="amh-login-panel">
+      <div>
+        <p className="amh-kicker">Council workspace access</p>
+        <h2>{isSignUp ? 'Create your hub account' : 'Welcome to Athletic Mind Hub'}</h2>
+        <p className="amh-panel-copy">
+          Sign in to manage council updates, Arionne&apos;s contact list, and the living Athletic Mind wiki.
+        </p>
+      </div>
+
+      <div className="amh-provider-row">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveProvider("apple");
+            handleSocialAuth("apple");
+          }}
+          disabled={isLoading && activeProvider === "apple"}
+          className="amh-provider-button dark"
+        >
+          {isLoading && activeProvider === "apple" ? (
+            <div className="loader border-t-transparent border-4 border-white rounded-full w-5 h-5 animate-spin"></div>
+          ) : (
+            <>
+              <img src="/apple-logo.svg" alt="Apple" />
+              {isSignUp ? "Sign up with Apple" : "Apple"}
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSocialAuth("google")}
+          disabled={isLoading}
+          className="amh-provider-button light"
+        >
+          {isLoading && activeProvider === "google" ? (
+            <div className="loader border-t-transparent border-4 border-black rounded-full w-5 h-5 animate-spin"></div>
+          ) : (
+            <>
+              <img src="/google-logo.svg" alt="Google" />
+              {isSignUp ? "Sign up with Google" : "Google"}
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="amh-divider"><span>or use hub credentials</span></div>
+
+      <div className="amh-fields">
+        <label>
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setShowError(false);
+            }}
+            placeholder="council.member@school.edu"
+          />
+          {showError && errors.email && <small className="amh-error">{errors.email}</small>}
+        </label>
+
+        {isSignUp && (
+          <label>
+            Invite code <span>optional</span>
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.trim())}
+              placeholder="Athletic Mind invite code"
+            />
+          </label>
+        )}
+
+        {!isSignUp && (
+          <label>
+            <div className="amh-label-row">
+              <span>Password</span>
+              <button type="button" onClick={() => setIsForgotPassword(true)}>Forgot password?</button>
+            </div>
+            <div className="amh-password-wrap">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setShowError(false);
+                }}
+                placeholder="Enter password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+              </button>
+            </div>
+          </label>
+        )}
+
+        {isSignUp && renderLegalAcceptanceField('Council accounts require agreement before access is created.')}
+      </div>
+
+      <button type="submit" className="amh-submit" disabled={isLoading}>
+        {isLoading ? "Checking access..." : submitLabel}
+      </button>
+
+      <p className="amh-switch">
+        {isSignUp ? "Already have an account? " : "Need council access? "}
+        <button type="button" onClick={toggleMode}>{isSignUp ? "Sign in" : "Create account"}</button>
+      </p>
+    </div>
+  );
+
+  const renderAthleticMindForgotPassword = () => (
+    <div className="amh-login-panel">
+      <div>
+        <p className="amh-kicker">Password reset</p>
+        <h2>{resetEmailSent ? "Check your email" : "Recover hub access"}</h2>
+        <p className="amh-panel-copy">
+          {resetEmailSent
+            ? "We sent reset instructions to the email you entered."
+            : "Enter your council email and we will send password reset instructions."}
+        </p>
+      </div>
+
+      {!resetEmailSent ? (
+        <>
+          <label className="amh-reset-field">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setShowError(false);
+              }}
+              placeholder="council.member@school.edu"
+            />
+          </label>
+          <button type="button" onClick={handleForgotPassword} disabled={isLoading} className="amh-submit">
+            {isLoading ? "Sending..." : "Send reset instructions"}
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setIsForgotPassword(false);
+            setResetEmailSent(false);
+          }}
+          className="amh-submit"
+        >
+          Return to sign in
+        </button>
+      )}
+
+      <button
+        type="button"
+        onClick={() => {
+          setIsForgotPassword(false);
+          setResetEmailSent(false);
+        }}
+        className="amh-muted-button"
+      >
+        Back to hub sign in
+      </button>
+    </div>
+  );
+
+  const renderAthleticMindAccess = () => (
+    <div className="amh-access-shell">
+      <div className="amh-access-bg" />
+      {mounted && window.location.hostname === 'localhost' && (
+        <div className="amh-dev-badges">
+          <DevModeToggle />
+          <SignedInBadge user={currentUser} />
+        </div>
+      )}
+
+      <section className="amh-access-hero" aria-label="Athletic Mind Hub access">
+        <div className="amh-access-copy">
+          <div className="amh-brand-row">
+            <span className="amh-mark">AM</span>
+            <span>Athletic Mind Council</span>
+          </div>
+          <h1>A focused workspace for the council&apos;s living work.</h1>
+          <p>
+            Updates, contacts, wiki notes, research, and decisions stay connected to the people making them.
+          </p>
+          <div className="amh-proof-grid">
+            <div><strong>Live Wiki</strong><span>Every edit carries an author label.</span></div>
+            <div><strong>Contact List</strong><span>Arionne can copy or export the roster fast.</span></div>
+            <div><strong>Updates</strong><span>Drafts and council communication history in one place.</span></div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="amh-form-shell">
+          {error && <div className="amh-error-banner">{error}</div>}
+          {isForgotPassword
+            ? renderAthleticMindForgotPassword()
+            : signUpStep === "initial"
+            ? renderAthleticMindInitialStep()
+            : (
+              <div className="amh-login-panel">
+                {renderCurrentStep()}
+                {signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && signUpStep !== "subscription" && (
+                  <button type="submit" className="amh-submit" disabled={isLoading}>
+                    {submitLabel}
+                  </button>
+                )}
+                {renderQuizNavigation()}
+              </div>
+            )}
+        </form>
+      </section>
+
+      <style jsx global>{`
+        .amh-access-shell {
+          position: fixed;
+          inset: 0;
+          z-index: 200;
+          min-height: 100vh;
+          overflow: auto;
+          background: #111c17;
+          color: #fffaf0;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .amh-access-bg {
+          position: fixed;
+          inset: 0;
+          background:
+            linear-gradient(90deg, rgba(13, 27, 22, 0.96) 0%, rgba(13, 27, 22, 0.86) 43%, rgba(13, 27, 22, 0.38) 100%),
+            linear-gradient(180deg, rgba(13, 27, 22, 0.26) 0%, rgba(13, 27, 22, 0.82) 100%),
+            url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
+        }
+
+        .amh-dev-badges {
+          position: fixed;
+          top: 18px;
+          left: 18px;
+          z-index: 3;
+          display: flex;
+          gap: 8px;
+        }
+
+        .amh-access-hero {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.78fr);
+          gap: clamp(32px, 5vw, 76px);
+          align-items: center;
+          width: min(1220px, calc(100% - 72px));
+          min-height: 100vh;
+          margin: 0 auto;
+          padding: 64px 0;
+        }
+
+        .amh-access-copy {
+          max-width: 720px;
+        }
+
+        .amh-brand-row {
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 34px;
+          color: #fff6df;
+          font-weight: 900;
+        }
+
+        .amh-mark {
+          display: grid;
+          place-items: center;
+          width: 44px;
+          height: 44px;
+          border-radius: 8px;
+          background: #e7b953;
+          color: #17241f;
+          font-size: 0.86rem;
+          letter-spacing: 0;
+        }
+
+        .amh-access-copy h1 {
+          max-width: 780px;
+          margin: 0 0 22px;
+          font-size: clamp(3.3rem, 6.8vw, 7.8rem);
+          line-height: 0.92;
+          letter-spacing: 0;
+        }
+
+        .amh-access-copy p {
+          max-width: 650px;
+          margin: 0 0 34px;
+          color: rgba(255, 250, 240, 0.78);
+          font-size: 1.16rem;
+          line-height: 1.62;
+        }
+
+        .amh-proof-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .amh-proof-grid div,
+        .amh-form-shell {
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 8px;
+          background: rgba(15, 28, 23, 0.72);
+          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(18px);
+        }
+
+        .amh-proof-grid div {
+          display: grid;
+          gap: 6px;
+          min-height: 104px;
+          padding: 16px;
+        }
+
+        .amh-proof-grid strong {
+          font-size: 0.95rem;
+        }
+
+        .amh-proof-grid span {
+          color: rgba(255, 250, 240, 0.66);
+          font-size: 0.88rem;
+          line-height: 1.45;
+        }
+
+        .amh-form-shell {
+          padding: 22px;
+        }
+
+        .amh-login-panel {
+          display: grid;
+          gap: 20px;
+        }
+
+        .amh-kicker {
+          margin: 0 0 10px;
+          color: #d99c68;
+          font-size: 0.76rem;
+          font-weight: 950;
+          text-transform: uppercase;
+        }
+
+        .amh-login-panel h2 {
+          margin: 0;
+          color: #fffaf0;
+          font-size: clamp(1.8rem, 3vw, 2.65rem);
+          line-height: 1.02;
+          letter-spacing: 0;
+        }
+
+        .amh-panel-copy {
+          margin: 10px 0 0;
+          color: rgba(255, 250, 240, 0.68);
+          line-height: 1.55;
+        }
+
+        .amh-provider-row {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .amh-provider-button,
+        .amh-submit,
+        .amh-muted-button {
+          border: 0;
+          border-radius: 8px;
+          min-height: 48px;
+          cursor: pointer;
+          font: inherit;
+          font-weight: 900;
+        }
+
+        .amh-provider-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+        }
+
+        .amh-provider-button img {
+          width: 19px;
+          height: 19px;
+        }
+
+        .amh-provider-button.dark {
+          background: #050706;
+          color: #fff;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .amh-provider-button.light {
+          background: #fffaf0;
+          color: #17241f;
+        }
+
+        .amh-divider {
+          position: relative;
+          color: rgba(255, 250, 240, 0.52);
+          font-size: 0.78rem;
+          font-weight: 850;
+          text-align: center;
+        }
+
+        .amh-divider:before {
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: rgba(255, 255, 255, 0.14);
+        }
+
+        .amh-divider span {
+          position: relative;
+          background: rgba(15, 28, 23, 0.94);
+          padding: 0 12px;
+        }
+
+        .amh-fields,
+        .amh-fields label,
+        .amh-reset-field {
+          display: grid;
+          gap: 8px;
+        }
+
+        .amh-fields {
+          gap: 15px;
+        }
+
+        .amh-fields label,
+        .amh-reset-field {
+          color: rgba(255, 250, 240, 0.78);
+          font-size: 0.84rem;
+          font-weight: 850;
+        }
+
+        .amh-fields label span {
+          color: rgba(255, 250, 240, 0.44);
+          font-weight: 750;
+        }
+
+        .amh-fields input,
+        .amh-reset-field input {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 8px;
+          background: rgba(255, 250, 240, 0.08);
+          color: #fffaf0;
+          font: inherit;
+          font-size: 1rem;
+          font-weight: 750;
+          outline: none;
+          padding: 14px 14px;
+        }
+
+        .amh-fields input:focus,
+        .amh-reset-field input:focus {
+          border-color: #e7b953;
+          box-shadow: 0 0 0 4px rgba(231, 185, 83, 0.18);
+        }
+
+        .amh-label-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .amh-label-row button,
+        .amh-switch button,
+        .amh-muted-button {
+          color: #e7b953;
+          background: transparent;
+        }
+
+        .amh-password-wrap {
+          position: relative;
+        }
+
+        .amh-password-wrap input {
+          padding-right: 44px;
+        }
+
+        .amh-password-wrap button {
+          position: absolute;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          display: grid;
+          place-items: center;
+          width: 44px;
+          border: 0;
+          background: transparent;
+          color: rgba(255, 250, 240, 0.58);
+        }
+
+        .amh-submit {
+          width: 100%;
+          background: #e7b953;
+          color: #17241f;
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+        }
+
+        .amh-switch {
+          margin: 0;
+          color: rgba(255, 250, 240, 0.58);
+          text-align: center;
+          font-size: 0.92rem;
+        }
+
+        .amh-muted-button {
+          justify-self: center;
+          min-height: auto;
+          padding: 0;
+        }
+
+        .amh-error,
+        .amh-error-banner {
+          color: #fecaca;
+        }
+
+        .amh-error-banner {
+          margin-bottom: 14px;
+          border-radius: 8px;
+          background: rgba(220, 38, 38, 0.22);
+          padding: 12px;
+          font-size: 0.9rem;
+          font-weight: 850;
+        }
+
+        @media (max-width: 980px) {
+          .amh-access-hero {
+            grid-template-columns: 1fr;
+            width: min(100% - 34px, 680px);
+            padding: 88px 0 34px;
+          }
+
+          .amh-access-copy h1 {
+            font-size: clamp(2.8rem, 11vw, 5.8rem);
+          }
+
+          .amh-proof-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .amh-provider-row {
+            grid-template-columns: 1fr;
+          }
+
+          .amh-form-shell {
+            padding: 16px;
+          }
+        }
+      `}</style>
+    </div>
+  );
+
   // ** Debug Log (placed before return) **
   // if (isVisible) {
   //     console.log('[SignInModal] Temp Redirect State Check (Render):', {
@@ -3022,6 +3615,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
   //       timestamp: new Date().toISOString()
   //     });
   // }
+
+  if (effectiveVariant === 'athleticMindHub') {
+    return renderAthleticMindAccess();
+  }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-[200] sm:p-6">
