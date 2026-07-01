@@ -9,7 +9,6 @@ import {
   Brain,
   Check,
   ChevronRight,
-  CircleGauge,
   HeartPulse,
   Link2,
   Moon,
@@ -183,18 +182,156 @@ const PhoneStatusBar = () => (
 );
 
 const WhoopBand: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
-  <div className={compact ? 'whoop-band whoop-band--compact' : 'whoop-band'} aria-label="WHOOP band illustration">
-    <div className="whoop-band__strap" />
-    <div className="whoop-band__sensor">
-      <span />
-    </div>
-  </div>
+  <svg
+    className={compact ? 'device-art device-art--compact' : 'device-art'}
+    viewBox="0 0 150 180"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="WHOOP band illustration"
+  >
+    <defs>
+      <linearGradient id="whoopStrap" x1="40" y1="12" x2="112" y2="168" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#3c3743" />
+        <stop offset="0.5" stopColor="#1b1921" />
+        <stop offset="1" stopColor="#0c0b11" />
+      </linearGradient>
+      <linearGradient id="whoopSheen" x1="48" y1="20" x2="74" y2="20" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#ffffff" stopOpacity="0.16" />
+        <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+      </linearGradient>
+      <linearGradient id="whoopBezel" x1="49" y1="56" x2="101" y2="118" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#56505f" />
+        <stop offset="0.5" stopColor="#2a2733" />
+        <stop offset="1" stopColor="#141219" />
+      </linearGradient>
+      <radialGradient id="whoopFace" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 90) scale(26)">
+        <stop stopColor="#211e2a" />
+        <stop offset="1" stopColor="#0d0c12" />
+      </radialGradient>
+      <radialGradient id="whoopGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 92) scale(70 82)">
+        <stop stopColor="#e0fe10" stopOpacity="0.42" />
+        <stop offset="1" stopColor="#e0fe10" stopOpacity="0" />
+      </radialGradient>
+      <pattern id="whoopKnit" width="4" height="4" patternUnits="userSpaceOnUse">
+        <line x1="1" y1="0" x2="1" y2="4" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+        <line x1="3" y1="0" x2="3" y2="4" stroke="rgba(0,0,0,0.22)" strokeWidth="1" />
+      </pattern>
+    </defs>
+    <ellipse cx="75" cy="92" rx="66" ry="80" fill="url(#whoopGlow)" />
+    <g transform="rotate(-9 75 90)">
+      <rect x="46" y="12" width="58" height="156" rx="26" fill="url(#whoopStrap)" stroke="rgba(255,255,255,0.15)" strokeWidth="1.4" />
+      <rect x="46" y="12" width="58" height="156" rx="26" fill="url(#whoopKnit)" />
+      <rect x="50" y="15" width="16" height="150" rx="8" fill="url(#whoopSheen)" />
+      <rect x="61" y="24" width="28" height="38" rx="12" fill="#08070c" />
+      <rect x="61" y="118" width="28" height="40" rx="12" fill="#08070c" />
+      <rect x="48" y="56" width="54" height="60" rx="18" fill="url(#whoopBezel)" stroke="rgba(255,255,255,0.22)" strokeWidth="1.3" />
+      <rect x="54" y="62" width="42" height="48" rx="13" fill="url(#whoopFace)" stroke="rgba(0,0,0,0.5)" strokeWidth="1" />
+      <path d="M54 70 Q54 62 62 62 L74 62 Q60 66 58 80 Z" fill="rgba(255,255,255,0.07)" />
+      <circle cx="75" cy="99" r="11" fill="#e0fe10" opacity="0.22" />
+      <circle cx="75" cy="86" r="4.6" fill="#34d399" />
+      <circle cx="64" cy="92" r="3.4" fill="#2bb47e" />
+      <circle cx="86" cy="92" r="3.4" fill="#2bb47e" />
+      <circle cx="75" cy="99" r="5.6" fill="#e0fe10" />
+      <circle cx="72.6" cy="97" r="1.8" fill="#f4ff8a" />
+    </g>
+  </svg>
 );
 
 const FitbitLoop: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
-  <div className={compact ? 'fitbit-loop fitbit-loop--compact' : 'fitbit-loop'} aria-label="Fitbit Air illustration">
-    <span className="fitbit-loop__sheen" />
-  </div>
+  <svg
+    className={compact ? 'device-art device-art--compact' : 'device-art'}
+    viewBox="0 0 150 180"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Fitbit Air illustration"
+  >
+    <defs>
+      <linearGradient id="fitbitBand" x1="36" y1="14" x2="116" y2="166" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#f7eedd" />
+        <stop offset="0.5" stopColor="#e5d4b6" />
+        <stop offset="1" stopColor="#bda684" />
+      </linearGradient>
+      <radialGradient id="fitbitGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 92) scale(66 80)">
+        <stop stopColor="#ff8a3d" stopOpacity="0.5" />
+        <stop offset="1" stopColor="#ff8a3d" stopOpacity="0" />
+      </radialGradient>
+      <pattern id="fitbitWeave" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="5" stroke="rgba(120,80,30,0.13)" strokeWidth="1.4" />
+      </pattern>
+    </defs>
+    <ellipse cx="75" cy="92" rx="64" ry="80" fill="url(#fitbitGlow)" />
+    <g transform="rotate(-7 75 92)">
+      <rect x="44" y="11" width="62" height="160" rx="31" stroke="#ff8a3d" strokeWidth="6" opacity="0.92" />
+      <rect x="46" y="13" width="58" height="156" rx="29" fill="url(#fitbitBand)" />
+      <rect x="46" y="13" width="58" height="156" rx="29" fill="url(#fitbitWeave)" />
+      <rect x="61" y="28" width="28" height="126" rx="14" fill="#0c0a08" />
+      <rect x="61" y="28" width="28" height="126" rx="14" stroke="#ff8a3d" strokeWidth="2.4" opacity="0.85" />
+      <rect x="50" y="17" width="13" height="148" rx="6.5" fill="rgba(255,255,255,0.3)" />
+    </g>
+  </svg>
+);
+
+const PolarSensor: React.FC = () => (
+  <svg
+    className="device-art"
+    viewBox="0 0 150 150"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Polar heart-rate sensor illustration"
+  >
+    <defs>
+      <radialGradient id="polarGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 75) scale(68)">
+        <stop stopColor="#a78bfa" stopOpacity="0.42" />
+        <stop offset="1" stopColor="#a78bfa" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="polarPod" x1="48" y1="54" x2="102" y2="98" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#2c2742" />
+        <stop offset="1" stopColor="#15121f" />
+      </linearGradient>
+    </defs>
+    <ellipse cx="75" cy="75" rx="68" ry="68" fill="url(#polarGlow)" />
+    <circle cx="75" cy="75" r="62" stroke="#8b5cf6" strokeOpacity="0.16" strokeWidth="2" />
+    <circle cx="75" cy="75" r="48" stroke="#8b5cf6" strokeOpacity="0.32" strokeWidth="2" />
+    <circle cx="75" cy="75" r="34" stroke="#a78bfa" strokeOpacity="0.55" strokeWidth="2" />
+    <rect x="48" y="54" width="54" height="42" rx="17" fill="url(#polarPod)" stroke="rgba(167,139,250,0.55)" strokeWidth="1.4" />
+    <path
+      d="M75 88c-8-5.1-13.2-9.2-13.2-14.6 0-3.3 2.6-5.8 5.9-5.8 2.1 0 4 1.1 5.1 2.8 1.1-1.7 3-2.8 5.1-2.8 3.3 0 5.9 2.5 5.9 5.8 0 5.4-5.2 9.5-13.2 14.6z"
+      fill="#c4b5fd"
+    />
+  </svg>
+);
+
+const OuraRing: React.FC = () => (
+  <svg
+    className="device-art"
+    viewBox="0 0 150 150"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Oura Ring illustration"
+  >
+    <defs>
+      <radialGradient id="ouraGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(75 86) scale(62 60)">
+        <stop stopColor="#a78bfa" stopOpacity="0.4" />
+        <stop offset="1" stopColor="#a78bfa" stopOpacity="0" />
+      </radialGradient>
+      <linearGradient id="ouraMetal" x1="32" y1="36" x2="120" y2="116" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#544f5f" />
+        <stop offset="0.5" stopColor="#24212c" />
+        <stop offset="1" stopColor="#100e15" />
+      </linearGradient>
+    </defs>
+    <ellipse cx="75" cy="84" rx="60" ry="56" fill="url(#ouraGlow)" />
+    <ellipse cx="75" cy="74" rx="49" ry="45" stroke="url(#ouraMetal)" strokeWidth="17" fill="none" />
+    <ellipse cx="75" cy="74" rx="57.5" ry="53.5" stroke="rgba(255,255,255,0.1)" strokeWidth="1" fill="none" />
+    <ellipse cx="75" cy="74" rx="40.5" ry="36.5" stroke="rgba(0,0,0,0.55)" strokeWidth="1.2" fill="none" />
+    <path d="M93 33 A49 45 0 0 1 122 61" stroke="#ffffff" strokeOpacity="0.9" strokeWidth="5" strokeLinecap="round" />
+    <path d="M88 30 A49 45 0 0 1 100 35" stroke="#ffffff" strokeOpacity="0.55" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M40 101 A49 45 0 0 0 57 116" stroke="#a78bfa" strokeOpacity="0.55" strokeWidth="4" strokeLinecap="round" />
+  </svg>
 );
 
 const StatusPill: React.FC<{ children: React.ReactNode; tone?: 'green' | 'purple' | 'orange' | 'muted' }> = ({
@@ -409,13 +546,13 @@ const StepContent: React.FC<{ step: DemoStep }> = ({ step }) => {
               name="Polar"
               connected
               description="Live heart rate during sims plus deep recovery from Polar Flow."
-              visual={<HeartPulse size={54} />}
+              visual={<PolarSensor />}
             />
             <DeviceCard
               name="Oura Ring"
               connected
               description="Recovery, readiness, and sleep quality from your Oura ring."
-              visual={<CircleGauge size={58} />}
+              visual={<OuraRing />}
             />
             <AddDeviceRow />
           </div>
@@ -1008,10 +1145,17 @@ export default function WhoopPulseCheckDemo() {
 
         .whoop-step {
           height: 100%;
-          overflow: hidden;
+          overflow-y: auto;
+          overflow-x: hidden;
           display: flex;
           flex-direction: column;
           gap: 12px;
+          padding-bottom: 18px;
+          scrollbar-width: none;
+        }
+
+        .whoop-step::-webkit-scrollbar {
+          display: none;
         }
 
         .whoop-step__header {
@@ -1101,12 +1245,6 @@ export default function WhoopPulseCheckDemo() {
           display: flex;
           flex-direction: column;
           gap: 10px;
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-          padding-right: 2px;
-          margin-right: -2px;
-          padding-bottom: 4px;
         }
 
         .whoop-source-stack {
@@ -1117,12 +1255,12 @@ export default function WhoopPulseCheckDemo() {
         }
 
         .whoop-device-card {
-          min-height: 150px;
-          border-radius: 24px;
-          padding: 16px;
+          min-height: 162px;
+          border-radius: 28px;
+          padding: 18px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 130px;
-          gap: 10px;
+          grid-template-columns: minmax(0, 1fr) 132px;
+          gap: 8px;
           background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
           border: 1px solid rgba(255, 255, 255, 0.1);
           overflow: hidden;
@@ -1231,78 +1369,21 @@ export default function WhoopPulseCheckDemo() {
           align-items: center;
           justify-content: center;
           min-width: 0;
+          margin: -10px -6px -10px 0;
           color: #a78bfa;
-          opacity: 0.95;
         }
 
-        .whoop-band {
-          position: relative;
-          width: 88px;
-          height: 122px;
-          transform: rotate(-7deg);
-          filter: drop-shadow(0 20px 22px rgba(0, 0, 0, 0.36));
+        .device-art {
+          width: 100%;
+          height: 100%;
+          max-height: 158px;
+          object-fit: contain;
+          filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.42));
         }
 
-        .whoop-band--compact {
-          width: 58px;
-          height: 74px;
-        }
-
-        .whoop-band__strap {
-          position: absolute;
-          inset: 0;
-          border-radius: 32px;
-          background:
-            repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.1) 0 2px, rgba(0, 0, 0, 0.08) 2px 4px),
-            linear-gradient(90deg, #131316, #3e3b46 50%, #111114);
-          border-left: 6px solid #e0fe10;
-          border-right: 6px solid #8b5cf6;
-        }
-
-        .whoop-band__sensor {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 58%;
-          height: 38%;
-          transform: translate(-50%, -50%);
-          border-radius: 19px;
-          background: linear-gradient(135deg, #111116, #262330);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .whoop-band__sensor span {
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: #e0fe10;
-          box-shadow: 0 0 24px rgba(224, 254, 16, 0.58);
-        }
-
-        .fitbit-loop {
-          position: relative;
-          width: 78px;
-          height: 118px;
-          border-radius: 40px;
-          transform: rotate(-6deg);
-          background: linear-gradient(160deg, #f6efe2, #e3d6bd);
-          border: 5px solid #fb923c;
-          filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.32));
-        }
-
-        .fitbit-loop--compact {
-          width: 50px;
-          height: 76px;
-        }
-
-        .fitbit-loop__sheen {
-          position: absolute;
-          inset: 6px;
-          border-radius: 30px;
-          background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 6px);
+        .device-art--compact {
+          width: 56px;
+          height: 72px;
         }
 
         .whoop-add-device-row {
@@ -1961,7 +2042,7 @@ export default function WhoopPulseCheckDemo() {
           }
 
           .whoop-device-card {
-            grid-template-columns: minmax(0, 1fr) 104px;
+            grid-template-columns: minmax(0, 1fr) 116px;
           }
         }
       `}</style>
