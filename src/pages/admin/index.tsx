@@ -79,10 +79,10 @@ const adminCardsData = [
     link: "/admin/groupMeet"
   },
   {
-    title: "Mission Control",
-    description: "Launch autonomous agent missions, monitor North Star progress, and review agent-proposed objectives.",
+    title: "Pulse Command",
+    description: "Control agent teams, roundtables, mission state, operator inbox, and token usage from one surface.",
     icon: <Rocket className="w-5 h-5" />,
-    link: "/admin/missionControl"
+    link: "/admin/pulseCommand"
   },
   {
     title: "System Overview",
@@ -167,13 +167,6 @@ const adminCardsData = [
     description: "Control Macra onboarding and paywall feature flags, rollout weights, and variant parameters from Firestore.",
     icon: <FlaskConical className="w-5 h-5" />,
     link: "/admin/experiments"
-  },
-  {
-
-    title: "Virtual Office",
-    description: "Live status board for agents with animated desks and typing state.",
-    icon: <Users className="w-5 h-5" />,
-    link: "/admin/virtualOffice"
   },
   {
     title: "Legacy Coach Invite Links",

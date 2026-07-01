@@ -1,0 +1,71 @@
+{
+  "missionId": "macra-growth-ops",
+  "product": "Macra",
+  "northStar": "Make Macra's trial-start path repeatable without breaking trust.",
+  "primaryMetric": "qualified_onboarding_start_to_trial_start",
+  "activeExperiment": {
+    "currentVariant": "variant_a",
+    "configuration": "monthly + annual, both with trial",
+    "knownIssue": "Saved /admin/experiments results snapshot is stale from 2026-06-16 and still reflects retired hard-paywall configuration.",
+    "firstTask": "Refresh/backfill experiment results so decisions are not made from stale variant data."
+  },
+  "latestSavedRun": {
+    "dateRangeStart": "2026-05-27",
+    "dateRangeEnd": "2026-06-25",
+    "source": "AppsFlyer aggregate report aligned with saved Macra Scoreboard",
+    "events": {
+      "uniqueOnboardingStarts": 533,
+      "reachedPaywall": 448,
+      "pressedPaywallPrimaryCta": 317,
+      "initiatedCheckout": 94,
+      "trialStarts": 5,
+      "purchases": 3,
+      "subscribes": 3
+    },
+    "rates": {
+      "startToPaywall": 0.841,
+      "paywallToPrimaryCta": 0.708,
+      "ctaToCheckout": 0.297,
+      "checkoutToTrial": 0.053
+    },
+    "sourceSplit": {
+      "organic": {
+        "starts": 406,
+        "trials": 2,
+        "startToTrial": 0.005,
+        "checkoutToTrialApprox": 0.025
+      },
+      "appleSearchAds": {
+        "starts": 127,
+        "trials": 3,
+        "startToTrial": 0.024,
+        "checkoutToTrialApprox": 0.2
+      }
+    },
+    "interpretation": "Apple Search Ads is outperforming organic on conversion quality, but this is an early signal and not proof of product-market fit."
+  },
+  "guardrails": [
+    "apple_purchase_cancels",
+    "checkout_failure_or_cancel_rate",
+    "under_18_or_missing_birthdate_blocks",
+    "trial_activation_after_start",
+    "paid_conversion_after_trial",
+    "cancel_reasons_price_not_ready_need_more_proof_something_broke"
+  ],
+  "cadence": {
+    "daily": [
+      "Validate AppsFlyer CSV coverage",
+      "Refresh Scoreboard",
+      "Post Macra KPI snapshot",
+      "Each agent produces one finding and one proposed action",
+      "Nora chooses at most one operational change unless something is broken"
+    ],
+    "weekly": [
+      "Decide whether the active experiment should continue",
+      "Review Apple Search Ads quality",
+      "Review trial starts, paid conversions, and cancel feedback",
+      "Promote, pause, or design the next experiment"
+    ]
+  },
+  "lastUpdated": "2026-06-29"
+}

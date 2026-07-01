@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const repoRoot = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web';
+const repoRoot = path.resolve(__dirname, '../../..');
 const submitPath = path.join(repoRoot, 'netlify/functions/submit-pulsecheck-checkin.js');
 const configPath = path.join(repoRoot, 'netlify/functions/config/firebase.js');
 const profileRuntimePath = path.join(repoRoot, 'src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
