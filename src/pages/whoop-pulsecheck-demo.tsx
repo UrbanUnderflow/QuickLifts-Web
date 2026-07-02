@@ -193,14 +193,16 @@ type BandCfg = {
   rimA: number;
   edgeLine: string;
   innerLine: string;
+  meshDark: string;
+  meshLight: string;
   specA: number;
   glintA: number;
 };
 
 const BAND_OUTER =
-  'M75 8 C95 8 108 24 108 46 L108 144 C108 166 95 182 75 182 C55 182 42 166 42 144 L42 46 C42 24 55 8 75 8 Z';
-const BAND_INNER =
-  'M75 34 C64 34 58 43 58 55 L58 135 C58 147 64 156 75 156 C86 156 92 147 92 135 L92 55 C92 43 86 34 75 34 Z';
+  'M50 8 C73 8 86 24 86 49 L86 191 C86 216 73 232 50 232 C27 232 14 216 14 191 L14 49 C14 24 27 8 50 8 Z';
+const BAND_FACE =
+  'M50 12 C68 12 78 27 78 49 L78 191 C78 213 68 228 50 228 C32 228 22 213 22 191 L22 49 C22 27 32 12 50 12 Z';
 
 const WovenBand: React.FC<{ compact?: boolean; label: string; cfg: BandCfg }> = ({
   compact = false,
@@ -210,8 +212,8 @@ const WovenBand: React.FC<{ compact?: boolean; label: string; cfg: BandCfg }> = 
   const uid = `b${React.useId().replace(/:/g, '')}`;
   return (
     <svg
-      className={compact ? 'device-art device-art--compact' : 'device-art'}
-      viewBox="0 0 150 190"
+      className={compact ? 'device-art device-art--band device-art--compact' : 'device-art device-art--band'}
+      viewBox="0 0 100 240"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
@@ -219,36 +221,44 @@ const WovenBand: React.FC<{ compact?: boolean; label: string; cfg: BandCfg }> = 
     >
       <defs>
         <clipPath id={`${uid}Clip`}>
-          <path fillRule="evenodd" d={`${BAND_OUTER} ${BAND_INNER}`} />
+          <path d={BAND_OUTER} />
         </clipPath>
-        <linearGradient id={`${uid}Metal`} x1="42" y1="0" x2="108" y2="0" gradientUnits="userSpaceOnUse">
+        <clipPath id={`${uid}FaceClip`}>
+          <path d={BAND_FACE} />
+        </clipPath>
+        <linearGradient id={`${uid}Rails`} x1="14" y1="0" x2="86" y2="0" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor={cfg.edge} />
-          <stop offset="0.14" stopColor={cfg.hi} />
-          <stop offset="0.33" stopColor={cfg.mid} />
-          <stop offset="0.5" stopColor={cfg.lo} />
-          <stop offset="0.67" stopColor={cfg.mid} />
-          <stop offset="0.86" stopColor={cfg.hi} />
+          <stop offset="0.16" stopColor={cfg.rim} />
+          <stop offset="0.48" stopColor={cfg.lo} />
+          <stop offset="0.84" stopColor={cfg.rim} />
           <stop offset="1" stopColor={cfg.edge} />
         </linearGradient>
-        <linearGradient id={`${uid}Vert`} x1="0" y1="8" x2="0" y2="182" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.16" />
+        <linearGradient id={`${uid}Face`} x1="22" y1="0" x2="78" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={cfg.mid} />
+          <stop offset="0.2" stopColor={cfg.hi} />
+          <stop offset="0.5" stopColor={cfg.lo} />
+          <stop offset="0.8" stopColor={cfg.hi} />
+          <stop offset="1" stopColor={cfg.mid} />
+        </linearGradient>
+        <linearGradient id={`${uid}Vert`} x1="0" y1="8" x2="0" y2="232" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.14" />
           <stop offset="0.4" stopColor="#ffffff" stopOpacity="0" />
-          <stop offset="1" stopColor="#000000" stopOpacity="0.28" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.24" />
         </linearGradient>
         <radialGradient
-          id={`${uid}Rim`}
+          id={`${uid}RailGlow`}
           cx="0"
           cy="0"
           r="1"
           gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(56 120) rotate(105) scale(78 34)"
+          gradientTransform="translate(27 153) rotate(104) scale(74 24)"
         >
           <stop offset="0" stopColor={cfg.rim} stopOpacity={cfg.rimA} />
           <stop offset="1" stopColor={cfg.rim} stopOpacity="0" />
         </radialGradient>
         <radialGradient id={`${uid}Spec`} cx="0.5" cy="0.5" r="0.5">
           <stop offset="0" stopColor="#ffffff" stopOpacity={cfg.specA} />
-          <stop offset="0.6" stopColor="#ffffff" stopOpacity={cfg.specA * 0.4} />
+          <stop offset="0.55" stopColor="#ffffff" stopOpacity={cfg.specA * 0.34} />
           <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
         </radialGradient>
         <radialGradient id={`${uid}Glint`} cx="0.5" cy="0.5" r="0.5">
@@ -261,45 +271,51 @@ const WovenBand: React.FC<{ compact?: boolean; label: string; cfg: BandCfg }> = 
           cy="0"
           r="1"
           gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(75 95) scale(72 86)"
+          gradientTransform="translate(50 120) scale(70 108)"
         >
           <stop offset="0" stopColor={cfg.rim} stopOpacity="0.28" />
           <stop offset="1" stopColor={cfg.rim} stopOpacity="0" />
         </radialGradient>
         <pattern id={`${uid}Mesh`} width="4.6" height="4.6" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
-          <path d="M0 2.3 h4.6 M2.3 0 v4.6" stroke="rgba(0,0,0,0.22)" strokeWidth="0.7" />
-          <path d="M0 0.6 h4.6" stroke="rgba(255,255,255,0.1)" strokeWidth="0.6" />
+          <path d="M0 2.3 h4.6 M2.3 0 v4.6" stroke={cfg.meshDark} strokeWidth="0.7" />
+          <path d="M0 0.6 h4.6" stroke={cfg.meshLight} strokeWidth="0.6" />
         </pattern>
       </defs>
-      <ellipse cx="75" cy="95" rx="70" ry="84" fill={`url(#${uid}Glow)`} />
-      <g transform="rotate(13 75 95)">
+      <ellipse cx="50" cy="120" rx="70" ry="105" fill={`url(#${uid}Glow)`} />
+      <g transform="rotate(-6 50 120)">
         <g clipPath={`url(#${uid}Clip)`}>
-          <rect x="42" y="8" width="66" height="174" fill={`url(#${uid}Metal)`} />
-          <rect x="42" y="8" width="66" height="174" fill={`url(#${uid}Mesh)`} />
-          <rect x="42" y="8" width="66" height="174" fill={`url(#${uid}Vert)`} />
-          <ellipse cx="58" cy="118" rx="44" ry="70" fill={`url(#${uid}Rim)`} />
-          <ellipse cx="59" cy="96" rx="11" ry="66" fill={`url(#${uid}Spec)`} />
-          <ellipse cx="95" cy="104" rx="7" ry="48" fill={`url(#${uid}Spec)`} opacity="0.6" />
-          <ellipse cx="64" cy="52" rx="13" ry="8" fill={`url(#${uid}Glint)`} />
+          <rect x="14" y="8" width="72" height="224" fill={`url(#${uid}Rails)`} />
+          <ellipse cx="23" cy="154" rx="32" ry="86" fill={`url(#${uid}RailGlow)`} />
+          <ellipse cx="77" cy="134" rx="20" ry="80" fill={`url(#${uid}RailGlow)`} opacity="0.54" />
+          <g clipPath={`url(#${uid}FaceClip)`}>
+            <rect x="22" y="12" width="56" height="216" fill={`url(#${uid}Face)`} />
+            <rect x="22" y="12" width="56" height="216" fill={`url(#${uid}Mesh)`} />
+            <rect x="22" y="12" width="56" height="216" fill={`url(#${uid}Vert)`} />
+            <ellipse cx="38" cy="116" rx="9" ry="72" fill={`url(#${uid}Spec)`} />
+            <ellipse cx="63" cy="128" rx="7" ry="64" fill={`url(#${uid}Spec)`} opacity="0.42" />
+            <ellipse cx="40" cy="58" rx="13" ry="7" fill={`url(#${uid}Glint)`} />
+          </g>
         </g>
-        <path fill="none" stroke={cfg.edgeLine} strokeWidth="1.2" strokeOpacity="0.7" d={BAND_OUTER} />
-        <path fill="none" stroke={cfg.innerLine} strokeWidth="1" strokeOpacity="0.5" d={BAND_INNER} />
+        <path fill="none" stroke={cfg.edgeLine} strokeWidth="1.6" strokeOpacity="0.72" d={BAND_OUTER} />
+        <path fill="none" stroke={cfg.innerLine} strokeWidth="0.9" strokeOpacity="0.52" d={BAND_FACE} />
       </g>
     </svg>
   );
 };
 
 const WHOOP_BAND_CFG: BandCfg = {
-  edge: '#0c0b10',
-  hi: '#6f6a79',
-  mid: '#2c2934',
-  lo: '#161419',
-  rim: '#cfd0e0',
-  rimA: 0.3,
-  edgeLine: '#9a96a8',
-  innerLine: '#413e4a',
-  specA: 0.42,
-  glintA: 0.6,
+  edge: '#020205',
+  hi: '#53515b',
+  mid: '#302f37',
+  lo: '#222129',
+  rim: '#07070a',
+  rimA: 0.62,
+  edgeLine: '#24232b',
+  innerLine: '#181820',
+  meshDark: 'rgba(0,0,0,0.4)',
+  meshLight: 'rgba(255,255,255,0.1)',
+  specA: 0.13,
+  glintA: 0.34,
 };
 
 const FITBIT_BAND_CFG: BandCfg = {
@@ -311,6 +327,8 @@ const FITBIT_BAND_CFG: BandCfg = {
   rimA: 0.85,
   edgeLine: '#ffb070',
   innerLine: '#ffa24d',
+  meshDark: 'rgba(0,0,0,0.25)',
+  meshLight: 'rgba(255,255,255,0.12)',
   specA: 0.6,
   glintA: 0.9,
 };
@@ -1305,11 +1323,11 @@ export default function WhoopPulseCheckDemo() {
         }
 
         .whoop-device-card {
-          min-height: 162px;
+          min-height: 254px;
           border-radius: 28px;
           padding: 18px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 132px;
+          grid-template-columns: minmax(0, 1fr) 142px;
           gap: 8px;
           background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.025));
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1419,7 +1437,7 @@ export default function WhoopPulseCheckDemo() {
           align-items: center;
           justify-content: center;
           min-width: 0;
-          margin: -10px -6px -10px 0;
+          margin: 0 -2px 0 0;
           color: #a78bfa;
         }
 
@@ -1429,6 +1447,11 @@ export default function WhoopPulseCheckDemo() {
           max-height: 158px;
           object-fit: contain;
           filter: drop-shadow(0 16px 22px rgba(0, 0, 0, 0.42));
+        }
+
+        .device-art--band {
+          max-height: 158px;
+          filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.5));
         }
 
         .device-art--compact {
@@ -1940,18 +1963,18 @@ export default function WhoopPulseCheckDemo() {
           position: absolute;
           left: 20px;
           right: 20px;
-          bottom: 66px;
+          bottom: 58px;
           z-index: 6;
         }
 
         .whoop-nora-brief {
           position: relative;
-          min-height: 88px;
-          border-radius: 28px;
-          padding: 14px 16px;
+          min-height: 68px;
+          border-radius: 24px;
+          padding: 9px 14px;
           display: grid;
-          grid-template-columns: 45px minmax(0, 1fr);
-          gap: 12px;
+          grid-template-columns: 36px minmax(0, 1fr);
+          gap: 10px;
           align-items: center;
           background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1977,21 +2000,21 @@ export default function WhoopPulseCheckDemo() {
           font-weight: 950;
           letter-spacing: 0.13em;
           text-transform: uppercase;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
         }
 
         .whoop-nora-brief p {
           margin: 0;
           color: rgba(255, 255, 255, 0.78);
-          font-size: 12px;
-          line-height: 1.33;
+          font-size: 11px;
+          line-height: 1.28;
           font-weight: 650;
         }
 
         .whoop-nora-orb {
           position: relative;
-          width: 42px;
-          height: 42px;
+          width: 34px;
+          height: 34px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -2007,8 +2030,8 @@ export default function WhoopPulseCheckDemo() {
 
         .whoop-nora-orb__core {
           position: relative;
-          width: 34px;
-          height: 34px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           display: flex;
           align-items: center;
