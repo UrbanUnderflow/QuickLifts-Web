@@ -100,7 +100,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
-  // eatwithmacra.ai / pulsecheckmind.ai: single-page domain mapping (root only).
+  // eatwithmacra.ai / pulsecheckmind.ai: single-page domain mapping for root.
+  // Other public routes, including pulsecheckmind.ai/pulse-check-tech-demo,
+  // pass through to their matching Next.js pages.
   const targetPath = getSinglePageHostTarget(host);
   if (!targetPath) return NextResponse.next();
 

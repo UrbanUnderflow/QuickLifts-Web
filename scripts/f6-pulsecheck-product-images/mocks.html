@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #07090b;
+    --panel: #11161a;
+    --panel-2: #151b20;
+    --line: rgba(255,255,255,.11);
+    --text: #f6f8f8;
+    --muted: rgba(246,248,248,.62);
+    --quiet: rgba(246,248,248,.42);
+    --lime: #e0fe10;
+    --purple: #8b5cf6;
+    --cyan: #22d3ee;
+    --teal: #14e7d0;
+    --red: #ff3b5c;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Arial, sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: #000;
+    color: var(--text);
+    font-family: var(--font);
+  }
+
+  .stage {
+    display: grid;
+    gap: 32px;
+    padding: 32px;
+  }
+
+  .asset {
+    width: 1200px;
+    height: 675px;
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(900px 420px at 86% -10%, rgba(139,92,246,.24), transparent 62%),
+      radial-gradient(720px 360px at -10% 100%, rgba(34,211,238,.12), transparent 58%),
+      linear-gradient(145deg, #0b1013 0%, #10161a 44%, #07090b 100%);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 18px;
+    isolation: isolate;
+  }
+
+  .asset::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: linear-gradient(90deg, rgba(0,0,0,.75), rgba(0,0,0,.1) 66%, transparent);
+    z-index: -2;
+  }
+
+  .asset::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgba(7,9,11,.78), rgba(7,9,11,.18) 55%, rgba(7,9,11,.40)),
+      radial-gradient(900px 460px at 70% 72%, rgba(224,254,16,.06), transparent 58%);
+    z-index: -1;
+  }
+
+  .brand {
+    position: absolute;
+    top: 40px;
+    right: 44px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(255,255,255,.92);
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -.2px;
+  }
+
+  .brand img {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+
+  .copy {
+    position: absolute;
+    left: 64px;
+    top: 72px;
+    width: 430px;
+    z-index: 5;
+  }
+
+  .kicker {
+    color: var(--lime);
+    text-transform: uppercase;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 2.8px;
+    margin-bottom: 22px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: 58px;
+    line-height: .96;
+    letter-spacing: 0;
+    font-weight: 900;
+  }
+
+  h1 .accent {
+    color: var(--lime);
+  }
+
+  .deck {
+    margin-top: 24px;
+    color: var(--muted);
+    font-size: 21px;
+    line-height: 1.35;
+    font-weight: 600;
+  }
+
+  .bullets {
+    margin: 30px 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 13px;
+  }
+
+  .bullets li {
+    display: grid;
+    grid-template-columns: 14px 1fr;
+    gap: 13px;
+    align-items: start;
+    color: rgba(255,255,255,.74);
+    font-size: 17px;
+    line-height: 1.32;
+    font-weight: 650;
+  }
+
+  .bullets li::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: var(--lime);
+    box-shadow: 0 0 18px rgba(224,254,16,.8);
+  }
+
+  .phone {
+    position: absolute;
+    width: 244px;
+    height: 516px;
+    border: 8px solid #252a30;
+    border-radius: 44px;
+    overflow: hidden;
+    background: #0a0a0b;
+    box-shadow: 0 34px 90px rgba(0,0,0,.62), inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    width: 74px;
+    height: 18px;
+    transform: translateX(-50%);
+    background: #050607;
+    border-radius: 0 0 14px 14px;
+    z-index: 2;
+  }
+
+  .phone img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .phone.big {
+    width: 290px;
+    height: 612px;
+    border-radius: 54px;
+  }
+
+  .phone.small {
+    width: 190px;
+    height: 402px;
+    border-radius: 36px;
+    border-width: 7px;
+  }
+
+  .metric-card {
+    position: absolute;
+    background: rgba(18,24,29,.88);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,.38);
+    backdrop-filter: blur(14px);
+  }
+
+  .metric-card .label {
+    color: var(--quiet);
+    text-transform: uppercase;
+    letter-spacing: 1.7px;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .metric-card .number {
+    margin-top: 8px;
+    color: white;
+    font-size: 38px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  .metric-card .note {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .ring {
+    width: 134px;
+    height: 134px;
+    border-radius: 50%;
+    background:
+      conic-gradient(var(--lime) 0 278deg, rgba(255,255,255,.12) 278deg 360deg);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 60px rgba(224,254,16,.12);
+  }
+
+  .ring::before {
+    content: "";
+    width: 102px;
+    height: 102px;
+    border-radius: 50%;
+    background: #11161a;
+    border: 1px solid rgba(255,255,255,.08);
+    position: absolute;
+  }
+
+  .ring span {
+    position: relative;
+    font-size: 35px;
+    font-weight: 900;
+  }
+
+  .rings {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(224,254,16,.18);
+    box-shadow: 0 0 80px rgba(224,254,16,.1);
+  }
+
+  .wave {
+    position: absolute;
+    width: 530px;
+    height: 170px;
+    right: 45px;
+    bottom: 70px;
+    opacity: .42;
+  }
+
+  .mini-grid {
+    position: absolute;
+    display: grid;
+    grid-template-columns: repeat(2, 168px);
+    gap: 14px;
+  }
+
+  .mini {
+    padding: 18px;
+    min-height: 112px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: rgba(19,25,30,.83);
+  }
+
+  .mini strong {
+    display: block;
+    color: #fff;
+    font-size: 23px;
+    font-weight: 900;
+  }
+
+  .mini span {
+    display: block;
+    color: var(--muted);
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.28;
+    font-weight: 700;
+  }
+
+  .timeline {
+    position: absolute;
+    right: 78px;
+    top: 190px;
+    width: 426px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .timeline-item {
+    display: grid;
+    grid-template-columns: 46px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 18px 20px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(18,24,29,.86);
+    box-shadow: 0 20px 50px rgba(0,0,0,.22);
+  }
+
+  .timeline-item .dot {
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+    display: grid;
+    place-items: center;
+    color: #101410;
+    background: var(--lime);
+    font-weight: 900;
+  }
+
+  .timeline-item h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .timeline-item p {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 650;
+  }
+
+  .timeline-item .status {
+    color: var(--lime);
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+  }
+
+  .panel {
+    position: absolute;
+    padding: 24px;
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,.11);
+    background: rgba(17,23,27,.88);
+    box-shadow: 0 28px 80px rgba(0,0,0,.36);
+  }
+
+  .panel-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  .panel-sub {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.35;
+    font-weight: 650;
+  }
+
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .chip {
+    padding: 9px 13px;
+    border-radius: 999px;
+    color: rgba(255,255,255,.80);
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.08);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .chip.hot {
+    color: #0b0f0d;
+    background: var(--lime);
+  }
+
+  .lab-lines {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 660px;
+    height: 675px;
+    opacity: .58;
+    pointer-events: none;
+  }
+
+  .faded {
+    opacity: .72;
+  }
+
+  .cover .copy {
+    width: 520px;
+  }
+
+  .cover h1 {
+    font-size: 66px;
+  }
+
+  .cover .phone:nth-of-type(1) {
+    right: 250px;
+    bottom: -40px;
+    transform: rotate(-7deg);
+  }
+
+  .cover .phone:nth-of-type(2) {
+    right: 72px;
+    top: 112px;
+    transform: rotate(7deg);
+  }
+
+  .readiness .copy,
+  .training .copy {
+    top: 78px;
+  }
+
+  .readiness .phone.big {
+    right: 112px;
+    bottom: -54px;
+    transform: rotate(5deg);
+  }
+
+  .readiness .ring {
+    position: absolute;
+    right: 408px;
+    top: 128px;
+  }
+
+  .nora .phone.big {
+    right: 368px;
+    bottom: -76px;
+    transform: rotate(-5deg);
+  }
+
+  .nora .phone.small {
+    right: 142px;
+    top: 146px;
+    transform: rotate(7deg);
+  }
+
+  .nora .panel {
+    right: 82px;
+    bottom: 70px;
+    width: 348px;
+  }
+
+  .wearables .phone.big {
+    right: 110px;
+    bottom: -54px;
+    transform: rotate(4deg);
+  }
+
+  .wearables .mini-grid {
+    right: 384px;
+    top: 164px;
+  }
+
+  .training .phone.big {
+    right: 104px;
+    bottom: -68px;
+    transform: rotate(6deg);
+  }
+
+  .training .panel {
+    right: 380px;
+    top: 150px;
+    width: 342px;
+  }
+</style>
+</head>
+<body>
+<main class="stage">
+  <section class="asset cover" id="cover">
+    <svg class="lab-lines" viewBox="0 0 660 675" fill="none" aria-hidden="true">
+      <path d="M90 144h118l44 82 63-164 72 288 56-126h126" stroke="#e0fe10" stroke-opacity=".32" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M126 495c85-58 168-77 249-56 81 20 138 12 171-26" stroke="#22d3ee" stroke-opacity=".16" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="452" cy="188" r="132" stroke="#8b5cf6" stroke-opacity=".18" stroke-width="2"/>
+      <circle cx="452" cy="188" r="218" stroke="#e0fe10" stroke-opacity=".09" stroke-width="2"/>
+    </svg>
+    <div class="brand"><img src="../../public/pulsecheck-app-icon.jpg" alt="" />PulseCheck</div>
+    <div class="copy">
+      <div class="kicker">Pulse Intelligence Labs</div>
+      <h1>Human performance, <span class="accent">measured daily.</span></h1>
+      <p class="deck">PulseCheck turns private check-ins, biometric signals, and mental reps into a live readiness layer for athletes and teams.</p>
+    </div>
+    <div class="phone big"><img src="../../public/pulsecheck-media/00-app-store-meet-nora.png" alt="" /></div>
+    <div class="phone"><img src="../../public/pulsecheck-media/01-today-checkin.png" alt="" /></div>
+    <svg class="wave" viewBox="0 0 530 170" fill="none">
+      <path d="M4 89h83l30-58 44 112 42-80h84l24-42 38 110 44-74h133" stroke="#e0fe10" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </section>
+
+  <section class="asset readiness" id="readiness">
+    <div class="brand"><img src="../../public/pulsecheck-app-icon.jpg" alt="" />PulseCheck</div>
+    <div class="copy">
+      <div class="kicker">Readiness engine</div>
+      <h1>Spot risk before the drop-off.</h1>
+      <ul class="bullets">
+        <li>Daily emotional state, sleep, soreness, HRV, and training load in one private flow.</li>
+        <li>Coaches see trends without exposing every athlete conversation.</li>
+        <li>Escalation signals surface when support needs to move faster.</li>
+      </ul>
+    </div>
+    <div class="ring"><span>78</span></div>
+    <div class="metric-card" style="right:390px;top:310px;width:210px;padding:22px;">
+      <div class="label">Team readiness</div>
+      <div class="number">+14%</div>
+      <div class="note">from baseline</div>
+    </div>
+    <div class="metric-card" style="right:344px;bottom:80px;width:246px;padding:20px;">
+      <div class="label">Signal blend</div>
+      <div class="note" style="margin-top:12px;color:rgba(255,255,255,.78);line-height:1.5;">Mood · HRV · sleep · soreness · training load</div>
+    </div>
+    <div class="phone big"><img src="../../public/pulsecheck-media/01-today-checkin.png" alt="" /></div>
+  </section>
+
+  <section class="asset nora" id="nora">
+    <div class="brand"><img src="../../public/pulsecheck-app-icon.jpg" alt="" />PulseCheck</div>
+    <div class="copy">
+      <div class="kicker">Nora AI coach</div>
+      <h1>Private support that knows the context.</h1>
+      <p class="deck">Nora listens, asks better follow-ups, and translates athlete context into the right recovery or performance rep.</p>
+    </div>
+    <div class="phone big"><img src="../../public/pulsecheck-media/02-nora-chat.png" alt="" /></div>
+    <div class="phone small"><img src="../../public/pulsecheck-media/08-box-breathing.png" alt="" /></div>
+    <div class="panel">
+      <div class="panel-title">Guided interventions</div>
+      <p class="panel-sub">Breathing, reset scripts, confidence reps, and staff handoff flows when the signal gets serious.</p>
+      <div class="chip-row">
+        <span class="chip hot">Box breathing</span>
+        <span class="chip">Pressure reset</span>
+        <span class="chip">Coach note</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="asset wearables" id="wearables">
+    <div class="brand"><img src="../../public/pulsecheck-app-icon.jpg" alt="" />PulseCheck</div>
+    <div class="copy">
+      <div class="kicker">Wearable context</div>
+      <h1>Connect body signals to the performance layer.</h1>
+      <ul class="bullets">
+        <li>Google Health, Oura, Polar, and HealthKit-ready signal lanes.</li>
+        <li>Readiness interpretation stays source-aware and privacy-aware.</li>
+        <li>Human support gets better timing, not more noise.</li>
+      </ul>
+    </div>
+    <div class="mini-grid">
+      <div class="mini"><strong>62 bpm</strong><span>live heart-rate context</span></div>
+      <div class="mini"><strong>HRV</strong><span>recovery trend input</span></div>
+      <div class="mini"><strong>Sleep</strong><span>readiness modifier</span></div>
+      <div class="mini"><strong>Load</strong><span>training stress signal</span></div>
+    </div>
+    <div class="phone big"><img src="../../public/pulsecheck-media/04-connect-wearable.png" alt="" /></div>
+  </section>
+
+  <section class="asset training" id="training">
+    <div class="brand"><img src="../../public/pulsecheck-app-icon.jpg" alt="" />PulseCheck</div>
+    <div class="copy">
+      <div class="kicker">Mental training protocol</div>
+      <h1>Turn check-ins into reps.</h1>
+      <p class="deck">PulseCheck adapts the day’s mental-performance work from real readiness signals, then keeps the team aligned.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Today's protocol</div>
+      <p class="panel-sub">Pressure Simulation · 12 min · breath control, attention lock, and post-rep reflection.</p>
+      <div class="chip-row">
+        <span class="chip hot">Start rep</span>
+        <span class="chip">Track response</span>
+      </div>
+    </div>
+    <div class="timeline">
+      <div class="timeline-item"><div class="dot">1</div><div><h3>Check in</h3><p>Capture private state and biometric posture.</p></div><div class="status">done</div></div>
+      <div class="timeline-item"><div class="dot">2</div><div><h3>Run the rep</h3><p>Nora adapts the training session to today.</p></div><div class="status">live</div></div>
+      <div class="timeline-item"><div class="dot">3</div><div><h3>Close the loop</h3><p>Update readiness and staff-level trend view.</p></div><div class="status">next</div></div>
+    </div>
+    <div class="phone big faded"><img src="../../public/pulsecheck-media/05-training.png" alt="" /></div>
+  </section>
+</main>
+</body>
+</html>

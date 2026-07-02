@@ -11,9 +11,13 @@ const VIDEO_DURATION_SECONDS = 1111;
 const resolveDemoHost = (host: string | undefined | string[]) => {
   const normalizedHost = Array.isArray(host) ? host[0] ?? '' : host ?? '';
   const hostName = normalizedHost.toLowerCase().split(':')[0];
-  return hostName === 'pulseintelligencelabs.com' || hostName === 'www.pulseintelligencelabs.com'
-    ? 'https://pulseintelligencelabs.com'
-    : 'https://fitwithpulse.ai';
+  if (hostName === 'pulseintelligencelabs.com' || hostName === 'www.pulseintelligencelabs.com') {
+    return 'https://pulseintelligencelabs.com';
+  }
+  if (hostName === 'pulsecheckmind.ai' || hostName === 'www.pulsecheckmind.ai') {
+    return 'https://pulsecheckmind.ai';
+  }
+  return 'https://fitwithpulse.ai';
 };
 
 const chapters = [
@@ -22,14 +26,14 @@ const chapters = [
     seconds: 0,
     title: 'Athlete Experience',
     desc: 'Game-day notification, Nora check-in, and the athlete-side flow from first tap to emotional signal capture.',
-    color: '#c8ff00',
+    color: '#a78bfa',
   },
   {
     time: '04:30',
     seconds: 270,
     title: 'Nora Regulation',
     desc: 'Nora moves from conversation into a guided breathing protocol and reads the athlete state in real time.',
-    color: '#4ad9ff',
+    color: '#22d3ee',
   },
   {
     time: '09:00',
@@ -43,21 +47,21 @@ const chapters = [
     seconds: 690,
     title: 'Escalation Protocols',
     desc: 'The system walks through no escalation, monitor-only, elevated risk, and critical risk routing.',
-    color: '#ff8d3a',
+    color: '#c084fc',
   },
   {
     time: '15:30',
     seconds: 930,
     title: 'Clinician Experience',
     desc: 'AuntEDNA receives the handoff with athlete context, conversation excerpts, medical history, and next actions.',
-    color: '#ff4fa3',
+    color: '#f472b6',
   },
   {
     time: '18:30',
     seconds: 1110,
     title: 'Closing Remarks',
     desc: 'The demo closes on the connected support loop across athlete, coach, signal layer, and clinician.',
-    color: '#c8ff00',
+    color: '#8b5cf6',
   },
 ] as const;
 
@@ -98,7 +102,7 @@ const trackDemoEvent = (eventName: string, props: Record<string, unknown> = {}) 
   }
 };
 
-const PulseCheckTechDemoPage: React.FC = () => {
+const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackedQuartilesRef = useRef<Set<number>>(new Set());
   const recordedViewRef = useRef(false);
@@ -242,6 +246,16 @@ const PulseCheckTechDemoPage: React.FC = () => {
           name="description"
           content={DEMO_DESCRIPTION}
         />
+        <meta property="og:title" content={ogMeta.title} />
+        <meta property="og:description" content={ogMeta.description} />
+        <meta property="og:image" content={ogMeta.image} />
+        <meta property="og:url" content={ogMeta.url} />
+        <meta property="og:type" content={ogMeta.type} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={ogMeta.title} />
+        <meta name="twitter:description" content={ogMeta.description} />
+        <meta name="twitter:image" content={ogMeta.image} />
+        <link rel="canonical" href={ogMeta.url} />
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -262,6 +276,14 @@ const PulseCheckTechDemoPage: React.FC = () => {
             </a>
             <div className="nav-meta">
               <span className="hide-mobile">PulseCheck / Tech Demo</span>
+              <a
+                href="https://pulsecheckmind.ai"
+                className="nav-site-link"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                PulseCheck Mind
+              </a>
               <span className="live-indicator">
                 <span className="live-dot" />
                 Tech Demo
@@ -449,6 +471,23 @@ const PulseCheckTechDemoPage: React.FC = () => {
                     Reach Tremaine
                   </a>
                 </div>
+
+                <div className="context-card">
+                  <div className="context-card-tag">PulseCheck Mind</div>
+                  <h3>See the public product site.</h3>
+                  <p>
+                    The demo walks through the full stack. PulseCheck Mind is the product-facing destination for the
+                    mental performance platform, athlete experience, and positioning.
+                  </p>
+                  <a
+                    href="https://pulsecheckmind.ai"
+                    className="context-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Visit PulseCheck Mind
+                  </a>
+                </div>
               </div>
             </div>
           </section>
@@ -491,16 +530,21 @@ const PulseCheckTechDemoPage: React.FC = () => {
           --text-primary: #ffffff;
           --text-secondary: rgba(255, 255, 255, 0.64);
           --text-tertiary: rgba(255, 255, 255, 0.4);
-          --accent-lime: #c8ff00;
-          --accent-lime-glow: rgba(200, 255, 0, 0.18);
-          --accent-cyan: #4ad9ff;
-          --accent-magenta: #ff4fa3;
+          --accent-lime: #a78bfa;
+          --accent-lime-glow: rgba(139, 92, 246, 0.24);
+          --accent-cyan: #22d3ee;
+          --accent-magenta: #f472b6;
+          --accent-purple: #8b5cf6;
+          --accent-purple-dark: #5b21b6;
+          --accent-purple-soft: rgba(167, 139, 250, 0.22);
+          --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 45%, #22d3ee 100%);
           --ease-expand: cubic-bezier(0.65, 0, 0.35, 1);
           --duration-expand: 800ms;
           min-height: 100vh;
           background:
-            linear-gradient(135deg, rgba(200, 255, 0, 0.08), transparent 34%),
-            linear-gradient(315deg, rgba(74, 217, 255, 0.06), transparent 36%),
+            radial-gradient(circle at 16% 18%, rgba(139, 92, 246, 0.22), transparent 34%),
+            radial-gradient(circle at 84% 8%, rgba(34, 211, 238, 0.12), transparent 36%),
+            linear-gradient(135deg, rgba(139, 92, 246, 0.12), transparent 40%),
             repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0, rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 88px),
             var(--bg-base);
           color: var(--text-primary);
@@ -563,7 +607,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
           height: 22px;
           border-radius: 999px;
           background: var(--accent-lime);
-          box-shadow: 0 0 20px rgba(200, 255, 0, 0.22);
+          box-shadow: 0 0 20px rgba(139, 92, 246, 0.32);
           position: relative;
         }
 
@@ -605,11 +649,21 @@ const PulseCheckTechDemoPage: React.FC = () => {
           color: var(--accent-lime);
         }
 
+        .nav-site-link {
+          color: var(--text-secondary);
+          text-decoration: none;
+          transition: color 0.2s ease;
+        }
+
+        .nav-site-link:hover {
+          color: var(--accent-lime);
+        }
+
         .live-dot {
           width: 7px;
           height: 7px;
           border-radius: 999px;
-          background: var(--accent-lime);
+          background: var(--accent-gradient);
           animation: pulse 2s ease-in-out infinite;
         }
 
@@ -617,11 +671,11 @@ const PulseCheckTechDemoPage: React.FC = () => {
           0%,
           100% {
             opacity: 1;
-            box-shadow: 0 0 0 0 rgba(200, 255, 0, 0.22);
+            box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.32);
           }
           50% {
             opacity: 0.65;
-            box-shadow: 0 0 0 8px rgba(200, 255, 0, 0);
+            box-shadow: 0 0 0 8px rgba(139, 92, 246, 0);
           }
         }
 
@@ -668,7 +722,9 @@ const PulseCheckTechDemoPage: React.FC = () => {
           left: -34%;
           width: 86%;
           height: 62%;
-          background: radial-gradient(circle, var(--accent-lime-glow), transparent 62%);
+          background:
+            radial-gradient(circle at 45% 45%, rgba(139, 92, 246, 0.32), transparent 58%),
+            radial-gradient(circle at 62% 52%, rgba(34, 211, 238, 0.12), transparent 64%);
           filter: blur(40px);
           opacity: 0.62;
           pointer-events: none;
@@ -696,7 +752,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
           content: '';
           width: 32px;
           height: 1px;
-          background: var(--accent-lime);
+          background: var(--accent-gradient);
         }
 
         .hero-title {
@@ -725,8 +781,8 @@ const PulseCheckTechDemoPage: React.FC = () => {
           margin-left: 16px;
           margin-bottom: 0.11em;
           border-radius: 999px;
-          background: var(--accent-lime);
-          box-shadow: 0 0 22px rgba(200, 255, 0, 0.5);
+          background: var(--accent-gradient);
+          box-shadow: 0 0 22px rgba(139, 92, 246, 0.55);
           vertical-align: middle;
           animation: liveDot 1.6s ease-in-out infinite;
         }
@@ -764,8 +820,8 @@ const PulseCheckTechDemoPage: React.FC = () => {
           padding: 0 24px;
           border: 0;
           border-radius: 999px;
-          background: var(--accent-lime);
-          color: var(--bg-base);
+          background: var(--accent-gradient);
+          color: #ffffff;
           cursor: pointer;
           font-family: 'JetBrains Mono', monospace;
           font-size: 12px;
@@ -783,7 +839,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
         .cta-play-icon {
           width: 0;
           height: 0;
-          border-left: 9px solid var(--bg-base);
+          border-left: 9px solid #ffffff;
           border-top: 6px solid transparent;
           border-bottom: 6px solid transparent;
           margin-left: 2px;
@@ -843,8 +899,8 @@ const PulseCheckTechDemoPage: React.FC = () => {
           overflow: hidden;
           padding: 48px;
           background:
-            radial-gradient(circle at 72% 30%, rgba(74, 217, 255, 0.06), transparent 58%),
-            radial-gradient(circle at 30% 70%, rgba(200, 255, 0, 0.05), transparent 58%),
+            radial-gradient(circle at 72% 30%, rgba(139, 92, 246, 0.18), transparent 58%),
+            radial-gradient(circle at 30% 70%, rgba(34, 211, 238, 0.08), transparent 58%),
             var(--bg-elevated);
           transition: padding var(--duration-expand) var(--ease-expand);
         }
@@ -883,7 +939,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
           border-radius: 8px;
           background: var(--bg-elevated);
           border: 1px solid var(--border-card);
-          box-shadow: 0 38px 100px rgba(0, 0, 0, 0.48), 0 0 70px rgba(200, 255, 0, 0.05);
+          box-shadow: 0 38px 100px rgba(0, 0, 0, 0.48), 0 0 80px rgba(139, 92, 246, 0.12);
           transition:
             border-radius var(--duration-expand) var(--ease-expand),
             height var(--duration-expand) var(--ease-expand);
@@ -916,7 +972,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
           padding: 32px;
           border: 0;
           background:
-            radial-gradient(circle at 48% 45%, rgba(200, 255, 0, 0.13), transparent 34%),
+            radial-gradient(circle at 48% 45%, rgba(139, 92, 246, 0.28), transparent 34%),
             linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.68));
           color: var(--text-primary);
           cursor: pointer;
@@ -925,7 +981,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
 
         .video-play-overlay:hover {
           background:
-            radial-gradient(circle at 48% 45%, rgba(200, 255, 0, 0.2), transparent 36%),
+            radial-gradient(circle at 48% 45%, rgba(167, 139, 250, 0.34), transparent 36%),
             linear-gradient(180deg, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.62));
         }
 
@@ -936,8 +992,8 @@ const PulseCheckTechDemoPage: React.FC = () => {
           width: 88px;
           height: 88px;
           border-radius: 999px;
-          background: var(--accent-lime);
-          box-shadow: 0 0 60px rgba(200, 255, 0, 0.22);
+          background: var(--accent-gradient);
+          box-shadow: 0 0 60px rgba(139, 92, 246, 0.34);
           transition: transform 0.24s ease;
         }
 
@@ -988,7 +1044,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
         }
 
         .video-close:hover {
-          border-color: rgba(200, 255, 0, 0.7);
+          border-color: rgba(167, 139, 250, 0.7);
           background: rgba(0, 0, 0, 0.82);
         }
 
@@ -1176,8 +1232,8 @@ const PulseCheckTechDemoPage: React.FC = () => {
 
         .stack-item:hover {
           transform: translateY(-3px);
-          border-color: rgba(200, 255, 0, 0.45);
-          box-shadow: 0 0 40px rgba(200, 255, 0, 0.06);
+          border-color: rgba(167, 139, 250, 0.45);
+          box-shadow: 0 0 40px rgba(139, 92, 246, 0.12);
         }
 
         .stack-number {
@@ -1199,7 +1255,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
 
         .context-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: repeat(3, 1fr);
           gap: 24px;
         }
 
@@ -1232,7 +1288,7 @@ const PulseCheckTechDemoPage: React.FC = () => {
           gap: 8px;
           min-height: 44px;
           padding: 0 18px;
-          border: 1px solid rgba(200, 255, 0, 0.7);
+          border: 1px solid rgba(167, 139, 250, 0.72);
           border-radius: 999px;
           color: var(--accent-lime);
           text-decoration: none;
@@ -1243,8 +1299,8 @@ const PulseCheckTechDemoPage: React.FC = () => {
         }
 
         .context-link:hover {
-          background: var(--accent-lime);
-          color: var(--bg-base);
+          background: var(--accent-gradient);
+          color: #ffffff;
         }
 
         footer {
