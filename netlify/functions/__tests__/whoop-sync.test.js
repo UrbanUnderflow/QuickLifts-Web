@@ -18,6 +18,7 @@ require.cache[firebaseConfigPath] = {
 
 const {
   buildDayWindow,
+  buildWhoopSnapshotArtifacts,
   buildWhoopSourceRecords,
   mapRecoveryPayload,
   mapSleepPayload,
@@ -182,6 +183,92 @@ test('buildWhoopSourceRecords emits canonical health-context source records by d
   assert.equal(training.payload.workouts[0].zoneMinutes.zone4, 15);
   assert.equal(biometrics.payload.bodyWeightKg, 82.3);
   assert.equal(biometrics.payload.maxHeartRate, 191);
+});
+
+test('buildWhoopSnapshotArtifacts projects WHOOP records into the canonical daily snapshot', () => {
+  const syncAt = 1_782_408_000;
+  const sourceRecordDocs = buildWhoopSourceRecords({
+    userId: 'athlete-1',
+    dateKey: '2026-06-25',
+    timezone: 'UTC',
+    syncAt,
+    whoopData: buildWhoopFixture(),
+  });
+
+  const { snapshot, snapshotRevision, assemblyTrace } = buildWhoopSnapshotArtifacts({
+    userId: 'athlete-1',
+    dateKey: '2026-06-25',
+    timezone: 'UTC',
+    syncAt,
+    sourceStatusDoc: { sourceFamily: 'whoop', lifecycleState: 'connected_synced' },
+    sourceRecordDocs,
+    existingSnapshot: null,
+  });
+
+  assert.equal(snapshot.id, 'athlete-1_daily_2026-06-25');
+  assert.equal(snapshot.snapshotDateKey, '2026-06-25');
+  assert.deepEqual(snapshot.provenance.sourcesUsed, ['whoop']);
+  assert.equal(snapshot.provenance.domainWinners.recovery, 'whoop');
+  assert.equal(snapshot.provenance.domainWinners.training, 'whoop');
+  assert.equal(snapshot.domains.recovery.recoveryScore, 74);
+  assert.equal(snapshot.domains.recovery.sleepDuration, 7);
+  assert.equal(snapshot.domains.activity.strain, 12.3);
+  assert.equal(snapshot.domains.training.workoutCount, 1);
+  assert.equal(snapshot.domains.biometrics.bodyWeightKg, 82.3);
+  assert.equal(snapshot.domains.summary.readinessScore, 74);
+  assert.equal(snapshot.freshness.recovery, 'fresh');
+  assert.equal(snapshot.freshness.overall, 'fresh');
+  assert.equal(snapshot.sourceStatus.whoop.lifecycleState, 'connected_synced');
+  assert.equal(snapshotRevision.snapshotId, snapshot.id);
+  assert.equal(assemblyTrace.selectedRecordIds.length, sourceRecordDocs.length);
+});
+
+test('buildWhoopSnapshotArtifacts merges into an existing snapshot without clobbering Polar-owned recovery', () => {
+  const syncAt = 1_782_408_000;
+  const sourceRecordDocs = buildWhoopSourceRecords({
+    userId: 'athlete-1',
+    dateKey: '2026-06-25',
+    timezone: 'UTC',
+    syncAt,
+    whoopData: buildWhoopFixture(),
+  });
+
+  const existingSnapshot = {
+    contractVersions: { snapshot: '1.0' },
+    sourceStatus: { healthkit: { sourceFamily: 'healthkit', lifecycleState: 'connected_synced' } },
+    freshness: { nutrition: 'fresh' },
+    provenance: {
+      sourcesUsed: ['healthkit', 'polar'],
+      sourceRecordIds: ['athlete-1_polar_recovery_2026-06-25'],
+      domainWinners: { recovery: 'polar', nutrition: 'quicklifts' },
+    },
+    domains: {
+      recovery: { sleepDuration: 6.2, heartRateVariability: 55 },
+      nutrition: { caloriesConsumed: 2200 },
+      summary: { dataSourcesUsed: ['healthkit', 'polar'] },
+    },
+  };
+
+  const { snapshot } = buildWhoopSnapshotArtifacts({
+    userId: 'athlete-1',
+    dateKey: '2026-06-25',
+    timezone: 'UTC',
+    syncAt,
+    sourceStatusDoc: { sourceFamily: 'whoop', lifecycleState: 'connected_synced' },
+    sourceRecordDocs,
+    existingSnapshot,
+  });
+
+  // Polar keeps the recovery domain; WHOOP takes the domains nobody owns.
+  assert.equal(snapshot.provenance.domainWinners.recovery, 'polar');
+  assert.equal(snapshot.domains.recovery.sleepDuration, 6.2);
+  assert.equal(snapshot.provenance.domainWinners.activity, 'whoop');
+  assert.equal(snapshot.provenance.domainWinners.nutrition, 'quicklifts');
+  assert.equal(snapshot.domains.nutrition.caloriesConsumed, 2200);
+  assert.deepEqual(snapshot.provenance.sourcesUsed, ['healthkit', 'polar', 'whoop']);
+  assert.ok(snapshot.provenance.sourceRecordIds.includes('athlete-1_polar_recovery_2026-06-25'));
+  assert.equal(snapshot.freshness.nutrition, 'fresh');
+  assert.equal(snapshot.sourceStatus.healthkit.lifecycleState, 'connected_synced');
 });
 
 test('buildDayWindow honors athlete timezone day boundaries', () => {

@@ -738,12 +738,14 @@ function buildSnapshotArtifacts({
     'oura',
   ]);
   const existingRecoveryWinner = String(existingProvenance?.domainWinners?.recovery || '').toLowerCase();
-  const polarOwnsRecovery = existingRecoveryWinner.includes('polar');
+  // Polar and WHOOP both outrank Oura for the recovery domain (WHOOP is
+  // recovery-first per the WHOOP integration contract).
+  const higherPriorityOwnsRecovery = existingRecoveryWinner.includes('polar') || existingRecoveryWinner.includes('whoop');
   const hasOuraRecoveryPayload = Object.keys(sleepPayload).length > 0 || Object.keys(stressPayload || {}).length > 0;
-  const shouldWriteOuraRecovery = hasOuraRecoveryPayload && !polarOwnsRecovery;
+  const shouldWriteOuraRecovery = hasOuraRecoveryPayload && !higherPriorityOwnsRecovery;
 
-  if (polarOwnsRecovery && hasOuraRecoveryPayload) {
-    console.log('[oura-sync] Preserving Polar-owned recovery domain; Oura will not override sleep/recovery', {
+  if (higherPriorityOwnsRecovery && hasOuraRecoveryPayload) {
+    console.log('[oura-sync] Preserving higher-priority recovery domain; Oura will not override sleep/recovery', {
       userId,
       dateKey,
       requestedDateKey,
@@ -1010,7 +1012,10 @@ exports.handler = async (event) => {
 
     const sourceStatusDoc = buildSourceStatusDocument({
       userId,
-      observedAt: hasPayload ? buildDayWindow(latestDateKey, timezone).endAt : null,
+      // Cap at syncAt: the day-window endAt can sit up to 24h in the
+      // future, which inflated device "reporting" freshness by a full
+      // day (an unworn ring kept reading as live on mobile).
+      observedAt: hasPayload ? Math.min(buildDayWindow(latestDateKey, timezone).endAt, syncAt) : null,
       syncAt,
       lifecycleState: hasPayload ? 'connected_synced' : 'connected_waiting_data',
       lastError: null,

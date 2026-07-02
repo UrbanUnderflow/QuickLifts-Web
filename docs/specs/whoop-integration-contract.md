@@ -26,6 +26,8 @@ PulseCheck supports WHOOP as a cloud wearable source for recovery, strain, sleep
 
 ## Current Bottlenecks
 
-- Live OAuth cannot be completed until public `WHOOP_CLIENT_ID`, redirect URL, webhook URL, and the GSM secrets `WHOOP_CLIENT_SECRET` / `WHOOP_WEBHOOK_SECRET` are configured.
+- Verified 2026-07-02: `WHOOP_CLIENT_ID` is checked into source (`whoop-utils.js` default + `.env.example`), the redirect URI is registered with WHOOP (authorize endpoint issues a login challenge for the checked-in client id), and `WHOOP_CLIENT_SECRET` resolves from Google Secret Manager in production. The webhook probe returned `WHOOP_WEBHOOK_SIGNATURE_INVALID` (not `WHOOP_CONFIG_UNAVAILABLE`); since no standalone `WHOOP_WEBHOOK_SECRET` GSM secret exists and the env fallback is disabled in production, the secret resolved via the client-secret fallback — proving the GSM client secret is present and readable.
+- No separate webhook secret exists in the WHOOP portal by design: WHOOP signs webhooks with the app client secret (`base64(HMAC-SHA256(timestamp + body, client_secret))`), and `getWebhookSecret()` falls back to the OAuth client secret accordingly. The optional `WHOOP_WEBHOOK_SECRET` GSM secret is an override only — do not create it unless WHOOP ever issues a distinct signing key.
+- Remaining WHOOP-portal config: ensure the webhook URL `https://fitwithpulse.ai/.netlify/functions/whoop-webhook` is registered in the WHOOP Developer Dashboard so events are delivered.
 - WHOOP app approval is required before broad production use beyond the developer app cap.
 - Snapshot domain precedence must be monitored once real WHOOP data lands; the first pass ranks WHOOP explicitly but may need sport/program tuning.

@@ -14,8 +14,27 @@ const {
 const HEALTH_CONTEXT_COLLECTIONS = {
   sourceStatus: 'health-context-source-status',
   sourceRecords: 'health-context-source-records',
+  snapshots: 'health-context-snapshots',
+  snapshotRevisions: 'health-context-snapshot-revisions',
+  assemblyTraces: 'health-context-assembly-traces',
 };
 const SOURCE_RECORD_CONTRACT_VERSION = '1.0';
+const CONTRACT_VERSIONS = {
+  sourceRecord: '1.0',
+  snapshot: '1.0',
+  assembler: '1.0',
+  storage: '1.0',
+};
+
+function uniqueStrings(values) {
+  return Array.from(
+    new Set(
+      (values || [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  );
+}
 
 function numberValue(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -455,13 +474,217 @@ async function fetchWhoopData(accessToken, { dateKey, timezone }) {
   return { profile, bodyMeasurement, cycles, recoveries, sleeps, workouts };
 }
 
+function mergeWhoopFreshness(existingFreshness = {}, freshDomains = []) {
+  const next = {
+    ...existingFreshness,
+    evaluatedAt: Date.now() / 1000,
+  };
+  for (const domain of freshDomains) {
+    next[domain] = 'fresh';
+  }
+
+  const freshnessValues = ['training', 'recovery', 'activity', 'nutrition', 'biometrics', 'behavioral']
+    .map((key) => next[key])
+    .filter(Boolean);
+  next.overall = freshnessValues.includes('fresh')
+    ? 'fresh'
+    : existingFreshness.overall || (freshDomains.length ? 'fresh' : 'missing');
+
+  return next;
+}
+
+// Projects the day's WHOOP source records into the canonical
+// health-context snapshot — the document Sports Intel, the home
+// biometrics strip, and Nora's daily read all consume. Mirrors the
+// Oura projection: merge into the existing snapshot, never clobber a
+// domain a higher-priority source (Polar) already owns.
+function buildWhoopSnapshotArtifacts({
+  userId,
+  dateKey,
+  timezone,
+  syncAt,
+  sourceStatusDoc,
+  sourceRecordDocs,
+  existingSnapshot,
+}) {
+  const payloadByDomain = {};
+  for (const record of sourceRecordDocs) {
+    payloadByDomain[record.domain] = record.payload;
+  }
+
+  const snapshotId = `${userId}_daily_${dateKey}`;
+  const revisionId = `${snapshotId}_${Math.trunc(syncAt * 1000)}`;
+  const existingSourceStatus = existingSnapshot?.sourceStatus || {};
+  const existingProvenance = existingSnapshot?.provenance || {};
+  const existingDomains = existingSnapshot?.domains || {};
+  const existingSourceRecordIds = Array.isArray(existingProvenance.sourceRecordIds) ? existingProvenance.sourceRecordIds : [];
+  const existingSourcesUsed = Array.isArray(existingProvenance.sourcesUsed)
+    ? existingProvenance.sourcesUsed
+    : Array.isArray(existingDomains?.summary?.dataSourcesUsed)
+    ? existingDomains.summary.dataSourcesUsed
+    : [];
+
+  const nextSourceRecordIds = uniqueStrings([
+    ...existingSourceRecordIds,
+    ...sourceRecordDocs.map((record) => record.id),
+  ]);
+  const nextSourcesUsed = uniqueStrings([
+    ...existingSourcesUsed,
+    'whoop',
+  ]);
+
+  const existingRecoveryWinner = String(existingProvenance?.domainWinners?.recovery || '').toLowerCase();
+  const polarOwnsRecovery = existingRecoveryWinner.includes('polar');
+  const shouldWriteRecovery = Boolean(payloadByDomain.recovery) && !polarOwnsRecovery;
+  const shouldWriteActivity = Boolean(payloadByDomain.activity);
+  const shouldWriteTraining = Boolean(payloadByDomain.training);
+  const shouldWriteBiometrics = Boolean(payloadByDomain.biometrics);
+
+  const freshDomains = [
+    ...(shouldWriteRecovery ? ['recovery'] : []),
+    ...(shouldWriteActivity ? ['activity'] : []),
+    ...(shouldWriteTraining ? ['training'] : []),
+    ...(shouldWriteBiometrics ? ['biometrics'] : []),
+  ];
+
+  const nextDomainWinners = {
+    ...(existingProvenance.domainWinners || {}),
+    ...(shouldWriteRecovery ? { recovery: 'whoop' } : {}),
+    ...(shouldWriteActivity ? { activity: 'whoop' } : {}),
+    ...(shouldWriteTraining ? { training: 'whoop' } : {}),
+    ...(shouldWriteBiometrics ? { biometrics: 'whoop' } : {}),
+    summary: 'pulsecheck_whoop',
+  };
+
+  const snapshot = {
+    ...(existingSnapshot || {}),
+    id: snapshotId,
+    athleteUserId: userId,
+    snapshotType: 'daily',
+    snapshotDateKey: dateKey,
+    activeRevisionId: revisionId,
+    generatedAt: syncAt,
+    contractVersions: existingSnapshot?.contractVersions || CONTRACT_VERSIONS,
+    sourceWindow: existingSnapshot?.sourceWindow || buildDayWindow(dateKey, timezone),
+    permissions: {
+      ...(existingSnapshot?.permissions || {}),
+      whoopAuthorized: true,
+      syncOrigin: 'pulsecheck_whoop_refresh',
+    },
+    sourceStatus: {
+      ...existingSourceStatus,
+      whoop: sourceStatusDoc,
+    },
+    freshness: mergeWhoopFreshness(existingSnapshot?.freshness, freshDomains),
+    provenance: {
+      ...existingProvenance,
+      summaryMode: existingSnapshot ? 'merged' : 'direct',
+      sourcesUsed: nextSourcesUsed,
+      sourceRecordIds: nextSourceRecordIds,
+      domainWinners: nextDomainWinners,
+      domainObservedAt: {
+        ...(existingProvenance.domainObservedAt || {}),
+        ...Object.fromEntries(freshDomains.map((domain) => [domain, syncAt])),
+      },
+      requestedSnapshotDateKey: dateKey,
+    },
+    domains: {
+      ...existingDomains,
+      identity: existingDomains.identity || {
+        athleteUserId: userId,
+        timezone,
+        snapshotDate: dateKey,
+      },
+      ...(shouldWriteRecovery
+        ? {
+            recovery: compactObject({
+              ...(existingDomains.recovery || {}),
+              ...payloadByDomain.recovery,
+            }),
+          }
+        : {}),
+      ...(shouldWriteActivity
+        ? {
+            activity: compactObject({
+              ...(existingDomains.activity || {}),
+              ...payloadByDomain.activity,
+            }),
+          }
+        : {}),
+      ...(shouldWriteTraining
+        ? {
+            training: compactObject({
+              ...(existingDomains.training || {}),
+              ...payloadByDomain.training,
+            }),
+          }
+        : {}),
+      ...(shouldWriteBiometrics
+        ? {
+            biometrics: compactObject({
+              ...(existingDomains.biometrics || {}),
+              ...payloadByDomain.biometrics,
+            }),
+          }
+        : {}),
+      summary: compactObject({
+        ...(existingDomains.summary || {}),
+        dataSourcesUsed: nextSourcesUsed,
+        lastSyncTimestamp: syncAt,
+        syncOrigin: 'pulsecheck_whoop_refresh',
+        whoopLastSyncTimestamp: syncAt,
+        ...(payloadByDomain.recovery?.recoveryScore != null
+          ? { readinessScore: payloadByDomain.recovery.recoveryScore }
+          : {}),
+      }),
+    },
+    lastTriggerReason: 'pulsecheck_whoop_refresh',
+  };
+
+  const snapshotRevision = {
+    id: revisionId,
+    snapshotId,
+    revision: String(Math.trunc(syncAt * 1000)),
+    generatedAt: syncAt,
+    triggerReason: 'pulsecheck_whoop_refresh',
+    payload: snapshot,
+    diffSummary: {
+      sourceFamily: 'whoop',
+      syncOrigin: 'pulsecheck_whoop_refresh',
+      snapshotDateKey: dateKey,
+    },
+  };
+
+  const assemblyTrace = {
+    id: `${revisionId}_1`,
+    athleteUserId: userId,
+    snapshotId,
+    snapshotRevisionId: revisionId,
+    triggerReason: 'pulsecheck_whoop_refresh',
+    selectedRecordIds: sourceRecordDocs.map((record) => record.id),
+    droppedRecordIds: [],
+    dropReasons: {},
+    domainWinnerSummary: nextDomainWinners,
+    contractVersions: CONTRACT_VERSIONS,
+    createdAt: syncAt,
+  };
+
+  return { snapshot, snapshotRevision, assemblyTrace };
+}
+
 async function syncWhoopForConnection({ firestore, connectionRef, connection, dateKey, timezone }) {
   const userId = connection.userId;
   const freshConnection = await ensureFreshAccessToken({ firestore, connectionRef, connection });
   const syncAt = Math.round(Date.now() / 1000);
   const whoopData = await fetchWhoopData(freshConnection.accessToken, { dateKey, timezone });
   const sourceRecordDocs = buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData });
-  const observedAt = sourceRecordDocs.reduce((latest, record) => Math.max(latest, record.observedAt || 0), 0);
+  // Cap at syncAt: record observedAt carries the day-window endAt, which
+  // can sit up to 24h in the future and would inflate device "reporting"
+  // freshness on mobile by a full day.
+  const observedAt = Math.min(
+    sourceRecordDocs.reduce((latest, record) => Math.max(latest, record.observedAt || 0), 0),
+    syncAt,
+  );
   const sourceStatusRef = firestore.collection(HEALTH_CONTEXT_COLLECTIONS.sourceStatus).doc(`${userId}_whoop`);
   const existingSourceStatusSnap = await sourceStatusRef.get();
   const sourceStatusDoc = buildSourceStatusDocument({
@@ -490,6 +713,42 @@ async function syncWhoopForConnection({ firestore, connectionRef, connection, da
   for (const record of sourceRecordDocs) {
     batch.set(firestore.collection(HEALTH_CONTEXT_COLLECTIONS.sourceRecords).doc(record.id), record, { merge: true });
   }
+
+  // Project into the canonical daily snapshot so Sports Intel, the home
+  // biometrics strip, and Nora's read see WHOOP data — source records
+  // alone are invisible to those surfaces.
+  let snapshotArtifacts = null;
+  if (sourceRecordDocs.length > 0) {
+    const snapshotId = `${userId}_daily_${dateKey}`;
+    const existingSnapshotSnap = await firestore
+      .collection(HEALTH_CONTEXT_COLLECTIONS.snapshots)
+      .doc(snapshotId)
+      .get();
+    snapshotArtifacts = buildWhoopSnapshotArtifacts({
+      userId,
+      dateKey,
+      timezone,
+      syncAt,
+      sourceStatusDoc,
+      sourceRecordDocs,
+      existingSnapshot: existingSnapshotSnap.exists ? existingSnapshotSnap.data() : null,
+    });
+    batch.set(
+      firestore.collection(HEALTH_CONTEXT_COLLECTIONS.snapshots).doc(snapshotArtifacts.snapshot.id),
+      snapshotArtifacts.snapshot,
+      { merge: true }
+    );
+    batch.set(
+      firestore.collection(HEALTH_CONTEXT_COLLECTIONS.snapshotRevisions).doc(snapshotArtifacts.snapshotRevision.id),
+      snapshotArtifacts.snapshotRevision,
+      { merge: true }
+    );
+    batch.set(
+      firestore.collection(HEALTH_CONTEXT_COLLECTIONS.assemblyTraces).doc(snapshotArtifacts.assemblyTrace.id),
+      snapshotArtifacts.assemblyTrace,
+      { merge: true }
+    );
+  }
   batch.set(connectionRef, {
     lastSuccessfulSyncAt: syncAt,
     lastImportedDomains: Array.from(new Set(sourceRecordDocs.map((record) => record.domain))),
@@ -508,8 +767,10 @@ async function syncWhoopForConnection({ firestore, connectionRef, connection, da
     provider: 'whoop',
     sourceFamily: 'whoop',
     snapshotDateKey: dateKey,
+    snapshotId: snapshotArtifacts?.snapshot.id || null,
     sourceRecordIds: sourceRecordDocs.map((record) => record.id),
     importedDomains: Array.from(new Set(sourceRecordDocs.map((record) => record.domain))),
+    sourcesUsed: snapshotArtifacts?.snapshot.provenance.sourcesUsed || ['whoop'],
     sourceStatus: sourceStatusDoc.lifecycleState,
     detail: sourceRecordDocs.length > 0
       ? 'Fresh WHOOP data was imported into PulseCheck.'
@@ -567,6 +828,7 @@ exports.handler = async (event) => {
 exports.__test = {
   buildDayWindow,
   buildSourceStatusDocument,
+  buildWhoopSnapshotArtifacts,
   buildWhoopSourceRecords,
   mapBodyMeasurementPayload,
   mapCyclePayload,
