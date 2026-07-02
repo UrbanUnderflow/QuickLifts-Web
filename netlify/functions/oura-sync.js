@@ -426,10 +426,22 @@ function mapReadinessPayload(record) {
 // whatever signals its device exposes (Oura: stress_high; Whoop: strain proxy;
 // Apple Watch: minutes-above-RHR-delta excluding workouts).
 function mapStressPayload(record) {
+  const daytimeAutonomicLoadMinutes = firstNumber(record, ['stress_high']);
+  const recoveryHighMinutes = firstNumber(record, ['recovery_high']);
+  const daySummary = firstString(record, ['day_summary']);
+
+  // Oura emits a zeroed stress record (stress_high 0, recovery_high 0, no
+  // day_summary) for days the ring isn't worn. That stub is "no data", not
+  // a calm day — mirror the sleep mapper's guard and drop it, otherwise an
+  // unworn ring keeps reading as synced/reporting forever.
+  if (!daySummary && !(daytimeAutonomicLoadMinutes > 0) && !(recoveryHighMinutes > 0)) {
+    return {};
+  }
+
   return compactObject({
-    daytimeAutonomicLoadMinutes: firstNumber(record, ['stress_high']),
-    recoveryHighMinutes: firstNumber(record, ['recovery_high']),
-    daySummary: firstString(record, ['day_summary']),
+    daytimeAutonomicLoadMinutes,
+    recoveryHighMinutes,
+    daySummary,
   });
 }
 

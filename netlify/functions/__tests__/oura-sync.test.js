@@ -171,3 +171,18 @@ test('sleep helpers classify unusable and primary sleep types correctly', () => 
   assert.equal(sleepRecordTypePriority({ type: 'sleep' }), 2);
   assert.equal(sleepRecordTypePriority({ type: 'late_nap' }), 1);
 });
+
+test('mapStressPayload drops the zeroed stub Oura emits for unworn days', () => {
+  const { mapStressPayload } = require('../oura-sync').__test;
+
+  // Unworn ring: zeroed durations, no summary — must read as "no data".
+  assert.deepEqual(mapStressPayload({ stress_high: 0, recovery_high: 0, day_summary: null }), {});
+  assert.deepEqual(mapStressPayload({}), {});
+
+  // Worn days keep their signal.
+  assert.deepEqual(mapStressPayload({ stress_high: 45, recovery_high: 0, day_summary: null }), {
+    daytimeAutonomicLoadMinutes: 45,
+    recoveryHighMinutes: 0,
+  });
+  assert.equal(mapStressPayload({ stress_high: 0, recovery_high: 0, day_summary: 'restored' }).daySummary, 'restored');
+});
