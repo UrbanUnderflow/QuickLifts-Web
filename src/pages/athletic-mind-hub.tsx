@@ -125,7 +125,7 @@ const AthleticMindHub: NextPage = () => {
 
   const authorUid = currentUser?.id || firebaseUser?.uid || '';
   const authorEmail = currentUser?.email || firebaseUser?.email || '';
-  const authorName = currentUser?.displayName || currentUser?.username || authorEmail || 'Council member';
+  const authorName = currentUser?.displayName || currentUser?.username || firebaseUser?.displayName || authorEmail || 'Council member';
 
   const author: HubAuthor | null = useMemo(() => {
     if (!authorUid) return null;
@@ -138,6 +138,7 @@ const AthleticMindHub: NextPage = () => {
   }, [authorEmail, authorName, authorUid]);
 
   const signedInLabel = author?.email || author?.name || '';
+  const accountStatusLabel = author ? `Signed in as ${signedInLabel}` : 'No signed-in account detected';
 
   const inviteToken = useMemo(() => {
     const raw = router.query.invite;
@@ -458,7 +459,10 @@ const AthleticMindHub: NextPage = () => {
                   </button>
                 </div>
               ) : (
-                <span className="signedInPill muted">Signed out</span>
+                <div className="signedInPill muted" title={accountStatusLabel}>
+                  <span>No account detected</span>
+                  <a className="pillButton" href="/athletic-mind-hub?signin=1">Sign in</a>
+                </div>
               )}
             </div>
           </nav>
@@ -518,9 +522,11 @@ const AthleticMindHub: NextPage = () => {
           <section className="accessState" aria-label="Hub access required">
             <ShieldCheck size={28} />
             <h2>Hub access required</h2>
+            <strong>{accountStatusLabel}</strong>
             <p>
-              Ask an Athletic Mind Hub admin to send you an invite link. If you already have one, open the link
-              while signed in with this account.
+              {author
+                ? 'Ask an Athletic Mind Hub admin to send an invite link for this account. If you already have one, open the link while signed in here.'
+                : 'Sign in with the account that should have hub access, or ask an Athletic Mind Hub admin to send you an invite link.'}
             </p>
           </section>
         ) : (
@@ -903,7 +909,8 @@ const AthleticMindHub: NextPage = () => {
           font-weight: 900;
         }
 
-        .signedInPill button {
+        .signedInPill button,
+        .signedInPill .pillButton {
           display: inline-flex;
           align-items: center;
           gap: 6px;
@@ -916,11 +923,12 @@ const AthleticMindHub: NextPage = () => {
           font-size: 0.75rem;
           font-weight: 900;
           padding: 0 10px;
+          text-decoration: none;
           white-space: nowrap;
         }
 
         .signedInPill.muted {
-          padding: 10px 13px;
+          padding: 7px 8px 7px 12px;
           color: rgba(255, 248, 230, 0.66);
         }
 

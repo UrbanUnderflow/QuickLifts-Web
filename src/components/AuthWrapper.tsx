@@ -610,7 +610,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       window.location.host.toLowerCase().split(':')[0],
     );
 
-  if (isPILHost) {
+  if (isPILHost && !isAthleticMindHubRoute) {
     return <>{children}</>;
   }
 

@@ -107,7 +107,7 @@ const AthleticMindHubContacts: NextPage = () => {
 
   const authorUid = currentUser?.id || firebaseUser?.uid || '';
   const authorEmail = currentUser?.email || firebaseUser?.email || '';
-  const authorName = currentUser?.displayName || currentUser?.username || authorEmail || 'Council member';
+  const authorName = currentUser?.displayName || currentUser?.username || firebaseUser?.displayName || authorEmail || 'Council member';
 
   const author: HubAuthor | null = useMemo(() => {
     if (!authorUid) return null;
@@ -120,7 +120,8 @@ const AthleticMindHubContacts: NextPage = () => {
 
   const isFounderAdmin = authorEmail.toLowerCase() === ATHLETIC_MIND_HUB_FOUNDER_EMAIL;
   const isAdmin = isFounderAdmin || member?.permission === 'admin';
-  const signedInLabel = authorEmail || authorName || 'Council member';
+  const signedInLabel = author ? authorEmail || authorName : '';
+  const accountStatusLabel = author ? `Signed in as ${signedInLabel}` : 'No signed-in account detected';
 
   useEffect(() => {
     if (!author) {
@@ -442,13 +443,20 @@ const AthleticMindHubContacts: NextPage = () => {
             <ArrowLeft size={18} />
             Hub
           </a>
-          <div className="signedInPill" title={`Signed in as ${signedInLabel}`}>
-            <span>Signed in as <strong>{signedInLabel}</strong></span>
-            <button type="button" onClick={handleSignOut} aria-label="Sign out">
-              <LogOut size={16} />
-              Sign out
-            </button>
-          </div>
+          {author ? (
+            <div className="signedInPill" title={`Signed in as ${signedInLabel}`}>
+              <span>Signed in as <strong>{signedInLabel}</strong></span>
+              <button type="button" onClick={handleSignOut} aria-label="Sign out">
+                <LogOut size={16} />
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <div className="signedInPill muted" title={accountStatusLabel}>
+              <span>No account detected</span>
+              <a className="pillButton" href="/athletic-mind-hub/contacts?signin=1">Sign in</a>
+            </div>
+          )}
         </nav>
 
         <header className="pageHeader">
@@ -483,7 +491,12 @@ const AthleticMindHubContacts: NextPage = () => {
           <section className="accessState">
             <ShieldCheck size={28} />
             <h2>Admin access required</h2>
-            <p>The council contact list is only visible to Athletic Mind Hub admins.</p>
+            <strong>{accountStatusLabel}</strong>
+            <p>
+              {author
+                ? 'The council contact list is only visible to Athletic Mind Hub admins. Ask an admin to update this account permission.'
+                : 'Sign in with an admin account to view and manage the council contact list.'}
+            </p>
           </section>
         ) : (
           <section className="contactsGrid">
@@ -667,7 +680,10 @@ const AthleticMindHubContacts: NextPage = () => {
           color: #16251f;
         }
 
-        .signedInPill button {
+        .signedInPill button,
+        .signedInPill .pillButton {
+          display: inline-flex;
+          align-items: center;
           gap: 6px;
           min-height: 30px;
           border: 0;
@@ -678,6 +694,12 @@ const AthleticMindHubContacts: NextPage = () => {
           font-size: 0.75rem;
           font-weight: 900;
           padding: 0 10px;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .signedInPill.muted {
+          padding: 7px 8px 7px 12px;
         }
 
         .pageHeader {
