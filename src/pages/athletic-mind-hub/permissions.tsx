@@ -8,6 +8,7 @@ import {
   KeyRound,
   Loader2,
   LogOut,
+  Search,
   ShieldCheck,
   UserPlus,
   Users,
@@ -22,6 +23,7 @@ import {
   type HubInviteRecord,
   type HubMemberRecord,
   type HubPermission,
+  type HubUserSearchResult,
 } from '../../api/firebase/athleticMindHub/service';
 
 const permissionLabels: Record<HubPermission, string> = {
@@ -69,12 +71,17 @@ const AthleticMindHubPermissions: NextPage = () => {
   const [member, setMember] = useState<HubMemberRecord | null>(null);
   const [members, setMembers] = useState<HubMemberRecord[]>([]);
   const [invites, setInvites] = useState<HubInviteRecord[]>([]);
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  const [memberSearchResults, setMemberSearchResults] = useState<HubUserSearchResult[]>([]);
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false);
+  const [directAddPermission, setDirectAddPermission] = useState<HubPermission>('readOnly');
   const [invitePermission, setInvitePermission] = useState<HubPermission>('readOnly');
   const [lastInviteLink, setLastInviteLink] = useState('');
   const [toast, setToast] = useState('');
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [addingUserId, setAddingUserId] = useState('');
 
   useEffect(() => onAuthStateChanged(auth, setFirebaseUser), []);
 
@@ -94,6 +101,8 @@ const AthleticMindHubPermissions: NextPage = () => {
   const isFounderAdmin = authorEmail.toLowerCase() === ATHLETIC_MIND_HUB_FOUNDER_EMAIL;
   const isAdmin = isFounderAdmin || member?.permission === 'admin';
   const signedInLabel = authorEmail || authorName || 'Council member';
+  const existingMemberIds = useMemo(() => new Set(members.map((hubMember) => hubMember.userId || hubMember.id)), [members]);
+  const trimmedMemberSearchTerm = memberSearchTerm.trim();
 
   useEffect(() => {
     if (!author) {
@@ -151,6 +160,36 @@ const AthleticMindHubPermissions: NextPage = () => {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    if (!isAdmin || trimmedMemberSearchTerm.length < 2) {
+      setMemberSearchResults([]);
+      setMemberSearchLoading(false);
+      return undefined;
+    }
+
+    let isActive = true;
+    setMemberSearchLoading(true);
+    const timeout = window.setTimeout(async () => {
+      try {
+        const results = await athleticMindHubService.searchUsers(trimmedMemberSearchTerm);
+        if (isActive) setMemberSearchResults(results);
+      } catch (error) {
+        console.error('[AthleticMindHubPermissions] User search failed', error);
+        if (isActive) {
+          setMemberSearchResults([]);
+          setToast('User search failed');
+        }
+      } finally {
+        if (isActive) setMemberSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeout);
+    };
+  }, [isAdmin, trimmedMemberSearchTerm]);
+
   function requireAdmin() {
     if (!author) {
       setToast('Sign in to manage permissions');
@@ -198,6 +237,28 @@ const AthleticMindHubPermissions: NextPage = () => {
       setToast('Invite generation failed');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addSearchedMember(user: HubUserSearchResult) {
+    const activeAuthor = requireAdmin();
+    if (!activeAuthor) return;
+    if (existingMemberIds.has(user.id)) {
+      setToast('That person already has hub access');
+      return;
+    }
+
+    setAddingUserId(user.id);
+    try {
+      await athleticMindHubService.addMemberFromUser(user, directAddPermission, activeAuthor);
+      setToast(`${user.displayName || user.email} added to the hub`);
+      setMemberSearchTerm('');
+      setMemberSearchResults([]);
+    } catch (error) {
+      console.error('[AthleticMindHubPermissions] Direct member add failed', error);
+      setToast('Member add failed');
+    } finally {
+      setAddingUserId('');
     }
   }
 
@@ -292,6 +353,67 @@ const AthleticMindHubPermissions: NextPage = () => {
         ) : (
           <>
             <section className="adminGrid">
+              <div className="panel">
+                <div className="panelHeader">
+                  <h2>Add Member by Search</h2>
+                  <Search size={18} />
+                </div>
+                <label>
+                  Find a Pulse account
+                  <div className="searchBox">
+                    <Search size={17} />
+                    <input
+                      type="search"
+                      value={memberSearchTerm}
+                      onChange={(event) => setMemberSearchTerm(event.target.value)}
+                      placeholder="Search name, username, or email"
+                    />
+                  </div>
+                  <small>Use this when the person already has a Pulse account. New people can still join with a share link.</small>
+                </label>
+                <label>
+                  Permission to add
+                  <select value={directAddPermission} onChange={(event) => setDirectAddPermission(event.target.value as HubPermission)}>
+                    <option value="readOnly">{permissionLabels.readOnly}</option>
+                    <option value="wikiEditor">{permissionLabels.wikiEditor}</option>
+                    <option value="admin">{permissionLabels.admin}</option>
+                  </select>
+                  <small>{permissionDescriptions[directAddPermission]}</small>
+                </label>
+                <div className="searchResults" aria-live="polite">
+                  {trimmedMemberSearchTerm.length < 2 ? (
+                    <p className="softText">Type at least two characters to search existing Pulse users.</p>
+                  ) : memberSearchLoading ? (
+                    <p className="softText">Searching...</p>
+                  ) : memberSearchResults.length ? (
+                    memberSearchResults.map((result) => {
+                      const alreadyMember = existingMemberIds.has(result.id);
+                      return (
+                        <article className="userResult" key={result.id}>
+                          <div>
+                            <strong>{result.displayName}</strong>
+                            <small>
+                              {result.email || 'No email saved'}
+                              {result.username ? ` · @${result.username}` : ''}
+                            </small>
+                          </div>
+                          <button
+                            className="addMemberButton"
+                            type="button"
+                            onClick={() => addSearchedMember(result)}
+                            disabled={alreadyMember || addingUserId === result.id}
+                          >
+                            {alreadyMember ? 'Added' : addingUserId === result.id ? 'Adding...' : 'Add'}
+                          </button>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <p className="softText">No matching Pulse account found. Generate a share link for someone who still needs to sign up.</p>
+                  )}
+                </div>
+              </div>
+
               <div className="panel">
                 <div className="panelHeader">
                   <h2>Invite Members</h2>
@@ -526,7 +648,7 @@ const AthleticMindHubPermissions: NextPage = () => {
 
         .adminGrid {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(320px, 0.6fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 18px;
           align-items: start;
         }
@@ -560,6 +682,7 @@ const AthleticMindHubPermissions: NextPage = () => {
           font-weight: 900;
         }
 
+        input,
         select {
           width: 100%;
           box-sizing: border-box;
@@ -572,6 +695,65 @@ const AthleticMindHubPermissions: NextPage = () => {
           font-weight: 750;
           outline: none;
           padding: 12px 13px;
+        }
+
+        .searchBox {
+          display: grid;
+          grid-template-columns: 18px minmax(0, 1fr);
+          gap: 9px;
+          align-items: center;
+          border: 1px solid #d9d0c2;
+          border-radius: 8px;
+          background: #fffaf2;
+          color: #64766d;
+          padding: 0 12px;
+        }
+
+        .searchBox input {
+          border: 0;
+          background: transparent;
+          padding: 13px 0;
+        }
+
+        .searchResults {
+          display: grid;
+          gap: 10px;
+        }
+
+        .userResult {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 12px;
+          align-items: center;
+          border: 1px solid #ebe4d6;
+          border-radius: 8px;
+          background: #fffaf2;
+          padding: 12px;
+        }
+
+        .userResult div {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+
+        .userResult strong,
+        .userResult small {
+          overflow-wrap: anywhere;
+        }
+
+        .addMemberButton {
+          min-height: 38px;
+          border: 0;
+          border-radius: 8px;
+          background: #16251f;
+          color: #fff8e6;
+          cursor: pointer;
+          font: inherit;
+          font-size: 0.82rem;
+          font-weight: 900;
+          padding: 0 13px;
+          white-space: nowrap;
         }
 
         label small,
@@ -771,6 +953,14 @@ const AthleticMindHubPermissions: NextPage = () => {
 
           .permissionRow {
             grid-template-columns: 1fr;
+          }
+
+          .userResult {
+            grid-template-columns: 1fr;
+          }
+
+          .addMemberButton {
+            width: 100%;
           }
         }
       `}</style>
