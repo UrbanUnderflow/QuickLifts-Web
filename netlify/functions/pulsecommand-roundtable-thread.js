@@ -84,12 +84,27 @@ function serializeTimestampFields(data, field) {
   };
 }
 
+function serializeArtifacts(value = []) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 12).map((artifact = {}) => ({
+    path: normalizeString(artifact.path),
+    status: normalizeString(artifact.status) || 'unverified',
+    exists: artifact.exists === true,
+    size: Number.isFinite(Number(artifact.size)) ? Number(artifact.size) : null,
+    updatedAt: normalizeString(artifact.updatedAt),
+    updatedAtMs: Number.isFinite(Number(artifact.updatedAtMs)) ? Number(artifact.updatedAtMs) : null,
+    checkedAt: normalizeString(artifact.checkedAt),
+    reason: normalizeString(artifact.reason),
+  })).filter((artifact) => artifact.path);
+}
+
 function serializeAgentResponse(response = {}) {
   return {
     content: normalizeString(response.content),
     status: normalizeString(response.status) || 'pending',
     error: normalizeString(response.error),
     timedOutReason: normalizeString(response.timedOutReason),
+    artifacts: serializeArtifacts(response.artifacts),
     ...serializeTimestampFields(response, 'startedAt'),
     ...serializeTimestampFields(response, 'completedAt'),
     ...serializeTimestampFields(response, 'timedOutAt'),

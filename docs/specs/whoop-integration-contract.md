@@ -14,6 +14,7 @@ PulseCheck supports WHOOP as a cloud wearable source for recovery, strain, sleep
 - Device registry marks WHOOP as an implemented experimental cloud adapter until app approval/production credentials are complete.
 - iOS and Android expose WHOOP as a connectable device lane using the same endpoint names.
 - Tests cover WHOOP OAuth URL construction, webhook signature verification, and source-record mapping from WHOOP-shaped fixtures.
+- Production secret material is loaded from Google Secret Manager, not Netlify function env values. Netlify may carry public config such as `WHOOP_CLIENT_ID`, but `WHOOP_CLIENT_SECRET` and `WHOOP_WEBHOOK_SECRET` should be removed from Netlify once the matching GSM secrets exist.
 
 ## Loop Ledger
 
@@ -25,6 +26,6 @@ PulseCheck supports WHOOP as a cloud wearable source for recovery, strain, sleep
 
 ## Current Bottlenecks
 
-- Live OAuth cannot be completed until `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, redirect URL, webhook URL, and webhook secret are configured in the WHOOP Developer Dashboard and Netlify environment.
+- Live OAuth cannot be completed until public `WHOOP_CLIENT_ID`, redirect URL, webhook URL, and the GSM secrets `WHOOP_CLIENT_SECRET` / `WHOOP_WEBHOOK_SECRET` are configured.
 - WHOOP app approval is required before broad production use beyond the developer app cap.
 - Snapshot domain precedence must be monitored once real WHOOP data lands; the first pass ranks WHOOP explicitly but may need sport/program tuning.

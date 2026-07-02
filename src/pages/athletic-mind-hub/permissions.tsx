@@ -8,16 +8,14 @@ import {
   KeyRound,
   Loader2,
   LogOut,
-  MailPlus,
   Search,
   ShieldCheck,
-  UserCheck,
   UserPlus,
   Users,
 } from 'lucide-react';
 import PageHead from '../../components/PageHead';
 import { useUser } from '../../hooks/useUser';
-import { auth, isUsingDevFirebase } from '../../api/firebase/config';
+import { auth } from '../../api/firebase/config';
 import {
   athleticMindHubService,
   ATHLETIC_MIND_HUB_FOUNDER_EMAIL,
@@ -25,6 +23,7 @@ import {
   type HubInviteRecord,
   type HubMemberRecord,
   type HubPermission,
+  type HubUserSearchResult,
 } from '../../api/firebase/athleticMindHub/service';
 
 const permissionLabels: Record<HubPermission, string> = {
@@ -38,16 +37,6 @@ const permissionDescriptions: Record<HubPermission, string> = {
   wikiEditor: 'Can read the hub and add or edit wiki blocks.',
   admin: 'Can manage permissions, contacts, updates, invites, and wiki content.',
 };
-
-type HubUserSuggestion = {
-  userId: string;
-  email: string;
-  displayName: string;
-  username: string;
-  profileImageUrl: string;
-};
-
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function toDate(value: unknown): Date | null {
   if (!value) return null;
@@ -82,22 +71,23 @@ const AthleticMindHubPermissions: NextPage = () => {
   const [member, setMember] = useState<HubMemberRecord | null>(null);
   const [members, setMembers] = useState<HubMemberRecord[]>([]);
   const [invites, setInvites] = useState<HubInviteRecord[]>([]);
+  const [memberSearchTerm, setMemberSearchTerm] = useState('');
+  const [memberSearchResults, setMemberSearchResults] = useState<HubUserSearchResult[]>([]);
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false);
+  const [directAddPermission, setDirectAddPermission] = useState<HubPermission>('readOnly');
   const [invitePermission, setInvitePermission] = useState<HubPermission>('readOnly');
-  const [inviteEmailQuery, setInviteEmailQuery] = useState('');
-  const [userSuggestions, setUserSuggestions] = useState<HubUserSuggestion[]>([]);
-  const [selectedSuggestion, setSelectedSuggestion] = useState<HubUserSuggestion | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [lastInviteLink, setLastInviteLink] = useState('');
   const [toast, setToast] = useState('');
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [addingUserId, setAddingUserId] = useState('');
 
   useEffect(() => onAuthStateChanged(auth, setFirebaseUser), []);
 
   const authorUid = currentUser?.id || firebaseUser?.uid || '';
   const authorEmail = currentUser?.email || firebaseUser?.email || '';
-  const authorName = currentUser?.displayName || currentUser?.username || firebaseUser?.displayName || authorEmail || 'Council member';
+  const authorName = currentUser?.displayName || currentUser?.username || authorEmail || 'Council member';
 
   const author: HubAuthor | null = useMemo(() => {
     if (!authorUid) return null;
@@ -110,11 +100,9 @@ const AthleticMindHubPermissions: NextPage = () => {
 
   const isFounderAdmin = authorEmail.toLowerCase() === ATHLETIC_MIND_HUB_FOUNDER_EMAIL;
   const isAdmin = isFounderAdmin || member?.permission === 'admin';
-  const signedInLabel = author ? authorEmail || authorName : '';
-  const accountStatusLabel = author ? `Signed in as ${signedInLabel}` : 'No signed-in account detected';
-  const normalizedInviteEmail = inviteEmailQuery.trim().toLowerCase();
-  const exactSuggestion = userSuggestions.find((suggestion) => suggestion.email.toLowerCase() === normalizedInviteEmail);
-  const canInviteTypedEmail = emailPattern.test(normalizedInviteEmail) && !exactSuggestion;
+  const signedInLabel = authorEmail || authorName || 'Council member';
+  const existingMemberIds = useMemo(() => new Set(members.map((hubMember) => hubMember.userId || hubMember.id)), [members]);
+  const trimmedMemberSearchTerm = memberSearchTerm.trim();
 
   useEffect(() => {
     if (!author) {
@@ -173,53 +161,34 @@ const AthleticMindHubPermissions: NextPage = () => {
   }, [toast]);
 
   useEffect(() => {
-    if (!isAdmin || !author || normalizedInviteEmail.length < 2 || selectedSuggestion?.email.toLowerCase() === normalizedInviteEmail) {
-      setUserSuggestions([]);
-      setSearchLoading(false);
+    if (!isAdmin || trimmedMemberSearchTerm.length < 2) {
+      setMemberSearchResults([]);
+      setMemberSearchLoading(false);
       return undefined;
     }
 
-    const controller = new AbortController();
+    let isActive = true;
+    setMemberSearchLoading(true);
     const timeout = window.setTimeout(async () => {
       try {
-        setSearchLoading(true);
-        const idToken = await auth.currentUser?.getIdToken();
-        if (!idToken) {
-          setUserSuggestions([]);
-          return;
-        }
-
-        const response = await fetch(`/api/athletic-mind-hub/admin-users?emailPrefix=${encodeURIComponent(normalizedInviteEmail)}`, {
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-            'x-pulsecheck-firebase-mode': isUsingDevFirebase() ? 'dev' : 'prod',
-          },
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error('User search failed');
-        }
-
-        const payload = await response.json();
-        setUserSuggestions(Array.isArray(payload.users) ? payload.users : []);
+        const results = await athleticMindHubService.searchUsers(trimmedMemberSearchTerm);
+        if (isActive) setMemberSearchResults(results);
       } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-          console.error('[AthleticMindHubPermissions] User search failed', error);
-          setUserSuggestions([]);
+        console.error('[AthleticMindHubPermissions] User search failed', error);
+        if (isActive) {
+          setMemberSearchResults([]);
+          setToast('User search failed');
         }
       } finally {
-        if (!controller.signal.aborted) {
-          setSearchLoading(false);
-        }
+        if (isActive) setMemberSearchLoading(false);
       }
-    }, 260);
+    }, 250);
 
     return () => {
+      isActive = false;
       window.clearTimeout(timeout);
-      controller.abort();
     };
-  }, [author, isAdmin, normalizedInviteEmail, selectedSuggestion]);
+  }, [isAdmin, trimmedMemberSearchTerm]);
 
   function requireAdmin() {
     if (!author) {
@@ -252,75 +221,44 @@ const AthleticMindHubPermissions: NextPage = () => {
     setToast('Signed out');
   }
 
-  async function postAdminUserAction(body: Record<string, unknown>) {
-    const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) {
-      throw new Error('Sign in again before managing members');
-    }
-
-    const response = await fetch('/api/athletic-mind-hub/admin-users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`,
-        'x-pulsecheck-firebase-mode': isUsingDevFirebase() ? 'dev' : 'prod',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(payload.error || 'Request failed');
-    }
-    return payload;
-  }
-
-  async function handleGrantOrInvite() {
+  async function generateInviteLink() {
     const activeAuthor = requireAdmin();
     if (!activeAuthor) return;
 
     setSaving(true);
     try {
-      if (selectedSuggestion) {
-        const payload = await postAdminUserAction({
-          action: 'grantExistingUser',
-          userId: selectedSuggestion.userId,
-          permission: invitePermission,
-        });
-        const hubLink = payload.hubLink || `${window.location.origin}/athletic-mind-hub?signin=1`;
-        setLastInviteLink(hubLink);
-        await copyText(hubLink, `${selectedSuggestion.email} has access; hub link copied`);
-        setInviteEmailQuery('');
-        setSelectedSuggestion(null);
-        setUserSuggestions([]);
-        return;
-      }
-
-      if (!canInviteTypedEmail) {
-        setToast('Select an account or enter a full email');
-        return;
-      }
-
-      const payload = await postAdminUserAction({
-        action: 'inviteEmail',
-        email: normalizedInviteEmail,
-        permission: invitePermission,
-      });
-      const inviteLink = payload.inviteLink || '';
-      setLastInviteLink(inviteLink);
-      if (inviteLink) {
-        await copyText(inviteLink, payload.emailSkipped ? 'Invite exists; link copied' : 'Invite emailed and link copied');
-      } else {
-        setToast(payload.emailSkipped ? 'Invite already sent recently' : 'Invite email sent');
-      }
-      setInviteEmailQuery('');
-      setSelectedSuggestion(null);
-      setUserSuggestions([]);
+      const token = await athleticMindHubService.createInvite(invitePermission, activeAuthor);
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+      const link = `${origin}/athletic-mind-hub?invite=${encodeURIComponent(token)}&signin=1`;
+      setLastInviteLink(link);
+      await copyText(link, 'Invite link generated and copied');
     } catch (error) {
-      console.error('[AthleticMindHubPermissions] Grant or invite failed', error);
-      setToast(error instanceof Error ? error.message : 'Invite failed');
+      console.error('[AthleticMindHubPermissions] Invite generation failed', error);
+      setToast('Invite generation failed');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addSearchedMember(user: HubUserSearchResult) {
+    const activeAuthor = requireAdmin();
+    if (!activeAuthor) return;
+    if (existingMemberIds.has(user.id)) {
+      setToast('That person already has hub access');
+      return;
+    }
+
+    setAddingUserId(user.id);
+    try {
+      await athleticMindHubService.addMemberFromUser(user, directAddPermission, activeAuthor);
+      setToast(`${user.displayName || user.email} added to the hub`);
+      setMemberSearchTerm('');
+      setMemberSearchResults([]);
+    } catch (error) {
+      console.error('[AthleticMindHubPermissions] Direct member add failed', error);
+      setToast('Member add failed');
+    } finally {
+      setAddingUserId('');
     }
   }
 
@@ -383,20 +321,13 @@ const AthleticMindHubPermissions: NextPage = () => {
             </a>
             <a href="/athletic-mind-hub/contacts">Contacts</a>
           </div>
-          {author ? (
-            <div className="signedInPill" title={`Signed in as ${signedInLabel}`}>
-              <span>Signed in as <strong>{signedInLabel}</strong></span>
-              <button type="button" onClick={handleSignOut} aria-label="Sign out">
-                <LogOut size={16} />
-                Sign out
-              </button>
-            </div>
-          ) : (
-            <div className="signedInPill muted" title={accountStatusLabel}>
-              <span>No account detected</span>
-              <a className="pillButton" href="/athletic-mind-hub/permissions?signin=1">Sign in</a>
-            </div>
-          )}
+          <div className="signedInPill" title={`Signed in as ${signedInLabel}`}>
+            <span>Signed in as <strong>{signedInLabel}</strong></span>
+            <button type="button" onClick={handleSignOut} aria-label="Sign out">
+              <LogOut size={16} />
+              Sign out
+            </button>
+          </div>
         </nav>
 
         <header className="pageHeader">
@@ -417,75 +348,79 @@ const AthleticMindHubPermissions: NextPage = () => {
           <section className="accessState">
             <ShieldCheck size={28} />
             <h2>Admin access required</h2>
-            <strong>{accountStatusLabel}</strong>
-            <p>
-              {author
-                ? 'Only Athletic Mind Hub admins can manage invites and member permissions. Ask an admin to update this account permission.'
-                : 'Sign in with an admin account to manage invites and member permissions.'}
-            </p>
+            <p>Only Athletic Mind Hub admins can manage invites and member permissions.</p>
           </section>
         ) : (
           <>
             <section className="adminGrid">
               <div className="panel">
                 <div className="panelHeader">
+                  <h2>Add Member by Search</h2>
+                  <Search size={18} />
+                </div>
+                <label>
+                  Find a Pulse account
+                  <div className="searchBox">
+                    <Search size={17} />
+                    <input
+                      type="search"
+                      value={memberSearchTerm}
+                      onChange={(event) => setMemberSearchTerm(event.target.value)}
+                      placeholder="Search name, username, or email"
+                    />
+                  </div>
+                  <small>Use this when the person already has a Pulse account. New people can still join with a share link.</small>
+                </label>
+                <label>
+                  Permission to add
+                  <select value={directAddPermission} onChange={(event) => setDirectAddPermission(event.target.value as HubPermission)}>
+                    <option value="readOnly">{permissionLabels.readOnly}</option>
+                    <option value="wikiEditor">{permissionLabels.wikiEditor}</option>
+                    <option value="admin">{permissionLabels.admin}</option>
+                  </select>
+                  <small>{permissionDescriptions[directAddPermission]}</small>
+                </label>
+                <div className="searchResults" aria-live="polite">
+                  {trimmedMemberSearchTerm.length < 2 ? (
+                    <p className="softText">Type at least two characters to search existing Pulse users.</p>
+                  ) : memberSearchLoading ? (
+                    <p className="softText">Searching...</p>
+                  ) : memberSearchResults.length ? (
+                    memberSearchResults.map((result) => {
+                      const alreadyMember = existingMemberIds.has(result.id);
+                      return (
+                        <article className="userResult" key={result.id}>
+                          <div>
+                            <strong>{result.displayName}</strong>
+                            <small>
+                              {result.email || 'No email saved'}
+                              {result.username ? ` · @${result.username}` : ''}
+                            </small>
+                          </div>
+                          <button
+                            className="addMemberButton"
+                            type="button"
+                            onClick={() => addSearchedMember(result)}
+                            disabled={alreadyMember || addingUserId === result.id}
+                          >
+                            {alreadyMember ? 'Added' : addingUserId === result.id ? 'Adding...' : 'Add'}
+                          </button>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <p className="softText">No matching Pulse account found. Generate a share link for someone who still needs to sign up.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panelHeader">
                   <h2>Invite Members</h2>
                   <UserPlus size={18} />
                 </div>
                 <label>
-                  Person
-                  <div className="searchWrap">
-                    <Search size={18} />
-                    <input
-                      type="email"
-                      value={inviteEmailQuery}
-                      onChange={(event) => {
-                        setInviteEmailQuery(event.target.value);
-                        setSelectedSuggestion(null);
-                      }}
-                      placeholder="Start typing an email"
-                      autoComplete="off"
-                    />
-                    {searchLoading && <Loader2 className="spin" size={17} />}
-                  </div>
-                  {(userSuggestions.length > 0 || canInviteTypedEmail) && !selectedSuggestion && (
-                    <div className="suggestions" role="listbox" aria-label="Pulse account suggestions">
-                      {userSuggestions.map((suggestion) => (
-                        <button
-                          type="button"
-                          key={suggestion.userId}
-                          onClick={() => {
-                            setSelectedSuggestion(suggestion);
-                            setInviteEmailQuery(suggestion.email);
-                            setUserSuggestions([]);
-                          }}
-                        >
-                          {suggestion.profileImageUrl ? (
-                            <img src={suggestion.profileImageUrl} alt="" />
-                          ) : (
-                            <span>{(suggestion.displayName || suggestion.email).slice(0, 1).toUpperCase()}</span>
-                          )}
-                          <strong>{suggestion.displayName || suggestion.email}</strong>
-                          <small>{suggestion.email}</small>
-                        </button>
-                      ))}
-                      {canInviteTypedEmail && (
-                        <button type="button" onClick={() => setUserSuggestions([])}>
-                          <span><MailPlus size={15} /></span>
-                          <strong>Invite this person</strong>
-                          <small>{normalizedInviteEmail}</small>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {selectedSuggestion && (
-                    <small className="selectedAccount">
-                      Existing Pulse account selected: {selectedSuggestion.displayName || selectedSuggestion.email}
-                    </small>
-                  )}
-                </label>
-                <label>
-                  Permission
+                  Default permission
                   <select value={invitePermission} onChange={(event) => setInvitePermission(event.target.value as HubPermission)}>
                     <option value="readOnly">{permissionLabels.readOnly}</option>
                     <option value="wikiEditor">{permissionLabels.wikiEditor}</option>
@@ -493,9 +428,9 @@ const AthleticMindHubPermissions: NextPage = () => {
                   </select>
                   <small>{permissionDescriptions[invitePermission]}</small>
                 </label>
-                <button className="primaryAction fullWidth" type="button" onClick={handleGrantOrInvite} disabled={saving}>
-                  {saving ? <Loader2 className="spin" size={18} /> : selectedSuggestion ? <UserCheck size={18} /> : <MailPlus size={18} />}
-                  {selectedSuggestion ? 'Grant Access' : 'Invite This Person'}
+                <button className="primaryAction fullWidth" type="button" onClick={generateInviteLink} disabled={saving}>
+                  {saving ? <Loader2 className="spin" size={18} /> : <KeyRound size={18} />}
+                  Generate Share Link
                 </button>
                 {lastInviteLink && (
                   <div className="inviteLinkBox">
@@ -519,10 +454,8 @@ const AthleticMindHubPermissions: NextPage = () => {
                     return (
                       <article className="permissionRow" key={invite.id}>
                         <div>
-                          <strong>{invite.inviteeEmail || permissionLabels[invite.permission]}</strong>
-                          <small>
-                            {permissionLabels[invite.permission]} · {invite.status} · Created by {invite.createdByName || invite.createdByEmail || 'admin'}
-                          </small>
+                          <strong>{permissionLabels[invite.permission]}</strong>
+                          <small>{invite.status} · Created by {invite.createdByName || invite.createdByEmail || 'admin'}</small>
                         </div>
                         <div className="rowActions">
                           <button type="button" onClick={() => copyText(inviteLink, 'Invite link copied')} aria-label="Copy invite link" title="Copy invite link"><Clipboard size={16} /></button>
@@ -665,10 +598,7 @@ const AthleticMindHubPermissions: NextPage = () => {
           color: #16251f;
         }
 
-        .signedInPill button,
-        .signedInPill .pillButton {
-          display: inline-flex;
-          align-items: center;
+        .signedInPill button {
           gap: 6px;
           min-height: 30px;
           border: 0;
@@ -679,12 +609,6 @@ const AthleticMindHubPermissions: NextPage = () => {
           font-size: 0.75rem;
           font-weight: 900;
           padding: 0 10px;
-          text-decoration: none;
-          white-space: nowrap;
-        }
-
-        .signedInPill.muted {
-          padding: 7px 8px 7px 12px;
         }
 
         .pageHeader {
@@ -724,7 +648,7 @@ const AthleticMindHubPermissions: NextPage = () => {
 
         .adminGrid {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(320px, 0.6fr);
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 18px;
           align-items: start;
         }
@@ -758,6 +682,7 @@ const AthleticMindHubPermissions: NextPage = () => {
           font-weight: 900;
         }
 
+        input,
         select {
           width: 100%;
           box-sizing: border-box;
@@ -772,99 +697,63 @@ const AthleticMindHubPermissions: NextPage = () => {
           padding: 12px 13px;
         }
 
-        .searchWrap {
-          position: relative;
+        .searchBox {
           display: grid;
-          grid-template-columns: 22px minmax(0, 1fr) 20px;
+          grid-template-columns: 18px minmax(0, 1fr);
+          gap: 9px;
           align-items: center;
-          gap: 8px;
           border: 1px solid #d9d0c2;
           border-radius: 8px;
           background: #fffaf2;
-          color: #5f6d66;
+          color: #64766d;
           padding: 0 12px;
         }
 
-        .searchWrap input {
-          width: 100%;
-          min-height: 48px;
+        .searchBox input {
           border: 0;
-          outline: 0;
           background: transparent;
-          color: #16251f;
-          font: inherit;
-          font-size: 0.95rem;
-          font-weight: 750;
+          padding: 13px 0;
         }
 
-        .searchWrap input::placeholder {
-          color: #9ba59f;
-        }
-
-        .suggestions {
+        .searchResults {
           display: grid;
-          overflow: hidden;
-          border: 1px solid #d8d0c2;
-          border-radius: 8px;
-          background: #fffdf8;
-          box-shadow: 0 18px 36px rgba(29, 41, 36, 0.1);
+          gap: 10px;
         }
 
-        .suggestions button {
+        .userResult {
           display: grid;
-          grid-template-columns: 34px minmax(0, 1fr);
-          gap: 2px 10px;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 12px;
           align-items: center;
-          border: 0;
-          border-bottom: 1px solid #eee6d9;
-          background: transparent;
-          color: #16251f;
-          cursor: pointer;
-          padding: 10px 12px;
-          text-align: left;
+          border: 1px solid #ebe4d6;
+          border-radius: 8px;
+          background: #fffaf2;
+          padding: 12px;
         }
 
-        .suggestions button:hover {
-          background: #f7f1e6;
-        }
-
-        .suggestions button:last-child {
-          border-bottom: 0;
-        }
-
-        .suggestions img,
-        .suggestions button > span {
-          grid-row: span 2;
-          width: 34px;
-          height: 34px;
-          border-radius: 999px;
-          object-fit: cover;
-        }
-
-        .suggestions button > span {
+        .userResult div {
           display: grid;
-          place-items: center;
-          background: #e7b953;
-          color: #14241e;
-          font-weight: 900;
-        }
-
-        .suggestions strong,
-        .suggestions small,
-        .selectedAccount {
+          gap: 3px;
           min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
+        }
+
+        .userResult strong,
+        .userResult small {
+          overflow-wrap: anywhere;
+        }
+
+        .addMemberButton {
+          min-height: 38px;
+          border: 0;
+          border-radius: 8px;
+          background: #16251f;
+          color: #fff8e6;
+          cursor: pointer;
+          font: inherit;
+          font-size: 0.82rem;
+          font-weight: 900;
+          padding: 0 13px;
           white-space: nowrap;
-        }
-
-        .suggestions small {
-          color: #5f6d66;
-        }
-
-        .selectedAccount {
-          display: block;
-          color: #286177;
         }
 
         label small,
@@ -1064,6 +953,14 @@ const AthleticMindHubPermissions: NextPage = () => {
 
           .permissionRow {
             grid-template-columns: 1fr;
+          }
+
+          .userResult {
+            grid-template-columns: 1fr;
+          }
+
+          .addMemberButton {
+            width: 100%;
           }
         }
       `}</style>

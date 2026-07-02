@@ -89,6 +89,16 @@ console.log('GOOGLE_GUEST_CALENDAR_ENCRYPTION_KEY:', process.env.GOOGLE_GUEST_CA
 console.log('GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME:', process.env.GOOGLE_GUEST_CALENDAR_OAUTH_SECRET_NAME ? '✓ Set' : '✗ Not set');
 console.log('GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME:', process.env.GOOGLE_GUEST_CALENDAR_ENCRYPTION_SECRET_NAME ? '✓ Set' : '✗ Not set');
 
+console.log('\nWHOOP VARIABLES:');
+console.log('WHOOP_CLIENT_ID:', process.env.WHOOP_CLIENT_ID ? '✓ Set' : '✓ Default public client id used');
+console.log('WHOOP_CLIENT_SECRET_NAME:', process.env.WHOOP_CLIENT_SECRET_NAME ? '✓ Set' : '✓ Defaults to WHOOP_CLIENT_SECRET in Google Secret Manager');
+console.log('WHOOP_WEBHOOK_SECRET_NAME:', process.env.WHOOP_WEBHOOK_SECRET_NAME ? '✓ Set' : '✓ Defaults to WHOOP_WEBHOOK_SECRET in Google Secret Manager');
+console.log('WHOOP_SECRET_MANAGER_PROJECT_ID:', process.env.WHOOP_SECRET_MANAGER_PROJECT_ID ? '✓ Set' : '✓ Defaults to quicklifts-dd3f1');
+console.log('WHOOP_REDIRECT_URI:', process.env.WHOOP_REDIRECT_URI ? '✓ Set' : '✓ Defaults to production callback');
+console.log('WHOOP_SCOPES:', process.env.WHOOP_SCOPES ? '✓ Set' : '✓ Defaults to PulseCheck WHOOP read scopes');
+console.log('WHOOP_CLIENT_SECRET legacy env fallback:', process.env.WHOOP_CLIENT_SECRET ? '⚠ Set locally; remove from Netlify production env' : '✓ Not set');
+console.log('WHOOP_WEBHOOK_SECRET legacy env fallback:', process.env.WHOOP_WEBHOOK_SECRET ? '⚠ Set locally; remove from Netlify production env if using GSM' : '✓ Not set');
+
 console.log('\nBREVO VARIABLES:');
 console.log('BREVO_MARKETING_KEY:', process.env.BREVO_MARKETING_KEY ? '✓ Set' : '✗ Not set');
 console.log('BREVO_API_KEY:', process.env.BREVO_API_KEY ? '✓ Set' : '✗ Not set');

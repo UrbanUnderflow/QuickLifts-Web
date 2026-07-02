@@ -841,6 +841,7 @@ const AthleticMindHub: NextPage = () => {
         .topbarActions {
           justify-content: flex-end;
           flex-wrap: wrap;
+          min-width: 0;
         }
 
         .hubNavLinks {
@@ -877,6 +878,7 @@ const AthleticMindHub: NextPage = () => {
         }
 
         .accountPill {
+          flex: 0 1 auto;
           max-width: 220px;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -889,6 +891,7 @@ const AthleticMindHub: NextPage = () => {
         .signedInPill {
           display: inline-flex;
           align-items: center;
+          flex: 0 1 auto;
           gap: 10px;
           max-width: min(430px, 42vw);
           border: 1px solid rgba(255, 255, 255, 0.2);
@@ -1885,16 +1888,39 @@ const AthleticMindHub: NextPage = () => {
 
           .topbar {
             align-items: flex-start;
+            flex-direction: column;
+            gap: 14px;
             padding-top: 18px;
           }
 
           .topbarActions {
+            width: 100%;
             flex-wrap: wrap;
-            justify-content: flex-end;
+            justify-content: flex-start;
+            gap: 8px;
           }
 
           .accountPill {
-            max-width: 148px;
+            flex: 1 1 auto;
+            max-width: none;
+            min-width: 132px;
+            text-align: center;
+          }
+
+          .signedInPill {
+            width: 100%;
+            max-width: none;
+            box-sizing: border-box;
+            justify-content: space-between;
+            padding: 8px 8px 8px 12px;
+          }
+
+          .signedInPill > span {
+            flex: 1 1 auto;
+          }
+
+          .signedInPill button {
+            flex: 0 0 auto;
           }
 
           .heroActions,

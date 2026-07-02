@@ -805,6 +805,34 @@ Root cause:
 - **[2026-06-30] Solara** — Step "Add a `Cancel Reasons And Paywall Dismissals` section to `docs/deliverables/macra-lifecycle-conversion-2026-06-30.md` summarizing cancel-reason patterns and paywall dismissal behavior with separate `Facts` and `Inference` labels." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
 [". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
 ["
+- **[2026-07-01] Nora** — Step "Create `docs/ops/macra-operating-snapshot-2026-07-01.md` with required sections for `Funnel Counts`, `Source Split`, `Experiment Snapshot Freshness`, `Guardrails`, `Operator Update`, and `Decision-Log Recommendation`." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-01] Nora** — Step "Populate `docs/ops/macra-operating-snapshot-2026-07-01.md` with refreshed read-only values from `/admin/emailSequences`, `/admin/purchaseLogs`, `/admin/macraCancelReasons`, and AppsFlyer imports, including funnel counts, source split, purchase/trial-start evidence, cancel-reason guardrails, and any user-state or retargeting-state gaps visible in those sources." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server native transcript exceeded active token "
+- **[2026-07-02] Nora** — Step "Create `docs/ops/macra-operating-snapshot-2026-07-02.md` with required sections for `Funnel Counts`, `Source Split`, `Experiment Snapshot Freshness`, `Guardrails`, `Operator-Facing Update`, and `Decision-Log Recommendation`." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Nora** — Step "Populate the `Funnel Counts` and `Source Split` sections in `docs/ops/macra-operating-snapshot-2026-07-02.md` from `/admin/emailSequences`, `/admin/purchaseLogs`, and AppsFlyer imports, recording actual onboarding-start, paywall, checkout, trial-start, purchase, and source-split values, plus any coverage gaps or stale import dates." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Scout** — Step "Create or update `docs/research/macra-asa-quality-2026-06-30.md` with exact sections `Question`, `Data Date Range`, `Source Inputs`, `Access or Freshness Blockers`, `ASA vs Organic Funnel Table`, `Source Quality Readout`, `Paid Acquisition Posture`, and `Sources`." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Solara** — Step "Create `docs/deliverables/macra-lifecycle-conversion-2026-07-02.md` with a `Source Coverage` section naming the refreshed Scoreboard, AppsFlyer coverage window, `/admin/macraCancelReasons`, paywall dismissal signals, retargeting state, `/admin/experiments`, and any source marked stale or unavailable." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Nora** — Step "Export or pull the latest AppsFlyer Macra metrics artifact used by the team, then upload that dataset through the Scoreboard import control in the `/admin/emailSequences` surface so the Scoreboard reflects the newest available AppsFlyer coverage." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Scout** — Step "Populate `Data Date Range`, `Source Inputs`, and `Access or Freshness Blockers` in `docs/research/macra-asa-quality-2026-06-30.md` with the latest available AppsFlyer/Scoreboard export reference, the Scoreboard source-level funnel metrics reference, the sample-size label for the read, and any exact missing or stale source such as unavailable AppsFlyer/admin access or stale `/admin/experiments` data." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server native transcript exceeded active token ". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Solara** — Step "Add a `Matched Lifecycle Read` section to `docs/deliverables/macra-lifecycle-conversion-2026-07-02.md` summarizing cancel reasons, paywall dismissal behavior, retargeting state, and trial-start outcomes using the same date range as the refreshed Scoreboard/AppsFlyer read." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
+- **[2026-07-02] Nora** — Step "Create `docs/ops/macra-operating-snapshot-2026-07-02.md` with sections for `AppsFlyer Coverage`, `Scoreboard Refresh`, `Funnel Counts`, `Source Split`, `Experiment Freshness`, `Guardrails`, `Decision Recommendation`, and `Access Blockers`." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+[". Rewrite error: "OpenClaw failed (exit 1): [agent/embedded] codex app-server one-shot cleanup retired shared client
+["
 ---
 
 ## Operational Rules

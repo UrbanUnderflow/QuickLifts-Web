@@ -179,6 +179,29 @@ function sanitizeModelField(model) {
     return safe || 'unknown';
 }
 
+function sanitizeGroupChatResponse(text) {
+    var raw = String(text || '').replace(/\r\n/g, '\n').trim();
+    if (!raw) return '';
+
+    var cleaned = raw
+        .replace(/\[agent\/embedded\]/gi, '')
+        .split('\n')
+        .filter(function (line) {
+            var normalized = String(line || '').trim().toLowerCase();
+            if (!normalized) return true;
+            return (
+                normalized.indexOf('codex app-server') === -1 &&
+                normalized.indexOf('cleanup retired shared client') === -1 &&
+                normalized.indexOf('[trace:embedded-run]') === -1
+            );
+        })
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    return cleaned || raw;
+}
+
 function toNumber(value) {
     var n = Number(value);
     return Number.isFinite(n) && n >= 0 ? n : 0;
@@ -299,6 +322,133 @@ function readRepoFileForPrompt(relPath, maxChars = 2200) {
         console.warn(`⚠️  Could not load ${safeRelPath}: ${err.message}`);
         return '';
     }
+}
+
+const ROUND_TABLE_ARTIFACT_EXTENSIONS = [
+    'md', 'mdx', 'json', 'csv', 'tsv', 'txt', 'js', 'jsx', 'ts', 'tsx',
+    'swift', 'html', 'css', 'yml', 'yaml', 'sql', 'png', 'jpg', 'jpeg', 'pdf',
+];
+const ROUND_TABLE_ARTIFACT_PREFIXES = [
+    '.agent/',
+    'docs/',
+    'scripts/',
+    'src/',
+    'netlify/functions/',
+    'public/',
+    'tests/',
+    '__tests__/',
+];
+
+function timestampToMillis(value) {
+    if (!value) return null;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value.toDate === 'function') return value.toDate().getTime();
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    return null;
+}
+
+function normalizeRoundTableArtifactPath(value) {
+    var raw = String(value || '')
+        .trim()
+        .replace(/^["'`]+|["'`]+$/g, '')
+        .replace(/[),.;:]+$/g, '')
+        .replace(/\\/g, '/')
+        .split('#')[0]
+        .trim();
+
+    if (raw.startsWith('./')) raw = raw.slice(2);
+    if (!raw || raw.indexOf('\0') >= 0 || path.isAbsolute(raw)) return '';
+    if (raw.startsWith('../') || raw.includes('/../')) return '';
+
+    var normalized = path.posix.normalize(raw);
+    if (!normalized || normalized === '.' || normalized.startsWith('../') || normalized.includes('/../')) return '';
+
+    var lower = normalized.toLowerCase();
+    var extension = lower.split('.').pop();
+    if (ROUND_TABLE_ARTIFACT_EXTENSIONS.indexOf(extension) === -1) return '';
+    if (!ROUND_TABLE_ARTIFACT_PREFIXES.some(function (prefix) { return normalized.startsWith(prefix); })) return '';
+
+    return normalized;
+}
+
+function extractRoundTableArtifactPaths(text) {
+    var raw = String(text || '');
+    if (!raw) return [];
+
+    var candidates = [];
+    var extPattern = ROUND_TABLE_ARTIFACT_EXTENSIONS.join('|');
+    var codeSpanRx = new RegExp('`([^`]{1,240}\\.(' + extPattern + '))`', 'gi');
+    var pathRx = new RegExp('(?:^|[\\s"\'(])((?:\\.agent|docs|scripts|src|netlify\\/functions|public|tests|__tests__)\\/[A-Za-z0-9._/@%+=:, -]{1,220}\\.(' + extPattern + '))(?:$|[\\s"\'),.;:])', 'gi');
+    var match;
+
+    while ((match = codeSpanRx.exec(raw)) !== null) {
+        candidates.push(match[1]);
+    }
+    while ((match = pathRx.exec(raw)) !== null) {
+        candidates.push(match[1]);
+    }
+
+    return Array.from(new Set(candidates
+        .map(normalizeRoundTableArtifactPath)
+        .filter(Boolean)
+    )).slice(0, 8);
+}
+
+function verifyRoundTableArtifacts(text, options = {}) {
+    var paths = extractRoundTableArtifactPaths(text);
+    var requestStartedAtMs = timestampToMillis(options.requestStartedAt);
+    var checkedAt = new Date();
+
+    return paths.map(function (relPath) {
+        var fullPath = path.resolve(projectDir, relPath);
+        var projectRoot = path.resolve(projectDir);
+        if (!(fullPath === projectRoot || fullPath.startsWith(projectRoot + path.sep))) {
+            return {
+                path: relPath,
+                status: 'unsafe-path',
+                exists: false,
+                checkedAt: checkedAt.toISOString(),
+                reason: 'Path resolves outside the project.',
+            };
+        }
+
+        try {
+            var stat = fs.existsSync(fullPath) ? fs.statSync(fullPath) : null;
+            if (!stat || !stat.isFile()) {
+                return {
+                    path: relPath,
+                    status: 'missing',
+                    exists: false,
+                    checkedAt: checkedAt.toISOString(),
+                    reason: 'Mentioned artifact was not found in the repo.',
+                };
+            }
+
+            var updatedAtMs = stat.mtimeMs;
+            var stale = requestStartedAtMs && updatedAtMs + 5000 < requestStartedAtMs;
+            return {
+                path: relPath,
+                status: stale ? 'stale' : 'verified',
+                exists: true,
+                size: stat.size,
+                updatedAtMs,
+                updatedAt: stat.mtime.toISOString(),
+                checkedAt: checkedAt.toISOString(),
+                reason: stale
+                    ? 'File exists, but was not modified after this Round Table request started.'
+                    : 'File exists and was modified during or after this Round Table request.',
+            };
+        } catch (err) {
+            return {
+                path: relPath,
+                status: 'unverified',
+                exists: false,
+                checkedAt: checkedAt.toISOString(),
+                reason: `Could not verify artifact: ${err.message}`,
+            };
+        }
+    });
 }
 
 function isMacraTask(task = {}) {
@@ -3818,6 +3968,7 @@ async function processCommands() {
                 var isStrategyPhase = meetingPhase === 'strategy' || meetingPhase === 'brainstorm' || meetingPhase === 'planning';
                 var isActionPhase = meetingPhase === 'action' || meetingPhase === 'execution';
                 var isExecMode = EXEC_RX.test(msgContent);
+                if (isActionPhase) isExecMode = true;
                 var currentDepth = cmd.context?.followUpDepth || 0;
                 // Only auto-trigger exec mode at very high depth — let the tree of thought breathe
                 if (!isStrategyPhase && currentDepth >= 5) isExecMode = true;
@@ -3879,6 +4030,8 @@ async function processCommands() {
                             `- DO NOT discuss, debate, ask clarifying questions, or propose "what if" scenarios.`,
                             `- DO NOT ask other agents for input, definitions, or dependencies.`,
                             `- DO NOT say you need alignment, a glossary, a shared doc, or a preflight checklist before you can start.`,
+                            `- Use this shape: Action: ... Evidence: ... Blocker: ...`,
+                            `- If the task needs data, credentials, or a file you cannot access, name that exact blocker and the next safe step.`,
                             `- State in 1-3 sentences what YOU will build/do RIGHT NOW based on the brainstorm.`,
                             `- Name the specific deliverable (doc, feature, schema, etc.) and commit to it.`,
                             `- If you are unsure about details, MAKE A DECISION and build it. Don't ask for consensus.`,
@@ -3927,8 +4080,8 @@ async function processCommands() {
                             isStrategyPhase
                                 ? `1. SHORT & PUNCHY — 3-5 sentences MAXIMUM. This is rapid strategy planning, not a report.`
                                 : `1. SHORT & PUNCHY — 2-4 sentences MAXIMUM. This is a fast back-and-forth, not a report.`,
-                            `2. @MENTION IS MANDATORY — You MUST @mention at least one other agent by name (e.g. @Nora, @Scout, @Solara, @Sage). No exceptions. Pick the person whose expertise is most relevant to your thought.`,
-                            `3. ASK A DIRECT QUESTION — End your message by asking that person something specific. Not rhetorical — a real question they need to answer.`,
+                            `2. @MENTION ONLY WHEN USEFUL — Mention a teammate only if they own a concrete next read or decision. Do not tag someone just to keep the chat going.`,
+                            `3. CLOSE THE LOOP — End with a decision, owner, next action, or exact blocker. Do not end every response with another question.`,
                             `4. BUILD OR CHALLENGE — Either extend an idea from the thread OR push back with a concern. Never just agree and move on.`,
                             `5. NO HEDGING — Skip phrases like "I think perhaps" or "it might be worth considering". Talk like you're texting a colleague.`,
                             isStrategyPhase
@@ -3936,11 +4089,11 @@ async function processCommands() {
                                 : `6. NO TASK QUEUING — Don't say you'll build something or queue a task. Just talk.`,
                             ``,
                             defaultTagTarget && !isFollowUp
-                                ? `You MUST include "@${defaultTagTarget}" in your response.`
-                                : `You MUST @mention the person who tagged you in your response.`,
+                                ? `Optional teammate to involve if genuinely useful: @${defaultTagTarget}.`
+                                : `If you were tagged directly, answer that person first.`,
                             ``,
                             isBoosted
-                                ? `Tremaine asked for deeper thinking. Go 4-6 sentences, be analytical — but still tag someone and ask a real question:`
+                                ? `Tremaine asked for deeper thinking. Go 4-6 sentences, be analytical, and still close with a decision/owner/blocker:`
                                 : (isStrategyPhase ? `3-5 sentences, strategy-first, plain text:` : `2-4 sentences, plain text, fast and real:`),
                         );
                         chatPrompt = brainstormParts.join('\n');
@@ -4094,6 +4247,8 @@ async function processCommands() {
                     }
                 }
 
+                gcResponse = sanitizeGroupChatResponse(gcResponse);
+
                 // Context-aware fallback (only if AI failed)
                 if (!gcResponse) {
                     var contentLower = cmd.content.toLowerCase();
@@ -4131,7 +4286,9 @@ async function processCommands() {
                     }
                 }
 
-                if (isStrategyPhase) {
+                gcResponse = sanitizeGroupChatResponse(gcResponse);
+
+                if (isStrategyPhase && currentDepth < 1) {
                     var strategyCandidates = uniqueAgentIds((commandTurnState.participants || []).concat(otherAgents || []).filter(function (id) {
                         return id && id !== AGENT_ID;
                     }));
@@ -4165,9 +4322,20 @@ async function processCommands() {
                             break;
                         }
 
+                        var roundTableArtifactEvidence = verifyRoundTableArtifacts(gcResponse, {
+                            requestStartedAt: gcMessageData?.createdAt || preWriteData?.createdAt || cmd.createdAt,
+                        });
+                        if (roundTableArtifactEvidence.length > 0) {
+                            var artifactSummary = roundTableArtifactEvidence
+                                .map(function (artifact) { return `${artifact.path}:${artifact.status}`; })
+                                .join(', ');
+                            console.log(`   📎 Round Table artifact evidence: ${artifactSummary}`);
+                        }
+
                         await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
                             [`responses.${AGENT_ID}.content`]: gcResponse,
                             [`responses.${AGENT_ID}.status`]: 'completed',
+                            [`responses.${AGENT_ID}.artifacts`]: roundTableArtifactEvidence,
                             [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
                         });
                         console.log(`   ✅ Wrote group-chat response to message ${gcMessageId}`);
@@ -4285,9 +4453,9 @@ async function processCommands() {
                         // Organic follow-up mode:
                         // - Optional by env toggle for normal chats
                         // - Forced during strategy phase so brainstorming doesn't collapse after one turn
-                        var shouldUseOrganicFollowUps = ENABLE_ORGANIC_FOLLOW_UPS || (isStrategyPhase && FORCE_STRATEGY_CONTINUATION);
-                        var organicDepthLimit = isStrategyPhase ? 5 : 3;
-                        var organicMinLength = isStrategyPhase ? 40 : 100;
+                        var shouldUseOrganicFollowUps = ENABLE_ORGANIC_FOLLOW_UPS || (isStrategyPhase && FORCE_STRATEGY_CONTINUATION && currentDepth < 1);
+                        var organicDepthLimit = isStrategyPhase ? 2 : 3;
+                        var organicMinLength = isStrategyPhase ? 120 : 100;
                         if (shouldUseOrganicFollowUps && mentionedAgentIds.length === 0 && currentDepth < organicDepthLimit && gcResponse.length > organicMinLength) {
                             // Determine which agent would best continue this thread based on content
                             var responseWords = gcResponse.toLowerCase();
@@ -4310,7 +4478,7 @@ async function processCommands() {
                             if (sortedByRelevance.length > 0 && sortedByRelevance[0][1] > 0) {
                                 mentionedAgentIds.push(sortedByRelevance[0][0]);
                                 console.log(`   🌿 Organic follow-up enabled: ${AGENT_NAME}'s response touches ${knownAgents[sortedByRelevance[0][0]]}'s expertise`);
-                            } else if (isStrategyPhase && followUpCandidates.length > 0) {
+                            } else if (isStrategyPhase && currentDepth < 1 && followUpCandidates.length > 0) {
                                 var fallbackTarget = followUpCandidates[Math.floor(Math.random() * followUpCandidates.length)];
                                 mentionedAgentIds.push(fallbackTarget);
                                 console.log(`   🧠 Strategy continuation: routing follow-up to @${knownAgents[fallbackTarget] || fallbackTarget}`);
@@ -4320,7 +4488,7 @@ async function processCommands() {
 
                         var effectiveMaxDepth = isExecMode
                             ? MAX_FOLLOW_UP_DEPTH_EXEC
-                            : (isStrategyPhase ? Math.max(MAX_FOLLOW_UP_DEPTH, 7) : MAX_FOLLOW_UP_DEPTH);
+                            : (isStrategyPhase ? Math.min(Math.max(MAX_FOLLOW_UP_DEPTH, 2), 2) : MAX_FOLLOW_UP_DEPTH);
                         if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < effectiveMaxDepth) {
                             // Brief pause (2s) to let admin cut in before the chain continues
                             await new Promise(resolve => setTimeout(resolve, 2_000));

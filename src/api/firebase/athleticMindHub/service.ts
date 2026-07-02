@@ -3,12 +3,16 @@ import {
   collection,
   deleteDoc,
   doc,
+  endAt,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  startAt,
   updateDoc,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -128,6 +132,13 @@ export type HubInviteRecord = {
   lastRedeemedByEmail?: string;
 };
 
+export type HubUserSearchResult = {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string;
+};
+
 const CONTACTS_COLLECTION = 'athletic-mind-hub-contacts';
 const UPDATES_COLLECTION = 'athletic-mind-hub-updates';
 const WIKI_COLLECTION = 'athletic-mind-hub-wiki-blocks';
@@ -164,6 +175,31 @@ async function logChange(
 
 function mapDoc<T>(document: { id: string; data: () => Record<string, unknown> }): T {
   return { id: document.id, ...document.data() } as T;
+}
+
+function normalizeSearchText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function mapUserSearchResult(document: { id: string; data: () => Record<string, unknown> }): HubUserSearchResult {
+  const data = document.data();
+  const email = normalizeSearchText(data.email).toLowerCase();
+  const displayName = normalizeSearchText(data.displayName);
+  const username = normalizeSearchText(data.username);
+
+  return {
+    id: document.id,
+    email,
+    displayName: displayName || username || email || 'Pulse user',
+    username,
+  };
+}
+
+function displayNameSearchVariants(term: string) {
+  const trimmed = term.trim();
+  if (!trimmed) return [];
+  const capitalized = `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+  return Array.from(new Set([trimmed, capitalized]));
 }
 
 export const athleticMindHubService = {
@@ -221,6 +257,44 @@ export const athleticMindHubService = {
       (snapshot) => onNext(snapshot.docs.slice(0, 24).map((document) => mapDoc<HubChangeRecord>(document))),
       onError,
     );
+  },
+
+  async searchUsers(searchTerm: string): Promise<HubUserSearchResult[]> {
+    const term = normalizeSearchText(searchTerm);
+    if (term.length < 2) return [];
+
+    const usersRef = collection(db, 'users');
+    const normalizedEmail = term.toLowerCase();
+    const normalizedUsername = normalizedEmail.replace(/^@/, '');
+    const results = new Map<string, HubUserSearchResult>();
+
+    if (term.length >= 8) {
+      const directSnapshot = await getDoc(doc(db, 'users', term));
+      if (directSnapshot.exists()) {
+        results.set(directSnapshot.id, mapUserSearchResult(directSnapshot));
+      }
+    }
+
+    const searchQueries = [
+      query(usersRef, orderBy('email'), startAt(normalizedEmail), endAt(`${normalizedEmail}\uf8ff`), limit(8)),
+      query(usersRef, orderBy('username'), startAt(normalizedUsername), endAt(`${normalizedUsername}\uf8ff`), limit(8)),
+      ...displayNameSearchVariants(term).map((displayNameTerm) => (
+        query(usersRef, orderBy('displayName'), startAt(displayNameTerm), endAt(`${displayNameTerm}\uf8ff`), limit(8))
+      )),
+    ];
+
+    await Promise.all(searchQueries.map(async (userQuery) => {
+      const snapshot = await getDocs(userQuery);
+      snapshot.docs.forEach((document) => {
+        const result = mapUserSearchResult(document);
+        const haystack = `${result.email} ${result.username} ${result.displayName}`.toLowerCase();
+        if (haystack.includes(normalizedEmail)) {
+          results.set(result.id, result);
+        }
+      });
+    }));
+
+    return Array.from(results.values()).slice(0, 12);
   },
 
   async addContact(contact: Omit<CouncilContactRecord, 'id'>, author: HubAuthor) {
@@ -387,6 +461,26 @@ export const athleticMindHubService = {
     await setDoc(inviteRef, invite);
     await logChange('created', 'invite', inviteRef.id, `${permission} invite generated`, author);
     return inviteRef.id;
+  },
+
+  async addMemberFromUser(user: HubUserSearchResult, permission: HubPermission, author: HubAuthor) {
+    await setDoc(
+      doc(db, MEMBERS_COLLECTION, user.id),
+      {
+        userId: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        permission,
+        createdByUid: author.uid,
+        createdByName: author.name,
+        createdByEmail: author.email,
+        ...withAuthor(author),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: false },
+    );
+    await logChange('created', 'member', user.id, `${user.displayName || user.email} added to the hub`, author);
   },
 
   async updateInviteStatus(invite: HubInviteRecord, status: HubInviteRecord['status'], author: HubAuthor) {

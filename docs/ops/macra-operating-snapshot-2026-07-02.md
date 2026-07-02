@@ -4,7 +4,7 @@
 
 - **Operating system:** Macra Trial-Start Operating System
 - **Snapshot date:** 2026-07-02
-- **Status:** Step 2 funnel counts and source split populated from read-only Scoreboard / AppsFlyer / purchase-log / user-state sources; experiment freshness and guardrails remain pending follow-up steps.
+- **Status:** Workflow sections aligned for the 2026-07-02 operating read; AppsFlyer coverage and Scoreboard refresh blockers recorded, funnel counts and source split populated from read-only sources, experiment freshness and guardrails pending follow-up steps.
 - **Primary metric:** qualified onboarding start to trial start
 - **Primary guardrail:** no onboarding/paywall changes while experiment data is stale
 - **Default posture:** refresh active `variant_a` experiment results before making funnel decisions.
@@ -17,6 +17,49 @@ Source surfaces to refresh:
 - Cancel reasons: `/admin/macraCancelReasons`
 - AppsFlyer imports: `appsflyer-scoreboards/macra`, `appsflyer-aggregate-periods`, `appsflyer-macra-raw-rows`, `appsflyer-macra-users`
 - User / retargeting state: `users.macraEmailSequenceState`
+
+## AppsFlyer Coverage
+
+### Observed Facts
+
+Refresh attempt evidence:
+
+- Step 1 artifact: `docs/ops/macra-appsflyer-refresh-attempt-2026-07-02.md`
+- Raw Pull API importer: `netlify/functions/sync-macra-appsflyer-raw-data.ts`
+- Admin import surface: `/admin/emailSequences`
+- Token source resolved: `secret_manager:APPSFLYER_RAW_DATA_API_TOKEN`
+- Raw Pull API result: `502`, `APPSFLYER_RAW_API_ACCESS_UNAVAILABLE`
+- AppsFlyer returned `400` for raw install, raw in-app event, and retargeting reports because the current subscription package does not include raw data reports.
+- Local CSV fallback search found no newer AppsFlyer aggregate CSV artifact in the repo or Downloads.
+
+Latest persisted AppsFlyer coverage:
+
+| Field | Value | Source |
+| --- | --- | --- |
+| Latest import run | `macra-appsflyer-csv-period-1782550099524-6ebef9b5` | Firestore `appsflyer-import-runs` |
+| Import source | `aggregate_csv_upload` | Firestore `appsflyer-import-runs/macra-appsflyer-csv-period-1782550099524-6ebef9b5` |
+| Created at | `2026-06-27T08:48:20.136Z` | Firestore `appsflyer-import-runs/macra-appsflyer-csv-period-1782550099524-6ebef9b5` |
+| Coverage | `2026-06-21` through `2026-06-27` | Firestore `appsflyer-import-runs/macra-appsflyer-csv-period-1782550099524-6ebef9b5` |
+| Rows | 199 | Firestore `appsflyer-import-runs/macra-appsflyer-csv-period-1782550099524-6ebef9b5` |
+| Events | 30819 | Firestore `appsflyer-import-runs/macra-appsflyer-csv-period-1782550099524-6ebef9b5` |
+
+### Inference
+
+AppsFlyer coverage is not fresh enough for July 2 source-level decisioning. The latest persisted aggregate CSV is useful as the newest available coverage, but it does not verify `2026-06-29` through `2026-07-02`.
+
+## Scoreboard Refresh
+
+### Observed Facts
+
+- The Scoreboard refresh was attempted through the same backend function used by `/admin/emailSequences`.
+- The raw Pull API path failed because AppsFlyer raw data reports are unavailable on the current subscription.
+- The CSV upload fallback could not be completed because no newer local AppsFlyer aggregate CSV artifact was available.
+- No new Scoreboard import was written during this step.
+- Existing Firestore Scoreboard doc `appsflyer-scoreboards/macra` still exists and remains the source for the currently persisted AppsFlyer coverage.
+
+### Inference
+
+The Scoreboard should be treated as not refreshed beyond the latest persisted aggregate CSV coverage. The first operating action remains obtaining or uploading a fresh aggregate CSV, or enabling AppsFlyer raw data report access.
 
 ## Funnel Counts
 
@@ -113,7 +156,7 @@ Fresh user-source hints:
 
 The stale saved split still suggests Apple Search Ads had stronger conversion quality than Organic through `2026-06-25`, but there is no fresh source-attributed evidence for `2026-06-29` through `2026-07-02`. Do not change Apple Search Ads spend, organic assumptions, or retargeting behavior from this Step 2 read.
 
-## Experiment Snapshot Freshness
+## Experiment Freshness
 
 ### Observed Facts
 
@@ -161,7 +204,7 @@ Draft update structure:
 
 > Macra Update - 2026-07-02: refreshed funnel/source read is pending. The operating recommendation remains refresh active `variant_a` experiment results before making onboarding/paywall decisions. No live funnel changes should be made while experiment data is stale.
 
-## Decision-Log Recommendation
+## Decision Recommendation
 
 Pending append to `.agent/macra/decisions.md`.
 
@@ -172,3 +215,18 @@ Recommendation to record:
 - **Expected metric movement:** experiment decision quality
 - **Guardrail:** no onboarding/paywall changes while experiment data is stale
 - **Evidence:** this snapshot after source data and experiment freshness are populated.
+
+## Access Blockers
+
+### Observed Facts
+
+The Scoreboard refresh blocker is recorded in `docs/ops/macra-appsflyer-refresh-attempt-2026-07-02.md`.
+
+| Blocker | Evidence | Required action |
+| --- | --- | --- |
+| AppsFlyer raw Pull API unavailable | Raw importer returned `APPSFLYER_RAW_API_ACCESS_UNAVAILABLE`; AppsFlyer returned `400` because the current subscription package does not include raw data reports. | Enable AppsFlyer raw data reports for the Macra app, or continue using aggregate CSV uploads. |
+| No newer local aggregate CSV artifact available | Project, Downloads, and bounded repo searches found no new AppsFlyer aggregate CSV artifact to upload. | Export the latest AppsFlyer aggregate performance CSV and upload it through `/admin/emailSequences` -> Macra Scoreboard -> Upload CSV. |
+
+### Inference
+
+Until one blocker is cleared, the operating read must preserve the coverage gap and avoid funnel decisions that depend on fresh AppsFlyer source attribution.

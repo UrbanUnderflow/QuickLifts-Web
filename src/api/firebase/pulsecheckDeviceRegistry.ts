@@ -335,7 +335,7 @@ export const PULSECHECK_DEVICE_REGISTRY_SEED_ENTRIES: PulseCheckDeviceRegistryEn
     phaseJSportFingerprint: 'via-vendor-sport-field',
     integrationStatus: 'experimental',
     gaps: [
-      'Requires WHOOP OAuth client credentials, webhook secret, and approved redirect/webhook URLs before production use.',
+      'Requires public WHOOP client id config, Google Secret Manager OAuth/webhook secrets, and approved redirect/webhook URLs before production use.',
       'Webhook reconciliation worker must promote queued webhook sync jobs into scheduled whoop-sync executions.',
     ],
   }),
