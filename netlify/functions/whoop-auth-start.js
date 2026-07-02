@@ -29,7 +29,7 @@ exports.handler = async (event) => {
     const requestedScopes = normalizeScopes(body.scopes || getConfiguredScopes());
     const returnTo = sanitizeReturnTo(body.returnTo || DEFAULT_RETURN_TO);
     const redirectUri = getRedirectUri();
-    const { clientId } = getOauthCredentials();
+    const { clientId } = await getOauthCredentials();
     const state = buildStateToken();
     const now = Date.now();
     const db = admin.firestore();

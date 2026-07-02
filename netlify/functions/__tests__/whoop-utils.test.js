@@ -26,6 +26,62 @@ const {
   verifyWebhookSignature,
 } = require('../whoop-utils');
 
+const whoopUtilsPath = require.resolve('../whoop-utils');
+const googleSecretManagerUtilsPath = require.resolve('../google-secret-manager-utils');
+
+async function withFreshWhoopUtils({ env = {}, secretManager } = {}, callback) {
+  const envKeys = [
+    'WHOOP_CLIENT_ID',
+    'WHOOP_CLIENT_SECRET',
+    'WHOOP_CLIENT_SECRET_NAME',
+    'WHOOP_OAUTH_SECRET_NAME',
+    'WHOOP_WEBHOOK_SECRET',
+    'WHOOP_WEBHOOK_SECRET_NAME',
+    'WHOOP_SECRET_MANAGER_PROJECT_ID',
+    'WHOOP_ALLOW_ENV_CREDENTIALS_FALLBACK',
+    'GOOGLE_SECRET_MANAGER_PROJECT_ID',
+    'NODE_ENV',
+    'CONTEXT',
+    'NETLIFY',
+  ];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+
+  for (const key of envKeys) {
+    delete process.env[key];
+  }
+  Object.entries(env).forEach(([key, value]) => {
+    process.env[key] = value;
+  });
+
+  delete require.cache[whoopUtilsPath];
+  delete require.cache[googleSecretManagerUtilsPath];
+  require.cache[googleSecretManagerUtilsPath] = {
+    id: googleSecretManagerUtilsPath,
+    filename: googleSecretManagerUtilsPath,
+    loaded: true,
+    exports: secretManager || {
+      getSecretManagerSecret: async () => {
+        throw new Error('Secret Manager mock not configured');
+      },
+    },
+  };
+
+  try {
+    const utils = require('../whoop-utils');
+    return await callback(utils);
+  } finally {
+    delete require.cache[whoopUtilsPath];
+    delete require.cache[googleSecretManagerUtilsPath];
+    Object.entries(previousEnv).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+  }
+}
+
 test('normalizeScopes keeps only WHOOP scopes PulseCheck can consume', () => {
   assert.deepEqual(
     normalizeScopes([
@@ -133,4 +189,91 @@ test('toConnectionStatus returns a token-free WHOOP connection contract', () => 
   assert.deepEqual(status.lastImportedDomains, ['recovery', 'activity']);
   assert.equal(Object.prototype.hasOwnProperty.call(status, 'accessToken'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(status, 'refreshToken'), false);
+});
+
+test('getOauthCredentials reads the WHOOP OAuth secret from Secret Manager first', async () => {
+  const calls = [];
+
+  await withFreshWhoopUtils({
+    env: {
+      NODE_ENV: 'development',
+      WHOOP_CLIENT_ID: 'env-client-id',
+      WHOOP_CLIENT_SECRET: 'env-client-secret',
+    },
+    secretManager: {
+      getSecretManagerSecret: async (secretName, options) => {
+        calls.push({ secretName, options });
+        return JSON.stringify({
+          client_id: 'secret-client-id',
+          client_secret: 'secret-client-secret',
+        });
+      },
+    },
+  }, async ({ getOauthCredentials }) => {
+    assert.deepEqual(await getOauthCredentials(), {
+      clientId: 'secret-client-id',
+      clientSecret: 'secret-client-secret',
+    });
+  });
+
+  assert.deepEqual(calls, [{
+    secretName: 'WHOOP_CLIENT_SECRET',
+    options: { projectId: 'quicklifts-dd3f1' },
+  }]);
+});
+
+test('getOauthCredentials accepts a raw Secret Manager client secret with the public WHOOP client id', async () => {
+  await withFreshWhoopUtils({
+    env: {
+      NODE_ENV: 'production',
+    },
+    secretManager: {
+      getSecretManagerSecret: async () => 'secret-manager-client-secret',
+    },
+  }, async ({ getOauthCredentials }) => {
+    assert.deepEqual(await getOauthCredentials(), {
+      clientId: '7eda3ec3-47c9-46a5-be57-6c4612bd9b82',
+      clientSecret: 'secret-manager-client-secret',
+    });
+  });
+});
+
+test('getOauthCredentials falls back to env credentials for local development', async () => {
+  await withFreshWhoopUtils({
+    env: {
+      NODE_ENV: 'development',
+      WHOOP_CLIENT_ID: 'env-client-id',
+      WHOOP_CLIENT_SECRET: 'env-client-secret',
+    },
+    secretManager: {
+      getSecretManagerSecret: async () => {
+        throw new Error('Secret unavailable');
+      },
+    },
+  }, async ({ getOauthCredentials }) => {
+    assert.deepEqual(await getOauthCredentials(), {
+      clientId: 'env-client-id',
+      clientSecret: 'env-client-secret',
+    });
+  });
+});
+
+test('getOauthCredentials does not fall back to env client secrets in production', async () => {
+  await withFreshWhoopUtils({
+    env: {
+      NODE_ENV: 'production',
+      WHOOP_CLIENT_ID: 'env-client-id',
+      WHOOP_CLIENT_SECRET: 'env-client-secret',
+    },
+    secretManager: {
+      getSecretManagerSecret: async () => {
+        throw new Error('Secret unavailable');
+      },
+    },
+  }, async ({ getOauthCredentials }) => {
+    await assert.rejects(getOauthCredentials(), (error) => {
+      assert.equal(error.errorCode, 'WHOOP_CONFIG_UNAVAILABLE');
+      return true;
+    });
+  });
 });

@@ -1,10 +1,15 @@
 const crypto = require('crypto');
 const { admin, headers } = require('./config/firebase');
+const { getSecretManagerSecret } = require('./google-secret-manager-utils');
 
 const WHOOP_AUTHORIZE_URL = 'https://api.prod.whoop.com/oauth/oauth2/auth';
 const WHOOP_TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token';
 const WHOOP_API_BASE_URL = 'https://api.prod.whoop.com/developer';
 const DEFAULT_WHOOP_REDIRECT_URI = 'https://fitwithpulse.ai/.netlify/functions/whoop-callback';
+const DEFAULT_WHOOP_CLIENT_ID = '7eda3ec3-47c9-46a5-be57-6c4612bd9b82';
+const DEFAULT_WHOOP_CLIENT_SECRET_NAME = 'WHOOP_CLIENT_SECRET';
+const DEFAULT_WHOOP_WEBHOOK_SECRET_NAME = 'WHOOP_WEBHOOK_SECRET';
+const DEFAULT_WHOOP_SECRET_MANAGER_PROJECT_ID = 'quicklifts-dd3f1';
 
 const DEFAULT_SCOPES = [
   'offline',
@@ -20,6 +25,8 @@ const DEFAULT_RETURN_TO = '/PulseCheck/whoop';
 const OAUTH_STATES_COLLECTION = 'pulsecheck-oauth-states';
 const CONNECTIONS_COLLECTION = 'pulsecheck-whoop-connections';
 const TOKEN_REFRESH_SKEW_SECONDS = 5 * 60;
+let cachedOauthCredentials = null;
+let cachedWebhookSecret = null;
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -150,13 +157,97 @@ function getConfiguredScopes() {
   return normalizeScopes(process.env.WHOOP_SCOPES || DEFAULT_SCOPES);
 }
 
-function getOauthCredentials() {
-  const clientId = process.env.WHOOP_CLIENT_ID;
-  const clientSecret = process.env.WHOOP_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    throw createError(500, 'Missing WHOOP_CLIENT_ID or WHOOP_CLIENT_SECRET environment variables.', 'WHOOP_CONFIG_UNAVAILABLE');
+function normalizeString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getWhoopSecretManagerProjectId() {
+  return normalizeString(process.env.WHOOP_SECRET_MANAGER_PROJECT_ID)
+    || normalizeString(process.env.GOOGLE_SECRET_MANAGER_PROJECT_ID)
+    || DEFAULT_WHOOP_SECRET_MANAGER_PROJECT_ID;
+}
+
+function getConfiguredClientId() {
+  return normalizeString(process.env.WHOOP_CLIENT_ID) || DEFAULT_WHOOP_CLIENT_ID;
+}
+
+function parseOauthSecretPayload(rawValue, fallbackClientId = '') {
+  const trimmed = normalizeString(rawValue);
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const clientId = normalizeString(parsed.client_id)
+      || normalizeString(parsed.clientId)
+      || normalizeString(parsed.WHOOP_CLIENT_ID)
+      || fallbackClientId;
+    const clientSecret = normalizeString(parsed.client_secret)
+      || normalizeString(parsed.clientSecret)
+      || normalizeString(parsed.WHOOP_CLIENT_SECRET)
+      || normalizeString(parsed.secret);
+    if (!clientId || !clientSecret) return null;
+    return { clientId, clientSecret };
+  } catch {
+    return fallbackClientId ? { clientId: fallbackClientId, clientSecret: trimmed } : null;
   }
+}
+
+function getOauthCredentialsFromEnv() {
+  const clientId = getConfiguredClientId();
+  const clientSecret = normalizeString(process.env.WHOOP_CLIENT_SECRET);
+  if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret };
+}
+
+function shouldAllowEnvSecretFallback() {
+  const configured = normalizeString(process.env.WHOOP_ALLOW_ENV_CREDENTIALS_FALLBACK).toLowerCase();
+  if (['true', '1', 'yes'].includes(configured)) return true;
+  if (['false', '0', 'no'].includes(configured)) return false;
+  return process.env.NODE_ENV !== 'production'
+    && process.env.CONTEXT !== 'production'
+    && process.env.NETLIFY !== 'true';
+}
+
+async function getOauthCredentials() {
+  if (cachedOauthCredentials) return cachedOauthCredentials;
+
+  const clientId = getConfiguredClientId();
+  const secretName = normalizeString(process.env.WHOOP_CLIENT_SECRET_NAME)
+    || normalizeString(process.env.WHOOP_OAUTH_SECRET_NAME)
+    || DEFAULT_WHOOP_CLIENT_SECRET_NAME;
+  const secretProjectId = getWhoopSecretManagerProjectId();
+  let secretError = null;
+
+  if (secretName) {
+    try {
+      const secretValue = await getSecretManagerSecret(secretName, { projectId: secretProjectId });
+      const secretCredentials = parseOauthSecretPayload(secretValue, clientId);
+      if (secretCredentials) {
+        cachedOauthCredentials = secretCredentials;
+        return cachedOauthCredentials;
+      }
+      secretError = new Error(`Secret Manager secret ${secretName} is missing a WHOOP client secret.`);
+    } catch (error) {
+      secretError = error;
+    }
+  }
+
+  const envCredentials = getOauthCredentialsFromEnv();
+  if (envCredentials && shouldAllowEnvSecretFallback()) {
+    cachedOauthCredentials = envCredentials;
+    return cachedOauthCredentials;
+  }
+
+  const detail = secretError
+    ? `, and failed to load WHOOP OAuth credentials from Secret Manager: ${secretError.message}`
+    : '.';
+  throw createError(
+    500,
+    `Missing WHOOP_CLIENT_ID or WHOOP_CLIENT_SECRET configuration${detail}`,
+    'WHOOP_CONFIG_UNAVAILABLE'
+  );
 }
 
 async function verifyAuth(event) {
@@ -201,7 +292,7 @@ async function tokenRequest(body) {
 }
 
 async function exchangeCodeForToken({ code, redirectUri }) {
-  const { clientId, clientSecret } = getOauthCredentials();
+  const { clientId, clientSecret } = await getOauthCredentials();
   return tokenRequest(new URLSearchParams({
     grant_type: 'authorization_code',
     code,
@@ -215,7 +306,7 @@ async function refreshAccessToken(refreshToken) {
   if (!refreshToken || typeof refreshToken !== 'string') {
     throw createError(409, 'WHOOP refresh token is missing. Reconnect WHOOP to keep syncing.', 'WHOOP_RECONNECT_REQUIRED');
   }
-  const { clientId, clientSecret } = getOauthCredentials();
+  const { clientId, clientSecret } = await getOauthCredentials();
   return tokenRequest(new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: refreshToken,
@@ -367,6 +458,53 @@ function buildWebhookSignature({ timestamp, rawBody, secret }) {
   return crypto.createHmac('sha256', secret).update(`${timestamp}${rawBody}`).digest('base64');
 }
 
+async function getWebhookSecret() {
+  if (cachedWebhookSecret) return cachedWebhookSecret;
+
+  const secretName = normalizeString(process.env.WHOOP_WEBHOOK_SECRET_NAME)
+    || DEFAULT_WHOOP_WEBHOOK_SECRET_NAME;
+  const secretProjectId = getWhoopSecretManagerProjectId();
+  let secretError = null;
+
+  if (secretName) {
+    try {
+      const secretValue = normalizeString(await getSecretManagerSecret(secretName, { projectId: secretProjectId }));
+      if (secretValue) {
+        cachedWebhookSecret = secretValue;
+        return cachedWebhookSecret;
+      }
+      secretError = new Error(`Secret Manager secret ${secretName} returned empty payload.`);
+    } catch (error) {
+      secretError = error;
+    }
+  }
+
+  const envSecret = normalizeString(process.env.WHOOP_WEBHOOK_SECRET);
+  if (envSecret && shouldAllowEnvSecretFallback()) {
+    cachedWebhookSecret = envSecret;
+    return cachedWebhookSecret;
+  }
+
+  try {
+    const oauthCredentials = await getOauthCredentials();
+    if (oauthCredentials.clientSecret) {
+      cachedWebhookSecret = oauthCredentials.clientSecret;
+      return cachedWebhookSecret;
+    }
+  } catch (error) {
+    secretError = secretError || error;
+  }
+
+  const detail = secretError
+    ? ` Failed to load WHOOP webhook secret from Secret Manager: ${secretError.message}`
+    : '';
+  throw createError(
+    500,
+    `Missing WHOOP_WEBHOOK_SECRET configuration.${detail}`,
+    'WHOOP_CONFIG_UNAVAILABLE'
+  );
+}
+
 function verifyWebhookSignature({ headers = {}, rawBody = '', secret }) {
   if (!secret) throw createError(500, 'Missing WHOOP_WEBHOOK_SECRET environment variable.', 'WHOOP_CONFIG_UNAVAILABLE');
   const signature = String(getHeader(headers, 'X-WHOOP-Signature') || '').trim();
@@ -399,6 +537,7 @@ module.exports = {
   exchangeCodeForToken,
   getConfiguredScopes,
   getOauthCredentials,
+  getWebhookSecret,
   getQueryParams,
   getRawBody,
   getRedirectUri,

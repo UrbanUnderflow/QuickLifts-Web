@@ -3,6 +3,7 @@ const {
   CONNECTIONS_COLLECTION,
   RESPONSE_HEADERS,
   buildWhoopErrorResponse,
+  getWebhookSecret,
   getRawBody,
   verifyWebhookSignature,
 } = require('./whoop-utils');
@@ -57,10 +58,11 @@ exports.handler = async (event) => {
   try {
     initializeFirebaseAdmin(event);
     const rawBody = getRawBody(event);
+    const webhookSecret = await getWebhookSecret();
     const isValidSignature = verifyWebhookSignature({
       headers: event.headers || {},
       rawBody,
-      secret: process.env.WHOOP_WEBHOOK_SECRET || process.env.WHOOP_CLIENT_SECRET,
+      secret: webhookSecret,
     });
     if (!isValidSignature) {
       return {
