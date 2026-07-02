@@ -8,7 +8,7 @@ const FWP_HOSTS = new Set(['fitwithpulse.ai', 'www.fitwithpulse.ai']);
 
 const PIL_PREFIX = '/PIL';
 const PIL_PUBLIC_ALIAS_PATHS = new Set(['/TheAthleticMindCouncil']);
-const PIL_SHARED_PUBLIC_PREFIXES = ['/research'];
+const PIL_SHARED_PUBLIC_PREFIXES = ['/research', '/athletic-mind-hub'];
 const LINK_PREVIEW_CRAWLER_PATTERN =
   /(bot|crawler|spider|preview|facebookexternalhit|facebot|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|pinterest|vkshare|skypeuripreview|applebot)/i;
 
