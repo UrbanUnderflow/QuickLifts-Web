@@ -111,6 +111,10 @@ export type HubInviteRecord = {
   token: string;
   permission: HubPermission;
   status: 'active' | 'disabled';
+  inviteeEmail?: string;
+  inviteeName?: string;
+  registrationEntryPoint?: string;
+  messageId?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
   createdByUid?: string;
@@ -327,6 +331,12 @@ export const athleticMindHubService = {
     const invite = mapDoc<HubInviteRecord>(inviteSnapshot);
     if (invite.status !== 'active') {
       throw new Error('Invite link is not active.');
+    }
+
+    const inviteeEmail = (invite.inviteeEmail || '').trim().toLowerCase();
+    const authorEmail = (author.email || '').trim().toLowerCase();
+    if (inviteeEmail && inviteeEmail !== authorEmail) {
+      throw new Error(`This invite is for ${invite.inviteeEmail}. Sign in with that email to join the hub.`);
     }
 
     await setDoc(

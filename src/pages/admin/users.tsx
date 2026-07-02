@@ -4,9 +4,9 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn, Search, Sparkles, Clipboard } from 'lucide-react';
+import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, Users, LogIn, Search, Sparkles, Clipboard } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
-import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
+import { Workout, WorkoutStatus, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { BetaApplication } from '../../api/firebase/admin/types';
@@ -52,8 +52,8 @@ const isBetaSubscription = (value?: string) => {
   return normalized === 'beta' || normalized === SubscriptionType.beta.toLowerCase();
 };
 
-type RegistrationOriginKey = 'fit_with_pulse' | 'macra' | 'pulse_check' | 'pulse_ritual' | 'unknown';
-type OriginTabType = 'originFitWithPulse' | 'originMacra' | 'originPulseCheck' | 'originPulseRitual' | 'originUnknown';
+type RegistrationOriginKey = 'fit_with_pulse' | 'macra' | 'pulse_check' | 'pulse_ritual' | 'athletic_council' | 'unknown';
+type OriginTabType = 'originFitWithPulse' | 'originMacra' | 'originPulseCheck' | 'originPulseRitual' | 'originAthleticCouncil' | 'originUnknown';
 type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'betaApplications' | OriginTabType;
 type JoinDateSortDirection = 'asc' | 'desc';
 
@@ -93,6 +93,13 @@ const originTabConfigs: Array<{
     badgeClassName: 'bg-emerald-900/30 text-emerald-300 border-emerald-900',
   },
   {
+    tab: 'originAthleticCouncil',
+    key: 'athletic_council',
+    label: 'Athletic Council',
+    caption: 'Council hub origin',
+    badgeClassName: 'bg-amber-900/30 text-amber-300 border-amber-900',
+  },
+  {
     tab: 'originUnknown',
     key: 'unknown',
     label: 'Unknown',
@@ -109,6 +116,16 @@ const normalizeRegistrationEntryPoint = (value?: string): RegistrationOriginKey 
   if (['macra'].includes(normalized)) return 'macra';
   if (['pulse_check', 'pulse-check', 'pulsecheck'].includes(normalized)) return 'pulse_check';
   if (['pulse_ritual', 'pulse-ritual', 'pulseritual', 'ritual'].includes(normalized)) return 'pulse_ritual';
+  if ([
+    'athletic_council',
+    'athletic-council',
+    'athleticcouncil',
+    'athletic_mind',
+    'athletic-mind',
+    'athleticmind',
+    'athletic_mind_council',
+    'athletic-mind-council',
+  ].includes(normalized)) return 'athletic_council';
   if (['fit_with_pulse', 'fit-with-pulse', 'fitwithpulse', 'fwp', 'quicklifts', 'quicklifts_web', 'quicklifts-ios', 'quicklifts_ios'].includes(normalized)) {
     return 'fit_with_pulse';
   }
@@ -149,7 +166,7 @@ const UsersManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [joinDateSortDirection, setJoinDateSortDirection] = useState<JoinDateSortDirection>('desc');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [copiedId, setCopiedId] = useState<string>('');
+  const [_copiedId, setCopiedId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
 
   // Add State for Batch Delete
@@ -183,13 +200,13 @@ const UsersManagement: React.FC = () => {
   // *** END: State for Workout Session Selection & Logs Tab ***
 
   // *** START: State for Fetched Session Logs ***
-  const [sessionLogs, setSessionLogs] = useState<ExerciseLog[]>([]);
-  const [loadingSessionLogs, setLoadingSessionLogs] = useState(false);
-  const [sessionLogsError, setSessionLogsError] = useState<string | null>(null);
+  const [_sessionLogs, setSessionLogs] = useState<ExerciseLog[]>([]);
+  const [_loadingSessionLogs, setLoadingSessionLogs] = useState(false);
+  const [_sessionLogsError, setSessionLogsError] = useState<string | null>(null);
   // *** END: State for Fetched Session Logs ***
 
   // *** START: State for Expanded Session Log Details ***
-  const [selectedSessionLogId, setSelectedSessionLogId] = useState<string | null>(null);
+  const [_selectedSessionLogId, setSelectedSessionLogId] = useState<string | null>(null);
   // *** END: State for Expanded Session Log Details ***
 
   // *** START: State for Beta Applications ***
@@ -436,6 +453,7 @@ const UsersManagement: React.FC = () => {
       macra: 0,
       pulse_check: 0,
       pulse_ritual: 0,
+      athletic_council: 0,
       unknown: 0,
     });
   }, [users]);
@@ -1208,7 +1226,7 @@ const UsersManagement: React.FC = () => {
     
     const total = diagnosticResults.usersWithoutUsernameDoc.length;
     let success = 0;
-    let failed = 0;
+    let _failed = 0;
     
     try {
       // Process in batches of 50 to avoid overwhelming Firestore
@@ -2240,7 +2258,7 @@ const UsersManagement: React.FC = () => {
   // *** END: useEffect to track single selected workout session ***
 
   // *** START: Function to load logs for the selected session ***
-  const loadLogsForSession = async () => {
+  const _loadLogsForSession = async () => {
     if (!logsWorkoutSession || !workoutSessionsUser) {
       setSessionLogsError("Cannot load logs: No user or workout session selected.");
       return;
@@ -2288,7 +2306,7 @@ const UsersManagement: React.FC = () => {
   // *** END: Function to load logs for the selected session ***
 
   // *** START: Render Log Details Function ***
-  const renderSessionLogDetails = (log: ExerciseLog) => {
+  const _renderSessionLogDetails = (log: ExerciseLog) => {
     // Ensure log and nested properties exist
     console.log("[Admin Users] Rendering Log Details for log ID:", log.id, "Data:", JSON.stringify(log, null, 2)); // Added detailed log
     if (!log) return null;
@@ -3783,7 +3801,7 @@ const UsersManagement: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                    {filteredUsers.map((user, index) => (
+                    {filteredUsers.map((user, _index) => (
                       <React.Fragment key={user.id}>
                         <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedUser?.id === user.id ? 'bg-[#1d2b3a]' : ''}`}>
                           {/* Conditional Checkbox Cell */}

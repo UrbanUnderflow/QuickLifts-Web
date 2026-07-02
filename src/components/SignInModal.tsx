@@ -151,6 +151,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [username, setUsername] = useState("");
   const [inviteCode, setInviteCode] = useState(""); // Optional gym invite code for affiliate tracking
   const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [profileImageUploadUrl, setProfileImageUploadUrl] = useState("");
+  const [athleticCouncilName, setAthleticCouncilName] = useState("");
+  const [athleticCouncilBio, setAthleticCouncilBio] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpStep, setSignUpStep] = useState<SignUpStep>("initial");
   const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
@@ -186,7 +189,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const effectiveVariant = normalizedModalRoutePath === '/athletic-mind-hub' || normalizedModalRoutePath.startsWith('/athletic-mind-hub/')
     ? 'athleticMindHub'
     : variant;
-  const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage;
+  const isAthleticMindHubFlow = effectiveVariant === 'athleticMindHub';
+  const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage || isAthleticMindHubFlow;
   const isPulseCheckLegalContext = isOnCoachPage || router.asPath.startsWith('/PulseCheck/post-activation');
   const legalTheme = isPulseCheckLegalContext
     ? {
@@ -243,6 +247,28 @@ const SignInModal: React.FC<SignInModalProps> = ({
     }
   }, [router.query, inviteCode]);
 
+  useEffect(() => {
+    if (!isAthleticMindHubFlow) return;
+
+    const queryEmail = Array.isArray(router.query.email) ? router.query.email[0] : router.query.email;
+    if (queryEmail && !email) {
+      setEmail(queryEmail);
+    }
+
+    if (router.query.signup === '1' && !auth.currentUser) {
+      setIsSignUp(true);
+      setSignUpStep('initial');
+    }
+  }, [email, isAthleticMindHubFlow, router.query.email, router.query.signup]);
+
+  useEffect(() => {
+    if (!isAthleticMindHubFlow || athleticCouncilName) return;
+    const fallbackName = currentUser?.displayName || auth.currentUser?.displayName || '';
+    if (fallbackName) {
+      setAthleticCouncilName(fallbackName);
+    }
+  }, [athleticCouncilName, currentUser?.displayName, isAthleticMindHubFlow]);
+
   const clearLegalError = () => {
     setErrors((prev) => ({ ...prev, legal: undefined }));
   };
@@ -272,6 +298,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setSignUpStep('legal');
     setError(null);
   };
+
+  const needsAthleticCouncilProfile = (userDoc: { registrationComplete?: boolean; displayName?: string } | null | undefined) => (
+    isAthleticMindHubFlow && (!userDoc?.registrationComplete || !userDoc?.displayName)
+  );
 
   const persistCurrentLegalAcceptance = async (
     userId: string,
@@ -357,6 +387,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
         return;
       }
 
+      if (isAthleticMindHubFlow) {
+        if (needsAthleticCouncilProfile(currentUser)) {
+          setIsSignUp(true);
+          setSignUpStep('profile');
+        }
+        return;
+      }
+
       if (!onboardingStatus) {
         console.log('[SignInModal Onboarding Check Effect] Onboarding NOT complete. Checking fields...');
 
@@ -395,12 +433,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
     } else {
       // User signed out, reset form fields
       console.log('[SignInModal] User signed out, resetting form state.');
-      setEmail("");
+      const queryEmail = Array.isArray(router.query.email) ? router.query.email[0] : router.query.email;
+      const isAthleticSignupIntent = isAthleticMindHubFlow && router.query.signup === '1';
+      setEmail(isAthleticSignupIntent && queryEmail ? queryEmail : "");
       setPassword("");
       setConfirmPassword("");
       setError(null);
       setErrors({});
-      setIsSignUp(false); // Reset to sign-in view
+      setIsSignUp(isAthleticSignupIntent); // Reset to sign-in view unless an invite asks for signup
       setSignUpStep('initial'); // Reset step
       setHasAcceptedLegal(false);
       setLegalFlowContext('signup');
@@ -453,8 +493,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
           return;
         }
 
+        if (needsAthleticCouncilProfile(firestoreUser)) {
+          console.log('[SignInModal] Athletic Mind profile incomplete, starting slim profile flow');
+          setIsSignUp(true);
+          setSignUpStep('profile');
+          setIsLoading(false);
+          return;
+        }
+
         // --- Onboarding completeness check ---
-        if (!isOnboardingComplete(firestoreUser)) {
+        if (!isAthleticMindHubFlow && !isOnboardingComplete(firestoreUser)) {
           console.log('[SignInModal] User missing onboarding data, starting onboarding flow');
           setIsSignUp(true);
           setSignUpStep('profile');
@@ -487,6 +535,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
           return;
         } else if (shouldBypassSubscriptionGate) {
           console.log('[SignInModal] User on bypass page, skipping subscription requirement');
+          onSignInSuccess?.(user);
+          onClose?.();
+          return;
         }
       }
     } catch (err) {
@@ -541,6 +592,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                     privacyPath: legalTheme.privacyPath,
                   })
                 : null,
+              ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
               ...(partnerSource ? { partnerSource } : {}),
             });
             await userService.createUser(user.uid, firestoreUser);
@@ -555,8 +607,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
 
+          if (needsAthleticCouncilProfile(firestoreUser)) {
+            console.log('[SignInModal] Apple sign-in: Athletic Mind profile missing, opening slim profile step');
+            setIsSignUp(true);
+            setSignUpStep('profile');
+            setIsLoading(false);
+            return;
+          }
+
           // If missing username, start registration flow (mirror Google path)
-          if (!firestoreUser.username) {
+          if (!isAthleticMindHubFlow && !firestoreUser.username) {
             console.log('[SignInModal] Apple sign-in: Username missing, opening profile step');
             setIsSignUp(true);
             setSignUpStep('profile');
@@ -631,6 +691,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                   privacyPath: legalTheme.privacyPath,
                 })
               : null,
+            ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
             ...(partnerSource ? { partnerSource } : {}),
           });
           await userService.createUser(user.uid, firestoreUser);
@@ -658,7 +719,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
           isEmpty: !firestoreUser.username,
           typeOf: typeof firestoreUser.username
         });
-        if (!firestoreUser.username) {
+        if (needsAthleticCouncilProfile(firestoreUser)) {
+          console.log("Starting Athletic Mind profile completion");
+          setIsSignUp(true);
+          setSignUpStep("profile");
+          setIsLoading(false);
+          return;
+        }
+        if (!isAthleticMindHubFlow && !firestoreUser.username) {
           console.log("Starting registration - username missing");
           setIsSignUp(true);
           setSignUpStep("profile");
@@ -671,7 +739,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           return;
         }
         // --- Onboarding completeness check ---
-        if (!isOnboardingComplete(firestoreUser)) {
+        if (!isAthleticMindHubFlow && !isOnboardingComplete(firestoreUser)) {
           console.log('[SignInModal] Google sign-in: User missing onboarding data, starting onboarding flow');
           setIsSignUp(true);
           setSignUpStep('profile');
@@ -838,6 +906,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             email: user.email,
             displayName: user.displayName || "",
             legalAcceptance: null,
+            ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
             ...(partnerSource ? { partnerSource } : {}),
           });
           await userService.createUser(user.uid, firestoreUser);
@@ -853,8 +922,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
 
+          if (needsAthleticCouncilProfile(firestoreUser)) {
+            setIsSignUp(true);
+            setSignUpStep('profile');
+            addLog("Athletic Mind profile incomplete, starting slim profile flow");
+            setIsLoading(false);
+            return;
+          }
+
           // Check if username is missing - highest priority
-          if (!firestoreUser.username) {
+          if (!isAthleticMindHubFlow && !firestoreUser.username) {
             setIsSignUp(true);
             setSignUpStep('profile');
             addLog("User missing username, starting registration flow");
@@ -913,6 +990,63 @@ const SignInModal: React.FC<SignInModalProps> = ({
     });
   
     if (signUpStep === "profile") {
+      if (isAthleticMindHubFlow) {
+        try {
+          setIsLoading(true);
+          setError(null);
+          const userId = auth.currentUser?.uid;
+          if (!userId) {
+            throw new Error("No authenticated user found for profile update");
+          }
+
+          const displayName = athleticCouncilName.trim() || auth.currentUser?.displayName || '';
+          if (!displayName) {
+            setError('Please add your name to finish your council profile');
+            setIsLoading(false);
+            return;
+          }
+
+          const currentUserData = await userService.fetchUserFromFirestore(userId);
+          const currentEmail = currentUserData?.email || auth.currentUser?.email || email;
+          if (!currentEmail) {
+            throw new Error("Email is missing, cannot complete registration.");
+          }
+
+          const profileImagePatch = profileImageUploadUrl
+            ? {
+                profileImage: {
+                  profileImageURL: profileImageUploadUrl,
+                  imageOffsetWidth: 0,
+                  imageOffsetHeight: 0,
+                },
+              }
+            : {};
+
+          await userService.updateUser(userId, {
+            displayName,
+            email: currentEmail,
+            bio: athleticCouncilBio.trim(),
+            registrationComplete: true,
+            registrationEntryPoint: 'athletic_council',
+            updatedAt: new Date(),
+            ...profileImagePatch,
+          });
+
+          const refreshedUser = await userService.fetchUserFromFirestore(userId);
+          userService.nonUICurrentUser = refreshedUser;
+          setIsSignUp(false);
+          setSignUpStep('initial');
+          onSignUpSuccess?.(auth.currentUser);
+          onClose?.();
+        } catch (err) {
+          console.error("[SignInModal Athletic Profile Step] Error updating profile:", err);
+          setError(err instanceof Error ? err.message : 'An error occurred');
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
@@ -1060,12 +1194,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setHasAcceptedLegal(false);
         clearLegalError();
 
-        if (!refreshedUser.username) {
+        if (needsAthleticCouncilProfile(refreshedUser)) {
           setSignUpStep('profile');
           return;
         }
 
-        if (!isOnboardingComplete(refreshedUser)) {
+        if (!isAthleticMindHubFlow && !refreshedUser.username) {
+          setSignUpStep('profile');
+          return;
+        }
+
+        if (!isAthleticMindHubFlow && !isOnboardingComplete(refreshedUser)) {
           setSignUpStep('quiz-prompt');
           return;
         }
@@ -1110,8 +1249,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
 
+          if (needsAthleticCouncilProfile(userDoc)) {
+            console.log('[SignInModal] Athletic Mind user needs council profile completion');
+            setIsSignUp(true);
+            setSignUpStep('profile');
+            setIsLoading(false);
+            return;
+          }
+
           // Check if username is missing
-          if (!userDoc.username) {
+          if (!isAthleticMindHubFlow && !userDoc.username) {
             console.log('[SignInModal] User missing username, starting registration');
             setIsSignUp(true);
             setSignUpStep('profile');
@@ -1240,6 +1387,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 }),
                 createdAt: new Date(), // Add createdAt
                 updatedAt: new Date(),  // Add updatedAt
+                ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
                 ...(partnerSource ? { partnerSource } : {}),
                 // If a gym inviteCode was provided, persist it so backend can resolve it
                 ...(inviteCode ? { gymInviteCode: inviteCode } : {})
@@ -1267,6 +1415,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
               // Update local/Redux state - AuthWrapper will pick this up via onAuthStateChanged
               userService.nonUICurrentUser = newUser;
               console.log('[SignInModal] New user state set locally. AuthWrapper should take over.');
+
+              if (isAthleticMindHubFlow) {
+                setIsSignUp(true);
+                setSignUpStep('profile');
+                setIsLoading(false);
+                return;
+              }
 
               // No need to setSignUpStep here - AuthWrapper handles it
 
@@ -2193,11 +2348,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
           UploadImageType.Profile
         );
     
+        setProfileImageUploadUrl(uploadResult.downloadURL);
         console.log('Profile image uploaded successfully', uploadResult);
       } catch (error) {
         console.error('Profile image upload failed', error);
         setError('Failed to upload profile image');
         setProfileImage(null);
+        setProfileImageUploadUrl("");
       } finally {
         setIsImageUploading(false);
       }
@@ -2268,6 +2425,53 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </div>
       </div>
     </>
+  );
+
+  const renderAthleticCouncilProfileStep = () => (
+    <div className="amh-council-profile">
+      <div>
+        <p className="amh-kicker">Council profile</p>
+        <h2>Finish your hub profile</h2>
+        <p className="amh-panel-copy">
+          Add the basics for your Athletic Mind Council account. You can enter the hub right after this.
+        </p>
+      </div>
+
+      <div className="amh-avatar-row">
+        <div className="amh-avatar-preview">
+          {profileImage ? (
+            <img src={URL.createObjectURL(profileImage)} alt="Profile preview" />
+          ) : (
+            <Camera size={28} />
+          )}
+          {isImageUploading && <div className="amh-avatar-loading">Uploading</div>}
+        </div>
+        <label className="amh-upload-button">
+          Upload image
+          <input type="file" accept="image/*" onChange={handleFileChange} />
+        </label>
+      </div>
+
+      <label>
+        Name
+        <input
+          type="text"
+          value={athleticCouncilName}
+          onChange={(event) => setAthleticCouncilName(event.target.value)}
+          placeholder="Your name"
+        />
+      </label>
+
+      <label>
+        Bio
+        <textarea
+          value={athleticCouncilBio}
+          onChange={(event) => setAthleticCouncilBio(event.target.value)}
+          placeholder="Role, school, sport, or how you support the council"
+          rows={4}
+        />
+      </label>
+    </div>
   );
 
   const renderLegalAcceptanceField = (helperText?: string) => (
@@ -2828,7 +3032,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         case "legal":
           return renderLegalStep();
         case "profile":
-          return renderProfileStep();
+          return isAthleticMindHubFlow ? renderAthleticCouncilProfileStep() : renderProfileStep();
         case "quiz-prompt":
           return renderQuizPrompt();
         case "quiz":
@@ -2856,6 +3060,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setConfirmPassword("");
     setUsername("");
     setProfileImage(null);
+    setProfileImageUploadUrl("");
+    setAthleticCouncilName("");
+    setAthleticCouncilBio("");
     setHasAcceptedLegal(false);
     setLegalFlowContext('signup');
   };
@@ -2934,8 +3141,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
         return;
       }
       
+      if (needsAthleticCouncilProfile(userDoc)) {
+        console.log('[SignInModal] handleSignInSuccess: Athletic Mind profile incomplete. Opening slim profile step.');
+        setIsSignUp(true);
+        setSignUpStep('profile');
+        setIsLoading(false);
+        return;
+      }
+
       // Explicit missing username check - prioritize this before subscription check
-      if (!userDoc.username) {
+      if (!isAthleticMindHubFlow && !userDoc.username) {
         console.log('[SignInModal] handleSignInSuccess: User has no username. Forcing profile completion step.');
         setIsSignUp(true);
         setSignUpStep('profile');
@@ -3507,6 +3722,108 @@ const SignInModal: React.FC<SignInModalProps> = ({
         .amh-reset-field input:focus {
           border-color: #e7b953;
           box-shadow: 0 0 0 4px rgba(231, 185, 83, 0.18);
+        }
+
+        .amh-council-profile {
+          display: grid;
+          gap: 18px;
+        }
+
+        .amh-council-profile h2 {
+          margin: 0;
+          color: #fffaf0;
+          font-size: clamp(1.8rem, 3vw, 2.45rem);
+          line-height: 1.02;
+          letter-spacing: 0;
+        }
+
+        .amh-council-profile label {
+          display: grid;
+          gap: 8px;
+          color: rgba(255, 250, 240, 0.78);
+          font-size: 0.84rem;
+          font-weight: 850;
+        }
+
+        .amh-council-profile input,
+        .amh-council-profile textarea {
+          width: 100%;
+          box-sizing: border-box;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 8px;
+          background: rgba(255, 250, 240, 0.08);
+          color: #fffaf0;
+          font: inherit;
+          font-size: 1rem;
+          font-weight: 750;
+          outline: none;
+          padding: 14px;
+        }
+
+        .amh-council-profile textarea {
+          min-height: 112px;
+          resize: vertical;
+        }
+
+        .amh-council-profile input:focus,
+        .amh-council-profile textarea:focus {
+          border-color: #e7b953;
+          box-shadow: 0 0 0 4px rgba(231, 185, 83, 0.18);
+        }
+
+        .amh-avatar-row {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .amh-avatar-preview {
+          position: relative;
+          display: grid;
+          place-items: center;
+          width: 78px;
+          height: 78px;
+          overflow: hidden;
+          border: 1px solid rgba(255, 255, 255, 0.16);
+          border-radius: 999px;
+          background: rgba(255, 250, 240, 0.08);
+          color: rgba(255, 250, 240, 0.64);
+        }
+
+        .amh-avatar-preview img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .amh-avatar-loading {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+          background: rgba(5, 7, 6, 0.68);
+          color: #fffaf0;
+          font-size: 0.72rem;
+          font-weight: 900;
+        }
+
+        .amh-upload-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: fit-content;
+          min-height: 42px;
+          border: 1px solid rgba(255, 255, 255, 0.18);
+          border-radius: 8px;
+          background: rgba(255, 250, 240, 0.08);
+          color: #fffaf0;
+          cursor: pointer;
+          font-weight: 900;
+          padding: 0 14px;
+        }
+
+        .amh-upload-button input {
+          display: none;
         }
 
         .amh-label-row {

@@ -50,6 +50,7 @@ export class ProfileImage {
 }
 
 export type PartnerSourceType = 'brand' | 'gym' | 'runClub';
+export type RegistrationEntryPoint = 'fit_with_pulse' | 'macra' | 'pulse_check' | 'pulse_ritual' | 'athletic_council' | string;
 
 export interface PartnerSource {
   type: PartnerSourceType;
@@ -108,6 +109,7 @@ export class User {
   subscriptionType: SubscriptionType;
   subscriptionPlatform: SubscriptionPlatform;
   referrer?: string;
+  registrationEntryPoint?: RegistrationEntryPoint;
   partnerSource?: PartnerSource;
   isCurrentlyActive: boolean;
   videoCount: number;
@@ -170,6 +172,7 @@ export class User {
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
     this.subscriptionPlatform = data.subscriptionPlatform || SubscriptionPlatform.Web;
     this.referrer = data.referrer || '';
+    this.registrationEntryPoint = data.registrationEntryPoint || '';
     this.partnerSource = normalizePartnerSource(data.partnerSource);
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
@@ -259,6 +262,7 @@ export class User {
       subscriptionType: this.subscriptionType,
       subscriptionPlatform: this.subscriptionPlatform,
       referrer: this.referrer,
+      registrationEntryPoint: this.registrationEntryPoint || '',
       partnerSource: this.partnerSource
         ? {
             type: this.partnerSource.type,

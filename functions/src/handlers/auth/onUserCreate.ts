@@ -15,6 +15,7 @@ export interface OnUserCreatePayload {
   email: string;
   displayName?: string;
   username?: string;
+  registrationEntryPoint?: string | null;
   // Optional partner attribution coming from the signup flow
   partnerSource?: PartnerSource | null;
 }
@@ -42,6 +43,10 @@ export function buildUserDocument(payload: OnUserCreatePayload): User {
       type: payload.partnerSource.type,
       partnerId: payload.partnerSource.partnerId,
     };
+  }
+
+  if (payload.registrationEntryPoint?.trim()) {
+    baseUser.registrationEntryPoint = payload.registrationEntryPoint.trim();
   }
 
   return baseUser;

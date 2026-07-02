@@ -57,6 +57,13 @@ export interface User {
    */
   partnerSource?: PartnerSource;
 
+  /**
+   * First product or workspace that created the ecosystem account.
+   * Examples: "fit_with_pulse", "macra", "pulse_check", "pulse_ritual",
+   * "athletic_council".
+   */
+  registrationEntryPoint?: string;
+
   /** Timestamps stored as JavaScript Date objects in backend logic. */
   createdAt?: Date;
   updatedAt?: Date;
