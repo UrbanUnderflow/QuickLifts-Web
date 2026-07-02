@@ -383,7 +383,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
         <section id="pulsecheck" className="border-t border-white/10 bg-[#08070d]">
           <div className="mx-auto grid max-w-6xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:py-28">
             <div>
-              <ProductPill icon={<Brain className="h-4 w-4 text-[#A05EF8]" />}>Featured product</ProductPill>
+              <ProductPill icon={<Brain className="h-4 w-4 text-[#A05EF8]" />}>Flagship Product</ProductPill>
               <h2 className="mt-6 text-4xl font-semibold leading-tight text-white">
                 <span className="bg-gradient-to-r from-[#C084FC] via-[#A05EF8] to-[#6A9AFA] bg-clip-text text-transparent">
                   PulseCheck

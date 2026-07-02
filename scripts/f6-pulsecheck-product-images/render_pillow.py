@@ -13,13 +13,14 @@ FONT_DIR = Path(
     "native/libreoffice-headless/libreoffice/LibreOfficeDev.app/Contents/Resources/fonts/truetype"
 )
 
-S = 2
+S = 4
 W, H = 1200, 675
+OUT_W, OUT_H = 2400, 1350
 
-LIME = "#E0FE10"
+LIME = "#A78BFA"
 TEXT = "#F7FAFA"
-MUTED = (247, 250, 250, 166)
-QUIET = (247, 250, 250, 105)
+MUTED = (247, 250, 250, 190)
+QUIET = (247, 250, 250, 126)
 PURPLE = "#8B5CF6"
 CYAN = "#22D3EE"
 TEAL = "#14E7D0"
@@ -36,8 +37,8 @@ def font(name: str, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(FONT_DIR / name), p(size))
 
 
-REG = "Rubik-Regular.ttf"
-BOLD = "Rubik-Bold.ttf"
+REG = "NotoSans-Regular.ttf"
+BOLD = "NotoSans-Bold.ttf"
 
 
 @dataclass
@@ -49,7 +50,7 @@ class TextBlock:
     x: int = 64
     y: int = 76
     width: int = 470
-    title_size: int = 58
+    title_size: int = 48
 
 
 def rgba(hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
@@ -97,6 +98,22 @@ def draw_wrapped(
     return y
 
 
+def draw_centered(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    text: str,
+    fnt: ImageFont.FreeTypeFont,
+    fill,
+) -> None:
+    bbox = draw.textbbox((0, 0), text, font=fnt)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    x1, y1, x2, y2 = box
+    x = x1 + (x2 - x1 - text_w) / 2 - bbox[0]
+    y = y1 + (y2 - y1 - text_h) / 2 - bbox[1]
+    draw.text((x, y), text, font=fnt, fill=fill)
+
+
 def rounded_rect_layer(size: tuple[int, int], radius: int, fill, outline=None, width: int = 1) -> Image.Image:
     layer = Image.new("RGBA", size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
@@ -132,11 +149,11 @@ def make_bg() -> Image.Image:
             )
 
     d = ImageDraw.Draw(img, "RGBA")
-    for x in range(0, p(W), p(46)):
-        d.line((x, 0, x, p(H)), fill=(255, 255, 255, 7), width=p(1))
-    for y in range(0, p(H), p(46)):
-        d.line((0, y, p(W), y), fill=(255, 255, 255, 7), width=p(1))
-    d.rectangle((0, 0, p(W), p(H)), outline=(255, 255, 255, 30), width=p(1))
+    for x in range(0, p(W), p(56)):
+        d.line((x, 0, x, p(H)), fill=(255, 255, 255, 5), width=p(1))
+    for y in range(0, p(H), p(56)):
+        d.line((0, y, p(W), y), fill=(255, 255, 255, 5), width=p(1))
+    d.rectangle((0, 0, p(W), p(H)), outline=(255, 255, 255, 22), width=p(1))
     return img
 
 
@@ -155,22 +172,22 @@ def draw_brand(img: Image.Image) -> None:
 def draw_copy(img: Image.Image, block: TextBlock) -> None:
     d = ImageDraw.Draw(img, "RGBA")
     x, y, width = p(block.x), p(block.y), p(block.width)
-    d.text((x, y), block.kicker.upper(), font=font(BOLD, 15), fill=rgba(LIME), spacing=0)
-    y += p(44)
+    d.text((x, y), block.kicker.upper(), font=font(BOLD, 13), fill=rgba(LIME), spacing=0)
+    y += p(38)
     title_font = font(BOLD, block.title_size)
     for line in block.title.split("\n"):
         d.text((x, y), line, font=title_font, fill=rgba(TEXT), spacing=0)
-        y += p(block.title_size * 0.98)
+        y += p(block.title_size * 1.08)
     if block.deck:
         y += p(18)
-        y = draw_wrapped(d, (x, y), block.deck, font(REG, 21), MUTED, width, line_gap=8)
+        y = draw_wrapped(d, (x, y), block.deck, font(REG, 20), MUTED, width, line_gap=9)
     if block.bullets:
         y += p(24)
-        bullet_font = font(BOLD, 16)
+        bullet_font = font(REG, 17)
         for bullet in block.bullets:
-            d.ellipse((x, y + p(8), x + p(9), y + p(17)), fill=rgba(LIME))
-            y = draw_wrapped(d, (x + p(22), y), bullet, bullet_font, (255, 255, 255, 190), width - p(30), line_gap=5)
-            y += p(12)
+            d.ellipse((x, y + p(9), x + p(19), y + p(19)), fill=rgba(LIME))
+            y = draw_wrapped(d, (x + p(30), y), bullet, bullet_font, (255, 255, 255, 214), width - p(36), line_gap=6)
+            y += p(14)
 
 
 def phone_image(src: str, w: int, h: int) -> Image.Image:
@@ -225,10 +242,11 @@ def draw_chips(d: ImageDraw.ImageDraw, x: int, y: int, chips: Iterable[tuple[str
         f = font(BOLD, 13)
         bbox = d.textbbox((0, 0), label, font=f)
         w = bbox[2] + p(28)
-        fill = rgba(LIME) if hot else (255, 255, 255, 22)
-        text_fill = (7, 9, 11, 255) if hot else (255, 255, 255, 205)
-        d.rounded_rectangle((x, y, x + w, y + p(36)), radius=p(18), fill=fill, outline=(255, 255, 255, 22))
-        d.text((x + p(14), y + p(9)), label, font=f, fill=text_fill)
+        fill = rgba(LIME) if hot else rgba(PURPLE, 30)
+        outline = (255, 255, 255, 24) if hot else rgba(LIME, 70)
+        text_fill = (9, 10, 15, 255) if hot else (255, 255, 255, 220)
+        d.rounded_rectangle((x, y, x + w, y + p(36)), radius=p(18), fill=fill, outline=outline)
+        draw_centered(d, (x, y, x + w, y + p(36)), label, f, text_fill)
         x += w + p(10)
 
 
@@ -239,10 +257,10 @@ def draw_wave(img: Image.Image, points: Sequence[tuple[int, int]], color=LIME, w
 
 
 def save_card(img: Image.Image, slug: str) -> None:
-    final = img.resize((W, H), Image.Resampling.LANCZOS).convert("RGB")
+    final = img.resize((OUT_W, OUT_H), Image.Resampling.LANCZOS).convert("RGB")
     OUT.mkdir(parents=True, exist_ok=True)
     final.save(OUT / f"{slug}.png", "PNG")
-    final.save(OUT / f"{slug}.jpg", "JPEG", quality=92, optimize=True)
+    final.save(OUT / f"{slug}.jpg", "JPEG", quality=94, optimize=True)
 
 
 def card_cover() -> None:
@@ -253,12 +271,12 @@ def card_cover() -> None:
     d.arc((p(716), p(118), p(1130), p(532)), 205, 500, fill=rgba(LIME, 34), width=p(2))
     draw_copy(img, TextBlock(
         "Pulse Intelligence Labs",
-        "Human\nperformance,\nmeasured daily.",
-        "PulseCheck turns private check-ins, biometric signals, and mental reps into a live readiness layer for athletes and teams.",
+        "Train the mind\nlike the body.",
+        "PulseCheck helps teams notice when an athlete is under pressure, guide a quick reset, and know when a real person should step in.",
         x=64,
         y=78,
         width=520,
-        title_size=62,
+        title_size=60,
     ))
     paste_rotated(img, phone_image("pulsecheck-media/00-app-store-meet-nora.png", 290, 612), (742, 410), -7)
     paste_rotated(img, phone_image("pulsecheck-media/01-today-checkin.png", 244, 516), (1016, 338), 7)
@@ -270,25 +288,26 @@ def card_readiness() -> None:
     img = make_bg()
     draw_brand(img)
     draw_copy(img, TextBlock(
-        "Readiness engine",
-        "Spot risk\nbefore the\ndrop-off.",
+        "Daily readiness",
+        "Know who\nneeds support\ntoday.",
         bullets=[
-            "Daily emotional state, sleep, soreness, HRV, and training load in one private flow.",
-            "Coaches see trends without exposing every athlete conversation.",
-            "Escalation signals surface when support needs to move faster.",
+            "Athletes answer a quick private check-in.",
+            "Wearables add sleep, heart-rate, and recovery clues.",
+            "Coaches see simple trends, not private chats.",
         ],
         x=64,
         y=78,
-        width=500,
+        width=470,
+        title_size=52,
     ))
     d = ImageDraw.Draw(img, "RGBA")
     cx, cy, r = p(728), p(180), p(68)
     d.ellipse((cx-r, cy-r, cx+r, cy+r), fill=(16, 22, 26, 230), outline=LINE, width=p(2))
     d.arc((cx-r, cy-r, cx+r, cy+r), -90, 188, fill=rgba(LIME), width=p(14))
-    d.text((cx - p(34), cy - p(26)), "78", font=font(BOLD, 36), fill=rgba(TEXT))
-    d.text((cx - p(32), cy + p(18)), "READY", font=font(BOLD, 10), fill=QUIET)
-    draw_metric_panel(img, (594, 306, 214, 126), "team readiness", "+14%", "from baseline")
-    draw_metric_panel(img, (618, 462, 252, 128), "signal blend", "5", "mood, HRV, sleep, load")
+    draw_centered(d, (cx - p(54), cy - p(44), cx + p(54), cy + p(8)), "78", font(BOLD, 36), rgba(TEXT))
+    draw_centered(d, (cx - p(46), cy + p(14), cx + p(46), cy + p(40)), "READY", font(BOLD, 10), QUIET)
+    draw_metric_panel(img, (594, 306, 214, 126), "team trend", "+14%", "better than baseline")
+    draw_metric_panel(img, (618, 462, 252, 128), "signals used", "5", "mood, HRV, sleep, load")
     paste_rotated(img, phone_image("pulsecheck-media/01-today-checkin.png", 290, 612), (1010, 382), 5)
     save_card(img, "02-pulsecheck-readiness-engine")
 
@@ -298,20 +317,21 @@ def card_nora() -> None:
     draw_brand(img)
     draw_copy(img, TextBlock(
         "Nora AI coach",
-        "Private support\nthat knows\nthe context.",
-        "Nora listens, asks better follow-ups, and translates athlete context into the right recovery or performance rep.",
+        "A private coach\nin every athlete's\npocket.",
+        "Nora asks thoughtful follow-up questions, helps the athlete reset, and knows when the right staff member should get context.",
         x=64,
         y=82,
-        width=470,
+        width=420,
+        title_size=46,
     ))
-    paste_rotated(img, phone_image("pulsecheck-media/02-nora-chat.png", 290, 612), (674, 402), -5)
-    paste_rotated(img, phone_image("pulsecheck-media/08-box-breathing.png", 190, 402), (963, 262), 7)
-    x, y, w, h = 792, 458, 340, 142
+    paste_rotated(img, phone_image("pulsecheck-media/02-nora-chat.png", 272, 574), (720, 404), -5)
+    paste_rotated(img, phone_image("pulsecheck-media/08-box-breathing.png", 178, 376), (986, 262), 7)
+    x, y, w, h = 790, 462, 330, 134
     rounded_panel(img, (x, y, w, h), radius=20)
     d = ImageDraw.Draw(img, "RGBA")
-    d.text((p(x + 24), p(y + 22)), "Guided interventions", font=font(BOLD, 22), fill=rgba(TEXT))
-    draw_wrapped(d, (p(x + 24), p(y + 58)), "Breathing, reset scripts, confidence reps, and staff handoff flows.", font(REG, 14), fill=MUTED, width=p(w - 48), line_gap=4)
-    draw_chips(d, x + 24, y + 106, [("Box breathing", True), ("Coach note", False)])
+    d.text((p(x + 24), p(y + 20)), "What Nora can do", font=font(BOLD, 22), fill=rgba(TEXT))
+    draw_wrapped(d, (p(x + 24), p(y + 56)), "Guide a quick reset, record what changed, or alert staff when extra support is needed.", font(REG, 13), fill=MUTED, width=p(w - 48), line_gap=4)
+    draw_chips(d, x + 24, y + 106, [("Breathing reset", True), ("Staff handoff", False)])
     save_card(img, "03-pulsecheck-nora-ai-coach")
 
 
@@ -319,25 +339,31 @@ def card_wearables() -> None:
     img = make_bg()
     draw_brand(img)
     draw_copy(img, TextBlock(
-        "Wearable context",
-        "Connect body\nsignals to the\nperformance layer.",
+        "Body signals",
+        "Bring the body\ninto the\npicture.",
         bullets=[
-            "Google Health, Oura, Polar, and HealthKit-ready signal lanes.",
-            "Readiness interpretation stays source-aware and privacy-aware.",
-            "Human support gets better timing, not more noise.",
+            "Connect Apple Health, Oura, Polar, or Google Health.",
+            "Turn sleep and heart-rate patterns into easy readiness cues.",
+            "Help staff choose the right support at the right time.",
         ],
         x=64,
         y=78,
-        width=500,
+        width=480,
+        title_size=54,
     ))
     d = ImageDraw.Draw(img, "RGBA")
-    for i, (label, note) in enumerate([("62 bpm", "live heart-rate context"), ("HRV", "recovery trend input"), ("Sleep", "readiness modifier"), ("Load", "training stress signal")]):
-        x = 594 + (i % 2) * 180
-        y = 162 + (i // 2) * 128
-        rounded_panel(img, (x, y, 166, 110), radius=17)
-        d.text((p(x + 18), p(y + 20)), label, font=font(BOLD, 23), fill=rgba(TEXT))
-        draw_wrapped(d, (p(x + 18), p(y + 56)), note, font(REG, 13), fill=MUTED, width=p(128), line_gap=3)
-    paste_rotated(img, phone_image("pulsecheck-media/04-connect-wearable.png", 290, 612), (1010, 382), 4)
+    for i, (label, note) in enumerate([
+        ("62 bpm", "live heart rate"),
+        ("Sleep", "last night's recovery"),
+        ("HRV", "stress and recovery clue"),
+        ("Load", "how hard training has been"),
+    ]):
+        x = 570 + (i % 2) * 184
+        y = 156 + (i // 2) * 134
+        rounded_panel(img, (x, y, 170, 116), radius=17)
+        d.text((p(x + 18), p(y + 18)), label, font=font(BOLD, 23), fill=rgba(TEXT))
+        draw_wrapped(d, (p(x + 18), p(y + 55)), note, font(REG, 13), fill=MUTED, width=p(134), line_gap=3)
+    paste_rotated(img, phone_image("pulsecheck-media/04-connect-wearable.png", 240, 508), (1086, 396), 4)
     save_card(img, "04-pulsecheck-wearable-context")
 
 
@@ -345,31 +371,33 @@ def card_training() -> None:
     img = make_bg()
     draw_brand(img)
     draw_copy(img, TextBlock(
-        "Mental training protocol",
-        "Turn check-ins\ninto reps.",
-        "PulseCheck adapts the day’s mental-performance work from real readiness signals, then keeps the team aligned.",
+        "Mental practice",
+        "Practice calm\nbefore game day.",
+        "PulseCheck turns a daily check-in into short mental reps: breathe, focus, reset, and review what changed.",
         x=64,
         y=82,
         width=470,
+        title_size=50,
     ))
     d = ImageDraw.Draw(img, "RGBA")
-    rounded_panel(img, (552, 150, 342, 154), radius=20)
-    d.text((p(576), p(172)), "Today's protocol", font=font(BOLD, 22), fill=rgba(TEXT))
-    draw_wrapped(d, (p(576), p(210)), "Pressure Simulation · 12 min · breath control, attention lock, and post-rep reflection.", font(REG, 14), fill=MUTED, width=p(292), line_gap=4)
-    draw_chips(d, 576, 256, [("Start rep", True), ("Track response", False)])
+    paste_rotated(img, phone_image("pulsecheck-media/05-training.png", 258, 544), (1042, 390), 5)
+    rounded_panel(img, (548, 138, 360, 166), radius=20)
+    d.text((p(574), p(160)), "Today's rep", font=font(BOLD, 22), fill=rgba(TEXT))
+    draw_wrapped(d, (p(574), p(198)), "Pressure Reset · 8 min · breathe, focus, and write down what changed.", font(REG, 14), fill=MUTED, width=p(304), line_gap=4)
+    draw_chips(d, 574, 252, [("Start rep", True)])
     for i, (title, note, status) in enumerate([
-        ("Check in", "Capture private state and biometric posture.", "done"),
-        ("Run the rep", "Nora adapts the training session to today.", "live"),
-        ("Close the loop", "Update readiness and staff-level trend view.", "next"),
+        ("Check in", "How do I feel today?", "done"),
+        ("Practice", "Breathe, focus, reset.", "live"),
+        ("Review", "What changed after the rep?", "next"),
     ]):
-        x, y = 566, 342 + i * 90
-        rounded_panel(img, (x, y, 424, 72), radius=18, fill=(18, 24, 29, 214))
-        d.rounded_rectangle((p(x+16), p(y+14), p(x+58), p(y+56)), radius=p(14), fill=rgba(LIME))
-        d.text((p(x+32), p(y+23)), str(i+1), font=font(BOLD, 17), fill=(8, 11, 9, 255), anchor="mm")
-        d.text((p(x+74), p(y+14)), title, font=font(BOLD, 18), fill=rgba(TEXT))
-        d.text((p(x+74), p(y+39)), note, font=font(REG, 12), fill=MUTED)
-        d.text((p(x+356), p(y+27)), status.upper(), font=font(BOLD, 11), fill=rgba(LIME))
-    paste_rotated(img, phone_image("pulsecheck-media/05-training.png", 290, 612), (1026, 394), 6)
+        x, y = 556, 342 + i * 88
+        rounded_panel(img, (x, y, 392, 72), radius=18, fill=(18, 24, 29, 220))
+        number_box = (p(x + 16), p(y + 14), p(x + 58), p(y + 56))
+        d.rounded_rectangle(number_box, radius=p(14), fill=rgba(LIME))
+        draw_centered(d, number_box, str(i + 1), font(BOLD, 17), (8, 11, 9, 255))
+        d.text((p(x + 74), p(y + 13)), title, font=font(BOLD, 18), fill=rgba(TEXT))
+        d.text((p(x + 74), p(y + 39)), note, font=font(REG, 12), fill=MUTED)
+        d.text((p(x + 326), p(y + 28)), status.upper(), font=font(BOLD, 10), fill=rgba(LIME))
     save_card(img, "05-pulsecheck-mental-training-protocol")
 
 
