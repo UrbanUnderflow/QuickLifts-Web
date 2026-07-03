@@ -11,7 +11,7 @@ const fallbackSimpBudgetConfig = {
   projectId: 'simpbudget-e213e',
   storageBucket: 'simpbudget-e213e.firebasestorage.app',
   messagingSenderId: '354650749412',
-  appId: '1:354650749412:ios:7265fa6ad14cdb4b8d6ff1',
+  appId: '1:354650749412:web:6da9fbef94bcad08d6ff1',
 };
 
 const simpBudgetFirebaseConfig = {

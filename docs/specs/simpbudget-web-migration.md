@@ -25,6 +25,18 @@ Set these Netlify environment variables before production deploy:
 - `NEXT_PUBLIC_SIMPBUDGET_FIREBASE_MESSAGING_SENDER_ID`
 - `NEXT_PUBLIC_SIMPBUDGET_FIREBASE_APP_ID`
 
+## Production Auth Domains
+
+Before Google, Apple, or email-link sign-in works on the hosted route, add these domains in the SimpBudget Firebase project:
+
+Firebase Console → `simpbudget-e213e` → Authentication → Settings → Authorized domains
+
+- `fitwithpulse.ai`
+- `www.fitwithpulse.ai`
+- the active Netlify site domain, if you sign in from Netlify deploy URLs
+
+If this is missing, the page will show `auth/unauthorized-domain` when starting sign-in from `https://fitwithpulse.ai/SimpBudget`.
+
 ## Data Model
 
 SimpBudget writes per-user data under:
@@ -48,7 +60,12 @@ The importer is idempotent. Running it again updates the migrated Business and P
 
 ## Firestore Rules Shape
 
-The SimpBudget project should allow an authenticated user to read/write only their own document tree:
+The SimpBudget project should allow an authenticated user to read/write only their own document tree. The deployable standalone rules live in:
+
+- `firestore.simpbudget.rules`
+- `storage.simpbudget.rules`
+
+Equivalent Firestore shape:
 
 ```text
 match /simpbudget-users/{userId}/{document=**} {
@@ -63,3 +80,10 @@ simpbudget-imports/{uid}/{spaceId}/{yearMonth}/{fileName}
 ```
 
 Storage rules should similarly require `request.auth.uid == uid`.
+
+Deploy with a Firebase CLI session that has access to `simpbudget-e213e`:
+
+```bash
+firebase deploy --project simpbudget-e213e --only firestore:rules --config firebase.simpbudget.json
+firebase deploy --project simpbudget-e213e --only storage --config firebase.simpbudget.json
+```

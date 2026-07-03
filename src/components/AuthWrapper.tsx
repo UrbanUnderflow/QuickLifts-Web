@@ -85,6 +85,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/delete-account', '/deleteAccount',
     '/checkout-redirect', '/subscription-success', '/subscription-error',
     '/group-meet', '/group-meet/privacy', '/group-meet/terms',
+    // SimpBudget owns its own Firebase project auth and signed-out desktop view.
+    '/SimpBudget',
+    // Lightweight operator surface for partner, funding, and contract pipelines.
+    '/PipeLists',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/coach/login', '/build-your-round', '/creator-onboarding',
     // Design language showcase

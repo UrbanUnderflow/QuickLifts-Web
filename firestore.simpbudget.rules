@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /simpbudget-users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /budgetSpaces/{spaceId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /budgets/{budgetId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    match /pipeListShares/{shareId} {
+      function isShareOwner() {
+        return isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      }
+
+      function isCreateOwner() {
+        return isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      }
+
+      function isInvitedEditor() {
+        return isSignedIn()
+          && resource.data.access == 'edit'
+          && request.auth.token.email in resource.data.editorEmails;
+      }
+
+      allow read: if resource.data.publicRead == true || isShareOwner() || isInvitedEditor();
+      allow create: if isCreateOwner();
+      allow update: if isShareOwner()
+        || (
+          isInvitedEditor()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'list',
+            'updatedAt',
+            'lastEditedBy'
+          ])
+        );
+      allow delete: if isShareOwner();
+    }
+
+    match /pipeListProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isOwner(userId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

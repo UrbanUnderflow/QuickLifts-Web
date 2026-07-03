@@ -1,0 +1,8 @@
+{
+  "firestore": {
+    "rules": "firestore.simpbudget.rules"
+  },
+  "storage": {
+    "rules": "storage.simpbudget.rules"
+  }
+}

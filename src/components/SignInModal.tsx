@@ -3938,8 +3938,45 @@ const SignInModal: React.FC<SignInModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black z-[200] sm:p-6">
-      <div className="relative bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
+    <div className="fixed inset-0 z-[200] overflow-y-auto bg-black text-white">
+      <div className="mx-auto grid min-h-screen w-full max-w-[1600px] gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(460px,600px)] lg:px-10 lg:py-8 xl:gap-10 xl:px-14">
+        <section className="hidden min-h-[calc(100vh-4rem)] flex-col justify-between rounded-lg border border-zinc-800 bg-[#090b0f] p-8 lg:flex xl:p-10">
+          <div className="flex items-center gap-4">
+            <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
+            <div className="h-8 w-px bg-zinc-800" />
+            <div>
+              <div className="text-sm font-semibold text-white">Fit With Pulse</div>
+              <div className="text-xs text-zinc-500">FitClub, rounds, creators, and training tools</div>
+            </div>
+          </div>
+
+          <div className="max-w-4xl">
+            <div className="mb-5 inline-flex items-center rounded-full border border-[#E0FE10]/25 bg-[#E0FE10]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#E0FE10]">
+              Member access
+            </div>
+            <h1 className="max-w-4xl font-['Thunder'] text-6xl font-bold leading-none tracking-normal text-white xl:text-8xl">
+              Train, track, compete, and keep moving.
+            </h1>
+            <p className="mt-6 max-w-2xl font-['HK Grotesk'] text-lg leading-8 text-zinc-300 xl:text-xl xl:leading-9">
+              Sign in once to get back into your FitClub tools, creator pages, rounds, client programming, and Pulse account settings.
+            </p>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            {[
+              { label: 'FitClub', value: 'Group training access' },
+              { label: 'Rounds', value: 'Challenges and wins' },
+              { label: 'Creators', value: 'Pages and programs' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#12151b] p-5">
+                <div className="text-sm font-semibold text-white">{item.label}</div>
+                <div className="mt-2 text-sm leading-6 text-zinc-500">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="relative flex min-h-[calc(100vh-2.5rem)] flex-col overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 p-6 shadow-2xl shadow-black/35 sm:p-8 lg:min-h-[calc(100vh-4rem)] xl:p-10">
         {mounted && window.location.hostname === 'localhost' && (
           <div className="absolute top-4 left-4 z-20 flex items-center gap-2 max-w-[calc(100%-4rem)] overflow-hidden">
             <DevModeToggle />
@@ -4105,6 +4142,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             </div>
           </>
         )}
+        </section>
       </div>
     </div>
   );

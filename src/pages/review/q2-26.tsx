@@ -1,20 +1,69 @@
 import Head from 'next/head';
 
-// Investor update — July 2026 (Q2). Unlisted + noindex; share the URL
-// directly. Editorial system matches the FitClub app redesign: deep
-// charcoal, one lime accent, big black-weight type, photography.
-//
-// >>> METRICS: fill these in before sending. Em-dashes render as
-// >>> placeholders so nothing fabricated ships by accident.
-const METRICS = [
-  { value: '—', label: 'MRR', note: 'vs last quarter' },
-  { value: '—', label: 'Active members', note: 'across clubs' },
-  { value: '—', label: 'Clubs created', note: 'this quarter' },
-  { value: '—', label: 'Coaching GMV', note: 'paid 1-on-1' },
-  { value: '—', label: 'Athletes monitored', note: 'PulseCheck' },
+// Investor update - July 2026 (Q2). Unlisted + noindex; share the URL
+// directly. This page is PulseCheck-first, with FitClub and Macra framed
+// as self-service products that keep operating while the company focuses.
+const PILOT_ACCOUNTS = [
+  {
+    account: 'Clark Atlanta University',
+    type: 'NCAA institution',
+    stage: 'Pilot onboarding',
+    value: 'Tracked in Q3',
+  },
+  {
+    account: 'University of Maryland Eastern Shore',
+    type: 'NCAA institution',
+    stage: 'Pilot scoping',
+    value: 'Tracked in Q3',
+  },
+  {
+    account: 'Worcester State University',
+    type: 'NCAA institution',
+    stage: 'Pilot scoping',
+    value: 'Tracked in Q3',
+  },
+  {
+    account: '4D Cycling',
+    type: 'Team / performance group',
+    stage: 'Pilot onboarding',
+    value: 'Tracked in Q3',
+  },
+  {
+    account: 'Hypercharge Performance Clinic',
+    type: 'Clinical / performance partner',
+    stage: 'Pilot onboarding',
+    value: 'Tracked in Q3',
+  },
+];
+
+const PIPELINE_SCOREBOARD = [
+  { value: '5', label: 'Total pilots', note: 'Q2 baseline accounts' },
+  { value: '2', label: 'Paid contracts', note: 'in the current pipeline' },
+  { value: '3', label: 'Free contracts', note: 'research-based pilots' },
+  { value: '$25,000', label: 'Total contract value', note: 'in the pipeline', compact: true },
+];
+
+const ATHLETE_RISK_STATS = [
+  {
+    value: '4x',
+    label: 'mental health crisis',
+    note: 'Athletes are more likely to face a mental health crisis.',
+  },
+  {
+    value: '60%',
+    label: 'pre-competition anxiety',
+    note: 'Athletes feel elevated anxiety before competition.',
+  },
+  {
+    value: '10%',
+    label: 'coach visibility',
+    note: 'Athletes say something to a coach before it breaks.',
+  },
 ];
 
 const LIME = '#E0FE10';
+const CYAN = '#67E8F9';
+const VIOLET = '#A78BFA';
 const CHARCOAL = 'rgba(17,18,21,0.78)';
 const HAIRLINE = '1px solid rgba(255,255,255,0.10)';
 
@@ -22,224 +71,412 @@ export default function InvestorUpdateQ226() {
   return (
     <>
       <Head>
-        <title>Pulse Intelligence Labs — Investor Update · July 2026</title>
+        <title>Pulse Intelligence Labs - Q2 2026 Investor Update</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex,nofollow" />
       </Head>
 
       <div style={styles.page}>
-        {/* ---------- HERO ---------- */}
         <section style={styles.hero}>
           <div style={styles.heroGrade} />
-          <a href="/review" style={styles.backlink}>← All Investor Updates</a>
+          <a href="/review" style={styles.backlink}>
+            &larr; All Investor Updates
+          </a>
           <div style={styles.heroInner}>
             <div style={styles.kicker}>
               PULSE INTELLIGENCE LABS · INVESTOR UPDATE · JULY 2026
             </div>
-            <h1 style={styles.h1}>
-              The quarter we<br />
-              found our <span style={{ color: LIME }}>crew.</span>
-            </h1>
+            <h1 style={styles.h1}>The Pivot.</h1>
             <p style={styles.heroSub} data-description="true">
-              Q2 2026: Pulse became <strong style={{ color: '#fff' }}>FitClub</strong>, fitness
-              became social, and the platform grew two new revenue engines.
+              Q2 2026: Pulse became <strong style={{ color: '#fff' }}>FitClub</strong>,
+              and PulseCheck became the priority.
             </p>
           </div>
         </section>
 
         <main style={styles.main}>
-          {/* ---------- METRICS BAND ---------- */}
-          <section style={styles.metricsBand}>
-            {METRICS.map((m) => (
-              <div key={m.label} style={styles.metric}>
-                <div style={styles.metricValue}>{m.value}</div>
-                <div style={styles.metricLabel}>{m.label}</div>
-                <div style={styles.metricNote}>{m.note}</div>
-              </div>
-            ))}
-          </section>
-
-          {/* ---------- 01 FITCLUB ---------- */}
           <Section
             num="01"
             kicker="THE BIG SWING"
+            title="We are focused on PulseCheck."
+            body={
+              <>
+                <p style={styles.p}>
+                  This quarter, the market taught us our most important lesson yet: the
+                  strongest pull is coming from PulseCheck. So we made a strategic call
+                  and put the company&apos;s weight there.
+                </p>
+                <p style={styles.p}>
+                  Over the past few months, we have sat across from universities,
+                  professional sports teams, collegiate athletes, US Olympians, and
+                  investors and run the same demo again and again. We noticed something
+                  we had never experienced before. Our audience&apos;s response does not
+                  change. People get it. They clearly understand the product. They know
+                  the challenge. And they are excited by the solution. In the first few
+                  minutes, we keep hearing, &ldquo;This is so needed,&rdquo; &ldquo;I wish I
+                  had this when I was playing,&rdquo; and &ldquo;I have goosebumps.&rdquo;
+                </p>
+                <p style={styles.p}>
+                  This is a strong signal. We feel it in the room, and it is palpable.
+                  PulseCheck sits in a gap nobody has filled. Mental health and sports
+                  performance have lived as two sides of the same coin, kept apart,
+                  handled by different people in different buildings. We bring them
+                  together in one place, end to end, from the daily check-in to the
+                  moment an athlete needs real clinical care.
+                </p>
+              </>
+            }
+          />
+
+          <AthleteProofPoint />
+
+          <Section
+            num="02"
+            kicker="OUR BEACHHEAD"
+            title="Our beachhead: NCAA institutions"
+            accent={CYAN}
+            body={
+              <>
+                <p style={styles.p}>
+                  Our beachhead is NCAA institutions, and for them PulseCheck is not a
+                  nice-to-have. It is a need-to-have.{' '}
+                  <a
+                    href="https://ncaaorg.s3.amazonaws.com/governance/ncaa/constitution/NCAAGov_Constitution121421.pdf"
+                    style={styles.inlineLink}
+                  >
+                    The NCAA Constitution
+                  </a>
+                  , Section D on Student-Athlete Well-Being, requires it.
+                </p>
+                <p style={styles.p}>
+                  <a
+                    href="https://www.ncaa.org/news/2024/1/10/media-center-new-ncaa-mental-health-best-practices-approved-for-all-schools-to-follow.aspx"
+                    style={styles.inlineLink}
+                  >
+                    The NCAA constitution, adopted in January 2022
+                  </a>
+                  , requires every member school, across all divisions, to ensure access
+                  to mental health resources and support consistent with the NCAA Mental
+                  Health Best Practices. The second edition became legislatively
+                  effective in August 2024. The first Division I attestation deadline
+                  landed in November 2025, when schools had to formally attest that they
+                  provide services consistent with the best practices.
+                </p>
+                <p style={styles.p}>
+                  The best practices name four required competencies:
+                </p>
+                <ul style={styles.obligationList}>
+                  <li style={styles.obligationItem}>
+                    A healthy environment that supports mental health
+                  </li>
+                  <li style={styles.obligationItem}>Screening for psychological distress</li>
+                  <li style={styles.obligationItem}>
+                    Action plans for mental health emergencies
+                  </li>
+                  <li style={styles.obligationItem}>Care from licensed providers</li>
+                </ul>
+                <p style={styles.p}>
+                  This is the infrastructure PulseCheck and AuntEDNA provide together.
+                  We help schools meet these obligations. Our product ensures a regular
+                  readiness check-in for every athlete, a clear escalation path when
+                  something changes with an athlete, and a routed handoff to licensed
+                  care by licensed providers. Schools are not deciding whether to offer
+                  this. They are required to.
+                </p>
+                <p style={styles.sourceNote}>
+                  Source context:{' '}
+                  <a
+                    href="https://www.ncaa.org/sports/2021/2/10/sport-science-institute-mental-health.aspx"
+                    style={styles.inlineLink}
+                  >
+                    NCAA Mental Health Best Practices
+                  </a>
+                  .
+                </p>
+              </>
+            }
+          />
+
+          <Section
+            num="03"
+            kicker="PULSECHECK, UP CLOSE"
+            title="The product the market is reaching for."
+            body={
+              <>
+                <p style={styles.p}>
+                  PulseCheck is a performance AI layer between athletes and coaches that
+                  helps assess, train, and improve mental readiness. Athletes run short,
+                  regular check-ins about mood, temperament, and performance readiness.
+                  They train their minds with the same frequency as their physical bodies
+                  through our mental performance simulations and protocols. Coaches get a
+                  holistic read on patterns across the team and a snapshot read on how
+                  every player shows up for the day, the practice, and the game. If there
+                  is a clinical need that goes beyond coaching, the athlete is escalated
+                  to a human clinician for timely support. The point is to support the
+                  athlete&apos;s mental performance and to help coaches and support staff
+                  notice patterns earlier and create better interventions for care.
+                </p>
+                <h3 style={styles.subhead}>The escalation model is the spine</h3>
+                <p style={styles.p}>
+                  This is what makes institutions trust us. Tier 1 is monitor-only, a
+                  normal dip a coach can simply notice. Tier 2 is consent-based, where a
+                  coach has a private conversation and, with the athlete&apos;s okay,
+                  loops in support. Tier 3 is mandatory, routing self-harm, safety risk,
+                  or abuse disclosures straight into clinical care through our partner,
+                  AuntEDNA.ai. A non-clinical coach never has to carry a clinical
+                  response they were never trained for.
+                </p>
+              </>
+            }
+          />
+
+          <PhoneRail
+            shots={[
+              { src: '/pulsecheck-media/01-today-checkin.png', caption: 'Daily athlete check-in' },
+              { src: '/pulsecheck-media/03-sports-intel.png', caption: 'Sports Intelligence layer' },
+              { src: '/pulsecheck-media/09-critical-signal.png', caption: 'Critical signal routing' },
+            ]}
+          />
+
+          <Section
+            num="04"
+            kicker="WHAT SHIPPED"
+            title="What shipped this quarter"
+            accent={VIOLET}
+            body={
+              <>
+                <p style={styles.p}>
+                  PulseCheck shipped its native Android app, with feature parity to iOS
+                  across monitoring, Nora chat, training curriculum, coach messaging, and
+                  crisis support. Device coverage now spans Polar, Fitbit, Oura, Whoop,
+                  and Apple Health, unified behind a Sports Intelligence layer that
+                  reports in coach language, not confusing or jargon-y science-speak.
+                </p>
+                <p style={styles.p}>
+                  On the staff side: a rebuilt coach dashboard, role-based provisioning
+                  for organizations, and Train Nora, a vault that lets each program teach
+                  our AI its own coaching philosophy.
+                </p>
+                <h3 style={styles.subhead}>Into the field</h3>
+                <p style={styles.p}>
+                  The demos are turning into programs. We are onboarding first pilots
+                  with Clark Atlanta University, University of Maryland Eastern Shore
+                  (UMES),
+                  Worcester State University, 4D Cycling, and Hypercharge Performance
+                  Clinic. All pilots will run the full loop from athlete check-in to
+                  coach dashboard to clinical handoff. Next quarter&apos;s update opens
+                  with what those pilots produced.
+                </p>
+              </>
+            }
+          />
+
+          <Section
+            num="05"
+            kicker="THE ATHLETIC MIND COUNCIL"
+            title="The people who move the field."
+            body={
+              <>
+                <p style={styles.p}>
+                  This spring we convened the Athletic Mind Council with our clinical
+                  partner, AuntEDNA.ai. The Council is a founding group of clinicians,
+                  athletes, coaches, researchers, technologists, and cultural voices
+                  brought together to shape the mental performance and clinical care
+                  infrastructure athletes deserve.
+                </p>
+                <p style={styles.p}>
+                  The Council exists because of a real gap. Mental performance training
+                  and mental health care still sit in separate silos. Wearables read the
+                  body without having a holistic context of an athlete and team. Coaches
+                  and clinicians work from different vocabularies and different data. The
+                  handoff between performance support and clinical care happens in a
+                  single moment in an athlete&apos;s life. We believe the people who shape
+                  that moment should be in the same room, covering the athlete from all
+                  sides.
+                </p>
+                <p style={styles.p}>
+                  We convened at the founding stage on purpose. PulseCheck is moving from
+                  live product into university deployment, and the research, the roadmap,
+                  and the language of this field are still early enough for the right
+                  voices to shape what comes next. We would rather build this field in
+                  public than watch the category harden without the people closest to
+                  athletes.
+                </p>
+                <p style={styles.p}>
+                  The Council pressure-tests the product, helps design pilots inside real
+                  programs, co-authors research, opens doors across athletic departments
+                  and clinical networks, and helps lead the public conversation. It brings
+                  together the advisor networks behind Pulse Intelligence Labs and
+                  AuntEDNA.ai while keeping each company&apos;s board distinct, under
+                  Founding Executive Director Arionne Allen.
+                </p>
+                <p style={styles.p}>
+                  See the full council, its members, and its charter here:{' '}
+                  <a href="/athletic-mind-hub" style={styles.inlineLink}>
+                    The Athletic Mind Council
+                  </a>
+                </p>
+              </>
+            }
+          />
+
+          <FeatureImage
+            src="/athletic-mind-council-og-v4.png"
+            caption="The Athletic Mind Council connects the athlete, coach, clinical, and research perspectives around one system."
+          />
+
+          <Section
+            num="06"
+            kicker="THE REST OF THE LAB"
             title="Pulse is now FitClub."
             body={
               <>
                 <p style={styles.p}>
-                  We rebuilt the flagship app around a simple conviction: people don&apos;t quit
-                  fitness — they quit doing it alone. QuickLifts became{' '}
-                  <strong style={styles.strong}>FitClub</strong>, a clubs-first product where every
-                  workout, challenge, and streak happens inside a crew that notices when you
-                  don&apos;t show up.
-                </p>
-                <p style={styles.p}>
-                  The rebrand came with a ground-up visual redesign — an editorial,
-                  photography-forward system we now ship across every surface — and a rebuilt App
-                  Store presence to match. Every screen below is live product, not concept.
-                </p>
-              </>
-            }
-          />
-          <PhoneRail
-            shots={[
-              { src: '/investor/july-2026/01-splash.png', caption: 'The new front door' },
-              { src: '/investor/july-2026/02-club-home.png', caption: 'Club home — The Pact' },
-              { src: '/investor/july-2026/07b-run-challenge-type-accent.png', caption: 'Run challenges' },
-            ]}
-          />
-
-          {/* ---------- 02 COACHING ---------- */}
-          <Section
-            num="02"
-            kicker="NEW REVENUE ENGINE"
-            title="Paid 1-on-1 coaching, end to end."
-            body={
-              <>
-                <p style={styles.p}>
-                  Creators can now sell private coaching directly inside their clubs — one-time
-                  packages or recurring auto-pay subscriptions — settled through Stripe Connect
-                  with a platform fee on every transaction. The full loop shipped this quarter:
-                  paid room creation, member checkout on web, deep-link entry into a private
-                  training room, and an <strong style={styles.strong}>adherence engine</strong>{' '}
-                  that closes the loop — assigned lifts, cardio, and meals auto-complete from
-                  workouts and wearable detection, and coaches watch the week fill in live.
-                </p>
-                <p style={styles.p}>
-                  This is the supply-side moat: coaches who run their business on FitClub
-                  don&apos;t leave FitClub.
-                </p>
-              </>
-            }
-          />
-          <PhoneRail
-            shots={[
-              { src: '/investor/july-2026/03-training-1on1.png', caption: 'The 1-on-1 training room' },
-            ]}
-            wide
-          />
-
-          {/* ---------- 03 TWO-APP STRATEGY ---------- */}
-          <Section
-            num="03"
-            kicker="PLATFORM ARCHITECTURE"
-            title="One catalog, two apps."
-            body={
-              <>
-                <p style={styles.p}>
-                  This quarter we split the platform into a two-sided architecture.{' '}
-                  <strong style={styles.strong}>FitClub</strong> is the studio — where creators
-                  build clubs, content, and coaching businesses.{' '}
-                  <strong style={styles.strong}>Fit With Pulse</strong> (launching Q3) is the
-                  consumer app — a streaming-style experience that assembles personalized workouts
-                  from the same creator catalog, the way a listener meets artists through a
-                  playlist.
-                </p>
-                <p style={styles.p}>
-                  Same content library, same Firebase backbone, two distinct audiences — supply
-                  and demand, each with an app built for how they actually behave.
+                  Our refined focus did not mean shelving what we built. It meant
+                  changing how we operate and optimize. FitClub is a prime example of
+                  this. We took our consumer fitness app and turned it into infrastructure
+                  for fitness creators, the people who build clubs, content, and coaching
+                  businesses on our app. We renamed it FitClub to fit that shift and made
+                  it self-service, so creators run it without us. Macra, our macro and
+                  calorie nutrition AI, works the same way: low lift for us, low touch for
+                  the user. Both products earn on their own.
                 </p>
               </>
             }
           />
 
-          {/* ---------- 04 PULSECHECK ---------- */}
-          <Section
-            num="04"
-            kicker="PULSECHECK"
-            title="Athlete intelligence went cross-platform."
-            accent="#A78BFA"
-            body={
-              <>
-                <p style={styles.p}>
-                  PulseCheck — our athlete mental-performance platform for schools, institutions,
-                  and pro programs — shipped its{' '}
-                  <strong style={styles.strong}>native Android app</strong> this quarter: feature
-                  parity with iOS across monitoring, Nora chat, training curriculum, coach
-                  messaging, and crisis support. Device coverage now spans Polar, Fitbit, Oura,
-                  and Apple Health, unified behind a device-agnostic Sports Intelligence layer
-                  that reports in coach language, not science-speak.
-                </p>
-                <p style={styles.p}>
-                  On the staff side: a rebuilt coach dashboard, role-based provisioning for
-                  organizations, and Train Nora — a vault that lets each program teach our AI its
-                  own coaching philosophy.
-                </p>
-              </>
-            }
-          />
+          <div style={styles.productSplit}>
+            <figure style={styles.productCard}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/fitclub-media/02-club-home.png" alt="FitClub club home" style={styles.productImg} />
+              <figcaption style={styles.caption}>FitClub - self-service clubs</figcaption>
+            </figure>
+            <figure style={styles.productCard}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/macra-og.png" alt="Macra nutrition AI" style={styles.productImgContained} />
+              <figcaption style={styles.caption}>Macra - self-service nutrition AI</figcaption>
+            </figure>
+          </div>
 
-          {/* ---------- 05 EVENTS ---------- */}
           <Section
-            num="05"
-            kicker="JUST SHIPPED"
-            title="Clubs became calendars."
-            body={
-              <>
-                <p style={styles.p}>
-                  The newest layer turns every club from a feed into a calendar: scheduled club
-                  events with RSVP (&ldquo;Sunday Long Run · 6:00 AM · 23 going&rdquo;), countdown
-                  cards, automatic reminders, QR + geofence check-in for real-world meetups, live
-                  &ldquo;mid-workout right now&rdquo; presence, and one-tap cheers that land as
-                  push notifications mid-set.
-                </p>
-                <p style={styles.p}>
-                  Anticipation, shared moments, afterglow — the mechanics that make a club a club.
-                </p>
-              </>
-            }
-          />
-          <PhoneRail
-            shots={[
-              { src: '/investor/july-2026/09-club-home-happening.png', caption: 'The Happening rail' },
-              { src: '/investor/july-2026/10-event-detail-rsvp.png', caption: 'Events with RSVP' },
-            ]}
-          />
-
-          {/* ---------- 06 NEXT ---------- */}
-          <Section
-            num="06"
+            num="07"
             kicker="WHAT'S NEXT · Q3"
-            title="Launch season."
+            title="What’s Next."
             body={
               <ul style={styles.list}>
                 <li style={styles.li}>
-                  <strong style={styles.strong}>Fit With Pulse consumer launch</strong> — the
-                  demand-side app meets the creator catalog.
+                  <strong style={styles.strong}>PulseCheck pilots go live:</strong> named
+                  schools and teams run the full loop, with adherence as the lead metric.
                 </li>
                 <li style={styles.li}>
-                  <strong style={styles.strong}>The recap engine</strong> — cycle podiums, weekly
-                  club recaps, and milestone celebrations, written by Nora.
+                  <strong style={styles.strong}>Fundraising:</strong> we have officially
+                  started our raise.
                 </li>
                 <li style={styles.li}>
-                  <strong style={styles.strong}>The daily drop</strong> — club workouts that post
-                  at an hour, not sit in a list.
+                  <strong style={styles.strong}>Growth:</strong> our goal is to add more
+                  pilots in Q3.
                 </li>
                 <li style={styles.li}>
-                  <strong style={styles.strong}>Creator monetization depth</strong> — club
-                  subscriptions and event ticketing on the Stripe rails we just laid.
+                  <strong style={styles.strong}>Refine and learn:</strong> based on what
+                  we&apos;re learning, we&apos;re excited to keep refining the product.
+                </li>
+                <li style={styles.li}>
+                  <strong style={styles.strong}>Activations:</strong> We are looking for
+                  community engagement opportunities within spaces and brands we want to
+                  build with. The Nike Store in Lenox Square Mall will be our first.
                 </li>
               </ul>
             }
           />
 
-          {/* ---------- CLOSING ---------- */}
+          <section style={styles.scoreboard}>
+            <div style={styles.sectionHead}>
+              <span style={{ ...styles.sectionNum, color: CYAN }}>08</span>
+              <span style={styles.sectionKicker}>NEW INVESTOR METRICS</span>
+            </div>
+            <h2 style={styles.h2}>The PulseCheck sales pipeline becomes the scoreboard.</h2>
+            <p style={styles.p}>
+              Because PulseCheck is now the company priority, future quarterly updates
+              will lead with pipeline metrics that show whether institutional demand is
+              turning into paid deployment. Q2 is the baseline quarter. Q3 is where this
+              section moves to the top of the update.
+            </p>
+
+            <div style={styles.pipelineScorecards} aria-label="PulseCheck pipeline metrics">
+              {PIPELINE_SCOREBOARD.map((m) => (
+                <div key={m.label} style={styles.metric}>
+                  <div style={{ ...styles.metricValue, ...(m.compact ? styles.metricValueCompact : null) }}>
+                    {m.value}
+                  </div>
+                  <div style={styles.metricLabel}>{m.label}</div>
+                  <div style={styles.metricNote}>{m.note}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={styles.pipelineGrid}>
+              <div style={styles.pipelinePanel}>
+                <div style={styles.panelTitle}>Q2 baseline accounts</div>
+                <div style={styles.accountTable}>
+                  {PILOT_ACCOUNTS.map((pilot) => (
+                    <div key={pilot.account} style={styles.accountRow}>
+                      <div>
+                        <div style={styles.accountName}>{pilot.account}</div>
+                        <div style={styles.accountType}>{pilot.type}</div>
+                      </div>
+                      <div style={styles.accountStage}>{pilot.stage}</div>
+                      <div style={styles.accountValue}>{pilot.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section style={styles.nameNote}>
+            <div style={styles.kicker}>A NOTE ON THE NAME</div>
+            <h2 style={styles.closingTitle}>Why we call it a lab.</h2>
+            <p style={{ ...styles.p, maxWidth: 720, margin: '18px auto 0', textAlign: 'center' }}>
+              You may have noticed our banner and pages now read Pulse Intelligence Labs.
+              That is on purpose. The name is an umbrella built to hold everything we make.
+              It sharpens what our business, our mission, and our value are: we are not
+              just a company with an app. We are a lab that specializes in human
+              performance and AI. We center human capacity and use AI to inform fitness
+              and well-being.
+            </p>
+          </section>
+
           <section style={styles.closing}>
             <div style={styles.kicker}>THANK YOU</div>
-            <h2 style={styles.closingTitle}>
-              Fitness is <span style={{ color: LIME }}>better together.</span>
-            </h2>
-            <p style={{ ...styles.p, maxWidth: 560, margin: '18px auto 0', textAlign: 'center' }}>
-              As always — grateful for your backing and your time. Replies, questions, and intros
-              to club operators, college athletic programs, and creator-economy talent are always
-              welcome.
+            <h2 style={styles.closingTitle}>The Ask.</h2>
+            <p style={{ ...styles.p, maxWidth: 680, margin: '18px auto 0', textAlign: 'center' }}>
+              Grateful, as always, for your backing and your time. We need introductions to:
             </p>
+            <ul style={styles.askList}>
+              <li style={styles.askItem}>
+                <strong style={styles.strong}>Decision makers in athletic programs:</strong>{' '}
+                athletic directors, heads of athlete development, coaches, and anyone
+                with knowledge of athletic departments and decision makers at
+                universities, in or adjacent to athletic performance.
+              </li>
+              <li style={styles.askItem}>
+                <strong style={styles.strong}>Brand sponsors:</strong> not only athletic
+                brands, but any brand or grant with funding to sponsor activations and
+                pilots for under-resourced schools that need help funding this program.
+              </li>
+              <li style={styles.askItem}>
+                <strong style={styles.strong}>Clinical partners:</strong> sports
+                psychologists, team doctors, or anyone in the medical field who works
+                with athletes.
+              </li>
+            </ul>
             <div style={styles.signature}>
               <div style={{ fontWeight: 800, color: '#fff', fontSize: 16 }}>Tremaine Grant</div>
               <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, marginTop: 4 }}>
                 Founder &amp; CEO · Pulse Intelligence Labs
               </div>
-              <a href="mailto:tremaine@fitwithpulse.ai" style={styles.mail}>
-                tremaine@fitwithpulse.ai
+              <a href="mailto:tre@fitwithpulse.ai" style={styles.mail}>
+                tre@fitwithpulse.ai
               </a>
             </div>
           </section>
@@ -248,8 +485,6 @@ export default function InvestorUpdateQ226() {
     </>
   );
 }
-
-/* ---------- components ---------- */
 
 function Section({
   num,
@@ -276,17 +511,50 @@ function Section({
   );
 }
 
-function PhoneRail({
-  shots,
-  wide = false,
-}: {
-  shots: { src: string; caption: string }[];
-  wide?: boolean;
-}) {
+function FeatureImage({ src, caption }: { src: string; caption: string }) {
+  return (
+    <figure style={styles.featureFigure}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={caption} style={styles.featureImg} loading="lazy" />
+      <figcaption style={styles.caption}>{caption}</figcaption>
+    </figure>
+  );
+}
+
+function AthleteProofPoint() {
+  return (
+    <section style={styles.athleteProof}>
+      <figure style={styles.athletePhotoCard}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/nakyala-cau.jpg"
+          alt="Nakyala of Clark Atlanta Women's Volleyball"
+          style={styles.athleteImg}
+          loading="lazy"
+        />
+        <figcaption style={styles.athleteCaption}>
+          Nakyala, team captain of Clark Atlanta Women&apos;s Volleyball, our first pilot team.
+        </figcaption>
+      </figure>
+
+      <div style={styles.athleteStats}>
+        {ATHLETE_RISK_STATS.map((stat) => (
+          <div key={stat.label} style={styles.athleteStatCard}>
+            <div style={styles.athleteStatValue}>{stat.value}</div>
+            <div style={styles.athleteStatLabel}>{stat.label}</div>
+            <div style={styles.athleteStatNote}>{stat.note}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PhoneRail({ shots }: { shots: { src: string; caption: string }[] }) {
   return (
     <div style={styles.rail}>
       {shots.map((s) => (
-        <figure key={s.src} style={{ ...styles.phone, maxWidth: wide ? 320 : 260 }}>
+        <figure key={s.src} style={styles.phone}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={s.src} alt={s.caption} style={styles.phoneImg} loading="lazy" />
           <figcaption style={styles.caption}>{s.caption}</figcaption>
@@ -295,8 +563,6 @@ function PhoneRail({
     </div>
   );
 }
-
-/* ---------- styles ---------- */
 
 const styles: Record<string, React.CSSProperties> = {
   backlink: {
@@ -308,12 +574,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     fontWeight: 700,
     letterSpacing: '0.12em',
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.78)',
     textDecoration: 'none',
     padding: '10px 16px',
     borderRadius: 999,
     border: '1px solid rgba(255,255,255,0.18)',
-    background: 'rgba(10,11,13,0.45)',
+    background: 'rgba(10,11,13,0.50)',
     backdropFilter: 'blur(12px)',
   },
   page: {
@@ -328,72 +594,86 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '88vh',
     display: 'flex',
     alignItems: 'flex-end',
-    backgroundImage: 'url(/investor/july-2026/hero.jpg)',
+    backgroundImage: 'url(/investor/july-2026/hero-basketball-huddle.png)',
     backgroundSize: 'cover',
-    backgroundPosition: '50% 35%',
+    backgroundPosition: '58% 50%',
   },
   heroGrade: {
     position: 'absolute',
     inset: 0,
     background:
-      'linear-gradient(to bottom, rgba(2,4,8,0.55) 0%, rgba(2,4,8,0.15) 30%, rgba(2,4,8,0.55) 65%, #020408 100%)',
+      'linear-gradient(to bottom, rgba(2,4,8,0.66) 0%, rgba(2,4,8,0.28) 34%, rgba(2,4,8,0.74) 72%, #020408 100%)',
   },
   heroInner: {
     position: 'relative',
     maxWidth: 980,
     margin: '0 auto',
-    padding: '0 28px 90px',
+    padding: '0 28px 92px',
     width: '100%',
   },
   kicker: {
     fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
     fontSize: 12,
     fontWeight: 700,
-    letterSpacing: '0.32em',
-    color: 'rgba(255,255,255,0.6)',
-    textTransform: 'uppercase' as const,
+    letterSpacing: '0.30em',
+    color: 'rgba(255,255,255,0.62)',
+    textTransform: 'uppercase',
   },
   h1: {
-    fontSize: 'clamp(52px, 9vw, 104px)',
-    lineHeight: 0.98,
-    letterSpacing: '-0.03em',
+    fontSize: 'clamp(58px, 11vw, 132px)',
+    lineHeight: 0.92,
+    letterSpacing: '-0.025em',
     fontWeight: 900,
     color: '#fff',
-    margin: '26px 0 0',
+    margin: '24px 0 0',
   },
   heroSub: {
-    fontSize: 'clamp(17px, 2.2vw, 22px)',
+    fontSize: 'clamp(18px, 2.2vw, 24px)',
     lineHeight: 1.5,
-    color: 'rgba(255,255,255,0.75)',
-    maxWidth: 620,
+    color: 'rgba(255,255,255,0.78)',
+    maxWidth: 680,
     marginTop: 28,
   },
   main: { maxWidth: 980, margin: '0 auto', padding: '0 28px 120px' },
-  metricsBand: {
+  pipelineScorecards: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
     gap: 14,
-    margin: '70px 0 30px',
+    margin: '42px 0 28px',
   },
   metric: {
     background: CHARCOAL,
     border: HAIRLINE,
-    borderRadius: 20,
-    padding: '26px 20px',
+    borderRadius: 8,
+    minHeight: 184,
+    padding: '32px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
   },
   metricValue: {
-    fontSize: 38,
+    fontSize: 46,
     fontWeight: 900,
     letterSpacing: '-0.02em',
     color: LIME,
   },
-  metricLabel: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: '#fff',
-    marginTop: 8,
+  metricValueCompact: {
+    fontSize: 36,
+    letterSpacing: '-0.01em',
   },
-  metricNote: { fontSize: 11.5, color: 'rgba(255,255,255,0.45)', marginTop: 3 },
+  metricLabel: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#fff',
+    marginTop: 26,
+    lineHeight: 1.28,
+  },
+  metricNote: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.42)',
+    lineHeight: 1.35,
+    marginTop: 10,
+  },
   section: { marginTop: 110 },
   sectionHead: { display: 'flex', alignItems: 'baseline', gap: 16 },
   sectionNum: {
@@ -405,14 +685,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
     fontSize: 11.5,
     fontWeight: 700,
-    letterSpacing: '0.28em',
-    color: 'rgba(255,255,255,0.45)',
-    textTransform: 'uppercase' as const,
+    letterSpacing: '0.25em',
+    color: 'rgba(255,255,255,0.48)',
+    textTransform: 'uppercase',
   },
   h2: {
     fontSize: 'clamp(34px, 5vw, 56px)',
     lineHeight: 1.04,
-    letterSpacing: '-0.025em',
+    letterSpacing: '-0.02em',
     fontWeight: 900,
     color: '#fff',
     margin: '18px 0 26px',
@@ -420,36 +700,150 @@ const styles: Record<string, React.CSSProperties> = {
   p: {
     fontSize: 17,
     lineHeight: 1.75,
-    color: 'rgba(255,255,255,0.7)',
-    maxWidth: 700,
+    color: 'rgba(255,255,255,0.72)',
+    maxWidth: 720,
     margin: '0 0 20px',
   },
+  subhead: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: 900,
+    lineHeight: 1.25,
+    margin: '28px 0 14px',
+    maxWidth: 720,
+  },
+  sourceNote: {
+    fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
+    fontSize: 12,
+    lineHeight: 1.6,
+    color: 'rgba(255,255,255,0.48)',
+    maxWidth: 720,
+    marginTop: 18,
+  },
+  inlineLink: {
+    color: CYAN,
+    textDecoration: 'none',
+    borderBottom: `1px solid ${CYAN}66`,
+    paddingBottom: 2,
+  },
   strong: { color: '#fff', fontWeight: 700 },
-  list: { margin: 0, padding: 0, listStyle: 'none', maxWidth: 700 },
+  list: { margin: 0, padding: 0, listStyle: 'none', maxWidth: 760 },
   li: {
     fontSize: 17,
     lineHeight: 1.7,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.72)',
     padding: '16px 0 16px 30px',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
-    position: 'relative' as const,
-    backgroundImage:
-      'radial-gradient(circle, #E0FE10 0%, #E0FE10 35%, transparent 40%)',
+    position: 'relative',
+    backgroundImage: `radial-gradient(circle, ${LIME} 0%, ${LIME} 35%, transparent 40%)`,
     backgroundRepeat: 'no-repeat',
     backgroundSize: '14px 14px',
     backgroundPosition: '2px 27px',
+  },
+  obligationList: {
+    margin: '4px 0 24px',
+    padding: 0,
+    listStyle: 'none',
+    maxWidth: 720,
+  },
+  obligationItem: {
+    fontSize: 17,
+    lineHeight: 1.55,
+    color: 'rgba(255,255,255,0.76)',
+    padding: '10px 0 10px 28px',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    backgroundImage: `radial-gradient(circle, ${CYAN} 0%, ${CYAN} 35%, transparent 40%)`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: '10px 10px',
+    backgroundPosition: '2px 19px',
+  },
+  featureFigure: {
+    margin: '48px 0 0',
+  },
+  featureImg: {
+    width: '100%',
+    borderRadius: 8,
+    border: HAIRLINE,
+    boxShadow: '0 30px 90px rgba(0,0,0,0.55)',
+    display: 'block',
+  },
+  athleteProof: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+    gap: 24,
+    alignItems: 'stretch',
+    marginTop: 50,
+  },
+  athletePhotoCard: {
+    margin: 0,
+  },
+  athleteImg: {
+    width: '100%',
+    height: '100%',
+    minHeight: 520,
+    maxHeight: 680,
+    objectFit: 'cover',
+    objectPosition: 'center 35%',
+    borderRadius: 8,
+    border: HAIRLINE,
+    boxShadow: '0 30px 90px rgba(0,0,0,0.55)',
+    display: 'block',
+  },
+  athleteCaption: {
+    fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
+    fontSize: 11,
+    letterSpacing: '0.14em',
+    lineHeight: 1.55,
+    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.45)',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  athleteStats: {
+    display: 'grid',
+    gridTemplateRows: 'repeat(3, minmax(0, 1fr))',
+    gap: 14,
+  },
+  athleteStatCard: {
+    background: CHARCOAL,
+    border: HAIRLINE,
+    borderRadius: 8,
+    padding: '28px 26px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  athleteStatValue: {
+    color: LIME,
+    fontSize: 52,
+    lineHeight: 1,
+    fontWeight: 900,
+    letterSpacing: '-0.02em',
+  },
+  athleteStatLabel: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 800,
+    lineHeight: 1.25,
+    marginTop: 20,
+  },
+  athleteStatNote: {
+    color: 'rgba(255,255,255,0.48)',
+    fontSize: 14,
+    lineHeight: 1.45,
+    marginTop: 9,
   },
   rail: {
     display: 'flex',
     gap: 26,
     marginTop: 50,
     justifyContent: 'center',
-    flexWrap: 'wrap' as const,
+    flexWrap: 'wrap',
   },
-  phone: { margin: 0, flex: '1 1 220px' },
+  phone: { margin: 0, flex: '1 1 220px', maxWidth: 260 },
   phoneImg: {
     width: '100%',
-    borderRadius: 28,
+    borderRadius: 8,
     border: HAIRLINE,
     boxShadow: '0 30px 80px rgba(0,0,0,0.55)',
     display: 'block',
@@ -457,22 +851,161 @@ const styles: Record<string, React.CSSProperties> = {
   caption: {
     fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
     fontSize: 11,
-    letterSpacing: '0.18em',
-    textTransform: 'uppercase' as const,
+    letterSpacing: '0.16em',
+    textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.45)',
-    textAlign: 'center' as const,
+    textAlign: 'center',
     marginTop: 16,
   },
-  closing: {
-    marginTop: 140,
-    textAlign: 'center' as const,
+  ctaLink: {
+    display: 'inline-block',
+    color: LIME,
+    fontWeight: 800,
+    fontSize: 14,
+    textDecoration: 'none',
+    borderBottom: `1px solid ${LIME}66`,
+    paddingBottom: 3,
+    marginTop: 6,
+  },
+  productSplit: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: 24,
+    marginTop: 46,
+  },
+  productCard: {
+    margin: 0,
+    padding: 16,
+    background: CHARCOAL,
+    border: HAIRLINE,
+    borderRadius: 8,
+  },
+  productImg: {
+    width: '100%',
+    aspectRatio: '4 / 3',
+    objectFit: 'cover',
+    objectPosition: 'top center',
+    borderRadius: 6,
+    display: 'block',
+  },
+  productImgContained: {
+    width: '100%',
+    aspectRatio: '4 / 3',
+    objectFit: 'contain',
+    objectPosition: 'center center',
+    borderRadius: 6,
+    display: 'block',
+    background: '#020408',
+  },
+  scoreboard: {
+    marginTop: 120,
+    padding: '42px 0 0',
     borderTop: HAIRLINE,
-    paddingTop: 90,
+  },
+  pipelineGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr',
+    gap: 18,
+    marginTop: 22,
+  },
+  pipelinePanel: {
+    background: CHARCOAL,
+    border: HAIRLINE,
+    borderRadius: 8,
+    padding: 22,
+  },
+  panelTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 800,
+    marginBottom: 18,
+  },
+  metricList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  metricPill: {
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: 999,
+    color: 'rgba(255,255,255,0.74)',
+    fontSize: 13,
+    lineHeight: 1.35,
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.04)',
+  },
+  accountTable: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+  },
+  accountRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1.4fr) minmax(100px, 0.8fr) minmax(92px, 0.7fr)',
+    gap: 12,
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottom: '1px solid rgba(255,255,255,0.08)',
+  },
+  accountName: {
+    color: '#fff',
+    fontSize: 13.5,
+    fontWeight: 800,
+    lineHeight: 1.3,
+  },
+  accountType: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 11.5,
+    lineHeight: 1.35,
+    marginTop: 3,
+  },
+  accountStage: {
+    color: CYAN,
+    fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
+    fontSize: 11.5,
+    lineHeight: 1.4,
+  },
+  accountValue: {
+    color: 'rgba(255,255,255,0.52)',
+    fontFamily: '"SF Mono", ui-monospace, Menlo, monospace',
+    fontSize: 11.5,
+    lineHeight: 1.4,
+    textAlign: 'right',
+  },
+  nameNote: {
+    marginTop: 130,
+    textAlign: 'center',
+    borderTop: HAIRLINE,
+    paddingTop: 84,
+  },
+  askList: {
+    margin: '28px auto 0',
+    padding: 0,
+    listStyle: 'none',
+    maxWidth: 760,
+    textAlign: 'left',
+  },
+  askItem: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 16,
+    lineHeight: 1.65,
+    padding: '16px 0 16px 28px',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    backgroundImage: `radial-gradient(circle, ${LIME} 0%, ${LIME} 35%, transparent 40%)`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: '10px 10px',
+    backgroundPosition: '2px 25px',
+  },
+  closing: {
+    marginTop: 120,
+    textAlign: 'center',
+    borderTop: HAIRLINE,
+    paddingTop: 84,
   },
   closingTitle: {
     fontSize: 'clamp(36px, 6vw, 64px)',
     fontWeight: 900,
-    letterSpacing: '-0.025em',
+    letterSpacing: '-0.02em',
     color: '#fff',
     margin: '22px 0 0',
   },

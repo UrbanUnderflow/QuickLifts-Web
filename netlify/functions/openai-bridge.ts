@@ -43,6 +43,8 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   classifyChallengeType: { maxTokens: 300, modelPattern: /gpt-4o-mini|gpt-4o/i },
   // Athletic Mind Hub: extract council contact emails from uploaded screenshots.
   athleticMindHubEmailExtraction: { maxTokens: 1600, modelPattern: /gpt-4o|gpt-4/i },
+  // PipeLists: extract structured list-item fields from a pasted lead URL.
+  pipeListsLeadExtraction: { maxTokens: 1800, modelPattern: /gpt-4o-mini|gpt-4o|gpt-4/i },
   // Default bounds for generic actions
   default: { maxTokens: 1000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4|gpt-3.5/i }
 };

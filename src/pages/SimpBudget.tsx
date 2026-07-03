@@ -34,6 +34,7 @@ import {
   Mail,
   Plus,
   Receipt,
+  RotateCcw,
   Save,
   ShieldCheck,
   Sparkles,
@@ -444,6 +445,29 @@ const selectDraftForSpaceMonth = (
   };
 };
 
+const findPreviousBudgetRecord = (
+  records: BudgetRecord[],
+  budgetSpaceId: string,
+  year: number,
+  month: number
+) =>
+  records
+    .filter(
+      (record) =>
+        record.budgetSpaceId === budgetSpaceId &&
+        (record.year < year || (record.year === year && record.month < month))
+    )
+    .sort((left, right) => {
+      if (left.year !== right.year) return right.year - left.year;
+      return right.month - left.month;
+    })[0] || null;
+
+const cloneRecurringExpenses = (expenses: RecurringExpenseDraft[]) =>
+  expenses.map((expense, index) => ({
+    ...expense,
+    id: expense.id || `restored-recurring-${index + 1}`,
+  }));
+
 const normalizeExpenseLabel = (value: string) =>
   value
     .toLowerCase()
@@ -531,6 +555,37 @@ const readResponseError = (payload: unknown, fallbackMessage: string) => {
   }
 
   return fallbackMessage;
+};
+
+const readAuthError = (error: unknown, fallbackMessage: string) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  if (code === 'auth/unauthorized-domain') {
+    const host =
+      typeof window !== 'undefined' && window.location.hostname
+        ? window.location.hostname
+        : 'this site';
+
+    return `Firebase Auth is not allowing ${host}. Add ${host} in the SimpBudget Firebase project under Authentication > Settings > Authorized domains, then try again.`;
+  }
+
+  return error instanceof Error ? error.message : fallbackMessage;
+};
+
+const readFirestoreError = (error: unknown, fallbackMessage: string) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  if (code === 'permission-denied') {
+    return 'SimpBudget signed you in, but the standalone Firebase project is rejecting Firestore access. Deploy the SimpBudget Firestore rules that allow each signed-in user to read/write their own simpbudget-users/{uid} tree.';
+  }
+
+  return error instanceof Error ? error.message : fallbackMessage;
 };
 
 const buildDraftPayload = (draft: BudgetDraft) => ({
@@ -635,6 +690,9 @@ const SimpBudgetPage: React.FC = () => {
   const [starterRecurring, setStarterRecurring] = useState<RecurringExpenseDraft[]>([
     createRecurringExpense('', ''),
   ]);
+  const [lastDeletedRecurringExpense, setLastDeletedRecurringExpense] =
+    useState<RecurringExpenseDraft | null>(null);
+  const autoMigrationAttemptedRef = useRef(false);
 
   const normalizedUserEmail = user?.email?.toLowerCase() || '';
   const isMigrationOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
@@ -742,16 +800,27 @@ const SimpBudgetPage: React.FC = () => {
       setAuthReady(true);
 
       if (currentUser) {
-        await setDoc(
-          userDocRef(currentUser.uid),
-          {
-            email: currentUser.email || '',
-            displayName: currentUser.displayName || '',
-            lastSeenAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-        await loadSimpBudgetData(currentUser.uid);
+        try {
+          await setDoc(
+            userDocRef(currentUser.uid),
+            {
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              lastSeenAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+          await loadSimpBudgetData(currentUser.uid);
+        } catch (error) {
+          console.error('Unable to initialize SimpBudget user:', error);
+          setSpaces([]);
+          setRecords([]);
+          setSelectedView('all');
+          setAppMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to initialize your SimpBudget account.'),
+          });
+        }
       } else {
         setSpaces([]);
         setRecords([]);
@@ -828,6 +897,62 @@ const SimpBudgetPage: React.FC = () => {
     return window.confirm('You have unsaved SimpBudget edits. Leave this sheet without saving?');
   };
 
+  const previousBudgetRecord =
+    selectedView !== 'all'
+      ? findPreviousBudgetRecord(records, selectedView, selectedYear, selectedMonth)
+      : null;
+  const previousRecurringRestoreLabel = previousBudgetRecord
+    ? `Reset from ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}`
+    : 'No previous month';
+
+  const restoreRecurringFromPreviousMonth = () => {
+    if (!previousBudgetRecord) return;
+
+    const confirmed =
+      typeof window === 'undefined' ||
+      window.confirm(
+        `Replace this month’s recurring expenses with ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}? This will only change the current draft until you save.`
+      );
+    if (!confirmed) return;
+
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      recurringExpenses: cloneRecurringExpenses(previousBudgetRecord.recurringExpenses),
+    }));
+    setAppMessage({
+      type: 'info',
+      text: `Recurring expenses reset from ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}. Click Save Budget to keep this month’s change.`,
+    });
+  };
+
+  const undoLastRecurringDelete = () => {
+    if (!lastDeletedRecurringExpense) return;
+
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      recurringExpenses: [
+        ...currentDraft.recurringExpenses,
+        {
+          ...lastDeletedRecurringExpense,
+          id: lastDeletedRecurringExpense.id || createLocalId('recurring'),
+        },
+      ],
+    }));
+    setAppMessage({
+      type: 'info',
+      text: `${lastDeletedRecurringExpense.label || 'Recurring expense'} restored. Click Save Budget to keep this month’s change.`,
+    });
+    setLastDeletedRecurringExpense(null);
+  };
+
+  const removeRecurringExpense = (expense: RecurringExpenseDraft) => {
+    setLastDeletedRecurringExpense({ ...expense });
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      recurringExpenses: currentDraft.recurringExpenses.filter((candidate) => candidate.id !== expense.id),
+    }));
+  };
+
   const handleGoogleSignIn = async () => {
     setAuthMessage(null);
     const provider = new GoogleAuthProvider();
@@ -837,15 +962,18 @@ const SimpBudgetPage: React.FC = () => {
       const result = await signInWithPopup(simpBudgetAuth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential) {
-        signInWithCredential(quickLiftsAuth, credential).catch((error) => {
+        try {
+          await signInWithCredential(quickLiftsAuth, credential);
+          setSourceConnected(true);
+        } catch (error) {
           console.warn('Unable to connect QuickLifts source with Google credential:', error);
-        });
+        }
       }
     } catch (error) {
       console.error('Google sign-in failed:', error);
       setAuthMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to sign in with Google.',
+        text: readAuthError(error, 'Unable to sign in with Google.'),
       });
     }
   };
@@ -862,7 +990,7 @@ const SimpBudgetPage: React.FC = () => {
       console.error('Apple sign-in failed:', error);
       setAuthMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to sign in with Apple.',
+        text: readAuthError(error, 'Unable to sign in with Apple.'),
       });
     }
   };
@@ -890,7 +1018,7 @@ const SimpBudgetPage: React.FC = () => {
       console.error('Unable to send magic link:', error);
       setAuthMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to send magic link.',
+        text: readAuthError(error, 'Unable to send magic link.'),
       });
     } finally {
       setSendingMagicLink(false);
@@ -910,7 +1038,7 @@ const SimpBudgetPage: React.FC = () => {
       console.error('Unable to connect QuickLifts source:', error);
       setMigrationMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to connect the QuickLifts admin source.',
+        text: readAuthError(error, 'Unable to connect the QuickLifts admin source.'),
       });
     }
   };
@@ -1086,15 +1214,21 @@ const SimpBudgetPage: React.FC = () => {
       console.error('Unable to migrate founder budget data:', error);
       setMigrationMessage({
         type: 'error',
-        text:
-          error instanceof Error
-            ? error.message
-            : 'Unable to import existing founder budget data.',
+        text: readFirestoreError(error, 'Unable to import existing founder budget data.'),
       });
     } finally {
       setMigrating(false);
     }
   };
+
+  useEffect(() => {
+    if (!user || !isMigrationOwner || !sourceConnected || loadingData || migrating) return;
+    if (spaces.length > 0 || records.length > 0) return;
+    if (autoMigrationAttemptedRef.current) return;
+
+    autoMigrationAttemptedRef.current = true;
+    migrateFounderBudgetData();
+  }, [isMigrationOwner, loadingData, migrating, records.length, sourceConnected, spaces.length, user]);
 
   const updateDraftField = (field: 'monthlyIncome' | 'debtPayments' | 'notes', value: string) => {
     setDraft((currentDraft) => ({
@@ -1482,7 +1616,7 @@ const SimpBudgetPage: React.FC = () => {
         <title>SimpBudget | Budget Spaces</title>
       </Head>
 
-      <main className="mx-auto flex min-h-screen max-w-6xl flex-col px-5 py-8">
+      <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col px-6 py-7 lg:px-10 xl:px-14">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-black">
@@ -1499,46 +1633,75 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
-        <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[minmax(0,1.1fr)_420px]">
-          <div>
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
+        <section className="grid flex-1 items-stretch gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)] xl:gap-12">
+          <div className="flex min-h-[calc(100vh-7rem)] flex-col justify-between rounded-lg border border-zinc-900 bg-[#0d0f12] p-6 lg:p-8">
+            <div>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
               <Sparkles className="h-3.5 w-3.5" />
               Web app
+              </div>
+              <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-white md:text-7xl xl:text-8xl">
+                One budget, every space.
+              </h1>
+              <p className="mt-5 max-w-3xl text-lg leading-8 text-zinc-300 xl:text-xl xl:leading-9">
+                Create Budget Spaces for business, personal, or any project, then view each one alone or rolled up into one monthly picture.
+              </p>
             </div>
-            <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-white md:text-7xl">
-              One budget, every space.
-            </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-zinc-300">
-              Create Budget Spaces for business, personal, or any project, then view each one alone or rolled up into one monthly picture.
-            </p>
 
-            <div className="mt-8 grid max-w-3xl gap-3 sm:grid-cols-3">
-              {[
-                { label: 'Recurring', value: 'Monthly fixed costs' },
-                { label: 'Misc', value: 'Month-by-month spend' },
-                { label: 'AI Import', value: 'Screenshots to rows' },
-              ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#14171c] p-4">
-                  <div className="text-sm font-semibold text-white">{item.label}</div>
-                  <div className="mt-1 text-sm text-zinc-500">{item.value}</div>
+            <div className="mt-10 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="rounded-lg border border-zinc-800 bg-[#14171c] p-5">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+                  <div>
+                    <div className="text-sm font-semibold text-white">July Overview</div>
+                    <div className="mt-1 text-xs text-zinc-500">All Budget Spaces</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-2xl font-semibold text-emerald-200">$4,280</div>
+                    <div className="text-xs text-zinc-500">remaining</div>
+                  </div>
                 </div>
-              ))}
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {[
+                    { label: 'Recurring', value: '$2,140' },
+                    { label: 'Misc', value: '$680' },
+                    { label: 'Debt', value: '$320' },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#0f1216] p-4">
+                      <div className="text-xs text-zinc-500">{item.label}</div>
+                      <div className="mt-2 text-lg font-semibold text-white">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                {[
+                  { label: 'Business', value: 'Launch spend' },
+                  { label: 'Personal', value: 'Household cashflow' },
+                  { label: 'AI Import', value: 'Screenshots to rows' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#14171c] p-4">
+                    <div className="text-sm font-semibold text-white">{item.label}</div>
+                    <div className="mt-1 text-sm text-zinc-500">{item.value}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-zinc-800 bg-[#171a1f] p-5 shadow-2xl shadow-black/30">
-            <div className="mb-5">
-              <h2 className="text-xl font-semibold text-white">Sign in</h2>
-              <p className="mt-1 text-sm text-zinc-400">
+          <aside className="flex min-h-[calc(100vh-7rem)] flex-col justify-center rounded-lg border border-zinc-800 bg-[#171a1f] p-6 shadow-2xl shadow-black/30 lg:p-8">
+            <div className="mb-7">
+              <h2 className="text-3xl font-semibold tracking-tight text-white">Sign in</h2>
+              <p className="mt-3 text-base leading-7 text-zinc-400">
                 Use the same Tremaine Google account to import the existing admin budget data.
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                className={`${pillButtonClassName} w-full bg-white text-black hover:bg-zinc-200`}
+                className={`${pillButtonClassName} min-h-12 w-full bg-white text-base text-black hover:bg-zinc-200`}
               >
                 <ShieldCheck className="h-4 w-4" />
                 Continue with Google
@@ -1546,7 +1709,7 @@ const SimpBudgetPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAppleSignIn}
-                className={`${pillButtonClassName} w-full border border-zinc-700 bg-[#111417] text-white hover:border-zinc-600`}
+                className={`${pillButtonClassName} min-h-12 w-full border border-zinc-700 bg-[#111417] text-base text-white hover:border-zinc-600`}
               >
                 <ShieldCheck className="h-4 w-4" />
                 Continue with Apple
@@ -1577,7 +1740,7 @@ const SimpBudgetPage: React.FC = () => {
             <div className="mt-4">
               <MessageBanner message={authMessage} />
             </div>
-          </div>
+          </aside>
         </section>
       </main>
     </div>
@@ -1903,19 +2066,41 @@ const SimpBudgetPage: React.FC = () => {
                           </div>
                           <div className="mt-1 text-sm text-zinc-500">{selectionStatus}</div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDraft((currentDraft) => ({
-                              ...currentDraft,
-                              recurringExpenses: [...currentDraft.recurringExpenses, createRecurringExpense()],
-                            }))
-                          }
-                          className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
-                        >
-                          <Plus className="h-4 w-4" />
-                          Add recurring
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          {lastDeletedRecurringExpense && (
+                            <button
+                              type="button"
+                              onClick={undoLastRecurringDelete}
+                              className={`${pillButtonClassName} border border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400/50`}
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                              Undo deleted item
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={restoreRecurringFromPreviousMonth}
+                            disabled={!previousBudgetRecord}
+                            className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                            title={previousBudgetRecord ? previousRecurringRestoreLabel : 'No earlier saved month for this Budget Space'}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                            {previousRecurringRestoreLabel}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDraft((currentDraft) => ({
+                                ...currentDraft,
+                                recurringExpenses: [...currentDraft.recurringExpenses, createRecurringExpense()],
+                              }))
+                            }
+                            className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add recurring
+                          </button>
+                        </div>
                       </div>
 
                       <div className="overflow-x-auto p-3">
@@ -1957,12 +2142,7 @@ const SimpBudgetPage: React.FC = () => {
                                   <td className="px-3 py-3 text-right">
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        setDraft((currentDraft) => ({
-                                          ...currentDraft,
-                                          recurringExpenses: currentDraft.recurringExpenses.filter((candidate) => candidate.id !== expense.id),
-                                        }))
-                                      }
+                                      onClick={() => removeRecurringExpense(expense)}
                                       className="rounded-lg border border-zinc-700 p-2 text-zinc-400 transition hover:border-red-500/30 hover:text-red-200"
                                       aria-label="Remove recurring expense"
                                     >

@@ -119,6 +119,227 @@ interface InvestorDataroomPageProps {
   metaData?: SerializablePageMetaDataForInvestor | null;
 }
 
+interface InvestorDocumentLink {
+  id: string;
+  title: string;
+  description: string;
+  href?: string;
+  fileType: string;
+  download?: string | boolean;
+  sectionId?: keyof SectionAccess;
+  actionLabel?: string;
+}
+
+interface InvestorDocumentGroup {
+  title: string;
+  description: string;
+  docs: InvestorDocumentLink[];
+}
+
+const BUSINESS_ENTITY_DOCUMENTS: InvestorDocumentLink[] = [
+  {
+    id: 'certificate-incorporation',
+    title: 'Certificate of Incorporation',
+    description: 'Delaware C-Corp formation document',
+    href: '/PulseIntelligenceLabsCertificateofIncorporation.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'approved-articles-incorporation',
+    title: 'Articles of Incorporation',
+    description: 'Approved Delaware certificate',
+    href: '/PulseIntelligenceLabsInc - Approved Certificate of Incorporation (Articles of Incorporation).pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'corporate-bylaws',
+    title: 'Corporate Bylaws',
+    description: 'Company bylaws',
+    href: '/Pulse Intelligence Labs_ Inc. Bylaws.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'founder-ip-assignment',
+    title: 'Founder IP Assignment Agreement',
+    description: 'Signed founder intellectual property assignment',
+    href: '/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf',
+    fileType: 'PDF',
+    download: 'Founder-IP-Assignment-Agreement.pdf',
+  },
+  {
+    id: 'founder-rspa',
+    title: 'Founder RSPA',
+    description: 'Signed restricted stock purchase agreement',
+    href: '/Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs.pdf',
+    fileType: 'PDF',
+    download: 'Founder-RSPA.pdf',
+  },
+  {
+    id: 'rspa-tremaine-grant',
+    title: 'RSPA for Tremaine Grant',
+    description: 'Restricted stock purchase agreement',
+    href: '/RSPA for Tremaine Grant.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'common-stock-certificate',
+    title: 'Common Stock Certificate',
+    description: 'Tremaine Grant common stock certificate',
+    href: '/Common Stock Certificate Tremaine Grant (1).pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'stock-assignment',
+    title: 'Stock Assignment',
+    description: 'Separate stock assignment document',
+    href: '/Stock Assignment Separate from Certificate for Tremaine Grant (1).pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'employee-ciiaa',
+    title: 'Employee CIIAA',
+    description: 'Confidentiality and IP assignment agreement',
+    href: '/Employee CIIAA for Tremaine Grant.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'section-83b-election',
+    title: 'Section 83(b) Election',
+    description: 'Tax election form',
+    href: '/Section 83(b) for Tremaine Grant.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'section-83b-proof',
+    title: '83(b) Filing Proof',
+    description: 'Proof of filing with attached mailed contents',
+    href: '/Proof of 83(b) filing w_ attached Lob mailed contents for Tremaine Grant.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'cp-575-letter',
+    title: 'CP 575 Letter',
+    description: 'IRS EIN confirmation letter',
+    href: '/PulseIntelligenceLabsInc - CP 575 Letter (2).pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'ss-4-form',
+    title: 'SS-4 Form',
+    description: 'EIN application form',
+    href: '/SS-4.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'form-8821',
+    title: 'Form 8821',
+    description: 'Tax information authorization',
+    href: '/Form 8821.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+];
+
+const FINANCING_DOCUMENTS: InvestorDocumentLink[] = [
+  {
+    id: 'convertible-note-25k-2025',
+    title: 'Convertible Note - $25K',
+    description: 'Convertible note for Pulse Intelligence Labs, Inc. dated 01/05/2025',
+    href: '/Convertible_Note_25K_Pulse_Intelligence_Labs_Inc_01_05_2025.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'launch-convertible-note-25k-2026',
+    title: 'Launch Convertible Note - $25K',
+    description: 'Existing convertible note document dated 01/05/2026',
+    href: '/LaunchConvertibleNote25K01_05_2026.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+];
+
+const INVESTOR_SITE_DOCUMENTS: InvestorDocumentLink[] = [
+  {
+    id: 'pulse-deck-current',
+    title: 'Pulse Intelligence Labs Deck',
+    description: 'Investor pitch deck PDF',
+    href: '/Pulse_Intelligence_Labs_Deck.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'pil-investor-deck-2026',
+    title: 'PIL Investor Deck 2026',
+    description: 'Editable investor deck presentation',
+    href: '/PIL_Investor_Deck_2026.pptx',
+    fileType: 'PPTX',
+    download: true,
+  },
+  {
+    id: 'pepperdine-mfc-2026',
+    title: 'Pepperdine MFC 2026 Deck',
+    description: 'Competition and investor presentation',
+    href: '/Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'wunna-run-investment-brief',
+    title: 'Pulse x WunnaRun Investment Brief',
+    description: 'Partnership and investment brief',
+    href: '/Pulse_x_WunnaRun_Investment_Brief.pdf',
+    fileType: 'PDF',
+    download: true,
+  },
+  {
+    id: 'org-chart',
+    title: 'Org Chart',
+    description: 'Pulse team and organization chart',
+    href: '/org.pdf',
+    fileType: 'PDF',
+    download: 'Pulse-Org-Chart.pdf',
+  },
+];
+
+const GENERATED_INVESTOR_DOCUMENTS: InvestorDocumentLink[] = [
+  {
+    id: 'profit-loss-statement',
+    title: 'Profit & Loss Statement',
+    description: 'Generated from the Financial Information section',
+    fileType: 'Generated PDF',
+    sectionId: 'financials',
+    actionLabel: 'Open Financials',
+  },
+  {
+    id: 'balance-sheet',
+    title: 'Balance Sheet',
+    description: 'Generated from the Financial Information section',
+    fileType: 'Generated PDF',
+    sectionId: 'financials',
+    actionLabel: 'Open Financials',
+  },
+  {
+    id: 'cap-table-export',
+    title: 'Cap Table Export',
+    description: 'Generated from the Cap Table section',
+    fileType: 'Generated PDF',
+    sectionId: 'captable',
+    actionLabel: 'Open Cap Table',
+  },
+];
+
 const BASELINE_CAP_TABLE = {
   authorizedShares: 10000000,
   stakeholders: [
@@ -183,8 +404,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [activeRevenueYear, setActiveRevenueYear] = useState<'2025' | '2024'>('2025');
 
   // Legal documents state
-  const [_legalDocuments, setLegalDocuments] = useState<any[]>([]);
-  const [_isLoadingLegalDocs, setIsLoadingLegalDocs] = useState(false);
+  const [legalDocuments, setLegalDocuments] = useState<any[]>([]);
+  const [isLoadingLegalDocs, setIsLoadingLegalDocs] = useState(false);
 
   // Corporate equity documents state
   const [corporateEquityDocs, setCorporateEquityDocs] = useState<any[]>([]);
@@ -1558,6 +1779,80 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     { id: 'oct25', label: 'October 2025', file: '/ExpenseReport-Oct25.pdf' },
     { id: 'nov25', label: 'November 2025', file: '/ExpenseReport-Nov25.pdf' },
   ];
+
+  const allDocumentGroups: InvestorDocumentGroup[] = [
+    {
+      title: 'Business Entity & Corporate',
+      description: 'Core company formation, ownership, tax, and IP documents.',
+      docs: BUSINESS_ENTITY_DOCUMENTS,
+    },
+    {
+      title: 'Financing',
+      description: 'Convertible notes and financing instruments.',
+      docs: FINANCING_DOCUMENTS,
+    },
+    {
+      title: 'Investor Materials',
+      description: 'Decks, briefs, and supporting investor-facing materials already used on the site.',
+      docs: INVESTOR_SITE_DOCUMENTS,
+    },
+    {
+      title: 'Financial Files',
+      description: 'Direct-download bank statements and subscription revenue exports.',
+      docs: [
+        ...bankStatements2025.map((report): InvestorDocumentLink => ({
+          id: `bank-${report.id}`,
+          title: `${report.label} Bank Statement`,
+          description: 'Verified bank statement PDF',
+          href: report.file,
+          fileType: 'PDF',
+          download: true,
+        })),
+        ...revenueReports.map((report): InvestorDocumentLink => ({
+          id: `revenue-${report.id}`,
+          title: `${report.label} Revenue Report`,
+          description: 'Monthly subscription revenue export',
+          href: report.file,
+          fileType: 'CSV',
+          download: true,
+        })),
+      ],
+    },
+    {
+      title: 'Generated Dataroom Documents',
+      description: 'Documents generated from live investor-page data and controls.',
+      docs: GENERATED_INVESTOR_DOCUMENTS,
+    },
+  ];
+
+  const totalListedDocuments = allDocumentGroups.reduce((total, group) => total + group.docs.length, 0) + legalDocuments.length;
+
+  const formatInvestorDocumentDate = (value: any) => {
+    const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return 'Date unavailable';
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getLiveDocumentHref = (doc: any) => (doc.source === 'equity' ? `/equity-doc/${doc.id}` : `/legal-doc/${doc.id}`);
+
+  const getLiveDocumentLabel = (doc: any) => {
+    if (doc.documentType === 'eip') return 'Equity Incentive Plan';
+    if (doc.documentType === 'board_consent') return 'Board Consent';
+    if (doc.documentType === 'advisor_nso_agreement') return 'Advisor NSO Agreement';
+    if (doc.documentType === 'option_agreement') return 'Option Agreement';
+    if (doc.documentType) {
+      return String(doc.documentType)
+        .split('_')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    }
+    return doc.source === 'equity' ? 'Equity Document' : 'Legal Document';
+  };
 
   // Handle URL query parameter for section navigation (only on initial load)
   const initialLoadRef = useRef(true);
@@ -6870,6 +7165,163 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   </section>
                 ) : (
                   <LockedSectionView sectionName="Cap Table" />
+                )
+              )}
+
+              {/* All Documents Section */}
+              {activeSection === 'documents' && (
+                hasSectionAccess('documents') ? (
+                  <section
+                    id="documents"
+                    ref={(el) => { sectionsRef.current.documents = el; }}
+                    className="mb-20"
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                          <span className="font-bold text-black">14</span>
+                        </div>
+                        <div>
+                          <h2 className="text-white text-3xl font-bold">All Documents</h2>
+                          <p className="text-zinc-400 text-sm mt-1">
+                            Complete investor document index with business entity, financing, financial, and generated dataroom documents.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-300">
+                        <span className="text-[#E0FE10] font-semibold">{totalListedDocuments}</span> documents listed
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[#E0FE10]/20 bg-[#E0FE10]/10 p-4 mb-8 flex items-start gap-3">
+                      <FileText className="w-5 h-5 text-[#E0FE10] mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-zinc-300">
+                        This list includes every business entity document shown on the Business Entity page, the newly added convertible note, and other important investor materials already available in the dataroom.
+                      </p>
+                    </div>
+
+                    <div className="space-y-8">
+                      {allDocumentGroups.map((group) => (
+                        <div key={group.title} className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                          <div className="p-6 border-b border-zinc-800 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                              <h3 className="text-white text-xl font-semibold">{group.title}</h3>
+                              <p className="text-zinc-400 text-sm mt-1">{group.description}</p>
+                            </div>
+                            <span className="text-zinc-500 text-xs mt-2 sm:mt-0">{group.docs.length} items</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6">
+                            {group.docs.map((document) => {
+                              const content = (
+                                <>
+                                  <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                    {document.sectionId ? (
+                                      <FileText className="w-5 h-5 text-[#E0FE10]" />
+                                    ) : (
+                                      <Download className="w-5 h-5 text-[#E0FE10]" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors truncate">
+                                      {document.title}
+                                    </div>
+                                    <div className="text-zinc-500 text-sm mt-1">
+                                      {document.fileType} • {document.description}
+                                    </div>
+                                  </div>
+                                  <div className="flex-shrink-0">
+                                    {document.sectionId ? (
+                                      <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" />
+                                    ) : (
+                                      <Download className="w-4 h-4 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" />
+                                    )}
+                                  </div>
+                                </>
+                              );
+
+                              if (document.sectionId) {
+                                return (
+                                  <button
+                                    key={document.id}
+                                    type="button"
+                                    onClick={() => switchSection(document.sectionId as string)}
+                                    className="group flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all text-left"
+                                    aria-label={document.actionLabel || `Open ${document.title}`}
+                                  >
+                                    {content}
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <a
+                                  key={document.id}
+                                  href={document.href}
+                                  download={document.download}
+                                  className="group flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all"
+                                >
+                                  {content}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+                        <div className="p-6 border-b border-zinc-800 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <h3 className="text-white text-xl font-semibold">Live Legal & Equity Documents</h3>
+                            <p className="text-zinc-400 text-sm mt-1">
+                              Completed documents pulled from the legal and equity document collections.
+                            </p>
+                          </div>
+                          <span className="text-zinc-500 text-xs mt-2 sm:mt-0">{legalDocuments.length} items</span>
+                        </div>
+
+                        {isLoadingLegalDocs ? (
+                          <div className="p-8 flex items-center justify-center">
+                            <Loader2 className="w-6 h-6 text-[#E0FE10] animate-spin" />
+                            <span className="ml-3 text-zinc-400 text-sm">Loading live documents...</span>
+                          </div>
+                        ) : legalDocuments.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-6">
+                            {legalDocuments.map((document) => (
+                              <a
+                                key={`${document.source}-${document.id}`}
+                                href={getLiveDocumentHref(document)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all"
+                              >
+                                <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                  <FileText className="w-5 h-5 text-[#E0FE10]" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors truncate">
+                                    {document.title || getLiveDocumentLabel(document)}
+                                  </div>
+                                  <div className="text-zinc-500 text-sm mt-1">
+                                    {getLiveDocumentLabel(document)} • {formatInvestorDocumentDate(document.createdAt)}
+                                  </div>
+                                </div>
+                                <ArrowUpRight className="w-4 h-4 text-zinc-500 group-hover:text-[#E0FE10] transition-colors flex-shrink-0" />
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-8 text-center">
+                            <FileText className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+                            <p className="text-zinc-300 text-sm font-medium">No completed live legal or equity documents yet.</p>
+                            <p className="text-zinc-500 text-xs mt-1">Static corporate, financing, investor, and financial files are still listed above.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                ) : (
+                  <LockedSectionView sectionName="All Documents" />
                 )
               )}
             </div>
