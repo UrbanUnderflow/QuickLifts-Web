@@ -241,6 +241,7 @@ const Year2025Review = () => {
       eyebrow="Q4 2025 + Year in Review"
       title="Q4 2025: From Bootcamp to Breakthrough"
       description="Founder University graduate. LAUNCH investment closed. AWS Retreat selected. AI Round Builder shipped. Then: the full 2025 year in review."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>Q4 2025: From Bootcamp to Breakthrough</h1>

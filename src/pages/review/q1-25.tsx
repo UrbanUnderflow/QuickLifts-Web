@@ -64,6 +64,7 @@ const Q1Review2025 = () => {
       eyebrow="Q1 2025 • January - March"
       title="Launch, Learn, Iterate"
       description="Q1 marked the official launch of Rounds—our core feature. We hosted our first challenges and rapidly iterated based on creator feedback."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>Launch, Learn, Iterate</h1>

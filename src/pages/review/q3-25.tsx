@@ -140,6 +140,7 @@ const Q3Review2025 = () => {
       eyebrow="Q3 2025 • July - September"
       title="Lessons from the Long Round"
       description="AWS Bootcamp selected. Morning Mobility completed. 90 days taught us what works—now we're building smarter."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>Lessons from the Long Round</h1>

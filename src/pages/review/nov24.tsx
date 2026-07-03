@@ -72,6 +72,7 @@ const Nov24Review = () => {
       eyebrow="November 2024"
       title="Shifting From Building Code to Building Community"
       description="November marks a pivotal shift—moving beyond the building phase to deeply engaging with our community and future partners. From prestigious tech accelerator programs to vibrant community partnerships, we're fostering meaningful dialogues about the future of social fitness."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>Shifting From Building Code to Building Community</h1>

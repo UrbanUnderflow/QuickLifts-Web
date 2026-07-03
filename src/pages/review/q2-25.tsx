@@ -114,6 +114,7 @@ const Q2Review2025 = () => {
       eyebrow="Q2 2025 • April - June"
       title="The Breakout Round"
       description="Morning Mobility proved the model—83 participants, 65% from referrals, 1,630 workouts completed. The creator-led community flywheel is real."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>The Breakout Round</h1>

@@ -69,6 +69,7 @@ const Dec24Review = () => {
       eyebrow="December 2024"
       title="Welcome to Rounds"
       description="We celebrated the launch of Rounds with a special event at SoulCycle Buckhead, marking our first official partnership with instructor Jaidus. The morning was filled with energy and excitement as our community came together to experience this new chapter in group fitness training."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>Welcome to Rounds</h1>

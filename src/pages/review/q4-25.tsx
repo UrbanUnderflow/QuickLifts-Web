@@ -86,6 +86,7 @@ const Q4Review2025 = () => {
       eyebrow="Q4 2025 • October - December"
       title="From Bootcamp to Breakthrough"
       description="Founder University graduate. LAUNCH investment closed. AWS Retreat selected. AI Round Builder shipped. Q4 delivered on every front."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>From Bootcamp to Breakthrough</h1>

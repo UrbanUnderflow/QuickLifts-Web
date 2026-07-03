@@ -120,6 +120,7 @@ const YearInReview = () => {
       eyebrow="Year in Review"
       title="2024: A Year of Building and Growing"
       description="From beta testing to our Rounds launch, 2024 was a transformative year for Pulse. Here's our journey of building, learning, and growing together."
+    theme="editorial"
     >
       <div className="hidden" aria-hidden="true">
         <h1>2024: A Year of Building and Growing</h1>

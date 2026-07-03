@@ -102,22 +102,22 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
           </Link>
 
           <div className="hidden items-center gap-8 sm:flex">
-            <Link href="/review" className="text-sm font-semibold text-stone-900">
+            <Link href="/review" className={dark ? 'text-sm font-semibold text-white' : 'text-sm font-semibold text-stone-900'}>
               Investor Updates
             </Link>
-            <Link href="/research" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/research" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               Research
             </Link>
-            <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               Home
             </Link>
-            <Link href="/about" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/about" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               About
             </Link>
           </div>
 
           <div className="sm:hidden">
-            <Link href="/review" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/review" className={dark ? 'text-sm text-white/55 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               ← Updates
             </Link>
           </div>
@@ -245,16 +245,16 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-6">
-            <Link href="/review" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/review" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               Investor Updates
             </Link>
-            <Link href="/research" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/research" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               Research
             </Link>
-            <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               Home
             </Link>
-            <Link href="/press" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+            <Link href="/press" className={dark ? 'text-sm text-white/50 transition-colors hover:text-white' : 'text-sm text-stone-500 transition-colors hover:text-stone-900'}>
               Press Kit
             </Link>
           </div>
@@ -371,23 +371,9 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
         counter-reset: editorial-section;
       }
 
-      /* Auto-numbered section headings: "01 / HEADING" */
       .review-article--editorial main h2 {
         color: #ffffff !important;
         font-weight: 900 !important;
-        letter-spacing: -0.025em !important;
-        font-size: clamp(28px, 4vw, 40px) !important;
-      }
-      .review-article--editorial main h2::before {
-        counter-increment: editorial-section;
-        content: counter(editorial-section, decimal-leading-zero);
-        display: block;
-        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-        font-size: 13px;
-        font-weight: 900;
-        letter-spacing: 0.28em;
-        color: #e0fe10;
-        margin-bottom: 10px;
       }
 
       .review-article--editorial main h3 {

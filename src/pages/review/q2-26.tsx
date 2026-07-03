@@ -84,7 +84,7 @@ export default function InvestorUpdateQ226() {
           </a>
           <div style={styles.heroInner}>
             <div style={styles.kicker}>
-              PULSE INTELLIGENCE LABS · INVESTOR UPDATE · JULY 2026
+              PULSE INTELLIGENCE LABS · INVESTOR UPDATE · JULY 3, 2026
             </div>
             <h1 style={styles.h1}>The Pivot.</h1>
             <p style={styles.heroSub} data-description="true">
@@ -109,12 +109,23 @@ export default function InvestorUpdateQ226() {
                 <p style={styles.p}>
                   Over the past few months, we have sat across from universities,
                   professional sports teams, collegiate athletes, US Olympians, and
-                  investors and run the same demo again and again. We noticed something
-                  we had never experienced before. Our audience&apos;s response does not
-                  change. People get it. They clearly understand the product. They know
-                  the challenge. And they are excited by the solution. In the first few
-                  minutes, we keep hearing, &ldquo;This is so needed,&rdquo; &ldquo;I wish I
-                  had this when I was playing,&rdquo; and &ldquo;I have goosebumps.&rdquo;
+                  investors and run the{' '}
+                  <a href="/pulse-check-tech-demo" style={styles.inlineLink}>
+                    same demo
+                  </a>{' '}
+                  again and again. We noticed something we had never experienced before.
+                  Our audience&apos;s response does not change. People get it. They clearly
+                  understand the product. They know the challenge. And they are excited by
+                  the solution. In the first few minutes, we keep hearing, &ldquo;This is so
+                  needed,&rdquo; &ldquo;I wish I had this when I was playing,&rdquo; and &ldquo;I
+                  have goosebumps.&rdquo;
+                </p>
+                <p style={styles.sourceNote}>
+                  Product context:{' '}
+                  <a href="/pulse-check-tech-demo" style={styles.inlineLink}>
+                    View the PulseCheck tech demo
+                  </a>
+                  .
                 </p>
                 <p style={styles.p}>
                   This is a strong signal. We feel it in the room, and it is palpable.

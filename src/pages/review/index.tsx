@@ -111,26 +111,26 @@ const matchesFilter = (review: Review, filter: ReviewFilter): boolean => {
 
 const getFeaturedCardClasses = (review: Review): string => {
   if (review.isDraft) {
-    return 'border-amber-300 bg-amber-50/70';
+    return 'border-amber-300/40 bg-amber-500/10';
   }
 
   if (review.reviewType === 'year') {
-    return 'border-amber-200 bg-gradient-to-br from-amber-50/80 to-[#fff9e8]';
+    return 'border-[#E0FE10]/25 bg-[rgba(17,18,21,0.78)]';
   }
 
-  return 'border-stone-200 bg-white/80';
+  return 'border-white/10 bg-[rgba(17,18,21,0.78)]';
 };
 
 const getAccentClasses = (review: Review): string => {
   if (review.isDraft) {
-    return 'border-amber-500';
-  }
-
-  if (review.reviewType === 'year') {
     return 'border-amber-400';
   }
 
-  return 'border-stone-900';
+  if (review.reviewType === 'year') {
+    return 'border-[#E0FE10]';
+  }
+
+  return 'border-white/35';
 };
 
 const getDraftStatusClasses = (status: DraftReview['status']): string => {
@@ -222,26 +222,26 @@ const FeaturedReviewCard: React.FC<{ review: Review }> = ({ review }) => (
     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
   >
     <Link href={`/review/${review.id}`} className="block group">
-      <article className={`border rounded-[28px] p-8 md:p-10 shadow-sm transition-all duration-300 group-hover:shadow-md ${getFeaturedCardClasses(review)}`}>
+      <article className={`border rounded-lg p-8 transition-all duration-300 group-hover:border-white/25 md:p-10 ${getFeaturedCardClasses(review)}`}>
         <div className={`border-t-2 pt-8 ${getAccentClasses(review)}`}>
-          <div className="flex flex-wrap items-center gap-3 mb-5 text-sm text-stone-400">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+          <div className="mb-5 flex flex-wrap items-center gap-3 font-mono text-xs uppercase tracking-[0.16em] text-white/38">
+            <span className="font-bold tracking-[0.22em] text-white/45">
               Latest Update
             </span>
-            <span className="text-stone-300">·</span>
+            <span className="text-white/20">·</span>
             <span>{getReviewTypeLabel(review)}</span>
-            <span className="text-stone-300">·</span>
+            <span className="text-white/20">·</span>
             <span>{getReviewPeriodLabel(review)}</span>
           </div>
 
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-3 mb-4">
-                <span className="text-4xl md:text-5xl font-bold tracking-tight text-stone-900">
+                <span className="text-4xl font-black tracking-tight text-white md:text-5xl">
                   {review.date.substring(0, 4)}
                 </span>
                 {review.reviewType === 'quarter' && (
-                  <span className="rounded-full bg-stone-900 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-white">
+                  <span className="rounded-full bg-[#E0FE10] px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-black">
                     Q{getQuarterNumber(review.date)}
                   </span>
                 )}
@@ -253,16 +253,16 @@ const FeaturedReviewCard: React.FC<{ review: Review }> = ({ review }) => (
                 )}
               </div>
 
-              <h2 className="mb-4 text-3xl font-bold leading-tight tracking-tight text-stone-900 transition-colors duration-300 group-hover:text-stone-700 md:text-4xl">
+              <h2 className="mb-4 text-3xl font-black leading-tight tracking-tight text-white transition-colors duration-300 group-hover:text-[#E0FE10] md:text-4xl">
                 {review.title}
               </h2>
 
-              <p className="max-w-2xl text-lg leading-relaxed text-stone-500">
+              <p className="max-w-2xl text-lg leading-relaxed text-white/58">
                 {review.description}
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-2 text-sm font-medium text-stone-900 transition-colors duration-300 group-hover:text-stone-600">
+            <div className="inline-flex items-center gap-2 text-sm font-bold text-white transition-colors duration-300 group-hover:text-[#E0FE10]">
               Open update
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </div>
@@ -280,16 +280,16 @@ const ReviewListItem: React.FC<{ review: Review; index: number }> = ({ review, i
     transition={{ duration: 0.45, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
   >
     <Link href={`/review/${review.id}`} className="block group">
-      <article className="border-b border-stone-200 py-8 transition-colors duration-300 group-hover:border-stone-400">
+      <article className="border-b border-white/10 py-8 transition-colors duration-300 group-hover:border-white/25">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:gap-10">
           <div className="w-full flex-shrink-0 md:w-44">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">
+            <div className="font-mono text-xs font-bold uppercase tracking-[0.20em] text-white/35">
               {getReviewTypeLabel(review)}
             </div>
-            <div className="mt-2 text-2xl font-bold leading-none tracking-tight text-stone-900">
+            <div className="mt-2 text-2xl font-black leading-none tracking-tight text-white">
               {review.date.substring(0, 4)}
             </div>
-            <div className="mt-2 text-sm text-stone-500">
+            <div className="mt-2 text-sm text-white/45">
               {review.reviewType === 'quarter'
                 ? `Q${getQuarterNumber(review.date)}`
                 : review.reviewType === 'year'
@@ -300,7 +300,7 @@ const ReviewListItem: React.FC<{ review: Review; index: number }> = ({ review, i
 
           <div className="flex-1">
             <div className="mb-3 flex flex-wrap items-center gap-3">
-              <h3 className="text-xl font-semibold leading-tight text-stone-900 transition-colors duration-300 group-hover:text-stone-700 md:text-2xl">
+              <h3 className="text-xl font-black leading-tight text-white transition-colors duration-300 group-hover:text-[#E0FE10] md:text-2xl">
                 {review.title}
               </h3>
               {review.isDraft && (
@@ -311,11 +311,11 @@ const ReviewListItem: React.FC<{ review: Review; index: number }> = ({ review, i
               )}
             </div>
 
-            <p className="max-w-3xl text-base leading-relaxed text-stone-500">
+            <p className="max-w-3xl text-base leading-relaxed text-white/58">
               {review.description}
             </p>
 
-            <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-stone-900 transition-colors duration-300 group-hover:text-stone-600">
+            <div className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-white transition-colors duration-300 group-hover:text-[#E0FE10]">
               Read update
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </div>
@@ -737,30 +737,30 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
         pageOgImage="/og-image.png?title=Investor%20Updates"
       />
 
-      <div className="min-h-screen bg-[#FAFAF7]">
-        <nav className="sticky top-0 z-50 border-b border-stone-200/60 bg-[#FAFAF7]/90 backdrop-blur-md">
+      <div className="review-index--editorial min-h-screen bg-[#020408] text-white/75">
+        <nav className="sticky top-0 z-50 border-b border-white/10 bg-[#020408]/88 backdrop-blur-md">
           <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6 md:px-8">
             <Link href="/" className="flex items-center gap-3">
-              <img src="/pulse-logo.svg" alt="Pulse" className="h-8" />
+              <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
             </Link>
 
             <div className="hidden items-center gap-8 sm:flex">
-              <Link href="/review" className="text-sm font-semibold text-stone-900">
+              <Link href="/review" className="text-sm font-semibold text-white">
                 Investor Updates
               </Link>
-              <Link href="/research" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/research" className="text-sm text-white/50 transition-colors hover:text-white">
                 Research
               </Link>
-              <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/" className="text-sm text-white/50 transition-colors hover:text-white">
                 Home
               </Link>
-              <Link href="/about" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/about" className="text-sm text-white/50 transition-colors hover:text-white">
                 About
               </Link>
             </div>
 
             <div className="sm:hidden">
-              <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/" className="text-sm text-white/55 transition-colors hover:text-white">
                 ← Home
               </Link>
             </div>
@@ -773,14 +773,14 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
-            <p className="mb-5 text-sm font-semibold uppercase tracking-[0.18em] text-stone-400">
+            <p className="mb-5 font-mono text-xs font-bold uppercase tracking-[0.30em] text-white/45">
               Investor Updates
             </p>
             <h1
-              className="mb-6 text-5xl font-bold tracking-tight text-stone-900 md:text-6xl lg:text-7xl"
+              className="mb-6 max-w-4xl text-5xl font-black leading-[0.96] tracking-[-0.03em] text-white md:text-6xl lg:text-7xl"
               style={{ fontFamily: "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
             >
-              Progress, shipped work, and what we&apos;re learning.
+              Dispatches from the lab.
             </h1>
           </motion.div>
 
@@ -790,9 +790,9 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
             transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
             className="max-w-3xl"
           >
-            <p className="text-lg leading-relaxed text-stone-500 md:text-xl">
+            <p className="text-lg leading-relaxed text-white/62 md:text-xl">
               A running archive of our milestones, experiments, investor notes, and product
-              progress as Pulse grows from idea to enduring fitness platform.
+              progress as Pulse Intelligence Labs builds at the edge of human performance and AI.
             </p>
           </motion.div>
 
@@ -800,14 +800,14 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-stone-400"
+            className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-xs uppercase tracking-[0.16em] text-white/38"
           >
             <span>{publishedReviewCount} published updates</span>
-            <span className="hidden text-stone-300 sm:inline">·</span>
+            <span className="hidden text-white/20 sm:inline">·</span>
             <span>Latest period: {featuredReview ? getReviewPeriodLabel(featuredReview) : 'Coming soon'}</span>
             {isAdmin && draftCount > 0 && (
               <>
-                <span className="hidden text-stone-300 sm:inline">·</span>
+                <span className="hidden text-white/20 sm:inline">·</span>
                 <span>{draftCount} draft updates</span>
               </>
             )}
@@ -821,15 +821,15 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
             transition={{ duration: 0.4, delay: 0.22 }}
             className="flex flex-wrap items-center gap-2"
           >
-            <span className="mr-2 text-sm text-stone-400">Views:</span>
+            <span className="mr-2 font-mono text-xs uppercase tracking-[0.18em] text-white/35">Views:</span>
             {filtersToRender.map((filter) => (
               <button
                 key={filter}
                 onClick={() => setActiveFilter(filter)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 ${
                   activeFilter === filter
-                    ? 'bg-stone-900 text-white'
-                    : 'bg-transparent text-stone-500 hover:bg-stone-100 hover:text-stone-800'
+                    ? 'bg-[#E0FE10] text-black'
+                    : 'bg-transparent text-white/48 hover:bg-white/8 hover:text-white'
                 }`}
               >
                 {filter}
@@ -1043,7 +1043,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
 
             <div className="mx-auto max-w-6xl px-6 pb-24 md:px-8">
               {remainingReviews.length > 0 && (
-                <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                <div className="mb-3 font-mono text-xs font-bold uppercase tracking-[0.24em] text-white/35">
                   Previous Updates
                 </div>
               )}
@@ -1056,7 +1056,7 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
                 </div>
               ) : (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-16 text-center">
-                  <p className="text-lg text-stone-400">
+                  <p className="text-lg text-white/45">
                     No additional updates in this view yet.
                   </p>
                 </motion.div>
@@ -1066,33 +1066,33 @@ const ReviewsIndex: NextPage<ReviewsIndexProps> = ({ reviews: staticReviews }) =
         ) : (
           <div className="mx-auto max-w-6xl px-6 pb-24 md:px-8">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-20 text-center">
-              <p className="text-lg text-stone-400">
+              <p className="text-lg text-white/45">
                 No investor updates available in this view yet.
               </p>
             </motion.div>
           </div>
         )}
 
-        <footer className="border-t border-stone-200 bg-[#FAFAF7]">
+        <footer className="border-t border-white/10 bg-[#020408]">
           <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-6 px-6 py-12 md:flex-row md:items-center md:px-8">
             <div>
-              <img src="/pulse-logo.svg" alt="Pulse" className="mb-3 h-6" />
-              <p className="text-sm text-stone-400">
+              <img src="/pulse-logo-white.svg" alt="Pulse" className="mb-3 h-6" />
+              <p className="text-sm text-white/35">
                 © {new Date().getFullYear()} Pulse Intelligence Labs, Inc.
               </p>
             </div>
 
             <div className="flex items-center gap-6">
-              <Link href="/research" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/research" className="text-sm text-white/45 transition-colors hover:text-white">
                 Research
               </Link>
-              <Link href="/" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/" className="text-sm text-white/45 transition-colors hover:text-white">
                 Home
               </Link>
-              <Link href="/about" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/about" className="text-sm text-white/45 transition-colors hover:text-white">
                 About
               </Link>
-              <Link href="/press" className="text-sm text-stone-500 transition-colors hover:text-stone-900">
+              <Link href="/press" className="text-sm text-white/45 transition-colors hover:text-white">
                 Press Kit
               </Link>
             </div>
