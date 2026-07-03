@@ -46,18 +46,18 @@ const PIPELINE_SCOREBOARD = [
 const ATHLETE_RISK_STATS = [
   {
     value: '4x',
-    label: 'mental health crisis',
-    note: 'Athletes are more likely to face a mental health crisis.',
+    before: 'Athletes are ',
+    after: ' more likely to face a mental health crisis.',
   },
   {
     value: '60%',
-    label: 'pre-competition anxiety',
-    note: 'Athletes feel elevated anxiety before competition.',
+    before: '',
+    after: ' of athletes feel elevated anxiety leading up to competition.',
   },
   {
     value: '10%',
-    label: 'coach visibility',
-    note: 'Athletes say something to a coach before it breaks.',
+    before: 'Only ',
+    after: ' of athletes voice it to their coach before it breaks.',
   },
 ];
 
@@ -550,10 +550,12 @@ function AthleteProofPoint() {
 
       <div style={styles.athleteStats}>
         {ATHLETE_RISK_STATS.map((stat) => (
-          <div key={stat.label} style={styles.athleteStatCard}>
-            <div style={styles.athleteStatValue}>{stat.value}</div>
-            <div style={styles.athleteStatLabel}>{stat.label}</div>
-            <div style={styles.athleteStatNote}>{stat.note}</div>
+          <div key={stat.value} style={styles.athleteStatCard}>
+            <p style={styles.athleteStatSentence}>
+              {stat.before}
+              <span style={styles.athleteStatValue}>{stat.value}</span>
+              {stat.after}
+            </p>
           </div>
         ))}
       </div>
@@ -819,30 +821,23 @@ const styles: Record<string, React.CSSProperties> = {
     background: CHARCOAL,
     border: HAIRLINE,
     borderRadius: 8,
-    padding: '28px 26px',
+    padding: '30px 28px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
   },
+  athleteStatSentence: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 'clamp(23px, 3.1vw, 34px)',
+    lineHeight: 1.18,
+    fontWeight: 850,
+    letterSpacing: '-0.01em',
+    margin: 0,
+  },
   athleteStatValue: {
     color: LIME,
-    fontSize: 52,
-    lineHeight: 1,
     fontWeight: 900,
     letterSpacing: '-0.02em',
-  },
-  athleteStatLabel: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 800,
-    lineHeight: 1.25,
-    marginTop: 20,
-  },
-  athleteStatNote: {
-    color: 'rgba(255,255,255,0.48)',
-    fontSize: 14,
-    lineHeight: 1.45,
-    marginTop: 9,
   },
   rail: {
     display: 'flex',
