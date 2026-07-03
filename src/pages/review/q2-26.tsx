@@ -784,7 +784,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
     gap: 24,
-    alignItems: 'stretch',
+    alignItems: 'start',
     marginTop: 50,
   },
   athletePhotoCard: {
@@ -792,9 +792,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   athleteImg: {
     width: '100%',
-    height: '100%',
-    minHeight: 520,
-    maxHeight: 680,
+    height: 'auto',
+    maxHeight: 720,
     objectFit: 'cover',
     objectPosition: 'center 35%',
     borderRadius: 8,
