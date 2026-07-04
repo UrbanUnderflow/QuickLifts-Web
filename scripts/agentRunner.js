@@ -2724,6 +2724,12 @@ function inferColor(steps, currentIndex) {
 let lastSnapshotHour = null;
 let lastNoraGitSyncHour = null;
 
+function currentHourIso(date = new Date()) {
+    const hour = new Date(date);
+    hour.setUTCMinutes(0, 0, 0);
+    return hour.toISOString();
+}
+
 /**
  * Nora-only hourly git sync:
  * 1) pull latest changes
@@ -2822,8 +2828,7 @@ function syncRepoDuringHourlyTelemetry(currentTask, hourIso) {
 function maybeSyncRepoDuringHourlyTelemetry(currentTask) {
     if (AGENT_ID !== 'nora') return;
 
-    const now = new Date();
-    const hourIso = now.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z');
+    const hourIso = currentHourIso();
     if (hourIso === lastNoraGitSyncHour) return;
 
     const synced = syncRepoDuringHourlyTelemetry(currentTask, hourIso);
@@ -2837,8 +2842,7 @@ function maybeSyncRepoDuringHourlyTelemetry(currentTask) {
  * Called on an interval; only fires once per calendar hour.
  */
 async function postHourlySnapshot(currentTask) {
-    const now = new Date();
-    const hourIso = now.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z'); // Round to hour
+    const hourIso = currentHourIso();
     if (hourIso === lastSnapshotHour) return;  // Already posted this hour
     lastSnapshotHour = hourIso;
 
