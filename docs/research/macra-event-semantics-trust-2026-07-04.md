@@ -22,19 +22,34 @@ Required source artifacts:
 
 ## variant_a Experiment Freshness
 
-_Pending Step 2 population._
+### Observed facts
 
-This section will record whether active `variant_a` results were refreshed or remain stale from the 2026-06-16 retired hard-paywall snapshot. It must cite `/admin/experiments`, Firestore experiment/result documents when available, and the Macra durable state/progress/decision files.
+- The durable Macra state records the active experiment as `variant_a`, configured as **monthly + annual, both with trial**. It also carries a known issue: the saved `/admin/experiments` results snapshot was stale from **2026-06-16** and still reflected a retired hard-paywall configuration. Source: `.agent/macra/state.json`
+- The Macra progress log names stale `/admin/experiments` results as the most urgent data issue because live config is now `variant_a`, while the saved result context had been tied to the retired hard-paywall read. Source: `.agent/macra/progress.md`
+- Nora's decision log says the first operational task is refreshing/backfilling `/admin/experiments` results for active `variant_a`, with the guardrail **do not decide from stale variant data**. Source: `.agent/macra/decisions.md`
+- Nora's later no-change decision keeps onboarding, paywall, pricing, experiment allocation, retargeting, and Apple Search Ads spend frozen during validation because AppsFlyer/Scoreboard coverage ends **2026-06-25**, purchase logs only confirm 2 trial-success rows on **2026-06-29**, and experiment results generated **2026-06-25** are mostly inferred. Source: `.agent/macra/decisions.md`; `.agent/macra/progress.md`
+- `/admin/experiments` is backed by Firestore `macra-experiments/macra_paywall_onboarding` for live config and `macra-experiment-results/macra_paywall_onboarding` for saved results. The admin implementation defines those collection/doc IDs and includes a `Refresh results` action that writes a new snapshot with `generatedAt`, assignment counts, `qualityLabel`, aggregate validation, data input counts, and `configSnapshot`. Source: `src/pages/admin/experiments.tsx`; Firestore `macra-experiments/macra_paywall_onboarding`; Firestore `macra-experiment-results/macra_paywall_onboarding`
+- Read-only Firestore check on 2026-07-04 found the live config exists, was updated at **2026-06-17T10:31:39.693Z**, uses primary metric `paid_conversion`, and assigns `variant_a` weight `100` while `baseline`, `variant_b`, and `variant_c` each have weight `0`. Source: Firestore `macra-experiments/macra_paywall_onboarding`; `src/pages/admin/experiments.tsx`
+- The saved result snapshot exists and was generated at **2026-06-25T10:08:00.102Z** / updated at **2026-06-25T10:08:00.461Z**. Its `configSnapshot` reflects active `variant_a` with weight `100`, so it is not the old 2026-06-16 retired hard-paywall snapshot. Source: Firestore `macra-experiment-results/macra_paywall_onboarding`
+- The saved result quality is **Mostly inferred assignments**: 692 loaded users, 692 assigned users, 95 exact assignments, 597 inferred assignments, and 0 unknown assignments. Source: Firestore `macra-experiment-results/macra_paywall_onboarding`
+- The result inputs are uneven: 288 purchase logs, 692 profiles/onboarding users, 32,241 AppsFlyer aggregate events, and **0 AppsFlyer user docs**. The aggregate validation records 7 AppsFlyer trial starts and notes that AppsFlyer aggregate data can validate top-line volume but cannot split by variant unless event metadata includes the variant. Source: Firestore `macra-experiment-results/macra_paywall_onboarding`
+- The `variant_a` result row records 503 qualified users, 692 onboarding completions, 692 paywall views, 40 checkout starts, 107 Apple cancels, 7 trial starts, 3 paid conversions, 95 exact assignments, and 597 inferred assignments. Source: Firestore `macra-experiment-results/macra_paywall_onboarding`
 
-Required fields to capture:
+### Inference
 
-- active experiment id and active variant
-- current variant configuration
-- saved result snapshot timestamp
-- whether the result reflects active `variant_a`
-- assignment quality and inference risk
-- AppsFlyer validation coverage
-- pass/fail freshness verdict for funnel decisions
+The active `variant_a` result context is **partially refreshed, not decision-fresh**. It has moved beyond the stale 2026-06-16 retired hard-paywall snapshot because the current saved result snapshot was generated on 2026-06-25 and its config snapshot matches active `variant_a`. But this audit did **not** create a new July 4 results refresh/backfill, and the saved result is still nine days old on 2026-07-04, mostly inferred, and missing AppsFlyer user-doc inputs for variant-level source validation. Treat `/admin/experiments` as observe-only evidence until a fresh active-`variant_a` snapshot is generated and reconciled with current AppsFlyer/Scoreboard coverage, purchase logs, cancel reasons, eligibility, and activation-quality guardrails. Source: `.agent/macra/state.json`; `.agent/macra/progress.md`; `.agent/macra/decisions.md`; `src/pages/admin/experiments.tsx`; Firestore `macra-experiments/macra_paywall_onboarding`; Firestore `macra-experiment-results/macra_paywall_onboarding`
+
+### Freshness verdict
+
+**Fail for funnel decisioning.** Active `variant_a` results were verified as refreshed past the 2026-06-16 retired hard-paywall snapshot, but they were **not refreshed in this Step 2 execution** and remain stale/incomplete for July 4 decisions. No onboarding, paywall, pricing, experiment allocation, retargeting, or Apple Search Ads decision should use this snapshot as a winner call.
+
+Primary metric protected: `qualified_onboarding_start_to_trial_start`.
+
+Guardrail: stale-source risk plus mostly inferred experiment assignments, missing AppsFlyer user-doc variant split, Apple purchase cancels, checkout failure/cancel pressure, age eligibility, activation quality, paid conversion after trial, and cancel reasons.
+
+### Step 2 status
+
+Complete. This section now cites `/admin/experiments`, Firestore `macra-experiments/macra_paywall_onboarding`, Firestore `macra-experiment-results/macra_paywall_onboarding`, `.agent/macra/state.json`, `.agent/macra/progress.md`, and `.agent/macra/decisions.md`; it explicitly records that active `variant_a` results are past the 2026-06-16 hard-paywall snapshot but still fail July 4 funnel-decision freshness.
 
 ## af_start_trial
 
