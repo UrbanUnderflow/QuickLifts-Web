@@ -180,19 +180,39 @@ AppsFlyer coverage guardrail:
 
 The strongest current guardrail signal is still trust/checkout friction, not scale readiness: recent first-party purchase logs show more cancels/failures than successes in the rolling window, while AppsFlyer attribution is stale and July 4 is not observable yet. Missing birthdate coverage is also a measurement gap for eligibility guardrails. Do not scale acquisition or make funnel changes until AppsFlyer coverage and experiment results are refreshed.
 
+## Paywall Dismissal And Cancel Signals
+
+### Observed Facts
+
+This section isolates the lifecycle/copy/proof/offer inputs from the broader guardrail table so the snapshot can support exactly one proposed lifecycle intervention.
+
+| Signal | Current read | Source | Freshness |
+| --- | --- | --- | --- |
+| StoreKit / purchase cancels | 7 `storekit_cancelled` rows in the `2026-06-30` through `2026-07-04` rolling read | Firestore `Macra-purchase-logs.failureReason` | Fresh through read time; no July 4 rows yet |
+| Purchase failures | 2 `storekit_purchase_failed` rows in the rolling read | Firestore `Macra-purchase-logs.failureReason` | Fresh through read time; no July 4 rows yet |
+| Cancel-feedback volume | 1 recent cancel-feedback row in the rolling read | Firestore `Macrafeedbackreason` | Fresh through read time; no July 4 rows yet |
+| Top cancel reason | `I'm not ready yet`: 1 | Firestore `Macrafeedbackreason.reasonLabel` / `reason` | Thin sample; treat as directional only |
+| Cancel trigger | `storekit_cancelled`: 1 | Firestore `Macrafeedbackreason.trigger` | Thin sample; treat as directional only |
+| Cancel source | `subscription_required`: 1 | Firestore `Macrafeedbackreason.source` | Thin sample; treat as directional only |
+| Plan context | `year`: 1 | Firestore `Macrafeedbackreason.selectedPlanPeriod` / `selectedPlanId` | Thin sample; treat as directional only |
+
+### Inference
+
+The current lifecycle signal is too thin for a live paywall or offer change, but it is enough to shape a proposed-only intervention lane. The strongest observed pattern is hesitation/trust at the purchase boundary: StoreKit cancels dominate recent purchase-log friction, and the only recent cancel-feedback reason is "I'm not ready yet." The execution steps should therefore prefer one reassurance/proof-oriented lifecycle copy proposal over a pricing or acquisition change, and keep it proposed-only while experiment results and AppsFlyer coverage remain stale or not decision-grade.
+
 ## Operator-Facing Update
 
 Recorded operator-facing update for this snapshot:
 
-> Macra Update - 2026-07-04: July 4 is not fully observable from the current runtime. The Scoreboard/Appsflyer import is still stale through `2026-06-27`, with no July 4 aggregate or raw rows. First-party logs show no July 4 purchase rows yet, and the experiment result snapshot is `2026-06-25` with mostly inferred assignments. Recommendation: refresh/backfill active `variant_a` experiment results and restore fresh AppsFlyer coverage before any onboarding, paywall, pricing, retargeting, allocation, or Apple Search Ads changes.
+> Macra Update - 2026-07-04: July 4 is not fully observable from the current runtime. The Scoreboard/Appsflyer import is still stale through `2026-06-27`, with no July 4 aggregate or raw rows. First-party logs show no July 4 purchase rows yet, while the rolling window shows StoreKit cancel friction and one "I'm not ready yet" cancel reason. Recommendation frame: prepare exactly one reassurance/proof-oriented lifecycle copy proposal from paywall-dismissal and cancel evidence, but do not ship any live funnel change while experiment results and AppsFlyer coverage are stale or not decision-grade.
 
 Posting status: recorded in this artifact during execution. No external operator message was sent in this step.
 
 ## Decision-Log Recommendation
 
 - **Owner:** Nora
-- **Recommendation:** Refresh active `variant_a` experiment results before making funnel decisions.
+- **Recommendation:** Use cancel reasons and paywall dismissal behavior to propose one reassurance/proof-oriented lifecycle copy change at a time; keep it proposed-only until experiment results and AppsFlyer coverage are decision-grade.
 - **Evidence:** `docs/ops/macra-operating-snapshot-2026-07-04.md`; `/admin/experiments`; Firestore `macra-experiment-results/macra_paywall_onboarding` generated at `2026-06-25T10:08:00.102Z`; Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`; Firestore `Macra-purchase-logs`; Firestore `Macrafeedbackreason`.
-- **Expected metric movement:** experiment decision quality.
-- **Guardrail:** no onboarding/paywall/pricing/allocation/retargeting/Apple Search Ads changes while experiment data and AppsFlyer coverage are stale or not decision-grade.
+- **Expected metric movement:** qualified onboarding start to trial start.
+- **Guardrail:** no live funnel change if `/admin/experiments` is still stale or not decision-grade; StoreKit purchase cancels, checkout failures, and negative cancel-feedback volume must not rise.
 - **Decision-log impact:** append the July 4 Nora recommendation to `.agent/macra/decisions.md` during the review/validation step after this snapshot is verified.
