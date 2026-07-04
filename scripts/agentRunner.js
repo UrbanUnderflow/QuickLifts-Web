@@ -132,6 +132,8 @@ const NO_ARTIFACT_LOOP_HISTORY_LIMIT = parseInt(process.env.NO_ARTIFACT_LOOP_HIS
 const SELF_ASSIGN_COOLDOWN_MS = parseInt(process.env.SELF_ASSIGN_COOLDOWN_MS || String(30 * 60 * 1000), 10); // Prevent rapid-fire self-assignment loops
 const NORA_SWEEP_ASSIGN_COOLDOWN_MS = parseInt(process.env.NORA_SWEEP_ASSIGN_COOLDOWN_MS || String(2 * 60 * 60 * 1000), 10); // Keep Nora's sweep from reassigning the same agent too quickly
 const TASK_NAME_DEDUP_WINDOW_MS = parseInt(process.env.TASK_NAME_DEDUP_WINDOW_MS || String(24 * 60 * 60 * 1000), 10); // Suppress near-identical task names in a 24h window
+const OPEN_TASK_STATUSES = ['todo', 'in-progress'];
+const TASK_FETCH_PER_ASSIGNEE_LIMIT = parseInt(process.env.TASK_FETCH_PER_ASSIGNEE_LIMIT || '60', 10);
 const MISSION_STATUS_CACHE_MS = parseInt(process.env.MISSION_STATUS_CACHE_MS || '3000', 10); // Keep pause propagation fast while avoiding excessive Firestore reads
 const GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS || '5600', 10);
 const GROUP_CHAT_USER_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_USER_PROMPT_BUDGET_CHARS || '1800', 10);
@@ -2722,6 +2724,12 @@ function inferColor(steps, currentIndex) {
 let lastSnapshotHour = null;
 let lastNoraGitSyncHour = null;
 
+function currentHourIso(date = new Date()) {
+    const hour = new Date(date);
+    hour.setUTCMinutes(0, 0, 0);
+    return hour.toISOString();
+}
+
 /**
  * Nora-only hourly git sync:
  * 1) pull latest changes
@@ -2820,8 +2828,7 @@ function syncRepoDuringHourlyTelemetry(currentTask, hourIso) {
 function maybeSyncRepoDuringHourlyTelemetry(currentTask) {
     if (AGENT_ID !== 'nora') return;
 
-    const now = new Date();
-    const hourIso = now.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z');
+    const hourIso = currentHourIso();
     if (hourIso === lastNoraGitSyncHour) return;
 
     const synced = syncRepoDuringHourlyTelemetry(currentTask, hourIso);
@@ -2835,8 +2842,7 @@ function maybeSyncRepoDuringHourlyTelemetry(currentTask) {
  * Called on an interval; only fires once per calendar hour.
  */
 async function postHourlySnapshot(currentTask) {
-    const now = new Date();
-    const hourIso = now.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z'); // Round to hour
+    const hourIso = currentHourIso();
     if (hourIso === lastSnapshotHour) return;  // Already posted this hour
     lastSnapshotHour = hourIso;
 
@@ -2962,6 +2968,12 @@ async function selfAssignTask() {
             return status === 'todo' || status === 'in-progress';
         });
         if (hasOpenTask) return null; // Race condition — task appeared
+
+        const now = Date.now();
+        if (lastSelfAssignAttemptMs && (now - lastSelfAssignAttemptMs) < SELF_ASSIGN_COOLDOWN_MS) {
+            return null;
+        }
+        lastSelfAssignAttemptMs = now;
 
         const recentAutoAssign = existingRows
             .filter((row) => ['self-assigned-idle', 'self-assigned-mission', 'nora-task-manager', 'mission-kickoff', 'telemetry-auto-assign'].includes(row?.source))
@@ -3272,11 +3284,8 @@ async function noraTaskManagerSweep() {
 
             const displayName = displayNames[agentId];
             const assigneeVariants = buildAssigneeVariants(displayName);
-            const snap = await db.collection(KANBAN_COLLECTION)
-                .where('assignee', 'in', assigneeVariants)
-                .limit(50)
-                .get();
-            const taskRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const taskDocs = await fetchTaskCandidatesForAssigneeVariants(assigneeVariants, 50);
+            const taskRows = taskDocs.map((d) => ({ id: d.id, ...d.data() }));
             const hasOpenTask = taskRows.some((row) => {
                 const status = row?.status;
                 return status === 'todo' || status === 'in-progress';
@@ -3339,6 +3348,7 @@ async function noraTaskManagerSweep() {
 const RUNNER_START_TIME = Date.now();
 var runnerEnabled = true;
 var runnerEnabledCacheMs = 0;
+var lastSelfAssignAttemptMs = 0;
 const RUNNER_ENABLED_CACHE_MS = 2_000;
 
 function startCommandListener() {
@@ -5134,13 +5144,28 @@ async function suppressLikelyRetryLoopTask(taskId, taskData, matchedHistory) {
 
 /* ─── Kanban Integration ──────────────────────────────── */
 
-async function fetchTaskCandidatesForAgent(limit) {
+async function fetchTaskCandidatesForAssigneeVariants(assigneeVariants, limit, options = {}) {
+    const statuses = Array.isArray(options.statuses) && options.statuses.length > 0
+        ? options.statuses
+        : OPEN_TASK_STATUSES;
+    const perQueryLimit = Math.max(1, Math.min(
+        Number.isFinite(Number(limit)) ? Number(limit) : TASK_FETCH_PER_ASSIGNEE_LIMIT,
+        TASK_FETCH_PER_ASSIGNEE_LIMIT
+    ));
+
     const snapshots = await Promise.all(
-        AGENT_NAME_VARIANTS.map((assignee) => (
-            db.collection(KANBAN_COLLECTION)
-                .where('assignee', '==', assignee)
-                .get()
-        ))
+        assigneeVariants.map((assignee) => {
+            let query = db.collection(KANBAN_COLLECTION)
+                .where('assignee', '==', assignee);
+
+            if (statuses.length === 1) {
+                query = query.where('status', '==', statuses[0]);
+            } else {
+                query = query.where('status', 'in', statuses.slice(0, 10));
+            }
+
+            return query.limit(perQueryLimit).get();
+        })
     );
 
     const dedupedDocs = new Map();
@@ -5155,6 +5180,10 @@ async function fetchTaskCandidatesForAgent(limit) {
     return Array.from(dedupedDocs.values())
         .sort((a, b) => toMillis(a.data()?.createdAt) - toMillis(b.data()?.createdAt))
         .slice(-limit);
+}
+
+async function fetchTaskCandidatesForAgent(limit, options = {}) {
+    return fetchTaskCandidatesForAssigneeVariants(AGENT_NAME_VARIANTS, limit, options);
 }
 
 async function fetchNextTask() {
