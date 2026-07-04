@@ -633,11 +633,18 @@ const createPitchCompetitionRecommendationItems = () =>
 
 const normalizeOpportunityKey = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
+const isPitchCompetitionList = (list: PipeList) =>
+  list.id === PITCH_COMPETITIONS_LIST_ID ||
+  list.templateKey === 'pitch' ||
+  normalizeOpportunityKey(list.name) === PITCH_COMPETITIONS_LIST_ID;
+
 const mergeRecommendedPitchCompetitions = (lists: PipeList[]) => {
   const recommendedItems = createPitchCompetitionRecommendationItems();
+  let mergedIntoPitchList = false;
 
   return lists.map((list) => {
-    if (list.id !== PITCH_COMPETITIONS_LIST_ID) return list;
+    if (mergedIntoPitchList || !isPitchCompetitionList(list)) return list;
+    mergedIntoPitchList = true;
 
     const existingKeys = new Set(
       list.items.flatMap((item) => [
