@@ -170,6 +170,7 @@ type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLo
 type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
 
 const STORAGE_KEY = 'pulse-pipe-lists-v2';
+const PITCH_COMPETITIONS_LIST_ID = 'pitch-competitions';
 const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
 const PIPELISTS_SUBCOLLECTION = 'pipeLists';
 const PIPELISTS_STATE_DOCUMENT_ID = 'state';
@@ -415,15 +416,246 @@ const defaultLogDraft = (templateKey: TemplateKey = 'partner'): ActivityLogDraft
   notes: '',
 });
 
+const stripAiConfidenceNote = (value?: string) =>
+  String(value || '')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*AI confidence:\s*\d+(?:\.\d+)?%?\s*$/i.test(line.trim()))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   const now = new Date().toISOString();
   return {
     ...draft,
+    notes: stripAiConfidenceNote(draft.notes),
     id,
     weeklyLogs: [],
     createdAt: now,
     updatedAt: now,
   };
+};
+
+const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
+  {
+    id: 'philadelphia-regional-startup-world-cup-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Philadelphia Regional Startup World Cup Pitch Competition',
+      organization: 'City of Philadelphia / Startup World Cup',
+      owner: 'Tre',
+      priority: 'high',
+      amount: '$20k first / $10k second / $5k third',
+      dueDate: '2026-07-15',
+      expectedCloseDate: '2026-08-14',
+      pilotStart: '2026-09-18',
+      sourceUrl: 'https://www.phila.gov/2026-06-11-tech-startups-can-apply-to-compete-at-the-2026-philadelphia-regional-startup-world-cup-pitch-competition/',
+      segment: 'Tech startup / Startup World Cup',
+      decisionMaker: 'Selection committee',
+      nextStep: 'Confirm Sept. 18 onsite availability in Philadelphia and submit application by 11:59 p.m.',
+      expansionPath: 'First place advances toward Startup World Cup for a chance at the $1M investment prize.',
+      notes: [
+        'Analysis: Strong visibility play if travel works; the deadline is urgent.',
+        'Fit: Tech startup pitch with clear regional prizes and a global Startup World Cup path.',
+        'Prep: Emphasize Fit With Pulse as health/performance technology with pilot traction, clear buyer, and a concise go-to-market story.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'sent-ventures-pitch-competition-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'SENT Ventures Pitch Competition',
+      organization: 'SENT Ventures',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: '$10k cash prize + $50k+ in-kind prizes',
+      dueDate: '2026-07-24',
+      expectedCloseDate: '2026-08-15',
+      sourceUrl: 'https://www.sentventures.com/pitch-2026',
+      segment: 'Angel / pre-seed / seed',
+      decisionMaker: 'SENT Summit investor judges',
+      nextStep: 'Verify values alignment and submit before the July 24 deadline.',
+      notes: [
+        'Analysis: Good investor-room opportunity if the values-aligned community is a real fit.',
+        'Fit: Seeking angel, pre-seed, and seed teams to pitch at SENT Summit in Denver.',
+        'Prep: Keep the application grounded in mission, founder conviction, and why mental-performance health technology can create durable impact.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'alibaba-cocreate-pitch-los-angeles-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Alibaba CoCreate Pitch - Los Angeles',
+      organization: 'Alibaba CoCreate',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: '$1M+ prize pool',
+      dueDate: '2026-07-25',
+      expectedCloseDate: '2026-08-10',
+      pilotStart: '2026-09-09',
+      pilotEnd: '2026-09-10',
+      sourceUrl: 'https://www.alibabacocreate.com/pitch',
+      segment: 'Global tech / product growth',
+      decisionMaker: 'CoCreate judges',
+      nextStep: 'Confirm the Los Angeles track is the right fit and submit the product story before July 25.',
+      notes: [
+        'Analysis: Broader tech exposure rather than health-specific; worth adding because the LA deadline is still open and the prize pool is meaningful.',
+        'Fit: Best positioned around AI-enabled product, scalable operations, and how Fit With Pulse can grow beyond one sports vertical.',
+        'Prep: Lead with product clarity, customer workflow, market size, and why now.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'agetech-august-open-mic-pitch-challenge-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'AgeTech August Open Mic Pitch Challenge',
+      organization: 'AgeTech Collaborative from AARP',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: 'Accelerator mentorship / AgeTech exposure',
+      dueDate: '2026-07-31',
+      expectedCloseDate: '2026-08-18',
+      pilotStart: '2026-08-27',
+      sourceUrl: 'https://agetechcollaborative.org/custom_events/august-open-mic-pitch-challenge/',
+      segment: 'AgeTech / healthspan / wellness',
+      decisionMaker: 'AgeTech selection committee',
+      nextStep: 'Frame Fit With Pulse around healthspan, recovery habits, and helping people stay in the game as they age.',
+      notes: [
+        'Analysis: Not a pure athlete pipeline, but it can fit if positioned around healthspan, wellness, independence, and long-term performance.',
+        'Fit: MVP-stage solutions in AgeTech, healthspan, or wellness; online pitch is 3 minutes plus 5 minutes of Q&A.',
+        'Prep: Avoid youth-sports language here; focus on recovery, daily behavior, confidence, and durable participation for the 50+ audience.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'pitch-and-pour-medtech-conference-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Pitch & Pour: Start-Up Pitch Competition',
+      organization: 'The MedTech Conference / MTEC',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: '$7.5k cash prize + 2027 conference pass and presentation slot',
+      dueDate: '2026-08-06',
+      expectedCloseDate: '2026-08-24',
+      pilotStart: '2026-10-18',
+      sourceUrl: 'https://themedtechconference.com/start-up-pitch-competition/',
+      segment: 'Medtech / military health',
+      decisionMaker: 'Pitch & Pour judges',
+      nextStep: 'Decide the military-health angle before applying; build a 5-minute pitch around readiness, recovery, and performance.',
+      notes: [
+        'Analysis: Strong healthcare conference exposure, but eligibility depends on having a credible military-focused application.',
+        'Fit: Companies must have raised less than $10M, offer a military-focused medtech, diagnostics, digital health, or imaging application, and pitch in person in Boston on Oct. 18 if selected.',
+        'Prep: Use a practical readiness/wellness use case and be clear about current product status, data, market, IP, milestones, and path to market.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'venture-atlanta-2026-pitch',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Venture Atlanta 2026 Pitch',
+      organization: 'Venture Atlanta',
+      owner: 'Tre',
+      priority: 'high',
+      amount: 'Investor exposure + two complimentary tickets if selected',
+      dueDate: '2026-08-07',
+      expectedCloseDate: '2026-08-21',
+      pilotStart: '2026-08-27',
+      pilotEnd: '2026-10-15',
+      sourceUrl: 'https://www.ventureatlanta.org/pitch/',
+      segment: 'Southeast digital health / investor pitch',
+      decisionMaker: 'Venture Atlanta committee',
+      nextStep: 'Apply as digital health/software with Southeast fit, pilot traction, and an 18-month raise plan.',
+      notes: [
+        'Analysis: High-priority investor exposure if Fit With Pulse qualifies as Southeast-based and is raising or planning to raise within 18 months.',
+        'Fit: Venture Atlanta accepts digital health and tech-enabled Southeast companies; it does not accept bio, pharma, life sciences, or medtech.',
+        'Prep: Emphasize buyer urgency, pilots, retention/engagement signals, revenue path, and what capital unlocks.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'sxsw-edu-launch-startup-competition-2027',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'SXSW EDU Launch Startup Competition',
+      organization: 'SXSW EDU',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: 'Startup exposure, credentials, coaching, and awards',
+      dueDate: '2026-09-11',
+      expectedCloseDate: '2026-11-01',
+      pilotStart: '2027-03-13',
+      pilotEnd: '2027-03-16',
+      sourceUrl: 'https://sxswedu.com/competitions/',
+      segment: 'Education / athlete development',
+      decisionMaker: 'SXSW EDU Launch judges',
+      nextStep: 'Choose whether the education positioning is strong enough before the Sept. 11 early deadline; final deadline is Nov. 1.',
+      notes: [
+        'Analysis: Good only if the application leads with schools, teams, coaching education, or athlete-development learning outcomes.',
+        'Fit: Early-stage education startups need a management team, public website, sustainable business model, and traction/adoption metrics; companies over $8M raised are ineligible.',
+        'Prep: Frame Fit With Pulse as a learning and behavior-change platform for athlete mental readiness, not just a health app.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'sxsw-pitch-2027',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'SXSW Pitch 2027',
+      organization: 'SXSW',
+      owner: 'Tre',
+      priority: 'high',
+      amount: 'Global startup exposure; investor, press, and early-adopter audience',
+      dueDate: '2026-09-13',
+      expectedCloseDate: '2026-11-13',
+      pilotStart: '2027-03-15',
+      pilotEnd: '2027-03-21',
+      sourceUrl: 'https://sxsw.com/news/2026/2027-pitch-applications/',
+      segment: 'Healthcare / sports digital platform',
+      decisionMaker: 'SXSW Pitch judges',
+      nextStep: 'Confirm launch-date eligibility and pick the strongest category before the Sept. 13 early-bird deadline.',
+      notes: [
+        'Analysis: High-upside awareness and investor opportunity if eligibility checks out.',
+        'Fit: Relevant categories include Life Sciences, Healthcare & Assistive Tech and Entertainment, Media, Sports & Digital Platforms.',
+        'Eligibility to verify: product/service launched before Jan. 1, 2024, company has not raised over $10M, and founders retain ownership.',
+        'Prep: Position the story around why mental-performance infrastructure for athletes and health teams belongs at a cross-industry innovation event.',
+      ].join('\n\n'),
+    },
+  },
+];
+
+const createPitchCompetitionRecommendationItems = () =>
+  pitchCompetitionRecommendations.map(({ id, draft }) => createItem(draft, id));
+
+const normalizeOpportunityKey = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+const mergeRecommendedPitchCompetitions = (lists: PipeList[]) => {
+  const recommendedItems = createPitchCompetitionRecommendationItems();
+
+  return lists.map((list) => {
+    if (list.id !== PITCH_COMPETITIONS_LIST_ID) return list;
+
+    const existingKeys = new Set(
+      list.items.flatMap((item) => [
+        item.id,
+        normalizeOpportunityKey(item.title),
+        item.sourceUrl ? normalizeOpportunityKey(item.sourceUrl) : '',
+      ]),
+    );
+    const missingItems = recommendedItems.filter(
+      (item) =>
+        !existingKeys.has(item.id) &&
+        !existingKeys.has(normalizeOpportunityKey(item.title)) &&
+        (!item.sourceUrl || !existingKeys.has(normalizeOpportunityKey(item.sourceUrl))),
+    );
+
+    if (missingItems.length === 0) return list;
+    return { ...list, items: [...missingItems, ...list.items] };
+  });
 };
 
 const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
@@ -552,9 +784,10 @@ const initialLists: PipeList[] = [
   },
   {
     ...createList('pitch', 'Pitch Competitions', 2),
-    id: 'pitch-competitions',
+    id: PITCH_COMPETITIONS_LIST_ID,
     createdAt: '2026-07-03T00:00:00.000Z',
     items: [
+      ...createPitchCompetitionRecommendationItems(),
       createItem(
         {
           ...defaultDraft('prepping'),
@@ -724,7 +957,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     amount: item.amount || '',
     dueDate: item.dueDate || '',
     nextStep: item.nextStep || '',
-    notes: item.notes || '',
+    notes: stripAiConfidenceNote(item.notes),
     sourceUrl: item.sourceUrl || '',
     segment: item.segment || '',
     decisionMaker: item.decisionMaker || '',
@@ -1235,6 +1468,8 @@ const PipelinePage: NextPage = () => {
             }
           }
         }
+
+        nextLists = mergeRecommendedPitchCompetitions(nextLists);
 
         setLists(nextLists);
         setActiveListId(nextLists[0]?.id || initialLists[0].id);
@@ -1806,8 +2041,7 @@ const PipelinePage: NextPage = () => {
           organization: extracted.organization?.trim() || '',
           sourceUrl: cleanUrl,
           notes: [
-            extracted.notes,
-            extracted.confidence !== undefined ? `AI confidence: ${Math.round(extracted.confidence)}%` : '',
+            stripAiConfidenceNote(extracted.notes),
             extracted.missingFields && extracted.missingFields.length > 0
               ? `Missing fields to review: ${extracted.missingFields.join(', ')}`
               : '',
@@ -1908,7 +2142,8 @@ const PipelinePage: NextPage = () => {
   const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify) return;
-    if (!draft.title.trim() && !draft.organization.trim()) return;
+    const draftToSave = { ...draft, notes: stripAiConfidenceNote(draft.notes) };
+    if (!draftToSave.title.trim() && !draftToSave.organization.trim()) return;
 
     setLists((currentLists) =>
       currentLists.map((list) => {
@@ -1921,9 +2156,9 @@ const PipelinePage: NextPage = () => {
               item.id === editingItemId
                 ? {
                     ...item,
-                    ...draft,
-                    title: draft.title.trim() || item.title,
-                    organization: draft.organization.trim(),
+                    ...draftToSave,
+                    title: draftToSave.title.trim() || item.title,
+                    organization: draftToSave.organization.trim(),
                     updatedAt: new Date().toISOString(),
                   }
                 : item,
@@ -1932,9 +2167,9 @@ const PipelinePage: NextPage = () => {
         }
 
         const newItemBase = createItem({
-          ...draft,
-          title: draft.title.trim() || 'Untitled opportunity',
-          organization: draft.organization.trim(),
+          ...draftToSave,
+          title: draftToSave.title.trim() || 'Untitled opportunity',
+          organization: draftToSave.organization.trim(),
         });
         const newItem: PipelineItem = {
           ...newItemBase,
@@ -1967,7 +2202,7 @@ const PipelinePage: NextPage = () => {
     void deletedAt;
     void deletedByLogId;
     void restorableUntil;
-    setDraft(editableItem);
+    setDraft({ ...editableItem, notes: stripAiConfidenceNote(editableItem.notes) });
     setEditingItemId(item.id);
     setIsEditorOpen(true);
     setSelectedDetailItemId(item.id);
@@ -2278,7 +2513,7 @@ const PipelinePage: NextPage = () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setShareMessage({ type: 'success', text: 'Share link copied.' });
-    } catch (error) {
+    } catch (_error) {
       setShareMessage({ type: 'info', text: shareUrl });
     }
   };
@@ -2441,12 +2676,46 @@ const PipelinePage: NextPage = () => {
   const selectedDetailIsEditing = Boolean(selectedDetailItem && isEditorOpen && editingItemId === selectedDetailItem.id);
   const shouldBlockEditShare = isSharedView && shareDoc?.access === 'edit' && !canEditShared;
 
-  const renderDetailField = (label: string, value: React.ReactNode, wide = false) => {
-    const isEmpty = value === null || value === undefined || value === '';
+  const isEmptyDetailValue = (value: React.ReactNode) =>
+    value === null || value === undefined || value === false || (typeof value === 'string' && value.trim() === '');
+
+  const renderDetailField = (label: string, value: React.ReactNode, wide = false, showWhenEmpty = false) => {
+    const isEmpty = isEmptyDetailValue(value);
+    if (isEmpty && !showWhenEmpty) return null;
+
     return (
-      <div className={`rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-2 ${wide ? 'md:col-span-2' : ''}`}>
+      <div key={label} className={`rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-2 ${wide ? 'md:col-span-2' : ''}`}>
         <p className="text-xs font-semibold uppercase text-stone-400">{label}</p>
         <div className="mt-1 break-words text-sm leading-6 text-stone-700">{isEmpty ? 'Not set' : value}</div>
+      </div>
+    );
+  };
+
+  const renderDetailGrid = (
+    className: string,
+    fields: { label: string; value: React.ReactNode; wide?: boolean; showWhenEmpty?: boolean }[],
+  ) => {
+    const renderedFields = fields
+      .map((field) => renderDetailField(field.label, field.value, field.wide, field.showWhenEmpty))
+      .filter((field): field is React.ReactElement => Boolean(field));
+
+    if (renderedFields.length === 0) return null;
+
+    return <div className={className}>{renderedFields}</div>;
+  };
+
+  const renderDetailSection = (
+    title: string,
+    fields: { label: string; value: React.ReactNode; wide?: boolean; showWhenEmpty?: boolean }[],
+    gridClassName = 'grid gap-3 md:grid-cols-2',
+  ) => {
+    const grid = renderDetailGrid(gridClassName, fields);
+    if (!grid) return null;
+
+    return (
+      <div>
+        <h4 className="mb-3 text-sm font-semibold text-stone-950">{title}</h4>
+        {grid}
       </div>
     );
   };
@@ -2455,7 +2724,7 @@ const PipelinePage: NextPage = () => {
     <form onSubmit={handleSaveItem} className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {[
-          ['title', 'Item', 'Name'],
+          ['title', 'Opportunity Name', 'Opportunity name'],
           ['organization', 'Organization', 'Company, school, fund'],
           ['owner', 'Owner', 'Owner'],
           ['segment', 'Segment', 'Category, fit, or type'],
@@ -3245,6 +3514,9 @@ const PipelinePage: NextPage = () => {
                     <div className="divide-y divide-stone-100">
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
+                        const hasItemValue = Boolean(item.acv || item.amount);
+                        const nextStepText = item.nextStep || item.notes || item.expansionPath;
+
                         return (
                           <article
                             key={item.id}
@@ -3278,9 +3550,9 @@ const PipelinePage: NextPage = () => {
                               </div>
                             </div>
 
-                            <div className="flex min-w-0 items-center gap-2 text-sm text-stone-600">
+                            <div className={`min-w-0 items-center gap-2 text-sm text-stone-600 ${item.organization ? 'flex' : 'hidden lg:flex'}`}>
                               <Building2 className="h-4 w-4 shrink-0 text-stone-400" />
-                              <span className="truncate">{item.organization || 'Unassigned'}</span>
+                              <span className="truncate">{item.organization}</span>
                             </div>
 
                             <div>
@@ -3289,21 +3561,20 @@ const PipelinePage: NextPage = () => {
                               </span>
                             </div>
 
-                            <p className="text-sm font-semibold text-stone-800">{formatMoney(itemValue(item))}</p>
+                            <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
+                              {hasItemValue ? formatMoney(itemValue(item)) : ''}
+                            </p>
 
-                            <div className="min-w-0">
-                              {(() => {
-                                const nextStepText = item.nextStep || item.notes || item.expansionPath || 'No next step';
-                                return (
-                                  <span
-                                    onMouseEnter={(event) => showNextStepTooltip(event, nextStepText)}
-                                    onMouseLeave={() => setNextStepTooltip(null)}
-                                    className="block max-w-full truncate text-sm leading-5 text-stone-600"
-                                  >
-                                    {nextStepText}
-                                  </span>
-                                );
-                              })()}
+                            <div className={`min-w-0 ${nextStepText ? '' : 'hidden lg:block'}`}>
+                              {nextStepText && (
+                                <span
+                                  onMouseEnter={(event) => showNextStepTooltip(event, nextStepText)}
+                                  onMouseLeave={() => setNextStepTooltip(null)}
+                                  className="block max-w-full truncate text-sm leading-5 text-stone-600"
+                                >
+                                  {nextStepText}
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center justify-end gap-2">
@@ -4240,20 +4511,23 @@ const PipelinePage: NextPage = () => {
               </div>
             ) : (
               <div className="space-y-5 px-5 py-5">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {renderDetailField('Value', formatMoney(itemValue(selectedDetailItem)))}
-                  {renderDetailField(
-                    'Next Date',
-                    selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd || 'Not set',
-                  )}
-                </div>
+                {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
+                  {
+                    label: 'Value',
+                    value: selectedDetailItem.acv || selectedDetailItem.amount ? formatMoney(itemValue(selectedDetailItem)) : '',
+                  },
+                  {
+                    label: 'Next Date',
+                    value: selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd,
+                  },
+                ])}
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  {renderDetailField('Next Step', selectedDetailItem.nextStep, true)}
-                  {renderDetailField('Notes', selectedDetailItem.notes, true)}
-                  {renderDetailField(
-                    'Source URL',
-                    selectedDetailItem.sourceUrl ? (
+                {renderDetailGrid('grid gap-3 md:grid-cols-2', [
+                  { label: 'Next Step', value: selectedDetailItem.nextStep, wide: true },
+                  { label: 'Notes', value: selectedDetailItem.notes, wide: true },
+                  {
+                    label: 'Source URL',
+                    value: selectedDetailItem.sourceUrl ? (
                       <a
                         href={selectedDetailItem.sourceUrl}
                         target="_blank"
@@ -4265,39 +4539,37 @@ const PipelinePage: NextPage = () => {
                     ) : (
                       ''
                     ),
-                    true,
-                  )}
-                </div>
+                    wide: true,
+                  },
+                ])}
 
-                <div>
-                  <h4 className="mb-3 text-sm font-semibold text-stone-950">Pipeline Details</h4>
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {renderDetailField('Owner', selectedDetailItem.owner || 'Unassigned')}
-                    {renderDetailField('Organization', selectedDetailItem.organization || 'Unassigned')}
-                    {renderDetailField('Segment', selectedDetailItem.segment)}
-                    {renderDetailField('Decision Maker', selectedDetailItem.decisionMaker)}
-                    {renderDetailField('ACV', selectedDetailItem.acv)}
-                    {renderDetailField('Amount / Prize', selectedDetailItem.amount)}
-                    {renderDetailField('Expected Close', selectedDetailItem.expectedCloseDate)}
-                    {renderDetailField('Due Date', selectedDetailItem.dueDate)}
-                    {renderDetailField('Contract Term', selectedDetailItem.contractTerm)}
-                    {renderDetailField('Margin Notes', selectedDetailItem.grossMargin)}
-                    {renderDetailField('Partner Cost', selectedDetailItem.partnerCost)}
-                    {renderDetailField('Hard Cost', selectedDetailItem.hardwareCost)}
-                  </div>
-                </div>
+                {renderDetailSection(
+                  'Pipeline Details',
+                  [
+                    { label: 'Owner', value: selectedDetailItem.owner },
+                    { label: 'Organization', value: selectedDetailItem.organization },
+                    { label: 'Segment', value: selectedDetailItem.segment },
+                    { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
+                    { label: 'ACV', value: selectedDetailItem.acv },
+                    { label: 'Amount / Prize', value: selectedDetailItem.amount },
+                    { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
+                    { label: 'Due Date', value: selectedDetailItem.dueDate },
+                    { label: 'Contract Term', value: selectedDetailItem.contractTerm },
+                    { label: 'Margin Notes', value: selectedDetailItem.grossMargin },
+                    { label: 'Partner Cost', value: selectedDetailItem.partnerCost },
+                    { label: 'Hard Cost', value: selectedDetailItem.hardwareCost },
+                  ],
+                  'grid gap-3 md:grid-cols-2 lg:grid-cols-3',
+                )}
 
-                <div>
-                  <h4 className="mb-3 text-sm font-semibold text-stone-950">Scope & Expansion</h4>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {renderDetailField('Scope', selectedDetailItem.pilotScope, true)}
-                    {renderDetailField('Expansion Path', selectedDetailItem.expansionPath, true)}
-                    {renderDetailField('Count', selectedDetailItem.athleteCount)}
-                    {renderDetailField('Start Date', selectedDetailItem.pilotStart)}
-                    {renderDetailField('End Date', selectedDetailItem.pilotEnd)}
-                    {renderDetailField('Loss Reason', selectedDetailItem.lossReason)}
-                  </div>
-                </div>
+                {renderDetailSection('Scope & Expansion', [
+                  { label: 'Scope', value: selectedDetailItem.pilotScope, wide: true },
+                  { label: 'Expansion Path', value: selectedDetailItem.expansionPath, wide: true },
+                  { label: 'Count', value: selectedDetailItem.athleteCount },
+                  { label: 'Start Date', value: selectedDetailItem.pilotStart },
+                  { label: 'End Date', value: selectedDetailItem.pilotEnd },
+                  { label: 'Loss Reason', value: selectedDetailItem.lossReason },
+                ])}
 
                 <div>
                   <div className="mb-3 flex items-center justify-between gap-3">
