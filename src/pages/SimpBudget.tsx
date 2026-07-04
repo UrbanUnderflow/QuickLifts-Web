@@ -188,10 +188,10 @@ const SPACE_ICON_OPTIONS = [
 ];
 
 const fieldClassName =
-  'w-full rounded-lg border border-zinc-700 bg-[#111417] px-3 py-2 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/10';
+  'w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white focus:ring-2 focus:ring-stone-200/50';
 
 const pillButtonClassName =
-  'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50';
 
 const createLocalId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -649,10 +649,10 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 
   const className =
     message.type === 'success'
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+      ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
       : message.type === 'error'
-        ? 'border-red-500/30 bg-red-500/10 text-red-100'
-        : 'border-sky-500/30 bg-sky-500/10 text-sky-100';
+        ? 'border-rose-100 bg-rose-50 text-rose-700'
+        : 'border-sky-100 bg-sky-50 text-sky-700';
 
   return <div className={`rounded-lg border px-4 py-3 text-sm ${className}`}>{message.text}</div>;
 };
@@ -1435,17 +1435,17 @@ const SimpBudgetPage: React.FC = () => {
   };
 
   const renderSpaceCreatePanel = (isFirstSpace: boolean) => (
-    <section className="rounded-lg border border-zinc-800 bg-[#171a1f] p-5 shadow-2xl shadow-black/20">
+    <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">
             <Sparkles className="h-3.5 w-3.5" />
             {isFirstSpace ? 'Start here' : 'New space'}
           </div>
-          <h2 className="text-xl font-semibold text-white">
+          <h2 className="text-xl font-semibold text-stone-950">
             {isFirstSpace ? 'Create your first Budget Space' : 'Add another Budget Space'}
           </h2>
-          <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+          <p className="mt-1 max-w-2xl text-sm text-stone-500">
             Budget Spaces are separate projects like Business, Personal, a trip, a launch, or a household budget.
           </p>
         </div>
@@ -1455,7 +1455,7 @@ const SimpBudgetPage: React.FC = () => {
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                 Space name
               </span>
               <input
@@ -1467,11 +1467,11 @@ const SimpBudgetPage: React.FC = () => {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                 Monthly income
               </span>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-stone-500">$</span>
                 <input
                   value={starterIncome}
                   onChange={(event) => setStarterIncome(sanitizeMoneyInput(event.target.value))}
@@ -1484,7 +1484,7 @@ const SimpBudgetPage: React.FC = () => {
           </div>
 
           <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
               Description
             </span>
             <input
@@ -1497,7 +1497,7 @@ const SimpBudgetPage: React.FC = () => {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
-              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                 Icon
               </span>
               <select
@@ -1514,7 +1514,7 @@ const SimpBudgetPage: React.FC = () => {
             </label>
 
             <div>
-              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                 Color
               </span>
               <div className="flex flex-wrap gap-2">
@@ -1523,8 +1523,8 @@ const SimpBudgetPage: React.FC = () => {
                     key={option.value}
                     type="button"
                     onClick={() => setNewSpaceColor(option.value)}
-                    className={`h-10 w-10 rounded-lg border transition ${
-                      newSpaceColor === option.value ? 'border-white' : 'border-zinc-700'
+                    className={`h-10 w-10 rounded-lg border-2 transition ${
+                      newSpaceColor === option.value ? 'border-stone-900' : 'border-white'
                     }`}
                     style={{ backgroundColor: option.value }}
                     aria-label={option.name}
@@ -1535,13 +1535,13 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-800 bg-[#111417] p-4">
+        <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-white">Recurring expenses</div>
+            <div className="text-sm font-semibold text-stone-950">Recurring expenses</div>
             <button
               type="button"
               onClick={() => setStarterRecurring((current) => [...current, createRecurringExpense()])}
-              className="rounded-lg border border-zinc-700 p-2 text-zinc-300 transition hover:border-zinc-600 hover:text-white"
+              className="rounded-lg border border-stone-200 bg-white p-2 text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
               aria-label="Add starter recurring expense"
             >
               <Plus className="h-4 w-4" />
@@ -1587,7 +1587,7 @@ const SimpBudgetPage: React.FC = () => {
                         : current.filter((candidate) => candidate.id !== expense.id)
                     )
                   }
-                  className="rounded-lg border border-zinc-700 p-2 text-zinc-400 transition hover:border-red-500/30 hover:text-red-200"
+                  className="rounded-lg border border-stone-200 bg-white p-2 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
                   aria-label="Remove starter recurring expense"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -1600,7 +1600,7 @@ const SimpBudgetPage: React.FC = () => {
             type="button"
             onClick={createBudgetSpace}
             disabled={saving}
-            className={`${pillButtonClassName} mt-4 w-full bg-white text-black hover:bg-zinc-200`}
+            className={`${pillButtonClassName} mt-4 w-full bg-stone-900 text-white hover:bg-stone-800`}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Create Budget Space
@@ -1611,7 +1611,7 @@ const SimpBudgetPage: React.FC = () => {
   );
 
   const renderLanding = () => (
-    <div className="min-h-screen bg-[#08090b] text-white">
+    <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
       <Head>
         <title>SimpBudget | Budget Spaces</title>
       </Head>
@@ -1619,45 +1619,45 @@ const SimpBudgetPage: React.FC = () => {
       <main className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col px-6 py-7 lg:px-10 xl:px-14">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-black">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-stone-900 text-white">
               <CircleDollarSign className="h-5 w-5" />
             </div>
             <div>
               <div className="text-lg font-semibold">SimpBudget</div>
-              <div className="text-xs text-zinc-500">Budget Spaces for real monthly spend</div>
+              <div className="text-xs text-stone-500">Budget Spaces for real monthly spend</div>
             </div>
           </div>
-          <div className="hidden items-center gap-2 text-xs text-zinc-500 sm:flex">
+          <div className="hidden items-center gap-2 text-xs text-stone-500 sm:flex">
             <ShieldCheck className="h-4 w-4 text-emerald-300" />
             Firebase auth + Firestore
           </div>
         </header>
 
         <section className="grid flex-1 items-stretch gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)] xl:gap-12">
-          <div className="flex min-h-[calc(100vh-7rem)] flex-col justify-between rounded-lg border border-zinc-900 bg-[#0d0f12] p-6 lg:p-8">
+          <div className="flex min-h-[calc(100vh-7rem)] flex-col justify-between rounded-lg border border-stone-200 bg-white p-6 lg:p-8">
             <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
-              <Sparkles className="h-3.5 w-3.5" />
-              Web app
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500 shadow-sm">
+                <Sparkles className="h-3.5 w-3.5" />
+                Web app
               </div>
-              <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-white md:text-7xl xl:text-8xl">
+              <h1 className="max-w-4xl text-5xl font-semibold tracking-tight text-stone-950 md:text-7xl xl:text-8xl">
                 One budget, every space.
               </h1>
-              <p className="mt-5 max-w-3xl text-lg leading-8 text-zinc-300 xl:text-xl xl:leading-9">
+              <p className="mt-5 max-w-3xl text-lg leading-8 text-stone-600 xl:text-xl xl:leading-9">
                 Create Budget Spaces for business, personal, or any project, then view each one alone or rolled up into one monthly picture.
               </p>
             </div>
 
             <div className="mt-10 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-lg border border-zinc-800 bg-[#14171c] p-5">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="rounded-lg border border-stone-200 bg-white p-5">
+                <div className="flex items-center justify-between border-b border-stone-200 pb-4">
                   <div>
-                    <div className="text-sm font-semibold text-white">July Overview</div>
-                    <div className="mt-1 text-xs text-zinc-500">All Budget Spaces</div>
+                    <div className="text-sm font-semibold text-stone-950">July Overview</div>
+                    <div className="mt-1 text-xs text-stone-500">All Budget Spaces</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-semibold text-emerald-200">$4,280</div>
-                    <div className="text-xs text-zinc-500">remaining</div>
+                    <div className="text-2xl font-semibold text-emerald-700">$4,280</div>
+                    <div className="text-xs text-stone-500">remaining</div>
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -1666,9 +1666,9 @@ const SimpBudgetPage: React.FC = () => {
                     { label: 'Misc', value: '$680' },
                     { label: 'Debt', value: '$320' },
                   ].map((item) => (
-                    <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#0f1216] p-4">
-                      <div className="text-xs text-zinc-500">{item.label}</div>
-                      <div className="mt-2 text-lg font-semibold text-white">{item.value}</div>
+                    <div key={item.label} className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                      <div className="text-xs text-stone-500">{item.label}</div>
+                      <div className="mt-2 text-lg font-semibold text-stone-950">{item.value}</div>
                     </div>
                   ))}
                 </div>
@@ -1680,19 +1680,19 @@ const SimpBudgetPage: React.FC = () => {
                   { label: 'Personal', value: 'Household cashflow' },
                   { label: 'AI Import', value: 'Screenshots to rows' },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#14171c] p-4">
-                    <div className="text-sm font-semibold text-white">{item.label}</div>
-                    <div className="mt-1 text-sm text-zinc-500">{item.value}</div>
+                  <div key={item.label} className="rounded-lg border border-stone-200 bg-white p-4">
+                    <div className="text-sm font-semibold text-stone-950">{item.label}</div>
+                    <div className="mt-1 text-sm text-stone-500">{item.value}</div>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          <aside className="flex min-h-[calc(100vh-7rem)] flex-col justify-center rounded-lg border border-zinc-800 bg-[#171a1f] p-6 shadow-2xl shadow-black/30 lg:p-8">
+          <aside className="flex min-h-[calc(100vh-7rem)] flex-col justify-center rounded-lg border border-stone-200 bg-white p-6 shadow-sm lg:p-8">
             <div className="mb-7">
-              <h2 className="text-3xl font-semibold tracking-tight text-white">Sign in</h2>
-              <p className="mt-3 text-base leading-7 text-zinc-400">
+              <h2 className="text-3xl font-semibold tracking-tight text-stone-950">Sign in</h2>
+              <p className="mt-3 text-base leading-7 text-stone-500">
                 Use the same Tremaine Google account to import the existing admin budget data.
               </p>
             </div>
@@ -1701,7 +1701,7 @@ const SimpBudgetPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                className={`${pillButtonClassName} min-h-12 w-full bg-white text-base text-black hover:bg-zinc-200`}
+                className={`${pillButtonClassName} min-h-12 w-full bg-stone-900 text-base text-white hover:bg-stone-800`}
               >
                 <ShieldCheck className="h-4 w-4" />
                 Continue with Google
@@ -1709,13 +1709,13 @@ const SimpBudgetPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAppleSignIn}
-                className={`${pillButtonClassName} min-h-12 w-full border border-zinc-700 bg-[#111417] text-base text-white hover:border-zinc-600`}
+                className={`${pillButtonClassName} min-h-12 w-full border border-stone-200 bg-white text-base text-stone-700 hover:border-stone-300 hover:text-stone-950`}
               >
                 <ShieldCheck className="h-4 w-4" />
                 Continue with Apple
               </button>
 
-              <div className="h-px bg-zinc-800" />
+              <div className="h-px bg-stone-100" />
 
               <div className="flex gap-2">
                 <input
@@ -1729,7 +1729,7 @@ const SimpBudgetPage: React.FC = () => {
                   type="button"
                   onClick={sendMagicLink}
                   disabled={sendingMagicLink}
-                  className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-white hover:border-zinc-600`}
+                  className={`${pillButtonClassName} border border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:text-stone-950`}
                   aria-label="Send magic link"
                 >
                   {sendingMagicLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
@@ -1748,7 +1748,7 @@ const SimpBudgetPage: React.FC = () => {
 
   if (!authReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#08090b] text-zinc-400">
+      <div className="flex min-h-screen items-center justify-center bg-[#FAFAF7] text-stone-500">
         <Loader2 className="mr-3 h-5 w-5 animate-spin" />
         Loading SimpBudget...
       </div>
@@ -1758,7 +1758,7 @@ const SimpBudgetPage: React.FC = () => {
   if (!user) return renderLanding();
 
   return (
-    <div className="min-h-screen bg-[#08090b] text-white">
+    <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
       <Head>
         <title>SimpBudget | Budget Spaces</title>
       </Head>
@@ -1767,12 +1767,12 @@ const SimpBudgetPage: React.FC = () => {
         <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-black">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-stone-900 text-white">
                 <CircleDollarSign className="h-5 w-5" />
               </div>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight">SimpBudget</h1>
-                <p className="text-sm text-zinc-500">{user.email || 'Signed in'}</p>
+                <p className="text-sm text-stone-500">{user.email || 'Signed in'}</p>
               </div>
             </div>
           </div>
@@ -1786,7 +1786,7 @@ const SimpBudgetPage: React.FC = () => {
                 setSelectedYear((currentYear) => (selectedMonth === 1 ? currentYear - 1 : currentYear));
                 setSelectedMonth(previousMonth);
               }}
-              className={`${pillButtonClassName} border border-zinc-800 bg-[#171a1f] text-zinc-200 hover:border-zinc-700`}
+              className={`${pillButtonClassName} border border-stone-200 bg-white text-stone-600 hover:border-stone-200`}
               aria-label="Previous month"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -1831,7 +1831,7 @@ const SimpBudgetPage: React.FC = () => {
                 setSelectedYear((currentYear) => (selectedMonth === 12 ? currentYear + 1 : currentYear));
                 setSelectedMonth(nextMonth);
               }}
-              className={`${pillButtonClassName} border border-zinc-800 bg-[#171a1f] text-zinc-200 hover:border-zinc-700`}
+              className={`${pillButtonClassName} border border-stone-200 bg-white text-stone-600 hover:border-stone-200`}
               aria-label="Next month"
             >
               <ChevronRight className="h-4 w-4" />
@@ -1840,7 +1840,7 @@ const SimpBudgetPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSignOut}
-              className={`${pillButtonClassName} border border-zinc-800 bg-[#171a1f] text-zinc-200 hover:border-zinc-700`}
+              className={`${pillButtonClassName} border border-stone-200 bg-white text-stone-600 hover:border-stone-200`}
             >
               <LogOut className="h-4 w-4" />
               Sign out
@@ -1848,7 +1848,7 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
-        <div className="mb-5 flex flex-col gap-3 rounded-lg border border-zinc-800 bg-[#171a1f] p-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -1858,8 +1858,8 @@ const SimpBudgetPage: React.FC = () => {
               }}
               className={`${pillButtonClassName} ${
                 selectedView === 'all'
-                  ? 'bg-white text-black'
-                  : 'border border-zinc-800 bg-[#111417] text-zinc-300 hover:border-zinc-700'
+                  ? 'bg-stone-900 text-white'
+                  : 'border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-200'
               }`}
             >
               <Grid2X2 className="h-4 w-4" />
@@ -1879,8 +1879,8 @@ const SimpBudgetPage: React.FC = () => {
                   }}
                   className={`${pillButtonClassName} ${
                     isSelected
-                      ? 'bg-white text-black'
-                      : 'border border-zinc-800 bg-[#111417] text-zinc-300 hover:border-zinc-700'
+                      ? 'bg-stone-900 text-white'
+                      : 'border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-200'
                   }`}
                 >
                   <span className="flex h-6 w-6 items-center justify-center rounded-md text-white" style={{ backgroundColor: space.color }}>
@@ -1892,12 +1892,12 @@ const SimpBudgetPage: React.FC = () => {
             })}
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-zinc-400">
+          <label className="flex items-center gap-2 text-sm text-stone-500">
             <input
               type="checkbox"
               checked={showArchivedSpaces}
               onChange={(event) => setShowArchivedSpaces(event.target.checked)}
-              className="h-4 w-4 rounded border-zinc-700 bg-[#111417]"
+              className="h-4 w-4 rounded border-stone-200 bg-[#FAFAF7]"
             />
             Show archived spaces
           </label>
@@ -1907,7 +1907,7 @@ const SimpBudgetPage: React.FC = () => {
           <MessageBanner message={appMessage} />
 
           {loadingData ? (
-            <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-zinc-800 bg-[#171a1f] text-zinc-400">
+            <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500">
               <Loader2 className="mr-3 h-5 w-5 animate-spin" />
               Loading budget spaces...
             </div>
@@ -1915,11 +1915,11 @@ const SimpBudgetPage: React.FC = () => {
             <>
               {renderSpaceCreatePanel(true)}
               {isMigrationOwner && (
-                <section className="rounded-lg border border-zinc-800 bg-[#171a1f] p-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-5">
                   <div className="mb-4 flex items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-lg font-semibold text-white">Import existing admin budget data</h2>
-                      <p className="mt-1 text-sm text-zinc-400">
+                      <h2 className="text-lg font-semibold text-stone-950">Import existing admin budget data</h2>
+                      <p className="mt-1 text-sm text-stone-500">
                         This copies the QuickLifts admin founder budget records into this SimpBudget Firebase account.
                       </p>
                     </div>
@@ -1928,7 +1928,7 @@ const SimpBudgetPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={connectQuickLiftsSource}
-                      className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                      className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
                     >
                       <ShieldCheck className="h-4 w-4" />
                       {sourceConnected ? 'Source connected' : 'Connect QuickLifts source'}
@@ -1937,7 +1937,7 @@ const SimpBudgetPage: React.FC = () => {
                       type="button"
                       onClick={migrateFounderBudgetData}
                       disabled={migrating || !sourceConnected}
-                      className={`${pillButtonClassName} bg-white text-black hover:bg-zinc-200`}
+                      className={`${pillButtonClassName} bg-stone-900 text-white hover:bg-stone-800`}
                     >
                       {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />}
                       Import founder budget
@@ -1952,11 +1952,11 @@ const SimpBudgetPage: React.FC = () => {
           ) : (
             <>
               {isMigrationOwner && (
-                <section className="rounded-lg border border-zinc-800 bg-[#171a1f] p-4">
+                <section className="rounded-lg border border-stone-200 bg-white p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-white">QuickLifts admin data migration</div>
-                      <div className="mt-1 text-sm text-zinc-500">
+                      <div className="text-sm font-semibold text-stone-950">QuickLifts admin data migration</div>
+                      <div className="mt-1 text-sm text-stone-500">
                         Re-run this after admin edits if you need to refresh migrated Business and Personal months.
                       </div>
                     </div>
@@ -1964,7 +1964,7 @@ const SimpBudgetPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={connectQuickLiftsSource}
-                        className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                        className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
                       >
                         <ShieldCheck className="h-4 w-4" />
                         {sourceConnected ? 'Source connected' : 'Connect source'}
@@ -1973,7 +1973,7 @@ const SimpBudgetPage: React.FC = () => {
                         type="button"
                         onClick={migrateFounderBudgetData}
                         disabled={migrating || !sourceConnected}
-                        className={`${pillButtonClassName} bg-white text-black hover:bg-zinc-200`}
+                        className={`${pillButtonClassName} bg-stone-900 text-white hover:bg-stone-800`}
                       >
                         {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />}
                         Import data
@@ -1988,17 +1988,17 @@ const SimpBudgetPage: React.FC = () => {
 
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
-                  { label: 'Income', value: selectedView === 'all' ? allTotals.monthlyIncome : draftTotals.monthlyIncome, color: 'text-emerald-300' },
-                  { label: 'Recurring', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-300' },
-                  { label: 'Misc', value: selectedView === 'all' ? allTotals.miscTotal : draftTotals.miscTotal, color: 'text-pink-300' },
-                  { label: 'Remaining', value: selectedView === 'all' ? allTotals.remaining : draftTotals.remaining, color: 'text-amber-300' },
+                  { label: 'Income', value: selectedView === 'all' ? allTotals.monthlyIncome : draftTotals.monthlyIncome, color: 'text-emerald-600' },
+                  { label: 'Recurring', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
+                  { label: 'Misc', value: selectedView === 'all' ? allTotals.miscTotal : draftTotals.miscTotal, color: 'text-pink-600' },
+                  { label: 'Remaining', value: selectedView === 'all' ? allTotals.remaining : draftTotals.remaining, color: 'text-amber-600' },
                 ].map((metric) => (
-                  <div key={metric.label} className="rounded-lg border border-zinc-800 bg-[#171a1f] p-4">
+                  <div key={metric.label} className="rounded-lg border border-stone-200 bg-white p-4">
                     <div className={`mb-3 ${metric.color}`}>
                       <CircleDollarSign className="h-5 w-5" />
                     </div>
-                    <div className="text-sm text-zinc-500">{metric.label}</div>
-                    <div className="mt-1 text-2xl font-semibold text-white">{formatCurrency(metric.value)}</div>
+                    <div className="text-sm text-stone-500">{metric.label}</div>
+                    <div className="mt-1 text-2xl font-semibold text-stone-950">{formatCurrency(metric.value)}</div>
                   </div>
                 ))}
               </section>
@@ -2018,33 +2018,33 @@ const SimpBudgetPage: React.FC = () => {
                           key={space.id}
                           type="button"
                           onClick={() => setSelectedView(space.id)}
-                          className="rounded-lg border border-zinc-800 bg-[#171a1f] p-5 text-left transition hover:border-zinc-700"
+                          className="rounded-lg border border-stone-200 bg-white p-5 text-left transition hover:border-stone-200"
                         >
                           <div className="mb-4 flex items-start gap-3">
                             <span className="flex h-11 w-11 items-center justify-center rounded-lg text-white" style={{ backgroundColor: space.color }}>
                               <Icon className="h-5 w-5" />
                             </span>
                             <div>
-                              <div className="text-lg font-semibold text-white">{space.name}</div>
-                              <div className="text-sm text-zinc-500">Remaining {formatCurrency(totals.remaining)}</div>
+                              <div className="text-lg font-semibold text-stone-950">{space.name}</div>
+                              <div className="text-sm text-stone-500">Remaining {formatCurrency(totals.remaining)}</div>
                             </div>
                           </div>
                           <div className="grid grid-cols-4 gap-3 text-sm">
                             <div>
-                              <div className="text-zinc-500">Income</div>
-                              <div className="font-semibold text-white">{formatCurrency(totals.monthlyIncome)}</div>
+                              <div className="text-stone-500">Income</div>
+                              <div className="font-semibold text-stone-950">{formatCurrency(totals.monthlyIncome)}</div>
                             </div>
                             <div>
-                              <div className="text-zinc-500">Recurring</div>
-                              <div className="font-semibold text-white">{formatCurrency(totals.recurringTotal)}</div>
+                              <div className="text-stone-500">Recurring</div>
+                              <div className="font-semibold text-stone-950">{formatCurrency(totals.recurringTotal)}</div>
                             </div>
                             <div>
-                              <div className="text-zinc-500">Misc</div>
-                              <div className="font-semibold text-white">{formatCurrency(totals.miscTotal)}</div>
+                              <div className="text-stone-500">Misc</div>
+                              <div className="font-semibold text-stone-950">{formatCurrency(totals.miscTotal)}</div>
                             </div>
                             <div>
-                              <div className="text-zinc-500">Debt</div>
-                              <div className="font-semibold text-white">{formatCurrency(totals.debtPayments)}</div>
+                              <div className="text-stone-500">Debt</div>
+                              <div className="font-semibold text-stone-950">{formatCurrency(totals.debtPayments)}</div>
                             </div>
                           </div>
                         </button>
@@ -2057,21 +2057,21 @@ const SimpBudgetPage: React.FC = () => {
               ) : activeSpace ? (
                 <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
                   <div className="space-y-5">
-                    <section className="rounded-lg border border-zinc-800 bg-[#171a1f]">
-                      <div className="flex flex-col gap-3 border-b border-zinc-800 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                    <section className="rounded-lg border border-stone-200 bg-white">
+                      <div className="flex flex-col gap-3 border-b border-stone-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                            <Calendar className="h-4 w-4 text-sky-300" />
+                          <div className="flex items-center gap-2 text-sm font-semibold text-stone-950">
+                            <Calendar className="h-4 w-4 text-sky-600" />
                             Recurring Monthly Expenses
                           </div>
-                          <div className="mt-1 text-sm text-zinc-500">{selectionStatus}</div>
+                          <div className="mt-1 text-sm text-stone-500">{selectionStatus}</div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {lastDeletedRecurringExpense && (
                             <button
                               type="button"
                               onClick={undoLastRecurringDelete}
-                              className={`${pillButtonClassName} border border-emerald-500/30 bg-emerald-500/10 text-emerald-100 hover:border-emerald-400/50`}
+                              className={`${pillButtonClassName} border border-emerald-100 bg-emerald-50 text-emerald-700 hover:border-emerald-200`}
                             >
                               <RotateCcw className="h-4 w-4" />
                               Undo deleted item
@@ -2081,7 +2081,7 @@ const SimpBudgetPage: React.FC = () => {
                             type="button"
                             onClick={restoreRecurringFromPreviousMonth}
                             disabled={!previousBudgetRecord}
-                            className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                            className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
                             title={previousBudgetRecord ? previousRecurringRestoreLabel : 'No earlier saved month for this Budget Space'}
                           >
                             <RotateCcw className="h-4 w-4" />
@@ -2095,7 +2095,7 @@ const SimpBudgetPage: React.FC = () => {
                                 recurringExpenses: [...currentDraft.recurringExpenses, createRecurringExpense()],
                               }))
                             }
-                            className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                            className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
                           >
                             <Plus className="h-4 w-4" />
                             Add recurring
@@ -2106,7 +2106,7 @@ const SimpBudgetPage: React.FC = () => {
                       <div className="overflow-x-auto p-3">
                         <table className="min-w-full text-sm">
                           <thead>
-                            <tr className="text-left text-xs uppercase tracking-[0.14em] text-zinc-500">
+                            <tr className="text-left text-xs uppercase tracking-[0.14em] text-stone-500">
                               <th className="px-3 py-3 font-semibold">Expense</th>
                               <th className="w-44 px-3 py-3 font-semibold">Amount</th>
                               <th className="w-16 px-3 py-3" />
@@ -2115,13 +2115,13 @@ const SimpBudgetPage: React.FC = () => {
                           <tbody>
                             {draft.recurringExpenses.length === 0 ? (
                               <tr>
-                                <td colSpan={3} className="px-3 py-8 text-center text-zinc-500">
+                                <td colSpan={3} className="px-3 py-8 text-center text-stone-500">
                                   No recurring expenses yet.
                                 </td>
                               </tr>
                             ) : (
                               draft.recurringExpenses.map((expense) => (
-                                <tr key={expense.id} className="border-t border-zinc-800">
+                                <tr key={expense.id} className="border-t border-stone-200">
                                   <td className="px-3 py-3">
                                     <input
                                       value={expense.label}
@@ -2143,7 +2143,7 @@ const SimpBudgetPage: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => removeRecurringExpense(expense)}
-                                      className="rounded-lg border border-zinc-700 p-2 text-zinc-400 transition hover:border-red-500/30 hover:text-red-200"
+                                      className="rounded-lg border border-stone-200 bg-white p-2 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
                                       aria-label="Remove recurring expense"
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -2157,14 +2157,14 @@ const SimpBudgetPage: React.FC = () => {
                       </div>
                     </section>
 
-                    <section className="rounded-lg border border-zinc-800 bg-[#171a1f]">
-                      <div className="flex flex-col gap-3 border-b border-zinc-800 px-5 py-4 md:flex-row md:items-center md:justify-between">
+                    <section className="rounded-lg border border-stone-200 bg-white">
+                      <div className="flex flex-col gap-3 border-b border-stone-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-white">
-                            <Receipt className="h-4 w-4 text-pink-300" />
+                          <div className="flex items-center gap-2 text-sm font-semibold text-stone-950">
+                            <Receipt className="h-4 w-4 text-pink-600" />
                             Misc Expenses
                           </div>
-                          <div className="mt-1 text-sm text-zinc-500">Month-specific expenses for {monthYearLabel(selectedMonth, selectedYear)}.</div>
+                          <div className="mt-1 text-sm text-stone-500">Month-specific expenses for {monthYearLabel(selectedMonth, selectedYear)}.</div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <input
@@ -2183,7 +2183,7 @@ const SimpBudgetPage: React.FC = () => {
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={parsingImport}
-                            className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                            className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
                           >
                             {parsingImport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
                             AI import
@@ -2196,7 +2196,7 @@ const SimpBudgetPage: React.FC = () => {
                                 miscExpenses: [...currentDraft.miscExpenses, createMiscExpense()],
                               }))
                             }
-                            className={`${pillButtonClassName} border border-zinc-700 bg-[#111417] text-zinc-200 hover:border-zinc-600`}
+                            className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
                           >
                             <Plus className="h-4 w-4" />
                             Add misc
@@ -2211,7 +2211,7 @@ const SimpBudgetPage: React.FC = () => {
                       <div className="overflow-x-auto p-3 pt-0">
                         <table className="min-w-[920px] text-sm">
                           <thead>
-                            <tr className="text-left text-xs uppercase tracking-[0.14em] text-zinc-500">
+                            <tr className="text-left text-xs uppercase tracking-[0.14em] text-stone-500">
                               <th className="w-36 px-3 py-3 font-semibold">Date</th>
                               <th className="px-3 py-3 font-semibold">Expense</th>
                               <th className="w-36 px-3 py-3 font-semibold">Amount</th>
@@ -2223,13 +2223,13 @@ const SimpBudgetPage: React.FC = () => {
                           <tbody>
                             {draft.miscExpenses.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="px-3 py-8 text-center text-zinc-500">
+                                <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
                                   No misc expenses yet.
                                 </td>
                               </tr>
                             ) : (
                               draft.miscExpenses.map((expense) => (
-                                <tr key={expense.id} className="border-t border-zinc-800">
+                                <tr key={expense.id} className="border-t border-stone-200">
                                   <td className="px-3 py-3">
                                     <input
                                       value={expense.date}
@@ -2285,7 +2285,7 @@ const SimpBudgetPage: React.FC = () => {
                                           miscExpenses: currentDraft.miscExpenses.filter((candidate) => candidate.id !== expense.id),
                                         }))
                                       }
-                                      className="rounded-lg border border-zinc-700 p-2 text-zinc-400 transition hover:border-red-500/30 hover:text-red-200"
+                                      className="rounded-lg border border-stone-200 bg-white p-2 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
                                       aria-label="Remove misc expense"
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -2301,14 +2301,14 @@ const SimpBudgetPage: React.FC = () => {
                   </div>
 
                   <aside className="space-y-5">
-                    <section className="rounded-lg border border-zinc-800 bg-[#171a1f] p-5">
+                    <section className="rounded-lg border border-stone-200 bg-white p-5">
                       <div className="mb-5 flex items-center gap-3">
                         <span className="flex h-11 w-11 items-center justify-center rounded-lg text-white" style={{ backgroundColor: activeSpace.color }}>
                           {React.createElement(getSpaceIcon(activeSpace.icon), { className: 'h-5 w-5' })}
                         </span>
                         <div>
-                          <h2 className="text-lg font-semibold text-white">{activeSpace.name}</h2>
-                          <p className="text-sm text-zinc-500">
+                          <h2 className="text-lg font-semibold text-stone-950">{activeSpace.name}</h2>
+                          <p className="text-sm text-stone-500">
                             {hasPersistedRecord ? 'Saved month' : 'Draft month'} · {hasUnsavedChanges ? 'Unsaved' : 'Saved'}
                           </p>
                         </div>
@@ -2316,7 +2316,7 @@ const SimpBudgetPage: React.FC = () => {
 
                       <div className="space-y-4">
                         <label className="block">
-                          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                             Monthly income
                           </span>
                           <input
@@ -2329,7 +2329,7 @@ const SimpBudgetPage: React.FC = () => {
                         </label>
 
                         <label className="block">
-                          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                             Debt payments
                           </span>
                           <input
@@ -2341,7 +2341,7 @@ const SimpBudgetPage: React.FC = () => {
                           />
                         </label>
 
-                        <div className="rounded-lg border border-zinc-800 bg-[#111417] p-4">
+                        <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
                           <div className="space-y-3 text-sm">
                             {[
                               ['Income', draftTotals.monthlyIncome],
@@ -2353,15 +2353,15 @@ const SimpBudgetPage: React.FC = () => {
                               ['Remaining', draftTotals.remaining],
                             ].map(([label, value]) => (
                               <div key={label} className="flex items-center justify-between gap-4">
-                                <span className="text-zinc-500">{label}</span>
-                                <span className="font-semibold text-white">{formatCurrency(value as number)}</span>
+                                <span className="text-stone-500">{label}</span>
+                                <span className="font-semibold text-stone-950">{formatCurrency(value as number)}</span>
                               </div>
                             ))}
                           </div>
                         </div>
 
                         <label className="block">
-                          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                          <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
                             Notes
                           </span>
                           <textarea
@@ -2377,7 +2377,7 @@ const SimpBudgetPage: React.FC = () => {
                           type="button"
                           onClick={saveDraft}
                           disabled={saving}
-                          className={`${pillButtonClassName} w-full bg-white text-black hover:bg-zinc-200`}
+                          className={`${pillButtonClassName} w-full bg-stone-900 text-white hover:bg-stone-800`}
                         >
                           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                           Save Budget

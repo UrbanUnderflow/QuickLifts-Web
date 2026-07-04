@@ -65,6 +65,12 @@ const resolveOpenAIApiKey = (): string | null => {
   return configuredKey || null;
 };
 
+const SIMPBUDGET_FIREBASE_API_KEY =
+  process.env.SIMPBUDGET_FIREBASE_API_KEY?.trim()
+  || process.env.NEXT_PUBLIC_SIMPBUDGET_FIREBASE_API_KEY?.trim()
+  || 'AIzaSyCBoCQ4J9xoIhZuaUjFMPq_zltkXDQ_0e8';
+const SIMPBUDGET_TOKEN_FEATURES = new Set(['pipeListsLeadExtraction']);
+
 const REMOTE_BRIDGE_FEATURE_ALIASES: Record<string, string> = {
   // Local dev may relay to a deployed bridge that has not received the newest
   // feature id yet. Use a known high-token policy there to avoid truncating
@@ -137,13 +143,50 @@ const relayToRemoteBridge = async (
   };
 };
 
-const verifyAuth = async (authHeader: string | undefined): Promise<string | null> => {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+const verifySimpBudgetAuth = async (idToken: string): Promise<string | null> => {
+  if (!SIMPBUDGET_FIREBASE_API_KEY) return null;
+
   try {
-    const idToken = authHeader.split('Bearer ')[1];
+    const response = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${SIMPBUDGET_FIREBASE_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      },
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.error('[openai-bridge] SimpBudget Auth verification failed:', {
+        status: response.status,
+        body: body.slice(0, 300),
+      });
+      return null;
+    }
+
+    const data = await response.json();
+    const uid = data?.users?.[0]?.localId;
+    return typeof uid === 'string' && uid ? uid : null;
+  } catch (error) {
+    console.error('[openai-bridge] SimpBudget Auth verification error:', error);
+    return null;
+  }
+};
+
+const verifyAuth = async (authHeader: string | undefined, featureId: string): Promise<string | null> => {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const idToken = authHeader.split('Bearer ')[1];
+
+  try {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     return decodedToken.uid;
   } catch (error) {
+    if (SIMPBUDGET_TOKEN_FEATURES.has(featureId)) {
+      const simpBudgetUid = await verifySimpBudgetAuth(idToken);
+      if (simpBudgetUid) return simpBudgetUid;
+    }
+
     console.error('[openai-bridge] Auth verification failed:', error);
     return null;
   }
@@ -162,8 +205,10 @@ export const handler: Handler = async (event) => {
     };
   }
 
+  const featureId = getHeader(event.headers, 'openai-organization') || 'default';
+
   // 1. Verify Authentication Layer
-  const uid = await verifyAuth(getHeader(event.headers, 'authorization'));
+  const uid = await verifyAuth(getHeader(event.headers, 'authorization'), featureId);
   if (!uid) {
     return {
       statusCode: 401,
@@ -178,7 +223,6 @@ export const handler: Handler = async (event) => {
   const openApiPath = pathMatch ? pathMatch[1] : '/v1/chat/completions';
   const openApiUrl = `https://api.openai.com${openApiPath}`;
 
-  const featureId = getHeader(event.headers, 'openai-organization') || 'default';
   const providerApiKey = resolveOpenAIApiKey();
 
   if (!providerApiKey) {

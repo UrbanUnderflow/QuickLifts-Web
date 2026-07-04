@@ -30,7 +30,6 @@ import {
   ListPlus,
   LogOut,
   Mail,
-  Percent,
   Plus,
   Search,
   ShieldCheck,
@@ -42,13 +41,22 @@ import {
   X,
 } from 'lucide-react';
 import PageHead from '../components/PageHead';
+import { auth as quickLiftsAuth } from '../api/firebase/config';
 import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase/simpBudgetConfig';
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 type ViewMode = 'pipeline' | 'metrics' | 'logs';
+type DetailModalMode = 'details' | 'logs';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
-type ActivityLogType = 'update' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
+type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
+type NextStepTooltip = {
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  placement: 'above' | 'below';
+};
 type TemplateKey =
   | 'vc'
   | 'grant'
@@ -88,6 +96,9 @@ type ActivityLog = {
   staffFeedbackScore: string;
   notes: string;
   createdAt: string;
+  systemAction?: 'item-created' | 'item-deleted' | 'item-restored';
+  relatedItemId?: string;
+  restorableUntil?: string;
 };
 
 type PipelineItem = {
@@ -120,6 +131,9 @@ type PipelineItem = {
   weeklyLogs: ActivityLog[];
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
+  deletedByLogId?: string;
+  restorableUntil?: string;
 };
 
 type PipeList = {
@@ -152,8 +166,8 @@ type PipeListProfile = {
   updatedAt?: unknown;
 };
 
-type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs'>;
-type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt'>;
+type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil'>;
+type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
 
 const STORAGE_KEY = 'pulse-pipe-lists-v2';
 const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
@@ -163,6 +177,7 @@ const PIPELIST_SHARES_COLLECTION = 'pipeListShares';
 const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
+const SOFT_DELETE_RESTORE_DAYS = 30;
 
 const accentClasses = [
   'bg-emerald-500',
@@ -179,14 +194,56 @@ const priorityStyles: Record<PipelinePriority, string> = {
   low: 'bg-emerald-50 text-emerald-700 border-emerald-100',
 };
 
+const importanceLabel = (priority: PipelinePriority) =>
+  `Importance: ${priority.charAt(0).toUpperCase()}${priority.slice(1)}`;
+
 const logTypeLabels: Record<ActivityLogType, string> = {
   update: 'General Update',
+  application: 'Application',
   meeting: 'Meeting',
   'follow-up': 'Follow-Up',
   decision: 'Decision',
   risk: 'Risk',
   document: 'Document Sent',
-  metrics: 'Metrics / Pilot Update',
+  metrics: 'Metrics Update',
+};
+
+const logNextStepOptions: Record<ActivityLogType, string[]> = {
+  update: ['Review status', 'Send update', 'Follow up', 'Wait for response'],
+  application: ['Prepare application', 'Submit application', 'Send supporting materials', 'Wait for results', 'Follow up'],
+  meeting: ['Schedule meeting', 'Send recap', 'Send materials', 'Follow up', 'Wait for response'],
+  'follow-up': ['Follow up', 'Send reminder', 'Send requested info', 'Schedule meeting', 'Wait for response'],
+  decision: ['Review decision', 'Notify team', 'Send acceptance', 'Plan next action'],
+  risk: ['Escalate risk', 'Assign owner', 'Monitor risk', 'Follow up'],
+  document: ['Send document', 'Send updated document', 'Wait for response', 'Follow up'],
+  metrics: ['Review metrics', 'Send report', 'Follow up', 'Wait for response'],
+};
+
+const updateLogDraftType = (current: ActivityLogDraft, type: ActivityLogType): ActivityLogDraft => {
+  const nextOptions = logNextStepOptions[type];
+
+  return {
+    ...current,
+    type,
+    nextStep: current.nextStep && nextOptions.includes(current.nextStep) ? current.nextStep : '',
+  };
+};
+
+const followUpDateLabel = (nextStep: string) => {
+  const normalizedStep = nextStep.toLowerCase();
+
+  if (normalizedStep.includes('wait for response') || normalizedStep.includes('wait for results')) return 'Results posted';
+  if (normalizedStep.includes('submit application') || normalizedStep.includes('prepare application')) return 'Application due';
+  if (normalizedStep.includes('schedule meeting')) return 'Meeting date';
+
+  return 'Follow-Up';
+};
+
+const logDisplayLabel = (log: ActivityLog) => {
+  if (log.systemAction === 'item-created') return 'Item Added';
+  if (log.systemAction === 'item-deleted') return 'Item Deleted';
+  if (log.systemAction === 'item-restored') return 'Item Restored';
+  return logTypeLabels[log.type];
 };
 
 const generalStages: StageConfig[] = [
@@ -282,7 +339,7 @@ const templateCatalog: Record<
   contract: {
     label: 'Contract Negotiations',
     defaultName: 'Contract Negotiations',
-    description: 'Formal proposals, term negotiation, gross margin, and close forecasting.',
+    description: 'Formal proposals, term negotiation, margin context, and close dates.',
     accent: 'bg-rose-500',
     stages: contractStages,
   },
@@ -309,6 +366,8 @@ const makeId = () => {
 
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
+
+const shareDocumentIdForList = (ownerUid: string, listId: string) => `${ownerUid}-${listId}`;
 
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
@@ -365,6 +424,57 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
     createdAt: now,
     updatedAt: now,
   };
+};
+
+const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+const isItemDeleted = (item: Pick<PipelineItem, 'deletedAt'>) => Boolean(item.deletedAt);
+const canRestoreDeletedItem = (item: Pick<PipelineItem, 'deletedAt' | 'restorableUntil'>) =>
+  Boolean(item.deletedAt && item.restorableUntil && new Date(item.restorableUntil).getTime() >= Date.now());
+
+const createSystemLog = (
+  item: Pick<PipelineItem, 'id' | 'title' | 'organization'>,
+  action: NonNullable<ActivityLog['systemAction']>,
+  summary: string,
+  restorableUntil = '',
+): ActivityLog => {
+  const now = new Date();
+  return {
+    ...defaultLogDraft(),
+    id: makeId(),
+    type: 'decision',
+    weekOf: now.toISOString().slice(0, 10),
+    summary,
+    nextStep: '',
+    notes: item.organization ? `Organization: ${item.organization}` : '',
+    createdAt: now.toISOString(),
+    systemAction: action,
+    relatedItemId: item.id,
+    restorableUntil,
+  };
+};
+
+const purgeExpiredDeletedItems = (lists: PipeList[]) =>
+  lists.map((list) => ({
+    ...list,
+    items: list.items.filter(
+      (item) => !item.deletedAt || !item.restorableUntil || new Date(item.restorableUntil).getTime() >= Date.now(),
+    ),
+  }));
+
+const stripUndefined = <T,>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [key, stripUndefined(entryValue)]),
+    ) as T;
+  }
+
+  return value;
 };
 
 const createList = (
@@ -594,6 +704,9 @@ const normalizeActivityLog = (log: Partial<ActivityLog>): ActivityLog => {
     staffFeedbackScore: log.staffFeedbackScore || '',
     notes: log.notes || '',
     createdAt: log.createdAt || now,
+    ...(log.systemAction ? { systemAction: log.systemAction } : {}),
+    relatedItemId: log.relatedItemId || '',
+    restorableUntil: log.restorableUntil || '',
   };
 };
 
@@ -631,6 +744,9 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     weeklyLogs: Array.isArray(item.weeklyLogs) ? item.weeklyLogs.map(normalizeActivityLog) : [],
     createdAt: item.createdAt || now,
     updatedAt: item.updatedAt || now,
+    deletedAt: item.deletedAt || '',
+    deletedByLogId: item.deletedByLogId || '',
+    restorableUntil: item.restorableUntil || '',
   };
 };
 
@@ -686,8 +802,6 @@ const parsePercent = (value: string) => {
 };
 
 const itemValue = (item: PipelineItem) => parseMoney(item.acv || item.amount);
-const itemProbability = (list: PipeList, item: PipelineItem) => parsePercent(item.conversionLikelihood) || getStage(list, item.stage).probability;
-const weightedValue = (list: PipeList, item: PipelineItem) => itemValue(item) * (itemProbability(list, item) / 100);
 
 const formatMoney = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return '$0';
@@ -812,14 +926,14 @@ const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-stone-500 sm:text-lg">
             Sign in with {TREMAINE_OWNER_EMAIL} to manage VC, grants, pitch competitions,
-            pilots, contract negotiations, weighted forecasts, and list metrics.
+            pilots, contract negotiations, list metrics, and shared updates.
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
             {[
-              ['Pilot Track', 'Institution stages plus weekly product proof.'],
-              ['Contract Track', 'ACV, close dates, margin, and expansion path.'],
-              ['Metrics View', 'Weighted value, logs, due dates, and proof signals.'],
+              ['Flexible Lists', 'Track investors, grants, partners, contracts, or custom lists.'],
+              ['Focused Details', 'Open each lead to review notes, next steps, dates, and context.'],
+              ['Metrics View', 'Simple list totals, logs, due dates, and status signals.'],
             ].map(([title, body]) => (
               <div key={title} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
                 <p className="text-sm font-semibold text-stone-950">{title}</p>
@@ -980,22 +1094,33 @@ const PipelinePage: NextPage = () => {
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [newListName, setNewListName] = useState('');
   const [newListTemplateKey, setNewListTemplateKey] = useState<TemplateKey>('university-pilot');
+  const [isDeleteListModalOpen, setIsDeleteListModalOpen] = useState(false);
   const [draft, setDraft] = useState<ItemDraft>(defaultDraft(initialLists[0].stages[0].id));
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [isLeadUrlModalOpen, setIsLeadUrlModalOpen] = useState(false);
   const [leadUrl, setLeadUrl] = useState('');
   const [isAnalyzingLead, setIsAnalyzingLead] = useState(false);
   const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
+  const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
+  const [logListFilter, setLogListFilter] = useState<string>('all');
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [logTargetListId, setLogTargetListId] = useState<string>(initialLists[0].id);
+  const [logTargetItemId, setLogTargetItemId] = useState<string>(initialLists[0].items[0]?.id || '');
   const [logDraft, setLogDraft] = useState<ActivityLogDraft>(defaultLogDraft(initialLists[0].templateKey));
+  const [nextStepTooltip, setNextStepTooltip] = useState<NextStepTooltip | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [dataReady, setDataReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
-  const [magicEmail, setMagicEmail] = useState(TREMAINE_OWNER_EMAIL);
+  const [magicEmail, setMagicEmail] = useState(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('share')) return '';
+    return TREMAINE_OWNER_EMAIL;
+  });
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [savingToCloud, setSavingToCloud] = useState(false);
   const [shareId] = useState(() => {
@@ -1095,7 +1220,7 @@ const PipelinePage: NextPage = () => {
         if (snapshot.exists()) {
           const data = snapshot.data() as { lists?: Partial<PipeList>[] };
           if (Array.isArray(data.lists) && data.lists.length > 0) {
-            nextLists = data.lists.map(normalizeList);
+            nextLists = purgeExpiredDeletedItems(data.lists.map(normalizeList));
           }
         } else if (typeof window !== 'undefined') {
           const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -1103,7 +1228,7 @@ const PipelinePage: NextPage = () => {
             try {
               const parsed = JSON.parse(stored) as Partial<PipeList>[];
               if (Array.isArray(parsed) && parsed.length > 0) {
-                nextLists = parsed.map(normalizeList);
+                nextLists = purgeExpiredDeletedItems(parsed.map(normalizeList));
               }
             } catch (error) {
               console.warn('[PipeLists] Unable to parse stored local pipeline data:', error);
@@ -1155,7 +1280,7 @@ const PipelinePage: NextPage = () => {
           return;
         }
 
-        const normalizedList = normalizeList(data.list, 0);
+        const normalizedList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
         const nextShare: PipeListShare = {
           id: snapshot.id,
           ownerUid: data.ownerUid || '',
@@ -1225,6 +1350,10 @@ const PipelinePage: NextPage = () => {
       setSavingToCloud(true);
 
       try {
+        const listsToPersist = purgeExpiredDeletedItems(lists);
+        if (JSON.stringify(listsToPersist) !== JSON.stringify(lists)) {
+          setLists(listsToPersist);
+        }
         const stateRef = doc(
           simpBudgetDb,
           SIMPBUDGET_USERS_COLLECTION,
@@ -1234,16 +1363,16 @@ const PipelinePage: NextPage = () => {
         );
         await setDoc(
           stateRef,
-          {
+          stripUndefined({
             ownerEmail: user.email || '',
-            lists,
+            lists: listsToPersist,
             updatedAt: serverTimestamp(),
-          },
+          }),
           { merge: true },
         );
 
         if (typeof window !== 'undefined') {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(listsToPersist));
         }
 
         if (!cancelled) setAppMessage(null);
@@ -1276,13 +1405,13 @@ const PipelinePage: NextPage = () => {
       setSavingToCloud(true);
 
       try {
-        const nextList = lists[0];
+        const nextList = purgeExpiredDeletedItems(lists)[0];
         if (!nextList) return;
 
         const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
         await setDoc(
           shareRef,
-          {
+          stripUndefined({
             list: nextList,
             updatedAt: serverTimestamp(),
             lastEditedBy: {
@@ -1291,7 +1420,7 @@ const PipelinePage: NextPage = () => {
               displayName: profile?.displayName || user?.displayName || '',
               photoURL: profile?.photoURL || user?.photoURL || '',
             },
-          },
+          }),
           { merge: true },
         );
 
@@ -1323,16 +1452,140 @@ const PipelinePage: NextPage = () => {
     () => lists.find((list) => list.id === activeListId) || lists[0],
     [activeListId, lists],
   );
+  const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
 
-  const allRows = useMemo(
+  useEffect(() => {
+    if (isSharedView || !user || !isOwner || !dataReady || !activeList?.id) return;
+
+    let cancelled = false;
+
+    const loadActiveListShare = async () => {
+      const nextShareId = shareDocumentIdForList(user.uid, activeList.id);
+      setShareMessage(null);
+
+      try {
+        const shareSnapshot = await getDoc(doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, nextShareId));
+        if (!shareSnapshot.exists()) {
+          if (!cancelled) {
+            setShareDoc(null);
+            setShareAccess('read');
+            setShareEditorEmails('');
+          }
+          return;
+        }
+
+        const data = shareSnapshot.data() as Partial<PipeListShare>;
+        if (!cancelled) {
+          setShareDoc({
+            id: shareSnapshot.id,
+            ownerUid: data.ownerUid || user.uid,
+            ownerEmail: data.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
+            list: data.list ? normalizeList(data.list, 0) : activeList,
+            access: data.access === 'edit' ? 'edit' : 'read',
+            publicRead: data.publicRead === true,
+            editorEmails: Array.isArray(data.editorEmails) ? data.editorEmails : [],
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          });
+          setShareAccess(data.access === 'edit' ? 'edit' : 'read');
+          setShareEditorEmails(Array.isArray(data.editorEmails) ? data.editorEmails.join(', ') : '');
+        }
+      } catch (error) {
+        console.error('Unable to load PipeList invite:', error);
+        if (!cancelled) {
+          setShareDoc(null);
+          setShareMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to load invite settings for this PipeList.'),
+          });
+        }
+      }
+    };
+
+    loadActiveListShare();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeList.id, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
+    if (isSharedView || !user || !isOwner || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
+
+    let cancelled = false;
+
+    const syncSharedListSnapshot = async () => {
+      try {
+        await setDoc(
+          doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareDoc.id),
+          stripUndefined({
+            list: activeList,
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true },
+        );
+
+        if (!cancelled) {
+          setShareDoc((current) => (current && current.id === shareDoc.id ? { ...current, list: activeList } : current));
+        }
+      } catch (error) {
+        console.error('Unable to sync PipeList invite:', error);
+      }
+    };
+
+    syncSharedListSnapshot();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, shareDoc?.id, user]);
+
+  const allItemRows = useMemo(
     () => lists.flatMap((list) => list.items.map((item) => ({ list, item }))),
     [lists],
   );
 
+  const allRows = useMemo(
+    () => allItemRows.filter(({ item }) => !isItemDeleted(item)),
+    [allItemRows],
+  );
+
+  const activeListItems = useMemo(
+    () => activeList.items.filter((item) => !isItemDeleted(item)),
+    [activeList.items],
+  );
+
+  const allLogRows = useMemo(
+    () =>
+      allItemRows
+        .flatMap(({ list, item }) =>
+          item.weeklyLogs.map((log) => ({
+            list,
+            item,
+            log,
+          })),
+        )
+        .sort((left, right) => {
+          const leftDate = left.log.weekOf || left.log.createdAt;
+          const rightDate = right.log.weekOf || right.log.createdAt;
+          return rightDate.localeCompare(leftDate);
+        }),
+    [allItemRows],
+  );
+
+  const filteredLogRows = useMemo(
+    () => allLogRows.filter(({ list }) => logListFilter === 'all' || list.id === logListFilter),
+    [allLogRows, logListFilter],
+  );
+
+  const logTargetList = lists.find((list) => list.id === logTargetListId) || activeList;
+  const logTargetListItems = logTargetList.items.filter((item) => !isItemDeleted(item));
+  const logTargetItem = logTargetListItems.find((item) => item.id === logTargetItemId) || logTargetListItems[0] || null;
+
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase();
 
-    return activeList.items.filter((item) => {
+    return activeListItems.filter((item) => {
       const matchesStage = stageFilter === 'all' || item.stage === stageFilter;
       const matchesQuery =
         search.length === 0 ||
@@ -1354,20 +1607,20 @@ const PipelinePage: NextPage = () => {
 
       return matchesStage && matchesQuery;
     });
-  }, [activeList.items, query, stageFilter]);
+  }, [activeListItems, query, stageFilter]);
 
   const countsByStage = useMemo(
     () =>
       activeList.stages.reduce<Record<string, number>>((accumulator, stage) => {
-        accumulator[stage.id] = activeList.items.filter((item) => item.stage === stage.id).length;
+        accumulator[stage.id] = activeListItems.filter((item) => item.stage === stage.id).length;
         return accumulator;
       }, {}),
-    [activeList.items, activeList.stages],
+    [activeListItems, activeList.stages],
   );
 
-  const activeItems = activeList.items.filter((item) => !isClosedStage(activeList, item.stage)).length;
-  const wonItems = activeList.items.filter((item) => isWonStage(activeList, item.stage)).length;
-  const dueSoonItems = activeList.items.filter((item) => {
+  const activeItems = activeListItems.filter((item) => !isClosedStage(activeList, item.stage)).length;
+  const wonItems = activeListItems.filter((item) => isWonStage(activeList, item.stage)).length;
+  const dueSoonItems = activeListItems.filter((item) => {
     const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
     if (!dueDate) return false;
     const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
@@ -1375,10 +1628,9 @@ const PipelinePage: NextPage = () => {
     const sevenDays = 7 * 24 * 60 * 60 * 1000;
     return dueTime >= now - 24 * 60 * 60 * 1000 && dueTime <= now + sevenDays;
   }).length;
-  const activeOpenValue = activeList.items
+  const activeOpenValue = activeListItems
     .filter((item) => !isClosedStage(activeList, item.stage))
     .reduce((sum, item) => sum + itemValue(item), 0);
-  const activeWeightedValue = activeList.items.reduce((sum, item) => sum + weightedValue(activeList, item), 0);
 
   const scorecardMetrics = useMemo(() => {
     const openRows = allRows.filter(({ list, item }) => !isClosedStage(list, item.stage));
@@ -1402,7 +1654,6 @@ const PipelinePage: NextPage = () => {
     return {
       totalOpenDeals: openRows.length,
       totalOpenValue: openRows.reduce((sum, row) => sum + itemValue(row.item), 0),
-      weightedValue: allRows.reduce((sum, row) => sum + weightedValue(row.list, row.item), 0),
       averageContractValue: average(allRows.map(({ item }) => itemValue(item))),
       firstExpectedCloseDate: expectedDates[0] || '',
       wonRate: allRows.length > 0 ? (wonRows.length / allRows.length) * 100 : 0,
@@ -1419,16 +1670,16 @@ const PipelinePage: NextPage = () => {
   }, [allRows]);
 
   const selectedLogItem =
-    activeList.items.find((item) => item.id === selectedLogItemId) ||
-    activeList.items.find((item) => item.weeklyLogs.length > 0 || item.stage.includes('pilot')) ||
-    activeList.items[0];
-  const showLogMetrics = activeList.templateKey === 'university-pilot' || logDraft.type === 'metrics';
+    activeListItems.find((item) => item.id === selectedLogItemId) ||
+    activeListItems.find((item) => item.weeklyLogs.length > 0 || item.stage.includes('pilot')) ||
+    activeListItems[0];
 
   const selectedDetailItem = activeList.items.find((item) => item.id === selectedDetailItemId) || null;
 
   useEffect(() => {
     if (selectedDetailItemId && !activeList.items.some((item) => item.id === selectedDetailItemId)) {
       setSelectedDetailItemId('');
+      setDetailModalMode('details');
     }
   }, [activeList.items, selectedDetailItemId]);
 
@@ -1436,7 +1687,10 @@ const PipelinePage: NextPage = () => {
     if (!selectedDetailItemId) return undefined;
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedDetailItemId('');
+      if (event.key === 'Escape') {
+        setSelectedDetailItemId('');
+        setDetailModalMode('details');
+      }
     };
 
     window.addEventListener('keydown', closeOnEscape);
@@ -1449,12 +1703,43 @@ const PipelinePage: NextPage = () => {
     setIsEditorOpen(false);
   };
 
+  const openLogModal = (listId?: string, itemId?: string) => {
+    if (!canModify) return;
+    const targetList = lists.find((list) => list.id === listId) || (logListFilter !== 'all' ? lists.find((list) => list.id === logListFilter) : null) || activeList;
+    const targetItems = targetList.items.filter((item) => !isItemDeleted(item));
+    const targetItem = targetItems.find((item) => item.id === itemId) || targetItems[0];
+
+    setLogTargetListId(targetList.id);
+    setLogTargetItemId(targetItem?.id || '');
+    setLogDraft(defaultLogDraft(targetList.templateKey));
+    setIsLogModalOpen(true);
+  };
+
+  const closeLogModal = () => {
+    setIsLogModalOpen(false);
+    setLogDraft(defaultLogDraft(logTargetList.templateKey));
+  };
+
+  const showNextStepTooltip = (event: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>, text: string) => {
+    if (!text || text === 'No next step') return;
+    if (typeof window === 'undefined') return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tooltipWidth = Math.min(360, window.innerWidth - 32);
+    const left = Math.min(Math.max(rect.left, 16), window.innerWidth - tooltipWidth - 16);
+    const placement = rect.bottom + 160 > window.innerHeight ? 'above' : 'below';
+    const top = placement === 'above' ? rect.top - 8 : rect.bottom + 8;
+
+    setNextStepTooltip({ text, left, top, width: tooltipWidth, placement });
+  };
+
   const openLeadUrlModal = () => {
     if (!canModify) return;
     setLeadUrl('');
     setLeadExtractMessage(null);
     setIsLeadUrlModalOpen(true);
     setSelectedDetailItemId('');
+    setDetailModalMode('details');
     setViewMode('pipeline');
   };
 
@@ -1473,7 +1758,8 @@ const PipelinePage: NextPage = () => {
     setLeadExtractMessage(null);
 
     try {
-      const idToken = await simpBudgetAuth.currentUser?.getIdToken();
+      const bridgeAuthUser = quickLiftsAuth.currentUser || simpBudgetAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
       if (!idToken) {
         throw new Error('Please sign in again before analyzing leads.');
       }
@@ -1510,7 +1796,7 @@ const PipelinePage: NextPage = () => {
         extracted.stage || activeList.stages[0]?.id || 'sourced',
         activeList.stages,
       );
-      const nextItem = createItem(
+      const nextItemBase = createItem(
         {
           ...defaultDraft(stage),
           ...extracted,
@@ -1531,6 +1817,16 @@ const PipelinePage: NextPage = () => {
         },
         makeId(),
       );
+      const nextItem: PipelineItem = {
+        ...nextItemBase,
+        weeklyLogs: [
+          createSystemLog(
+            nextItemBase,
+            'item-created',
+            `Added ${nextItemBase.title} to ${activeList.name}.`,
+          ),
+        ],
+      };
 
       setLists((currentLists) =>
         currentLists.map((list) =>
@@ -1544,6 +1840,37 @@ const PipelinePage: NextPage = () => {
       );
       setStageFilter('all');
       setSelectedDetailItemId(nextItem.id);
+      setSelectedLogItemId(nextItem.id);
+      setDetailModalMode('details');
+      setDraft({
+        title: nextItem.title,
+        organization: nextItem.organization,
+        owner: nextItem.owner,
+        stage: nextItem.stage,
+        priority: nextItem.priority,
+        amount: nextItem.amount,
+        dueDate: nextItem.dueDate,
+        nextStep: nextItem.nextStep,
+        notes: nextItem.notes,
+        sourceUrl: nextItem.sourceUrl,
+        segment: nextItem.segment,
+        decisionMaker: nextItem.decisionMaker,
+        acv: nextItem.acv,
+        expectedCloseDate: nextItem.expectedCloseDate,
+        contractTerm: nextItem.contractTerm,
+        pilotScope: nextItem.pilotScope,
+        athleteCount: nextItem.athleteCount,
+        pilotStart: nextItem.pilotStart,
+        pilotEnd: nextItem.pilotEnd,
+        conversionLikelihood: nextItem.conversionLikelihood,
+        grossMargin: nextItem.grossMargin,
+        partnerCost: nextItem.partnerCost,
+        hardwareCost: nextItem.hardwareCost,
+        lossReason: nextItem.lossReason,
+        expansionPath: nextItem.expansionPath,
+      });
+      setEditingItemId(nextItem.id);
+      setIsEditorOpen(true);
       setLeadUrl('');
       setViewMode('pipeline');
     } catch (error) {
@@ -1573,6 +1900,8 @@ const PipelinePage: NextPage = () => {
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextList.templateKey));
     setSelectedDetailItemId('');
+    setDetailModalMode('details');
+    setIsNewListModalOpen(false);
     resetEditor();
   };
 
@@ -1602,16 +1931,25 @@ const PipelinePage: NextPage = () => {
           };
         }
 
+        const newItemBase = createItem({
+          ...draft,
+          title: draft.title.trim() || 'Untitled opportunity',
+          organization: draft.organization.trim(),
+        });
+        const newItem: PipelineItem = {
+          ...newItemBase,
+          weeklyLogs: [
+            createSystemLog(
+              newItemBase,
+              'item-created',
+              `Added ${newItemBase.title} to ${list.name}.`,
+            ),
+          ],
+        };
+
         return {
           ...list,
-          items: [
-            createItem({
-              ...draft,
-              title: draft.title.trim() || 'Untitled opportunity',
-              organization: draft.organization.trim(),
-            }),
-            ...list.items,
-          ],
+          items: [newItem, ...list.items],
         };
       }),
     );
@@ -1621,26 +1959,48 @@ const PipelinePage: NextPage = () => {
 
   const handleEditItem = (item: PipelineItem) => {
     if (!canModify) return;
-    const { id, createdAt, updatedAt, weeklyLogs, ...editableItem } = item;
+    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, ...editableItem } = item;
     void id;
     void createdAt;
     void updatedAt;
     void weeklyLogs;
+    void deletedAt;
+    void deletedByLogId;
+    void restorableUntil;
     setDraft(editableItem);
     setEditingItemId(item.id);
     setIsEditorOpen(true);
-    setViewMode('pipeline');
-    setSelectedDetailItemId('');
+    setSelectedDetailItemId(item.id);
+    setDetailModalMode('details');
   };
 
   const handleDeleteItem = (itemId: string) => {
     if (!canModify) return;
+    const now = new Date();
+    const deletedAt = now.toISOString();
+    const restorableUntil = addDays(now, SOFT_DELETE_RESTORE_DAYS).toISOString();
     setLists((currentLists) =>
       currentLists.map((list) =>
         list.id === activeList.id
           ? {
               ...list,
-              items: list.items.filter((item) => item.id !== itemId),
+              items: list.items.map((item) => {
+                if (item.id !== itemId || isItemDeleted(item)) return item;
+                const deletionLog = createSystemLog(
+                  item,
+                  'item-deleted',
+                  `Deleted ${item.title} from ${list.name}.`,
+                  restorableUntil,
+                );
+                return {
+                  ...item,
+                  deletedAt,
+                  deletedByLogId: deletionLog.id,
+                  restorableUntil,
+                  weeklyLogs: [deletionLog, ...item.weeklyLogs],
+                  updatedAt: deletedAt,
+                };
+              }),
             }
           : list,
       ),
@@ -1648,7 +2008,42 @@ const PipelinePage: NextPage = () => {
 
     if (editingItemId === itemId) resetEditor();
     if (selectedLogItemId === itemId) setSelectedLogItemId('');
-    if (selectedDetailItemId === itemId) setSelectedDetailItemId('');
+    if (selectedDetailItemId === itemId) {
+      setSelectedDetailItemId('');
+      setDetailModalMode('details');
+    }
+  };
+
+  const handleRestoreDeletedItem = (listId: string, itemId: string) => {
+    if (!canModify) return;
+    const now = new Date().toISOString();
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === listId
+          ? {
+              ...list,
+              items: list.items.map((item) => {
+                if (item.id !== itemId || !canRestoreDeletedItem(item)) return item;
+                return {
+                  ...item,
+                  deletedAt: '',
+                  deletedByLogId: '',
+                  restorableUntil: '',
+                  weeklyLogs: [
+                    createSystemLog(item, 'item-restored', `Restored ${item.title} to ${list.name}.`),
+                    ...item.weeklyLogs,
+                  ],
+                  updatedAt: now,
+                };
+              }),
+            }
+          : list,
+      ),
+    );
+    setActiveListId(listId);
+    setSelectedDetailItemId(itemId);
+    setDetailModalMode('details');
   };
 
   const handleDeleteList = () => {
@@ -1662,13 +2057,21 @@ const PipelinePage: NextPage = () => {
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextLists[0].templateKey));
     setSelectedDetailItemId('');
+    setDetailModalMode('details');
+    setIsDeleteListModalOpen(false);
     resetEditor();
   };
 
-  const handleSaveLog = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveLog = (
+    event: React.FormEvent<HTMLFormElement>,
+    options: { listId?: string; itemId?: string; closeOnSave?: boolean } = {},
+  ) => {
     event.preventDefault();
     if (!canModify) return;
-    if (!selectedLogItem) return;
+    const targetListId = options.listId || activeList.id;
+    const targetList = lists.find((list) => list.id === targetListId);
+    const targetItemId = options.itemId || selectedLogItem?.id || '';
+    if (!targetList || !targetItemId) return;
     const hasMetricInput = Boolean(
       logDraft.rosteredAthletes ||
         logDraft.completedCheckIns ||
@@ -1693,11 +2096,11 @@ const PipelinePage: NextPage = () => {
 
     setLists((currentLists) =>
       currentLists.map((list) =>
-        list.id === activeList.id
+        list.id === targetList.id
           ? {
               ...list,
               items: list.items.map((item) =>
-                item.id === selectedLogItem.id
+                item.id === targetItemId
                   ? {
                       ...item,
                       weeklyLogs: [nextLog, ...item.weeklyLogs],
@@ -1709,14 +2112,17 @@ const PipelinePage: NextPage = () => {
           : list,
       ),
     );
-    setLogDraft(defaultLogDraft(activeList.templateKey));
+    setLogDraft(defaultLogDraft(targetList.templateKey));
+    if (options.closeOnSave) {
+      setIsLogModalOpen(false);
+    }
   };
 
-  const handleDeleteLog = (itemId: string, logId: string) => {
+  const handleDeleteLog = (itemId: string, logId: string, listId = activeList.id) => {
     if (!canModify) return;
     setLists((currentLists) =>
       currentLists.map((list) =>
-        list.id === activeList.id
+        list.id === listId
           ? {
               ...list,
               items: list.items.map((item) =>
@@ -1743,9 +2149,7 @@ const PipelinePage: NextPage = () => {
         'Title',
         'Organization',
         'Stage',
-        'Stage Probability',
-        'Weighted Value',
-        'Priority',
+        'Importance',
         'Owner',
         'Segment',
         'Decision Maker',
@@ -1753,18 +2157,18 @@ const PipelinePage: NextPage = () => {
         'Amount',
         'Expected Close Date',
         'Due Date',
-        'Pilot Scope',
-        'Athlete Count',
-        'Gross Margin',
+        'Scope',
+        'Count',
+        'Margin Notes',
         'Partner Cost',
-        'Hardware Cost',
+        'Hard Cost',
         'Next Step',
         'Expansion Path',
         'Loss Reason',
         'Notes',
         'Source URL',
       ],
-      ...activeList.items.map((item) => {
+      ...activeListItems.map((item) => {
         const stage = getStage(activeList, item.stage);
         return [
           activeList.name,
@@ -1772,8 +2176,6 @@ const PipelinePage: NextPage = () => {
           item.title,
           item.organization,
           stage.label,
-          `${itemProbability(activeList, item)}%`,
-          String(Math.round(weightedValue(activeList, item))),
           item.priority,
           item.owner,
           item.segment,
@@ -1826,8 +2228,13 @@ const PipelinePage: NextPage = () => {
     setShareMessage(null);
 
     try {
-      const nextShareId = shareDoc?.id || makeId();
+      const nextShareId = ownerShareId || shareDocumentIdForList(user.uid, activeList.id);
       const editorEmails = shareAccess === 'edit' ? normalizeEmailList(shareEditorEmails) : [];
+      if (shareAccess === 'edit' && editorEmails.length === 0) {
+        setShareMessage({ type: 'error', text: 'Add at least one collaborator email for edit access.' });
+        return;
+      }
+
       const payload: PipeListShare = {
         id: nextShareId,
         ownerUid: user.uid,
@@ -1840,11 +2247,11 @@ const PipelinePage: NextPage = () => {
 
       await setDoc(
         doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, nextShareId),
-        {
+        stripUndefined({
           ...payload,
           createdAt: shareDoc?.createdAt || serverTimestamp(),
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       );
 
@@ -1907,10 +2314,10 @@ const PipelinePage: NextPage = () => {
 
       await setDoc(
         doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, user.uid),
-        {
+        stripUndefined({
           ...nextProfile,
           updatedAt: serverTimestamp(),
-        },
+        }),
         { merge: true },
       );
 
@@ -1945,7 +2352,6 @@ const PipelinePage: NextPage = () => {
       } else if (
         isSharedView &&
         shareDoc?.access === 'edit' &&
-        shareDoc.editorEmails.length > 0 &&
         email !== shareDoc.ownerEmail.toLowerCase() &&
         !shareDoc.editorEmails.map((editorEmail) => editorEmail.toLowerCase()).includes(email)
       ) {
@@ -1978,7 +2384,6 @@ const PipelinePage: NextPage = () => {
     if (
       isSharedView &&
       shareDoc?.access === 'edit' &&
-      shareDoc.editorEmails.length > 0 &&
       email !== shareDoc.ownerEmail.toLowerCase() &&
       !shareDoc.editorEmails.map((editorEmail) => editorEmail.toLowerCase()).includes(email)
     ) {
@@ -2033,6 +2438,8 @@ const PipelinePage: NextPage = () => {
   );
 
   const selectedDetailStage = selectedDetailItem ? getStage(activeList, selectedDetailItem.stage) : null;
+  const selectedDetailIsEditing = Boolean(selectedDetailItem && isEditorOpen && editingItemId === selectedDetailItem.id);
+  const shouldBlockEditShare = isSharedView && shareDoc?.access === 'edit' && !canEditShared;
 
   const renderDetailField = (label: string, value: React.ReactNode, wide = false) => {
     const isEmpty = value === null || value === undefined || value === '';
@@ -2043,6 +2450,149 @@ const PipelinePage: NextPage = () => {
       </div>
     );
   };
+
+  const renderItemEditor = () => (
+    <form onSubmit={handleSaveItem} className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ['title', 'Item', 'Name'],
+          ['organization', 'Organization', 'Company, school, fund'],
+          ['owner', 'Owner', 'Owner'],
+          ['segment', 'Segment', 'Category, fit, or type'],
+          ['decisionMaker', 'Decision Maker', 'Role or name'],
+          ['acv', 'ACV', '$'],
+          ['amount', 'Amount / Prize', '$'],
+          ['expectedCloseDate', 'Expected Close', 'date'],
+          ['contractTerm', 'Contract Term', '12 months'],
+          ['pilotStart', 'Start Date', 'date'],
+          ['pilotEnd', 'End Date', 'date'],
+          ['athleteCount', 'Count', '42'],
+          ['sourceUrl', 'Source URL', 'https://example.com'],
+        ].map(([key, label, placeholder]) => (
+          <label key={key} className={key === 'sourceUrl' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
+            <input
+              id={`pipe-${key}`}
+              type={placeholder === 'date' ? 'date' : 'text'}
+              value={draft[key as keyof ItemDraft]}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+              placeholder={placeholder === 'date' ? undefined : placeholder}
+            />
+          </label>
+        ))}
+
+        <label className="block" htmlFor="pipe-stage">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
+          <select
+            id="pipe-stage"
+            value={draft.stage}
+            onChange={(event) => setDraft((current) => ({ ...current, stage: event.target.value }))}
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+          >
+            {activeList.stages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block" htmlFor="pipe-priority">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Importance</span>
+          <select
+            id="pipe-priority"
+            value={draft.priority}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, priority: event.target.value as PipelinePriority }))
+            }
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm capitalize outline-none transition focus:border-stone-400 focus:bg-white"
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+
+        <label className="block" htmlFor="pipe-dueDate">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Due Date</span>
+          <input
+            id="pipe-dueDate"
+            type="date"
+            value={draft.dueDate}
+            onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+          />
+        </label>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {[
+          ['pilotScope', 'Scope', 'Timeline, scope, requirements, and commitments'],
+          ['nextStep', 'Next Step', 'The next action that moves this forward'],
+          ['grossMargin', 'Margin Notes', 'Revenue, costs, or margin context'],
+          ['partnerCost', 'Partner Cost', 'Partner, implementation, or service share'],
+          ['hardwareCost', 'Hard Cost', 'Hardware, fulfillment, or delivery costs'],
+          ['expansionPath', 'Expansion Path', 'Renewal, upsell, or next relationship path'],
+          ['lossReason', 'Loss Reason', 'Only if paused or closed lost'],
+          ['notes', 'Notes', 'Context'],
+        ].map(([key, label, placeholder]) => (
+          <label key={key} className={key === 'notes' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
+            <textarea
+              id={`pipe-${key}`}
+              value={draft[key as keyof ItemDraft]}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+              placeholder={placeholder}
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-stone-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {editingItemId ? (
+          <button
+            type="button"
+            onClick={() => handleDeleteItem(editingItemId)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Item
+          </button>
+        ) : (
+          <span />
+        )}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={resetEditor}
+            className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 transition hover:text-stone-900"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            data-testid="pipe-save-opportunity"
+            className="inline-flex h-10 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </form>
+  );
 
   if (isSharedView && !dataReady) {
     return (
@@ -2231,12 +2781,12 @@ const PipelinePage: NextPage = () => {
               {canModify && (
                 <button
                   type="button"
-                  data-testid="pipe-new-opportunity"
-                  onClick={openLeadUrlModal}
+                  data-testid="pipe-new-list"
+                  onClick={() => setIsNewListModalOpen(true)}
                   className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-700"
                 >
-                  <Plus className="h-4 w-4" />
-                  Add new lead
+                  <ListPlus className="h-4 w-4" />
+                  Add new list
                 </button>
               )}
               {user && (
@@ -2289,122 +2839,12 @@ const PipelinePage: NextPage = () => {
                           activeListId === list.id ? 'text-stone-300' : 'text-stone-400'
                         }`}
                       >
-                        {formatCount(list.items.length, 'opportunity')} · {templateCatalog[list.templateKey].label}
+                        {formatCount(list.items.filter((item) => !isItemDeleted(item)).length, 'opportunity')} · {templateCatalog[list.templateKey].label}
                       </span>
                     </span>
                   </button>
                 ))}
               </div>
-
-              {!isSharedView && (
-                <form onSubmit={handleCreateList} className="mt-4 border-t border-stone-100 pt-4">
-                  <label className="mb-1.5 block text-xs font-semibold uppercase text-stone-400" htmlFor="new-list-template">
-                    Template
-                  </label>
-                  <select
-                    id="new-list-template"
-                    value={newListTemplateKey}
-                    onChange={(event) => setNewListTemplateKey(event.target.value as TemplateKey)}
-                    className="mb-2 h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
-                  >
-                    {(Object.keys(templateCatalog) as TemplateKey[]).map((key) => (
-                      <option key={key} value={key}>
-                        {templateCatalog[key].label}
-                      </option>
-                    ))}
-                  </select>
-
-                  <label className="sr-only" htmlFor="new-list-name">
-                    List name
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="new-list-name"
-                      value={newListName}
-                      onChange={(event) => setNewListName(event.target.value)}
-                      className="min-w-0 flex-1 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder={templateCatalog[newListTemplateKey].defaultName}
-                    />
-                    <button
-                      type="submit"
-                      data-testid="pipe-add-list"
-                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-stone-900 text-white transition hover:bg-stone-700"
-                      title="Add list"
-                    >
-                      <ListPlus className="h-4 w-4" />
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {!isSharedView && isOwner && (
-                <div className="mt-4 border-t border-stone-100 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsSharePanelOpen((current) => !current)}
-                    className="inline-flex h-10 w-full items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:text-stone-950"
-                  >
-                    Share Selected List
-                  </button>
-
-                  {isSharePanelOpen && (
-                    <div className="mt-3 space-y-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
-                      <label className="block" htmlFor="pipe-share-access">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
-                        <select
-                          id="pipe-share-access"
-                          value={shareAccess}
-                          onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
-                          className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400"
-                        >
-                          <option value="read">Read-only public link</option>
-                          <option value="edit">Read-only public + invited editors</option>
-                        </select>
-                      </label>
-
-                      {shareAccess === 'edit' && (
-                        <label className="block" htmlFor="pipe-share-editors">
-                          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Editor emails</span>
-                          <textarea
-                            id="pipe-share-editors"
-                            value={shareEditorEmails}
-                            onChange={(event) => setShareEditorEmails(event.target.value)}
-                            className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none focus:border-stone-400"
-                            placeholder="name@example.com, teammate@example.com"
-                          />
-                        </label>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={createOrUpdateShareLink}
-                        className="inline-flex h-10 w-full items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                      >
-                        Create / Update Link
-                      </button>
-
-                      {shareUrl && (
-                        <div className="space-y-2">
-                          <input
-                            readOnly
-                            value={shareUrl}
-                            className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={copyShareLink}
-                            className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                          >
-                            Copy Link
-                          </button>
-                        </div>
-                      )}
-
-                      <MessageBanner message={shareMessage} />
-                    </div>
-                  )}
-                </div>
-              )}
 
               {isSharedView && (
                 <div className="mt-4 border-t border-stone-100 pt-4">
@@ -2470,15 +2910,26 @@ const PipelinePage: NextPage = () => {
               </div>
 
               {!isSharedView && (
-                <button
-                  type="button"
-                  onClick={handleDeleteList}
-                  disabled={lists.length <= 1}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete List
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsSharePanelOpen(true)}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
+                  >
+                    <Users className="h-4 w-4" />
+                    Invite Collaborator
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDeleteListModalOpen(true)}
+                    disabled={lists.length <= 1}
+                    title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete List
+                  </button>
+                </div>
               )}
             </div>
 
@@ -2506,19 +2957,12 @@ const PipelinePage: NextPage = () => {
 
             {viewMode === 'metrics' && (
               <div className="space-y-5">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {renderMetricCard(
                     'Open Pipeline',
                     formatMoney(scorecardMetrics.totalOpenValue),
                     `${scorecardMetrics.totalOpenDeals} open opportunities across all lists`,
                     <DollarSign className="h-4 w-4" />,
-                  )}
-                  {renderMetricCard(
-                    'Weighted Forecast',
-                    formatMoney(scorecardMetrics.weightedValue),
-                    'ACV or amount multiplied by stage probability',
-                    <Percent className="h-4 w-4" />,
-                    'bg-emerald-50 text-emerald-700',
                   )}
                   {renderMetricCard(
                     'Average Value',
@@ -2575,12 +3019,11 @@ const PipelinePage: NextPage = () => {
                   </div>
                   <div className="divide-y divide-stone-100">
                     {[
-                      ['How much is open?', `${scorecardMetrics.totalOpenDeals} open opportunities, ${formatMoney(scorecardMetrics.totalOpenValue)} unweighted value.`],
-                      ['What is weighted value?', `${formatMoney(scorecardMetrics.weightedValue)} based on stage probabilities.`],
+                      ['How much is open?', `${scorecardMetrics.totalOpenDeals} open opportunities, ${formatMoney(scorecardMetrics.totalOpenValue)} total listed value.`],
                       ['What needs attention soon?', scorecardMetrics.firstExpectedCloseDate || 'Add expected close or due dates to important items.'],
                       ['How much is documented?', `${scorecardMetrics.loggedItems} items have logs, with ${scorecardMetrics.totalLogs} total records.`],
                       ['What proof signals exist?', `${Math.round(scorecardMetrics.checkInRate)}% check-in rate, ${Math.round(scorecardMetrics.signalEvents)} signal events, ${Math.round(scorecardMetrics.staffScore) || 0}/10 staff score from metric logs.`],
-                      ['Where does margin compress?', 'Track Gross Margin, Partner Cost, and Hardware Cost when those fields apply.'],
+                      ['Where do costs need attention?', 'Track margin notes, partner costs, and hard costs when those fields apply.'],
                     ].map(([question, answer]) => (
                       <div key={question} className="grid gap-2 px-4 py-3 md:grid-cols-[minmax(220px,0.8fr)_1fr]">
                         <p className="text-sm font-semibold text-stone-800">{question}</p>
@@ -2593,233 +3036,113 @@ const PipelinePage: NextPage = () => {
             )}
 
             {viewMode === 'logs' && (
-              <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-                <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
-                  <h3 className="mb-3 px-1 text-sm font-semibold text-stone-950">Items</h3>
-                  <div className="space-y-1.5">
-                    {activeList.items.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setSelectedLogItemId(item.id)}
-                        className={`w-full rounded-md px-3 py-3 text-left transition ${
-                          selectedLogItem?.id === item.id ? 'bg-stone-900 text-white' : 'hover:bg-stone-100'
-                        }`}
-                      >
-                        <span className="block truncate text-sm font-semibold">{item.title}</span>
-                        <span className={selectedLogItem?.id === item.id ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
-                          {item.organization || 'No organization'} · {formatCount(item.weeklyLogs.length, 'log')}
-                        </span>
-                      </button>
-                    ))}
-                    {activeList.items.length === 0 && (
-                      <p className="px-2 py-8 text-center text-sm text-stone-400">Add an opportunity first.</p>
-                    )}
+              <div className="space-y-5">
+                <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label className="sr-only" htmlFor="log-list-filter">
+                      Filter logs by PipeList
+                    </label>
+                    <select
+                      id="log-list-filter"
+                      value={logListFilter}
+                      onChange={(event) => setLogListFilter(event.target.value)}
+                      className="h-11 min-w-[220px] rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+                    >
+                      <option value="all">All PipeLists</option>
+                      {lists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-stone-400">
+                      {formatCount(filteredLogRows.length, 'log')}
+                    </span>
                   </div>
+
+                  {canModify && (
+                    <button
+                      type="button"
+                      onClick={() => openLogModal()}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Log
+                    </button>
+                  )}
                 </div>
 
-                <div className="space-y-5">
-                  {selectedLogItem ? (
-                    <>
-                      {canModify ? (
-                        <form onSubmit={handleSaveLog} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-                          <div className="mb-4">
-                            <h3 className="text-base font-semibold text-stone-950">Add Log</h3>
-                            <p className="mt-1 text-sm text-stone-500">
-                              {selectedLogItem.organization || selectedLogItem.title}
-                            </p>
-                          </div>
-
-                          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                            <label className="block" htmlFor="log-weekOf">
-                              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Date</span>
-                              <input
-                                id="log-weekOf"
-                                type="date"
-                                value={logDraft.weekOf}
-                                onChange={(event) => setLogDraft((current) => ({ ...current, weekOf: event.target.value }))}
-                                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                              />
-                            </label>
-
-                            <label className="block" htmlFor="log-type">
-                              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Type</span>
-                              <select
-                                id="log-type"
-                                value={logDraft.type}
-                                onChange={(event) =>
-                                  setLogDraft((current) => ({
-                                    ...current,
-                                    type: event.target.value as ActivityLogType,
-                                  }))
-                                }
-                                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                              >
-                                {(Object.keys(logTypeLabels) as ActivityLogType[]).map((type) => (
-                                  <option key={type} value={type}>
-                                    {logTypeLabels[type]}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label className="block md:col-span-2" htmlFor="log-summary">
-                              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Summary</span>
-                              <input
-                                id="log-summary"
-                                value={logDraft.summary}
-                                onChange={(event) => setLogDraft((current) => ({ ...current, summary: event.target.value }))}
-                                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                                placeholder="What happened?"
-                              />
-                            </label>
-
-                            <label className="block md:col-span-2" htmlFor="log-nextStep">
-                              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Next Step</span>
-                              <input
-                                id="log-nextStep"
-                                value={logDraft.nextStep}
-                                onChange={(event) => setLogDraft((current) => ({ ...current, nextStep: event.target.value }))}
-                                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                                placeholder="Optional follow-up"
-                              />
-                            </label>
-
-                            <label className="block" htmlFor="log-followUpDate">
-                              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Follow-Up</span>
-                              <input
-                                id="log-followUpDate"
-                                type="date"
-                                value={logDraft.followUpDate}
-                                onChange={(event) => setLogDraft((current) => ({ ...current, followUpDate: event.target.value }))}
-                                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                              />
-                            </label>
-                          </div>
-
-                          {showLogMetrics && (
-                            <div className="mt-3 rounded-lg border border-stone-100 bg-[#FAFAF7] p-3">
-                              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                {[
-                                  ['rosteredAthletes', 'Rostered Athletes'],
-                                  ['completedCheckIns', 'Completed Check-Ins'],
-                                  ['checkInRate', 'Check-In Rate'],
-                                  ['biometricSyncRate', 'Biometric Sync'],
-                                  ['signalEvents', 'Signal Events'],
-                                  ['noraEngagementRate', 'Nora Engagement'],
-                                  ['noraSessions', 'Nora Sessions'],
-                                  ['staffFeedbackScore', 'Staff Score'],
-                                ].map(([key, label]) => (
-                                  <label key={key} className="block" htmlFor={`log-${key}`}>
-                                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
-                                    <input
-                                      id={`log-${key}`}
-                                      value={logDraft[key as keyof ActivityLogDraft]}
-                                      onChange={(event) =>
-                                        setLogDraft((current) => ({
-                                          ...current,
-                                          [key]: event.target.value,
-                                        }))
-                                      }
-                                      className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
-                                      placeholder={key.includes('Rate') ? '%' : undefined}
-                                    />
-                                  </label>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          <label className="mt-3 block" htmlFor="log-notes">
-                            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
-                            <textarea
-                              id="log-notes"
-                              value={logDraft.notes}
-                              onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
-                              className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                              placeholder="Details, risk, context"
-                            />
-                          </label>
-
-                          <div className="mt-4 flex justify-end">
-                            <button
-                              type="submit"
-                              className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Add Log
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-                          <h3 className="text-base font-semibold text-stone-950">Logs</h3>
-                          <p className="mt-1 text-sm leading-6 text-stone-500">
-                            This shared list is read-only. Records are visible below.
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                        <div className="border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400">
-                          Timeline
-                        </div>
-                        {selectedLogItem.weeklyLogs.length > 0 ? (
-                          <div className="divide-y divide-stone-100">
-                            {selectedLogItem.weeklyLogs.map((log) => (
-                              <article key={log.id} className="px-4 py-4">
-                                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                  <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
-                                        {logTypeLabels[log.type]}
-                                      </span>
-                                      <span className="text-xs text-stone-400">{log.weekOf}</span>
-                                      {log.followUpDate && <span className="text-xs text-stone-400">Follow up {log.followUpDate}</span>}
-                                    </div>
-                                    <h4 className="mt-2 text-sm font-semibold text-stone-950">{log.summary || log.notes || 'Untitled log'}</h4>
-                                    {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
-                                    {log.notes && log.notes !== log.summary && <p className="mt-1 text-sm leading-6 text-stone-500">{log.notes}</p>}
-                                  </div>
-                                  {canModify && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteLog(selectedLogItem.id, log.id)}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
-                                      title="Delete log"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </div>
-                                {logHasMetrics(log) && (
-                                  <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                                    {[
-                                      ['Check-ins', `${Math.round(derivedCheckInRate(log))}%`],
-                                      ['Biometrics', log.biometricSyncRate || '-'],
-                                      ['Signals', log.signalEvents || '0'],
-                                      ['Nora', log.noraEngagementRate || '-'],
-                                      ['Staff', log.staffFeedbackScore || '-'],
-                                    ].map(([label, value]) => (
-                                      <div key={label} className="rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-2">
-                                        <p className="text-xs text-stone-400">{label}</p>
-                                        <p className="text-sm font-semibold text-stone-800">{value}</p>
-                                      </div>
-                                    ))}
-                                  </div>
+                <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div className="border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400">
+                    Timeline
+                  </div>
+                  {filteredLogRows.length > 0 ? (
+                    <div className="divide-y divide-stone-100">
+                      {filteredLogRows.map(({ list, item, log }) => (
+                        <article key={`${list.id}-${item.id}-${log.id}`} className="px-4 py-4">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                  {logDisplayLabel(log)}
+                                </span>
+                                <span className="text-xs text-stone-400">{log.weekOf}</span>
+                                <span className="text-xs text-stone-400">{list.name}</span>
+                                {log.followUpDate && (
+                                  <span className="text-xs text-stone-400">
+                                    {followUpDateLabel(log.nextStep)} {log.followUpDate}
+                                  </span>
                                 )}
-                              </article>
-                            ))}
+                              </div>
+                              <h4 className="mt-2 text-sm font-semibold text-stone-950">{log.summary || log.notes || 'Untitled log'}</h4>
+                              <p className="mt-1 text-sm text-stone-500">
+                                {item.title}
+                                {item.organization ? ` · ${item.organization}` : ''}
+                              </p>
+                              {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                              {log.notes && log.notes !== log.summary && <p className="mt-1 text-sm leading-6 text-stone-500">{log.notes}</p>}
+                            </div>
+                            <div className="flex items-center gap-2 self-start">
+                              {log.systemAction === 'item-deleted' && canRestoreDeletedItem(item) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestoreDeletedItem(list.id, item.id)}
+                                  className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-3 text-xs font-semibold text-white transition hover:bg-stone-700"
+                                >
+                                  Undo Delete
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveListId(list.id);
+                                  setSelectedDetailItemId(item.id);
+                                  setSelectedLogItemId(item.id);
+                                  setDetailModalMode('logs');
+                                }}
+                                className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                              >
+                                Open
+                              </button>
+                              {canModify && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLog(item.id, log.id, list.id)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                  title="Delete log"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        ) : (
-                          <div className="px-4 py-12 text-center text-sm text-stone-400">No logs yet.</div>
-                        )}
-                      </div>
-                    </>
+                        </article>
+                      ))}
+                    </div>
                   ) : (
-                    <div className="rounded-lg border border-stone-200 bg-white px-4 py-16 text-center shadow-sm">
-                      <p className="text-sm font-semibold text-stone-900">No item selected</p>
-                      <p className="mt-1 text-sm text-stone-500">Add an opportunity, then record updates here.</p>
+                    <div className="px-4 py-16 text-center">
+                      <p className="text-sm font-semibold text-stone-900">No logs yet</p>
+                      <p className="mt-1 text-sm text-stone-500">Add updates from here or from any lead details modal.</p>
                     </div>
                   )}
                 </div>
@@ -2828,12 +3151,11 @@ const PipelinePage: NextPage = () => {
 
             {viewMode === 'pipeline' && (
               <>
-                <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  {renderMetricCard('Total', String(activeList.items.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
+                <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
                   {renderMetricCard('Active', String(activeItems), 'Not closed won or lost', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
                   {renderMetricCard('Won', String(wonItems), 'Closed or awarded opportunities', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
-                  {renderMetricCard('Open Value', formatMoney(activeOpenValue), 'Unweighted ACV or amount', <DollarSign className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
-                  {renderMetricCard('Weighted', formatMoney(activeWeightedValue), 'Stage-adjusted forecast', <Percent className="h-4 w-4" />, 'bg-indigo-50 text-indigo-700')}
+                  {renderMetricCard('Open Value', formatMoney(activeOpenValue), 'ACV or amount for active items', <DollarSign className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
                 </div>
 
                 <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm xl:flex-row xl:items-center">
@@ -2889,158 +3211,6 @@ const PipelinePage: NextPage = () => {
                   </div>
                 </div>
 
-                {isEditorOpen && editingItemId && (
-                  <form onSubmit={handleSaveItem} className="mb-5 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-base font-semibold text-stone-950">
-                          Edit Item
-                        </h3>
-                        <p className="mt-1 text-sm text-stone-500">{activeList.name}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={resetEditor}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
-                        title="Close editor"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      {[
-                        ['title', 'Item', 'Name'],
-                        ['organization', 'Organization', 'Company, school, fund'],
-                        ['owner', 'Owner', 'Owner'],
-                        ['segment', 'Segment', 'D3, mid-major, pro'],
-                        ['decisionMaker', 'Decision Maker', 'Role or name'],
-                        ['acv', 'ACV', '$'],
-                        ['amount', 'Amount / Prize', '$'],
-                        ['expectedCloseDate', 'Expected Close', 'date'],
-                        ['contractTerm', 'Contract Term', '12 months'],
-                        ['pilotStart', 'Pilot Start', 'date'],
-                        ['pilotEnd', 'Pilot End', 'date'],
-                        ['athleteCount', 'Athlete Count', '42'],
-                      ].map(([key, label, placeholder]) => (
-                        <label key={key} className="block" htmlFor={`pipe-${key}`}>
-                          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
-                          <input
-                            id={`pipe-${key}`}
-                            type={placeholder === 'date' ? 'date' : 'text'}
-                            value={draft[key as keyof ItemDraft]}
-                            onChange={(event) =>
-                              setDraft((current) => ({
-                                ...current,
-                                [key]: event.target.value,
-                              }))
-                            }
-                            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                            placeholder={placeholder === 'date' ? undefined : placeholder}
-                          />
-                        </label>
-                      ))}
-
-                      <label className="block" htmlFor="pipe-stage">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
-                        <select
-                          id="pipe-stage"
-                          value={draft.stage}
-                          onChange={(event) => setDraft((current) => ({ ...current, stage: event.target.value }))}
-                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                        >
-                          {activeList.stages.map((stage) => (
-                            <option key={stage.id} value={stage.id}>
-                              {stage.label} · {stage.probability}%
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block" htmlFor="pipe-priority">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Priority</span>
-                        <select
-                          id="pipe-priority"
-                          value={draft.priority}
-                          onChange={(event) =>
-                            setDraft((current) => ({ ...current, priority: event.target.value as PipelinePriority }))
-                          }
-                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm capitalize outline-none transition focus:border-stone-400 focus:bg-white"
-                        >
-                          <option value="high">High</option>
-                          <option value="medium">Medium</option>
-                          <option value="low">Low</option>
-                        </select>
-                      </label>
-                      <label className="block" htmlFor="pipe-conversionLikelihood">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Override Probability</span>
-                        <input
-                          id="pipe-conversionLikelihood"
-                          value={draft.conversionLikelihood}
-                          onChange={(event) => setDraft((current) => ({ ...current, conversionLikelihood: event.target.value }))}
-                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                          placeholder="%"
-                        />
-                      </label>
-                      <label className="block" htmlFor="pipe-dueDate">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Due Date</span>
-                        <input
-                          id="pipe-dueDate"
-                          type="date"
-                          value={draft.dueDate}
-                          onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
-                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      {[
-                        ['pilotScope', 'Pilot Scope', 'Timeline, scope, sports, and institution commitment'],
-                        ['nextStep', 'Next Step', 'The next action that moves this forward'],
-                        ['grossMargin', 'Gross Margin', 'Software margin after partner and hardware costs'],
-                        ['partnerCost', 'Partner Cost', 'AuntEDNA, implementation, or service share'],
-                        ['hardwareCost', 'Hardware Cost', 'Polar or other device costs'],
-                        ['expansionPath', 'Expansion Path', 'One sport to full program, conference, or renewal path'],
-                        ['lossReason', 'Loss Reason', 'Only if paused or closed lost'],
-                        ['notes', 'Notes', 'Context'],
-                      ].map(([key, label, placeholder]) => (
-                        <label key={key} className={key === 'notes' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
-                          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
-                          <textarea
-                            id={`pipe-${key}`}
-                            value={draft[key as keyof ItemDraft]}
-                            onChange={(event) =>
-                              setDraft((current) => ({
-                                ...current,
-                                [key]: event.target.value,
-                              }))
-                            }
-                            className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                            placeholder={placeholder}
-                          />
-                        </label>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={resetEditor}
-                        className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 transition hover:text-stone-900"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        data-testid="pipe-save-opportunity"
-                        className="inline-flex h-10 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </form>
-                )}
-
                 <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
                   {activeList.stages.map((stage) => (
                     <button
@@ -3055,19 +3225,18 @@ const PipelinePage: NextPage = () => {
                     >
                       <span className="block truncate text-sm font-semibold">{stage.label}</span>
                       <span className={stageFilter === stage.id ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
-                        {countsByStage[stage.id] || 0} · {stage.probability}%
+                        {formatCount(countsByStage[stage.id] || 0, 'item')}
                       </span>
                     </button>
                   ))}
                 </div>
 
                 <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                  <div className="hidden grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_120px_110px_120px_minmax(220px,1fr)_104px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
+                  <div className="hidden grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_120px_120px_minmax(220px,1fr)_104px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
                     <span>Item</span>
                     <span>Organization</span>
                     <span>Stage</span>
                     <span>Value</span>
-                    <span>Weighted</span>
                     <span>Next Step</span>
                     <span className="text-right">Actions</span>
                   </div>
@@ -3082,14 +3251,18 @@ const PipelinePage: NextPage = () => {
                             role="button"
                             tabIndex={0}
                             aria-label={`Open details for ${item.title}`}
-                            onClick={() => setSelectedDetailItemId(item.id)}
+                            onClick={() => {
+                              setSelectedDetailItemId(item.id);
+                              setDetailModalMode('details');
+                            }}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault();
                                 setSelectedDetailItemId(item.id);
+                                setDetailModalMode('details');
                               }
                             }}
-                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_120px_110px_120px_minmax(220px,1fr)_104px] lg:items-center lg:gap-4"
+                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_120px_120px_minmax(220px,1fr)_104px] lg:items-center lg:gap-4"
                           >
                             <div className="min-w-0">
                               <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
@@ -3117,11 +3290,21 @@ const PipelinePage: NextPage = () => {
                             </div>
 
                             <p className="text-sm font-semibold text-stone-800">{formatMoney(itemValue(item))}</p>
-                            <p className="text-sm text-stone-600">{formatMoney(weightedValue(activeList, item))}</p>
 
-                            <p className="min-w-0 text-sm leading-5 text-stone-600 lg:truncate">
-                              {item.nextStep || item.notes || item.expansionPath || 'No next step'}
-                            </p>
+                            <div className="min-w-0">
+                              {(() => {
+                                const nextStepText = item.nextStep || item.notes || item.expansionPath || 'No next step';
+                                return (
+                                  <span
+                                    onMouseEnter={(event) => showNextStepTooltip(event, nextStepText)}
+                                    onMouseLeave={() => setNextStepTooltip(null)}
+                                    className="block max-w-full truncate text-sm leading-5 text-stone-600"
+                                  >
+                                    {nextStepText}
+                                  </span>
+                                );
+                              })()}
+                            </div>
 
                             <div className="flex items-center justify-end gap-2">
                               <button
@@ -3186,13 +3369,349 @@ const PipelinePage: NextPage = () => {
                 </div>
 
                 <div className="mt-4 text-sm text-stone-500">
-                  {dueSoonItems} due soon · {activeList.items.filter((item) => item.weeklyLogs.length > 0).length} with logs.
+                  {dueSoonItems} due soon · {activeListItems.filter((item) => item.weeklyLogs.length > 0).length} with logs.
                 </div>
               </>
             )}
           </section>
         </div>
       </main>
+
+      {shouldBlockEditShare && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#FAFAF7]/95 px-4 py-6 backdrop-blur-md">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-share-auth-title"
+            className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 text-stone-900 shadow-2xl"
+          >
+            <div className="mb-5">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <h3 id="edit-share-auth-title" className="text-xl font-bold text-stone-950">
+                Sign in for edit access
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                This invite includes editing permissions for {activeList.name}. Sign in or create an account with the invited email to open the editable list.
+              </p>
+              {user && !canEditShared && (
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
+                  You are signed in as {user.email || 'this account'}, but that email has not been invited to edit this PipeList.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={!authReady}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Continue with Google
+              </button>
+
+              <div className="flex items-center gap-3 py-1">
+                <div className="h-px flex-1 bg-stone-100" />
+                <span className="text-xs font-semibold uppercase text-stone-400">or</span>
+                <div className="h-px flex-1 bg-stone-100" />
+              </div>
+
+              <label className="block" htmlFor="edit-share-magic-email">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email magic link</span>
+                <input
+                  id="edit-share-magic-email"
+                  type="email"
+                  value={magicEmail}
+                  onChange={(event) => setMagicEmail(event.target.value)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="you@example.com"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={sendMagicLink}
+                disabled={!authReady || sendingMagicLink}
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
+              </button>
+
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-500 transition hover:text-stone-950"
+                >
+                  Sign out and use another account
+                </button>
+              )}
+
+              <MessageBanner message={authMessage} />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {nextStepTooltip && (
+        <div
+          className="pointer-events-none fixed z-[70] max-w-sm rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm leading-6 text-stone-700 shadow-xl"
+          style={{
+            left: nextStepTooltip.left,
+            top: nextStepTooltip.top,
+            width: nextStepTooltip.width,
+            transform: nextStepTooltip.placement === 'above' ? 'translateY(-100%)' : undefined,
+          }}
+        >
+          <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words">{nextStepTooltip.text}</p>
+        </div>
+      )}
+
+      {isSharePanelOpen && !isSharedView && isOwner && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setIsSharePanelOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-share-title"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <Users className="h-4 w-4" />
+                </div>
+                <h3 id="pipe-share-title" className="text-xl font-bold text-stone-950">
+                  Invite collaborator
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Share {activeList.name} without exposing your other PipeLists.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSharePanelOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block" htmlFor="pipe-share-access">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
+                <select
+                  id="pipe-share-access"
+                  value={shareAccess}
+                  onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                >
+                  <option value="read">Read only - no account needed</option>
+                  <option value="edit">Read and edit - sign-in required</option>
+                </select>
+              </label>
+
+              {shareAccess === 'edit' && (
+                <label className="block" htmlFor="pipe-share-editors">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Collaborator emails</span>
+                  <textarea
+                    id="pipe-share-editors"
+                    value={shareEditorEmails}
+                    onChange={(event) => setShareEditorEmails(event.target.value)}
+                    className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="name@example.com, teammate@example.com"
+                  />
+                  <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                    These people will need Google or magic-link sign-in before they can edit.
+                  </span>
+                </label>
+              )}
+
+              <button
+                type="button"
+                onClick={createOrUpdateShareLink}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                <Mail className="h-4 w-4" />
+                Create Invite Link
+              </button>
+
+              {shareUrl && (
+                <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                  <label className="block" htmlFor="pipe-share-url">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Invite link</span>
+                    <input
+                      id="pipe-share-url"
+                      readOnly
+                      value={shareUrl}
+                      className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={copyShareLink}
+                    className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              )}
+
+              <MessageBanner message={shareMessage} />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isNewListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setIsNewListModalOpen(false)}
+        >
+          <form
+            onSubmit={handleCreateList}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <ListPlus className="h-4 w-4" />
+                </div>
+                <h3 className="text-xl font-bold text-stone-950">Add new list</h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Choose a template and create a focused PipeList for a new type of pipeline.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewListModalOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="block" htmlFor="modal-new-list-template">
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Template</span>
+              <select
+                id="modal-new-list-template"
+                value={newListTemplateKey}
+                onChange={(event) => setNewListTemplateKey(event.target.value as TemplateKey)}
+                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+              >
+                {(Object.keys(templateCatalog) as TemplateKey[]).map((key) => (
+                  <option key={key} value={key}>
+                    {templateCatalog[key].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mt-3 block" htmlFor="modal-new-list-name">
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List Name</span>
+              <input
+                id="modal-new-list-name"
+                value={newListName}
+                onChange={(event) => setNewListName(event.target.value)}
+                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                placeholder={templateCatalog[newListTemplateKey].defaultName}
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsNewListModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                <ListPlus className="h-4 w-4" />
+                Create List
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isDeleteListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={() => setIsDeleteListModalOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-list-title"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                  <Trash2 className="h-4 w-4" />
+                </div>
+                <h3 id="delete-list-title" className="text-xl font-bold text-stone-950">
+                  Delete PipeList
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Delete {activeList.name} and its {formatCount(activeListItems.length, 'active lead')}. This removes the full list from your workspace.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDeleteListModalOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {lists.length <= 1 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                You need at least one PipeList. Create another list before deleting this one.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-700">
+                This cannot be undone from the Logs restore flow because it deletes the whole PipeList.
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteListModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteList}
+                disabled={lists.length <= 1}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete List
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {isLeadUrlModalOpen && (
         <div
@@ -3261,6 +3780,196 @@ const PipelinePage: NextPage = () => {
         </div>
       )}
 
+      {isLogModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={closeLogModal}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-log-modal-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="sticky top-0 z-10 border-b border-stone-100 bg-white px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 id="pipe-log-modal-title" className="text-2xl font-bold tracking-normal text-stone-950">
+                    Add Log
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Record an update and choose where it belongs.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeLogModal}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(event) =>
+                handleSaveLog(event, {
+                  listId: logTargetList.id,
+                  itemId: logTargetItem?.id,
+                  closeOnSave: true,
+                })
+              }
+              className="space-y-4 px-5 py-5"
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block" htmlFor="modal-log-list">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">PipeList</span>
+                  <select
+                    id="modal-log-list"
+                    value={logTargetList.id}
+                    onChange={(event) => {
+                      const nextList = lists.find((list) => list.id === event.target.value) || activeList;
+                      setLogTargetListId(nextList.id);
+                      setLogTargetItemId(nextList.items[0]?.id || '');
+                      setLogDraft(defaultLogDraft(nextList.templateKey));
+                    }}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    {lists.map((list) => (
+                      <option key={list.id} value={list.id}>
+                        {list.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block" htmlFor="modal-log-item">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead</span>
+                  <select
+                    id="modal-log-item"
+                    value={logTargetItem?.id || ''}
+                    onChange={(event) => setLogTargetItemId(event.target.value)}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                    disabled={logTargetListItems.length === 0}
+                  >
+                    {logTargetListItems.length > 0 ? (
+                      logTargetListItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">No leads in this PipeList</option>
+                    )}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <label className="block" htmlFor="modal-log-weekOf">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Date</span>
+                  <input
+                    id="modal-log-weekOf"
+                    type="date"
+                    value={logDraft.weekOf}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, weekOf: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  />
+                </label>
+
+                <label className="block" htmlFor="modal-log-type">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Type</span>
+                  <select
+                    id="modal-log-type"
+                    value={logDraft.type}
+                    onChange={(event) =>
+                      setLogDraft((current) => updateLogDraftType(current, event.target.value as ActivityLogType))
+                    }
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    {(Object.keys(logTypeLabels) as ActivityLogType[]).map((type) => (
+                      <option key={type} value={type}>
+                        {logTypeLabels[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block md:col-span-2" htmlFor="modal-log-summary">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Summary</span>
+                  <input
+                    id="modal-log-summary"
+                    value={logDraft.summary}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, summary: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                    placeholder="What happened?"
+                  />
+                </label>
+
+                <label className="block md:col-span-2" htmlFor="modal-log-nextStep">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Next Step</span>
+                  <select
+                    id="modal-log-nextStep"
+                    value={logDraft.nextStep}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, nextStep: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    <option value="">No next step</option>
+                    {logNextStepOptions[logDraft.type].map((nextStep) => (
+                      <option key={nextStep} value={nextStep}>
+                        {nextStep}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block md:col-span-2" htmlFor="modal-log-followUpDate">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{followUpDateLabel(logDraft.nextStep)}</span>
+                  <input
+                    id="modal-log-followUpDate"
+                    type="date"
+                    value={logDraft.followUpDate}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, followUpDate: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  />
+                </label>
+              </div>
+
+              <label className="block" htmlFor="modal-log-notes">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
+                <textarea
+                  id="modal-log-notes"
+                  value={logDraft.notes}
+                  onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+                  className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  placeholder="Details, risk, context"
+                />
+              </label>
+
+              <div className="flex justify-end gap-2 border-t border-stone-100 pt-4">
+                <button
+                  type="button"
+                  onClick={closeLogModal}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 transition hover:text-stone-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!logTargetItem}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Log
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
       {isAnalyzingLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-5 text-center shadow-2xl">
@@ -3276,7 +3985,11 @@ const PipelinePage: NextPage = () => {
       {selectedDetailItem && selectedDetailStage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setSelectedDetailItemId('')}
+          onClick={() => {
+            resetEditor();
+            setSelectedDetailItemId('');
+            setDetailModalMode('details');
+          }}
         >
           <section
             role="dialog"
@@ -3293,11 +4006,11 @@ const PipelinePage: NextPage = () => {
                       {selectedDetailStage.label}
                     </span>
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityStyles[selectedDetailItem.priority]}`}>
-                      {selectedDetailItem.priority}
+                      {importanceLabel(selectedDetailItem.priority)}
                     </span>
                   </div>
                   <h3 id="pipe-detail-title" className="break-words text-2xl font-bold tracking-normal text-stone-950">
-                    {selectedDetailItem.title}
+                    {selectedDetailIsEditing ? 'Edit Item' : selectedDetailItem.title}
                   </h3>
                   <p className="mt-1 text-sm leading-6 text-stone-500">
                     {selectedDetailItem.organization || 'No organization'} · {activeList.name}
@@ -3305,7 +4018,11 @@ const PipelinePage: NextPage = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedDetailItemId('')}
+                  onClick={() => {
+                    resetEditor();
+                    setSelectedDetailItemId('');
+                    setDetailModalMode('details');
+                  }}
                   className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
                   title="Close details"
                 >
@@ -3314,7 +4031,17 @@ const PipelinePage: NextPage = () => {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {canModify && (
+                {!selectedDetailIsEditing && detailModalMode === 'logs' && (
+                  <button
+                    type="button"
+                    onClick={() => setDetailModalMode('details')}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    <Layers className="h-4 w-4" />
+                    Details
+                  </button>
+                )}
+                {canModify && !selectedDetailIsEditing && (
                   <button
                     type="button"
                     onClick={() => handleEditItem(selectedDetailItem)}
@@ -3324,120 +4051,307 @@ const PipelinePage: NextPage = () => {
                     Edit
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLogItemId(selectedDetailItem.id);
-                    setSelectedDetailItemId('');
-                    setViewMode('logs');
-                  }}
-                  className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                >
-                  <ClipboardList className="h-4 w-4" />
-                  Logs
-                </button>
+                {!selectedDetailIsEditing && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLogItemId(selectedDetailItem.id);
+                      setDetailModalMode('logs');
+                    }}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'logs'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Logs
+                  </button>
+                )}
               </div>
             </div>
 
-            <div className="space-y-5 px-5 py-5">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {renderDetailField('Value', formatMoney(itemValue(selectedDetailItem)))}
-                {renderDetailField('Weighted', formatMoney(weightedValue(activeList, selectedDetailItem)))}
-                {renderDetailField('Probability', `${itemProbability(activeList, selectedDetailItem)}%`)}
-                {renderDetailField(
-                  'Next Date',
-                  selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd || 'Not set',
-                )}
-              </div>
+            {selectedDetailIsEditing ? (
+              <div className="px-5 py-5">{renderItemEditor()}</div>
+            ) : detailModalMode === 'logs' ? (
+              <div className="space-y-5 px-5 py-5">
+                {canModify ? (
+                  <form onSubmit={handleSaveLog} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                    <div className="mb-4 flex flex-col gap-1">
+                      <h4 className="text-sm font-semibold text-stone-950">Add Log</h4>
+                      <p className="text-sm text-stone-500">{selectedDetailItem.organization || selectedDetailItem.title}</p>
+                    </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                {renderDetailField('Next Step', selectedDetailItem.nextStep, true)}
-                {renderDetailField('Notes', selectedDetailItem.notes, true)}
-                {renderDetailField(
-                  'Source URL',
-                  selectedDetailItem.sourceUrl ? (
-                    <a
-                      href={selectedDetailItem.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-stone-950 underline decoration-stone-300 underline-offset-4"
-                    >
-                      {selectedDetailItem.sourceUrl}
-                    </a>
-                  ) : (
-                    ''
-                  ),
-                  true,
-                )}
-              </div>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <label className="block" htmlFor="detail-log-weekOf">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Date</span>
+                        <input
+                          id="detail-log-weekOf"
+                          type="date"
+                          value={logDraft.weekOf}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, weekOf: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
 
-              <div>
-                <h4 className="mb-3 text-sm font-semibold text-stone-950">Pipeline Details</h4>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {renderDetailField('Owner', selectedDetailItem.owner || 'Unassigned')}
-                  {renderDetailField('Organization', selectedDetailItem.organization || 'Unassigned')}
-                  {renderDetailField('Segment', selectedDetailItem.segment)}
-                  {renderDetailField('Decision Maker', selectedDetailItem.decisionMaker)}
-                  {renderDetailField('ACV', selectedDetailItem.acv)}
-                  {renderDetailField('Amount / Prize', selectedDetailItem.amount)}
-                  {renderDetailField('Expected Close', selectedDetailItem.expectedCloseDate)}
-                  {renderDetailField('Due Date', selectedDetailItem.dueDate)}
-                  {renderDetailField('Contract Term', selectedDetailItem.contractTerm)}
-                  {renderDetailField('Gross Margin', selectedDetailItem.grossMargin)}
-                  {renderDetailField('Partner Cost', selectedDetailItem.partnerCost)}
-                  {renderDetailField('Hardware Cost', selectedDetailItem.hardwareCost)}
-                </div>
-              </div>
+                      <label className="block" htmlFor="detail-log-type">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Type</span>
+                        <select
+                          id="detail-log-type"
+                          value={logDraft.type}
+                          onChange={(event) =>
+                            setLogDraft((current) => updateLogDraftType(current, event.target.value as ActivityLogType))
+                          }
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        >
+                          {(Object.keys(logTypeLabels) as ActivityLogType[]).map((type) => (
+                            <option key={type} value={type}>
+                              {logTypeLabels[type]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
 
-              <div>
-                <h4 className="mb-3 text-sm font-semibold text-stone-950">Pilot & Expansion</h4>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {renderDetailField('Pilot Scope', selectedDetailItem.pilotScope, true)}
-                  {renderDetailField('Expansion Path', selectedDetailItem.expansionPath, true)}
-                  {renderDetailField('Athlete Count', selectedDetailItem.athleteCount)}
-                  {renderDetailField('Pilot Start', selectedDetailItem.pilotStart)}
-                  {renderDetailField('Pilot End', selectedDetailItem.pilotEnd)}
-                  {renderDetailField('Loss Reason', selectedDetailItem.lossReason)}
-                </div>
-              </div>
+                      <label className="block md:col-span-2" htmlFor="detail-log-summary">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Summary</span>
+                        <input
+                          id="detail-log-summary"
+                          value={logDraft.summary}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, summary: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                          placeholder="What happened?"
+                        />
+                      </label>
 
-              <div>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h4 className="text-sm font-semibold text-stone-950">Recent Logs</h4>
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
-                    {formatCount(selectedDetailItem.weeklyLogs.length, 'log')}
-                  </span>
-                </div>
-                {selectedDetailItem.weeklyLogs.length > 0 ? (
-                  <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
-                    {selectedDetailItem.weeklyLogs.slice(0, 3).map((log) => (
-                      <article key={log.id} className="bg-white px-4 py-3">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-stone-900">{log.summary || log.notes || logTypeLabels[log.type]}</p>
-                            <p className="mt-1 text-xs text-stone-400">
-                              {log.weekOf} · {logTypeLabels[log.type]}
-                            </p>
-                            {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
-                          </div>
-                          {logHasMetrics(log) && (
-                            <div className="grid grid-cols-3 gap-2 text-right text-xs text-stone-500">
-                              <span>{Math.round(derivedCheckInRate(log))}% check-ins</span>
-                              <span>{log.signalEvents || '0'} signals</span>
-                              <span>{log.staffFeedbackScore || '-'} staff</span>
-                            </div>
-                          )}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                      <label className="block md:col-span-2" htmlFor="detail-log-nextStep">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Next Step</span>
+                        <select
+                          id="detail-log-nextStep"
+                          value={logDraft.nextStep}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, nextStep: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        >
+                          <option value="">No next step</option>
+                          {logNextStepOptions[logDraft.type].map((nextStep) => (
+                            <option key={nextStep} value={nextStep}>
+                              {nextStep}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block md:col-span-2" htmlFor="detail-log-followUpDate">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{followUpDateLabel(logDraft.nextStep)}</span>
+                        <input
+                          id="detail-log-followUpDate"
+                          type="date"
+                          value={logDraft.followUpDate}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, followUpDate: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="mt-3 block" htmlFor="detail-log-notes">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
+                      <textarea
+                        id="detail-log-notes"
+                        value={logDraft.notes}
+                        onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+                        className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        placeholder="Details, risk, context"
+                      />
+                    </label>
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="submit"
+                        className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Log
+                      </button>
+                    </div>
+                  </form>
                 ) : (
-                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-8 text-center text-sm text-stone-400">
-                    No logs yet.
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                    <h4 className="text-sm font-semibold text-stone-950">Logs</h4>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">This shared list is read-only. Logs are visible below.</p>
                   </div>
                 )}
+
+                <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-stone-100 bg-stone-50 px-4 py-3">
+                    <h4 className="text-xs font-semibold uppercase text-stone-400">Timeline</h4>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-stone-500">
+                      {formatCount(selectedDetailItem.weeklyLogs.length, 'log')}
+                    </span>
+                  </div>
+                  {selectedDetailItem.weeklyLogs.length > 0 ? (
+                    <div className="divide-y divide-stone-100">
+                      {selectedDetailItem.weeklyLogs.map((log) => (
+                        <article key={log.id} className="px-4 py-4">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                  {logDisplayLabel(log)}
+                                </span>
+                                <span className="text-xs text-stone-400">{log.weekOf}</span>
+                                {log.followUpDate && (
+                                  <span className="text-xs text-stone-400">
+                                    {followUpDateLabel(log.nextStep)} {log.followUpDate}
+                                  </span>
+                                )}
+                              </div>
+                              <h5 className="mt-2 text-sm font-semibold text-stone-950">{log.summary || log.notes || 'Untitled log'}</h5>
+                              {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                              {log.notes && log.notes !== log.summary && <p className="mt-1 text-sm leading-6 text-stone-500">{log.notes}</p>}
+                            </div>
+                            {canModify && (
+                              <div className="flex items-center gap-2">
+                                {log.systemAction === 'item-deleted' && canRestoreDeletedItem(selectedDetailItem) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreDeletedItem(activeList.id, selectedDetailItem.id)}
+                                    className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-3 text-xs font-semibold text-white transition hover:bg-stone-700"
+                                  >
+                                    Undo Delete
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLog(selectedDetailItem.id, log.id)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                  title="Delete log"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-12 text-center text-sm text-stone-400">No logs yet.</div>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-5 px-5 py-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {renderDetailField('Value', formatMoney(itemValue(selectedDetailItem)))}
+                  {renderDetailField(
+                    'Next Date',
+                    selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd || 'Not set',
+                  )}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  {renderDetailField('Next Step', selectedDetailItem.nextStep, true)}
+                  {renderDetailField('Notes', selectedDetailItem.notes, true)}
+                  {renderDetailField(
+                    'Source URL',
+                    selectedDetailItem.sourceUrl ? (
+                      <a
+                        href={selectedDetailItem.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-stone-950 underline decoration-stone-300 underline-offset-4"
+                      >
+                        {selectedDetailItem.sourceUrl}
+                      </a>
+                    ) : (
+                      ''
+                    ),
+                    true,
+                  )}
+                </div>
+
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-stone-950">Pipeline Details</h4>
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {renderDetailField('Owner', selectedDetailItem.owner || 'Unassigned')}
+                    {renderDetailField('Organization', selectedDetailItem.organization || 'Unassigned')}
+                    {renderDetailField('Segment', selectedDetailItem.segment)}
+                    {renderDetailField('Decision Maker', selectedDetailItem.decisionMaker)}
+                    {renderDetailField('ACV', selectedDetailItem.acv)}
+                    {renderDetailField('Amount / Prize', selectedDetailItem.amount)}
+                    {renderDetailField('Expected Close', selectedDetailItem.expectedCloseDate)}
+                    {renderDetailField('Due Date', selectedDetailItem.dueDate)}
+                    {renderDetailField('Contract Term', selectedDetailItem.contractTerm)}
+                    {renderDetailField('Margin Notes', selectedDetailItem.grossMargin)}
+                    {renderDetailField('Partner Cost', selectedDetailItem.partnerCost)}
+                    {renderDetailField('Hard Cost', selectedDetailItem.hardwareCost)}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="mb-3 text-sm font-semibold text-stone-950">Scope & Expansion</h4>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {renderDetailField('Scope', selectedDetailItem.pilotScope, true)}
+                    {renderDetailField('Expansion Path', selectedDetailItem.expansionPath, true)}
+                    {renderDetailField('Count', selectedDetailItem.athleteCount)}
+                    {renderDetailField('Start Date', selectedDetailItem.pilotStart)}
+                    {renderDetailField('End Date', selectedDetailItem.pilotEnd)}
+                    {renderDetailField('Loss Reason', selectedDetailItem.lossReason)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-semibold text-stone-950">Recent Logs</h4>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
+                        {formatCount(selectedDetailItem.weeklyLogs.length, 'log')}
+                      </span>
+                      {canModify && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLogItemId(selectedDetailItem.id);
+                            setDetailModalMode('logs');
+                          }}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-stone-900 px-3 text-xs font-semibold text-white transition hover:bg-stone-700"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Log
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {selectedDetailItem.weeklyLogs.length > 0 ? (
+                    <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
+                      {selectedDetailItem.weeklyLogs.slice(0, 3).map((log) => (
+                        <article key={log.id} className="bg-white px-4 py-3">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-stone-900">{log.summary || log.notes || logDisplayLabel(log)}</p>
+                              <p className="mt-1 text-xs text-stone-400">
+                                {log.weekOf} · {logDisplayLabel(log)}
+                              </p>
+                              {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                            </div>
+                            {logHasMetrics(log) && (
+                              <div className="grid grid-cols-3 gap-2 text-right text-xs text-stone-500">
+                                <span>{Math.round(derivedCheckInRate(log))}% check-ins</span>
+                                <span>{log.signalEvents || '0'} signals</span>
+                                <span>{log.staffFeedbackScore || '-'} staff</span>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-8 text-center text-sm text-stone-400">
+                      No logs yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}
