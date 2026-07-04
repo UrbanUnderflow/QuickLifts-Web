@@ -4,8 +4,8 @@
 
 - **Operating system:** Macra Trial-Start Operating System
 - **Snapshot date:** 2026-07-04
-- **Read timestamp:** `2026-07-04T00:15:45.769Z`
-- **Runtime note:** Source runtime is still 2026-07-03 America/New_York, so July 4 is not fully observable yet. Treat target-date counts as early/unverified unless the source explicitly contains July 4 rows.
+- **Read timestamp:** `2026-07-04T04:07:05.856Z`
+- **Runtime note:** July 4 is now partially observable in first-party user state, but AppsFlyer and purchase-log coverage for the target date are still missing at this read.
 - **Primary metric:** qualified onboarding start to trial start
 - **Primary guardrail:** no onboarding/paywall/pricing/allocation/retargeting/Apple Search Ads changes while experiment data is stale or not decision-grade.
 - **Default posture:** refresh active `variant_a` experiment results before making funnel decisions.
@@ -54,7 +54,7 @@ Fresh lower-funnel purchase-log read from Firestore `Macra-purchase-logs`:
 | 2026-07-01 | 2 | 0 | 0 | 2 | 0 | 0 | Firestore `Macra-purchase-logs` |
 | 2026-07-02 | 6 | 0 | 0 | 4 | 2 | 0 | Firestore `Macra-purchase-logs` |
 | 2026-07-03 | 0 | 0 | 0 | 0 | 0 | 0 | Firestore `Macra-purchase-logs` |
-| 2026-07-04 | 0 | 0 | 0 | 0 | 0 | 0 | Firestore `Macra-purchase-logs`; target date not fully observable at runtime |
+| 2026-07-04 | 0 | 0 | 0 | 0 | 0 | 0 | Firestore `Macra-purchase-logs`; no rows at read time |
 
 Fresh user-state read from Firestore `users` where `registrationEntryPoint == "macra"`:
 
@@ -64,7 +64,7 @@ Fresh user-state read from Firestore `users` where `registrationEntryPoint == "m
 | 2026-07-01 | 22 | 17 | Missing on all 22 rows |
 | 2026-07-02 | 23 | 19 | Missing on all 23 rows |
 | 2026-07-03 | 8 | 5 | Missing on all 8 rows |
-| 2026-07-04 | 0 | 0 | No rows at read time |
+| 2026-07-04 | 2 | 1 | Missing on both rows |
 
 Fresh AppsFlyer rows in the July 4 target window:
 
@@ -74,13 +74,13 @@ Fresh AppsFlyer rows in the July 4 target window:
 
 ### Inference
 
-The July 4 full funnel is not refreshed because Scoreboard / AppsFlyer coverage stops at `2026-06-27`, and July 4 has no raw rows, purchase-log rows, or user rows at the read time. The most recent fresh first-party movement is July 3 user-state activity: `8` Macra user docs created and `5` completed onboarding rows. That is not enough to make a source-quality or funnel-change decision.
+The July 4 full funnel is still not refreshed because Scoreboard / AppsFlyer coverage stops at `2026-06-27`, and July 4 has no raw AppsFlyer rows or purchase-log rows at the read time. The only fresh target-date movement is first-party user-state activity: `2` Macra user docs created and `1` completed onboarding row. That is not enough to make a source-quality or funnel-change decision.
 
 ## Source Split
 
 ### Observed Facts
 
-Fresh acquisition-source split is unavailable for July 4 because Firestore `appsflyer-aggregate-periods` has no doc covering `2026-07-04`, Firestore `appsflyer-macra-raw-rows` returned `0` rows for the rolling target window, and Firestore `users` has no usable source hints for fresh Macra user rows.
+Fresh acquisition-source split is unavailable for July 4 because Firestore `appsflyer-aggregate-periods` has no doc covering `2026-07-04`, Firestore `appsflyer-macra-raw-rows` returned `0` rows for the rolling target window, and Firestore `users` has no usable source hints on the `2` fresh July 4 Macra user rows.
 
 Latest available AppsFlyer aggregate event-volume split:
 
@@ -103,11 +103,11 @@ Fresh user-source hints:
 | 2026-07-01 | 22 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
 | 2026-07-02 | 23 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
 | 2026-07-03 | 8 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
-| 2026-07-04 | 0 | No rows at read time | Firestore `users`, `registrationEntryPoint == "macra"` |
+| 2026-07-04 | 2 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
 
 ### Inference
 
-The source split is not decision-grade for July 4. The latest stale AppsFlyer aggregate still shows Organic carrying most event volume and Apple Search Ads carrying the smaller paid bucket through `2026-06-27`, but there is no fresh July 4 Apple Search Ads vs Organic trial-start read. Do not change Apple Search Ads spend, organic assumptions, or retargeting behavior from this snapshot.
+The source split is not decision-grade for July 4. The latest stale AppsFlyer aggregate still shows Organic carrying most event volume and Apple Search Ads carrying the smaller paid bucket through `2026-06-27`, but the fresh July 4 user rows have no source hints and there is no fresh Apple Search Ads vs Organic trial-start read. Do not change Apple Search Ads spend, organic assumptions, or retargeting behavior from this snapshot.
 
 ## Experiment Snapshot Freshness
 
