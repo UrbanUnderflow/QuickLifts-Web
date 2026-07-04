@@ -27,6 +27,10 @@ service cloud.firestore {
     }
 
     match /pipeListShares/{shareId} {
+      function isSharePathOwner() {
+        return isSignedIn() && shareId.matches('^' + request.auth.uid + '-.*');
+      }
+
       function isShareOwner() {
         return isSignedIn() && resource.data.ownerUid == request.auth.uid;
       }
@@ -41,7 +45,7 @@ service cloud.firestore {
           && request.auth.token.email in resource.data.editorEmails;
       }
 
-      allow read: if resource.data.publicRead == true || isShareOwner() || isInvitedEditor();
+      allow read: if isSharePathOwner() || resource.data.publicRead == true || isShareOwner() || isInvitedEditor();
       allow create: if isCreateOwner();
       allow update: if isShareOwner()
         || (
