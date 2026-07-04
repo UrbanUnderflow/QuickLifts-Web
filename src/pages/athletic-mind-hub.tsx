@@ -17,6 +17,7 @@ import {
   Save,
   Search,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -271,6 +272,35 @@ const AthleticMindHub: NextPage = () => {
 
     return Array.from(sectionMap.entries()).map(([title, blocks]) => ({ title, blocks }));
   }, [filteredWikiBlocks]);
+  const wikiSectionCount = wikiSections.length || wikiBlocks.length ? wikiSections.length : 0;
+  const latestChange = changes[0];
+  const latestChangeLabel = latestChange
+    ? formatDate(latestChange.createdAt)
+    : updates[0]
+      ? formatDate(updates[0].updatedAt || updates[0].createdAt)
+      : 'No activity yet';
+  const hubSignals = [
+    {
+      value: updates.length,
+      label: 'Council updates',
+      note: updates.length ? 'saved to the workspace' : 'ready for first update',
+    },
+    {
+      value: wikiBlocks.length,
+      label: 'Wiki entries',
+      note: wikiSectionCount ? `${wikiSectionCount} active sections` : 'knowledge base ready',
+    },
+    {
+      value: changes.length,
+      label: 'Change log',
+      note: latestChangeLabel,
+    },
+    {
+      value: accessLabel,
+      label: 'Access mode',
+      note: signedInLabel || 'member permissions',
+    },
+  ];
 
   async function copyText(value: string, confirmation: string) {
     if (!value.trim()) {
@@ -469,11 +499,11 @@ const AthleticMindHub: NextPage = () => {
 
           <div className="heroContent">
             <div className="heroCopy">
-              <p className="eyebrow">Firebase council workspace</p>
+              <p className="eyebrow">Athletic Mind Council · Live workspace</p>
               <h1>Athletic Mind Hub</h1>
               <p className="heroText">
-                Shared updates, role-based access, and a living council wiki where each change carries the author
-                with it.
+                The private operating room for council updates, founder notes, research, and the living wiki behind
+                Athletic Mind.
               </p>
               <div className="heroActions">
                 <a className="primaryAction" href="#athletic-mind-wiki">
@@ -495,22 +525,44 @@ const AthleticMindHub: NextPage = () => {
               </div>
             </div>
 
-            <div className="metricStrip" aria-label="Hub summary">
-              <div>
-                <strong>{accessLabel}</strong>
-                <span>Your access</span>
+            <div className="opsPanel" aria-label="Hub operating summary">
+              <div className="opsPanelHeader">
+                <span>COUNCIL OS</span>
+                <Sparkles size={18} />
               </div>
-              <div>
-                <strong>{updates.length}</strong>
-                <span>Saved updates</span>
+              <div className="opsHeadline">
+                <strong>{canReadHub ? 'Workspace live' : 'Access gated'}</strong>
+                <p>{canReadHub ? 'Updates, wiki edits, and change history are synced through Firebase.' : 'Sign in or redeem an invite to open the council workspace.'}</p>
               </div>
-              <div>
-                <strong>{wikiBlocks.length}</strong>
-                <span>Wiki entries</span>
+              <div className="opsRows">
+                <div>
+                  <span>Mode</span>
+                  <strong>{accessLabel}</strong>
+                </div>
+                <div>
+                  <span>Latest activity</span>
+                  <strong>{latestChangeLabel}</strong>
+                </div>
+                <div>
+                  <span>Knowledge base</span>
+                  <strong>{wikiBlocks.length} entries</strong>
+                </div>
               </div>
             </div>
           </div>
         </section>
+
+        {canReadHub && (
+          <section className="signalDeck" aria-label="Hub signals">
+            {hubSignals.map((signal) => (
+              <article className="signalCard" key={signal.label}>
+                <strong>{signal.value}</strong>
+                <span>{signal.label}</span>
+                <p>{signal.note}</p>
+              </article>
+            ))}
+          </section>
+        )}
 
         {membershipLoading && !canReadHub ? (
           <section className="accessState" aria-label="Loading hub access">
@@ -532,6 +584,14 @@ const AthleticMindHub: NextPage = () => {
         ) : (
           <>
         <section className="workspace" aria-label="Council workspace">
+          <div className="workspaceIntro">
+            <p className="eyebrow">Operations feed</p>
+            <h2>What the council needs to see next.</h2>
+            <p>
+              Saved updates stay readable like an investor dispatch, while copy, removal, authorship, and dates
+              stay close to the surface for day-to-day execution.
+            </p>
+          </div>
           <div className="updatesColumn">
             <div className="timeline">
               <div className="timelineHeader">
@@ -1973,6 +2033,459 @@ const AthleticMindHub: NextPage = () => {
 
           .rowActions {
             justify-content: flex-start;
+          }
+        }
+
+        :global(body) {
+          background: #020408;
+        }
+
+        .hubShell {
+          background:
+            radial-gradient(circle at 14% 10%, rgba(224, 254, 16, 0.12), transparent 28rem),
+            radial-gradient(circle at 84% 14%, rgba(103, 232, 249, 0.08), transparent 30rem),
+            linear-gradient(180deg, #020408 0%, #05070a 56%, #020408 100%);
+          color: rgba(255, 255, 255, 0.78);
+        }
+
+        .hero {
+          min-height: 650px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .heroBackdrop {
+          background:
+            linear-gradient(90deg, rgba(2, 4, 8, 0.96) 0%, rgba(2, 4, 8, 0.76) 45%, rgba(2, 4, 8, 0.34) 100%),
+            linear-gradient(180deg, rgba(2, 4, 8, 0.2) 0%, rgba(2, 4, 8, 0.96) 100%),
+            url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
+          opacity: 0.95;
+        }
+
+        .brandMark {
+          color: #ffffff;
+          letter-spacing: 0;
+        }
+
+        .brainMark {
+          border: 1px solid rgba(224, 254, 16, 0.34);
+          background: rgba(224, 254, 16, 0.12);
+          color: #e0fe10;
+        }
+
+        .hubNavLinks,
+        .accountPill,
+        .signedInPill {
+          border-color: rgba(255, 255, 255, 0.12);
+          background: rgba(10, 13, 18, 0.72);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .hubNavLinks a,
+        .signedInPill,
+        .signedInPill.muted,
+        .accountPill {
+          color: rgba(255, 255, 255, 0.72);
+        }
+
+        .hubNavLinks a:hover {
+          background: rgba(224, 254, 16, 0.12);
+          color: #ffffff;
+        }
+
+        .signedInPill strong {
+          color: #ffffff;
+        }
+
+        .signedInPill button,
+        .signedInPill .pillButton {
+          background: #e0fe10;
+          color: #05070a;
+        }
+
+        .eyebrow {
+          color: #e0fe10;
+          font-size: 0.72rem;
+          letter-spacing: 0.32em;
+        }
+
+        h1 {
+          max-width: 820px;
+          color: #ffffff;
+          font-weight: 850;
+        }
+
+        .heroText {
+          color: rgba(255, 255, 255, 0.72);
+        }
+
+        .primaryAction {
+          background: #e0fe10;
+          color: #020408;
+          box-shadow: 0 18px 48px rgba(224, 254, 16, 0.14);
+        }
+
+        .secondaryAction {
+          border-color: rgba(255, 255, 255, 0.14);
+          background: rgba(255, 255, 255, 0.06);
+          color: rgba(255, 255, 255, 0.84);
+        }
+
+        .opsPanel {
+          display: grid;
+          gap: 22px;
+          align-self: end;
+          border: 1px solid rgba(255, 255, 255, 0.13);
+          border-radius: 8px;
+          background: rgba(10, 13, 18, 0.74);
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+          backdrop-filter: blur(18px);
+          padding: 22px;
+        }
+
+        .opsPanelHeader,
+        .opsRows div,
+        .signalCard {
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.045);
+        }
+
+        .opsPanelHeader {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-radius: 8px;
+          color: #e0fe10;
+          font-size: 0.74rem;
+          font-weight: 900;
+          letter-spacing: 0.28em;
+          padding: 12px 14px;
+        }
+
+        .opsHeadline {
+          display: grid;
+          gap: 9px;
+        }
+
+        .opsHeadline strong {
+          color: #ffffff;
+          font-size: clamp(1.45rem, 3vw, 2.25rem);
+          line-height: 1;
+        }
+
+        .opsHeadline p,
+        .opsRows span,
+        .signalCard p,
+        .workspaceIntro p,
+        .softText {
+          color: rgba(255, 255, 255, 0.58);
+        }
+
+        .opsRows {
+          display: grid;
+          gap: 10px;
+        }
+
+        .opsRows div {
+          display: grid;
+          gap: 5px;
+          border-radius: 8px;
+          padding: 14px;
+        }
+
+        .opsRows span {
+          font-size: 0.72rem;
+          font-weight: 850;
+          text-transform: uppercase;
+        }
+
+        .opsRows strong {
+          color: #ffffff;
+          font-size: 0.94rem;
+          overflow-wrap: anywhere;
+        }
+
+        .signalDeck {
+          position: relative;
+          z-index: 2;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 14px;
+          width: min(1180px, calc(100% - 40px));
+          margin: -44px auto 0;
+        }
+
+        .signalCard {
+          display: grid;
+          min-height: 178px;
+          align-content: end;
+          gap: 12px;
+          border-radius: 8px;
+          padding: 22px;
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+        }
+
+        .signalCard::before {
+          content: "";
+          width: 74px;
+          height: 8px;
+          background: #e0fe10;
+        }
+
+        .signalCard strong {
+          color: #e0fe10;
+          font-size: clamp(2.1rem, 4vw, 3.4rem);
+          line-height: 0.96;
+          overflow-wrap: anywhere;
+        }
+
+        .signalCard span {
+          color: #ffffff;
+          font-size: 1.04rem;
+          font-weight: 900;
+          line-height: 1.18;
+        }
+
+        .signalCard p {
+          margin: 0;
+          line-height: 1.4;
+        }
+
+        .workspace {
+          gap: 20px;
+          padding-top: 72px;
+        }
+
+        .workspaceIntro {
+          display: grid;
+          max-width: 820px;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+
+        .workspaceIntro h2 {
+          margin: 0;
+          color: #ffffff;
+          font-size: clamp(2rem, 4.5vw, 4.4rem);
+          line-height: 0.98;
+          letter-spacing: 0;
+        }
+
+        .workspaceIntro p {
+          max-width: 670px;
+          line-height: 1.65;
+        }
+
+        .timeline {
+          border-top: 1px solid rgba(255, 255, 255, 0.18);
+          padding-top: 18px;
+        }
+
+        .timelineHeader h3,
+        .wikiAppearance .timelineHeader h3,
+        .wikiLogo strong,
+        .wikiArticleHeader h2,
+        .wikiSectionTitle h3,
+        .updateCard h4,
+        .wikiEntryHeader h4,
+        .emptyState h3,
+        .accessState h2 {
+          color: #ffffff;
+        }
+
+        .timelineHeader,
+        .wikiChrome,
+        .wikiRailHeader,
+        .wikiAppearance .timelineHeader,
+        .wikiArticleHeader,
+        .wikiSectionTitle {
+          border-color: rgba(255, 255, 255, 0.13);
+        }
+
+        .timelineHeader {
+          color: #e0fe10;
+        }
+
+        .panel,
+        .updateCard,
+        .contactCard,
+        .wikiBlock,
+        .emptyState,
+        .wikiInlineEditor,
+        .wikiEmptyArticle {
+          border-color: rgba(255, 255, 255, 0.12);
+          background: rgba(17, 18, 21, 0.78);
+          box-shadow: none;
+        }
+
+        .updateMeta,
+        .updateFooter,
+        .wikiLogo span,
+        .wikiEntryHeader span,
+        .wikiByline,
+        .changeRow small,
+        label,
+        .contactDetails,
+        .invitePanel small,
+        .permissionRow small {
+          color: rgba(255, 255, 255, 0.52);
+        }
+
+        .priority,
+        .typePill,
+        .authorChip {
+          background: rgba(224, 254, 16, 0.12);
+          color: #e0fe10;
+        }
+
+        .priority.high {
+          background: rgba(103, 232, 249, 0.12);
+          color: #67e8f9;
+        }
+
+        .priority.urgent {
+          background: rgba(248, 113, 113, 0.14);
+          color: #fca5a5;
+        }
+
+        .updateCard p,
+        .contactCard p,
+        .emptyState p,
+        .wikiBlock p,
+        .wikiArticleEntry .wikiContent,
+        .accessState p,
+        .roleNotice p,
+        .permissionRow small {
+          color: rgba(255, 255, 255, 0.66);
+        }
+
+        .workspace .iconButton,
+        .wikiWorkspace .iconButton,
+        .rowActions button,
+        .panel .secondaryAction,
+        .workspace .secondaryAction,
+        .wikiWorkspace .secondaryAction,
+        .inviteLinkBox button {
+          border-color: rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.06);
+          color: rgba(255, 255, 255, 0.84);
+        }
+
+        .wikiWorkspace {
+          padding-top: 42px;
+        }
+
+        .wikiChrome {
+          border-top: 1px solid rgba(255, 255, 255, 0.18);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          padding-top: 22px;
+        }
+
+        .wikiLogo {
+          color: #e0fe10;
+        }
+
+        .wikiLogo strong,
+        .wikiArticle,
+        .wikiArticleHeader h2,
+        .wikiSectionTitle h3 {
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .wikiSearchBar,
+        .searchBox,
+        .inviteLinkBox,
+        input,
+        select,
+        textarea {
+          border-color: rgba(255, 255, 255, 0.12);
+          background: rgba(255, 255, 255, 0.06);
+          color: #ffffff;
+        }
+
+        .wikiSearchBar {
+          border-radius: 8px;
+        }
+
+        input::placeholder,
+        textarea::placeholder {
+          color: rgba(255, 255, 255, 0.34);
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+          border-color: rgba(224, 254, 16, 0.58);
+          box-shadow: 0 0 0 4px rgba(224, 254, 16, 0.12);
+        }
+
+        .wikiTextButton,
+        .wikiContents a,
+        .resourceLink,
+        .contactDetails a {
+          color: #67e8f9;
+        }
+
+        .wikiTextButton:hover {
+          background: rgba(103, 232, 249, 0.1);
+        }
+
+        .wikiArticleTabs {
+          color: rgba(255, 255, 255, 0.48);
+        }
+
+        .wikiArticleTabs span:first-child {
+          border-color: #e0fe10;
+          color: #ffffff;
+        }
+
+        .wikiArticleEntry + .wikiArticleEntry,
+        .changeRow,
+        .permissionRow {
+          border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .changeRow span {
+          color: #e0fe10;
+        }
+
+        .accessState {
+          color: #e0fe10;
+        }
+
+        .toast {
+          background: #e0fe10;
+          color: #020408;
+        }
+
+        @media (max-width: 920px) {
+          .heroBackdrop {
+            background:
+              linear-gradient(180deg, rgba(2, 4, 8, 0.96) 0%, rgba(2, 4, 8, 0.84) 58%, rgba(2, 4, 8, 0.96) 100%),
+              url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
+          }
+
+          .signalDeck {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            margin-top: 18px;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .signalDeck {
+            grid-template-columns: 1fr;
+            width: min(100% - 28px, 1180px);
+          }
+
+          .signalCard {
+            min-height: 156px;
+          }
+
+          .workspace {
+            padding-top: 42px;
+          }
+
+          h1 {
+            font-size: clamp(3.3rem, 18vw, 5.2rem);
           }
         }
       `}</style>
