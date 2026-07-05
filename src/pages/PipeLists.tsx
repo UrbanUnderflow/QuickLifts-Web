@@ -510,7 +510,7 @@ const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
       notes: [
         'Analysis: Strong visibility play if travel works; the deadline is urgent.',
         'Fit: Tech startup pitch with clear regional prizes and a global Startup World Cup path.',
-        'Prep: Emphasize Fit With Pulse as health/performance technology with pilot traction, clear buyer, and a concise go-to-market story.',
+        'Prep: Emphasize PulseCheck as mental-readiness and performance-support technology with pilot traction, clear buyer, and a concise go-to-market story.',
       ].join('\n\n'),
     },
   },
@@ -555,7 +555,7 @@ const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
       nextStep: 'Confirm the Los Angeles track is the right fit and submit the product story before July 25.',
       notes: [
         'Analysis: Broader tech exposure rather than health-specific; worth adding because the LA deadline is still open and the prize pool is meaningful.',
-        'Fit: Best positioned around AI-enabled product, scalable operations, and how Fit With Pulse can grow beyond one sports vertical.',
+        'Fit: Best positioned around AI-enabled product, scalable operations, and how PulseCheck can grow beyond one sports vertical.',
         'Prep: Lead with product clarity, customer workflow, market size, and why now.',
       ].join('\n\n'),
     },
@@ -575,7 +575,7 @@ const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
       sourceUrl: 'https://agetechcollaborative.org/custom_events/august-open-mic-pitch-challenge/',
       segment: 'AgeTech / healthspan / wellness',
       decisionMaker: 'AgeTech selection committee',
-      nextStep: 'Frame Fit With Pulse around healthspan, recovery habits, and helping people stay in the game as they age.',
+      nextStep: 'Frame PulseCheck around healthspan, recovery habits, and helping people stay in the game as they age.',
       notes: [
         'Analysis: Not a pure athlete pipeline, but it can fit if positioned around healthspan, wellness, independence, and long-term performance.',
         'Fit: MVP-stage solutions in AgeTech, healthspan, or wellness; online pitch is 3 minutes plus 5 minutes of Q&A.',
@@ -624,7 +624,7 @@ const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
       decisionMaker: 'Venture Atlanta committee',
       nextStep: 'Apply as digital health/software with Southeast fit, pilot traction, and an 18-month raise plan.',
       notes: [
-        'Analysis: High-priority investor exposure if Fit With Pulse qualifies as Southeast-based and is raising or planning to raise within 18 months.',
+        'Analysis: High-priority investor exposure if PulseCheck qualifies as Southeast-based and is raising or planning to raise within 18 months.',
         'Fit: Venture Atlanta accepts digital health and tech-enabled Southeast companies; it does not accept bio, pharma, life sciences, or medtech.',
         'Prep: Emphasize buyer urgency, pilots, retention/engagement signals, revenue path, and what capital unlocks.',
       ].join('\n\n'),
@@ -650,7 +650,7 @@ const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
       notes: [
         'Analysis: Good only if the application leads with schools, teams, coaching education, or athlete-development learning outcomes.',
         'Fit: Early-stage education startups need a management team, public website, sustainable business model, and traction/adoption metrics; companies over $8M raised are ineligible.',
-        'Prep: Frame Fit With Pulse as a learning and behavior-change platform for athlete mental readiness, not just a health app.',
+        'Prep: Frame PulseCheck as a learning and behavior-change platform for athlete mental readiness, not just a health app.',
       ].join('\n\n'),
     },
   },
@@ -695,19 +695,19 @@ const defaultLeadGenAdjustments = (list: PipeList) => {
   const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
 
   if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return 'Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities relevant to Fit With Pulse: sports performance, digital health, wellness, athlete mental readiness, AI, education, and team markets. Only include deadlines today or later. Prefer official pages, U.S. or remote options, meaningful prize/investor exposure, and opportunities not already in this list.';
+    return 'Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities relevant to PulseCheck: athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, youth/college athletics, and team markets. Only include deadlines today or later. Prefer official pages, U.S. or remote options, meaningful prize/investor exposure, and opportunities not already in this list.';
   }
 
   if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
-    return 'Find open grants, awards, challenges, or non-dilutive funding opportunities relevant to sports performance, digital health, wellness, mental performance, youth/college athletics, education, and healthcare-adjacent innovation. Only include application deadlines today or later and prefer official funder pages.';
+    return 'Find open grants, awards, challenges, or non-dilutive funding opportunities relevant to PulseCheck: athlete mental readiness, sport psychology, sports performance, digital health, wellness, youth/college athletics, education, AI, and healthcare-adjacent innovation. Only include application deadlines today or later and prefer official funder pages.';
   }
 
   if (identity.includes('vc') || identity.includes('investor')) {
-    return 'Find investors, angel groups, accelerators, and founder programs that are a strong fit for Fit With Pulse across sports performance, digital health, wellness, AI, education, and athlete/team operations. Do not force deadlines; prioritize fit, thesis alignment, and a practical outreach next step.';
+    return 'Find investors, angel groups, accelerators, and founder programs that are a strong fit for PulseCheck across athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, and athlete/team operations. Do not force deadlines; prioritize fit, thesis alignment, and a practical outreach next step.';
   }
 
   if (identity.includes('university') || identity.includes('pilot')) {
-    return 'Find universities, athletic departments, sports performance labs, wellness programs, mental-performance groups, and innovation offices that could plausibly run a Fit With Pulse pilot. Do not force deadlines; prioritize buyer fit, pilot scope, decision-maker clues, and a practical follow-up.';
+    return 'Find universities, athletic departments, sports performance labs, wellness programs, mental-performance groups, sport psychology teams, and innovation offices that could plausibly run a PulseCheck pilot. Do not force deadlines; prioritize buyer fit, pilot scope, decision-maker clues, and a practical follow-up.';
   }
 
   return 'Find highly relevant opportunities for this PipeList. Match the template purpose: require future deadlines for application-based opportunities, but leave due dates blank for relationship-based leads unless the source has a real deadline.';

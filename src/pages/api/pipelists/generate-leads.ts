@@ -187,11 +187,11 @@ const templateInstructions = (
   const identity = `${templateKey} ${listName} ${templateLabel}`.toLowerCase();
 
   if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return `Template policy: this is a pitch competition list. Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities that are relevant to Fit With Pulse. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, or undated opportunities. Prefer official program pages or organizer pages.`;
+    return `Template policy: this is a pitch competition list. Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities that are relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, or undated opportunities. Prefer official program pages or organizer pages.`;
   }
 
   if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
-    return `Template policy: this is a grant or non-dilutive funding list. Find open grant, award, challenge, innovation fund, or public/private funding opportunities relevant to Fit With Pulse. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, vague, or undated opportunities. Prefer official funder pages.`;
+    return `Template policy: this is a grant or non-dilutive funding list. Find open grant, award, challenge, innovation fund, or public/private funding opportunities relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, vague, or undated opportunities. Prefer official funder pages.`;
   }
 
   if (identity.includes('vc') || identity.includes('investor')) {
@@ -199,11 +199,11 @@ const templateInstructions = (
   }
 
   if (identity.includes('university') || identity.includes('pilot')) {
-    return `Template policy: this is a university pilot list. Find universities, athletic departments, sports performance labs, wellness programs, psychology/mental-performance groups, or innovation offices that could plausibly run a Fit With Pulse pilot. Do not force a dueDate. Use pilotScope, decisionMaker, segment, athleteCount, and nextStep when the source supports them.`;
+    return `Template policy: this is a university pilot list. Find universities, athletic departments, sports performance labs, wellness programs, psychology/mental-performance groups, or innovation offices that could plausibly run a PulseCheck pilot. Do not force a dueDate. Use pilotScope, decisionMaker, segment, athleteCount, and nextStep when the source supports them.`;
   }
 
   if (identity.includes('contract')) {
-    return `Template policy: this is a contract pipeline. Find procurement, partnership, RFP, vendor, or paid-program opportunities relevant to Fit With Pulse. If the source has a submission deadline, dueDate must be on or after ${today}; otherwise leave dueDate blank and use expectedCloseDate only for a practical follow-up target if supported.`;
+    return `Template policy: this is a contract pipeline. Find procurement, partnership, RFP, vendor, or paid-program opportunities relevant to PulseCheck. If the source has a submission deadline, dueDate must be on or after ${today}; otherwise leave dueDate blank and use expectedCloseDate only for a practical follow-up target if supported.`;
   }
 
   if (identity.includes('partner')) {
@@ -375,13 +375,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             role: 'system',
             content: `You are a lead-generation researcher for PipeLists, a CRM-style opportunity tracker.
 
-Fit With Pulse context: Fit With Pulse helps teams, athletes, schools, clinics, and sports/wellness programs track mental readiness, wellness signals, engagement, and performance support. Favor opportunities related to sports performance, digital health, wellness, mental performance, athlete support, AI, education, team operations, youth/college athletics, and healthcare-adjacent innovation.
+PulseCheck context: PulseCheck helps teams, athletes, schools, clinics, and sports/wellness programs track mental readiness, wellness signals, engagement, and performance support. Favor opportunities related to sport psychology, athlete mental readiness, sports performance, digital health, wellness, mental performance, athlete support, AI, education, team operations, youth/college athletics, and healthcare-adjacent innovation.
 
 Current date: ${today}.
 
 Research rules:
 - Use web search and prioritize official/current sources.
-- Return only leads that are relevant to the active PipeList and Fit With Pulse.
+- Return only leads that are relevant to the active PipeList and PulseCheck.
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
