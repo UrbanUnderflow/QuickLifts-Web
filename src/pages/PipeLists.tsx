@@ -121,6 +121,22 @@ type LeadAttachment = {
   createdBy: string;
 };
 
+type LeadSearchBrief = {
+  productName: string;
+  productContext: string;
+  searchFocus: string;
+  targetAudience: string;
+  opportunityTypes: string;
+  preferredSources: string;
+  mustInclude: string;
+  mustExclude: string;
+  positioning: string;
+  requireFutureDeadline: boolean;
+  officialSourcesOnly: boolean;
+  includeAdjacentFit: boolean;
+  leadCount: number;
+};
+
 type PipelineItem = {
   id: string;
   title: string;
@@ -165,6 +181,7 @@ type PipeList = {
   templateKey: TemplateKey;
   stages: StageConfig[];
   items: PipelineItem[];
+  searchBrief?: LeadSearchBrief;
   createdAt: string;
 };
 
@@ -217,6 +234,7 @@ const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
 const PIPELISTS_LEAD_SEARCH_FEATURE_ID = 'pipeListsLeadGeneration';
 const PIPELISTS_LEAD_SEARCH_MODEL = 'gpt-4o-mini';
+const PIPELISTS_REMOTE_BRIDGE_ORIGIN = 'https://fitwithpulse.ai';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
 const SOFT_DELETE_RESTORE_DAYS = 30;
@@ -693,11 +711,72 @@ const generatedLeadKey = (lead: Pick<ItemDraft, 'title' | 'organization' | 'sour
     ? normalizeOpportunityKey(lead.sourceUrl)
     : normalizeOpportunityKey(`${lead.title} ${lead.organization}`);
 
+const isIsoDateOnOrAfter = (dateValue: string, minimumDate: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
+
+  const dateTime = new Date(`${dateValue}T12:00:00`).getTime();
+  const minimumTime = new Date(`${minimumDate}T00:00:00`).getTime();
+  return !Number.isNaN(dateTime) && dateTime >= minimumTime;
+};
+
+const isLikelyPitchApplicationOpportunity = (lead: GeneratedLead) => {
+  const combinedText = [
+    lead.title,
+    lead.organization,
+    lead.nextStep,
+    lead.notes,
+    lead.sourceUrl,
+    lead.segment,
+    lead.rationale,
+    lead.sourceEvidence,
+    lead.deadlineStatus,
+  ]
+    .join(' ')
+    .toLowerCase();
+  const nextStepText = lead.nextStep.toLowerCase();
+
+  if (combinedText.includes('event has passed') || combinedText.includes('event passed')) return false;
+
+  const eventOnlyLanguage = [
+    'demo day',
+    'showcase',
+    'networking event',
+    'alumni event',
+    'speaker event',
+    'webinar',
+    'conference session',
+  ].some((token) => combinedText.includes(token));
+  const applicationLanguage = [
+    'apply',
+    'application',
+    'applications open',
+    'application deadline',
+    'submit',
+    'submission',
+    'submissions',
+    'call for startups',
+    'startup competition',
+    'pitch competition',
+    'prize competition',
+    'compete',
+  ].some((token) => combinedText.includes(token));
+  const spectatorNextStep = /^(attend|register|watch|join|visit|go to)\b/.test(nextStepText);
+
+  return !eventOnlyLanguage || (applicationLanguage && !spectatorNextStep);
+};
+
+const isGeneratedLeadEligible = (lead: GeneratedLead, list: PipeList, today: string) => {
+  if (isDeadlineDrivenTemplate(list) && !isIsoDateOnOrAfter(lead.dueDate, today)) return false;
+  if (isPitchCompetitionList(list) && !isLikelyPitchApplicationOpportunity(lead)) return false;
+
+  return true;
+};
+
 const defaultLeadGenAdjustments = (list: PipeList) => {
   const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
 
   if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return 'Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities relevant to PulseCheck: athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, youth/college athletics, and team markets. Only include deadlines today or later. Prefer official pages, U.S. or remote options, meaningful prize/investor exposure, and opportunities not already in this list.';
+    return 'Find open startup pitch competitions, prize competitions, startup challenges, and founder award applications relevant to PulseCheck: athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, youth/college athletics, and team markets. Only include opportunities where PulseCheck can apply, submit, or compete, with application deadlines today or later. Exclude demo days, showcase-only events, networking events, spectator events, and accelerator cohort events unless there is a current application to pitch or compete. Prefer official pages, U.S. or remote options, meaningful prize/investor exposure, and opportunities not already in this list.';
   }
 
   if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
@@ -716,6 +795,132 @@ const defaultLeadGenAdjustments = (list: PipeList) => {
 };
 
 const clampLeadGenCount = (value: number) => Math.min(10, Math.max(3, value));
+
+const defaultLeadSearchBrief = (list: PipeList): LeadSearchBrief => {
+  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
+  const productContext =
+    'PulseCheck helps teams, schools, clinics, and sports/wellness programs track mental readiness, wellbeing signals, engagement, early alerts, referrals, support navigation, and outcomes reporting.';
+
+  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
+    return {
+      productName: 'PulseCheck',
+      productContext:
+        'PulseCheck is a student check-in, wellbeing, early-alert, referral-routing, support-navigation, and outcomes-reporting platform for universities. It can support campus mental health, suicide prevention, basic needs, retention, student success, advising, belonging, substance-use screening/referral, case management, STEM persistence, first-generation/low-income student support, and grant reporting.',
+      searchFocus: defaultLeadGenAdjustments(list),
+      targetAudience:
+        'Universities, colleges, community colleges, HBCUs, MSIs, TRIO programs, student-success offices, counseling centers, basic-needs offices, advising teams, and research faculty.',
+      opportunityTypes:
+        'Federal grants, current or recurring federal programs, formula grants, cooperative agreements, SBIR/STTR opportunities, adjacent federal funding, state pass-through grants, and foundation grants aligned to federal priorities.',
+      preferredSources:
+        'Official sources first: Grants.gov, Simpler.Grants.gov, SAMHSA, U.S. Department of Education, NSF, NIH, NIMH, HRSA, Department of Labor, DOJ/OVW, CDC, USDA, AmeriCorps, and official agency pages.',
+      mustInclude:
+        'Grant/program name, agency, opportunity number when available, current status, deadline, eligible applicants, award size, project period, university eligibility, PulseCheck positioning, fit score, funded activities, buyer/champion, budget language, reporting/outcomes, risks, and official source link.',
+      mustExclude:
+        'Expired one-off opportunities with no recurring path, vague pages, unofficial aggregators unless verified against an official source, and anything that cannot plausibly fund PulseCheck as implementation infrastructure.',
+      positioning:
+        'Frame PulseCheck as implementation infrastructure for a federally funded student-success, wellbeing, behavioral-health, retention, basic-needs, or evaluation initiative. Do not frame it as simply a grant to buy software.',
+      requireFutureDeadline: true,
+      officialSourcesOnly: true,
+      includeAdjacentFit: true,
+      leadCount: 6,
+    };
+  }
+
+  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
+    return {
+      productName: 'PulseCheck',
+      productContext,
+      searchFocus: defaultLeadGenAdjustments(list),
+      targetAudience: 'Startup accelerators, pitch competitions, founder awards, innovation challenges, demo competitions, and prize programs where PulseCheck can apply or submit.',
+      opportunityTypes: 'Open pitch competitions, prize competitions, startup challenges, founder award applications, and accelerator pitch applications.',
+      preferredSources: 'Official program pages, organizer pages, accelerator pages, university innovation-center pages, and reputable startup ecosystem pages only when they link to official applications.',
+      mustInclude: 'Application deadline, prize or investor exposure, eligibility, fit rationale, source link, and a practical application next step.',
+      mustExclude: 'Passed events, demo-day-only pages, showcase-only events, spectator events, networking events, webinars, closed applications, vague deadlines, and anything without an active application or submission path.',
+      positioning: 'Position PulseCheck around athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, youth/college athletics, and team markets.',
+      requireFutureDeadline: true,
+      officialSourcesOnly: true,
+      includeAdjacentFit: false,
+      leadCount: 6,
+    };
+  }
+
+  if (identity.includes('vc') || identity.includes('investor')) {
+    return {
+      productName: 'PulseCheck',
+      productContext,
+      searchFocus: defaultLeadGenAdjustments(list),
+      targetAudience: 'Venture funds, angels, family offices, accelerators, founder programs, and strategic investors.',
+      opportunityTypes: 'Investor targets, warm-intro paths, accelerator investor programs, and thesis-aligned capital sources.',
+      preferredSources: 'Official investor websites, portfolio pages, fund thesis pages, LinkedIn/company pages when official pages are thin, and reputable startup databases when available.',
+      mustInclude: 'Investor thesis, relevant portfolio signals, check/stage fit when available, best contact or intro path, fit rationale, source link, and next outreach step.',
+      mustExclude: 'Investors with no clear fit, inactive funds, irrelevant geographies/stages, and sources that do not support a practical next step.',
+      positioning: 'Frame PulseCheck as a sports/wellness performance and mental-readiness infrastructure company with education, team, and healthcare-adjacent markets.',
+      requireFutureDeadline: false,
+      officialSourcesOnly: false,
+      includeAdjacentFit: true,
+      leadCount: 6,
+    };
+  }
+
+  return {
+    productName: 'PulseCheck',
+    productContext,
+    searchFocus: defaultLeadGenAdjustments(list),
+    targetAudience: 'Organizations, partners, buyers, programs, or institutions that match this PipeList.',
+    opportunityTypes: templateCatalog[list.templateKey].label,
+    preferredSources: 'Official and current sources first. Use reputable secondary sources only when they add useful context.',
+    mustInclude: 'Name, organization, source link, amount or value when available, due date when relevant, fit rationale, and next step.',
+    mustExclude: 'Expired, closed, irrelevant, vague, duplicate, or unsupported opportunities.',
+    positioning: 'Position PulseCheck using the strongest buyer-specific fit for this PipeList.',
+    requireFutureDeadline: isDeadlineDrivenTemplate(list),
+    officialSourcesOnly: isDeadlineDrivenTemplate(list),
+    includeAdjacentFit: true,
+    leadCount: 6,
+  };
+};
+
+const normalizeLeadSearchBrief = (brief: Partial<LeadSearchBrief> | undefined, list: PipeList): LeadSearchBrief => {
+  const fallback = defaultLeadSearchBrief(list);
+  return {
+    productName: brief?.productName || fallback.productName,
+    productContext: brief?.productContext || fallback.productContext,
+    searchFocus: brief?.searchFocus || fallback.searchFocus,
+    targetAudience: brief?.targetAudience || fallback.targetAudience,
+    opportunityTypes: brief?.opportunityTypes || fallback.opportunityTypes,
+    preferredSources: brief?.preferredSources || fallback.preferredSources,
+    mustInclude: brief?.mustInclude || fallback.mustInclude,
+    mustExclude: brief?.mustExclude || fallback.mustExclude,
+    positioning: brief?.positioning || fallback.positioning,
+    requireFutureDeadline: brief?.requireFutureDeadline ?? fallback.requireFutureDeadline,
+    officialSourcesOnly: brief?.officialSourcesOnly ?? fallback.officialSourcesOnly,
+    includeAdjacentFit: brief?.includeAdjacentFit ?? fallback.includeAdjacentFit,
+    leadCount: clampLeadGenCount(Number(brief?.leadCount) || fallback.leadCount),
+  };
+};
+
+const buildLeadSearchPrompt = (brief: LeadSearchBrief) =>
+  [
+    `Research role: act as a lead-generation research strategist helping ${brief.productName} find leads for this PipeList.`,
+    `Product context: ${brief.productContext}`,
+    `Research goal: ${brief.searchFocus}`,
+    `Target audience/customer: ${brief.targetAudience}`,
+    `Opportunity types: ${brief.opportunityTypes}`,
+    `Preferred sources: ${brief.preferredSources}`,
+    brief.includeAdjacentFit
+      ? 'Include both direct-fit opportunities and adjacent opportunities where PulseCheck could be positioned as a vendor, implementation partner, subrecipient, evaluator, research tool, data platform, referral system, or pilot-site technology.'
+      : 'Only include direct-fit opportunities with a clear path for PulseCheck to apply, submit, compete, sell, partner, or outreach.',
+    brief.requireFutureDeadline
+      ? 'Require a current or future application/submission deadline. Exclude undated, expired, closed, or already-passed opportunities.'
+      : 'Do not force deadlines unless the source has a real application/submission deadline.',
+    brief.officialSourcesOnly
+      ? 'Use official/current sources first and verify against official pages before returning a lead.'
+      : 'Use current sources and prefer official pages, but allow reputable secondary sources when they provide useful context.',
+    `Must include: ${brief.mustInclude}`,
+    `Must exclude: ${brief.mustExclude}`,
+    `Positioning guidance: ${brief.positioning}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
 const leadSearchStringFields = [
   'title',
@@ -819,6 +1024,14 @@ const getApiErrorMessage = (payload: unknown, fallbackMessage: string) => {
   return fallbackMessage;
 };
 
+const getLeadSearchBridgeUrl = () => {
+  if (typeof window === 'undefined') return '/api/openai/v1/responses';
+
+  const host = window.location.hostname;
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  return isLocalHost ? `${PIPELISTS_REMOTE_BRIDGE_ORIGIN}/api/openai/v1/responses` : '/api/openai/v1/responses';
+};
+
 const getEasternDate = () => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/New_York',
@@ -844,7 +1057,7 @@ const leadSearchTemplatePolicy = (list: PipeList, today: string) => {
   const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
 
   if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return `Template policy: this is a pitch competition list. Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities that are relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, or undated opportunities. Prefer official program pages or organizer pages.`;
+    return `Template policy: this is a pitch competition list. Find only open startup pitch competitions, founder award applications, startup challenges, and prize competitions that PulseCheck can apply to, submit to, or compete in. Only include opportunities with an explicit application/submission deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, undated, event-only, spectator-only, demo-day-only, showcase-only, networking, webinar, and accelerator-cohort pages unless the page has a current application to pitch or compete. Prefer official program pages or organizer pages.`;
   }
 
   if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
@@ -956,7 +1169,7 @@ const createList = (
   items: PipelineItem[] = [],
 ): PipeList => {
   const template = templateCatalog[templateKey];
-  return {
+  const list: PipeList = {
     id: makeId(),
     name,
     description: template.description,
@@ -965,6 +1178,10 @@ const createList = (
     stages: template.stages,
     items,
     createdAt: new Date().toISOString(),
+  };
+  return {
+    ...list,
+    searchBrief: defaultLeadSearchBrief(list),
   };
 };
 
@@ -1267,7 +1484,7 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
           return [...mergedStages, templateStage];
         }, savedStages)
       : savedStages;
-  return {
+  const normalizedList: PipeList = {
     id: list.id || makeId(),
     name: list.name || template.defaultName,
     description: list.description || template.description,
@@ -1276,6 +1493,10 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
     stages,
     items: Array.isArray(list.items) ? list.items.map((item) => normalizeItem(item, stages)) : [],
     createdAt: list.createdAt || new Date().toISOString(),
+  };
+  return {
+    ...normalizedList,
+    searchBrief: normalizeLeadSearchBrief(list.searchBrief, normalizedList),
   };
 };
 
@@ -1400,11 +1621,26 @@ const readApiJson = async (response: Response, fallbackMessage: string) => {
   try {
     return JSON.parse(trimmed);
   } catch {
+    const contentType = response.headers.get('content-type') || 'unknown';
+    const lowerPreview = trimmed.slice(0, 400).toLowerCase();
     console.error('[PipeLists] Expected JSON API response but received something else:', {
       status: response.status,
-      contentType: response.headers.get('content-type') || 'unknown',
+      contentType,
       preview: trimmed.slice(0, 160),
     });
+
+    if (response.status === 500 && lowerPreview.includes('task timed out')) {
+      throw new Error('Lead search took too long for the local bridge. Refresh and try again.');
+    }
+
+    if (response.status === 504 || lowerPreview.includes('timeout') || lowerPreview.includes('timed out')) {
+      throw new Error('Lead search timed out. Try a smaller lead count or narrower search brief.');
+    }
+
+    if (contentType.includes('text/html') || lowerPreview.startsWith('<!doctype') || lowerPreview.startsWith('<html')) {
+      throw new Error('Lead search returned a server page instead of JSON. Refresh and try again.');
+    }
+
     throw new Error(fallbackMessage);
   }
 };
@@ -1642,8 +1878,7 @@ const PipelinePage: NextPage = () => {
   const [isAnalyzingLead, setIsAnalyzingLead] = useState(false);
   const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isLeadGenModalOpen, setIsLeadGenModalOpen] = useState(false);
-  const [leadGenAdjustments, setLeadGenAdjustments] = useState('');
-  const [leadGenCount, setLeadGenCount] = useState(6);
+  const [leadSearchBrief, setLeadSearchBrief] = useState<LeadSearchBrief>(() => defaultLeadSearchBrief(initialLists[0]));
   const [isGeneratingLeads, setIsGeneratingLeads] = useState(false);
   const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
   const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
@@ -2129,6 +2364,13 @@ const PipelinePage: NextPage = () => {
     () => lists.find((list) => list.id === activeListId) || lists[0],
     [activeListId, lists],
   );
+  const leadSearchPromptPreview = useMemo(() => buildLeadSearchPrompt(leadSearchBrief), [leadSearchBrief]);
+  const updateLeadSearchBrief = <Key extends keyof LeadSearchBrief>(field: Key, value: LeadSearchBrief[Key]) => {
+    setLeadSearchBrief((currentBrief) => ({
+      ...currentBrief,
+      [field]: value,
+    }));
+  };
   const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
 
   useEffect(() => {
@@ -2274,28 +2516,43 @@ const PipelinePage: NextPage = () => {
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase();
 
-    return activeListItems.filter((item) => {
-      const matchesStage = stageFilter === 'all' || item.stage === stageFilter;
-      const matchesQuery =
-        search.length === 0 ||
-        [
-          item.title,
-          item.organization,
-          item.owner,
-          item.nextStep,
-          item.amount,
-          item.acv,
-          item.sourceUrl,
-          item.segment,
-          item.decisionMaker,
-          item.notes,
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(search);
+    const dueTime = (item: PipelineItem) => {
+      const dateValue = item.expectedCloseDate || item.dueDate || item.pilotEnd;
+      if (!dateValue) return Number.POSITIVE_INFINITY;
 
-      return matchesStage && matchesQuery;
-    });
+      const parsed = new Date(`${dateValue}T12:00:00`).getTime();
+      return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+    };
+
+    return activeListItems
+      .filter((item) => {
+        const matchesStage = stageFilter === 'all' || item.stage === stageFilter;
+        const matchesQuery =
+          search.length === 0 ||
+          [
+            item.title,
+            item.organization,
+            item.owner,
+            item.nextStep,
+            item.amount,
+            item.acv,
+            item.sourceUrl,
+            item.segment,
+            item.decisionMaker,
+            item.notes,
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(search);
+
+        return matchesStage && matchesQuery;
+      })
+      .sort((left, right) => {
+        const dateDifference = dueTime(left) - dueTime(right);
+        if (dateDifference !== 0) return dateDifference;
+
+        return left.title.localeCompare(right.title);
+      });
   }, [activeListItems, query, stageFilter]);
 
   const countsByStage = useMemo(
@@ -2443,7 +2700,7 @@ const PipelinePage: NextPage = () => {
 
   const openLeadGenModal = () => {
     if (!canModify) return;
-    setLeadGenAdjustments(defaultLeadGenAdjustments(activeList));
+    setLeadSearchBrief(normalizeLeadSearchBrief(activeList.searchBrief, activeList));
     setGeneratedLeads([]);
     setAddedGeneratedLeadKeys([]);
     setLeadGenMessage(null);
@@ -2512,6 +2769,19 @@ const PipelinePage: NextPage = () => {
       }
 
       const today = getEasternDate();
+      const normalizedBrief = normalizeLeadSearchBrief(leadSearchBrief, activeList);
+      const userAdjustments = buildLeadSearchPrompt(normalizedBrief);
+      setLeadSearchBrief(normalizedBrief);
+      setLists((currentLists) =>
+        currentLists.map((list) =>
+          list.id === activeList.id
+            ? {
+                ...list,
+                searchBrief: normalizedBrief,
+              }
+            : list,
+        ),
+      );
       const deadlineRequired = isDeadlineDrivenTemplate(activeList);
       const stageOptions = activeList.stages.map((stage) => ({
         id: stage.id,
@@ -2525,7 +2795,7 @@ const PipelinePage: NextPage = () => {
         dueDate: item.dueDate,
       }));
 
-      const response = await fetch('/api/openai/v1/responses', {
+      const response = await fetch(getLeadSearchBridgeUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2563,6 +2833,8 @@ Research rules:
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
 - If the template is deadline-driven, every returned lead must have a verified dueDate on or after ${today}.
 - If the template is relationship-driven, dueDate can be "" unless the source provides a real deadline.
+- For pitch competition lists, do not return demo-day/showcase/networking/spectator event pages unless they have an active application or submission path for PulseCheck to compete.
+- For pitch competition lists, nextStep should be an application/submission action, not "attend", "watch", or "register for" an event.
 - Pick stage from the provided stage ids only. If unsure, use the first stage id.
 - Keep notes useful for the user: concise analysis, prep angle, and practical context. Do not write "AI confidence".
 - sourceEvidence must briefly name the source support used, including the deadline when relevant.
@@ -2573,14 +2845,15 @@ Research rules:
               role: 'user',
               content: JSON.stringify(
                 {
-                  requestedLeadCount: leadGenCount,
+                  requestedLeadCount: normalizedBrief.leadCount,
                   listName: activeList.name,
                   templateLabel: templateCatalog[activeList.templateKey].label,
                   templateKey: activeList.templateKey,
                   templatePolicy: leadSearchTemplatePolicy(activeList, today),
+                  searchBrief: normalizedBrief,
                   deadlineRequired,
                   stageOptions,
-                  userAdjustments: leadGenAdjustments,
+                  userAdjustments,
                   existingItems,
                 },
                 null,
@@ -2598,15 +2871,28 @@ Research rules:
 
       const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
       const rawLeads = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads : [];
-      const nextLeads = rawLeads.length > 0
+      const sanitizedLeads: GeneratedLead[] = rawLeads.length > 0
         ? rawLeads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
         : [];
+      const nextLeads = sanitizedLeads.filter((lead) => isGeneratedLeadEligible(lead, activeList, today));
 
       setGeneratedLeads(nextLeads);
       setLeadGenMessage(
         nextLeads.length > 0
-          ? { type: 'success', text: `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.` }
-          : { type: 'info', text: 'No new leads matched this search. Try widening the adjustments.' },
+          ? {
+              type: 'success',
+              text:
+                sanitizedLeads.length > nextLeads.length
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Filtered out event-only or expired matches.`
+                  : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.`,
+            }
+          : {
+              type: 'info',
+              text:
+                sanitizedLeads.length > 0
+                  ? 'The search only found expired or event-only matches. Try searching for open application deadlines.'
+                  : 'No new leads matched this search. Try widening the adjustments.',
+            },
       );
     } catch (error) {
       console.error('[PipeLists] Lead generation failed:', error);
@@ -4552,8 +4838,8 @@ Research rules:
                   ))}
                 </div>
 
-                <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                  <div className="hidden grid-cols-[minmax(220px,1.25fr)_minmax(150px,0.75fr)_112px_110px_120px_minmax(180px,0.9fr)_88px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
+                <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div className="hidden min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
                     <span>Item</span>
                     <span>Organization</span>
                     <span>Stage</span>
@@ -4564,7 +4850,7 @@ Research rules:
                   </div>
 
                   {filteredItems.length > 0 ? (
-                    <div className="divide-y divide-stone-100">
+                    <div className="divide-y divide-stone-100 lg:min-w-[1280px]">
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
                         const hasItemValue = Boolean(item.acv || item.amount);
@@ -4588,7 +4874,7 @@ Research rules:
                                 setDetailModalMode('details');
                               }
                             }}
-                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[minmax(220px,1.25fr)_minmax(150px,0.75fr)_112px_110px_120px_minmax(180px,0.9fr)_88px] lg:items-center lg:gap-4"
+                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px] lg:items-center lg:gap-4"
                           >
                             <div className="min-w-0">
                               <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
@@ -5188,16 +5474,16 @@ Research rules:
             ) : (
               <form onSubmit={handleGenerateLeads} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
                 <div className="grid gap-4 md:grid-cols-[1fr_160px]">
-                  <label className="block" htmlFor="pipe-lead-gen-adjustments">
+                  <label className="block" htmlFor="pipe-lead-brief-product">
                     <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                      Search adjustments
+                      Product / company
                     </span>
-                    <textarea
-                      id="pipe-lead-gen-adjustments"
-                      value={leadGenAdjustments}
-                      onChange={(event) => setLeadGenAdjustments(event.target.value)}
-                      className="min-h-32 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder="Describe the kinds of leads to find"
+                    <input
+                      id="pipe-lead-brief-product"
+                      value={leadSearchBrief.productName}
+                      onChange={(event) => updateLeadSearchBrief('productName', event.target.value)}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="PulseCheck"
                     />
                   </label>
 
@@ -5208,13 +5494,164 @@ Research rules:
                       type="number"
                       min={3}
                       max={10}
-                      value={leadGenCount}
-                      onChange={(event) => setLeadGenCount(clampLeadGenCount(Number(event.target.value) || 3))}
+                      value={leadSearchBrief.leadCount}
+                      onChange={(event) => updateLeadSearchBrief('leadCount', clampLeadGenCount(Number(event.target.value) || 3))}
                       className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
                     />
-                    <p className="mt-2 text-xs leading-5 text-stone-400">3 to 10 leads per search.</p>
+                    <p className="mt-2 text-xs leading-5 text-stone-400">3 to 10 leads.</p>
                   </label>
                 </div>
+
+                <label className="mt-4 block" htmlFor="pipe-lead-brief-focus">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    Search focus
+                  </span>
+                  <textarea
+                    id="pipe-lead-brief-focus"
+                    value={leadSearchBrief.searchFocus}
+                    onChange={(event) => updateLeadSearchBrief('searchFocus', event.target.value)}
+                    className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="What kind of leads should this PipeList search for?"
+                  />
+                </label>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <label className="block" htmlFor="pipe-lead-brief-audience">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                      Target buyer / audience
+                    </span>
+                    <textarea
+                      id="pipe-lead-brief-audience"
+                      value={leadSearchBrief.targetAudience}
+                      onChange={(event) => updateLeadSearchBrief('targetAudience', event.target.value)}
+                      className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="Who should these leads be for?"
+                    />
+                  </label>
+
+                  <label className="block" htmlFor="pipe-lead-brief-types">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                      Opportunity types
+                    </span>
+                    <textarea
+                      id="pipe-lead-brief-types"
+                      value={leadSearchBrief.opportunityTypes}
+                      onChange={(event) => updateLeadSearchBrief('opportunityTypes', event.target.value)}
+                      className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="Grants, pitch competitions, investors, pilots..."
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                  <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
+                    <input
+                      type="checkbox"
+                      checked={leadSearchBrief.requireFutureDeadline}
+                      onChange={(event) => updateLeadSearchBrief('requireFutureDeadline', event.target.checked)}
+                      className="h-4 w-4 rounded border-stone-300"
+                    />
+                    Future deadline
+                  </label>
+                  <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
+                    <input
+                      type="checkbox"
+                      checked={leadSearchBrief.officialSourcesOnly}
+                      onChange={(event) => updateLeadSearchBrief('officialSourcesOnly', event.target.checked)}
+                      className="h-4 w-4 rounded border-stone-300"
+                    />
+                    Official sources
+                  </label>
+                  <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
+                    <input
+                      type="checkbox"
+                      checked={leadSearchBrief.includeAdjacentFit}
+                      onChange={(event) => updateLeadSearchBrief('includeAdjacentFit', event.target.checked)}
+                      className="h-4 w-4 rounded border-stone-300"
+                    />
+                    Adjacent fit
+                  </label>
+                </div>
+
+                <details className="mt-4 rounded-lg border border-stone-200 bg-white">
+                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-stone-700">
+                    Advanced brief
+                  </summary>
+                  <div className="space-y-4 border-t border-stone-100 p-4">
+                    <label className="block" htmlFor="pipe-lead-brief-context">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                        Product context
+                      </span>
+                      <textarea
+                        id="pipe-lead-brief-context"
+                        value={leadSearchBrief.productContext}
+                        onChange={(event) => updateLeadSearchBrief('productContext', event.target.value)}
+                        className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      />
+                    </label>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block" htmlFor="pipe-lead-brief-sources">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                          Preferred sources
+                        </span>
+                        <textarea
+                          id="pipe-lead-brief-sources"
+                          value={leadSearchBrief.preferredSources}
+                          onChange={(event) => updateLeadSearchBrief('preferredSources', event.target.value)}
+                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+
+                      <label className="block" htmlFor="pipe-lead-brief-positioning">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                          Positioning
+                        </span>
+                        <textarea
+                          id="pipe-lead-brief-positioning"
+                          value={leadSearchBrief.positioning}
+                          onChange={(event) => updateLeadSearchBrief('positioning', event.target.value)}
+                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block" htmlFor="pipe-lead-brief-include">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                          Must include
+                        </span>
+                        <textarea
+                          id="pipe-lead-brief-include"
+                          value={leadSearchBrief.mustInclude}
+                          onChange={(event) => updateLeadSearchBrief('mustInclude', event.target.value)}
+                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+
+                      <label className="block" htmlFor="pipe-lead-brief-exclude">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                          Must exclude
+                        </span>
+                        <textarea
+                          id="pipe-lead-brief-exclude"
+                          value={leadSearchBrief.mustExclude}
+                          onChange={(event) => updateLeadSearchBrief('mustExclude', event.target.value)}
+                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <details className="rounded-md border border-stone-200 bg-[#FAFAF7]">
+                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase text-stone-400">
+                        Prompt preview
+                      </summary>
+                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-stone-200 px-3 py-3 text-xs leading-5 text-stone-600">
+                        {leadSearchPromptPreview}
+                      </pre>
+                    </details>
+                  </div>
+                </details>
 
                 <div className="mt-4">
                   <MessageBanner message={leadGenMessage} />
