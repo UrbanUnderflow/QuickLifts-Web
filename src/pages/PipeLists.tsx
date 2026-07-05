@@ -4,11 +4,13 @@ import Link from 'next/link';
 import {
   GoogleAuthProvider,
   User,
+  getRedirectResult,
   isSignInWithEmailLink,
   onAuthStateChanged,
   sendSignInLinkToEmail,
   signInWithEmailLink,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
@@ -409,6 +411,16 @@ const makeId = () => {
 const shareDocumentIdForList = (ownerUid: string, listId: string) => `${ownerUid}-${listId}`;
 const shareDocumentIdForLead = (ownerUid: string, listId: string, itemId: string) =>
   `${ownerUid}-${listId}-${itemId}`;
+
+const shouldUseRedirectSignIn = () => {
+  if (typeof window === 'undefined') return false;
+
+  const userAgent = window.navigator.userAgent || '';
+  const isMobileUserAgent = /Android|iPhone|iPad|iPod|CriOS|FxiOS|Mobile/i.test(userAgent);
+  const isTouchFirst = window.matchMedia?.('(pointer: coarse)').matches || false;
+
+  return isMobileUserAgent || isTouchFirst;
+};
 
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
@@ -1771,6 +1783,44 @@ const PipelinePage: NextPage = () => {
 
     loadLeadShare();
   }, [leadShareId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const completeGoogleRedirectSignIn = async () => {
+      try {
+        const result = await getRedirectResult(simpBudgetAuth);
+        if (!result?.user) return;
+
+        const email = result.user.email?.toLowerCase() || '';
+        if (!isSharedView && email !== TREMAINE_OWNER_EMAIL) {
+          setAuthMessage({
+            type: 'error',
+            text: `That account is ${result.user.email || 'not the owner account'}. Please sign in with ${TREMAINE_OWNER_EMAIL}.`,
+          });
+          await signOut(simpBudgetAuth);
+        } else if (
+          isSharedView &&
+          shareDoc?.access === 'edit' &&
+          email !== shareDoc.ownerEmail.toLowerCase() &&
+          !shareDoc.editorEmails.map((editorEmail) => editorEmail.toLowerCase()).includes(email)
+        ) {
+          setAuthMessage({
+            type: 'info',
+            text: 'You are signed in and can view this list, but this email was not granted edit access.',
+          });
+        }
+      } catch (error) {
+        console.error('PipeLists Google redirect sign-in failed:', error);
+        setAuthMessage({
+          type: 'error',
+          text: readAuthError(error, 'Unable to finish Google sign-in.'),
+        });
+      }
+    };
+
+    completeGoogleRedirectSignIn();
+  }, [isSharedView, shareDoc]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -3331,6 +3381,12 @@ const PipelinePage: NextPage = () => {
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
+      if (shouldUseRedirectSignIn()) {
+        setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
+        await signInWithRedirect(simpBudgetAuth, provider);
+        return;
+      }
+
       const result = await signInWithPopup(simpBudgetAuth, provider);
       const email = result.user.email?.toLowerCase() || '';
       if (!isSharedView && email !== TREMAINE_OWNER_EMAIL) {
