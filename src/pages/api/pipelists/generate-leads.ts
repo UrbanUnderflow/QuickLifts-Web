@@ -166,6 +166,31 @@ const isValidUrl = (value: string) => {
   }
 };
 
+const listSourcePatterns = [
+  /\b(list|directory|database|roundup|round-up|guide|overview|landscape|market map|map of|index)\b/i,
+  /\b(top|best)\s+\d+\b/i,
+  /\b\d+\+?\s+(investors|funds|grants|accelerators|competitions|programs|opportunities|vcs)\b/i,
+  /\b(investors|funds|grants|accelerators|competitions|programs|opportunities|vcs)\s+(to know|you can|for startups|in \d{4})\b/i,
+];
+
+const listSourceUrlPatterns = [
+  /\/(blog|news|insights|resources|articles|posts|lists|directories|directory|database|roundups?|guides?)\//i,
+  /\b(list|directory|database|roundup|guide|overview|landscape|market-map)\b/i,
+];
+
+const isLikelyAggregateSource = (lead: Pick<LeadCandidate, 'title' | 'organization' | 'sourceUrl' | 'rationale' | 'sourceEvidence'>) => {
+  const text = [lead.title, lead.organization, lead.rationale, lead.sourceEvidence].filter(Boolean).join(' ');
+  if (listSourcePatterns.some((pattern) => pattern.test(text))) return true;
+
+  try {
+    const parsed = new URL(lead.sourceUrl);
+    const urlText = `${parsed.hostname}${parsed.pathname}`;
+    return listSourceUrlPatterns.some((pattern) => pattern.test(urlText));
+  } catch {
+    return false;
+  }
+};
+
 const clampCount = (value: unknown) => {
   const parsed = typeof value === 'number' ? value : Number.parseInt(String(value || ''), 10);
   if (Number.isNaN(parsed)) return 6;
@@ -196,7 +221,7 @@ const templateInstructions = (
   }
 
   if (identity.includes('vc') || identity.includes('investor')) {
-    return `Template policy: this is an investor list. Find relevant venture funds, angel groups, accelerators, or investor programs for sports performance, digital health, wellness, education technology, AI, or athlete/team markets. Do not force a dueDate unless there is a real application deadline. Use nextStep for the best outreach or application action.`;
+    return `Template policy: this is an investor list. Find specific venture funds, named angel groups, named investors, accelerators, or investor programs for sports performance, digital health, wellness, education technology, AI, or athlete/team markets. Do not return articles, directories, databases, roundups, sector overviews, market maps, or "top investor" lists as leads. If a search result is a list of investors/funds, use it only as a research source, follow the entries on that list, and return the individual investors/funds as separate leads with their own official site, LinkedIn profile, investor page, or fund page as sourceUrl. Do not force a dueDate unless there is a real application deadline. Use nextStep for the best outreach or application action.`;
   }
 
   if (identity.includes('university') || identity.includes('pilot')) {
@@ -384,6 +409,10 @@ Current date: ${today}.
 Research rules:
 - Use web search and prioritize official/current sources.
 - Return only leads that are relevant to the active PipeList and PulseCheck.
+- A lead must be a specific actionable entity: a named fund, person, company, program, grant, competition, contract, school, partner, or opportunity.
+- Do not return source pages that are merely lists of other leads, directories, databases, rankings, roundups, market maps, article collections, or sector overviews.
+- If a useful source page is a list/directory/roundup, treat it as a research source only: open or follow the entries, extract the individual leads from that page, and return those individual leads instead.
+- Each returned lead's sourceUrl must point to that individual lead's official page, LinkedIn/profile page, application page, fund page, or program page. Do not use a directory/list page as sourceUrl unless it is also the official page for that exact lead.
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
@@ -429,6 +458,7 @@ Research rules:
       .map((lead: unknown) => sanitizeLead(lead, stageIds, fallbackStage, today, deadlineRequired))
       .filter((lead: LeadCandidate | null): lead is LeadCandidate => {
         if (!lead) return false;
+        if (isLikelyAggregateSource(lead)) return false;
         const leadKeys = [
           normalizeKey(`${lead.title} ${lead.organization}`),
           normalizeKey(lead.sourceUrl),

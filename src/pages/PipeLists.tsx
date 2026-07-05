@@ -104,7 +104,7 @@ type ActivityLog = {
   staffFeedbackScore: string;
   notes: string;
   createdAt: string;
-  systemAction?: 'item-created' | 'item-deleted' | 'item-restored';
+  systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved';
   relatedItemId?: string;
   restorableUntil?: string;
 };
@@ -303,6 +303,7 @@ const logDisplayLabel = (log: ActivityLog) => {
   if (log.systemAction === 'item-created') return 'Item Added';
   if (log.systemAction === 'item-deleted') return 'Item Deleted';
   if (log.systemAction === 'item-restored') return 'Item Restored';
+  if (log.systemAction === 'item-moved') return 'Item Moved';
   return logTypeLabels[log.type];
 };
 
@@ -1912,6 +1913,8 @@ const PipelinePage: NextPage = () => {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [leadShareMessage, setLeadShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [leadShareUrl, setLeadShareUrl] = useState('');
+  const [leadMoveMessage, setLeadMoveMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [moveTargetListId, setMoveTargetListId] = useState('');
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
@@ -2670,6 +2673,8 @@ const PipelinePage: NextPage = () => {
     setAttachmentMessage(null);
     setLeadShareMessage(null);
     setLeadShareUrl('');
+    setLeadMoveMessage(null);
+    setMoveTargetListId('');
     setAttachmentLinkName('');
     setAttachmentLinkUrl('');
   }, [selectedDetailItemId, detailModalMode]);
@@ -3615,6 +3620,70 @@ Research rules:
     setActiveListId(listId);
     setSelectedDetailItemId(itemId);
     setDetailModalMode('details');
+  };
+
+  const handleMoveItem = (itemId: string, targetListId: string) => {
+    if (!canModify || !targetListId || targetListId === activeList.id) return;
+
+    const sourceList = lists.find((list) => list.id === activeList.id);
+    const targetList = lists.find((list) => list.id === targetListId);
+    const itemToMove = sourceList?.items.find((item) => item.id === itemId);
+
+    if (!sourceList || !targetList || !itemToMove || isItemDeleted(itemToMove)) {
+      setMoveTargetListId('');
+      setLeadMoveMessage({ type: 'error', text: 'Unable to move this lead.' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const targetStage = normalizeStageId(itemToMove.stage, targetList.stages);
+    const movedItem: PipelineItem = {
+      ...itemToMove,
+      stage: targetStage,
+      updatedAt: now,
+      weeklyLogs: [
+        createSystemLog(
+          itemToMove,
+          'item-moved',
+          `Moved ${itemToMove.title} from ${sourceList.name} to ${targetList.name}.`,
+        ),
+        ...itemToMove.weeklyLogs,
+      ],
+    };
+
+    setLists((currentLists) => {
+      return currentLists.map((list) => {
+        if (list.id === sourceList.id) {
+          return {
+            ...list,
+            items: list.items.filter((item) => item.id !== itemId),
+          };
+        }
+
+        if (list.id === targetList.id) {
+          const withoutExistingCopy = list.items.filter((item) => item.id !== itemId);
+          return {
+            ...list,
+            items: [movedItem, ...withoutExistingCopy],
+          };
+        }
+
+        return list;
+      });
+    });
+
+    if (editingItemId === itemId) resetEditor();
+    setActiveListId(targetListId);
+    setStageFilter('all');
+    setQuery('');
+    setSelectedDetailItemId(itemId);
+    setSelectedLogItemId(itemId);
+    setDetailModalMode('details');
+    setMoveTargetListId('');
+    setLeadMoveMessage({
+      type: 'success',
+      text: `Moved ${movedItem.title} from ${sourceList.name} to ${targetList.name}.`,
+    });
   };
 
   const handleDeleteList = () => {
@@ -6109,13 +6178,38 @@ Research rules:
                     Logs
                   </button>
                 )}
+                {canModify && !selectedDetailIsEditing && !isLeadSharedView && lists.length > 1 && (
+                  <label className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition focus-within:border-stone-400 hover:text-stone-950">
+                    <ListPlus className="h-4 w-4" />
+                    <span className="sr-only">Move lead to another PipeList</span>
+                    <select
+                      value={moveTargetListId}
+                      onChange={(event) => {
+                        const nextListId = event.target.value;
+                        setMoveTargetListId(nextListId);
+                        if (nextListId) handleMoveItem(selectedDetailItem.id, nextListId);
+                      }}
+                      className="max-w-[160px] bg-transparent text-sm font-semibold outline-none"
+                    >
+                      <option value="">Move to...</option>
+                      {lists
+                        .filter((list) => list.id !== activeList.id)
+                        .map((list) => (
+                          <option key={list.id} value={list.id}>
+                            {list.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
               </div>
             </div>
 
-            {!selectedDetailIsEditing && (leadCopyMessage || leadShareMessage || attachmentMessage) && (
+            {!selectedDetailIsEditing && (leadCopyMessage || leadShareMessage || leadMoveMessage || attachmentMessage) && (
               <div className="space-y-2 border-b border-stone-100 px-5 py-3">
                 <MessageBanner message={leadCopyMessage} />
                 <MessageBanner message={leadShareMessage} />
+                <MessageBanner message={leadMoveMessage} />
                 <MessageBanner message={attachmentMessage} />
                 {leadShareUrl && (
                   <input
