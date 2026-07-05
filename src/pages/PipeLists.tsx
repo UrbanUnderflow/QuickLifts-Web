@@ -4328,11 +4328,12 @@ const PipelinePage: NextPage = () => {
                 </div>
 
                 <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                  <div className="hidden grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_120px_120px_minmax(220px,1fr)_104px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
+                  <div className="hidden grid-cols-[minmax(220px,1.25fr)_minmax(150px,0.75fr)_112px_110px_120px_minmax(180px,0.9fr)_88px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
                     <span>Item</span>
                     <span>Organization</span>
                     <span>Stage</span>
                     <span>Value</span>
+                    <span>Due Date</span>
                     <span>Next Step</span>
                     <span className="text-right">Actions</span>
                   </div>
@@ -4342,6 +4343,7 @@ const PipelinePage: NextPage = () => {
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
                         const hasItemValue = Boolean(item.acv || item.amount);
+                        const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
 
                         return (
@@ -4361,17 +4363,17 @@ const PipelinePage: NextPage = () => {
                                 setDetailModalMode('details');
                               }
                             }}
-                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[minmax(220px,1.3fr)_minmax(160px,0.8fr)_120px_120px_minmax(220px,1fr)_104px] lg:items-center lg:gap-4"
+                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[minmax(220px,1.25fr)_minmax(150px,0.75fr)_112px_110px_120px_minmax(180px,0.9fr)_88px] lg:items-center lg:gap-4"
                           >
                             <div className="min-w-0">
                               <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
                                 {item.owner && <span>{item.owner}</span>}
                                 {item.segment && <span>{item.segment}</span>}
-                                {item.expectedCloseDate && (
-                                  <span className="inline-flex items-center gap-1">
+                                {dueDate && (
+                                  <span className="inline-flex items-center gap-1 lg:hidden">
                                     <Calendar className="h-3 w-3" />
-                                    {item.expectedCloseDate}
+                                    {dueDate}
                                   </span>
                                 )}
                               </div>
@@ -4391,6 +4393,15 @@ const PipelinePage: NextPage = () => {
                             <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
                               {hasItemValue ? formatMoney(itemValue(item)) : ''}
                             </p>
+
+                            <div className={`min-w-0 text-sm text-stone-600 ${dueDate ? '' : 'hidden lg:block'}`}>
+                              {dueDate && (
+                                <span className="inline-flex max-w-full items-center gap-1.5 truncate">
+                                  <Calendar className="h-4 w-4 shrink-0 text-stone-400" />
+                                  <span className="truncate">{dueDate}</span>
+                                </span>
+                              )}
+                            </div>
 
                             <div className={`min-w-0 ${nextStepText ? '' : 'hidden lg:block'}`}>
                               {nextStepText && (
