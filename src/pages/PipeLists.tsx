@@ -1488,6 +1488,7 @@ const PipelinePage: NextPage = () => {
   const [dataReady, setDataReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [magicEmail, setMagicEmail] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -1528,6 +1529,13 @@ const PipelinePage: NextPage = () => {
       shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
   const canModify = !isSharedView || canEditShared;
+
+  useEffect(() => {
+    if (!toastMessage) return undefined;
+
+    const timeout = window.setTimeout(() => setToastMessage(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(simpBudgetAuth, async (currentUser) => {
@@ -2707,7 +2715,9 @@ const PipelinePage: NextPage = () => {
       if (nextShareUrl) {
         try {
           await writeClipboardText(nextShareUrl);
+          setToastMessage({ type: 'success', text: 'Copied share link to clipboard.' });
         } catch {
+          setToastMessage({ type: 'info', text: 'Share link created. Copy it from the link field.' });
           setLeadShareMessage({ type: 'info', text: nextShareUrl });
         }
       }
@@ -4418,6 +4428,22 @@ const PipelinePage: NextPage = () => {
           </section>
         </div>
       </main>
+
+      {toastMessage && (
+        <div className="fixed left-1/2 top-5 z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2" aria-live="polite">
+          <div
+            className={`rounded-full border px-4 py-3 text-center text-sm font-semibold shadow-2xl ${
+              toastMessage.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : toastMessage.type === 'error'
+                  ? 'border-rose-200 bg-rose-50 text-rose-800'
+                  : 'border-sky-200 bg-sky-50 text-sky-800'
+            }`}
+          >
+            {toastMessage.text}
+          </div>
+        </div>
+      )}
 
       {shouldBlockEditShare && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#FAFAF7]/95 px-4 py-6 backdrop-blur-md">
