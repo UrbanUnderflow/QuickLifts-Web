@@ -215,6 +215,8 @@ const PIPELISTS_STATE_DOCUMENT_ID = 'state';
 const PIPELIST_SHARES_COLLECTION = 'pipeListShares';
 const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
+const PIPELISTS_LEAD_SEARCH_FEATURE_ID = 'pipeListsLeadGeneration';
+const PIPELISTS_LEAD_SEARCH_MODEL = 'gpt-4o-mini';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
 const SOFT_DELETE_RESTORE_DAYS = 30;
@@ -714,6 +716,155 @@ const defaultLeadGenAdjustments = (list: PipeList) => {
 };
 
 const clampLeadGenCount = (value: number) => Math.min(10, Math.max(3, value));
+
+const leadSearchStringFields = [
+  'title',
+  'organization',
+  'owner',
+  'stage',
+  'amount',
+  'dueDate',
+  'nextStep',
+  'notes',
+  'sourceUrl',
+  'segment',
+  'decisionMaker',
+  'acv',
+  'expectedCloseDate',
+  'contractTerm',
+  'pilotScope',
+  'athleteCount',
+  'pilotStart',
+  'pilotEnd',
+  'conversionLikelihood',
+  'grossMargin',
+  'partnerCost',
+  'hardwareCost',
+  'lossReason',
+  'expansionPath',
+  'rationale',
+  'sourceEvidence',
+  'deadlineStatus',
+] as const;
+
+const leadSearchResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    leads: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: leadSearchStringFields.reduce<Record<string, { type: 'string' }>>(
+          (properties, field) => ({ ...properties, [field]: { type: 'string' } }),
+          { priority: { type: 'string' } },
+        ),
+        required: ['priority', ...leadSearchStringFields],
+      },
+    },
+  },
+  required: ['leads'],
+};
+
+const parseJsonSafe = (raw: string) => {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+};
+
+const getResponsesApiText = (value: unknown) => {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  if (typeof record.output_text === 'string') return record.output_text;
+
+  const output = Array.isArray(record.output) ? record.output : [];
+  return output
+    .flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const content = (item as Record<string, unknown>).content;
+      if (!Array.isArray(content)) return [];
+      return content
+        .map((part) => {
+          if (!part || typeof part !== 'object') return '';
+          const partRecord = part as Record<string, unknown>;
+          return typeof partRecord.text === 'string' ? partRecord.text : '';
+        })
+        .filter(Boolean);
+    })
+    .join('\n');
+};
+
+const getApiErrorMessage = (payload: unknown, fallbackMessage: string) => {
+  if (!payload || typeof payload !== 'object') return fallbackMessage;
+  const record = payload as Record<string, unknown>;
+  const error = record.error;
+  if (error && typeof error === 'object') {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  if (typeof error === 'string' && error.trim()) return error;
+  if (typeof record.message === 'string' && record.message.trim()) return record.message;
+  return fallbackMessage;
+};
+
+const getEasternDate = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const year = parts.find((part) => part.type === 'year')?.value || '';
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  const day = parts.find((part) => part.type === 'day')?.value || '';
+  return `${year}-${month}-${day}`;
+};
+
+const isDeadlineDrivenTemplate = (list: PipeList) => {
+  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
+  return ['pitch', 'grant', 'competition', 'challenge', 'award', 'prize', 'rfp', 'application deadline'].some((token) =>
+    identity.includes(token),
+  );
+};
+
+const leadSearchTemplatePolicy = (list: PipeList, today: string) => {
+  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
+
+  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
+    return `Template policy: this is a pitch competition list. Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities that are relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, or undated opportunities. Prefer official program pages or organizer pages.`;
+  }
+
+  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
+    return `Template policy: this is a grant or non-dilutive funding list. Find open grant, award, challenge, innovation fund, or public/private funding opportunities relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, vague, or undated opportunities. Prefer official funder pages.`;
+  }
+
+  if (identity.includes('vc') || identity.includes('investor')) {
+    return `Template policy: this is an investor list. Find relevant venture funds, angel groups, accelerators, or investor programs for sports performance, digital health, wellness, education technology, AI, or athlete/team markets. Do not force a dueDate unless there is a real application deadline. Use nextStep for the best outreach or application action.`;
+  }
+
+  if (identity.includes('university') || identity.includes('pilot')) {
+    return `Template policy: this is a university pilot list. Find universities, athletic departments, sports performance labs, wellness programs, psychology/mental-performance groups, or innovation offices that could plausibly run a PulseCheck pilot. Do not force a dueDate. Use pilotScope, decisionMaker, segment, athleteCount, and nextStep when the source supports them.`;
+  }
+
+  if (identity.includes('contract')) {
+    return `Template policy: this is a contract pipeline. Find procurement, partnership, RFP, vendor, or paid-program opportunities relevant to PulseCheck. If the source has a submission deadline, dueDate must be on or after ${today}; otherwise leave dueDate blank and use expectedCloseDate only for a practical follow-up target if supported.`;
+  }
+
+  return `Template policy: match the user's PipeList purpose. If this looks like a deadline-driven application list, only include leads with explicit deadlines on or after ${today}. If it is relationship-driven, do not invent dates and leave dueDate blank unless a real deadline exists.`;
+};
 
 const isPitchCompetitionList = (list: PipeList) =>
   list.id === PITCH_COMPETITIONS_LIST_ID ||
@@ -2360,39 +2511,95 @@ const PipelinePage: NextPage = () => {
         throw new Error('Please sign in again before generating leads.');
       }
 
-      const response = await fetch('/api/pipelists/generate-leads', {
+      const today = getEasternDate();
+      const deadlineRequired = isDeadlineDrivenTemplate(activeList);
+      const stageOptions = activeList.stages.map((stage) => ({
+        id: stage.id,
+        label: stage.label,
+        probability: stage.probability,
+      }));
+      const existingItems = activeListItems.map((item) => ({
+        title: item.title,
+        organization: item.organization,
+        sourceUrl: item.sourceUrl,
+        dueDate: item.dueDate,
+      }));
+
+      const response = await fetch('/api/openai/v1/responses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
         },
         body: JSON.stringify({
-          listName: activeList.name,
-          templateLabel: templateCatalog[activeList.templateKey].label,
-          templateKey: activeList.templateKey,
-          count: leadGenCount,
-          adjustments: leadGenAdjustments,
-          stages: activeList.stages.map((stage) => ({
-            id: stage.id,
-            label: stage.label,
-            probability: stage.probability,
-          })),
-          existingItems: activeListItems.map((item) => ({
-            title: item.title,
-            organization: item.organization,
-            sourceUrl: item.sourceUrl,
-            dueDate: item.dueDate,
-          })),
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.15,
+          max_output_tokens: 3500,
+          tools: [{ type: 'web_search' }],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'pipelists_lead_generation',
+              strict: true,
+              schema: leadSearchResponseSchema,
+            },
+          },
+          input: [
+            {
+              role: 'system',
+              content: `You are a lead-generation researcher for PipeLists, a CRM-style opportunity tracker.
+
+PulseCheck context: PulseCheck helps teams, athletes, schools, clinics, and sports/wellness programs track mental readiness, wellness signals, engagement, and performance support. Favor opportunities related to sport psychology, athlete mental readiness, sports performance, digital health, wellness, mental performance, athlete support, AI, education, team operations, youth/college athletics, and healthcare-adjacent innovation.
+
+Current date: ${today}.
+
+Research rules:
+- Use web search and prioritize official/current sources.
+- Return only leads that are relevant to the active PipeList and PulseCheck.
+- Avoid duplicates already in the user's list.
+- Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
+- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
+- If the template is deadline-driven, every returned lead must have a verified dueDate on or after ${today}.
+- If the template is relationship-driven, dueDate can be "" unless the source provides a real deadline.
+- Pick stage from the provided stage ids only. If unsure, use the first stage id.
+- Keep notes useful for the user: concise analysis, prep angle, and practical context. Do not write "AI confidence".
+- sourceEvidence must briefly name the source support used, including the deadline when relevant.
+- deadlineStatus must state whether the lead has a future deadline, no fixed deadline, or an optional follow-up date.
+- Return JSON only.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  requestedLeadCount: leadGenCount,
+                  listName: activeList.name,
+                  templateLabel: templateCatalog[activeList.templateKey].label,
+                  templateKey: activeList.templateKey,
+                  templatePolicy: leadSearchTemplatePolicy(activeList, today),
+                  deadlineRequired,
+                  stageOptions,
+                  userAdjustments: leadGenAdjustments,
+                  existingItems,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         }),
       });
 
       const payload = await readApiJson(response, 'Search leads returned an unexpected response. Refresh and try again.');
       if (!response.ok) {
-        throw new Error(payload?.error || 'Unable to generate leads.');
+        throw new Error(getApiErrorMessage(payload, 'Unable to generate leads.'));
       }
 
-      const nextLeads = Array.isArray(payload?.leads)
-        ? payload.leads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
+      const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
+      const rawLeads = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads : [];
+      const nextLeads = rawLeads.length > 0
+        ? rawLeads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
         : [];
 
       setGeneratedLeads(nextLeads);
