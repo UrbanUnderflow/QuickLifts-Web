@@ -21,22 +21,28 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Copy,
   DollarSign,
   Download,
   Edit,
+  ExternalLink,
   FileText,
   Filter,
   Layers,
+  Link2,
   ListPlus,
   LogOut,
   Mail,
+  Paperclip,
   Plus,
   Search,
   ShieldCheck,
   Sparkles,
+  Share2,
   Target,
   Trash2,
   TrendingUp,
+  UploadCloud,
   Users,
   X,
 } from 'lucide-react';
@@ -101,6 +107,18 @@ type ActivityLog = {
   restorableUntil?: string;
 };
 
+type LeadAttachment = {
+  id: string;
+  type: 'file' | 'link';
+  name: string;
+  url: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  createdAt: string;
+  createdBy: string;
+};
+
 type PipelineItem = {
   id: string;
   title: string;
@@ -128,6 +146,7 @@ type PipelineItem = {
   hardwareCost: string;
   lossReason: string;
   expansionPath: string;
+  attachments: LeadAttachment[];
   weeklyLogs: ActivityLog[];
   createdAt: string;
   updatedAt: string;
@@ -159,6 +178,18 @@ type PipeListShare = {
   updatedAt?: unknown;
 };
 
+type PipeLeadShare = {
+  id: string;
+  ownerUid: string;
+  ownerEmail: string;
+  listId: string;
+  itemId: string;
+  list: PipeList;
+  publicRead: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
 type PipeListProfile = {
   displayName: string;
   photoURL: string;
@@ -168,6 +199,11 @@ type PipeListProfile = {
 
 type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil'>;
 type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
+type GeneratedLead = ItemDraft & {
+  rationale: string;
+  sourceEvidence: string;
+  deadlineStatus: string;
+};
 
 const STORAGE_KEY = 'pulse-pipe-lists-v2';
 const PITCH_COMPETITIONS_LIST_ID = 'pitch-competitions';
@@ -175,6 +211,7 @@ const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
 const PIPELISTS_SUBCOLLECTION = 'pipeLists';
 const PIPELISTS_STATE_DOCUMENT_ID = 'state';
 const PIPELIST_SHARES_COLLECTION = 'pipeListShares';
+const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
@@ -291,6 +328,7 @@ const grantStages: StageConfig[] = [
 
 const pitchStages: StageConfig[] = [
   { id: 'identified', label: 'Identified', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'application-in-progress', label: 'Application In Progress', probability: 18, track: 'general', tone: 'bg-teal-50 text-teal-700 border-teal-100' },
   { id: 'applied', label: 'Applied', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
   { id: 'selected', label: 'Selected', probability: 55, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
   { id: 'prepping', label: 'Prepping', probability: 70, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
@@ -369,6 +407,8 @@ const makeId = () => {
 };
 
 const shareDocumentIdForList = (ownerUid: string, listId: string) => `${ownerUid}-${listId}`;
+const shareDocumentIdForLead = (ownerUid: string, listId: string, itemId: string) =>
+  `${ownerUid}-${listId}-${itemId}`;
 
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
@@ -396,6 +436,7 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   hardwareCost: '',
   lossReason: '',
   expansionPath: '',
+  attachments: [],
 });
 
 const defaultLogDraft = (templateKey: TemplateKey = 'partner'): ActivityLogDraft => ({
@@ -632,6 +673,35 @@ const createPitchCompetitionRecommendationItems = () =>
   pitchCompetitionRecommendations.map(({ id, draft }) => createItem(draft, id));
 
 const normalizeOpportunityKey = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+const generatedLeadKey = (lead: Pick<ItemDraft, 'title' | 'organization' | 'sourceUrl'>) =>
+  lead.sourceUrl
+    ? normalizeOpportunityKey(lead.sourceUrl)
+    : normalizeOpportunityKey(`${lead.title} ${lead.organization}`);
+
+const defaultLeadGenAdjustments = (list: PipeList) => {
+  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
+
+  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
+    return 'Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities relevant to Fit With Pulse: sports performance, digital health, wellness, athlete mental readiness, AI, education, and team markets. Only include deadlines today or later. Prefer official pages, U.S. or remote options, meaningful prize/investor exposure, and opportunities not already in this list.';
+  }
+
+  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
+    return 'Find open grants, awards, challenges, or non-dilutive funding opportunities relevant to sports performance, digital health, wellness, mental performance, youth/college athletics, education, and healthcare-adjacent innovation. Only include application deadlines today or later and prefer official funder pages.';
+  }
+
+  if (identity.includes('vc') || identity.includes('investor')) {
+    return 'Find investors, angel groups, accelerators, and founder programs that are a strong fit for Fit With Pulse across sports performance, digital health, wellness, AI, education, and athlete/team operations. Do not force deadlines; prioritize fit, thesis alignment, and a practical outreach next step.';
+  }
+
+  if (identity.includes('university') || identity.includes('pilot')) {
+    return 'Find universities, athletic departments, sports performance labs, wellness programs, mental-performance groups, and innovation offices that could plausibly run a Fit With Pulse pilot. Do not force deadlines; prioritize buyer fit, pilot scope, decision-maker clues, and a practical follow-up.';
+  }
+
+  return 'Find highly relevant opportunities for this PipeList. Match the template purpose: require future deadlines for application-based opportunities, but leave due dates blank for relationship-based leads unless the source has a real deadline.';
+};
+
+const clampLeadGenCount = (value: number) => Math.min(10, Math.max(3, value));
 
 const isPitchCompetitionList = (list: PipeList) =>
   list.id === PITCH_COMPETITIONS_LIST_ID ||
@@ -950,6 +1020,24 @@ const normalizeActivityLog = (log: Partial<ActivityLog>): ActivityLog => {
   };
 };
 
+const normalizeAttachment = (attachment: Partial<LeadAttachment>): LeadAttachment | null => {
+  const name = attachment.name?.trim() || attachment.fileName?.trim() || 'Attachment';
+  const url = attachment.url?.trim() || '';
+  if (!url) return null;
+
+  return {
+    id: attachment.id || makeId(),
+    type: attachment.type === 'file' ? 'file' : 'link',
+    name,
+    url,
+    fileName: attachment.fileName || '',
+    contentType: attachment.contentType || '',
+    size: typeof attachment.size === 'number' && Number.isFinite(attachment.size) ? attachment.size : 0,
+    createdAt: attachment.createdAt || new Date().toISOString(),
+    createdBy: attachment.createdBy || '',
+  };
+};
+
 const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): PipelineItem => {
   const now = new Date().toISOString();
   const stage = normalizeStageId(item.stage || listStages[0]?.id || 'sourced', listStages);
@@ -981,6 +1069,11 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     hardwareCost: item.hardwareCost || '',
     lossReason: item.lossReason || '',
     expansionPath: item.expansionPath || '',
+    attachments: Array.isArray(item.attachments)
+      ? item.attachments
+          .map((attachment) => normalizeAttachment(attachment))
+          .filter((attachment): attachment is LeadAttachment => Boolean(attachment))
+      : [],
     weeklyLogs: Array.isArray(item.weeklyLogs) ? item.weeklyLogs.map(normalizeActivityLog) : [],
     createdAt: item.createdAt || now,
     updatedAt: item.updatedAt || now,
@@ -993,7 +1086,24 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
 const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const templateKey = (list.templateKey && templateCatalog[list.templateKey] ? list.templateKey : 'partner') as TemplateKey;
   const template = templateCatalog[templateKey];
-  const stages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
+  const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
+  const stages =
+    templateKey === 'pitch'
+      ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
+          if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
+          const insertAfterIndex = templateStage.id === 'application-in-progress'
+            ? mergedStages.findIndex((stage) => stage.id === 'identified')
+            : -1;
+          if (insertAfterIndex >= 0) {
+            return [
+              ...mergedStages.slice(0, insertAfterIndex + 1),
+              templateStage,
+              ...mergedStages.slice(insertAfterIndex + 1),
+            ];
+          }
+          return [...mergedStages, templateStage];
+        }, savedStages)
+      : savedStages;
   return {
     id: list.id || makeId(),
     name: list.name || template.defaultName,
@@ -1050,6 +1160,13 @@ const formatMoney = (value: number) => {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
+};
+
+const formatFileSize = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
 const average = (values: number[]) => {
@@ -1343,6 +1460,20 @@ const PipelinePage: NextPage = () => {
   const [leadUrl, setLeadUrl] = useState('');
   const [isAnalyzingLead, setIsAnalyzingLead] = useState(false);
   const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isLeadGenModalOpen, setIsLeadGenModalOpen] = useState(false);
+  const [leadGenAdjustments, setLeadGenAdjustments] = useState('');
+  const [leadGenCount, setLeadGenCount] = useState(6);
+  const [isGeneratingLeads, setIsGeneratingLeads] = useState(false);
+  const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
+  const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
+  const [leadGenMessage, setLeadGenMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [leadCopyMessage, setLeadCopyMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [attachmentLinkName, setAttachmentLinkName] = useState('');
+  const [attachmentLinkUrl, setAttachmentLinkUrl] = useState('');
+  const [attachmentMessage, setAttachmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [leadShareMessage, setLeadShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [leadShareUrl, setLeadShareUrl] = useState('');
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
@@ -1358,7 +1489,10 @@ const PipelinePage: NextPage = () => {
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [magicEmail, setMagicEmail] = useState(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('share')) return '';
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('share') || params.get('leadShare')) return '';
+    }
     return TREMAINE_OWNER_EMAIL;
   });
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
@@ -1367,7 +1501,12 @@ const PipelinePage: NextPage = () => {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('share') || '';
   });
+  const [leadShareId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('leadShare') || '';
+  });
   const [shareDoc, setShareDoc] = useState<PipeListShare | null>(null);
+  const [leadShareDoc, setLeadShareDoc] = useState<PipeLeadShare | null>(null);
   const [shareMessage, setShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [shareAccess, setShareAccess] = useState<ShareAccess>('read');
   const [shareEditorEmails, setShareEditorEmails] = useState('');
@@ -1378,10 +1517,11 @@ const PipelinePage: NextPage = () => {
   const [profileMessage, setProfileMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const normalizedUserEmail = user?.email?.toLowerCase() || '';
-  const isSharedView = Boolean(shareId);
+  const isLeadSharedView = Boolean(leadShareId);
+  const isSharedView = Boolean(shareId || leadShareId);
   const isOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
   const canEditShared =
-    isSharedView &&
+    Boolean(shareId) &&
     !!user &&
     !!shareDoc &&
     (shareDoc.ownerUid === user.uid ||
@@ -1394,12 +1534,14 @@ const PipelinePage: NextPage = () => {
       setAuthReady(true);
       setUser(currentUser);
 
-      if (shareId) {
+      if (shareId || leadShareId) {
         if (!currentUser) {
           setProfile(null);
           setProfileName('');
           return;
         }
+
+        if (leadShareId) return;
 
         try {
           const profileRef = doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, currentUser.uid);
@@ -1497,7 +1639,7 @@ const PipelinePage: NextPage = () => {
     });
 
     return unsubscribe;
-  }, [shareId]);
+  }, [leadShareId, shareId]);
 
   useEffect(() => {
     if (!shareId) return;
@@ -1557,6 +1699,72 @@ const PipelinePage: NextPage = () => {
   }, [shareId]);
 
   useEffect(() => {
+    if (!leadShareId) return;
+
+    const loadLeadShare = async () => {
+      setDataReady(false);
+      setShareMessage(null);
+
+      try {
+        const shareRef = doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, leadShareId);
+        const snapshot = await getDoc(shareRef);
+        if (!snapshot.exists()) {
+          setShareMessage({ type: 'error', text: 'This lead share link was not found.' });
+          setDataReady(true);
+          return;
+        }
+
+        const data = snapshot.data() as Partial<PipeLeadShare>;
+        if (!data.publicRead || !data.list) {
+          setShareMessage({ type: 'error', text: 'This lead share link is not available.' });
+          setDataReady(true);
+          return;
+        }
+
+        const normalizedList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+        const normalizedItem =
+          normalizedList.items.find((item) => item.id === data.itemId) || normalizedList.items[0] || null;
+        if (!normalizedItem) {
+          setShareMessage({ type: 'error', text: 'This lead share does not include a readable lead.' });
+          setDataReady(true);
+          return;
+        }
+
+        const nextShare: PipeLeadShare = {
+          id: snapshot.id,
+          ownerUid: data.ownerUid || '',
+          ownerEmail: data.ownerEmail || '',
+          listId: data.listId || normalizedList.id,
+          itemId: normalizedItem.id,
+          list: normalizedList,
+          publicRead: data.publicRead === true,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        };
+
+        setLeadShareDoc(nextShare);
+        setLists([normalizedList]);
+        setActiveListId(normalizedList.id);
+        setDraft(defaultDraft(normalizedList.stages[0]?.id));
+        setSelectedLogItemId(normalizedItem.id);
+        setLogDraft(defaultLogDraft(normalizedList.templateKey));
+        setSelectedDetailItemId(normalizedItem.id);
+        setDetailModalMode('details');
+        setDataReady(true);
+      } catch (error) {
+        console.error('Unable to load shared PipeList lead:', error);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load this shared lead.'),
+        });
+        setDataReady(true);
+      }
+    };
+
+    loadLeadShare();
+  }, [leadShareId]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!isSignInWithEmailLink(simpBudgetAuth, window.location.href)) return;
 
@@ -1582,7 +1790,7 @@ const PipelinePage: NextPage = () => {
   }, []);
 
   useEffect(() => {
-    if (shareId) return;
+    if (isSharedView) return;
     if (!user || !dataReady) return;
     if ((user.email || '').toLowerCase() !== TREMAINE_OWNER_EMAIL) return;
 
@@ -1636,7 +1844,7 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [dataReady, lists, shareId, user]);
+  }, [dataReady, isSharedView, lists, user]);
 
   useEffect(() => {
     if (!shareId || !shareDoc || !dataReady || !canEditShared) return;
@@ -1796,6 +2004,18 @@ const PipelinePage: NextPage = () => {
     () => activeList.items.filter((item) => !isItemDeleted(item)),
     [activeList.items],
   );
+  const activeLeadKeys = useMemo(
+    () =>
+      new Set(
+        activeListItems.flatMap((item) =>
+          [
+            normalizeOpportunityKey(`${item.title} ${item.organization}`),
+            item.sourceUrl ? normalizeOpportunityKey(item.sourceUrl) : '',
+          ].filter(Boolean),
+        ),
+      ),
+    [activeListItems],
+  );
 
   const allLogRows = useMemo(
     () =>
@@ -1939,6 +2159,15 @@ const PipelinePage: NextPage = () => {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [selectedDetailItemId]);
 
+  useEffect(() => {
+    setLeadCopyMessage(null);
+    setAttachmentMessage(null);
+    setLeadShareMessage(null);
+    setLeadShareUrl('');
+    setAttachmentLinkName('');
+    setAttachmentLinkUrl('');
+  }, [selectedDetailItemId, detailModalMode]);
+
   const resetEditor = () => {
     setDraft(defaultDraft(activeList.stages[0]?.id));
     setEditingItemId(null);
@@ -1983,6 +2212,512 @@ const PipelinePage: NextPage = () => {
     setSelectedDetailItemId('');
     setDetailModalMode('details');
     setViewMode('pipeline');
+  };
+
+  const openLeadGenModal = () => {
+    if (!canModify) return;
+    setLeadGenAdjustments(defaultLeadGenAdjustments(activeList));
+    setGeneratedLeads([]);
+    setAddedGeneratedLeadKeys([]);
+    setLeadGenMessage(null);
+    setIsLeadGenModalOpen(true);
+    setSelectedDetailItemId('');
+    setDetailModalMode('details');
+    setViewMode('pipeline');
+  };
+
+  const closeLeadGenModal = () => {
+    if (isGeneratingLeads) return;
+    setIsLeadGenModalOpen(false);
+  };
+
+  const sanitizeGeneratedLead = (lead: Partial<GeneratedLead>): GeneratedLead => {
+    const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
+    const priority = lead.priority === 'high' || lead.priority === 'low' ? lead.priority : 'medium';
+
+    return {
+      ...defaultDraft(stage),
+      title: lead.title?.trim() || lead.organization?.trim() || 'Untitled opportunity',
+      organization: lead.organization?.trim() || '',
+      owner: lead.owner?.trim() || '',
+      stage,
+      priority,
+      amount: lead.amount?.trim() || '',
+      dueDate: lead.dueDate?.trim() || '',
+      nextStep: lead.nextStep?.trim() || '',
+      notes: stripAiConfidenceNote(lead.notes),
+      sourceUrl: lead.sourceUrl?.trim() || '',
+      segment: lead.segment?.trim() || '',
+      decisionMaker: lead.decisionMaker?.trim() || '',
+      acv: lead.acv?.trim() || '',
+      expectedCloseDate: lead.expectedCloseDate?.trim() || '',
+      contractTerm: lead.contractTerm?.trim() || '',
+      pilotScope: lead.pilotScope?.trim() || '',
+      athleteCount: lead.athleteCount?.trim() || '',
+      pilotStart: lead.pilotStart?.trim() || '',
+      pilotEnd: lead.pilotEnd?.trim() || '',
+      conversionLikelihood: lead.conversionLikelihood?.trim() || '',
+      grossMargin: lead.grossMargin?.trim() || '',
+      partnerCost: lead.partnerCost?.trim() || '',
+      hardwareCost: lead.hardwareCost?.trim() || '',
+      lossReason: lead.lossReason?.trim() || '',
+      expansionPath: lead.expansionPath?.trim() || '',
+      rationale: lead.rationale?.trim() || '',
+      sourceEvidence: lead.sourceEvidence?.trim() || '',
+      deadlineStatus: lead.deadlineStatus?.trim() || '',
+    };
+  };
+
+  const handleGenerateLeads = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || isGeneratingLeads) return;
+
+    setIsGeneratingLeads(true);
+    setGeneratedLeads([]);
+    setAddedGeneratedLeadKeys([]);
+    setLeadGenMessage(null);
+
+    try {
+      const bridgeAuthUser = quickLiftsAuth.currentUser || simpBudgetAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before generating leads.');
+      }
+
+      const response = await fetch('/api/pipelists/generate-leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          listName: activeList.name,
+          templateLabel: templateCatalog[activeList.templateKey].label,
+          templateKey: activeList.templateKey,
+          count: leadGenCount,
+          adjustments: leadGenAdjustments,
+          stages: activeList.stages.map((stage) => ({
+            id: stage.id,
+            label: stage.label,
+            probability: stage.probability,
+          })),
+          existingItems: activeListItems.map((item) => ({
+            title: item.title,
+            organization: item.organization,
+            sourceUrl: item.sourceUrl,
+            dueDate: item.dueDate,
+          })),
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Unable to generate leads.');
+      }
+
+      const nextLeads = Array.isArray(payload?.leads)
+        ? payload.leads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
+        : [];
+
+      setGeneratedLeads(nextLeads);
+      setLeadGenMessage(
+        nextLeads.length > 0
+          ? { type: 'success', text: `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.` }
+          : { type: 'info', text: 'No new leads matched this search. Try widening the adjustments.' },
+      );
+    } catch (error) {
+      console.error('[PipeLists] Lead generation failed:', error);
+      setLeadGenMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to generate leads.',
+      });
+    } finally {
+      setIsGeneratingLeads(false);
+    }
+  };
+
+  const handleAddGeneratedLead = (lead: GeneratedLead) => {
+    if (!canModify) return;
+    const key = generatedLeadKey(lead);
+    if (activeLeadKeys.has(key) || addedGeneratedLeadKeys.includes(key)) {
+      setLeadGenMessage({ type: 'info', text: `${lead.title} is already in this PipeList.` });
+      return;
+    }
+
+    const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
+    const nextItemBase = createItem(
+      {
+        ...defaultDraft(stage),
+        ...lead,
+        stage,
+        priority: lead.priority || 'medium',
+        notes: [
+          stripAiConfidenceNote(lead.notes),
+          lead.rationale ? `Why this fits: ${lead.rationale}` : '',
+          lead.sourceEvidence ? `Source evidence: ${lead.sourceEvidence}` : '',
+          lead.deadlineStatus ? `Deadline status: ${lead.deadlineStatus}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+      makeId(),
+    );
+    const nextItem: PipelineItem = {
+      ...nextItemBase,
+      weeklyLogs: [
+        createSystemLog(
+          nextItemBase,
+          'item-created',
+          `Added ${nextItemBase.title} to ${activeList.name}.`,
+        ),
+      ],
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: [nextItem, ...list.items],
+            }
+          : list,
+      ),
+    );
+    setAddedGeneratedLeadKeys((currentKeys) => [...currentKeys, key]);
+    setSelectedLogItemId(nextItem.id);
+    setStageFilter('all');
+    setViewMode('pipeline');
+    setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
+  };
+
+  const formatClipboardSection = (title: string, rows: Array<[string, string | number | undefined]>) => {
+    const body = rows
+      .map(([label, value]) => [label, String(value || '').trim()] as const)
+      .filter(([, value]) => value.length > 0)
+      .map(([label, value]) => `${label}: ${value}`)
+      .join('\n');
+
+    return body ? `${title}\n${body}` : '';
+  };
+
+  const buildLeadDetailsClipboardText = (item: PipelineItem, stage: StageConfig) => {
+    const valueText = item.acv || item.amount ? formatMoney(itemValue(item)) : '';
+    const attachmentsText =
+      item.attachments.length > 0
+        ? item.attachments
+            .map((attachment, index) =>
+              formatClipboardSection(`Attachment ${index + 1}`, [
+                ['Name', attachment.name],
+                ['Type', attachment.type],
+                ['URL', attachment.url],
+                ['File Name', attachment.fileName],
+                ['Content Type', attachment.contentType],
+                ['Size', formatFileSize(attachment.size)],
+                ['Created By', attachment.createdBy],
+                ['Created At', attachment.createdAt],
+              ]),
+            )
+            .filter(Boolean)
+            .join('\n\n')
+        : 'No attachments.';
+    const logsText =
+      item.weeklyLogs.length > 0
+        ? item.weeklyLogs
+            .map((log, index) =>
+              formatClipboardSection(`Log ${index + 1}`, [
+                ['Type', logDisplayLabel(log)],
+                ['Date', log.weekOf],
+                [followUpDateLabel(log.nextStep), log.followUpDate],
+                ['Summary', log.summary],
+                ['Next Step', log.nextStep],
+                ['Rostered Athletes', log.rosteredAthletes],
+                ['Completed Check-Ins', log.completedCheckIns],
+                ['Check-In Rate', log.checkInRate],
+                ['Biometric Sync Rate', log.biometricSyncRate],
+                ['Signal Events', log.signalEvents],
+                ['Nora Engagement Rate', log.noraEngagementRate],
+                ['Nora Sessions', log.noraSessions],
+                ['Escalations', log.escalations],
+                ['Staff Feedback Score', log.staffFeedbackScore],
+                ['Notes', log.notes],
+                ['Created At', log.createdAt],
+              ]),
+            )
+            .filter(Boolean)
+            .join('\n\n')
+        : 'No logs recorded.';
+
+    return [
+      formatClipboardSection('Lead Details', [
+        ['Title', item.title],
+        ['PipeList', activeList.name],
+        ['Template', templateCatalog[activeList.templateKey].label],
+        ['Organization', item.organization],
+        ['Stage', `${stage.label} (${item.stage})`],
+        ['Importance', importanceLabel(item.priority)],
+        ['Value', valueText],
+        ['Owner', item.owner],
+        ['Segment', item.segment],
+        ['Decision Maker', item.decisionMaker],
+        ['Next Step', item.nextStep],
+        ['Source URL', item.sourceUrl],
+      ]),
+      formatClipboardSection('Financials & Dates', [
+        ['ACV', item.acv],
+        ['Amount / Prize', item.amount],
+        ['Expected Close', item.expectedCloseDate],
+        ['Due Date', item.dueDate],
+        ['Contract Term', item.contractTerm],
+        ['Partner Cost', item.partnerCost],
+        ['Hard Cost', item.hardwareCost],
+        ['Margin Notes', item.grossMargin],
+      ]),
+      formatClipboardSection('Scope & Expansion', [
+        ['Scope', item.pilotScope],
+        ['Count', item.athleteCount],
+        ['Start Date', item.pilotStart],
+        ['End Date', item.pilotEnd],
+        ['Conversion Likelihood', item.conversionLikelihood],
+        ['Expansion Path', item.expansionPath],
+        ['Loss Reason', item.lossReason],
+      ]),
+      formatClipboardSection('Notes', [['Notes', stripAiConfidenceNote(item.notes)]]),
+      `Attachments\n${attachmentsText}`,
+      `Logs\n${logsText}`,
+      formatClipboardSection('Internal Metadata', [
+        ['Lead ID', item.id],
+        ['Created At', item.createdAt],
+        ['Updated At', item.updatedAt],
+        ['Deleted At', item.deletedAt],
+        ['Restorable Until', item.restorableUntil],
+      ]),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  };
+
+  const writeClipboardText = async (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    if (typeof document === 'undefined') {
+      throw new Error('Clipboard is not available in this browser.');
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const didCopy = document.execCommand('copy');
+    document.body.removeChild(textarea);
+
+    if (!didCopy) {
+      throw new Error('Clipboard is not available in this browser.');
+    }
+  };
+
+  const handleCopyLeadDetails = async (item: PipelineItem, stage: StageConfig) => {
+    try {
+      await writeClipboardText(buildLeadDetailsClipboardText(item, stage));
+      setLeadCopyMessage({ type: 'success', text: 'Lead details copied to clipboard.' });
+    } catch (error) {
+      console.error('[PipeLists] Copy lead details failed:', error);
+      setLeadCopyMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to copy lead details.',
+      });
+    }
+  };
+
+  const updateLeadAttachments = (
+    itemId: string,
+    updater: (attachments: LeadAttachment[]) => LeadAttachment[],
+  ) => {
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) =>
+                item.id === itemId
+                  ? {
+                      ...item,
+                      attachments: updater(item.attachments || []),
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : item,
+              ),
+            }
+          : list,
+      ),
+    );
+  };
+
+  const safeAttachmentFileName = (value: string) =>
+    value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
+
+  const handleUploadLeadAttachments = async (item: PipelineItem, files: FileList | null) => {
+    if (!canModify) return;
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+    if (!user) {
+      setAttachmentMessage({ type: 'error', text: 'Sign in before uploading attachments.' });
+      return;
+    }
+
+    setUploadingAttachment(true);
+    setAttachmentMessage(null);
+
+    try {
+      const ownerUid = shareDoc?.ownerUid || user.uid;
+      const nextAttachments: LeadAttachment[] = [];
+
+      for (const file of selectedFiles) {
+        const cleanFileName = safeAttachmentFileName(file.name);
+        const attachmentRef = storageRef(
+          simpBudgetStorage,
+          `pipelists-attachments/${ownerUid}/${activeList.id}/${item.id}/${Date.now()}-${cleanFileName}`,
+        );
+
+        await uploadBytes(attachmentRef, file, {
+          contentType: file.type || 'application/octet-stream',
+          customMetadata: {
+            listId: activeList.id,
+            itemId: item.id,
+            uploadedBy: user.email || user.uid,
+          },
+        });
+
+        const url = await getDownloadURL(attachmentRef);
+        nextAttachments.push({
+          id: makeId(),
+          type: 'file',
+          name: file.name,
+          url,
+          fileName: file.name,
+          contentType: file.type || 'application/octet-stream',
+          size: file.size,
+          createdAt: new Date().toISOString(),
+          createdBy: profile?.displayName || user.email || user.uid,
+        });
+      }
+
+      updateLeadAttachments(item.id, (attachments) => [...nextAttachments, ...attachments]);
+      setAttachmentMessage({ type: 'success', text: `Added ${formatCount(nextAttachments.length, 'attachment')}.` });
+    } catch (error) {
+      console.error('[PipeLists] Attachment upload failed:', error);
+      setAttachmentMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to upload attachment.'),
+      });
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleAddAttachmentLink = (event: React.FormEvent<HTMLFormElement>, item: PipelineItem) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const cleanUrl = attachmentLinkUrl.trim();
+    if (!cleanUrl) {
+      setAttachmentMessage({ type: 'error', text: 'Add an attachment link first.' });
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(cleanUrl);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Unsupported URL protocol');
+    } catch {
+      setAttachmentMessage({ type: 'error', text: 'Use a valid http or https attachment link.' });
+      return;
+    }
+
+    const nextAttachment: LeadAttachment = {
+      id: makeId(),
+      type: 'link',
+      name: attachmentLinkName.trim() || parsedUrl.hostname.replace(/^www\./, ''),
+      url: parsedUrl.toString(),
+      fileName: '',
+      contentType: '',
+      size: 0,
+      createdAt: new Date().toISOString(),
+      createdBy: profile?.displayName || user?.email || '',
+    };
+
+    updateLeadAttachments(item.id, (attachments) => [nextAttachment, ...attachments]);
+    setAttachmentLinkName('');
+    setAttachmentLinkUrl('');
+    setAttachmentMessage({ type: 'success', text: 'Attachment link added.' });
+  };
+
+  const handleDeleteAttachment = (itemId: string, attachmentId: string) => {
+    if (!canModify) return;
+    updateLeadAttachments(itemId, (attachments) => attachments.filter((attachment) => attachment.id !== attachmentId));
+    setAttachmentMessage({ type: 'success', text: 'Attachment removed from this lead.' });
+  };
+
+  const buildLeadShareList = (item: PipelineItem): PipeList => ({
+    ...activeList,
+    name: item.title || activeList.name,
+    description: `${activeList.name} read-only lead share`,
+    items: [item],
+  });
+
+  const createOrUpdateLeadShareLink = async (item: PipelineItem) => {
+    if (!canModify || !user || isLeadSharedView) return;
+    setLeadShareMessage(null);
+
+    try {
+      const ownerUid = shareDoc?.ownerUid || user.uid;
+      const ownerEmail = shareDoc?.ownerEmail || user.email || TREMAINE_OWNER_EMAIL;
+      const nextShareId = shareDocumentIdForLead(ownerUid, activeList.id, item.id);
+      const nextShareUrl =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/PipeLists?leadShare=${encodeURIComponent(nextShareId)}`
+          : '';
+      const payload: PipeLeadShare = {
+        id: nextShareId,
+        ownerUid,
+        ownerEmail,
+        listId: activeList.id,
+        itemId: item.id,
+        list: buildLeadShareList(item),
+        publicRead: true,
+      };
+
+      await setDoc(
+        doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, nextShareId),
+        stripUndefined({
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true },
+      );
+
+      setLeadShareUrl(nextShareUrl);
+      setLeadShareMessage({ type: 'success', text: 'Read-only lead share link created and copied.' });
+      if (nextShareUrl) {
+        try {
+          await writeClipboardText(nextShareUrl);
+        } catch {
+          setLeadShareMessage({ type: 'info', text: nextShareUrl });
+        }
+      }
+    } catch (error) {
+      console.error('[PipeLists] Lead share link failed:', error);
+      setLeadShareMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to create this lead share link.'),
+      });
+    }
   };
 
   const handleExtractLead = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -2109,6 +2844,7 @@ const PipelinePage: NextPage = () => {
         hardwareCost: nextItem.hardwareCost,
         lossReason: nextItem.lossReason,
         expansionPath: nextItem.expansionPath,
+        attachments: nextItem.attachments,
       });
       setEditingItemId(nextItem.id);
       setIsEditorOpen(true);
@@ -2409,6 +3145,7 @@ const PipelinePage: NextPage = () => {
         'Loss Reason',
         'Notes',
         'Source URL',
+        'Attachments',
       ],
       ...activeListItems.map((item) => {
         const stage = getStage(activeList, item.stage);
@@ -2436,6 +3173,7 @@ const PipelinePage: NextPage = () => {
           item.lossReason,
           item.notes,
           item.sourceUrl,
+          item.attachments.map((attachment) => `${attachment.name}: ${attachment.url}`).join('\n'),
         ];
       }),
     ];
@@ -2750,7 +3488,7 @@ const PipelinePage: NextPage = () => {
             <input
               id={`pipe-${key}`}
               type={placeholder === 'date' ? 'date' : 'text'}
-              value={draft[key as keyof ItemDraft]}
+              value={String(draft[key as keyof ItemDraft] || '')}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
@@ -2822,7 +3560,7 @@ const PipelinePage: NextPage = () => {
             <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
             <textarea
               id={`pipe-${key}`}
-              value={draft[key as keyof ItemDraft]}
+              value={String(draft[key as keyof ItemDraft] || '')}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
@@ -2888,14 +3626,16 @@ const PipelinePage: NextPage = () => {
         <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
           <div className="text-center">
             <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
-            <p className="text-base font-semibold text-stone-950">Loading shared PipeList</p>
+            <p className="text-base font-semibold text-stone-950">
+              {isLeadSharedView ? 'Loading shared lead' : 'Loading shared PipeList'}
+            </p>
           </div>
         </main>
       </>
     );
   }
 
-  if (isSharedView && shareMessage?.type === 'error' && !shareDoc) {
+  if (isSharedView && shareMessage?.type === 'error' && !shareDoc && !leadShareDoc) {
     return (
       <>
         <PageHead
@@ -3034,7 +3774,9 @@ const PipelinePage: NextPage = () => {
                   {isSharedView
                     ? canEditShared
                       ? 'Shared editor'
-                      : 'Read-only share'
+                      : isLeadSharedView
+                        ? 'Read-only lead'
+                        : 'Read-only share'
                     : savingToCloud
                       ? 'Saving'
                       : 'Saved'}
@@ -3126,12 +3868,14 @@ const PipelinePage: NextPage = () => {
                 <div className="mt-4 border-t border-stone-100 pt-4">
                   <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
                     <p className="text-sm font-semibold text-stone-950">
-                      {canEditShared ? 'Editor access' : 'Read-only share'}
+                      {canEditShared ? 'Editor access' : isLeadSharedView ? 'Read-only lead' : 'Read-only share'}
                     </p>
                     <p className="mt-1 text-xs leading-5 text-stone-500">
                       {canEditShared
                         ? 'Your changes save back to this shared list.'
-                        : 'Anyone with this link can read this list. Sign in only if you were granted edit access.'}
+                        : isLeadSharedView
+                          ? 'Anyone with this link can read this lead and open its attachments.'
+                          : 'Anyone with this link can read this list. Sign in only if you were granted edit access.'}
                     </p>
 
                     {shareDoc?.access === 'edit' && !canEditShared && (
@@ -3475,14 +4219,24 @@ const PipelinePage: NextPage = () => {
                     </button>
 
                     {canModify && (
-                      <button
-                        type="button"
-                        onClick={openLeadUrlModal}
-                        className="inline-flex h-11 items-center gap-2 rounded-md bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                      >
-                        <Plus className="h-4 w-4" />
-                        Add new lead
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={openLeadGenModal}
+                          className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                        >
+                          <Search className="h-4 w-4" />
+                          Find leads
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openLeadUrlModal}
+                          className="inline-flex h-11 items-center gap-2 rounded-md bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add new lead
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -3633,14 +4387,24 @@ const PipelinePage: NextPage = () => {
                       <p className="text-sm font-semibold text-stone-900">No items found</p>
                       <p className="mt-1 text-sm text-stone-500">Adjust the filter or add a new item.</p>
                       {canModify && (
-                        <button
-                          type="button"
-                          onClick={openLeadUrlModal}
-                          className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                        >
-                          <Plus className="h-4 w-4" />
-                          Add new lead
-                        </button>
+                        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={openLeadGenModal}
+                            className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <Search className="h-4 w-4" />
+                            Find leads
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openLeadUrlModal}
+                            className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add new lead
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}
@@ -4058,6 +4822,202 @@ const PipelinePage: NextPage = () => {
         </div>
       )}
 
+      {isLeadGenModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={closeLeadGenModal}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-lead-gen-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="border-b border-stone-100 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                    <Search className="h-4 w-4" />
+                  </div>
+                  <h3 id="pipe-lead-gen-title" className="text-xl font-bold text-stone-950">
+                    Find leads
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Tune the search, then review each recommendation before it goes into {activeList.name}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeLeadGenModal}
+                  disabled={isGeneratingLeads}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {isGeneratingLeads ? (
+              <div className="px-5 py-12 text-center">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+                <h4 className="text-base font-semibold text-stone-950">Searching leads</h4>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-500">
+                  Researching current sources, checking template fit, and filtering against existing items.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleGenerateLeads} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
+                <div className="grid gap-4 md:grid-cols-[1fr_160px]">
+                  <label className="block" htmlFor="pipe-lead-gen-adjustments">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                      Search adjustments
+                    </span>
+                    <textarea
+                      id="pipe-lead-gen-adjustments"
+                      value={leadGenAdjustments}
+                      onChange={(event) => setLeadGenAdjustments(event.target.value)}
+                      className="min-h-32 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="Describe the kinds of leads to find"
+                    />
+                  </label>
+
+                  <label className="block" htmlFor="pipe-lead-gen-count">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead count</span>
+                    <input
+                      id="pipe-lead-gen-count"
+                      type="number"
+                      min={3}
+                      max={10}
+                      value={leadGenCount}
+                      onChange={(event) => setLeadGenCount(clampLeadGenCount(Number(event.target.value) || 3))}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                    />
+                    <p className="mt-2 text-xs leading-5 text-stone-400">3 to 10 leads per search.</p>
+                  </label>
+                </div>
+
+                <div className="mt-4">
+                  <MessageBanner message={leadGenMessage} />
+                </div>
+
+                {generatedLeads.length > 0 && (
+                  <div className="mt-5 border-t border-stone-100 pt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold uppercase tracking-normal text-stone-400">
+                        Results
+                      </h4>
+                      <span className="text-sm text-stone-500">{formatCount(generatedLeads.length, 'lead')}</span>
+                    </div>
+
+                    <div className="max-h-[48vh] space-y-3 overflow-y-auto pr-1">
+                      {generatedLeads.map((lead) => {
+                        const stage = getStage(activeList, lead.stage);
+                        const key = generatedLeadKey(lead);
+                        const alreadyAdded = addedGeneratedLeadKeys.includes(key);
+                        const alreadyInList = activeLeadKeys.has(key);
+                        const addDisabled = alreadyAdded || alreadyInList;
+
+                        return (
+                          <article
+                            key={key}
+                            className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <h5 className="break-words text-base font-semibold text-stone-950">{lead.title}</h5>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  {lead.organization && <span>{lead.organization}</span>}
+                                  {lead.segment && <span>{lead.segment}</span>}
+                                  {lead.dueDate && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {lead.dueDate}
+                                    </span>
+                                  )}
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleAddGeneratedLead(lead)}
+                                disabled={addDisabled}
+                                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                              >
+                                {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                {alreadyAdded ? 'Added' : alreadyInList ? 'In list' : 'Add'}
+                              </button>
+                            </div>
+
+                            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                              {lead.rationale && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Fit:</span> {lead.rationale}
+                                </p>
+                              )}
+                              {lead.nextStep && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Next:</span> {lead.nextStep}
+                                </p>
+                              )}
+                              {lead.sourceEvidence && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Source:</span> {lead.sourceEvidence}
+                                </p>
+                              )}
+                              {lead.deadlineStatus && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Date:</span> {lead.deadlineStatus}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                              {lead.amount && <span className="font-semibold text-stone-800">{lead.amount}</span>}
+                              {lead.sourceUrl && (
+                                <a
+                                  href={lead.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                >
+                                  View source
+                                </a>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2 border-t border-stone-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeLeadGenModal}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    <Search className="h-4 w-4" />
+                    Search leads
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
+
       {isLogModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
@@ -4294,18 +5254,44 @@ const PipelinePage: NextPage = () => {
                     {selectedDetailItem.organization || 'No organization'} · {activeList.name}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetEditor();
-                    setSelectedDetailItemId('');
-                    setDetailModalMode('details');
-                  }}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
-                  title="Close details"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!selectedDetailIsEditing && (
+                    <>
+                      {canModify && !isLeadSharedView && (
+                        <button
+                          type="button"
+                          onClick={() => createOrUpdateLeadShareLink(selectedDetailItem)}
+                          className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                          title="Share lead"
+                        >
+                          <Share2 className="h-4 w-4" />
+                          <span className="hidden sm:inline">Share lead</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLeadDetails(selectedDetailItem, selectedDetailStage)}
+                        className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                        title="Copy lead details"
+                      >
+                        <Copy className="h-4 w-4" />
+                        <span className="hidden sm:inline">Copy details</span>
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetEditor();
+                      setSelectedDetailItemId('');
+                      setDetailModalMode('details');
+                    }}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                    title="Close details"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -4348,6 +5334,22 @@ const PipelinePage: NextPage = () => {
                 )}
               </div>
             </div>
+
+            {!selectedDetailIsEditing && (leadCopyMessage || leadShareMessage || attachmentMessage) && (
+              <div className="space-y-2 border-b border-stone-100 px-5 py-3">
+                <MessageBanner message={leadCopyMessage} />
+                <MessageBanner message={leadShareMessage} />
+                <MessageBanner message={attachmentMessage} />
+                {leadShareUrl && (
+                  <input
+                    readOnly
+                    value={leadShareUrl}
+                    className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-xs text-stone-500"
+                    aria-label="Lead share link"
+                  />
+                )}
+              </div>
+            )}
 
             {selectedDetailIsEditing ? (
               <div className="px-5 py-5">{renderItemEditor()}</div>
@@ -4549,6 +5551,134 @@ const PipelinePage: NextPage = () => {
                     wide: true,
                   },
                 ])}
+
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-stone-950">Attachments</h4>
+                      <p className="mt-1 text-xs text-stone-400">
+                        {formatCount(selectedDetailItem.attachments.length, 'attachment')}
+                      </p>
+                    </div>
+                    {canModify && (
+                      <label
+                        htmlFor="lead-attachment-upload"
+                        className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        <UploadCloud className="h-4 w-4" />
+                        {uploadingAttachment ? 'Uploading...' : 'Upload file'}
+                        <input
+                          id="lead-attachment-upload"
+                          type="file"
+                          multiple
+                          className="sr-only"
+                          disabled={uploadingAttachment}
+                          onChange={async (event) => {
+                            await handleUploadLeadAttachments(selectedDetailItem, event.target.files);
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {selectedDetailItem.attachments.length > 0 ? (
+                    <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
+                      {selectedDetailItem.attachments.map((attachment) => (
+                        <article key={attachment.id} className="flex flex-col gap-3 bg-[#FAFAF7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              {attachment.type === 'file' ? (
+                                <Paperclip className="h-4 w-4 shrink-0 text-stone-400" />
+                              ) : (
+                                <Link2 className="h-4 w-4 shrink-0 text-stone-400" />
+                              )}
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                download={attachment.type === 'file' ? attachment.fileName || attachment.name : undefined}
+                                className="truncate text-sm font-semibold text-stone-950 underline-offset-4 hover:underline"
+                              >
+                                {attachment.name}
+                              </a>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                              <span>{attachment.type === 'file' ? 'Uploaded file' : 'External link'}</span>
+                              {attachment.contentType && <span>{attachment.contentType}</span>}
+                              {attachment.size > 0 && <span>{formatFileSize(attachment.size)}</span>}
+                              {attachment.createdAt && <span>{attachment.createdAt.slice(0, 10)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={attachment.type === 'file' ? attachment.fileName || attachment.name : undefined}
+                              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-600 transition hover:text-stone-950"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Open
+                            </a>
+                            {canModify && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAttachment(selectedDetailItem.id, attachment.id)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                title="Remove attachment"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-8 text-center text-sm text-stone-400">
+                      No attachments yet.
+                    </div>
+                  )}
+
+                  {canModify && (
+                    <form
+                      onSubmit={(event) => handleAddAttachmentLink(event, selectedDetailItem)}
+                      className="mt-4 grid gap-2 border-t border-stone-100 pt-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]"
+                    >
+                      <label className="block" htmlFor="lead-attachment-name">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Name</span>
+                        <input
+                          id="lead-attachment-name"
+                          value={attachmentLinkName}
+                          onChange={(event) => setAttachmentLinkName(event.target.value)}
+                          className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                          placeholder="Deck, memo, doc"
+                        />
+                      </label>
+                      <label className="block" htmlFor="lead-attachment-url">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Link</span>
+                        <input
+                          id="lead-attachment-url"
+                          type="url"
+                          value={attachmentLinkUrl}
+                          onChange={(event) => setAttachmentLinkUrl(event.target.value)}
+                          className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                          placeholder="https://drive.google.com/..."
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="submit"
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:text-stone-950 md:w-auto"
+                        >
+                          <Link2 className="h-4 w-4" />
+                          Add Link
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </section>
 
                 {renderDetailSection(
                   'Pipeline Details',
