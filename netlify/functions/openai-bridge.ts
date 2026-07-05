@@ -45,6 +45,8 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   athleticMindHubEmailExtraction: { maxTokens: 1600, modelPattern: /gpt-4o|gpt-4/i },
   // PipeLists: extract structured list-item fields from a pasted lead URL.
   pipeListsLeadExtraction: { maxTokens: 1800, modelPattern: /gpt-4o-mini|gpt-4o|gpt-4/i },
+  // PipeLists: find new leads with the Responses API web-search tool.
+  pipeListsLeadGeneration: { maxTokens: 6500, modelPattern: /gpt-5|gpt-4o|gpt-4|o[1-4]/i },
   // Default bounds for generic actions
   default: { maxTokens: 1000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4|gpt-3.5/i }
 };
@@ -69,7 +71,7 @@ const SIMPBUDGET_FIREBASE_API_KEY =
   process.env.SIMPBUDGET_FIREBASE_API_KEY?.trim()
   || process.env.NEXT_PUBLIC_SIMPBUDGET_FIREBASE_API_KEY?.trim()
   || 'AIzaSyCBoCQ4J9xoIhZuaUjFMPq_zltkXDQ_0e8';
-const SIMPBUDGET_TOKEN_FEATURES = new Set(['pipeListsLeadExtraction']);
+const SIMPBUDGET_TOKEN_FEATURES = new Set(['pipeListsLeadExtraction', 'pipeListsLeadGeneration']);
 
 const REMOTE_BRIDGE_FEATURE_ALIASES: Record<string, string> = {
   // Local dev may relay to a deployed bridge that has not received the newest

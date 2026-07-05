@@ -2336,7 +2336,7 @@ const PipelinePage: NextPage = () => {
     setLeadGenMessage(null);
 
     try {
-      const bridgeAuthUser = quickLiftsAuth.currentUser || simpBudgetAuth.currentUser;
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
       const idToken = await bridgeAuthUser?.getIdToken();
       if (!idToken) {
         throw new Error('Please sign in again before generating leads.');
@@ -2795,7 +2795,7 @@ const PipelinePage: NextPage = () => {
     setLeadExtractMessage(null);
 
     try {
-      const bridgeAuthUser = quickLiftsAuth.currentUser || simpBudgetAuth.currentUser;
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
       const idToken = await bridgeAuthUser?.getIdToken();
       if (!idToken) {
         throw new Error('Please sign in again before analyzing leads.');

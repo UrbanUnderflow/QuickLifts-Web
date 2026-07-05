@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const OPENAI_LEAD_GEN_MODEL = process.env.OPENAI_LEAD_GEN_MODEL || process.env.OPENAI_SEARCH_MODEL || 'gpt-5.5';
+const OPENAI_BRIDGE_FEATURE_ID = 'pipeListsLeadGeneration';
 const MAX_ADJUSTMENTS_CHARS = 3000;
 const MAX_EXISTING_ITEMS = 80;
 const MIN_LEAD_COUNT = 3;
@@ -235,7 +236,11 @@ const getResponseText = (value: unknown) => {
     .join('\n');
 };
 
-const getOpenAiErrorMessage = (value: unknown) => {
+const getBridgeOrigin = () =>
+  (process.env.OPENAI_BRIDGE_FALLBACK_ORIGIN || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai')
+    .replace(/\/+$/, '');
+
+const getBridgeErrorMessage = (value: unknown) => {
   if (!value || typeof value !== 'object') return 'Unable to generate leads.';
   const record = value as Record<string, unknown>;
   const error = record.error;
@@ -309,11 +314,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(401).json({ error: 'Please sign in before generating leads.' });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY || process.env.OPEN_AI_SECRET_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
-  }
-
   const body = (req.body || {}) as GenerateLeadsRequest;
   const listName = cleanString(body.listName, 120);
   const templateLabel = cleanString(body.templateLabel, 120);
@@ -351,11 +351,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   );
 
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch(`${getBridgeOrigin()}/api/openai/v1/responses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: authHeader,
+        'openai-organization': OPENAI_BRIDGE_FEATURE_ID,
+        'x-pulsecheck-firebase-mode': 'prod',
       },
       body: JSON.stringify({
         model: OPENAI_LEAD_GEN_MODEL,
@@ -417,7 +419,7 @@ Research rules:
 
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      return res.status(response.status).json({ error: getOpenAiErrorMessage(data), success: false });
+      return res.status(response.status).json({ error: getBridgeErrorMessage(data), success: false });
     }
 
     const parsed = parseJsonSafe(getResponseText(data) || '{}');
