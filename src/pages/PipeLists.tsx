@@ -497,11 +497,33 @@ const stripAiConfidenceNote = (value?: string) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+const cleanDealNotes = (value?: string) => {
+  const cleaned = stripAiConfidenceNote(value);
+  if (!cleaned) return '';
+
+  const genericPageSummaryPatterns = [
+    /^\s*(this|the)\s+page\s+(serves|appears|is|provides|showcases|contains|describes|highlights)\b/i,
+    /^\s*(this|the)\s+(website|site)\s+(serves|appears|is|provides|showcases|contains|describes|highlights)\b/i,
+    /\bmay be relevant for partnerships? or sponsorships?\b/i,
+    /\bcould be relevant for partnerships? or sponsorships?\b/i,
+    /\bshowcasing various\b/i,
+    /\bofficial athletics website\b/i,
+  ];
+
+  const paragraphs = cleaned
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .filter((paragraph) => !genericPageSummaryPatterns.some((pattern) => pattern.test(paragraph)));
+
+  return paragraphs.join('\n\n').trim();
+};
+
 const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   const now = new Date().toISOString();
   return {
     ...draft,
-    notes: stripAiConfidenceNote(draft.notes),
+    notes: cleanDealNotes(draft.notes),
     id,
     weeklyLogs: [],
     createdAt: now,
@@ -1432,7 +1454,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     amount: item.amount || '',
     dueDate: item.dueDate || '',
     nextStep: item.nextStep || '',
-    notes: stripAiConfidenceNote(item.notes),
+    notes: cleanDealNotes(item.notes),
     sourceUrl: item.sourceUrl || '',
     segment: item.segment || '',
     decisionMaker: item.decisionMaker || '',
@@ -2729,7 +2751,7 @@ const PipelinePage: NextPage = () => {
       amount: lead.amount?.trim() || '',
       dueDate: lead.dueDate?.trim() || '',
       nextStep: lead.nextStep?.trim() || '',
-      notes: stripAiConfidenceNote(lead.notes),
+      notes: cleanDealNotes(lead.notes),
       sourceUrl: lead.sourceUrl?.trim() || '',
       segment: lead.segment?.trim() || '',
       decisionMaker: lead.decisionMaker?.trim() || '',
@@ -2836,7 +2858,7 @@ Research rules:
 - For pitch competition lists, do not return demo-day/showcase/networking/spectator event pages unless they have an active application or submission path for PulseCheck to compete.
 - For pitch competition lists, nextStep should be an application/submission action, not "attend", "watch", or "register for" an event.
 - Pick stage from the provided stage ids only. If unsure, use the first stage id.
-- Keep notes useful for the user: concise analysis, prep angle, and practical context. Do not write "AI confidence".
+- Keep notes blank unless there is deal-moving context: risk, eligibility nuance, budget/funding detail, buyer angle, procurement constraint, strategic fit, or prep detail. Do not summarize what the page is. Do not write generic "may be relevant" notes or "AI confidence".
 - sourceEvidence must briefly name the source support used, including the deadline when relevant.
 - deadlineStatus must state whether the lead has a future deadline, no fixed deadline, or an optional follow-up date.
 - Return JSON only.`,
@@ -2921,7 +2943,7 @@ Research rules:
         stage,
         priority: lead.priority || 'medium',
         notes: [
-          stripAiConfidenceNote(lead.notes),
+          cleanDealNotes(lead.notes),
           lead.rationale ? `Why this fits: ${lead.rationale}` : '',
           lead.sourceEvidence ? `Source evidence: ${lead.sourceEvidence}` : '',
           lead.deadlineStatus ? `Deadline status: ${lead.deadlineStatus}` : '',
@@ -3354,7 +3376,7 @@ Research rules:
           organization: extracted.organization?.trim() || '',
           sourceUrl: cleanUrl,
           notes: [
-            stripAiConfidenceNote(extracted.notes),
+            cleanDealNotes(extracted.notes),
             extracted.missingFields && extracted.missingFields.length > 0
               ? `Missing fields to review: ${extracted.missingFields.join(', ')}`
               : '',
@@ -3456,7 +3478,7 @@ Research rules:
   const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify) return;
-    const draftToSave = { ...draft, notes: stripAiConfidenceNote(draft.notes) };
+    const draftToSave = { ...draft, notes: cleanDealNotes(draft.notes) };
     if (!draftToSave.title.trim() && !draftToSave.organization.trim()) return;
 
     setLists((currentLists) =>
@@ -3516,7 +3538,7 @@ Research rules:
     void deletedAt;
     void deletedByLogId;
     void restorableUntil;
-    setDraft({ ...editableItem, notes: stripAiConfidenceNote(editableItem.notes) });
+    setDraft({ ...editableItem, notes: cleanDealNotes(editableItem.notes) });
     setEditingItemId(item.id);
     setIsEditorOpen(true);
     setSelectedDetailItemId(item.id);

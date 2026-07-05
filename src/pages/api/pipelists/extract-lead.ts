@@ -114,6 +114,29 @@ const getBridgeErrorMessage = (value: unknown) => {
   return 'Unable to analyze that lead URL.';
 };
 
+const cleanExtractedNotes = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  const cleaned = value.trim();
+  if (!cleaned) return '';
+
+  const genericPageSummaryPatterns = [
+    /^\s*(this|the)\s+page\s+(serves|appears|is|provides|showcases|contains|describes|highlights)\b/i,
+    /^\s*(this|the)\s+(website|site)\s+(serves|appears|is|provides|showcases|contains|describes|highlights)\b/i,
+    /\bmay be relevant for partnerships? or sponsorships?\b/i,
+    /\bcould be relevant for partnerships? or sponsorships?\b/i,
+    /\bshowcasing various\b/i,
+    /\bofficial athletics website\b/i,
+  ];
+
+  const paragraphs = cleaned
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .filter((paragraph) => !genericPageSummaryPatterns.some((pattern) => pattern.test(paragraph)));
+
+  return paragraphs.join('\n\n').trim();
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -204,7 +227,8 @@ Rules:
 - "title" should be a short lead name, not a marketing headline.
 - "organization" should be the company, school, grant program, competition, fund, or partner name.
 - "nextStep" should be a practical next action for following up.
-- "notes" should summarize what the page appears to be and why it may matter.
+- "notes" should be blank unless the page contains deal-moving context: buyer angle, eligibility nuance, budget/funding detail, deadline risk, procurement constraint, relationship context, strategic fit, or a prep detail that changes what the user should do.
+- Do not use "notes" to summarize what the page is, describe the website, or explain generic relevance. If the only note is "this page appears to be..." or "may be relevant...", return "".
 - Use ISO date format YYYY-MM-DD for dates when explicit dates appear.
 - Keep confidence from 0 to 100.`,
           },
@@ -257,7 +281,7 @@ Rules:
         amount: typeof parsed.amount === 'string' ? parsed.amount : '',
         dueDate: typeof parsed.dueDate === 'string' ? parsed.dueDate : '',
         nextStep: typeof parsed.nextStep === 'string' ? parsed.nextStep : '',
-        notes: typeof parsed.notes === 'string' ? parsed.notes : '',
+        notes: cleanExtractedNotes(parsed.notes),
         segment: typeof parsed.segment === 'string' ? parsed.segment : '',
         decisionMaker: typeof parsed.decisionMaker === 'string' ? parsed.decisionMaker : '',
         acv: typeof parsed.acv === 'string' ? parsed.acv : '',
