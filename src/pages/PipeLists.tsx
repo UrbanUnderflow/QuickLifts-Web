@@ -1240,6 +1240,24 @@ const readFirestoreError = (error: unknown, fallbackMessage: string) => {
   return error instanceof Error ? error.message : fallbackMessage;
 };
 
+const readApiJson = async (response: Response, fallbackMessage: string) => {
+  const raw = await response.text();
+  const trimmed = raw.trim();
+
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    console.error('[PipeLists] Expected JSON API response but received something else:', {
+      status: response.status,
+      contentType: response.headers.get('content-type') || 'unknown',
+      preview: trimmed.slice(0, 160),
+    });
+    throw new Error(fallbackMessage);
+  }
+};
+
 const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | null }> = ({ message }) => {
   if (!message) return null;
 
@@ -2368,7 +2386,7 @@ const PipelinePage: NextPage = () => {
         }),
       });
 
-      const payload = await response.json();
+      const payload = await readApiJson(response, 'Search leads returned an unexpected response. Refresh and try again.');
       if (!response.ok) {
         throw new Error(payload?.error || 'Unable to generate leads.');
       }
@@ -2820,7 +2838,7 @@ const PipelinePage: NextPage = () => {
         }),
       });
 
-      const payload = await response.json();
+      const payload = await readApiJson(response, 'Analyze lead returned an unexpected response. Refresh and try again.');
       if (!response.ok || !payload?.item) {
         throw new Error(payload?.error || 'Unable to analyze that URL.');
       }
