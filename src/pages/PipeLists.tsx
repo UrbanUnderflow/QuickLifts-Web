@@ -4214,6 +4214,7 @@ Research rules:
         sentAt?: unknown;
         acceptedAt?: unknown;
         listNames: string[];
+        inviteUrl: string;
       }
     >();
 
@@ -4224,6 +4225,12 @@ Research rules:
           const existing = grouped.get(invite.email);
           const nextAccess: ShareAccess = invite.access === 'edit' || existing?.access === 'edit' ? 'edit' : 'read';
           const nextStatus = invite.status === 'accepted' || existing?.status === 'accepted' ? 'accepted' : 'sent';
+          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+          const inviteUrl =
+            existing?.inviteUrl ||
+            `${origin}/PipeLists?invite=${encodeURIComponent(share.id)}${
+              invite.inviteId ? `&inviteBatch=${encodeURIComponent(invite.inviteId)}` : ''
+            }&inviteEmail=${encodeURIComponent(invite.email)}`;
           grouped.set(invite.email, {
             email: invite.email,
             access: nextAccess,
@@ -4231,6 +4238,7 @@ Research rules:
             sentAt: existing?.sentAt || invite.sentAt,
             acceptedAt: existing?.acceptedAt || invite.acceptedAt,
             listNames: Array.from(new Set([...(existing?.listNames || []), share.list.name])),
+            inviteUrl,
           });
         });
       });
@@ -4279,6 +4287,15 @@ Research rules:
 
     setShareEditorEmails((currentValue) => Array.from(new Set([...normalizeEmailList(currentValue), cleanEmail])).join(', '));
     setCollaboratorSearch('');
+  };
+
+  const copyInviteUrl = async (inviteUrl: string) => {
+    try {
+      await writeClipboardText(inviteUrl);
+      setToastMessage({ type: 'success', text: 'Copied invite link to clipboard.' });
+    } catch {
+      setToastMessage({ type: 'error', text: 'Unable to copy invite link.' });
+    }
   };
 
   useEffect(() => {
@@ -4393,13 +4410,31 @@ Research rules:
       const activePayload = payloads.find((payload) => payload.list.id === activeList.id) || payloads[0];
       setShareDoc(activePayload);
       if (typeof window !== 'undefined') {
+        const idToken = await user.getIdToken();
         await Promise.all(
-          accountEmails.map((email) => {
+          accountEmails.map(async (email) => {
             const invitePath = `/PipeLists?invite=${encodeURIComponent(activePayload.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(email)}`;
-            return sendSignInLinkToEmail(simpBudgetAuth, email, {
-              url: `${window.location.origin}${invitePath}`,
-              handleCodeInApp: true,
+            const inviteUrl = `${window.location.origin}${invitePath}`;
+            const response = await fetch('/api/pipelists/send-invite', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idToken}`,
+              },
+              body: JSON.stringify({
+                toEmail: email,
+                inviteUrl,
+                listNames: targetLists.map((list) => list.name),
+                access: shareAccess,
+                ownerName: profile?.displayName || user.displayName || 'Tremaine Grant',
+                ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
+                inviteBatchId,
+              }),
             });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok || result?.success === false) {
+              throw new Error(result?.error || `Unable to email ${email}.`);
+            }
           }),
         );
       }
@@ -4412,14 +4447,14 @@ Research rules:
         type: 'success',
         text:
           shareAccess === 'edit'
-            ? `Editor invite sent to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`
-            : `Read-only invite sent to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`,
+            ? `Editor invite emailed to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`
+            : `Read-only invite emailed to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`,
       });
     } catch (error) {
       console.error('Unable to create PipeLists share link:', error);
       setShareMessage({
         type: 'error',
-        text: readFirestoreError(error, 'Unable to create this share link.'),
+        text: error instanceof Error ? error.message : readFirestoreError(error, 'Unable to create this share link.'),
       });
     }
   };
@@ -5928,6 +5963,23 @@ Research rules:
                               ) : (
                                 <span>Invite sent</span>
                               )}
+                            </div>
+                            <div className="mt-2 flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5">
+                              <input
+                                value={invite.inviteUrl}
+                                readOnly
+                                aria-label={`Invite link for ${invite.email}`}
+                                className="min-w-0 flex-1 truncate bg-transparent text-xs text-stone-500 outline-none"
+                                onFocus={(event) => event.currentTarget.select()}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => copyInviteUrl(invite.inviteUrl)}
+                                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                Copy
+                              </button>
                             </div>
                           </div>
                         ))}
