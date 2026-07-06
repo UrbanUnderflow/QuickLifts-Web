@@ -5502,7 +5502,7 @@ Research rules:
 
       {isSharePanelOpen && !isSharedView && isOwner && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-10 backdrop-blur-sm sm:py-12"
           onClick={() => setIsSharePanelOpen(false)}
         >
           <section
@@ -5510,9 +5510,9 @@ Research rules:
             aria-modal="true"
             aria-labelledby="pipe-share-title"
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+            className="my-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
           >
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-100 px-5 py-5">
               <div>
                 <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
                   <Users className="h-4 w-4" />
@@ -5534,152 +5534,158 @@ Research rules:
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold uppercase text-stone-400">Apply to PipeLists</span>
-                  <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
-                    {formatCount(selectedShareLists.length || 1, 'list')}
-                  </span>
-                </div>
-                <div className="grid max-h-36 gap-2 overflow-y-auto sm:grid-cols-2">
-                  {lists.map((list) => (
-                    <label
-                      key={list.id}
-                      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={shareSelectedListIds.includes(list.id)}
-                        onChange={() => toggleShareListSelection(list.id)}
-                        className="h-4 w-4 rounded border-stone-300 accent-stone-900"
-                      />
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
-                      <span className="truncate">{list.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <label className="block" htmlFor="pipe-share-access">
-                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
-                <select
-                  id="pipe-share-access"
-                  value={shareAccess}
-                  onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
-                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                >
-                  <option value="read">Read only</option>
-                  <option value="edit">Read and edit</option>
-                </select>
-              </label>
-
-              <div className="rounded-lg border border-stone-200 bg-white p-3">
-                <label className="block" htmlFor="pipe-account-search">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Find account</span>
-                  <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3">
-                    <Search className="h-4 w-4 shrink-0 text-stone-400" />
-                    <input
-                      id="pipe-account-search"
-                      value={collaboratorSearch}
-                      onChange={(event) => setCollaboratorSearch(event.target.value)}
-                      className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
-                      placeholder="Search name or email"
-                    />
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold uppercase text-stone-400">Apply to PipeLists</span>
+                      <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
+                        {formatCount(selectedShareLists.length || 1, 'list')}
+                      </span>
+                    </div>
+                    <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+                      {lists.map((list) => (
+                        <label
+                          key={list.id}
+                          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={shareSelectedListIds.includes(list.id)}
+                            onChange={() => toggleShareListSelection(list.id)}
+                            className="h-4 w-4 rounded border-stone-300 accent-stone-900"
+                          />
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
+                          <span className="truncate">{list.name}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </label>
 
-                <div className="mt-2 space-y-1">
-                  {loadingProfiles ? (
-                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">Loading accounts...</p>
-                  ) : filteredCollaboratorProfiles.length > 0 ? (
-                    filteredCollaboratorProfiles.map((account) => (
+                  <label className="block" htmlFor="pipe-share-access">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
+                    <select
+                      id="pipe-share-access"
+                      value={shareAccess}
+                      onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                    >
+                      <option value="read">Read only</option>
+                      <option value="edit">Read and edit</option>
+                    </select>
+                  </label>
+
+                  <div className="rounded-lg border border-stone-200 bg-white p-3">
+                    <label className="block" htmlFor="pipe-account-search">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Find account</span>
+                      <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3">
+                        <Search className="h-4 w-4 shrink-0 text-stone-400" />
+                        <input
+                          id="pipe-account-search"
+                          value={collaboratorSearch}
+                          onChange={(event) => setCollaboratorSearch(event.target.value)}
+                          className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
+                          placeholder="Search name or email"
+                        />
+                      </div>
+                    </label>
+
+                    <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                      {loadingProfiles ? (
+                        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">Loading accounts...</p>
+                      ) : filteredCollaboratorProfiles.length > 0 ? (
+                        filteredCollaboratorProfiles.map((account) => (
+                          <button
+                            key={account.uid}
+                            type="button"
+                            onClick={() => addCollaboratorEmail(account.email)}
+                            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                          >
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold text-stone-900">
+                                {account.displayName || account.email}
+                              </span>
+                              <span className="block truncate text-xs text-stone-500">{account.email}</span>
+                            </span>
+                            <Plus className="h-4 w-4 shrink-0 text-stone-500" />
+                          </button>
+                        ))
+                      ) : collaboratorSearch.trim() ? (
+                        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">No matching PipeLists account found.</p>
+                      ) : null}
+                    </div>
+
+                    <MessageBanner message={profileSearchMessage} />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block" htmlFor="pipe-share-editors">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                      {shareAccess === 'edit' ? 'Account edit access' : 'Account read access'}
+                    </span>
+                    <textarea
+                      id="pipe-share-editors"
+                      value={shareEditorEmails}
+                      onChange={(event) => setShareEditorEmails(event.target.value)}
+                      className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="name@example.com, teammate@example.com"
+                    />
+                    <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                      Search accounts above or paste emails. Signed-in collaborators will see these lists on their dashboard.
+                    </span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={createOrUpdateShareLink}
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Save Access
+                  </button>
+
+                  {shareUrl && (
+                    <div className="space-y-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                      <label className="block" htmlFor="pipe-share-url">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Single-list invite link</span>
+                        <input
+                          id="pipe-share-url"
+                          readOnly
+                          value={shareUrl}
+                          className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
+                        />
+                      </label>
                       <button
-                        key={account.uid}
                         type="button"
-                        onClick={() => addCollaboratorEmail(account.email)}
-                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                        onClick={copyShareLink}
+                        className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
                       >
-                        <span className="min-w-0">
-                          <span className="block truncate font-semibold text-stone-900">
-                            {account.displayName || account.email}
-                          </span>
-                          <span className="block truncate text-xs text-stone-500">{account.email}</span>
-                        </span>
-                        <Plus className="h-4 w-4 shrink-0 text-stone-500" />
+                        Copy Invite Link
                       </button>
-                    ))
-                  ) : collaboratorSearch.trim() ? (
-                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">No matching PipeLists account found.</p>
-                  ) : null}
-                </div>
+                      <label className="block" htmlFor="pipe-dashboard-url">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Collaborator dashboard link</span>
+                        <input
+                          id="pipe-dashboard-url"
+                          readOnly
+                          value={collaboratorDashboardUrl}
+                          className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={copyCollaboratorDashboardLink}
+                        className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                      >
+                        Copy Dashboard Link
+                      </button>
+                    </div>
+                  )}
 
-                <MessageBanner message={profileSearchMessage} />
+                  <MessageBanner message={shareMessage} />
+                </div>
               </div>
-
-              <label className="block" htmlFor="pipe-share-editors">
-                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                  {shareAccess === 'edit' ? 'Account edit access' : 'Account read access'}
-                </span>
-                <textarea
-                  id="pipe-share-editors"
-                  value={shareEditorEmails}
-                  onChange={(event) => setShareEditorEmails(event.target.value)}
-                  className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                  placeholder="name@example.com, teammate@example.com"
-                />
-                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
-                  Search accounts above or paste emails. Signed-in collaborators will see these lists on their dashboard.
-                </span>
-              </label>
-
-              <button
-                type="button"
-                onClick={createOrUpdateShareLink}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-              >
-                <Mail className="h-4 w-4" />
-                Save Access
-              </button>
-
-              {shareUrl && (
-                <div className="space-y-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
-                  <label className="block" htmlFor="pipe-share-url">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Single-list invite link</span>
-                    <input
-                      id="pipe-share-url"
-                      readOnly
-                      value={shareUrl}
-                      className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={copyShareLink}
-                    className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                  >
-                    Copy Invite Link
-                  </button>
-                  <label className="block" htmlFor="pipe-dashboard-url">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Collaborator dashboard link</span>
-                    <input
-                      id="pipe-dashboard-url"
-                      readOnly
-                      value={collaboratorDashboardUrl}
-                      className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={copyCollaboratorDashboardLink}
-                    className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                  >
-                    Copy Dashboard Link
-                  </button>
-                </div>
-              )}
-
-              <MessageBanner message={shareMessage} />
             </div>
           </section>
         </div>
