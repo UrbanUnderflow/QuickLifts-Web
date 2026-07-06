@@ -65,6 +65,16 @@ type InviteStatus = {
   sentAt?: unknown;
   acceptedAt?: unknown;
 };
+type InviteHistoryEntry = {
+  email: string;
+  access: ShareAccess;
+  status: 'sent' | 'accepted';
+  sentAt?: unknown;
+  acceptedAt?: unknown;
+  listNames: string[];
+  shareIds: string[];
+  inviteUrl: string;
+};
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
 type NextStepTooltip = {
   text: string;
@@ -2073,6 +2083,7 @@ const PipelinePage: NextPage = () => {
   const [profileSearchMessage, setProfileSearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [searchableProfiles, setSearchableProfiles] = useState<SearchablePipeListProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [resendingInviteEmails, setResendingInviteEmails] = useState<string[]>([]);
   const [isSharePanelOpen, setIsSharePanelOpen] = useState(false);
   const [profile, setProfile] = useState<PipeListProfile | null>(null);
   const [profileName, setProfileName] = useState('');
@@ -4205,18 +4216,7 @@ Research rules:
     ownerShareDocs.forEach((share) => shareDocsById.set(share.id, share));
     if (shareDoc) shareDocsById.set(shareDoc.id, shareDoc);
 
-    const grouped = new Map<
-      string,
-      {
-        email: string;
-        access: ShareAccess;
-        status: 'sent' | 'accepted';
-        sentAt?: unknown;
-        acceptedAt?: unknown;
-        listNames: string[];
-        inviteUrl: string;
-      }
-    >();
+    const grouped = new Map<string, InviteHistoryEntry>();
 
     Array.from(shareDocsById.values())
       .filter((share) => selectedIds.has(share.list.id))
@@ -4238,6 +4238,7 @@ Research rules:
             sentAt: existing?.sentAt || invite.sentAt,
             acceptedAt: existing?.acceptedAt || invite.acceptedAt,
             listNames: Array.from(new Set([...(existing?.listNames || []), share.list.name])),
+            shareIds: Array.from(new Set([...(existing?.shareIds || []), share.id])),
             inviteUrl,
           });
         });
@@ -4295,6 +4296,105 @@ Research rules:
       setToastMessage({ type: 'success', text: 'Copied invite link to clipboard.' });
     } catch {
       setToastMessage({ type: 'error', text: 'Unable to copy invite link.' });
+    }
+  };
+
+  const sendCollaboratorInviteEmail = async (args: {
+    email: string;
+    inviteUrl: string;
+    listNames: string[];
+    access: ShareAccess;
+    inviteBatchId: string;
+  }) => {
+    if (!user) throw new Error('Please sign in again.');
+
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/pipelists/send-invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        toEmail: args.email,
+        inviteUrl: args.inviteUrl,
+        listNames: args.listNames,
+        access: args.access,
+        ownerName: profile?.displayName || user.displayName || 'Tremaine Grant',
+        ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
+        inviteBatchId: args.inviteBatchId,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.success === false) {
+      throw new Error(result?.error || `Unable to email ${args.email}.`);
+    }
+  };
+
+  const resendInviteEmail = async (invite: InviteHistoryEntry) => {
+    if (!user || !isOwner) return;
+
+    setShareMessage(null);
+    setResendingInviteEmails((currentEmails) => Array.from(new Set([...currentEmails, invite.email])));
+
+    try {
+      const inviteBatchId = makeId();
+      await sendCollaboratorInviteEmail({
+        email: invite.email,
+        inviteUrl: invite.inviteUrl,
+        listNames: invite.listNames,
+        access: invite.access,
+        inviteBatchId,
+      });
+
+      await Promise.all(
+        invite.shareIds.map((shareId) =>
+          setDoc(
+            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId),
+            stripUndefined({
+              inviteStatuses: {
+                [invite.email]: {
+                  email: invite.email,
+                  access: invite.access,
+                  status: invite.status,
+                  sentAt: serverTimestamp(),
+                },
+              },
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true },
+          ),
+        ),
+      );
+
+      setOwnerShareDocs((currentShares) =>
+        currentShares.map((share) =>
+          invite.shareIds.includes(share.id)
+            ? {
+                ...share,
+                inviteStatuses: {
+                  ...share.inviteStatuses,
+                  [invite.email]: {
+                    ...(share.inviteStatuses[invite.email] || invite),
+                    email: invite.email,
+                    access: invite.access,
+                    status: invite.status,
+                    sentAt: new Date().toISOString(),
+                  },
+                },
+              }
+            : share,
+        ),
+      );
+      setShareMessage({ type: 'success', text: `Invite resent to ${invite.email}.` });
+    } catch (error) {
+      console.error('Unable to resend PipeLists invite:', error);
+      setShareMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : readFirestoreError(error, 'Unable to resend this invite.'),
+      });
+    } finally {
+      setResendingInviteEmails((currentEmails) => currentEmails.filter((email) => email !== invite.email));
     }
   };
 
@@ -4410,31 +4510,17 @@ Research rules:
       const activePayload = payloads.find((payload) => payload.list.id === activeList.id) || payloads[0];
       setShareDoc(activePayload);
       if (typeof window !== 'undefined') {
-        const idToken = await user.getIdToken();
         await Promise.all(
           accountEmails.map(async (email) => {
             const invitePath = `/PipeLists?invite=${encodeURIComponent(activePayload.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(email)}`;
             const inviteUrl = `${window.location.origin}${invitePath}`;
-            const response = await fetch('/api/pipelists/send-invite', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${idToken}`,
-              },
-              body: JSON.stringify({
-                toEmail: email,
-                inviteUrl,
-                listNames: targetLists.map((list) => list.name),
-                access: shareAccess,
-                ownerName: profile?.displayName || user.displayName || 'Tremaine Grant',
-                ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
-                inviteBatchId,
-              }),
+            await sendCollaboratorInviteEmail({
+              email,
+              inviteUrl,
+              listNames: targetLists.map((list) => list.name),
+              access: shareAccess,
+              inviteBatchId,
             });
-            const result = await response.json().catch(() => ({}));
-            if (!response.ok || result?.success === false) {
-              throw new Error(result?.error || `Unable to email ${email}.`);
-            }
           }),
         );
       }
@@ -5932,12 +6018,20 @@ Research rules:
                         {inviteHistory.map((invite) => (
                           <div
                             key={invite.email}
-                            className="rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-2"
+                            className="space-y-2 rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-3"
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-semibold text-stone-900">{invite.email}</p>
-                                <p className="mt-0.5 truncate text-xs text-stone-500">
+                                <p
+                                  className="mt-1 text-xs leading-5 text-stone-500"
+                                  style={{
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                  }}
+                                >
                                   {invite.listNames.join(', ')}
                                 </p>
                               </div>
@@ -5952,7 +6046,7 @@ Research rules:
                                 {invite.status === 'accepted' ? 'Accepted' : 'Pending'}
                               </span>
                             </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
                               <span className="rounded-full bg-white px-2 py-1 font-medium capitalize text-stone-600">
                                 {invite.access === 'edit' ? 'Read and edit' : 'Read only'}
                               </span>
@@ -5964,7 +6058,7 @@ Research rules:
                                 <span>Invite sent</span>
                               )}
                             </div>
-                            <div className="mt-2 flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5">
+                            <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5">
                               <input
                                 value={invite.inviteUrl}
                                 readOnly
@@ -5980,6 +6074,17 @@ Research rules:
                                 <Copy className="h-3.5 w-3.5" />
                                 Copy
                               </button>
+                              {invite.status === 'sent' && (
+                                <button
+                                  type="button"
+                                  onClick={() => resendInviteEmail(invite)}
+                                  disabled={resendingInviteEmails.includes(invite.email)}
+                                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Mail className="h-3.5 w-3.5" />
+                                  {resendingInviteEmails.includes(invite.email) ? 'Sending...' : 'Resend'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
