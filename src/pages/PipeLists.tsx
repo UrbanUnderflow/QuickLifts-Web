@@ -13,7 +13,7 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   Activity,
@@ -192,6 +192,7 @@ type PipeListShare = {
   list: PipeList;
   access: ShareAccess;
   publicRead: boolean;
+  viewerEmails: string[];
   editorEmails: string[];
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -214,6 +215,10 @@ type PipeListProfile = {
   photoURL: string;
   email: string;
   updatedAt?: unknown;
+};
+
+type SearchablePipeListProfile = PipeListProfile & {
+  uid: string;
 };
 
 type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil'>;
@@ -1523,6 +1528,31 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   };
 };
 
+const normalizeShareEmails = (emails: unknown) =>
+  Array.isArray(emails)
+    ? emails
+        .filter((email): email is string => typeof email === 'string')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+
+const normalizePipeListShare = (id: string, data: Partial<PipeListShare>, index = 0): PipeListShare | null => {
+  if (!data.list) return null;
+
+  return {
+    id,
+    ownerUid: data.ownerUid || '',
+    ownerEmail: data.ownerEmail || '',
+    list: normalizeList(data.list, index),
+    access: data.access === 'edit' ? 'edit' : 'read',
+    publicRead: data.publicRead === true,
+    viewerEmails: normalizeShareEmails(data.viewerEmails),
+    editorEmails: normalizeShareEmails(data.editorEmails),
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+};
+
 const formatCount = (count: number, singular: string) => {
   if (count === 1) return `${count} ${singular}`;
   const plural = singular.endsWith('y') ? `${singular.slice(0, -1)}ies` : `${singular}s`;
@@ -1948,10 +1978,16 @@ const PipelinePage: NextPage = () => {
     return new URLSearchParams(window.location.search).get('leadShare') || '';
   });
   const [shareDoc, setShareDoc] = useState<PipeListShare | null>(null);
+  const [accessibleShareDocs, setAccessibleShareDocs] = useState<PipeListShare[]>([]);
   const [leadShareDoc, setLeadShareDoc] = useState<PipeLeadShare | null>(null);
   const [shareMessage, setShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [shareAccess, setShareAccess] = useState<ShareAccess>('read');
   const [shareEditorEmails, setShareEditorEmails] = useState('');
+  const [shareSelectedListIds, setShareSelectedListIds] = useState<string[]>([]);
+  const [collaboratorSearch, setCollaboratorSearch] = useState('');
+  const [profileSearchMessage, setProfileSearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [searchableProfiles, setSearchableProfiles] = useState<SearchablePipeListProfile[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [isSharePanelOpen, setIsSharePanelOpen] = useState(false);
   const [profile, setProfile] = useState<PipeListProfile | null>(null);
   const [profileName, setProfileName] = useState('');
@@ -1962,6 +1998,21 @@ const PipelinePage: NextPage = () => {
   const isLeadSharedView = Boolean(leadShareId);
   const isSharedView = Boolean(shareId || leadShareId);
   const isOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
+  const activeList = useMemo(
+    () => lists.find((list) => list.id === activeListId) || lists[0] || initialLists[0],
+    [activeListId, lists],
+  );
+  const editableListIds = useMemo(() => {
+    if (!normalizedUserEmail) return new Set<string>();
+    return new Set(
+      accessibleShareDocs
+        .filter((share) => share.editorEmails.includes(normalizedUserEmail) || share.ownerEmail.toLowerCase() === normalizedUserEmail)
+        .map((share) => share.list.id),
+    );
+  }, [accessibleShareDocs, normalizedUserEmail]);
+  const activeDashboardShare = !isSharedView && !isOwner
+    ? accessibleShareDocs.find((share) => share.list.id === activeList.id) || null
+    : null;
   const canEditShared =
     Boolean(shareId) &&
     !!user &&
@@ -1969,7 +2020,8 @@ const PipelinePage: NextPage = () => {
     (shareDoc.ownerUid === user.uid ||
       shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
-  const canModify = !isSharedView || canEditShared;
+  const canModify = isSharedView ? canEditShared : isOwner || editableListIds.has(activeList.id);
+  const canManageWorkspace = !isSharedView && isOwner;
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -2013,19 +2065,11 @@ const PipelinePage: NextPage = () => {
 
       if (!currentUser) {
         setDataReady(false);
+        setAccessibleShareDocs([]);
         return;
       }
 
       const email = currentUser.email?.toLowerCase() || '';
-      if (email !== TREMAINE_OWNER_EMAIL) {
-        setAuthMessage({
-          type: 'error',
-          text: `Signed in as ${currentUser.email || 'another account'}. PipeLists is limited to ${TREMAINE_OWNER_EMAIL}.`,
-        });
-        setDataReady(false);
-        await signOut(simpBudgetAuth);
-        return;
-      }
 
       try {
         await setDoc(
@@ -2038,6 +2082,64 @@ const PipelinePage: NextPage = () => {
           { merge: true },
         );
 
+        await setDoc(
+          doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, currentUser.uid),
+          stripUndefined({
+            email: currentUser.email || '',
+            displayName: currentUser.displayName || '',
+            photoURL: currentUser.photoURL || '',
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true },
+        );
+
+        if (email !== TREMAINE_OWNER_EMAIL) {
+          const sharesById = new Map<string, PipeListShare>();
+          const sharesRef = collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION);
+          const [viewerSnapshot, editorSnapshot] = await Promise.all([
+            getDocs(
+              firestoreQuery(
+                sharesRef,
+                where('viewerEmails', 'array-contains', email),
+                where('publicRead', '==', true),
+              ),
+            ),
+            getDocs(
+              firestoreQuery(
+                sharesRef,
+                where('editorEmails', 'array-contains', email),
+                where('access', '==', 'edit'),
+              ),
+            ),
+          ]);
+
+          [...viewerSnapshot.docs, ...editorSnapshot.docs].forEach((shareSnapshot, index) => {
+            const normalizedShare = normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index);
+            if (normalizedShare?.publicRead) sharesById.set(normalizedShare.id, normalizedShare);
+          });
+
+          const nextShares = Array.from(sharesById.values());
+          const nextLists = nextShares.map((share) => share.list);
+          setAccessibleShareDocs(nextShares);
+          setLists(nextLists);
+          setActiveListId(nextLists[0]?.id || '');
+          setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
+          setSelectedLogItemId('');
+          setLogDraft(defaultLogDraft(nextLists[0]?.templateKey || initialLists[0].templateKey));
+          setSelectedDetailItemId('');
+          setDataReady(true);
+          setAppMessage(
+            nextLists.length > 0
+              ? null
+              : {
+                  type: 'info',
+                  text: 'This account does not have access to any PipeLists yet.',
+                },
+          );
+          return;
+        }
+
+        setAccessibleShareDocs([]);
         const stateRef = doc(
           simpBudgetDb,
           SIMPBUDGET_USERS_COLLECTION,
@@ -2113,20 +2215,15 @@ const PipelinePage: NextPage = () => {
           return;
         }
 
-        const normalizedList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
-        const nextShare: PipeListShare = {
-          id: snapshot.id,
-          ownerUid: data.ownerUid || '',
-          ownerEmail: data.ownerEmail || '',
-          list: normalizedList,
-          access: data.access === 'edit' ? 'edit' : 'read',
-          publicRead: data.publicRead === true,
-          editorEmails: Array.isArray(data.editorEmails) ? data.editorEmails : [],
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
-        };
+        const nextShare = normalizePipeListShare(snapshot.id, data, 0);
+        if (!nextShare) {
+          setShareMessage({ type: 'error', text: 'This PipeLists share link is not available.' });
+          setDataReady(true);
+          return;
+        }
+        const normalizedList = purgeExpiredDeletedItems([nextShare.list])[0];
 
-        setShareDoc(nextShare);
+        setShareDoc({ ...nextShare, list: normalizedList });
         setLists([normalizedList]);
         setActiveListId(normalizedList.id);
         setDraft(defaultDraft(normalizedList.stages[0]?.id));
@@ -2222,13 +2319,7 @@ const PipelinePage: NextPage = () => {
         if (!result?.user) return;
 
         const email = result.user.email?.toLowerCase() || '';
-        if (!isSharedView && email !== TREMAINE_OWNER_EMAIL) {
-          setAuthMessage({
-            type: 'error',
-            text: `That account is ${result.user.email || 'not the owner account'}. Please sign in with ${TREMAINE_OWNER_EMAIL}.`,
-          });
-          await signOut(simpBudgetAuth);
-        } else if (
+        if (
           isSharedView &&
           shareDoc?.access === 'edit' &&
           email !== shareDoc.ownerEmail.toLowerCase() &&
@@ -2385,10 +2476,61 @@ const PipelinePage: NextPage = () => {
     };
   }, [canEditShared, dataReady, lists, profile, shareDoc, shareId, user]);
 
-  const activeList = useMemo(
-    () => lists.find((list) => list.id === activeListId) || lists[0],
-    [activeListId, lists],
-  );
+  useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady || accessibleShareDocs.length === 0) return;
+
+    const editableShares = accessibleShareDocs.filter((share) => share.editorEmails.includes(normalizedUserEmail));
+    if (editableShares.length === 0) return;
+
+    let cancelled = false;
+
+    const saveAccessibleSharedLists = async () => {
+      setSavingToCloud(true);
+
+      try {
+        await Promise.all(
+          editableShares.map((share) => {
+            const nextList = lists.find((list) => list.id === share.list.id);
+            if (!nextList) return Promise.resolve();
+
+            return setDoc(
+              doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, share.id),
+              stripUndefined({
+                list: nextList,
+                updatedAt: serverTimestamp(),
+                lastEditedBy: {
+                  uid: user.uid,
+                  email: user.email || '',
+                  displayName: profile?.displayName || user.displayName || '',
+                  photoURL: profile?.photoURL || user.photoURL || '',
+                },
+              }),
+              { merge: true },
+            );
+          }),
+        );
+
+        if (!cancelled) setAppMessage(null);
+      } catch (error) {
+        console.error('Unable to save collaborator PipeLists:', error);
+        if (!cancelled) {
+          setAppMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to save shared PipeList changes.'),
+          });
+        }
+      } finally {
+        if (!cancelled) setSavingToCloud(false);
+      }
+    };
+
+    saveAccessibleSharedLists();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, lists, normalizedUserEmail, profile, user]);
+
   const leadSearchPromptPreview = useMemo(() => buildLeadSearchPrompt(leadSearchBrief), [leadSearchBrief]);
   const updateLeadSearchBrief = <Key extends keyof LeadSearchBrief>(field: Key, value: LeadSearchBrief[Key]) => {
     setLeadSearchBrief((currentBrief) => ({
@@ -2419,20 +2561,25 @@ const PipelinePage: NextPage = () => {
         }
 
         const data = shareSnapshot.data() as Partial<PipeListShare>;
+        const normalizedShare = normalizePipeListShare(shareSnapshot.id, data, 0);
         if (!cancelled) {
-          setShareDoc({
-            id: shareSnapshot.id,
-            ownerUid: data.ownerUid || user.uid,
-            ownerEmail: data.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
-            list: data.list ? normalizeList(data.list, 0) : activeList,
-            access: data.access === 'edit' ? 'edit' : 'read',
-            publicRead: data.publicRead === true,
-            editorEmails: Array.isArray(data.editorEmails) ? data.editorEmails : [],
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          });
+          setShareDoc(
+            normalizedShare || {
+              id: shareSnapshot.id,
+              ownerUid: data.ownerUid || user.uid,
+              ownerEmail: data.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
+              list: activeList,
+              access: data.access === 'edit' ? 'edit' : 'read',
+              publicRead: data.publicRead === true,
+              viewerEmails: normalizeShareEmails(data.viewerEmails),
+              editorEmails: normalizeShareEmails(data.editorEmails),
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+            },
+          );
           setShareAccess(data.access === 'edit' ? 'edit' : 'read');
-          setShareEditorEmails(Array.isArray(data.editorEmails) ? data.editorEmails.join(', ') : '');
+          const accountEmails = data.access === 'edit' ? normalizeShareEmails(data.editorEmails) : normalizeShareEmails(data.viewerEmails);
+          setShareEditorEmails(accountEmails.join(', '));
         }
       } catch (error) {
         console.error('Unable to load PipeList invite:', error);
@@ -3462,7 +3609,7 @@ Research rules:
 
   const handleCreateList = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (isSharedView) return;
+    if (!canManageWorkspace) return;
     const template = templateCatalog[newListTemplateKey];
     const name = newListName.trim() || template.defaultName;
     const nextList = createList(newListTemplateKey, name, lists.length);
@@ -3624,6 +3771,11 @@ Research rules:
 
   const handleMoveItem = (itemId: string, targetListId: string) => {
     if (!canModify || !targetListId || targetListId === activeList.id) return;
+    if (!isOwner && (!editableListIds.has(activeList.id) || !editableListIds.has(targetListId))) {
+      setMoveTargetListId('');
+      setLeadMoveMessage({ type: 'error', text: 'You need edit access on both PipeLists to move this lead.' });
+      return;
+    }
 
     const sourceList = lists.find((list) => list.id === activeList.id);
     const targetList = lists.find((list) => list.id === targetListId);
@@ -3687,7 +3839,7 @@ Research rules:
   };
 
   const handleDeleteList = () => {
-    if (isSharedView) return;
+    if (!canManageWorkspace) return;
     if (lists.length <= 1) return;
 
     const nextLists = lists.filter((list) => list.id !== activeList.id);
@@ -3853,6 +4005,7 @@ Research rules:
     typeof window !== 'undefined' && shareDoc
       ? `${window.location.origin}/PipeLists?share=${shareDoc.id}`
       : '';
+  const collaboratorDashboardUrl = typeof window !== 'undefined' ? `${window.location.origin}/PipeLists` : '';
 
   const normalizeEmailList = (value: string) =>
     Array.from(
@@ -3864,46 +4017,145 @@ Research rules:
       ),
     );
 
+  const selectedShareLists = lists.filter((list) => shareSelectedListIds.includes(list.id));
+  const moveTargetLists = lists.filter((list) => list.id !== activeList.id && (isOwner || editableListIds.has(list.id)));
+  const collaboratorAccountEmails = normalizeEmailList(shareEditorEmails);
+  const filteredCollaboratorProfiles = useMemo(() => {
+    const search = collaboratorSearch.trim().toLowerCase();
+    if (!search) return searchableProfiles.slice(0, 6);
+
+    return searchableProfiles
+      .filter((account) =>
+        [account.displayName, account.email]
+          .join(' ')
+          .toLowerCase()
+          .includes(search),
+      )
+      .slice(0, 6);
+  }, [collaboratorSearch, searchableProfiles]);
+
+  const openSharePanel = () => {
+    setShareSelectedListIds([activeList.id]);
+    setCollaboratorSearch('');
+    setProfileSearchMessage(null);
+    setIsSharePanelOpen(true);
+  };
+
+  const toggleShareListSelection = (listId: string) => {
+    setShareSelectedListIds((currentIds) => {
+      if (currentIds.includes(listId)) {
+        return currentIds.length > 1 ? currentIds.filter((id) => id !== listId) : currentIds;
+      }
+
+      return [...currentIds, listId];
+    });
+  };
+
+  const addCollaboratorEmail = (email: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    setShareEditorEmails((currentValue) => Array.from(new Set([...normalizeEmailList(currentValue), cleanEmail])).join(', '));
+    setCollaboratorSearch('');
+  };
+
+  useEffect(() => {
+    if (!isSharePanelOpen || !isOwner || !user) return;
+
+    let cancelled = false;
+
+    const loadProfiles = async () => {
+      setLoadingProfiles(true);
+      setProfileSearchMessage(null);
+
+      try {
+        const profileSnapshot = await getDocs(collection(simpBudgetDb, PIPELIST_PROFILES_COLLECTION));
+        const profiles = profileSnapshot.docs
+          .map((profileDoc) => {
+            const data = profileDoc.data() as Partial<PipeListProfile>;
+            return {
+              uid: profileDoc.id,
+              displayName: data.displayName || '',
+              photoURL: data.photoURL || '',
+              email: data.email || '',
+              updatedAt: data.updatedAt,
+            };
+          })
+          .filter((account) => account.email && account.email.toLowerCase() !== normalizedUserEmail)
+          .sort((left, right) => (left.displayName || left.email).localeCompare(right.displayName || right.email));
+
+        if (!cancelled) setSearchableProfiles(profiles);
+      } catch (error) {
+        console.error('Unable to search PipeLists profiles:', error);
+        if (!cancelled) {
+          setSearchableProfiles([]);
+          setProfileSearchMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to load existing PipeLists accounts.'),
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingProfiles(false);
+      }
+    };
+
+    loadProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner, isSharePanelOpen, normalizedUserEmail, user]);
+
   const createOrUpdateShareLink = async () => {
     if (!user || !isOwner || isSharedView) return;
 
     setShareMessage(null);
 
     try {
-      const nextShareId = ownerShareId || shareDocumentIdForList(user.uid, activeList.id);
-      const editorEmails = shareAccess === 'edit' ? normalizeEmailList(shareEditorEmails) : [];
+      const targetLists = selectedShareLists.length > 0 ? selectedShareLists : [activeList];
+      const accountEmails = collaboratorAccountEmails;
+      const editorEmails = shareAccess === 'edit' ? accountEmails : [];
+      const viewerEmails = shareAccess === 'read' ? accountEmails : [];
       if (shareAccess === 'edit' && editorEmails.length === 0) {
         setShareMessage({ type: 'error', text: 'Add at least one collaborator email for edit access.' });
         return;
       }
 
-      const payload: PipeListShare = {
-        id: nextShareId,
+      const payloads = targetLists.map((list) => ({
+        id: shareDocumentIdForList(user.uid, list.id),
         ownerUid: user.uid,
         ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
-        list: activeList,
+        list,
         access: shareAccess,
         publicRead: true,
+        viewerEmails,
         editorEmails,
-      };
+      } satisfies PipeListShare));
 
-      await setDoc(
-        doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, nextShareId),
-        stripUndefined({
-          ...payload,
-          createdAt: shareDoc?.createdAt || serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }),
-        { merge: true },
+      await Promise.all(
+        payloads.map((payload) =>
+          setDoc(
+            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, payload.id),
+            stripUndefined({
+              ...payload,
+              createdAt: payload.id === shareDoc?.id ? shareDoc.createdAt || serverTimestamp() : serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true },
+          ),
+        ),
       );
 
-      setShareDoc(payload);
+      const activePayload = payloads.find((payload) => payload.list.id === activeList.id) || payloads[0];
+      setShareDoc(activePayload);
       setShareMessage({
         type: 'success',
         text:
           shareAccess === 'edit'
-            ? 'Share link is live. Invited editors can sign in to edit; everyone else sees read-only.'
-            : 'Read-only share link is live.',
+            ? `Editor access saved for ${formatCount(targetLists.length, 'PipeList')}. They can sign in and see those lists on their dashboard.`
+            : accountEmails.length > 0
+              ? `Read access saved for ${formatCount(targetLists.length, 'PipeList')}. They can sign in and see those lists on their dashboard.`
+              : 'Read-only share link is live.',
       });
     } catch (error) {
       console.error('Unable to create PipeLists share link:', error);
@@ -3918,10 +4170,21 @@ Research rules:
     if (!shareUrl || typeof navigator === 'undefined') return;
 
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await writeClipboardText(shareUrl);
       setShareMessage({ type: 'success', text: 'Share link copied.' });
     } catch (_error) {
       setShareMessage({ type: 'info', text: shareUrl });
+    }
+  };
+
+  const copyCollaboratorDashboardLink = async () => {
+    if (!collaboratorDashboardUrl) return;
+
+    try {
+      await writeClipboardText(collaboratorDashboardUrl);
+      setShareMessage({ type: 'success', text: 'Dashboard link copied. Collaborators will see only lists they can access.' });
+    } catch (_error) {
+      setShareMessage({ type: 'info', text: collaboratorDashboardUrl });
     }
   };
 
@@ -3991,13 +4254,7 @@ Research rules:
 
       const result = await signInWithPopup(simpBudgetAuth, provider);
       const email = result.user.email?.toLowerCase() || '';
-      if (!isSharedView && email !== TREMAINE_OWNER_EMAIL) {
-        setAuthMessage({
-          type: 'error',
-          text: `That account is ${result.user.email || 'not the owner account'}. Please sign in with ${TREMAINE_OWNER_EMAIL}.`,
-        });
-        await signOut(simpBudgetAuth);
-      } else if (
+      if (
         isSharedView &&
         shareDoc?.access === 'edit' &&
         email !== shareDoc.ownerEmail.toLowerCase() &&
@@ -4021,11 +4278,6 @@ Research rules:
     const email = magicEmail.trim().toLowerCase();
     if (!email) {
       setAuthMessage({ type: 'error', text: 'Enter an email address first.' });
-      return;
-    }
-
-    if (!isSharedView && email !== TREMAINE_OWNER_EMAIL) {
-      setAuthMessage({ type: 'error', text: `PipeLists is limited to ${TREMAINE_OWNER_EMAIL}.` });
       return;
     }
 
@@ -4358,7 +4610,7 @@ Research rules:
     );
   }
 
-  if (!isSharedView && (!authReady || !user || !isOwner)) {
+  if (!isSharedView && (!authReady || !user)) {
     return (
       <>
         <PageHead
@@ -4412,6 +4664,43 @@ Research rules:
     );
   }
 
+  if (!isSharedView && dataReady && user && !isOwner && lists.length === 0) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-no-access',
+            pageTitle: 'PipeLists Access - Pulse',
+            metaDescription: 'PipeLists account access.',
+            ogTitle: 'PipeLists Access - Pulse',
+            ogDescription: 'PipeLists account access.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
+          <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 text-center shadow-sm">
+            <div className="mx-auto mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+              <Users className="h-4 w-4" />
+            </div>
+            <p className="text-base font-semibold text-stone-950">No PipeLists shared yet</p>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              You are signed in as {user.email || 'this account'}, but no PipeLists have been shared with this email.
+            </p>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+            >
+              Sign out
+            </button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHead
@@ -4445,6 +4734,10 @@ Research rules:
                       : isLeadSharedView
                         ? 'Read-only lead'
                         : 'Read-only share'
+                    : activeDashboardShare
+                      ? activeDashboardShare.editorEmails.includes(normalizedUserEmail)
+                        ? 'Editor access'
+                        : 'Read-only access'
                     : savingToCloud
                       ? 'Saving'
                       : 'Saved'}
@@ -4464,7 +4757,7 @@ Research rules:
               >
                 <Download className="h-4 w-4" />
               </button>
-              {canModify && (
+              {canManageWorkspace && (
                 <button
                   type="button"
                   data-testid="pipe-new-list"
@@ -4597,11 +4890,11 @@ Research rules:
                 )}
               </div>
 
-              {!isSharedView && (
+              {canManageWorkspace && (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsSharePanelOpen(true)}
+                    onClick={openSharePanel}
                     className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
                   >
                     <Users className="h-4 w-4" />
@@ -5241,7 +5534,33 @@ Research rules:
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase text-stone-400">Apply to PipeLists</span>
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
+                    {formatCount(selectedShareLists.length || 1, 'list')}
+                  </span>
+                </div>
+                <div className="grid max-h-36 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {lists.map((list) => (
+                    <label
+                      key={list.id}
+                      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={shareSelectedListIds.includes(list.id)}
+                        onChange={() => toggleShareListSelection(list.id)}
+                        className="h-4 w-4 rounded border-stone-300 accent-stone-900"
+                      />
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
+                      <span className="truncate">{list.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <label className="block" htmlFor="pipe-share-access">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
                 <select
@@ -5250,26 +5569,69 @@ Research rules:
                   onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
                   className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
                 >
-                  <option value="read">Read only - no account needed</option>
-                  <option value="edit">Read and edit - sign-in required</option>
+                  <option value="read">Read only</option>
+                  <option value="edit">Read and edit</option>
                 </select>
               </label>
 
-              {shareAccess === 'edit' && (
-                <label className="block" htmlFor="pipe-share-editors">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Collaborator emails</span>
-                  <textarea
-                    id="pipe-share-editors"
-                    value={shareEditorEmails}
-                    onChange={(event) => setShareEditorEmails(event.target.value)}
-                    className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                    placeholder="name@example.com, teammate@example.com"
-                  />
-                  <span className="mt-1.5 block text-xs leading-5 text-stone-400">
-                    These people will need Google or magic-link sign-in before they can edit.
-                  </span>
+              <div className="rounded-lg border border-stone-200 bg-white p-3">
+                <label className="block" htmlFor="pipe-account-search">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Find account</span>
+                  <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3">
+                    <Search className="h-4 w-4 shrink-0 text-stone-400" />
+                    <input
+                      id="pipe-account-search"
+                      value={collaboratorSearch}
+                      onChange={(event) => setCollaboratorSearch(event.target.value)}
+                      className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
+                      placeholder="Search name or email"
+                    />
+                  </div>
                 </label>
-              )}
+
+                <div className="mt-2 space-y-1">
+                  {loadingProfiles ? (
+                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">Loading accounts...</p>
+                  ) : filteredCollaboratorProfiles.length > 0 ? (
+                    filteredCollaboratorProfiles.map((account) => (
+                      <button
+                        key={account.uid}
+                        type="button"
+                        onClick={() => addCollaboratorEmail(account.email)}
+                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-stone-900">
+                            {account.displayName || account.email}
+                          </span>
+                          <span className="block truncate text-xs text-stone-500">{account.email}</span>
+                        </span>
+                        <Plus className="h-4 w-4 shrink-0 text-stone-500" />
+                      </button>
+                    ))
+                  ) : collaboratorSearch.trim() ? (
+                    <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">No matching PipeLists account found.</p>
+                  ) : null}
+                </div>
+
+                <MessageBanner message={profileSearchMessage} />
+              </div>
+
+              <label className="block" htmlFor="pipe-share-editors">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                  {shareAccess === 'edit' ? 'Account edit access' : 'Account read access'}
+                </span>
+                <textarea
+                  id="pipe-share-editors"
+                  value={shareEditorEmails}
+                  onChange={(event) => setShareEditorEmails(event.target.value)}
+                  className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="name@example.com, teammate@example.com"
+                />
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  Search accounts above or paste emails. Signed-in collaborators will see these lists on their dashboard.
+                </span>
+              </label>
 
               <button
                 type="button"
@@ -5277,13 +5639,13 @@ Research rules:
                 className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
               >
                 <Mail className="h-4 w-4" />
-                Create Invite Link
+                Save Access
               </button>
 
               {shareUrl && (
-                <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                <div className="space-y-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
                   <label className="block" htmlFor="pipe-share-url">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Invite link</span>
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Single-list invite link</span>
                     <input
                       id="pipe-share-url"
                       readOnly
@@ -5294,9 +5656,25 @@ Research rules:
                   <button
                     type="button"
                     onClick={copyShareLink}
-                    className="mt-2 inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                    className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
                   >
-                    Copy Link
+                    Copy Invite Link
+                  </button>
+                  <label className="block" htmlFor="pipe-dashboard-url">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Collaborator dashboard link</span>
+                    <input
+                      id="pipe-dashboard-url"
+                      readOnly
+                      value={collaboratorDashboardUrl}
+                      className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={copyCollaboratorDashboardLink}
+                    className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    Copy Dashboard Link
                   </button>
                 </div>
               )}
@@ -6178,7 +6556,7 @@ Research rules:
                     Logs
                   </button>
                 )}
-                {canModify && !selectedDetailIsEditing && !isLeadSharedView && lists.length > 1 && (
+                {canModify && !selectedDetailIsEditing && !isLeadSharedView && moveTargetLists.length > 0 && (
                   <label className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition focus-within:border-stone-400 hover:text-stone-950">
                     <ListPlus className="h-4 w-4" />
                     <span className="sr-only">Move lead to another PipeList</span>
@@ -6192,9 +6570,7 @@ Research rules:
                       className="max-w-[160px] bg-transparent text-sm font-semibold outline-none"
                     >
                       <option value="">Move to...</option>
-                      {lists
-                        .filter((list) => list.id !== activeList.id)
-                        .map((list) => (
+                      {moveTargetLists.map((list) => (
                           <option key={list.id} value={list.id}>
                             {list.name}
                           </option>
