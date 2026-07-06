@@ -1752,8 +1752,7 @@ const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
             Your pipeline command center.
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-stone-500 sm:text-lg">
-            Sign in with {TREMAINE_OWNER_EMAIL} to manage VC, grants, pitch competitions,
-            pilots, contract negotiations, list metrics, and shared updates.
+            Sign in to manage your PipeLists or open the lists someone shared with your account.
           </p>
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -1820,7 +1819,7 @@ const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
             <MessageBanner message={authMessage} />
 
             <p className="text-xs leading-5 text-stone-400">
-              Access is limited to {TREMAINE_OWNER_EMAIL}. Other accounts are signed out automatically.
+              Owners see their full workspace. Collaborators only see the PipeLists shared with their email.
             </p>
           </div>
         </div>
@@ -2010,6 +2009,10 @@ const PipelinePage: NextPage = () => {
         .map((share) => share.list.id),
     );
   }, [accessibleShareDocs, normalizedUserEmail]);
+  const sharedListIds = useMemo(
+    () => new Set(accessibleShareDocs.map((share) => share.list.id)),
+    [accessibleShareDocs],
+  );
   const activeDashboardShare = !isSharedView && !isOwner
     ? accessibleShareDocs.find((share) => share.list.id === activeList.id) || null
     : null;
@@ -2020,8 +2023,9 @@ const PipelinePage: NextPage = () => {
     (shareDoc.ownerUid === user.uid ||
       shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
-  const canModify = isSharedView ? canEditShared : isOwner || editableListIds.has(activeList.id);
-  const canManageWorkspace = !isSharedView && isOwner;
+  const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
+  const canManageWorkspace = !isSharedView && Boolean(user);
+  const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -2093,7 +2097,42 @@ const PipelinePage: NextPage = () => {
           { merge: true },
         );
 
-        if (email !== TREMAINE_OWNER_EMAIL) {
+        const stateRef = doc(
+          simpBudgetDb,
+          SIMPBUDGET_USERS_COLLECTION,
+          currentUser.uid,
+          PIPELISTS_SUBCOLLECTION,
+          PIPELISTS_STATE_DOCUMENT_ID,
+        );
+        const snapshot = await getDoc(stateRef);
+        let privateLists: PipeList[] = isOwner ? initialLists : [];
+
+        if (snapshot.exists()) {
+          const data = snapshot.data() as { lists?: Partial<PipeList>[] };
+          if (Array.isArray(data.lists) && data.lists.length > 0) {
+            privateLists = purgeExpiredDeletedItems(data.lists.map(normalizeList));
+          }
+        } else if (isOwner && typeof window !== 'undefined') {
+          const stored = window.localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored) as Partial<PipeList>[];
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                privateLists = purgeExpiredDeletedItems(parsed.map(normalizeList));
+              }
+            } catch (error) {
+              console.warn('[PipeLists] Unable to parse stored local pipeline data:', error);
+            }
+          }
+        }
+
+        if (isOwner) {
+          privateLists = mergeRecommendedPitchCompetitions(privateLists);
+        }
+
+        let nextShares: PipeListShare[] = [];
+
+        if (!isOwner) {
           const sharesById = new Map<string, PipeListShare>();
           const sharesRef = collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION);
           const [viewerSnapshot, editorSnapshot] = await Promise.all([
@@ -2118,59 +2157,21 @@ const PipelinePage: NextPage = () => {
             if (normalizedShare?.publicRead) sharesById.set(normalizedShare.id, normalizedShare);
           });
 
-          const nextShares = Array.from(sharesById.values());
-          const nextLists = nextShares.map((share) => share.list);
-          setAccessibleShareDocs(nextShares);
-          setLists(nextLists);
-          setActiveListId(nextLists[0]?.id || '');
-          setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
-          setSelectedLogItemId('');
-          setLogDraft(defaultLogDraft(nextLists[0]?.templateKey || initialLists[0].templateKey));
-          setSelectedDetailItemId('');
-          setDataReady(true);
-          setAppMessage(
-            nextLists.length > 0
-              ? null
-              : {
-                  type: 'info',
-                  text: 'This account does not have access to any PipeLists yet.',
-                },
-          );
-          return;
+          nextShares = Array.from(sharesById.values());
         }
 
-        setAccessibleShareDocs([]);
-        const stateRef = doc(
-          simpBudgetDb,
-          SIMPBUDGET_USERS_COLLECTION,
-          currentUser.uid,
-          PIPELISTS_SUBCOLLECTION,
-          PIPELISTS_STATE_DOCUMENT_ID,
-        );
-        const snapshot = await getDoc(stateRef);
-        let nextLists = initialLists;
+        let nextLists = [
+          ...privateLists,
+          ...nextShares
+            .filter((share) => !privateLists.some((privateList) => privateList.id === share.list.id))
+            .map((share) => share.list),
+        ];
 
-        if (snapshot.exists()) {
-          const data = snapshot.data() as { lists?: Partial<PipeList>[] };
-          if (Array.isArray(data.lists) && data.lists.length > 0) {
-            nextLists = purgeExpiredDeletedItems(data.lists.map(normalizeList));
-          }
-        } else if (typeof window !== 'undefined') {
-          const stored = window.localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored) as Partial<PipeList>[];
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                nextLists = purgeExpiredDeletedItems(parsed.map(normalizeList));
-              }
-            } catch (error) {
-              console.warn('[PipeLists] Unable to parse stored local pipeline data:', error);
-            }
-          }
+        if (nextLists.length === 0) {
+          nextLists = [{ ...createList('vc', 'My PipeList', 0), items: [] }];
         }
 
-        nextLists = mergeRecommendedPitchCompetitions(nextLists);
-
+        setAccessibleShareDocs(nextShares);
         setLists(nextLists);
         setActiveListId(nextLists[0]?.id || initialLists[0].id);
         setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
@@ -2348,7 +2349,9 @@ const PipelinePage: NextPage = () => {
 
     const completeEmailLinkSignIn = async () => {
       const storedEmail = window.localStorage.getItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
-      const email = storedEmail || window.prompt('Confirm your email for PipeLists sign-in') || '';
+      const urlParams = new URLSearchParams(window.location.search);
+      const inviteEmail = urlParams.get('inviteEmail')?.trim().toLowerCase() || '';
+      const email = storedEmail || inviteEmail || window.prompt('Confirm your email for PipeLists sign-in') || '';
       if (!email) return;
 
       try {
@@ -2370,7 +2373,6 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     if (isSharedView) return;
     if (!user || !dataReady) return;
-    if ((user.email || '').toLowerCase() !== TREMAINE_OWNER_EMAIL) return;
 
     let cancelled = false;
 
@@ -2378,8 +2380,8 @@ const PipelinePage: NextPage = () => {
       setSavingToCloud(true);
 
       try {
-        const listsToPersist = purgeExpiredDeletedItems(lists);
-        if (JSON.stringify(listsToPersist) !== JSON.stringify(lists)) {
+        const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)));
+        if (isOwner && JSON.stringify(listsToPersist) !== JSON.stringify(lists)) {
           setLists(listsToPersist);
         }
         const stateRef = doc(
@@ -2399,7 +2401,7 @@ const PipelinePage: NextPage = () => {
           { merge: true },
         );
 
-        if (typeof window !== 'undefined') {
+        if (isOwner && typeof window !== 'undefined') {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(listsToPersist));
         }
 
@@ -2422,7 +2424,7 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [dataReady, isSharedView, lists, user]);
+  }, [dataReady, isOwner, isSharedView, lists, sharedListIds, user]);
 
   useEffect(() => {
     if (!shareId || !shareDoc || !dataReady || !canEditShared) return;
@@ -3839,7 +3841,7 @@ Research rules:
   };
 
   const handleDeleteList = () => {
-    if (!canManageWorkspace) return;
+    if (!canManageActiveList) return;
     if (lists.length <= 1) return;
 
     const nextLists = lists.filter((list) => list.id !== activeList.id);
@@ -4001,12 +4003,6 @@ Research rules:
     URL.revokeObjectURL(url);
   };
 
-  const shareUrl =
-    typeof window !== 'undefined' && shareDoc
-      ? `${window.location.origin}/PipeLists?share=${shareDoc.id}`
-      : '';
-  const collaboratorDashboardUrl = typeof window !== 'undefined' ? `${window.location.origin}/PipeLists` : '';
-
   const normalizeEmailList = (value: string) =>
     Array.from(
       new Set(
@@ -4116,8 +4112,8 @@ Research rules:
       const accountEmails = collaboratorAccountEmails;
       const editorEmails = shareAccess === 'edit' ? accountEmails : [];
       const viewerEmails = shareAccess === 'read' ? accountEmails : [];
-      if (shareAccess === 'edit' && editorEmails.length === 0) {
-        setShareMessage({ type: 'error', text: 'Add at least one collaborator email for edit access.' });
+      if (accountEmails.length === 0) {
+        setShareMessage({ type: 'error', text: 'Add at least one collaborator email first.' });
         return;
       }
 
@@ -4148,14 +4144,23 @@ Research rules:
 
       const activePayload = payloads.find((payload) => payload.list.id === activeList.id) || payloads[0];
       setShareDoc(activePayload);
+      if (typeof window !== 'undefined') {
+        await Promise.all(
+          accountEmails.map((email) => {
+            const invitePath = `/PipeLists?invite=${encodeURIComponent(activePayload.id)}&inviteEmail=${encodeURIComponent(email)}`;
+            return sendSignInLinkToEmail(simpBudgetAuth, email, {
+              url: `${window.location.origin}${invitePath}`,
+              handleCodeInApp: true,
+            });
+          }),
+        );
+      }
       setShareMessage({
         type: 'success',
         text:
           shareAccess === 'edit'
-            ? `Editor access saved for ${formatCount(targetLists.length, 'PipeList')}. They can sign in and see those lists on their dashboard.`
-            : accountEmails.length > 0
-              ? `Read access saved for ${formatCount(targetLists.length, 'PipeList')}. They can sign in and see those lists on their dashboard.`
-              : 'Read-only share link is live.',
+            ? `Editor invite sent to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`
+            : `Read-only invite sent to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`,
       });
     } catch (error) {
       console.error('Unable to create PipeLists share link:', error);
@@ -4163,28 +4168,6 @@ Research rules:
         type: 'error',
         text: readFirestoreError(error, 'Unable to create this share link.'),
       });
-    }
-  };
-
-  const copyShareLink = async () => {
-    if (!shareUrl || typeof navigator === 'undefined') return;
-
-    try {
-      await writeClipboardText(shareUrl);
-      setShareMessage({ type: 'success', text: 'Share link copied.' });
-    } catch (_error) {
-      setShareMessage({ type: 'info', text: shareUrl });
-    }
-  };
-
-  const copyCollaboratorDashboardLink = async () => {
-    if (!collaboratorDashboardUrl) return;
-
-    try {
-      await writeClipboardText(collaboratorDashboardUrl);
-      setShareMessage({ type: 'success', text: 'Dashboard link copied. Collaborators will see only lists they can access.' });
-    } catch (_error) {
-      setShareMessage({ type: 'info', text: collaboratorDashboardUrl });
     }
   };
 
@@ -4757,6 +4740,16 @@ Research rules:
               >
                 <Download className="h-4 w-4" />
               </button>
+              {isOwner && !isSharedView && (
+                <button
+                  type="button"
+                  onClick={openSharePanel}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
+                >
+                  <Users className="h-4 w-4" />
+                  <span className="hidden sm:inline">Invite</span>
+                </button>
+              )}
               {canManageWorkspace && (
                 <button
                   type="button"
@@ -4890,27 +4883,17 @@ Research rules:
                 )}
               </div>
 
-              {canManageWorkspace && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={openSharePanel}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
-                  >
-                    <Users className="h-4 w-4" />
-                    Invite Collaborator
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsDeleteListModalOpen(true)}
-                    disabled={lists.length <= 1}
-                    title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete List
-                  </button>
-                </div>
+              {canManageActiveList && (
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteListModalOpen(true)}
+                  disabled={lists.length <= 1}
+                  title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete List
+                </button>
               )}
             </div>
 
@@ -5518,10 +5501,10 @@ Research rules:
                   <Users className="h-4 w-4" />
                 </div>
                 <h3 id="pipe-share-title" className="text-xl font-bold text-stone-950">
-                  Invite collaborator
+                  Invite collaborators
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Share {activeList.name} without exposing your other PipeLists.
+                  Choose the PipeLists this person should see, then send one dashboard invite link.
                 </p>
               </div>
               <button
@@ -5643,45 +5626,8 @@ Research rules:
                     className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                   >
                     <Mail className="h-4 w-4" />
-                    Save Access
+                    Save & Send Invite
                   </button>
-
-                  {shareUrl && (
-                    <div className="space-y-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
-                      <label className="block" htmlFor="pipe-share-url">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Single-list invite link</span>
-                        <input
-                          id="pipe-share-url"
-                          readOnly
-                          value={shareUrl}
-                          className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={copyShareLink}
-                        className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                      >
-                        Copy Invite Link
-                      </button>
-                      <label className="block" htmlFor="pipe-dashboard-url">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Collaborator dashboard link</span>
-                        <input
-                          id="pipe-dashboard-url"
-                          readOnly
-                          value={collaboratorDashboardUrl}
-                          className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-xs text-stone-500"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={copyCollaboratorDashboardLink}
-                        className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                      >
-                        Copy Dashboard Link
-                      </button>
-                    </div>
-                  )}
 
                   <MessageBanner message={shareMessage} />
                 </div>
