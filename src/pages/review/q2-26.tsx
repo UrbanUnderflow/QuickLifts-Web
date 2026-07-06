@@ -282,8 +282,52 @@ export default function InvestorUpdateQ226() {
             }
           />
 
+          <section style={styles.scoreboard}>
+            <div style={styles.sectionHead}>
+              <span style={{ ...styles.sectionNum, color: CYAN }}>05</span>
+              <span style={styles.sectionKicker}>NEW INVESTOR METRICS</span>
+            </div>
+            <h2 style={styles.h2}>The PulseCheck sales pipeline becomes the scoreboard.</h2>
+            <p style={styles.p}>
+              Because PulseCheck is now the company priority, future quarterly updates
+              will lead with pipeline metrics that show whether institutional demand is
+              turning into paid deployment. Q2 is the baseline quarter. Q3 is where this
+              section moves to the top of the update.
+            </p>
+
+            <div style={styles.pipelineScorecards} aria-label="PulseCheck pipeline metrics">
+              {PIPELINE_SCOREBOARD.map((m) => (
+                <div key={m.label} style={styles.metric}>
+                  <div style={{ ...styles.metricValue, ...(m.compact ? styles.metricValueCompact : null) }}>
+                    {m.value}
+                  </div>
+                  <div style={styles.metricLabel}>{m.label}</div>
+                  <div style={styles.metricNote}>{m.note}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={styles.pipelineGrid}>
+              <div style={styles.pipelinePanel}>
+                <div style={styles.panelTitle}>Q2 baseline accounts</div>
+                <div style={styles.accountTable}>
+                  {PILOT_ACCOUNTS.map((pilot) => (
+                    <div key={pilot.account} style={styles.accountRow}>
+                      <div>
+                        <div style={styles.accountName}>{pilot.account}</div>
+                        <div style={styles.accountType}>{pilot.type}</div>
+                      </div>
+                      <div style={styles.accountStage}>{pilot.stage}</div>
+                      <div style={styles.accountValue}>{pilot.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
           <Section
-            num="05"
+            num="06"
             kicker="THE ATHLETIC MIND COUNCIL"
             title="The people who move the field."
             body={
@@ -337,7 +381,7 @@ export default function InvestorUpdateQ226() {
           />
 
           <Section
-            num="06"
+            num="07"
             kicker="THE REST OF THE LAB"
             title="Pulse is now FitClub."
             body={
@@ -370,7 +414,7 @@ export default function InvestorUpdateQ226() {
           </div>
 
           <Section
-            num="07"
+            num="08"
             kicker="WHAT'S NEXT · Q3"
             title="What’s Next."
             body={
@@ -399,50 +443,6 @@ export default function InvestorUpdateQ226() {
               </ul>
             }
           />
-
-          <section style={styles.scoreboard}>
-            <div style={styles.sectionHead}>
-              <span style={{ ...styles.sectionNum, color: CYAN }}>08</span>
-              <span style={styles.sectionKicker}>NEW INVESTOR METRICS</span>
-            </div>
-            <h2 style={styles.h2}>The PulseCheck sales pipeline becomes the scoreboard.</h2>
-            <p style={styles.p}>
-              Because PulseCheck is now the company priority, future quarterly updates
-              will lead with pipeline metrics that show whether institutional demand is
-              turning into paid deployment. Q2 is the baseline quarter. Q3 is where this
-              section moves to the top of the update.
-            </p>
-
-            <div style={styles.pipelineScorecards} aria-label="PulseCheck pipeline metrics">
-              {PIPELINE_SCOREBOARD.map((m) => (
-                <div key={m.label} style={styles.metric}>
-                  <div style={{ ...styles.metricValue, ...(m.compact ? styles.metricValueCompact : null) }}>
-                    {m.value}
-                  </div>
-                  <div style={styles.metricLabel}>{m.label}</div>
-                  <div style={styles.metricNote}>{m.note}</div>
-                </div>
-              ))}
-            </div>
-
-            <div style={styles.pipelineGrid}>
-              <div style={styles.pipelinePanel}>
-                <div style={styles.panelTitle}>Q2 baseline accounts</div>
-                <div style={styles.accountTable}>
-                  {PILOT_ACCOUNTS.map((pilot) => (
-                    <div key={pilot.account} style={styles.accountRow}>
-                      <div>
-                        <div style={styles.accountName}>{pilot.account}</div>
-                        <div style={styles.accountType}>{pilot.type}</div>
-                      </div>
-                      <div style={styles.accountStage}>{pilot.stage}</div>
-                      <div style={styles.accountValue}>{pilot.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
 
           <section style={styles.nameNote}>
             <div style={styles.kicker}>A NOTE ON THE NAME</div>
