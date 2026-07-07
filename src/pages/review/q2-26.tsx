@@ -256,28 +256,45 @@ export default function InvestorUpdateQ226() {
             accent={VIOLET}
             body={
               <>
-                <p style={styles.p}>
-                  PulseCheck shipped its native Android app, with feature parity to iOS
-                  across monitoring, Nora chat, training curriculum, coach messaging, and
-                  crisis support. Device coverage now spans Polar, Fitbit, Oura, Whoop,
-                  and Apple Health, unified behind a Sports Intelligence layer that
-                  reports in coach language, not confusing or jargon-y science-speak.
-                </p>
-                <p style={styles.p}>
-                  On the staff side: a rebuilt coach dashboard, role-based provisioning
-                  for organizations, and Train Nora, a vault that lets each program teach
-                  our AI its own coaching philosophy.
-                </p>
+                <ul style={styles.shippedList}>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Native Android shipped:</strong> feature
+                    parity with iOS across monitoring, Nora chat, training curriculum,
+                    coach messaging, and crisis support.
+                  </li>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Device coverage expanded:</strong> Polar,
+                    Fitbit, Oura, Whoop, and Apple Health now feed one Sports Intelligence
+                    layer.
+                  </li>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Coach language, not science-speak:</strong>{' '}
+                    biometric data is translated into reports staff can understand and act
+                    on quickly.
+                  </li>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Staff tooling rebuilt:</strong> coach
+                    dashboard, role-based provisioning, and Train Nora for each program&apos;s
+                    coaching philosophy.
+                  </li>
+                </ul>
                 <h3 style={styles.subhead}>Into the field</h3>
-                <p style={styles.p}>
-                  The demos are turning into programs. We are onboarding first pilots
-                  with Clark Atlanta University, University of Maryland Eastern Shore
-                  (UMES),
-                  Worcester State University, 4D Cycling, and Hypercharge Performance
-                  Clinic. All pilots will run the full loop from athlete check-in to
-                  coach dashboard to clinical handoff. Next quarter&apos;s update opens
-                  with what those pilots produced.
-                </p>
+                <ul style={styles.shippedList}>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Demos are becoming programs:</strong>{' '}
+                    first pilots are onboarding with Clark Atlanta University, UMES,
+                    Worcester State University, 4D Cycling, and Hypercharge Performance
+                    Clinic.
+                  </li>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Full loop pilots:</strong> each pilot
+                    runs from athlete check-in to coach dashboard to clinical handoff.
+                  </li>
+                  <li style={styles.shippedItem}>
+                    <strong style={styles.strong}>Next update gets measurable:</strong> Q3
+                    opens with what those pilots produced.
+                  </li>
+                </ul>
               </>
             }
           />
@@ -740,6 +757,24 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: 2,
   },
   strong: { color: '#fff', fontWeight: 700 },
+  shippedList: {
+    margin: '0 0 6px',
+    padding: 0,
+    listStyle: 'none',
+    maxWidth: 780,
+  },
+  shippedItem: {
+    fontSize: 17,
+    lineHeight: 1.6,
+    color: 'rgba(255,255,255,0.72)',
+    padding: '14px 0 14px 30px',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    position: 'relative',
+    backgroundImage: `radial-gradient(circle, ${VIOLET} 0%, ${VIOLET} 35%, transparent 40%)`,
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: '12px 12px',
+    backgroundPosition: '2px 23px',
+  },
   list: { margin: 0, padding: 0, listStyle: 'none', maxWidth: 760 },
   li: {
     fontSize: 17,

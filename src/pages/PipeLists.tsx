@@ -160,6 +160,7 @@ type PipelineItem = {
   title: string;
   organization: string;
   owner: string;
+  contactEmails: string[];
   stage: string;
   priority: PipelinePriority;
   amount: string;
@@ -448,6 +449,24 @@ const templateCatalog: Record<
 const amountFieldLabelForList = (list: Pick<PipeList, 'templateKey'>) =>
   list.templateKey === 'vc' ? 'Fund Size' : 'Amount / Prize';
 
+const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
+const normalizeContactEmails = (value: unknown): string[] => {
+  const rawEmails = Array.isArray(value)
+    ? value.flatMap((entry) => (typeof entry === 'string' ? entry.split(/[\s,;]+/) : []))
+    : typeof value === 'string'
+      ? value.split(/[\s,;]+/)
+      : [];
+
+  return Array.from(
+    new Set(
+      rawEmails
+        .map((email) => email.trim().toLowerCase())
+        .filter((email) => email && isValidContactEmail(email)),
+    ),
+  );
+};
+
 const makeId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -474,6 +493,7 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
   organization: '',
   owner: '',
+  contactEmails: [],
   stage,
   priority: 'medium',
   amount: '',
@@ -551,6 +571,7 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   const now = new Date().toISOString();
   return {
     ...draft,
+    contactEmails: normalizeContactEmails(draft.contactEmails),
     notes: cleanDealNotes(draft.notes),
     id,
     weeklyLogs: [],
@@ -1011,11 +1032,17 @@ const leadSearchResponseSchema = {
       items: {
         type: 'object',
         additionalProperties: false,
-        properties: leadSearchStringFields.reduce<Record<string, { type: 'string' }>>(
-          (properties, field) => ({ ...properties, [field]: { type: 'string' } }),
-          { priority: { type: 'string' } },
-        ),
-        required: ['priority', ...leadSearchStringFields],
+        properties: {
+          ...leadSearchStringFields.reduce<Record<string, { type: 'string' }>>(
+            (properties, field) => ({ ...properties, [field]: { type: 'string' } }),
+            { priority: { type: 'string' } },
+          ),
+          contactEmails: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+        required: ['priority', ...leadSearchStringFields, 'contactEmails'],
       },
     },
   },
@@ -1477,6 +1504,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     title: item.title || 'Untitled opportunity',
     organization: item.organization || '',
     owner: item.owner || '',
+    contactEmails: normalizeContactEmails(item.contactEmails),
     stage,
     priority: item.priority || 'medium',
     amount: item.amount || '',
@@ -2034,6 +2062,8 @@ const PipelinePage: NextPage = () => {
   const [leadShareUrl, setLeadShareUrl] = useState('');
   const [leadMoveMessage, setLeadMoveMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [moveTargetListId, setMoveTargetListId] = useState('');
+  const [contactEmailInput, setContactEmailInput] = useState('');
+  const [contactEmailError, setContactEmailError] = useState('');
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
@@ -3028,8 +3058,40 @@ const PipelinePage: NextPage = () => {
 
   const resetEditor = () => {
     setDraft(defaultDraft(activeList.stages[0]?.id));
+    setContactEmailInput('');
+    setContactEmailError('');
     setEditingItemId(null);
     setIsEditorOpen(false);
+  };
+
+  const addContactEmailTokens = (value: string) => {
+    const tokens = value
+      .split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (tokens.length === 0) return true;
+    const invalidEmails = tokens.filter((email) => !isValidContactEmail(email));
+    if (invalidEmails.length > 0) {
+      setContactEmailInput(value.trim());
+      setContactEmailError('Enter a valid email address.');
+      return false;
+    }
+
+    setDraft((current) => ({
+      ...current,
+      contactEmails: Array.from(new Set([...current.contactEmails, ...tokens])),
+    }));
+    setContactEmailInput('');
+    setContactEmailError('');
+    return true;
+  };
+
+  const removeContactEmail = (email: string) => {
+    setDraft((current) => ({
+      ...current,
+      contactEmails: current.contactEmails.filter((contactEmail) => contactEmail !== email),
+    }));
   };
 
   const openLogModal = (listId?: string, itemId?: string) => {
@@ -3098,6 +3160,7 @@ const PipelinePage: NextPage = () => {
       title: lead.title?.trim() || lead.organization?.trim() || 'Untitled opportunity',
       organization: lead.organization?.trim() || '',
       owner: lead.owner?.trim() || '',
+      contactEmails: normalizeContactEmails((lead as { contactEmails?: unknown }).contactEmails),
       stage,
       priority,
       amount: lead.amount?.trim() || '',
@@ -3204,6 +3267,7 @@ Research rules:
 - Return only leads that are relevant to the active PipeList and PulseCheck.
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
+- Only include contactEmails when the source visibly provides valid email addresses. Never invent contact emails.
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
 - If the template is deadline-driven, every returned lead must have a verified dueDate on or after ${today}.
 - If the template is relationship-driven, dueDate can be "" unless the source provides a real deadline.
@@ -3400,6 +3464,7 @@ Research rules:
         ['Importance', importanceLabel(item.priority)],
         ['Value', valueText],
         ['Owner', item.owner],
+        ['Contact Emails', item.contactEmails.join(', ')],
         ['Segment', item.segment],
         ['Decision Maker', item.decisionMaker],
         ['Next Step', item.nextStep],
@@ -3726,6 +3791,7 @@ Research rules:
           priority: extracted.priority || 'medium',
           title: extracted.title?.trim() || new URL(cleanUrl).hostname.replace(/^www\./, ''),
           organization: extracted.organization?.trim() || '',
+          contactEmails: normalizeContactEmails(extracted.contactEmails),
           sourceUrl: cleanUrl,
           notes: [
             cleanDealNotes(extracted.notes),
@@ -3767,6 +3833,7 @@ Research rules:
         title: nextItem.title,
         organization: nextItem.organization,
         owner: nextItem.owner,
+        contactEmails: nextItem.contactEmails,
         stage: nextItem.stage,
         priority: nextItem.priority,
         amount: nextItem.amount,
@@ -3830,8 +3897,24 @@ Research rules:
   const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify) return;
-    const draftToSave = { ...draft, notes: cleanDealNotes(draft.notes) };
+    const pendingContactTokens = contactEmailInput
+      .split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+    const invalidPendingContactEmails = pendingContactTokens.filter((email) => !isValidContactEmail(email));
+    if (invalidPendingContactEmails.length > 0) {
+      setContactEmailError('Enter a valid email address.');
+      return;
+    }
+
+    const draftToSave = {
+      ...draft,
+      contactEmails: Array.from(new Set([...draft.contactEmails, ...pendingContactTokens])),
+      notes: cleanDealNotes(draft.notes),
+    };
     if (!draftToSave.title.trim() && !draftToSave.organization.trim()) return;
+    setContactEmailInput('');
+    setContactEmailError('');
 
     setLists((currentLists) =>
       currentLists.map((list) => {
@@ -3890,7 +3973,13 @@ Research rules:
     void deletedAt;
     void deletedByLogId;
     void restorableUntil;
-    setDraft({ ...editableItem, notes: cleanDealNotes(editableItem.notes) });
+    setDraft({
+      ...editableItem,
+      contactEmails: normalizeContactEmails(editableItem.contactEmails),
+      notes: cleanDealNotes(editableItem.notes),
+    });
+    setContactEmailInput('');
+    setContactEmailError('');
     setEditingItemId(item.id);
     setIsEditorOpen(true);
     setSelectedDetailItemId(item.id);
@@ -4143,6 +4232,7 @@ Research rules:
         'Stage',
         'Importance',
         'Owner',
+        'Contact Emails',
         'Segment',
         'Decision Maker',
         'ACV',
@@ -4171,6 +4261,7 @@ Research rules:
           stage.label,
           item.priority,
           item.owner,
+          item.contactEmails.join('\n'),
           item.segment,
           item.decisionMaker,
           item.acv,
@@ -4824,6 +4915,65 @@ Research rules:
           />
         </label>
       </div>
+
+      <label className="block" htmlFor="pipe-contact-emails">
+        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Contact Email</span>
+        <div
+          className={`flex min-h-11 flex-wrap items-center gap-2 rounded-md border bg-[#FAFAF7] px-2 py-2 transition focus-within:bg-white ${
+            contactEmailError ? 'border-rose-300' : 'border-stone-200 focus-within:border-stone-400'
+          }`}
+        >
+          {draft.contactEmails.map((email) => (
+            <span
+              key={email}
+              className="inline-flex h-7 items-center gap-1 rounded-full bg-white px-2.5 text-xs font-semibold text-stone-700 ring-1 ring-stone-200"
+            >
+              {email}
+              <button
+                type="button"
+                onClick={() => removeContactEmail(email)}
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-950"
+                aria-label={`Remove ${email}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            id="pipe-contact-emails"
+            type="text"
+            inputMode="email"
+            value={contactEmailInput}
+            onChange={(event) => {
+              setContactEmailInput(event.target.value);
+              if (contactEmailError) setContactEmailError('');
+            }}
+            onKeyDown={(event) => {
+              if (event.key === ',' || event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                addContactEmailTokens(contactEmailInput);
+              }
+            }}
+            onPaste={(event) => {
+              const pastedText = event.clipboardData.getData('text');
+              if (/[\s,;]/.test(pastedText)) {
+                event.preventDefault();
+                addContactEmailTokens(`${contactEmailInput} ${pastedText}`);
+              }
+            }}
+            onBlur={() => {
+              if (contactEmailInput.trim()) addContactEmailTokens(contactEmailInput);
+            }}
+            className="h-7 min-w-44 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-stone-400"
+            placeholder={draft.contactEmails.length > 0 ? 'Add another email' : 'name@example.com'}
+          />
+        </div>
+        {contactEmailError ? (
+          <span className="mt-1.5 block text-xs font-medium text-rose-600">{contactEmailError}</span>
+        ) : (
+          <span className="mt-1.5 block text-xs text-stone-400">Use comma or space to add each email.</span>
+        )}
+      </label>
 
       <div className="grid gap-3 md:grid-cols-2">
         {[
@@ -7351,6 +7501,7 @@ Research rules:
                   'Pipeline Details',
                   [
                     { label: 'Owner', value: selectedDetailItem.owner },
+                    { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
                     { label: 'Organization', value: selectedDetailItem.organization },
                     { label: 'Segment', value: selectedDetailItem.segment },
                     { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
