@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NextPage } from 'next';
 import Link from 'next/link';
 import {
@@ -49,7 +49,7 @@ import {
   X,
 } from 'lucide-react';
 import PageHead from '../components/PageHead';
-import { auth as quickLiftsAuth } from '../api/firebase/config';
+import { auth as quickLiftsAuth, db as quickLiftsDb } from '../api/firebase/config';
 import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase/simpBudgetConfig';
 
 type PipelinePriority = 'high' | 'medium' | 'low';
@@ -241,6 +241,20 @@ type SearchablePipeListProfile = PipeListProfile & {
   uid: string;
 };
 
+type FriendOfBusinessContact = {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  titleOrCompany?: string;
+  notes?: string;
+  emailStatus?: string;
+  lastEmailEvent?: string;
+  emailOpenCount?: number;
+  emailClickCount?: number;
+  lastEmailClickedLink?: string;
+};
+
 type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil'>;
 type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
 type GeneratedLead = ItemDraft & {
@@ -258,6 +272,7 @@ const PIPELIST_SHARES_COLLECTION = 'pipeListShares';
 const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
 const PIPELISTS_LEAD_SEARCH_FEATURE_ID = 'pipeListsLeadGeneration';
+const FRIENDS_OF_BUSINESS_COLLECTION = 'friends-of-business';
 const PIPELISTS_LEAD_SEARCH_MODEL = 'gpt-4o-mini';
 const PIPELISTS_REMOTE_BRIDGE_ORIGIN = 'https://fitwithpulse.ai';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
@@ -467,6 +482,56 @@ const normalizeContactEmails = (value: unknown): string[] => {
         .filter((email) => email && isValidContactEmail(email)),
     ),
   );
+};
+
+const normalizeBasicText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const fullFriendName = (friend: FriendOfBusinessContact) =>
+  [friend.firstName, friend.lastName]
+    .map(normalizeBasicText)
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+const friendContactKey = (friend: FriendOfBusinessContact) => {
+  const email = normalizeContactEmails(friend.email)[0];
+  if (email) return `email:${email}`;
+
+  const name = fullFriendName(friend).toLowerCase();
+  const organization = normalizeBasicText(friend.titleOrCompany).toLowerCase();
+  if (!name && !organization) return '';
+
+  return `name:${name}|org:${organization}`;
+};
+
+const itemContactKey = (item: PipelineItem) => {
+  const email = normalizeContactEmails(item.contactEmails)[0];
+  if (email) return `email:${email}`;
+  return `name:${item.title.trim().toLowerCase()}|org:${item.organization.trim().toLowerCase()}`;
+};
+
+const buildFriendAnalysisNotes = (friend: FriendOfBusinessContact) => {
+  const relationshipContext = normalizeBasicText(friend.titleOrCompany);
+  const notes = normalizeBasicText(friend.notes);
+  const emailStatus = normalizeBasicText(friend.emailStatus || friend.lastEmailEvent);
+  const openCount = Number.isFinite(friend.emailOpenCount) ? Number(friend.emailOpenCount) : 0;
+  const clickCount = Number.isFinite(friend.emailClickCount) ? Number(friend.emailClickCount) : 0;
+  const clickedLink = normalizeBasicText(friend.lastEmailClickedLink);
+  const engagementParts = [
+    emailStatus,
+    openCount > 0 ? `${openCount} opens` : '',
+    clickCount > 0 ? `${clickCount} clicks` : '',
+    clickedLink ? `last clicked ${clickedLink}` : '',
+  ].filter(Boolean);
+
+  return [
+    'Imported from Friends of the Business for investor updates.',
+    relationshipContext ? `Relationship context: ${relationshipContext}.` : '',
+    notes ? `Existing notes: ${notes}` : '',
+    engagementParts.length > 0 ? `Email engagement: ${engagementParts.join(', ')}.` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 };
 
 const normalizeLeadInputUrl = (value: string) => {
@@ -2103,6 +2168,9 @@ const PipelinePage: NextPage = () => {
   const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
   const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
   const [leadGenMessage, setLeadGenMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isImportingFriends, setIsImportingFriends] = useState(false);
+  const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
   const [leadCopyMessage, setLeadCopyMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [attachmentLinkName, setAttachmentLinkName] = useState('');
   const [attachmentLinkUrl, setAttachmentLinkUrl] = useState('');
@@ -2206,6 +2274,7 @@ const PipelinePage: NextPage = () => {
   const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
   const canManageWorkspace = !isSharedView && Boolean(user);
   const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
+  const isInvestorUpdateContactsList = activeList.name.trim().toLowerCase() === 'investor update contacts';
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -3200,6 +3269,132 @@ const PipelinePage: NextPage = () => {
     if (isGeneratingLeads) return;
     setIsLeadGenModalOpen(false);
   };
+
+  const handleImportFriendsOfBusiness = async () => {
+    if (!isOwner || !canManageActiveList || !isInvestorUpdateContactsList || isImportingFriends) return;
+
+    setIsImportingFriends(true);
+    setFriendsImportMessage(null);
+
+    try {
+      const snapshot = await getDocs(collection(quickLiftsDb, FRIENDS_OF_BUSINESS_COLLECTION));
+      const friends = snapshot.docs.map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        ...(documentSnapshot.data() as FriendOfBusinessContact),
+      }));
+
+      if (friends.length === 0) {
+        setFriendsImportMessage({ type: 'info', text: 'No Friends of the Business contacts were found to import.' });
+        return;
+      }
+
+      const targetList = lists.find((list) => list.id === activeList.id) || activeList;
+      const firstStage = targetList.stages[0]?.id || 'sourced';
+      const existingKeys = new Set(targetList.items.map(itemContactKey));
+      const importedItems: PipelineItem[] = [];
+      let skippedCount = 0;
+
+      friends.forEach((friend) => {
+        const contactKey = friendContactKey(friend);
+        if (!contactKey || existingKeys.has(contactKey)) {
+          skippedCount += 1;
+          return;
+        }
+
+        const contactEmails = normalizeContactEmails(friend.email);
+        const displayName = fullFriendName(friend);
+        const organization = normalizeBasicText(friend.titleOrCompany);
+        const title = displayName || contactEmails[0] || organization || 'Investor update contact';
+        const nextItemBase = createItem(
+          {
+            ...defaultDraft(firstStage),
+            title,
+            organization,
+            owner: 'Tre',
+            contactEmails,
+            stage: firstStage,
+            priority: 'medium',
+            segment: 'Investor update contact',
+            decisionMaker: displayName || title,
+            nextStep: 'Include in the next investor update and personalize around existing relationship context.',
+            notes: buildFriendAnalysisNotes(friend),
+          },
+          `friend-${friend.id || makeId()}`,
+        );
+        const nextItem = {
+          ...nextItemBase,
+          weeklyLogs: [
+            createSystemLog(
+              nextItemBase,
+              'item-created',
+              `Imported ${nextItemBase.title} from Friends of the Business.`,
+            ),
+          ],
+        };
+
+        importedItems.push(nextItem);
+        existingKeys.add(contactKey);
+      });
+
+      if (importedItems.length > 0) {
+        setLists((currentLists) =>
+          currentLists.map((list) =>
+            list.id === targetList.id
+              ? {
+                  ...list,
+                  items: [...importedItems, ...list.items],
+                }
+              : list,
+          ),
+        );
+      }
+
+      setFriendsImportMessage({
+        type: importedItems.length > 0 ? 'success' : 'info',
+        text:
+          importedItems.length > 0
+            ? `Imported ${formatCount(importedItems.length, 'contact')}${skippedCount > 0 ? ` and skipped ${formatCount(skippedCount, 'duplicate')}` : ''}.`
+            : `No new contacts to import. Skipped ${formatCount(skippedCount, 'duplicate')}.`,
+      });
+
+      if (importedItems.length > 0) {
+        setToastMessage({ type: 'success', text: `Imported ${formatCount(importedItems.length, 'investor update contact')}.` });
+      }
+    } catch (error) {
+      console.error('[PipeLists] Friends of the Business import failed:', error);
+      setFriendsImportMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to import Friends of the Business contacts.'),
+      });
+    } finally {
+      setIsImportingFriends(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !dataReady ||
+      isImportingFriends ||
+      !isOwner ||
+      !canManageActiveList ||
+      !isInvestorUpdateContactsList ||
+      activeListItems.length > 0 ||
+      autoImportedFriendsListIds.current.has(activeList.id)
+    ) {
+      return;
+    }
+
+    autoImportedFriendsListIds.current.add(activeList.id);
+    void handleImportFriendsOfBusiness();
+  }, [
+    activeList.id,
+    activeListItems.length,
+    canManageActiveList,
+    dataReady,
+    isImportingFriends,
+    isInvestorUpdateContactsList,
+    isOwner,
+  ]);
 
   const sanitizeGeneratedLead = (lead: Partial<GeneratedLead>): GeneratedLead => {
     const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
@@ -5745,6 +5940,18 @@ Research rules:
                       Clear
                     </button>
 
+                    {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
+                      <button
+                        type="button"
+                        onClick={handleImportFriendsOfBusiness}
+                        disabled={isImportingFriends}
+                        className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Users className="h-4 w-4" />
+                        {isImportingFriends ? 'Importing...' : 'Import contacts'}
+                      </button>
+                    )}
+
                     {canModify && (
                       <>
                         <button
@@ -5767,6 +5974,8 @@ Research rules:
                     )}
                   </div>
                 </div>
+
+                {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
 
                 <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
                   {activeList.stages.map((stage) => (
@@ -5927,6 +6136,17 @@ Research rules:
                       <p className="mt-1 text-sm text-stone-500">Adjust the filter or add a new item.</p>
                       {canModify && (
                         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                          {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
+                            <button
+                              type="button"
+                              onClick={handleImportFriendsOfBusiness}
+                              disabled={isImportingFriends}
+                              className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Users className="h-4 w-4" />
+                              {isImportingFriends ? 'Importing...' : 'Import contacts'}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={openLeadGenModal}
