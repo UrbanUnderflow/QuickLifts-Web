@@ -116,6 +116,62 @@ type RoundtableMessage = {
   createdAt?: unknown;
 };
 
+type MacraOperatingRead = {
+  generatedAt: string;
+  targetDate: string;
+  action: 'refresh_data_first' | 'hold_and_diagnose_checkout' | 'ready_for_one_controlled_change' | string;
+  operatorSummary: string;
+  blockers: string[];
+  recommendedNextSteps: string[];
+  scoreboard: {
+    coverageStart?: string | null;
+    coverageEnd?: string | null;
+    importedAt?: string | null;
+    freshness?: string;
+    coverageLagDays?: number | null;
+  };
+  appsFlyer: {
+    latestAggregatePeriod?: {
+      startDate?: string | null;
+      endDate?: string | null;
+      funnelEvents?: Record<string, number>;
+      mediaSourceEventVolume?: Record<string, number>;
+    } | null;
+  };
+  experiment: {
+    activeVariantId?: string;
+    resultsGeneratedAt?: string | null;
+    qualityLabel?: string;
+    decisionGrade?: boolean;
+  };
+  lowerFunnel: {
+    purchaseLogs: {
+      total: number;
+      byStatus: Record<string, number>;
+      byDate: Record<string, number>;
+    };
+    cancelReasons: {
+      total: number;
+      byReason: Record<string, number>;
+    };
+    macraUsers: {
+      total: number;
+      completedOnboarding: number;
+    };
+  };
+  systemHealth: {
+    push: {
+      successes: number;
+      failures: number;
+      failureCodes: Record<string, number>;
+    };
+    tasks: {
+      byStatus: Record<string, number>;
+      staleActive: Array<{ id: string; name: string; assignee: string; status: string; updatedAt?: string | null }>;
+    };
+  };
+};
+
 const MACRA_TEAM_FALLBACK: PulseCommandTeam = {
   id: 'macra-growth',
   name: 'Macra Growth',
@@ -338,6 +394,9 @@ function PulseCommandDashboard() {
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamProduct, setNewTeamProduct] = useState('');
   const [newAgent, setNewAgent] = useState({ id: '', displayName: '', role: '', focus: '' });
+  const [macraRead, setMacraRead] = useState<MacraOperatingRead | null>(null);
+  const [macraReadLoading, setMacraReadLoading] = useState(false);
+  const [macraReadError, setMacraReadError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -413,6 +472,30 @@ function PulseCommandDashboard() {
   const teamTasks = tasks.filter((task) => taskMatchesTeam(task, activeTeam)).slice(0, 18);
   const teamMessages = operatorMessages.filter((message) => operatorMessageMatchesTeam(message, activeTeam)).slice(0, 12);
   const tokenTotal = activeAgents.reduce((sum, agent) => sum + totalTokensForAgent(agentPresenceById.get(normalize(agent.id))), 0);
+  const isMacraTeam = normalize(activeTeam.product) === 'macra' || normalize(activeTeam.name).includes('macra');
+
+  const refreshMacraRead = useCallback(async () => {
+    if (!isMacraTeam) return;
+    setMacraReadLoading(true);
+    setMacraReadError(null);
+    try {
+      const res = await fetch('/api/agent/macra-operating-read');
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload?.read) throw new Error(payload?.error || 'Macra operating read failed.');
+      setMacraRead(payload.read as MacraOperatingRead);
+    } catch (error: any) {
+      setMacraReadError(error?.message || 'Macra operating read failed.');
+    } finally {
+      setMacraReadLoading(false);
+    }
+  }, [isMacraTeam]);
+
+  useEffect(() => {
+    refreshMacraRead();
+    if (!isMacraTeam) return undefined;
+    const interval = window.setInterval(refreshMacraRead, 5 * 60_000);
+    return () => window.clearInterval(interval);
+  }, [isMacraTeam, refreshMacraRead]);
 
   useEffect(() => {
     if (!activeTeam.defaultRoundtableId) return undefined;
@@ -559,7 +642,7 @@ function PulseCommandDashboard() {
         to: 'nora',
         type: 'task',
         content:
-          `Create the ${today} Macra daily operating snapshot. Use Scoreboard, Experiments, purchase logs, cancel reasons, retargeting state, AppsFlyer coverage, and .agent/macra memory. Post one PulseCommand update and log one decision or explicit no-change decision.`,
+          `Create the ${today} Macra daily operating snapshot. First run \`node scripts/macraDailyOpsRead.js --write --date=${today}\` and use that deterministic read as source truth. Then explain the Scoreboard, Experiments, purchase logs, cancel reasons, retargeting state, and AppsFlyer coverage. Post one PulseCommand update and log one decision or explicit no-change decision.`,
         status: 'pending',
         createdAt: serverTimestamp(),
         metadata: {
@@ -815,6 +898,122 @@ function PulseCommandDashboard() {
                 <span>{toast}</span>
                 <button type="button" onClick={() => setToast(null)} className="text-zinc-500 hover:text-white">Dismiss</button>
               </div>
+            )}
+
+            {isMacraTeam && (
+              <section className="pc-panel">
+                <div className="pc-panel-heading">
+                  <div>
+                    <p className="pc-eyebrow">Macra Operating Read</p>
+                    <h2 className="pc-section-title">Source Truth</h2>
+                  </div>
+                  <button type="button" onClick={refreshMacraRead} className="pc-btn pc-btn-muted" disabled={macraReadLoading}>
+                    {macraReadLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    Refresh
+                  </button>
+                </div>
+
+                {macraReadError ? (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/8 p-3 text-sm text-red-100">
+                    {macraReadError}
+                  </div>
+                ) : !macraRead ? (
+                  <p className="pc-empty">Loading Macra source read...</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className={`rounded-lg border p-4 ${
+                      macraRead.action === 'refresh_data_first'
+                        ? 'border-red-500/25 bg-red-500/8'
+                        : macraRead.action === 'hold_and_diagnose_checkout'
+                          ? 'border-amber-500/25 bg-amber-500/8'
+                          : 'border-emerald-500/25 bg-emerald-500/8'
+                    }`}>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Current posture</p>
+                          <h3 className="mt-1 text-lg font-semibold text-white">{macraRead.operatorSummary}</h3>
+                          <p className="mt-2 text-sm text-zinc-400">Generated {formatRelative(macraRead.generatedAt)} for {macraRead.targetDate}</p>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold uppercase text-zinc-200">
+                          {macraRead.action.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="pc-stat">
+                        <div className="pc-stat-icon text-cyan-200"><Database className="h-4 w-4" /></div>
+                        <div>
+                          <p className="pc-stat-label">Scoreboard</p>
+                          <p className="pc-stat-value capitalize">{macraRead.scoreboard.freshness || 'unknown'}</p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {macraRead.scoreboard.coverageEnd ? `Through ${macraRead.scoreboard.coverageEnd}` : 'No coverage date'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="pc-stat">
+                        <div className="pc-stat-icon text-violet-200"><Gauge className="h-4 w-4" /></div>
+                        <div>
+                          <p className="pc-stat-label">Experiment</p>
+                          <p className="pc-stat-value">{macraRead.experiment.decisionGrade ? 'Clean' : 'Stale'}</p>
+                          <p className="mt-1 text-xs text-zinc-500">{macraRead.experiment.activeVariantId || 'No variant'} · {macraRead.experiment.qualityLabel || 'No quality label'}</p>
+                        </div>
+                      </div>
+                      <div className="pc-stat">
+                        <div className="pc-stat-icon text-emerald-200"><CheckCircle2 className="h-4 w-4" /></div>
+                        <div>
+                          <p className="pc-stat-label">Purchase Logs</p>
+                          <p className="pc-stat-value">{formatNumber(macraRead.lowerFunnel.purchaseLogs.total)}</p>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            {Object.entries(macraRead.lowerFunnel.purchaseLogs.byStatus).map(([key, value]) => `${key}: ${value}`).join(' · ') || 'No rows'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="pc-stat">
+                        <div className="pc-stat-icon text-red-200"><AlertTriangle className="h-4 w-4" /></div>
+                        <div>
+                          <p className="pc-stat-label">System Blocks</p>
+                          <p className="pc-stat-value">{formatNumber(macraRead.blockers.length)}</p>
+                          <p className="mt-1 text-xs text-zinc-500">Push failures: {formatNumber(macraRead.systemHealth.push.failures)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-lg border border-white/8 bg-white/[0.025] p-4">
+                        <p className="pc-eyebrow">Latest AppsFlyer Funnel</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                          {[
+                            ['Starts', macraRead.appsFlyer.latestAggregatePeriod?.funnelEvents?.macra_onboarding_started],
+                            ['Paywall', macraRead.appsFlyer.latestAggregatePeriod?.funnelEvents?.macra_onboarding_paywall_reached],
+                            ['CTA', macraRead.appsFlyer.latestAggregatePeriod?.funnelEvents?.macra_paywall_primary_button_pressed],
+                            ['Checkout', macraRead.appsFlyer.latestAggregatePeriod?.funnelEvents?.af_initiated_checkout],
+                            ['Trials', macraRead.appsFlyer.latestAggregatePeriod?.funnelEvents?.af_start_trial],
+                            ['Purchases', macraRead.appsFlyer.latestAggregatePeriod?.funnelEvents?.af_purchase],
+                          ].map(([label, value]) => (
+                            <div key={label as string} className="rounded-lg border border-white/8 bg-black/15 p-2">
+                              <p className="text-xs text-zinc-500">{label}</p>
+                              <p className="mt-1 font-semibold text-white">{formatNumber(Number(value || 0))}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-white/8 bg-white/[0.025] p-4">
+                        <p className="pc-eyebrow">Next Steps</p>
+                        <div className="mt-3 space-y-2">
+                          {macraRead.recommendedNextSteps.slice(0, 4).map((step) => (
+                            <div key={step} className="flex gap-2 text-sm leading-6 text-zinc-300">
+                              <ArrowRight className="mt-1 h-3.5 w-3.5 flex-none text-violet-300" />
+                              <span>{step}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
             )}
 
             <section className="pc-panel">

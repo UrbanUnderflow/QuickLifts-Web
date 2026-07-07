@@ -1072,7 +1072,7 @@ function buildMacraTaskBlueprint(agentId, focusLabel, dateStamp, options = {}) {
         focusObjective: focusLabel,
         objectiveCode: MACRA_OBJECTIVE_CODE,
         priority,
-        complexity: 3,
+        complexity: options.dailySnapshot ? 1 : 3,
         tags: ['macra', 'agent-os', 'trial-start-quality'],
         guardrails: [
             'apple_purchase_cancels',
@@ -1093,7 +1093,8 @@ function buildMacraTaskBlueprint(agentId, focusLabel, dateStamp, options = {}) {
                 ? `Macra daily operating snapshot: ${dateStamp}`
                 : `Macra operating snapshot: ${focusLabel}`,
             description:
-                `Create ${expectedArtifactPath} from /admin/emailSequences, /admin/experiments, ` +
+                `First run \`node scripts/macraDailyOpsRead.js --write --date=${dateStamp} --out=${expectedArtifactPath}\` to create the deterministic Macra operating read. ` +
+                `Then use ${expectedArtifactPath} from /admin/emailSequences, /admin/experiments, ` +
                 `/admin/purchaseLogs, /admin/macraCancelReasons, and AppsFlyer imports. Include funnel counts, source split, ` +
                 `experiment snapshot freshness, guardrails, one operator-facing update, and one decision-log recommendation tied to "${focusLabel}". ` +
                 `If /admin/experiments is still stale from 2026-06-16, flag refresh/backfill as the first operating action before recommending funnel changes.`,
@@ -1108,6 +1109,7 @@ function buildMacraTaskBlueprint(agentId, focusLabel, dateStamp, options = {}) {
             ],
             requiredOutputs: [
                 expectedArtifactPath,
+                'Firestore macra-operating-reads/{dateKey} updated',
                 'PulseCommand operator update with type update or decision',
                 '.agent/macra/progress.md update when state changes',
                 '.agent/macra/decisions.md update for decisions or no-change decisions',
@@ -5589,6 +5591,7 @@ async function updateMissionSequencingAfterVerifiedTask(task, options = {}) {
 
 async function markTaskFailed(taskId, failureMessage, options = {}) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
+        status: 'needs-review',
         runnerBlocked: true,
         runnerFailureAt: FieldValue.serverTimestamp(),
         runnerFailureMessage: (failureMessage || 'Unknown runner failure').slice(0, 2000),
