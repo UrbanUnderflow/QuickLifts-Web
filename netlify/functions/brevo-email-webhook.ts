@@ -276,6 +276,7 @@ const updatePipeListsContactEmailStatus = async (args: {
   ownerUid: string;
   listId: string;
   itemIds: string[];
+  emailType?: string;
   eventType: CanonicalBrevoEmailEvent;
   email: string;
   messageId?: string;
@@ -323,6 +324,7 @@ const updatePipeListsContactEmailStatus = async (args: {
       const nextItem: Record<string, any> = {
         ...item,
         emailStatus: status,
+        lastEmailType: args.emailType || item.lastEmailType || '',
         lastEmailEvent: status,
         lastEmailEventAt: nowIso,
         updatedAt: nowIso,
@@ -663,6 +665,7 @@ export const handler: Handler = async (event) => {
       let pipeListsOwnerUid: string | null = null;
       let pipeListsListId: string | null = null;
       let pipeListsItemIds: string[] = [];
+      let pipeListsEmailType: string | null = null;
       let pipeListsEmailBatchId: string | null = null;
       let pipeListsEmailRecordId: string | null = null;
       
@@ -686,6 +689,7 @@ export const handler: Handler = async (event) => {
           pipeListsItemIds = Array.isArray(custom.pipeListsItemIds)
             ? custom.pipeListsItemIds.map((itemId: any) => String(itemId || '').trim()).filter(Boolean)
             : [];
+          pipeListsEmailType = custom.pipeListsEmailType || null;
           pipeListsEmailBatchId = custom.pipeListsEmailBatchId || null;
           pipeListsEmailRecordId = custom.pipeListsEmailRecordId || null;
         } catch (e) {
@@ -794,6 +798,7 @@ export const handler: Handler = async (event) => {
           ownerUid: pipeListsOwnerUid,
           listId: pipeListsListId,
           itemIds: pipeListsItemIds,
+          emailType: pipeListsEmailType || undefined,
           eventType,
           email,
           messageId,

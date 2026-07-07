@@ -76,6 +76,7 @@ type InviteHistoryEntry = {
   inviteUrl: string;
 };
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
+type ContactEmailType = 'metrics-update' | 'general-update';
 type NextStepTooltip = {
   text: string;
   left: number;
@@ -162,6 +163,7 @@ type PipelineItem = {
   owner: string;
   contactEmails: string[];
   emailStatus: string;
+  lastEmailType: string;
   lastEmailEvent: string;
   lastEmailMessageId: string;
   lastEmailSentAt: string;
@@ -316,6 +318,16 @@ const logTypeLabels: Record<ActivityLogType, string> = {
   risk: 'Risk',
   document: 'Document Sent',
   metrics: 'Metrics Update',
+};
+
+const contactEmailTypeLabels: Record<ContactEmailType, string> = {
+  'metrics-update': 'Metrics Update',
+  'general-update': 'General Update',
+};
+
+const contactEmailTypeLogType: Record<ContactEmailType, ActivityLogType> = {
+  'metrics-update': 'metrics',
+  'general-update': 'update',
 };
 
 const logNextStepOptions: Record<ActivityLogType, string[]> = {
@@ -640,6 +652,7 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   owner: '',
   contactEmails: [],
   emailStatus: '',
+  lastEmailType: '',
   lastEmailEvent: '',
   lastEmailMessageId: '',
   lastEmailSentAt: '',
@@ -1492,6 +1505,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
     emailStatus: item.emailStatus || '',
+    lastEmailType: item.lastEmailType || '',
     lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
     lastEmailMessageId: item.lastEmailMessageId || '',
     lastEmailSentAt: item.lastEmailSentAt || '',
@@ -2078,6 +2092,7 @@ const PipelinePage: NextPage = () => {
   const [isImportingFriends, setIsImportingFriends] = useState(false);
   const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isContactEmailModalOpen, setIsContactEmailModalOpen] = useState(false);
+  const [contactEmailType, setContactEmailType] = useState<ContactEmailType>('metrics-update');
   const [contactEmailRecipients, setContactEmailRecipients] = useState('');
   const [contactEmailSubject, setContactEmailSubject] = useState('');
   const [contactEmailBody, setContactEmailBody] = useState('');
@@ -3222,9 +3237,11 @@ const PipelinePage: NextPage = () => {
       ),
     );
 
-  const openContactEmailModal = () => {
-    setContactEmailRecipients(activeContactEmails.join(', '));
-    setContactEmailSubject('');
+  const openContactEmailModal = (emails?: string[], subject = '') => {
+    const nextEmails = emails && emails.length > 0 ? normalizeContactEmails(emails) : activeContactEmails;
+    setContactEmailType('metrics-update');
+    setContactEmailRecipients(nextEmails.join(', '));
+    setContactEmailSubject(subject);
     setContactEmailBody('');
     setContactEmailSendMessage(
       isOwner
@@ -3295,6 +3312,7 @@ const PipelinePage: NextPage = () => {
         },
         body: JSON.stringify({
           provider: 'pulse-brevo',
+          emailType: contactEmailType,
           toEmails,
           subject: contactEmailSubject.trim(),
           message: contactEmailBody.trim(),
@@ -3323,6 +3341,8 @@ const PipelinePage: NextPage = () => {
           .filter(([email]) => Boolean(email)),
       );
       const sentAt = new Date().toISOString();
+      const emailTypeLabel = contactEmailTypeLabels[contactEmailType];
+      const emailLogType = contactEmailTypeLogType[contactEmailType];
 
       setLists((currentLists) =>
         currentLists.map((list) => {
@@ -3334,19 +3354,23 @@ const PipelinePage: NextPage = () => {
               const matchingEmail = normalizeContactEmails(item.contactEmails).find((email) => toEmails.includes(email));
               if (!matchingEmail) return item;
 
-              const summary = `Email sent to ${matchingEmail}.`;
+              const summary = `${emailTypeLabel} sent to ${matchingEmail}.`;
               const alreadyLogged = item.weeklyLogs.some(
                 (log) => log.systemAction === 'email-sent' && log.summary === summary && log.createdAt.slice(0, 10) === sentAt.slice(0, 10),
               );
+              const emailLog = createSystemLog(item, 'email-sent', summary);
+              emailLog.type = emailLogType;
+              emailLog.notes = contactEmailSubject.trim() ? `Subject: ${contactEmailSubject.trim()}` : '';
 
               return {
                 ...item,
                 emailStatus: 'sent',
+                lastEmailType: contactEmailType,
                 lastEmailEvent: 'sent',
                 lastEmailSentAt: sentAt,
                 lastEmailMessageId: messageIdsByEmail.get(matchingEmail) || item.lastEmailMessageId,
                 updatedAt: sentAt,
-                weeklyLogs: alreadyLogged ? item.weeklyLogs : [createSystemLog(item, 'email-sent', summary), ...item.weeklyLogs],
+                weeklyLogs: alreadyLogged ? item.weeklyLogs : [emailLog, ...item.weeklyLogs],
               };
             }),
           };
@@ -4153,14 +4177,7 @@ Research rules:
           organization: extracted.organization?.trim() || '',
           contactEmails: normalizeContactEmails(extracted.contactEmails),
           sourceUrl: extracted.sourceUrl?.trim() || normalizeLeadInputUrl(cleanInput)?.toString() || '',
-          notes: [
-            cleanDealNotes(extracted.notes),
-            extracted.missingFields && extracted.missingFields.length > 0
-              ? `Missing fields to review: ${extracted.missingFields.join(', ')}`
-              : '',
-          ]
-            .filter(Boolean)
-            .join('\n\n'),
+          notes: cleanDealNotes(extracted.notes),
         },
         makeId(),
       );
@@ -6212,7 +6229,7 @@ Research rules:
                       <>
                         <button
                           type="button"
-                          onClick={openContactEmailModal}
+                          onClick={() => openContactEmailModal()}
                           className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
                         >
                           <Mail className="h-4 w-4" />
@@ -6879,7 +6896,7 @@ Research rules:
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
               <label className="block" htmlFor="contact-email-provider">
-                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email provider</span>
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email configuration</span>
                 <select
                   id="contact-email-provider"
                   value="pulse-brevo"
@@ -6889,17 +6906,17 @@ Research rules:
                   <option value="pulse-brevo">Pulse Brevo</option>
                 </select>
                 <span className="mt-1.5 block text-xs leading-5 text-stone-400">
-                  Pulse Brevo is restricted to {TREMAINE_OWNER_EMAIL}. Collaborators will need a connected provider before sending.
+                  Uses the Brevo sender configured in Netlify. This option only sends when signed in as {TREMAINE_OWNER_EMAIL}.
                 </span>
               </label>
 
               <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold uppercase text-stone-400">Custom provider</span>
-                  <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">Not connected</span>
+                  <span className="text-xs font-semibold uppercase text-stone-400">External providers</span>
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">Coming next</span>
                 </div>
                 <p className="text-sm leading-6 text-stone-500">
-                  Outside users will connect their own email service here before sending from PipeLists.
+                  Outside users will configure their own email service here before sending from PipeLists. They will still be able to track sent, delivered, and opened once connected.
                 </p>
               </div>
 
@@ -6914,6 +6931,25 @@ Research rules:
                 />
                 <span className="mt-1.5 block text-xs leading-5 text-stone-400">
                   Use commas, spaces, or new lines. Emails are validated before sending.
+                </span>
+              </label>
+
+              <label className="block" htmlFor="contact-email-type">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email type</span>
+                <select
+                  id="contact-email-type"
+                  value={contactEmailType}
+                  onChange={(event) => setContactEmailType(event.target.value as ContactEmailType)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                >
+                  {(Object.keys(contactEmailTypeLabels) as ContactEmailType[]).map((emailType) => (
+                    <option key={emailType} value={emailType}>
+                      {contactEmailTypeLabels[emailType]}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  This is used for the automatic log and email tracking.
                 </span>
               </label>
 
@@ -7863,6 +7899,23 @@ Research rules:
                   >
                     <ClipboardList className="h-4 w-4" />
                     Logs
+                  </button>
+                )}
+                {isInvestorUpdateContactsList && canModify && !selectedDetailIsEditing && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openContactEmailModal(
+                        selectedDetailItem.contactEmails,
+                        selectedDetailItem.organization
+                          ? `${selectedDetailItem.organization} investor update`
+                          : 'PulseCheck investor update',
+                      )
+                    }
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Send email
                   </button>
                 )}
                 {canModify && !selectedDetailIsEditing && !isLeadSharedView && moveTargetLists.length > 0 && (

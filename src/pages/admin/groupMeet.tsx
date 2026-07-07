@@ -1056,7 +1056,7 @@ const GroupMeetAdminPage: React.FC = () => {
         text: hostAvailabilityEntries.length
           ? "Group Meet draft saved. Open Requests to send invitations when you are ready."
           : hostInvite
-            ? "Group Meet draft saved. Open the host link from Requests to connect Google Calendar or add host availability before sending guest invitations."
+            ? "Group Meet draft saved. Open Requests and use Sync host calendar before sending guest invitations."
             : "Group Meet draft saved. Add host availability before sending guest invitations.",
       });
       setCreateDraftError(null);
@@ -2193,7 +2193,7 @@ const GroupMeetAdminPage: React.FC = () => {
                       <p className="text-sm text-stone-500">
                           Pick the organizer from your saved contacts. You can
                           add times manually now, or save the draft and use the
-                          host link to connect Google Calendar.
+                          host availability page to connect Google Calendar.
                         </p>
                       </div>
                       <AvatarBubble
@@ -2613,8 +2613,9 @@ const GroupMeetAdminPage: React.FC = () => {
                             </div>
                             {!hostHasAvailability && hostInvite && (
                               <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-                                Open the host link to connect Google Calendar or
-                                add host availability before guest invitations go out.
+                                Sync the host calendar or save a manual
+                                availability window before guest invitations go
+                                out.
                               </div>
                             )}
                           </div>
@@ -2646,10 +2647,16 @@ const GroupMeetAdminPage: React.FC = () => {
                                 href={hostInvite.shareUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm hover:bg-white"
+                                className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
+                                  hostHasAvailability
+                                    ? "border border-stone-200 hover:bg-white"
+                                    : "bg-stone-900 text-white hover:bg-stone-700"
+                                }`}
                               >
                                 <Calendar className="w-4 h-4" />
-                                Open host link
+                                {hostHasAvailability
+                                  ? "Open host availability"
+                                  : "Sync host calendar"}
                               </a>
                             )}
                             {hostInvite?.shareUrl && (
@@ -2859,10 +2866,16 @@ const GroupMeetAdminPage: React.FC = () => {
                                 href={selectedRequestHostInvite.shareUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-4 py-2.5 text-sm hover:bg-white"
+                                className={`inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold ${
+                                  selectedRequestHostHasAvailability
+                                    ? "border border-stone-200 hover:bg-white"
+                                    : "bg-stone-900 text-white hover:bg-stone-700"
+                                }`}
                               >
                                 <Calendar className="w-4 h-4" />
-                                Open host link
+                                {selectedRequestHostHasAvailability
+                                  ? "Open host availability"
+                                  : "Sync host calendar"}
                               </a>
                             )}
                             <button
@@ -2886,11 +2899,28 @@ const GroupMeetAdminPage: React.FC = () => {
 
                         {!selectedRequestHostHasAvailability &&
                           selectedRequestHostInvite?.shareUrl && (
-                            <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-700">
-                              The host can use their host link to connect Google
-                              Calendar and import availability. Guest
-                              invitations stay locked until the host has at
-                              least one saved window.
+                            <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-800">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                  <div className="font-semibold">
+                                    Host availability is needed before invites can send.
+                                  </div>
+                                  <p className="mt-1 max-w-4xl text-amber-700">
+                                    Click Sync host calendar to open the host
+                                    availability page, connect Google Calendar,
+                                    import times, then save at least one window.
+                                  </p>
+                                </div>
+                                <a
+                                  href={selectedRequestHostInvite.shareUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700"
+                                >
+                                  <Calendar className="w-4 h-4" />
+                                  Sync host calendar
+                                </a>
+                              </div>
                             </div>
                           )}
 

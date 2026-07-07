@@ -3,6 +3,7 @@ import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../ne
 
 type SendContactEmailRequest = {
   provider?: 'pulse-brevo';
+  emailType?: string;
   toEmails?: string[];
   subject?: string;
   message?: string;
@@ -33,6 +34,10 @@ const cleanText = (value: unknown, maxLength = 5000) =>
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const cleanItemId = (value: unknown) => cleanText(value, 180).replace(/[^\w.-]/g, '').slice(0, 180);
+const cleanEmailType = (value: unknown) => {
+  const emailType = cleanText(value, 80).replace(/[^\w-]/g, '');
+  return emailType || 'metrics-update';
+};
 
 const escapeHtml = (value: string) =>
   value
@@ -81,6 +86,7 @@ const buildContactEmailHtml = (args: {
   message: string;
   senderEmail: string;
   listName: string;
+  emailTypeLabel: string;
 }) => {
   const paragraphs = args.message
     .split(/\n{2,}/)
@@ -95,7 +101,7 @@ const buildContactEmailHtml = (args: {
         <div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:14px;overflow:hidden;">
           <div style="padding:28px 28px 18px;border-bottom:1px solid #f1f0ee;">
             <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#78716c;font-weight:700;">Pulse PipeLists</div>
-            <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;color:#111111;">Investor update</h1>
+            <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;color:#111111;">${escapeHtml(args.emailTypeLabel)}</h1>
           </div>
           <div style="padding:26px 28px;">
             ${paragraphs}
@@ -133,6 +139,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const invalidEmails = toEmails.filter((email) => !isValidEmail(email));
   const subject = cleanText(body.subject, 180);
   const message = cleanText(body.message, 12000);
+  const emailType = cleanEmailType(body.emailType);
+  const emailTypeLabel = emailType === 'general-update' ? 'General Update' : 'Metrics Update';
   const listId = cleanText(body.listId, 120);
   const listName = cleanText(body.listName, 120) || 'PipeLists';
   const ownerUid = verifiedUser.uid;
@@ -170,19 +178,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         toEmail,
         toName: toEmail,
         subject,
-        htmlContent: buildContactEmailHtml({ message, senderEmail: verifiedUser.email, listName }),
+        htmlContent: buildContactEmailHtml({ message, senderEmail: verifiedUser.email, listName, emailTypeLabel }),
         sender: {
           email: process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai',
           name: process.env.BREVO_SENDER_NAME || 'Pulse PipeLists',
         },
         replyTo: { email: verifiedUser.email, name: 'Tremaine Grant' },
-        tags: ['pipelists', 'investor-update-contact'],
+        tags: ['pipelists', 'investor-update-contact', emailType],
         headers: {
           'X-Mailin-custom': JSON.stringify({
             pipeListsOwnerUid: ownerUid,
             pipeListsListId: listId,
             pipeListsListName: listName,
             pipeListsItemIds: itemIds,
+            pipeListsEmailType: emailType,
             pipeListsEmailBatchId: batchId,
             pipeListsEmailRecordId: `${batchId}-${toEmail}`,
           }),
@@ -197,6 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           senderEmail: verifiedUser.email,
           listId,
           listName,
+          emailType,
         },
         bypassDailyRecipientLimit: true,
       });
