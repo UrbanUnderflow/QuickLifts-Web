@@ -2171,6 +2171,8 @@ const PipelinePage: NextPage = () => {
   const [isImportingFriends, setIsImportingFriends] = useState(false);
   const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
+  const [isEnrichingVcSources, setIsEnrichingVcSources] = useState(false);
+  const [vcSourceEnrichmentMessage, setVcSourceEnrichmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [leadCopyMessage, setLeadCopyMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [attachmentLinkName, setAttachmentLinkName] = useState('');
   const [attachmentLinkUrl, setAttachmentLinkUrl] = useState('');
@@ -2993,6 +2995,13 @@ const PipelinePage: NextPage = () => {
   const activeListItems = useMemo(
     () => activeList.items.filter((item) => !isItemDeleted(item)),
     [activeList.items],
+  );
+  const missingVcSourceItems = useMemo(
+    () =>
+      activeList.templateKey === 'vc'
+        ? activeListItems.filter((item) => !item.sourceUrl.trim())
+        : [],
+    [activeList.templateKey, activeListItems],
   );
   const activeLeadKeys = useMemo(
     () =>
@@ -4119,6 +4128,151 @@ Research rules:
     }
   };
 
+  const handleEnrichMissingVcSources = async () => {
+    if (!canModify || activeList.templateKey !== 'vc' || isEnrichingVcSources) return;
+
+    const targets = missingVcSourceItems;
+    if (targets.length === 0) {
+      setVcSourceEnrichmentMessage({ type: 'info', text: 'Every lead in this VC list already has a source link.' });
+      return;
+    }
+
+    setIsEnrichingVcSources(true);
+    setVcSourceEnrichmentMessage({
+      type: 'info',
+      text: `Analyzing ${formatCount(targets.length, 'VC lead')} with missing source links...`,
+    });
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before analyzing VC leads.');
+      }
+
+      const updatesByItemId = new Map<string, Partial<PipelineItem>>();
+      let skippedCount = 0;
+
+      for (const item of targets) {
+        const searchInput = [
+          item.title,
+          item.organization && item.organization !== item.title ? item.organization : '',
+          'venture capital firm official website investment focus',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+        try {
+          const response = await fetch('/api/pipelists/extract-lead', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              input: searchInput,
+              listName: activeList.name,
+              templateLabel: templateCatalog[activeList.templateKey].label,
+              templateKey: activeList.templateKey,
+              stages: activeList.stages.map((stage) => ({
+                id: stage.id,
+                label: stage.label,
+                probability: stage.probability,
+              })),
+            }),
+          });
+
+          const payload = await readApiJson(response, `Analyze lead returned an unexpected response for ${item.title}.`);
+          if (!response.ok || !payload?.item) {
+            skippedCount += 1;
+            continue;
+          }
+
+          const extracted = payload.item as Partial<PipelineItem> & {
+            contactEmails?: unknown;
+          };
+          const normalizedSourceUrl = normalizeLeadInputUrl(extracted.sourceUrl?.trim() || '')?.toString() || '';
+          if (!normalizedSourceUrl) {
+            skippedCount += 1;
+            continue;
+          }
+
+          updatesByItemId.set(item.id, {
+            sourceUrl: normalizedSourceUrl,
+            organization: item.organization.trim() ? item.organization : extracted.organization?.trim() || '',
+            amount: item.amount.trim() ? item.amount : extracted.amount?.trim() || '',
+            segment: item.segment.trim() ? item.segment : extracted.segment?.trim() || '',
+            decisionMaker: item.decisionMaker.trim() ? item.decisionMaker : extracted.decisionMaker?.trim() || '',
+            nextStep: item.nextStep.trim() ? item.nextStep : extracted.nextStep?.trim() || '',
+            notes: item.notes.trim() ? item.notes : cleanDealNotes(extracted.notes),
+            contactEmails:
+              item.contactEmails.length > 0 ? item.contactEmails : normalizeContactEmails(extracted.contactEmails),
+          });
+        } catch (error) {
+          console.error('[PipeLists] VC source enrichment failed for lead:', item.title, error);
+          skippedCount += 1;
+        }
+      }
+
+      if (updatesByItemId.size > 0) {
+        const now = new Date().toISOString();
+        setLists((currentLists) =>
+          currentLists.map((list) =>
+            list.id === activeList.id
+              ? {
+                  ...list,
+                  items: list.items.map((item) => {
+                    const update = updatesByItemId.get(item.id);
+                    if (!update) return item;
+
+                    const updatedItem = { ...item, ...update, updatedAt: now };
+                    return {
+                      ...updatedItem,
+                      weeklyLogs: [
+                        {
+                          ...defaultLogDraft(),
+                          id: makeId(),
+                          type: 'update',
+                          weekOf: now.slice(0, 10),
+                          summary: `Added source link for ${updatedItem.title}.`,
+                          nextStep: '',
+                          notes: update.sourceUrl ? `Source: ${update.sourceUrl}` : '',
+                          createdAt: now,
+                        },
+                        ...item.weeklyLogs,
+                      ],
+                    };
+                  }),
+                }
+              : list,
+          ),
+        );
+      }
+
+      setVcSourceEnrichmentMessage({
+        type: updatesByItemId.size > 0 ? 'success' : 'info',
+        text:
+          updatesByItemId.size > 0
+            ? `Added source links to ${formatCount(updatesByItemId.size, 'VC lead')}${
+                skippedCount > 0 ? `; ${formatCount(skippedCount, 'lead')} still needs manual review.` : '.'
+              }`
+            : `No source links were found automatically. ${formatCount(skippedCount, 'lead')} need manual review.`,
+      });
+
+      if (updatesByItemId.size > 0) {
+        setToastMessage({ type: 'success', text: `Added ${formatCount(updatesByItemId.size, 'source link')}.` });
+      }
+    } catch (error) {
+      console.error('[PipeLists] VC source enrichment failed:', error);
+      setVcSourceEnrichmentMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to analyze missing VC source links.',
+      });
+    } finally {
+      setIsEnrichingVcSources(false);
+    }
+  };
+
   const handleCreateList = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canManageWorkspace) return;
@@ -5082,7 +5236,7 @@ Research rules:
   };
 
   const renderItemEditor = () => (
-    <form onSubmit={handleSaveItem} className="space-y-4">
+    <form id="pipe-item-editor-form" onSubmit={handleSaveItem} className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {[
           ['title', 'Opportunity Name', 'Opportunity name'],
@@ -5262,23 +5416,6 @@ Research rules:
         ) : (
           <span />
         )}
-
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={resetEditor}
-            className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 transition hover:text-stone-900"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            data-testid="pipe-save-opportunity"
-            className="inline-flex h-10 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-          >
-            Save
-          </button>
-        </div>
       </div>
     </form>
   );
@@ -5954,6 +6091,17 @@ Research rules:
 
                     {canModify && (
                       <>
+                        {activeList.templateKey === 'vc' && missingVcSourceItems.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleEnrichMissingVcSources}
+                            disabled={isEnrichingVcSources}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            {isEnrichingVcSources ? 'Analyzing...' : 'Analyze sources'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={openLeadGenModal}
@@ -5976,6 +6124,7 @@ Research rules:
                 </div>
 
                 {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
+                {activeList.templateKey === 'vc' && <MessageBanner message={vcSourceEnrichmentMessage} />}
 
                 <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
                   {activeList.stages.map((stage) => (
@@ -7326,6 +7475,25 @@ Research rules:
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {selectedDetailIsEditing && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={resetEditor}
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        form="pipe-item-editor-form"
+                        data-testid="pipe-save-opportunity"
+                        className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        Save
+                      </button>
+                    </>
+                  )}
                   {!selectedDetailIsEditing && (
                     <>
                       {canModify && !isLeadSharedView && (

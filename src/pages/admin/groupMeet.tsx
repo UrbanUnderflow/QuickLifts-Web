@@ -500,6 +500,7 @@ const GroupMeetAdminPage: React.FC = () => {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [createDraftError, setCreateDraftError] = useState<string | null>(null);
   const contactImageInputRef = useRef<HTMLInputElement>(null);
   const activeAdminEmail = auth.currentUser?.email || host.email || null;
 
@@ -591,6 +592,18 @@ const GroupMeetAdminPage: React.FC = () => {
         (invite) => invite.participantType !== "host",
       ),
     [selectedRequest],
+  );
+  const selectedRequestHostInvite = useMemo(
+    () =>
+      selectedRequest?.invites.find(
+        (invite) => invite.participantType === "host",
+      ) || null,
+    [selectedRequest],
+  );
+  const selectedRequestHostHasAvailability = Boolean(
+    selectedRequestHostInvite &&
+      (selectedRequestHostInvite.availabilityCount > 0 ||
+        selectedRequestHostInvite.respondedAt),
   );
 
   const getAdminHeaders = async () => {
@@ -976,27 +989,27 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   const createRequest = async () => {
-    if (!host.contactId) {
-      setMessage({
-        type: "error",
-        text: "Choose the host from your contact list before creating the request.",
-      });
-      return;
-    }
+    setCreateDraftError(null);
 
-    if (!hostAvailabilityEntries.length) {
+    if (!host.contactId) {
+      const errorText =
+        "Choose the host from your contact list before creating the request.";
       setMessage({
         type: "error",
-        text: "Add the host availability before sending the request.",
+        text: errorText,
       });
+      setCreateDraftError(errorText);
       return;
     }
 
     if (!selectedParticipantContacts.length) {
+      const errorText =
+        "Choose at least one guest before saving the draft. Guests can be selected lower on this form.";
       setMessage({
         type: "error",
-        text: "Choose at least one guest from your contact list.",
+        text: errorText,
       });
+      setCreateDraftError(errorText);
       return;
     }
 
@@ -1035,18 +1048,29 @@ const GroupMeetAdminPage: React.FC = () => {
 
       setSelectedRequestId(payload.request.id);
       setActiveTab("requests");
+      const hostInvite = payload.request.invites.find(
+        (invite) => invite.participantType === "host",
+      );
       setMessage({
         type: "success",
-        text: "Group Meet draft saved. Open Requests to send invitations when you are ready.",
+        text: hostAvailabilityEntries.length
+          ? "Group Meet draft saved. Open Requests to send invitations when you are ready."
+          : hostInvite
+            ? "Group Meet draft saved. Open the host link from Requests to connect Google Calendar or add host availability before sending guest invitations."
+            : "Group Meet draft saved. Add host availability before sending guest invitations.",
       });
+      setCreateDraftError(null);
       setSelectedParticipantContactIds([]);
       setHostAvailabilityEntries([]);
       await loadRequests();
     } catch (error: any) {
+      const errorText =
+        error?.message || "Failed to create Group Meet request.";
       setMessage({
         type: "error",
-        text: error?.message || "Failed to create Group Meet request.",
+        text: errorText,
       });
+      setCreateDraftError(errorText);
     } finally {
       setCreating(false);
     }
@@ -1899,6 +1923,10 @@ const GroupMeetAdminPage: React.FC = () => {
       invite.availabilityEntries.some((slot) => slot.date === date),
     );
 
+  const getHostInvite = (
+    request: Pick<GroupMeetRequestSummary, "invites">,
+  ) => request.invites.find((invite) => invite.participantType === "host");
+
   const handleContactImageSelection = (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -2142,18 +2170,30 @@ const GroupMeetAdminPage: React.FC = () => {
                         invitations when ready.
                       </div>
                     </div>
-                    <div className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white">
-                      Saves as draft
-                    </div>
+                    <button
+                      type="button"
+                      onClick={createRequest}
+                      disabled={creating}
+                      className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
+                    >
+                      {creating ? "Saving..." : "Save draft"}
+                    </button>
                   </div>
+
+                  {createDraftError && (
+                    <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+                      {createDraftError}
+                    </div>
+                  )}
 
                   <div className="mt-8 rounded-lg border border-stone-200 bg-white p-5">
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div>
-                        <h3 className="text-lg font-semibold">Host</h3>
-                        <p className="text-sm text-stone-500">
-                          Pick the organizer from your saved contacts, then lock
-                          in their availability before the request goes out.
+                      <h3 className="text-lg font-semibold">Host</h3>
+                      <p className="text-sm text-stone-500">
+                          Pick the organizer from your saved contacts. You can
+                          add times manually now, or save the draft and use the
+                          host link to connect Google Calendar.
                         </p>
                       </div>
                       <AvatarBubble
@@ -2236,7 +2276,7 @@ const GroupMeetAdminPage: React.FC = () => {
                       subtitle={
                         host.contactId
                           ? "Set the days and time ranges the host can actually do before the request goes out."
-                          : "Choose a host contact first, then add the organizer availability."
+                          : "Choose a host contact first, then add availability manually or save a draft to use the host Google Calendar link."
                       }
                     />
                   </div>
@@ -2311,19 +2351,29 @@ const GroupMeetAdminPage: React.FC = () => {
 
                   <div className="mt-8 flex items-center justify-between gap-4 border-t border-stone-200 pt-6">
                     <div className="text-sm text-stone-500">
-                      Host availability locked in •{" "}
+                      {hostAvailabilityEntries.length
+                        ? "Host availability locked in"
+                        : "Host availability can be added after draft save"}{" "}
+                      •{" "}
                       {selectedParticipantContacts.length} guest
                       {selectedParticipantContacts.length === 1 ? "" : "s"}{" "}
                       ready
                     </div>
-                    <button
-                      type="button"
-                      onClick={createRequest}
-                      disabled={creating}
-                      className="rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
-                    >
-                      {creating ? "Saving…" : "Save draft"}
-                    </button>
+                    <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                      {createDraftError && (
+                        <div className="max-w-md rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700">
+                          {createDraftError}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={createRequest}
+                        disabled={creating}
+                        className="rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
+                      >
+                        {creating ? "Saving..." : "Save draft"}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : activeTab === "contacts" ? (
@@ -2505,7 +2555,13 @@ const GroupMeetAdminPage: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
-                    {requests.map((request) => (
+                    {requests.map((request) => {
+                      const hostInvite = getHostInvite(request);
+                      const hostHasAvailability =
+                        Number(hostInvite?.availabilityCount) > 0 ||
+                        Boolean(hostInvite?.respondedAt);
+
+                      return (
                       <div
                         key={request.id}
                         className="rounded-lg border border-stone-200 bg-white p-4"
@@ -2551,7 +2607,16 @@ const GroupMeetAdminPage: React.FC = () => {
                               </span>
                               <span>{request.responseCount} responded</span>
                               <span>{request.meetingDurationMinutes} min</span>
+                              <span>
+                                Host {hostHasAvailability ? "ready" : "needs availability"}
+                              </span>
                             </div>
+                            {!hostHasAvailability && hostInvite && (
+                              <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                                Open the host link to connect Google Calendar or
+                                add host availability before guest invitations go out.
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex flex-wrap gap-2">
@@ -2559,13 +2624,44 @@ const GroupMeetAdminPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => sendDraftInvites(request.id)}
-                                disabled={sendingRequestId === request.id}
+                                disabled={
+                                  sendingRequestId === request.id ||
+                                  !hostHasAvailability
+                                }
+                                title={
+                                  hostHasAvailability
+                                    ? "Send guest invitations"
+                                    : "Add host availability before sending guest invitations"
+                                }
                                 className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                               >
                                 <Mail className="w-4 h-4" />
                                 {sendingRequestId === request.id
                                   ? "Sending…"
                                   : "Send invitations"}
+                              </button>
+                            )}
+                            {hostInvite?.shareUrl && (
+                              <a
+                                href={hostInvite.shareUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm hover:bg-white"
+                              >
+                                <Calendar className="w-4 h-4" />
+                                Open host link
+                              </a>
+                            )}
+                            {hostInvite?.shareUrl && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  copyText(hostInvite.shareUrl, "Host link copied.")
+                                }
+                                className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm hover:bg-white"
+                              >
+                                <Copy className="w-4 h-4" />
+                                Copy host link
                               </button>
                             )}
                             <button
@@ -2592,7 +2688,8 @@ const GroupMeetAdminPage: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
 
                     {!requests.length && !loading && (
                       <div className="rounded-lg border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-400">
@@ -2709,6 +2806,18 @@ const GroupMeetAdminPage: React.FC = () => {
                                 {selectedRequest.analysis.bestCandidates.length}{" "}
                                 ranked candidates
                               </span>
+                              <span
+                                className={`rounded-full border px-3 py-1.5 ${
+                                  selectedRequestHostHasAvailability
+                                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                                    : "border-amber-500/30 bg-amber-500/10 text-amber-700"
+                                }`}
+                              >
+                                Host{" "}
+                                {selectedRequestHostHasAvailability
+                                  ? "ready"
+                                  : "needs availability"}
+                              </span>
                               {hasGroupMeetDeadlinePassed(
                                 selectedRequest.deadlineAt,
                               ) &&
@@ -2729,7 +2838,13 @@ const GroupMeetAdminPage: React.FC = () => {
                                   sendDraftInvites(selectedRequestId)
                                 }
                                 disabled={
-                                  sendingRequestId === selectedRequestId
+                                  sendingRequestId === selectedRequestId ||
+                                  !selectedRequestHostHasAvailability
+                                }
+                                title={
+                                  selectedRequestHostHasAvailability
+                                    ? "Send guest invitations"
+                                    : "Add host availability before sending guest invitations"
                                 }
                                 className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                               >
@@ -2738,6 +2853,17 @@ const GroupMeetAdminPage: React.FC = () => {
                                   ? "Sending…"
                                   : "Send invitations"}
                               </button>
+                            )}
+                            {selectedRequestHostInvite?.shareUrl && (
+                              <a
+                                href={selectedRequestHostInvite.shareUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-4 py-2.5 text-sm hover:bg-white"
+                              >
+                                <Calendar className="w-4 h-4" />
+                                Open host link
+                              </a>
                             )}
                             <button
                               type="button"
@@ -2757,6 +2883,16 @@ const GroupMeetAdminPage: React.FC = () => {
                             send.
                           </div>
                         )}
+
+                        {!selectedRequestHostHasAvailability &&
+                          selectedRequestHostInvite?.shareUrl && (
+                            <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-700">
+                              The host can use their host link to connect Google
+                              Calendar and import availability. Guest
+                              invitations stay locked until the host has at
+                              least one saved window.
+                            </div>
+                          )}
 
                         {selectedRequest.analysis.pendingParticipantNames
                           .length > 0 && (

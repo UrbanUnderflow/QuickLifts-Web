@@ -348,6 +348,7 @@ Rules:
 - "nextStep" should be a practical next action for following up.
 - "notes" should be blank unless the page contains deal-moving context: buyer angle, eligibility nuance, budget/funding detail, deadline risk, procurement constraint, relationship context, strategic fit, or a prep detail that changes what the user should do.
 - Do not use "notes" to summarize what the page is, describe the website, or explain generic relevance. If the only note is "this page appears to be..." or "may be relevant...", return "".
+- For VC, investor, or fund leads, prefer the official firm/fund website as sourceUrl. Do not use directories, "top investor" lists, LinkedIn posts, or listicles as sourceUrl unless no official source can be found.
 - Use ISO date format YYYY-MM-DD for dates when explicit dates appear.
 - Keep confidence from 0 to 100.`;
 

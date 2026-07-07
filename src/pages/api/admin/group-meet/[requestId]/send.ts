@@ -70,6 +70,23 @@ export default async function handler(
       .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
       .orderBy("createdAt", "asc")
       .get();
+    const hostInviteDoc = invitesSnapshot.docs.find((inviteDoc) => {
+      const inviteData = inviteDoc.data() || {};
+      return inviteData.participantType === "host";
+    });
+    const hostAvailabilityEntries = Array.isArray(
+      hostInviteDoc?.data()?.availabilityEntries,
+    )
+      ? hostInviteDoc?.data()?.availabilityEntries
+      : [];
+
+    if (!hostInviteDoc || !hostAvailabilityEntries.length) {
+      return res.status(400).json({
+        error:
+          "Add host availability before sending invitations. Open the host link to connect Google Calendar or add availability manually.",
+      });
+    }
+
     const hadSentInviteAlready = invitesSnapshot.docs.some((inviteDoc) => {
       const inviteData = inviteDoc.data() || {};
       return (

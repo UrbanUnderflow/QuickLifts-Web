@@ -163,12 +163,6 @@ export default async function handler(
       ),
     };
 
-    if (!normalizedHost.availabilityEntries.length) {
-      return res.status(400).json({
-        error: "Add the host availability before sending the request.",
-      });
-    }
-
     const requestedParticipantIds = Array.from(
       new Set(
         (Array.isArray(body.participants) ? body.participants : [])
@@ -232,7 +226,7 @@ export default async function handler(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       participantCount: totalParticipants,
-      responseCount: 1,
+      responseCount: normalizedHost.availabilityEntries.length > 0 ? 1 : 0,
       status: "draft",
     });
 
