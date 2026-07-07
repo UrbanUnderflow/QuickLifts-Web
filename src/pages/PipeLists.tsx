@@ -122,7 +122,7 @@ type ActivityLog = {
   staffFeedbackScore: string;
   notes: string;
   createdAt: string;
-  systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved';
+  systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved' | 'email-sent';
   relatedItemId?: string;
   restorableUntil?: string;
 };
@@ -161,6 +161,16 @@ type PipelineItem = {
   organization: string;
   owner: string;
   contactEmails: string[];
+  emailStatus: string;
+  lastEmailEvent: string;
+  lastEmailMessageId: string;
+  lastEmailSentAt: string;
+  lastEmailDeliveredAt: string;
+  lastEmailOpenedAt: string;
+  lastEmailClickedAt: string;
+  emailOpenCount: number;
+  emailClickCount: number;
+  lastEmailClickedLink: string;
   stage: string;
   priority: PipelinePriority;
   amount: string;
@@ -344,6 +354,7 @@ const logDisplayLabel = (log: ActivityLog) => {
   if (log.systemAction === 'item-deleted') return 'Item Deleted';
   if (log.systemAction === 'item-restored') return 'Item Restored';
   if (log.systemAction === 'item-moved') return 'Item Moved';
+  if (log.systemAction === 'email-sent') return 'Email Sent';
   return logTypeLabels[log.type];
 };
 
@@ -354,6 +365,16 @@ const generalStages: StageConfig[] = [
   { id: 'negotiating', label: 'Negotiating', probability: 75, track: 'run', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
   { id: 'won', label: 'Won', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
   { id: 'parked', label: 'Parked', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const investorContactStages: StageConfig[] = [
+  { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'cold-contact', label: 'Cold Contact', probability: 15, track: 'general', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { id: 'contacted', label: 'Contacted', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'engaged', label: 'Engaged', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'update-ready', label: 'Update Ready', probability: 65, track: 'general', tone: 'bg-teal-50 text-teal-700 border-teal-100' },
+  { id: 'sent-update', label: 'Sent Update', probability: 80, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 
 const pilotContractStages: StageConfig[] = [
@@ -454,17 +475,20 @@ const templateCatalog: Record<
     stages: generalStages,
   },
   'investor-metrics': {
-    label: 'Investor Update Metrics',
-    defaultName: 'Investor Metrics',
-    description: 'Investor questions, proof points, data sources, and update readiness.',
+    label: 'Investor Update Contacts',
+    defaultName: 'Investor Update Contacts',
+    description: 'People to include in investor updates, with relationship status, notes, and follow-up tracking.',
     accent: 'bg-stone-700',
-    stages: generalStages,
+    stages: investorContactStages,
   },
 };
 
 const isFundSizeList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'vc';
 const amountFieldLabelForList = (list: Pick<PipeList, 'templateKey'>) =>
   isFundSizeList(list) ? 'Fund Size' : 'Amount / Prize';
+const isInvestorContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+  list.templateKey === 'investor-metrics' || list.name.trim().toLowerCase() === 'investor update contacts';
+const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) => (isInvestorContactList(list) ? 'contact' : 'opportunity');
 
 const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
@@ -534,6 +558,36 @@ const buildFriendAnalysisNotes = (friend: FriendOfBusinessContact) => {
     .join('\n\n');
 };
 
+const normalizeEmailStatus = (value: unknown) => String(value || '').trim().toLowerCase();
+const emailStatusLabel = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
+  const status = normalizeEmailStatus(item.emailStatus || item.lastEmailEvent);
+  if (!status) return 'Not sent';
+  if (status === 'request') return 'Sent';
+  if (status === 'opened') return 'Opened';
+  if (status === 'click' || status === 'clicked') return 'Clicked';
+  if (status === 'delivered') return 'Delivered';
+  if (status === 'sent') return 'Sent';
+  if (status === 'soft_bounce') return 'Soft bounce';
+  if (status === 'hard_bounce') return 'Hard bounce';
+  if (status === 'invalid_email') return 'Invalid email';
+  if (status === 'unsubscribed' || status === 'unsubscribe') return 'Unsubscribed';
+  return status
+    .split(/[_-]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const emailStatusTone = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
+  const status = normalizeEmailStatus(item.emailStatus || item.lastEmailEvent);
+  if (status === 'opened' || status === 'click' || status === 'clicked') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'delivered') return 'border-sky-200 bg-sky-50 text-sky-700';
+  if (status === 'sent' || status === 'request') return 'border-stone-200 bg-stone-50 text-stone-600';
+  if (['soft_bounce', 'hard_bounce', 'blocked', 'deferred', 'spam', 'unsubscribe', 'unsubscribed', 'invalid_email', 'error'].includes(status)) {
+    return 'border-rose-200 bg-rose-50 text-rose-700';
+  }
+  return 'border-stone-200 bg-white text-stone-400';
+};
+
 const normalizeLeadInputUrl = (value: string) => {
   const trimmed = value.trim();
   const candidate = /^https?:\/\//i.test(trimmed)
@@ -585,6 +639,16 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   organization: '',
   owner: '',
   contactEmails: [],
+  emailStatus: '',
+  lastEmailEvent: '',
+  lastEmailMessageId: '',
+  lastEmailSentAt: '',
+  lastEmailDeliveredAt: '',
+  lastEmailOpenedAt: '',
+  lastEmailClickedAt: '',
+  emailOpenCount: 0,
+  emailClickCount: 0,
+  lastEmailClickedLink: '',
   stage,
   priority: 'medium',
   amount: '',
@@ -881,178 +945,41 @@ const isIsoDateOnOrAfter = (dateValue: string, minimumDate: string) => {
   return !Number.isNaN(dateTime) && dateTime >= minimumTime;
 };
 
-const isLikelyPitchApplicationOpportunity = (lead: GeneratedLead) => {
-  const combinedText = [
-    lead.title,
-    lead.organization,
-    lead.nextStep,
-    lead.notes,
-    lead.sourceUrl,
-    lead.segment,
-    lead.rationale,
-    lead.sourceEvidence,
-    lead.deadlineStatus,
-  ]
-    .join(' ')
-    .toLowerCase();
-  const nextStepText = lead.nextStep.toLowerCase();
-
-  if (combinedText.includes('event has passed') || combinedText.includes('event passed')) return false;
-
-  const eventOnlyLanguage = [
-    'demo day',
-    'showcase',
-    'networking event',
-    'alumni event',
-    'speaker event',
-    'webinar',
-    'conference session',
-  ].some((token) => combinedText.includes(token));
-  const applicationLanguage = [
-    'apply',
-    'application',
-    'applications open',
-    'application deadline',
-    'submit',
-    'submission',
-    'submissions',
-    'call for startups',
-    'startup competition',
-    'pitch competition',
-    'prize competition',
-    'compete',
-  ].some((token) => combinedText.includes(token));
-  const spectatorNextStep = /^(attend|register|watch|join|visit|go to)\b/.test(nextStepText);
-
-  return !eventOnlyLanguage || (applicationLanguage && !spectatorNextStep);
-};
-
-const isGeneratedLeadEligible = (lead: GeneratedLead, list: PipeList, today: string) => {
-  if (isDeadlineDrivenTemplate(list) && !isIsoDateOnOrAfter(lead.dueDate, today)) return false;
-  if (isPitchCompetitionList(list) && !isLikelyPitchApplicationOpportunity(lead)) return false;
-
-  return true;
-};
-
-const defaultLeadGenAdjustments = (list: PipeList) => {
-  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
-
-  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return 'Find open startup pitch competitions, prize competitions, startup challenges, and founder award applications relevant to PulseCheck: athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, youth/college athletics, and team markets. Only include opportunities where PulseCheck can apply, submit, or compete, with application deadlines today or later. Exclude demo days, showcase-only events, networking events, spectator events, and accelerator cohort events unless there is a current application to pitch or compete. Prefer official pages, U.S. or remote options, meaningful prize/investor exposure, and opportunities not already in this list.';
-  }
-
-  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
-    return 'Find open grants, awards, challenges, or non-dilutive funding opportunities relevant to PulseCheck: athlete mental readiness, sport psychology, sports performance, digital health, wellness, youth/college athletics, education, AI, and healthcare-adjacent innovation. Only include application deadlines today or later and prefer official funder pages.';
-  }
-
-  if (identity.includes('vc') || identity.includes('investor')) {
-    return 'Find investors, angel groups, accelerators, and founder programs that are a strong fit for PulseCheck across athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, and athlete/team operations. Do not force deadlines; prioritize fit, thesis alignment, and a practical outreach next step.';
-  }
-
-  if (identity.includes('university') || identity.includes('pilot')) {
-    return 'Find universities, athletic departments, sports performance labs, wellness programs, mental-performance groups, sport psychology teams, and innovation offices that could plausibly run a PulseCheck pilot. Do not force deadlines; prioritize buyer fit, pilot scope, decision-maker clues, and a practical follow-up.';
-  }
-
-  return 'Find highly relevant opportunities for this PipeList. Match the template purpose: require future deadlines for application-based opportunities, but leave due dates blank for relationship-based leads unless the source has a real deadline.';
-};
-
 const clampLeadGenCount = (value: number) => Math.min(10, Math.max(3, value));
 
-const defaultLeadSearchBrief = (list: PipeList): LeadSearchBrief => {
-  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
-  const productContext =
-    'PulseCheck helps teams, schools, clinics, and sports/wellness programs track mental readiness, wellbeing signals, engagement, early alerts, referrals, support navigation, and outcomes reporting.';
-
-  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
-    return {
-      productName: 'PulseCheck',
-      productContext:
-        'PulseCheck is a student check-in, wellbeing, early-alert, referral-routing, support-navigation, and outcomes-reporting platform for universities. It can support campus mental health, suicide prevention, basic needs, retention, student success, advising, belonging, substance-use screening/referral, case management, STEM persistence, first-generation/low-income student support, and grant reporting.',
-      searchFocus: defaultLeadGenAdjustments(list),
-      targetAudience:
-        'Universities, colleges, community colleges, HBCUs, MSIs, TRIO programs, student-success offices, counseling centers, basic-needs offices, advising teams, and research faculty.',
-      opportunityTypes:
-        'Federal grants, current or recurring federal programs, formula grants, cooperative agreements, SBIR/STTR opportunities, adjacent federal funding, state pass-through grants, and foundation grants aligned to federal priorities.',
-      preferredSources:
-        'Official sources first: Grants.gov, Simpler.Grants.gov, SAMHSA, U.S. Department of Education, NSF, NIH, NIMH, HRSA, Department of Labor, DOJ/OVW, CDC, USDA, AmeriCorps, and official agency pages.',
-      mustInclude:
-        'Grant/program name, agency, opportunity number when available, current status, deadline, eligible applicants, award size, project period, university eligibility, PulseCheck positioning, fit score, funded activities, buyer/champion, budget language, reporting/outcomes, risks, and official source link.',
-      mustExclude:
-        'Expired one-off opportunities with no recurring path, vague pages, unofficial aggregators unless verified against an official source, and anything that cannot plausibly fund PulseCheck as implementation infrastructure.',
-      positioning:
-        'Frame PulseCheck as implementation infrastructure for a federally funded student-success, wellbeing, behavioral-health, retention, basic-needs, or evaluation initiative. Do not frame it as simply a grant to buy software.',
-      requireFutureDeadline: true,
-      officialSourcesOnly: true,
-      includeAdjacentFit: true,
-      leadCount: 6,
-    };
-  }
-
-  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return {
-      productName: 'PulseCheck',
-      productContext,
-      searchFocus: defaultLeadGenAdjustments(list),
-      targetAudience: 'Startup accelerators, pitch competitions, founder awards, innovation challenges, demo competitions, and prize programs where PulseCheck can apply or submit.',
-      opportunityTypes: 'Open pitch competitions, prize competitions, startup challenges, founder award applications, and accelerator pitch applications.',
-      preferredSources: 'Official program pages, organizer pages, accelerator pages, university innovation-center pages, and reputable startup ecosystem pages only when they link to official applications.',
-      mustInclude: 'Application deadline, prize or investor exposure, eligibility, fit rationale, source link, and a practical application next step.',
-      mustExclude: 'Passed events, demo-day-only pages, showcase-only events, spectator events, networking events, webinars, closed applications, vague deadlines, and anything without an active application or submission path.',
-      positioning: 'Position PulseCheck around athlete mental readiness, sport psychology, sports performance, digital health, wellness, AI, education, youth/college athletics, and team markets.',
-      requireFutureDeadline: true,
-      officialSourcesOnly: true,
-      includeAdjacentFit: false,
-      leadCount: 6,
-    };
-  }
-
-  if (identity.includes('vc') || identity.includes('investor')) {
-    return {
-      productName: 'PulseCheck',
-      productContext,
-      searchFocus: defaultLeadGenAdjustments(list),
-      targetAudience: 'Venture funds, angels, family offices, accelerators, founder programs, and strategic investors.',
-      opportunityTypes: 'Investor targets, warm-intro paths, accelerator investor programs, and thesis-aligned capital sources.',
-      preferredSources: 'Official investor websites, portfolio pages, fund thesis pages, LinkedIn/company pages when official pages are thin, and reputable startup databases when available.',
-      mustInclude: 'Investor thesis, relevant portfolio signals, check/stage fit when available, best contact or intro path, fit rationale, source link, and next outreach step.',
-      mustExclude: 'Investors with no clear fit, inactive funds, irrelevant geographies/stages, and sources that do not support a practical next step.',
-      positioning: 'Frame PulseCheck as a sports/wellness performance and mental-readiness infrastructure company with education, team, and healthcare-adjacent markets.',
-      requireFutureDeadline: false,
-      officialSourcesOnly: false,
-      includeAdjacentFit: true,
-      leadCount: 6,
-    };
-  }
-
+const defaultLeadSearchBrief = (_list: PipeList): LeadSearchBrief => {
   return {
-    productName: 'PulseCheck',
-    productContext,
-    searchFocus: defaultLeadGenAdjustments(list),
-    targetAudience: 'Organizations, partners, buyers, programs, or institutions that match this PipeList.',
-    opportunityTypes: templateCatalog[list.templateKey].label,
-    preferredSources: 'Official and current sources first. Use reputable secondary sources only when they add useful context.',
-    mustInclude: 'Name, organization, source link, amount or value when available, due date when relevant, fit rationale, and next step.',
-    mustExclude: 'Expired, closed, irrelevant, vague, duplicate, or unsupported opportunities.',
-    positioning: 'Position PulseCheck using the strongest buyer-specific fit for this PipeList.',
-    requireFutureDeadline: isDeadlineDrivenTemplate(list),
-    officialSourcesOnly: isDeadlineDrivenTemplate(list),
-    includeAdjacentFit: true,
+    productName: '',
+    productContext: '',
+    searchFocus: '',
+    targetAudience: '',
+    opportunityTypes: '',
+    preferredSources: '',
+    mustInclude: '',
+    mustExclude: '',
+    positioning: '',
+    requireFutureDeadline: false,
+    officialSourcesOnly: false,
+    includeAdjacentFit: false,
     leadCount: 6,
   };
 };
 
 const normalizeLeadSearchBrief = (brief: Partial<LeadSearchBrief> | undefined, list: PipeList): LeadSearchBrief => {
   const fallback = defaultLeadSearchBrief(list);
+  const readString = (field: keyof LeadSearchBrief) =>
+    typeof brief?.[field] === 'string' ? (brief[field] as string) : (fallback[field] as string);
+
   return {
-    productName: brief?.productName || fallback.productName,
-    productContext: brief?.productContext || fallback.productContext,
-    searchFocus: brief?.searchFocus || fallback.searchFocus,
-    targetAudience: brief?.targetAudience || fallback.targetAudience,
-    opportunityTypes: brief?.opportunityTypes || fallback.opportunityTypes,
-    preferredSources: brief?.preferredSources || fallback.preferredSources,
-    mustInclude: brief?.mustInclude || fallback.mustInclude,
-    mustExclude: brief?.mustExclude || fallback.mustExclude,
-    positioning: brief?.positioning || fallback.positioning,
+    productName: readString('productName'),
+    productContext: readString('productContext'),
+    searchFocus: readString('searchFocus'),
+    targetAudience: readString('targetAudience'),
+    opportunityTypes: readString('opportunityTypes'),
+    preferredSources: readString('preferredSources'),
+    mustInclude: readString('mustInclude'),
+    mustExclude: readString('mustExclude'),
+    positioning: readString('positioning'),
     requireFutureDeadline: brief?.requireFutureDeadline ?? fallback.requireFutureDeadline,
     officialSourcesOnly: brief?.officialSourcesOnly ?? fallback.officialSourcesOnly,
     includeAdjacentFit: brief?.includeAdjacentFit ?? fallback.includeAdjacentFit,
@@ -1062,24 +989,24 @@ const normalizeLeadSearchBrief = (brief: Partial<LeadSearchBrief> | undefined, l
 
 const buildLeadSearchPrompt = (brief: LeadSearchBrief) =>
   [
-    `Research role: act as a lead-generation research strategist helping ${brief.productName} find leads for this PipeList.`,
-    `Product context: ${brief.productContext}`,
-    `Research goal: ${brief.searchFocus}`,
-    `Target audience/customer: ${brief.targetAudience}`,
-    `Opportunity types: ${brief.opportunityTypes}`,
-    `Preferred sources: ${brief.preferredSources}`,
+    brief.productName ? `Product / company: ${brief.productName}` : '',
+    brief.productContext ? `Product context: ${brief.productContext}` : '',
+    brief.searchFocus ? `Search focus: ${brief.searchFocus}` : '',
+    brief.targetAudience ? `Target buyer / audience: ${brief.targetAudience}` : '',
+    brief.opportunityTypes ? `Opportunity types: ${brief.opportunityTypes}` : '',
+    brief.preferredSources ? `Preferred sources: ${brief.preferredSources}` : '',
     brief.includeAdjacentFit
-      ? 'Include both direct-fit opportunities and adjacent opportunities where PulseCheck could be positioned as a vendor, implementation partner, subrecipient, evaluator, research tool, data platform, referral system, or pilot-site technology.'
-      : 'Only include direct-fit opportunities with a clear path for PulseCheck to apply, submit, compete, sell, partner, or outreach.',
+      ? 'Include adjacent-fit leads when there is a practical positioning or outreach path.'
+      : '',
     brief.requireFutureDeadline
       ? 'Require a current or future application/submission deadline. Exclude undated, expired, closed, or already-passed opportunities.'
-      : 'Do not force deadlines unless the source has a real application/submission deadline.',
+      : '',
     brief.officialSourcesOnly
       ? 'Use official/current sources first and verify against official pages before returning a lead.'
-      : 'Use current sources and prefer official pages, but allow reputable secondary sources when they provide useful context.',
-    `Must include: ${brief.mustInclude}`,
-    `Must exclude: ${brief.mustExclude}`,
-    `Positioning guidance: ${brief.positioning}`,
+      : '',
+    brief.mustInclude ? `Must include: ${brief.mustInclude}` : '',
+    brief.mustExclude ? `Must exclude: ${brief.mustExclude}` : '',
+    brief.positioning ? `Positioning guidance: ${brief.positioning}` : '',
   ]
     .filter(Boolean)
     .join('\n\n');
@@ -1212,39 +1139,6 @@ const getEasternDate = () => {
   const month = parts.find((part) => part.type === 'month')?.value || '';
   const day = parts.find((part) => part.type === 'day')?.value || '';
   return `${year}-${month}-${day}`;
-};
-
-const isDeadlineDrivenTemplate = (list: PipeList) => {
-  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
-  return ['pitch', 'grant', 'competition', 'challenge', 'award', 'prize', 'rfp', 'application deadline'].some((token) =>
-    identity.includes(token),
-  );
-};
-
-const leadSearchTemplatePolicy = (list: PipeList, today: string) => {
-  const identity = `${list.templateKey} ${list.name} ${templateCatalog[list.templateKey].label}`.toLowerCase();
-
-  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return `Template policy: this is a pitch competition list. Find only open startup pitch competitions, founder award applications, startup challenges, and prize competitions that PulseCheck can apply to, submit to, or compete in. Only include opportunities with an explicit application/submission deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, undated, event-only, spectator-only, demo-day-only, showcase-only, networking, webinar, and accelerator-cohort pages unless the page has a current application to pitch or compete. Prefer official program pages or organizer pages.`;
-  }
-
-  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
-    return `Template policy: this is a grant or non-dilutive funding list. Find open grant, award, challenge, innovation fund, or public/private funding opportunities relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, vague, or undated opportunities. Prefer official funder pages.`;
-  }
-
-  if (identity.includes('vc') || identity.includes('investor')) {
-    return `Template policy: this is an investor list. Find relevant venture funds, angel groups, accelerators, or investor programs for sports performance, digital health, wellness, education technology, AI, or athlete/team markets. Do not force a dueDate unless there is a real application deadline. Use nextStep for the best outreach or application action.`;
-  }
-
-  if (identity.includes('university') || identity.includes('pilot')) {
-    return `Template policy: this is a university pilot list. Find universities, athletic departments, sports performance labs, wellness programs, psychology/mental-performance groups, or innovation offices that could plausibly run a PulseCheck pilot. Do not force a dueDate. Use pilotScope, decisionMaker, segment, athleteCount, and nextStep when the source supports them.`;
-  }
-
-  if (identity.includes('contract')) {
-    return `Template policy: this is a contract pipeline. Find procurement, partnership, RFP, vendor, or paid-program opportunities relevant to PulseCheck. If the source has a submission deadline, dueDate must be on or after ${today}; otherwise leave dueDate blank and use expectedCloseDate only for a practical follow-up target if supported.`;
-  }
-
-  return `Template policy: match the user's PipeList purpose. If this looks like a deadline-driven application list, only include leads with explicit deadlines on or after ${today}. If it is relationship-driven, do not invent dates and leave dueDate blank unless a real deadline exists.`;
 };
 
 const isPitchCompetitionList = (list: PipeList) =>
@@ -1520,12 +1414,13 @@ const isWonStage = (list: PipeList, stageId: string) => getStage(list, stageId).
 const normalizeStageId = (stage: string, listStages: StageConfig[]) => {
   if (listStages.some((stageConfig) => stageConfig.id === stage)) return stage;
   const legacyMap: Record<string, string> = {
-    sourced: listStages[0]?.id || 'sourced',
-    contacted: listStages[1]?.id || listStages[0]?.id || 'contacted',
-    'in-review': listStages[2]?.id || listStages[0]?.id || 'in-review',
-    negotiating: listStages.find((stageConfig) => stageConfig.id === 'negotiating')?.id || listStages[0]?.id || 'negotiating',
-    won: listStages.find((stageConfig) => stageConfig.outcome === 'won')?.id || listStages[0]?.id || 'won',
-    parked: listStages.find((stageConfig) => stageConfig.outcome === 'lost')?.id || listStages[0]?.id || 'parked',
+    sourced: listStages.find((stageConfig) => stageConfig.id === 'sourced')?.id || listStages[0]?.id || 'sourced',
+    'cold-contact': listStages.find((stageConfig) => stageConfig.id === 'cold-contact')?.id || listStages[1]?.id || listStages[0]?.id || 'cold-contact',
+    contacted: listStages.find((stageConfig) => stageConfig.id === 'contacted')?.id || listStages[1]?.id || listStages[0]?.id || 'contacted',
+    'in-review': listStages.find((stageConfig) => stageConfig.id === 'in-review')?.id || listStages.find((stageConfig) => stageConfig.id === 'engaged')?.id || listStages[2]?.id || listStages[0]?.id || 'in-review',
+    negotiating: listStages.find((stageConfig) => stageConfig.id === 'negotiating')?.id || listStages.find((stageConfig) => stageConfig.id === 'update-ready')?.id || listStages[0]?.id || 'negotiating',
+    won: listStages.find((stageConfig) => stageConfig.outcome === 'won')?.id || listStages.find((stageConfig) => stageConfig.id === 'sent-update')?.id || listStages[0]?.id || 'won',
+    parked: listStages.find((stageConfig) => stageConfig.outcome === 'lost')?.id || listStages.find((stageConfig) => stageConfig.id === 'paused')?.id || listStages[0]?.id || 'parked',
   };
   return legacyMap[stage] || listStages[0]?.id || stage;
 };
@@ -1596,6 +1491,16 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     organization: item.organization || '',
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
+    emailStatus: item.emailStatus || '',
+    lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
+    lastEmailMessageId: item.lastEmailMessageId || '',
+    lastEmailSentAt: item.lastEmailSentAt || '',
+    lastEmailDeliveredAt: item.lastEmailDeliveredAt || '',
+    lastEmailOpenedAt: item.lastEmailOpenedAt || '',
+    lastEmailClickedAt: item.lastEmailClickedAt || '',
+    emailOpenCount: Number.isFinite(item.emailOpenCount) ? Number(item.emailOpenCount) : 0,
+    emailClickCount: Number.isFinite(item.emailClickCount) ? Number(item.emailClickCount) : 0,
+    lastEmailClickedLink: item.lastEmailClickedLink || '',
     stage,
     priority: item.priority || 'medium',
     amount: item.amount || '',
@@ -1637,7 +1542,9 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const template = templateCatalog[templateKey];
   const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
   const stages =
-    templateKey === 'vc'
+    templateKey === 'investor-metrics'
+      ? template.stages
+      : templateKey === 'vc'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
           if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
           const insertAfterIndex = templateStage.id === 'cold-contact'
@@ -2170,6 +2077,12 @@ const PipelinePage: NextPage = () => {
   const [leadGenMessage, setLeadGenMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isImportingFriends, setIsImportingFriends] = useState(false);
   const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isContactEmailModalOpen, setIsContactEmailModalOpen] = useState(false);
+  const [contactEmailRecipients, setContactEmailRecipients] = useState('');
+  const [contactEmailSubject, setContactEmailSubject] = useState('');
+  const [contactEmailBody, setContactEmailBody] = useState('');
+  const [contactEmailSendMessage, setContactEmailSendMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isSendingContactEmail, setIsSendingContactEmail] = useState(false);
   const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
   const [isEnrichingVcSources, setIsEnrichingVcSources] = useState(false);
   const [vcSourceEnrichmentMessage, setVcSourceEnrichmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -2276,7 +2189,7 @@ const PipelinePage: NextPage = () => {
   const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
   const canManageWorkspace = !isSharedView && Boolean(user);
   const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
-  const isInvestorUpdateContactsList = activeList.name.trim().toLowerCase() === 'investor update contacts';
+  const isInvestorUpdateContactsList = isInvestorContactList(activeList);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -2847,11 +2760,34 @@ const PipelinePage: NextPage = () => {
   }, [accessibleShareDocs, dataReady, isOwner, isSharedView, lists, normalizedUserEmail, profile, user]);
 
   const leadSearchPromptPreview = useMemo(() => buildLeadSearchPrompt(leadSearchBrief), [leadSearchBrief]);
+  const persistLeadSearchBrief = (brief: LeadSearchBrief = leadSearchBrief) => {
+    const normalizedBrief = normalizeLeadSearchBrief(brief, activeList);
+
+    setLeadSearchBrief(normalizedBrief);
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              searchBrief: normalizedBrief,
+            }
+          : list,
+      ),
+    );
+
+    return normalizedBrief;
+  };
   const updateLeadSearchBrief = <Key extends keyof LeadSearchBrief>(field: Key, value: LeadSearchBrief[Key]) => {
     setLeadSearchBrief((currentBrief) => ({
       ...currentBrief,
       [field]: value,
     }));
+  };
+  const updateAndPersistLeadSearchBrief = <Key extends keyof LeadSearchBrief>(field: Key, value: LeadSearchBrief[Key]) => {
+    persistLeadSearchBrief({
+      ...leadSearchBrief,
+      [field]: value,
+    });
   };
   const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
 
@@ -2996,6 +2932,10 @@ const PipelinePage: NextPage = () => {
     () => activeList.items.filter((item) => !isItemDeleted(item)),
     [activeList.items],
   );
+  const activeContactEmails = useMemo(
+    () => Array.from(new Set(activeListItems.flatMap((item) => normalizeContactEmails(item.contactEmails)))),
+    [activeListItems],
+  );
   const missingVcSourceItems = useMemo(
     () =>
       activeList.templateKey === 'vc'
@@ -3096,6 +3036,16 @@ const PipelinePage: NextPage = () => {
 
   const activeItems = activeListItems.filter((item) => !isClosedStage(activeList, item.stage)).length;
   const wonItems = activeListItems.filter((item) => isWonStage(activeList, item.stage)).length;
+  const loggedItems = activeListItems.filter((item) => item.weeklyLogs.length > 0).length;
+  const sentEmailItems = activeListItems.filter((item) =>
+    ['request', 'sent', 'delivered', 'opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
+  ).length;
+  const deliveredEmailItems = activeListItems.filter((item) =>
+    ['delivered', 'opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
+  ).length;
+  const openedEmailItems = activeListItems.filter((item) =>
+    ['opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
+  ).length;
   const dueSoonItems = activeListItems.filter((item) => {
     const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
     if (!dueDate) return false;
@@ -3262,6 +3212,158 @@ const PipelinePage: NextPage = () => {
     setViewMode('pipeline');
   };
 
+  const parseRecipientEmails = (value: string) =>
+    Array.from(
+      new Set(
+        value
+          .split(/[\s,;]+/)
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+
+  const openContactEmailModal = () => {
+    setContactEmailRecipients(activeContactEmails.join(', '));
+    setContactEmailSubject('');
+    setContactEmailBody('');
+    setContactEmailSendMessage(
+      isOwner
+        ? null
+        : {
+            type: 'info',
+            text: 'Pulse Brevo is only available to tremaine.grant@gmail.com. Collaborators will need their own email provider before sending.',
+          },
+    );
+    setIsContactEmailModalOpen(true);
+  };
+
+  const closeContactEmailModal = () => {
+    if (isSendingContactEmail) return;
+    setIsContactEmailModalOpen(false);
+    setContactEmailSendMessage(null);
+  };
+
+  const handleSendContactEmail = async () => {
+    if (!user) {
+      setContactEmailSendMessage({ type: 'error', text: 'Please sign in again.' });
+      return;
+    }
+    if (!isOwner) {
+      setContactEmailSendMessage({
+        type: 'error',
+        text: 'Pulse Brevo sending is only enabled for tremaine.grant@gmail.com.',
+      });
+      return;
+    }
+
+    const toEmails = parseRecipientEmails(contactEmailRecipients);
+    const invalidEmail = toEmails.find((email) => !isValidContactEmail(email));
+    if (toEmails.length === 0) {
+      setContactEmailSendMessage({ type: 'error', text: 'Add at least one recipient.' });
+      return;
+    }
+    if (invalidEmail) {
+      setContactEmailSendMessage({ type: 'error', text: `Invalid recipient: ${invalidEmail}` });
+      return;
+    }
+    if (!contactEmailSubject.trim()) {
+      setContactEmailSendMessage({ type: 'error', text: 'Add a subject.' });
+      return;
+    }
+    if (!contactEmailBody.trim()) {
+      setContactEmailSendMessage({ type: 'error', text: 'Add a message.' });
+      return;
+    }
+
+    setIsSendingContactEmail(true);
+    setContactEmailSendMessage(null);
+    const recipientItems = toEmails.map((email) => ({
+      email,
+      itemIds: activeListItems
+        .filter((item) => normalizeContactEmails(item.contactEmails).includes(email))
+        .map((item) => item.id),
+    }));
+    const batchId = makeId();
+
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/pipelists/send-contact-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          provider: 'pulse-brevo',
+          toEmails,
+          subject: contactEmailSubject.trim(),
+          message: contactEmailBody.trim(),
+          listId: activeList.id,
+          listName: activeList.name,
+          ownerUid: user.uid,
+          batchId,
+          recipientItems,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.error || 'Unable to send email.');
+      }
+
+      const sentCount = Number(result?.sentCount || toEmails.length);
+      setContactEmailSendMessage({
+        type: 'success',
+        text: `Sent ${formatCount(sentCount, 'email')}.`,
+      });
+      setToastMessage({ type: 'success', text: `Sent ${formatCount(sentCount, 'email')}.` });
+      const resultRows: Array<{ toEmail?: string; messageId?: string }> = Array.isArray(result?.results) ? result.results : [];
+      const messageIdsByEmail = new Map<string, string>(
+        resultRows
+          .map((row): [string, string] => [String(row.toEmail || '').toLowerCase(), String(row.messageId || '')])
+          .filter(([email]) => Boolean(email)),
+      );
+      const sentAt = new Date().toISOString();
+
+      setLists((currentLists) =>
+        currentLists.map((list) => {
+          if (list.id !== activeList.id) return list;
+
+          return {
+            ...list,
+            items: list.items.map((item) => {
+              const matchingEmail = normalizeContactEmails(item.contactEmails).find((email) => toEmails.includes(email));
+              if (!matchingEmail) return item;
+
+              const summary = `Email sent to ${matchingEmail}.`;
+              const alreadyLogged = item.weeklyLogs.some(
+                (log) => log.systemAction === 'email-sent' && log.summary === summary && log.createdAt.slice(0, 10) === sentAt.slice(0, 10),
+              );
+
+              return {
+                ...item,
+                emailStatus: 'sent',
+                lastEmailEvent: 'sent',
+                lastEmailSentAt: sentAt,
+                lastEmailMessageId: messageIdsByEmail.get(matchingEmail) || item.lastEmailMessageId,
+                updatedAt: sentAt,
+                weeklyLogs: alreadyLogged ? item.weeklyLogs : [createSystemLog(item, 'email-sent', summary), ...item.weeklyLogs],
+              };
+            }),
+          };
+        }),
+      );
+      setContactEmailSubject('');
+      setContactEmailBody('');
+    } catch (error) {
+      setContactEmailSendMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to send email.',
+      });
+    } finally {
+      setIsSendingContactEmail(false);
+    }
+  };
+
   const openLeadGenModal = () => {
     if (!canModify) return;
     setLeadSearchBrief(normalizeLeadSearchBrief(activeList.searchBrief, activeList));
@@ -3276,6 +3378,7 @@ const PipelinePage: NextPage = () => {
 
   const closeLeadGenModal = () => {
     if (isGeneratingLeads) return;
+    persistLeadSearchBrief();
     setIsLeadGenModalOpen(false);
   };
 
@@ -3314,6 +3417,7 @@ const PipelinePage: NextPage = () => {
         const displayName = fullFriendName(friend);
         const organization = normalizeBasicText(friend.titleOrCompany);
         const title = displayName || contactEmails[0] || organization || 'Investor update contact';
+        const friendEmailStatus = normalizeBasicText(friend.emailStatus || friend.lastEmailEvent);
         const nextItemBase = createItem(
           {
             ...defaultDraft(firstStage),
@@ -3321,6 +3425,11 @@ const PipelinePage: NextPage = () => {
             organization,
             owner: 'Tre',
             contactEmails,
+            emailStatus: friendEmailStatus,
+            lastEmailEvent: friendEmailStatus,
+            emailOpenCount: Number.isFinite(friend.emailOpenCount) ? Number(friend.emailOpenCount) : 0,
+            emailClickCount: Number.isFinite(friend.emailClickCount) ? Number(friend.emailClickCount) : 0,
+            lastEmailClickedLink: normalizeBasicText(friend.lastEmailClickedLink),
             stage: firstStage,
             priority: 'medium',
             segment: 'Investor update contact',
@@ -3462,18 +3571,8 @@ const PipelinePage: NextPage = () => {
       const today = getEasternDate();
       const normalizedBrief = normalizeLeadSearchBrief(leadSearchBrief, activeList);
       const userAdjustments = buildLeadSearchPrompt(normalizedBrief);
-      setLeadSearchBrief(normalizedBrief);
-      setLists((currentLists) =>
-        currentLists.map((list) =>
-          list.id === activeList.id
-            ? {
-                ...list,
-                searchBrief: normalizedBrief,
-              }
-            : list,
-        ),
-      );
-      const deadlineRequired = isDeadlineDrivenTemplate(activeList);
+      persistLeadSearchBrief(normalizedBrief);
+      const deadlineRequired = normalizedBrief.requireFutureDeadline;
       const stageOptions = activeList.stages.map((stage) => ({
         id: stage.id,
         label: stage.label,
@@ -3512,21 +3611,19 @@ const PipelinePage: NextPage = () => {
               role: 'system',
               content: `You are a lead-generation researcher for PipeLists, a CRM-style opportunity tracker.
 
-PulseCheck context: PulseCheck helps teams, athletes, schools, clinics, and sports/wellness programs track mental readiness, wellness signals, engagement, and performance support. Favor opportunities related to sport psychology, athlete mental readiness, sports performance, digital health, wellness, mental performance, athlete support, AI, education, team operations, youth/college athletics, and healthcare-adjacent innovation.
-
 Current date: ${today}.
 
 Research rules:
-- Use web search and prioritize official/current sources.
-- Return only leads that are relevant to the active PipeList and PulseCheck.
+- Use the user's search brief as the primary instruction source.
+- Use web search and return leads supported by current sources.
+- Return only leads that are relevant to the active PipeList and the user's search brief.
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
 - Only include contactEmails when the source visibly provides valid email addresses. Never invent contact emails.
-- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
-- If the template is deadline-driven, every returned lead must have a verified dueDate on or after ${today}.
-- If the template is relationship-driven, dueDate can be "" unless the source provides a real deadline.
-- For pitch competition lists, do not return demo-day/showcase/networking/spectator event pages unless they have an active application or submission path for PulseCheck to compete.
-- For pitch competition lists, nextStep should be an application/submission action, not "attend", "watch", or "register for" an event.
+- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD.
+- If requireFutureDeadline is true in the search brief, every returned lead must have a verified dueDate on or after ${today}.
+- If requireFutureDeadline is false, dueDate can be "" unless the source provides a real deadline.
+- If officialSourcesOnly is true in the search brief, prefer official/current sources and verify against official pages before returning a lead.
 - Pick stage from the provided stage ids only. If unsure, use the first stage id.
 - Keep notes blank unless there is deal-moving context: risk, eligibility nuance, budget/funding detail, buyer angle, procurement constraint, strategic fit, or prep detail. Do not summarize what the page is. Do not write generic "may be relevant" notes or "AI confidence".
 - sourceEvidence must briefly name the source support used, including the deadline when relevant.
@@ -3541,7 +3638,6 @@ Research rules:
                   listName: activeList.name,
                   templateLabel: templateCatalog[activeList.templateKey].label,
                   templateKey: activeList.templateKey,
-                  templatePolicy: leadSearchTemplatePolicy(activeList, today),
                   searchBrief: normalizedBrief,
                   deadlineRequired,
                   stageOptions,
@@ -3566,7 +3662,7 @@ Research rules:
       const sanitizedLeads: GeneratedLead[] = rawLeads.length > 0
         ? rawLeads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
         : [];
-      const nextLeads = sanitizedLeads.filter((lead) => isGeneratedLeadEligible(lead, activeList, today));
+      const nextLeads = sanitizedLeads.filter((lead) => !normalizedBrief.requireFutureDeadline || isIsoDateOnOrAfter(lead.dueDate, today));
 
       setGeneratedLeads(nextLeads);
       setLeadGenMessage(
@@ -3575,14 +3671,14 @@ Research rules:
               type: 'success',
               text:
                 sanitizedLeads.length > nextLeads.length
-                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Filtered out event-only or expired matches.`
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Filtered out expired matches.`
                   : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.`,
             }
           : {
               type: 'info',
               text:
                 sanitizedLeads.length > 0
-                  ? 'The search only found expired or event-only matches. Try searching for open application deadlines.'
+                  ? 'The search only found expired matches. Try widening the search or turning off future deadline.'
                   : 'No new leads matched this search. Try widening the adjustments.',
             },
       );
@@ -3707,33 +3803,43 @@ Research rules:
             .filter(Boolean)
             .join('\n\n')
         : 'No logs recorded.';
+    const detailRows: Array<[string, string | number | undefined]> = [
+      ['Title', item.title],
+      ['PipeList', activeList.name],
+      ['Template', templateCatalog[activeList.templateKey].label],
+      ['Organization', item.organization],
+      ['Stage', `${stage.label} (${item.stage})`],
+      ['Importance', importanceLabel(item.priority)],
+      ...(isInvestorUpdateContactsList ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
+      [isInvestorUpdateContactsList ? 'Relationship Owner' : 'Owner', item.owner],
+      ['Contact Emails', item.contactEmails.join(', ')],
+      ['Segment', item.segment],
+      [isInvestorUpdateContactsList ? 'Relationship Context' : 'Decision Maker', item.decisionMaker],
+      ['Next Step', item.nextStep],
+      ['Source URL', item.sourceUrl],
+    ];
+    const timelineRows: Array<[string, string | number | undefined]> = isInvestorUpdateContactsList
+      ? [
+          ['Next Update Date', item.expectedCloseDate],
+          ['Follow-Up Date', item.dueDate],
+          ['First Contacted', item.pilotStart],
+          ['Last Contacted', item.pilotEnd],
+          ['Update Cadence', item.athleteCount],
+        ]
+      : [
+          ['ACV', item.acv],
+          [amountFieldLabelForList(activeList), item.amount],
+          ['Expected Close', item.expectedCloseDate],
+          ['Due Date', item.dueDate],
+          ['Contract Term', item.contractTerm],
+          ['Partner Cost', item.partnerCost],
+          ['Hard Cost', item.hardwareCost],
+          ['Margin Notes', item.grossMargin],
+        ];
 
     return [
-      formatClipboardSection('Lead Details', [
-        ['Title', item.title],
-        ['PipeList', activeList.name],
-        ['Template', templateCatalog[activeList.templateKey].label],
-        ['Organization', item.organization],
-        ['Stage', `${stage.label} (${item.stage})`],
-        ['Importance', importanceLabel(item.priority)],
-        [isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText],
-        ['Owner', item.owner],
-        ['Contact Emails', item.contactEmails.join(', ')],
-        ['Segment', item.segment],
-        ['Decision Maker', item.decisionMaker],
-        ['Next Step', item.nextStep],
-        ['Source URL', item.sourceUrl],
-      ]),
-      formatClipboardSection('Financials & Dates', [
-        ['ACV', item.acv],
-        [amountFieldLabelForList(activeList), item.amount],
-        ['Expected Close', item.expectedCloseDate],
-        ['Due Date', item.dueDate],
-        ['Contract Term', item.contractTerm],
-        ['Partner Cost', item.partnerCost],
-        ['Hard Cost', item.hardwareCost],
-        ['Margin Notes', item.grossMargin],
-      ]),
+      formatClipboardSection(isInvestorUpdateContactsList ? 'Contact Details' : 'Lead Details', detailRows),
+      formatClipboardSection(isInvestorUpdateContactsList ? 'Relationship Dates' : 'Financials & Dates', timelineRows),
       formatClipboardSection('Scope & Expansion', [
         ['Scope', item.pilotScope],
         ['Count', item.athleteCount],
@@ -4084,6 +4190,7 @@ Research rules:
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
       setDraft({
+        ...defaultDraft(nextItem.stage),
         title: nextItem.title,
         organization: nextItem.organization,
         owner: nextItem.owner,
@@ -5238,21 +5345,34 @@ Research rules:
   const renderItemEditor = () => (
     <form id="pipe-item-editor-form" onSubmit={handleSaveItem} className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          ['title', 'Opportunity Name', 'Opportunity name'],
-          ['organization', 'Organization', 'Company, school, fund'],
-          ['owner', 'Owner', 'Owner'],
-          ['segment', 'Segment', 'Category, fit, or type'],
-          ['decisionMaker', 'Decision Maker', 'Role or name'],
-          ['acv', 'ACV', '$'],
-          ['amount', amountFieldLabelForList(activeList), '$'],
-          ['expectedCloseDate', 'Expected Close', 'date'],
-          ['contractTerm', 'Contract Term', '12 months'],
-          ['pilotStart', 'Start Date', 'date'],
-          ['pilotEnd', 'End Date', 'date'],
-          ['athleteCount', 'Count', '42'],
-          ['sourceUrl', 'Source URL', 'https://example.com'],
-        ].map(([key, label, placeholder]) => (
+        {(isInvestorUpdateContactsList
+          ? [
+              ['title', 'Contact Name', 'Name'],
+              ['organization', 'Role / Organization', 'Partner, investor, advisor'],
+              ['owner', 'Relationship Owner', 'Owner'],
+              ['segment', 'Segment', 'Investor, operator, advisor'],
+              ['decisionMaker', 'Relationship Context', 'How they know us or why they matter'],
+              ['expectedCloseDate', 'Next Update Date', 'date'],
+              ['pilotStart', 'First Contacted', 'date'],
+              ['pilotEnd', 'Last Contacted', 'date'],
+              ['athleteCount', 'Update Cadence', 'Monthly, quarterly'],
+              ['sourceUrl', 'Source URL', 'https://example.com'],
+            ]
+          : [
+              ['title', 'Opportunity Name', 'Opportunity name'],
+              ['organization', 'Organization', 'Company, school, fund'],
+              ['owner', 'Owner', 'Owner'],
+              ['segment', 'Segment', 'Category, fit, or type'],
+              ['decisionMaker', 'Decision Maker', 'Role or name'],
+              ['acv', 'ACV', '$'],
+              ['amount', amountFieldLabelForList(activeList), '$'],
+              ['expectedCloseDate', 'Expected Close', 'date'],
+              ['contractTerm', 'Contract Term', '12 months'],
+              ['pilotStart', 'Start Date', 'date'],
+              ['pilotEnd', 'End Date', 'date'],
+              ['athleteCount', 'Count', '42'],
+              ['sourceUrl', 'Source URL', 'https://example.com'],
+            ]).map(([key, label, placeholder]) => (
           <label key={key} className={key === 'sourceUrl' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
             <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
             <input
@@ -5304,7 +5424,7 @@ Research rules:
         </label>
 
         <label className="block" htmlFor="pipe-dueDate">
-          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Due Date</span>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isInvestorUpdateContactsList ? 'Follow-Up Date' : 'Due Date'}</span>
           <input
             id="pipe-dueDate"
             type="date"
@@ -5720,7 +5840,7 @@ Research rules:
                           activeListId === list.id ? 'text-stone-300' : 'text-stone-400'
                         }`}
                       >
-                        {formatCount(list.items.filter((item) => !isItemDeleted(item)).length, 'opportunity')} · {templateCatalog[list.templateKey].label}
+                        {formatCount(list.items.filter((item) => !isItemDeleted(item)).length, listItemNoun(list))} · {templateCatalog[list.templateKey].label}
                       </span>
                     </span>
                   </button>
@@ -6025,15 +6145,26 @@ Research rules:
             {viewMode === 'pipeline' && (
               <>
                 <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
-                  {renderMetricCard('Active', String(activeItems), 'Not closed won or lost', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
-                  {renderMetricCard('Won', String(wonItems), 'Closed or awarded opportunities', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
-                  {renderMetricCard(
-                    isFundSizeList(activeList) ? 'Fund Size' : 'Open Value',
-                    formatMoney(activeOpenValue),
-                    isFundSizeList(activeList) ? 'Fund sizes for active items' : 'ACV or amount for active items',
-                    <DollarSign className="h-4 w-4" />,
-                    'bg-amber-50 text-amber-700',
+                  {isInvestorUpdateContactsList ? (
+                    <>
+                      {renderMetricCard('Contacts', String(activeListItems.length), 'People in this update list', <Users className="h-4 w-4" />)}
+                      {renderMetricCard('Sent', String(sentEmailItems), 'Contacts with an email sent', <Mail className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Delivered', String(deliveredEmailItems), 'Emails delivered by Brevo', <CheckCircle2 className="h-4 w-4" />, 'bg-indigo-50 text-indigo-700')}
+                      {renderMetricCard('Opened', String(openedEmailItems), 'Contacts who opened an email', <ClipboardList className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                    </>
+                  ) : (
+                    <>
+                      {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
+                      {renderMetricCard('Active', String(activeItems), 'Not closed won or lost', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Won', String(wonItems), 'Closed or awarded opportunities', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                      {renderMetricCard(
+                        isFundSizeList(activeList) ? 'Fund Size' : 'Open Value',
+                        formatMoney(activeOpenValue),
+                        isFundSizeList(activeList) ? 'Fund sizes for active items' : 'ACV or amount for active items',
+                        <DollarSign className="h-4 w-4" />,
+                        'bg-amber-50 text-amber-700',
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -6077,16 +6208,28 @@ Research rules:
                       Clear
                     </button>
 
-                    {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
-                      <button
-                        type="button"
-                        onClick={handleImportFriendsOfBusiness}
-                        disabled={isImportingFriends}
-                        className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Users className="h-4 w-4" />
-                        {isImportingFriends ? 'Importing...' : 'Import contacts'}
-                      </button>
+                    {isInvestorUpdateContactsList && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={openContactEmailModal}
+                          className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                        >
+                          <Mail className="h-4 w-4" />
+                          Send email
+                        </button>
+                        {isOwner && canManageActiveList && (
+                          <button
+                            type="button"
+                            onClick={handleImportFriendsOfBusiness}
+                            disabled={isImportingFriends}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Users className="h-4 w-4" />
+                            {isImportingFriends ? 'Importing...' : 'Import contacts'}
+                          </button>
+                        )}
+                      </>
                     )}
 
                     {canModify && (
@@ -6116,7 +6259,7 @@ Research rules:
                           className="inline-flex h-11 items-center gap-2 rounded-md bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                         >
                           <Plus className="h-4 w-4" />
-                          Add new lead
+                          {isInvestorUpdateContactsList ? 'Add contact' : 'Add new lead'}
                         </button>
                       </>
                     )}
@@ -6140,7 +6283,7 @@ Research rules:
                     >
                       <span className="block truncate text-sm font-semibold">{stage.label}</span>
                       <span className={stageFilter === stage.id ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
-                        {formatCount(countsByStage[stage.id] || 0, 'item')}
+                        {formatCount(countsByStage[stage.id] || 0, isInvestorUpdateContactsList ? 'contact' : 'item')}
                       </span>
                     </button>
                   ))}
@@ -6148,10 +6291,10 @@ Research rules:
 
                 <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
                   <div className="hidden min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
-                    <span>Item</span>
+                    <span>{isInvestorUpdateContactsList ? 'Contact' : 'Item'}</span>
                     <span>Organization</span>
                     <span>Stage</span>
-                    <span>{isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
+                    <span>{isInvestorUpdateContactsList ? 'Email Status' : isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
                     <span>Due Date</span>
                     <span>Next Step</span>
                     <span className="text-right">Actions</span>
@@ -6162,7 +6305,8 @@ Research rules:
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
-                        const hasItemValue = Boolean(itemValueText);
+                        const tableValueText = isInvestorUpdateContactsList ? item.contactEmails[0] || '' : itemValueText;
+                        const hasItemValue = Boolean(tableValueText);
                         const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
 
@@ -6210,9 +6354,25 @@ Research rules:
                               </span>
                             </div>
 
-                            <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
-                              {itemValueText}
-                            </p>
+                            {isInvestorUpdateContactsList ? (
+                              <div className="min-w-0">
+                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
+                                  {emailStatusLabel(item)}
+                                </span>
+                                {item.contactEmails[0] && <p className="mt-1 truncate text-xs text-stone-500">{item.contactEmails[0]}</p>}
+                                {(item.emailOpenCount > 0 || item.emailClickCount > 0) && (
+                                  <p className="mt-1 truncate text-xs text-stone-400">
+                                    {item.emailOpenCount > 0 ? `${item.emailOpenCount} opens` : ''}
+                                    {item.emailOpenCount > 0 && item.emailClickCount > 0 ? ' · ' : ''}
+                                    {item.emailClickCount > 0 ? `${item.emailClickCount} clicks` : ''}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
+                                {tableValueText}
+                              </p>
+                            )}
 
                             <div className={`min-w-0 text-sm text-stone-600 ${dueDate ? '' : 'hidden lg:block'}`}>
                               {dueDate && (
@@ -6281,8 +6441,10 @@ Research rules:
                     </div>
                   ) : (
                     <div className="px-4 py-16 text-center">
-                      <p className="text-sm font-semibold text-stone-900">No items found</p>
-                      <p className="mt-1 text-sm text-stone-500">Adjust the filter or add a new item.</p>
+                      <p className="text-sm font-semibold text-stone-900">{isInvestorUpdateContactsList ? 'No contacts found' : 'No items found'}</p>
+                      <p className="mt-1 text-sm text-stone-500">
+                        {isInvestorUpdateContactsList ? 'Adjust the filter or add a new contact.' : 'Adjust the filter or add a new item.'}
+                      </p>
                       {canModify && (
                         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                           {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
@@ -6310,7 +6472,7 @@ Research rules:
                             className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                           >
                             <Plus className="h-4 w-4" />
-                            Add new lead
+                            {isInvestorUpdateContactsList ? 'Add contact' : 'Add new lead'}
                           </button>
                         </div>
                       )}
@@ -6319,7 +6481,7 @@ Research rules:
                 </div>
 
                 <div className="mt-4 text-sm text-stone-500">
-                  {dueSoonItems} due soon · {activeListItems.filter((item) => item.weeklyLogs.length > 0).length} with logs.
+                  {dueSoonItems} due soon · {loggedItems} with logs.
                 </div>
               </>
             )}
@@ -6681,6 +6843,128 @@ Research rules:
         </div>
       )}
 
+      {isContactEmailModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-8 backdrop-blur-sm"
+          onClick={closeContactEmailModal}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contact-email-title"
+            onClick={(event) => event.stopPropagation()}
+            className="my-auto flex max-h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-100 px-5 py-5">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <Mail className="h-4 w-4" />
+                </div>
+                <h3 id="contact-email-title" className="text-xl font-bold text-stone-950">
+                  Send email
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Send a direct update to contacts in {activeList.name}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeContactEmailModal}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <label className="block" htmlFor="contact-email-provider">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email provider</span>
+                <select
+                  id="contact-email-provider"
+                  value="pulse-brevo"
+                  disabled={!isOwner}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                >
+                  <option value="pulse-brevo">Pulse Brevo</option>
+                </select>
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  Pulse Brevo is restricted to {TREMAINE_OWNER_EMAIL}. Collaborators will need a connected provider before sending.
+                </span>
+              </label>
+
+              <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase text-stone-400">Custom provider</span>
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">Not connected</span>
+                </div>
+                <p className="text-sm leading-6 text-stone-500">
+                  Outside users will connect their own email service here before sending from PipeLists.
+                </p>
+              </div>
+
+              <label className="block" htmlFor="contact-email-recipients">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Recipients</span>
+                <textarea
+                  id="contact-email-recipients"
+                  value={contactEmailRecipients}
+                  onChange={(event) => setContactEmailRecipients(event.target.value)}
+                  className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="name@example.com, teammate@example.com"
+                />
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  Use commas, spaces, or new lines. Emails are validated before sending.
+                </span>
+              </label>
+
+              <label className="block" htmlFor="contact-email-subject">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Subject</span>
+                <input
+                  id="contact-email-subject"
+                  value={contactEmailSubject}
+                  onChange={(event) => setContactEmailSubject(event.target.value)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="PulseCheck investor update"
+                />
+              </label>
+
+              <label className="block" htmlFor="contact-email-body">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Message</span>
+                <textarea
+                  id="contact-email-body"
+                  value={contactEmailBody}
+                  onChange={(event) => setContactEmailBody(event.target.value)}
+                  className="min-h-48 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="Write the update you want to send."
+                />
+              </label>
+
+              <MessageBanner message={contactEmailSendMessage} />
+            </div>
+
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-stone-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeContactEmailModal}
+                disabled={isSendingContactEmail}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendContactEmail}
+                disabled={isSendingContactEmail || !isOwner}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Mail className="h-4 w-4" />
+                {isSendingContactEmail ? 'Sending...' : 'Send email'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {isNewListModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
@@ -6947,6 +7231,7 @@ Research rules:
                       id="pipe-lead-brief-product"
                       value={leadSearchBrief.productName}
                       onChange={(event) => updateLeadSearchBrief('productName', event.target.value)}
+                      onBlur={() => persistLeadSearchBrief()}
                       className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                       placeholder="PulseCheck"
                     />
@@ -6961,6 +7246,7 @@ Research rules:
                       max={10}
                       value={leadSearchBrief.leadCount}
                       onChange={(event) => updateLeadSearchBrief('leadCount', clampLeadGenCount(Number(event.target.value) || 3))}
+                      onBlur={() => persistLeadSearchBrief()}
                       className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
                     />
                     <p className="mt-2 text-xs leading-5 text-stone-400">3 to 10 leads.</p>
@@ -6975,6 +7261,7 @@ Research rules:
                     id="pipe-lead-brief-focus"
                     value={leadSearchBrief.searchFocus}
                     onChange={(event) => updateLeadSearchBrief('searchFocus', event.target.value)}
+                    onBlur={() => persistLeadSearchBrief()}
                     className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                     placeholder="What kind of leads should this PipeList search for?"
                   />
@@ -6989,6 +7276,7 @@ Research rules:
                       id="pipe-lead-brief-audience"
                       value={leadSearchBrief.targetAudience}
                       onChange={(event) => updateLeadSearchBrief('targetAudience', event.target.value)}
+                      onBlur={() => persistLeadSearchBrief()}
                       className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                       placeholder="Who should these leads be for?"
                     />
@@ -7002,6 +7290,7 @@ Research rules:
                       id="pipe-lead-brief-types"
                       value={leadSearchBrief.opportunityTypes}
                       onChange={(event) => updateLeadSearchBrief('opportunityTypes', event.target.value)}
+                      onBlur={() => persistLeadSearchBrief()}
                       className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                       placeholder="Grants, pitch competitions, investors, pilots..."
                     />
@@ -7013,7 +7302,7 @@ Research rules:
                     <input
                       type="checkbox"
                       checked={leadSearchBrief.requireFutureDeadline}
-                      onChange={(event) => updateLeadSearchBrief('requireFutureDeadline', event.target.checked)}
+                      onChange={(event) => updateAndPersistLeadSearchBrief('requireFutureDeadline', event.target.checked)}
                       className="h-4 w-4 rounded border-stone-300"
                     />
                     Future deadline
@@ -7022,7 +7311,7 @@ Research rules:
                     <input
                       type="checkbox"
                       checked={leadSearchBrief.officialSourcesOnly}
-                      onChange={(event) => updateLeadSearchBrief('officialSourcesOnly', event.target.checked)}
+                      onChange={(event) => updateAndPersistLeadSearchBrief('officialSourcesOnly', event.target.checked)}
                       className="h-4 w-4 rounded border-stone-300"
                     />
                     Official sources
@@ -7031,7 +7320,7 @@ Research rules:
                     <input
                       type="checkbox"
                       checked={leadSearchBrief.includeAdjacentFit}
-                      onChange={(event) => updateLeadSearchBrief('includeAdjacentFit', event.target.checked)}
+                      onChange={(event) => updateAndPersistLeadSearchBrief('includeAdjacentFit', event.target.checked)}
                       className="h-4 w-4 rounded border-stone-300"
                     />
                     Adjacent fit
@@ -7051,6 +7340,7 @@ Research rules:
                         id="pipe-lead-brief-context"
                         value={leadSearchBrief.productContext}
                         onChange={(event) => updateLeadSearchBrief('productContext', event.target.value)}
+                        onBlur={() => persistLeadSearchBrief()}
                         className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                       />
                     </label>
@@ -7064,6 +7354,7 @@ Research rules:
                           id="pipe-lead-brief-sources"
                           value={leadSearchBrief.preferredSources}
                           onChange={(event) => updateLeadSearchBrief('preferredSources', event.target.value)}
+                          onBlur={() => persistLeadSearchBrief()}
                           className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                         />
                       </label>
@@ -7076,6 +7367,7 @@ Research rules:
                           id="pipe-lead-brief-positioning"
                           value={leadSearchBrief.positioning}
                           onChange={(event) => updateLeadSearchBrief('positioning', event.target.value)}
+                          onBlur={() => persistLeadSearchBrief()}
                           className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                         />
                       </label>
@@ -7090,6 +7382,7 @@ Research rules:
                           id="pipe-lead-brief-include"
                           value={leadSearchBrief.mustInclude}
                           onChange={(event) => updateLeadSearchBrief('mustInclude', event.target.value)}
+                          onBlur={() => persistLeadSearchBrief()}
                           className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                         />
                       </label>
@@ -7102,6 +7395,7 @@ Research rules:
                           id="pipe-lead-brief-exclude"
                           value={leadSearchBrief.mustExclude}
                           onChange={(event) => updateLeadSearchBrief('mustExclude', event.target.value)}
+                          onBlur={() => persistLeadSearchBrief()}
                           className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                         />
                       </label>
@@ -7783,12 +8077,21 @@ Research rules:
             ) : (
               <div className="space-y-5 px-5 py-5">
                 {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
+                  ...(isInvestorUpdateContactsList
+                    ? [
+                        {
+                          label: 'Contact Email',
+                          value: selectedDetailItem.contactEmails.join(', '),
+                        },
+                      ]
+                    : [
+                        {
+                          label: isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value',
+                          value: itemAmountDisplay(activeList, selectedDetailItem),
+                        },
+                      ]),
                   {
-                    label: isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value',
-                    value: itemAmountDisplay(activeList, selectedDetailItem),
-                  },
-                  {
-                    label: 'Next Date',
+                    label: isInvestorUpdateContactsList ? 'Next Follow-Up' : 'Next Date',
                     value: selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd,
                   },
                 ])}
@@ -7943,26 +8246,39 @@ Research rules:
                 </section>
 
                 {renderDetailSection(
-                  'Pipeline Details',
-                  [
-                    { label: 'Owner', value: selectedDetailItem.owner },
-                    { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
-                    { label: 'Organization', value: selectedDetailItem.organization },
-                    { label: 'Segment', value: selectedDetailItem.segment },
-                    { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
-                    ...(isFundSizeList(activeList)
-                      ? []
-                      : [
-                          { label: 'ACV', value: selectedDetailItem.acv },
-                          { label: amountFieldLabelForList(activeList), value: selectedDetailItem.amount },
-                        ]),
-                    { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
-                    { label: 'Due Date', value: selectedDetailItem.dueDate },
-                    { label: 'Contract Term', value: selectedDetailItem.contractTerm },
-                    { label: 'Margin Notes', value: selectedDetailItem.grossMargin },
-                    { label: 'Partner Cost', value: selectedDetailItem.partnerCost },
-                    { label: 'Hard Cost', value: selectedDetailItem.hardwareCost },
-                  ],
+                  isInvestorUpdateContactsList ? 'Contact Details' : 'Pipeline Details',
+                  isInvestorUpdateContactsList
+                    ? [
+                        { label: 'Relationship Owner', value: selectedDetailItem.owner },
+                        { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
+                        { label: 'Role / Organization', value: selectedDetailItem.organization },
+                        { label: 'Segment', value: selectedDetailItem.segment },
+                        { label: 'Relationship Context', value: selectedDetailItem.decisionMaker },
+                        { label: 'Next Update Date', value: selectedDetailItem.expectedCloseDate },
+                        { label: 'Follow-Up Date', value: selectedDetailItem.dueDate },
+                        { label: 'First Contacted', value: selectedDetailItem.pilotStart },
+                        { label: 'Last Contacted', value: selectedDetailItem.pilotEnd },
+                        { label: 'Update Cadence', value: selectedDetailItem.athleteCount },
+                      ]
+                    : [
+                        { label: 'Owner', value: selectedDetailItem.owner },
+                        { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
+                        { label: 'Organization', value: selectedDetailItem.organization },
+                        { label: 'Segment', value: selectedDetailItem.segment },
+                        { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
+                        ...(isFundSizeList(activeList)
+                          ? []
+                          : [
+                              { label: 'ACV', value: selectedDetailItem.acv },
+                              { label: amountFieldLabelForList(activeList), value: selectedDetailItem.amount },
+                            ]),
+                        { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
+                        { label: 'Due Date', value: selectedDetailItem.dueDate },
+                        { label: 'Contract Term', value: selectedDetailItem.contractTerm },
+                        { label: 'Margin Notes', value: selectedDetailItem.grossMargin },
+                        { label: 'Partner Cost', value: selectedDetailItem.partnerCost },
+                        { label: 'Hard Cost', value: selectedDetailItem.hardwareCost },
+                      ],
                   'grid gap-3 md:grid-cols-2 lg:grid-cols-3',
                 )}
 

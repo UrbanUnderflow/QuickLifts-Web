@@ -26,6 +26,8 @@ type GenerateLeadsRequest = {
   templateKey?: string;
   stages?: StageInput[];
   adjustments?: string;
+  requireFutureDeadline?: boolean;
+  officialSourcesOnly?: boolean;
   count?: number;
   existingItems?: ExistingItemInput[];
 };
@@ -211,48 +213,6 @@ const clampCount = (value: unknown) => {
   return Math.min(MAX_LEAD_COUNT, Math.max(MIN_LEAD_COUNT, parsed));
 };
 
-const isDeadlineDrivenTemplate = (templateKey: string, listName: string, templateLabel: string) => {
-  const identity = `${templateKey} ${listName} ${templateLabel}`.toLowerCase();
-  return ['pitch', 'grant', 'competition', 'challenge', 'award', 'prize', 'rfp', 'application deadline'].some((token) =>
-    identity.includes(token),
-  );
-};
-
-const templateInstructions = (
-  templateKey: string,
-  listName: string,
-  templateLabel: string,
-  today: string,
-) => {
-  const identity = `${templateKey} ${listName} ${templateLabel}`.toLowerCase();
-
-  if (identity.includes('pitch') || identity.includes('competition') || identity.includes('prize')) {
-    return `Template policy: this is a pitch competition list. Find startup pitch competitions, demo days, accelerator showcases, and prize opportunities that are relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, waitlist-only, vague, or undated opportunities. Prefer official program pages or organizer pages.`;
-  }
-
-  if (identity.includes('grant') || identity.includes('award') || identity.includes('challenge')) {
-    return `Template policy: this is a grant or non-dilutive funding list. Find open grant, award, challenge, innovation fund, or public/private funding opportunities relevant to PulseCheck. Only include opportunities with an explicit application deadline on or after ${today}. Put that deadline in dueDate. Exclude expired, closed, vague, or undated opportunities. Prefer official funder pages.`;
-  }
-
-  if (identity.includes('vc') || identity.includes('investor')) {
-    return `Template policy: this is an investor list. Find specific venture funds, named angel groups, named investors, accelerators, or investor programs for sports performance, digital health, wellness, education technology, AI, or athlete/team markets. Do not return articles, directories, databases, roundups, sector overviews, market maps, or "top investor" lists as leads. If a search result is a list of investors/funds, use it only as a research source, follow the entries on that list, and return the individual investors/funds as separate leads with their own official site, LinkedIn profile, investor page, or fund page as sourceUrl. Do not force a dueDate unless there is a real application deadline. Use nextStep for the best outreach or application action.`;
-  }
-
-  if (identity.includes('university') || identity.includes('pilot')) {
-    return `Template policy: this is a university pilot list. Find universities, athletic departments, sports performance labs, wellness programs, psychology/mental-performance groups, or innovation offices that could plausibly run a PulseCheck pilot. Do not force a dueDate. Use pilotScope, decisionMaker, segment, athleteCount, and nextStep when the source supports them.`;
-  }
-
-  if (identity.includes('contract')) {
-    return `Template policy: this is a contract pipeline. Find procurement, partnership, RFP, vendor, or paid-program opportunities relevant to PulseCheck. If the source has a submission deadline, dueDate must be on or after ${today}; otherwise leave dueDate blank and use expectedCloseDate only for a practical follow-up target if supported.`;
-  }
-
-  if (identity.includes('partner')) {
-    return `Template policy: this is a partner pipeline. Find organizations, leagues, clinics, schools, associations, accelerators, or operators that could become strategic partners. Do not force a dueDate unless the source has a real deadline. Prioritize strong fit and a practical next action.`;
-  }
-
-  return `Template policy: match the user's PipeList purpose. If this looks like a deadline-driven application list, only include leads with explicit deadlines on or after ${today}. If it is relationship-driven, do not invent dates and leave dueDate blank unless a real deadline exists.`;
-};
-
 const getResponseText = (value: unknown) => {
   if (!value || typeof value !== 'object') return '';
   const record = value as Record<string, unknown>;
@@ -372,7 +332,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     : [];
   const stageIds = stageOptions.map((stage) => stage.id);
   const fallbackStage = stageIds[0] || '';
-  const deadlineRequired = isDeadlineDrivenTemplate(templateKey, listName, templateLabel);
+  const deadlineRequired = body.requireFutureDeadline === true;
+  const officialSourcesOnly = body.officialSourcesOnly === true;
   const existingItems = Array.isArray(body.existingItems)
     ? body.existingItems.slice(0, MAX_EXISTING_ITEMS).map((item) => ({
         title: cleanString(item.title, 180),
@@ -417,13 +378,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             role: 'system',
             content: `You are a lead-generation researcher for PipeLists, a CRM-style opportunity tracker.
 
-PulseCheck context: PulseCheck helps teams, athletes, schools, clinics, and sports/wellness programs track mental readiness, wellness signals, engagement, and performance support. Favor opportunities related to sport psychology, athlete mental readiness, sports performance, digital health, wellness, mental performance, athlete support, AI, education, team operations, youth/college athletics, and healthcare-adjacent innovation.
-
 Current date: ${today}.
 
 Research rules:
-- Use web search and prioritize official/current sources.
-- Return only leads that are relevant to the active PipeList and PulseCheck.
+- Use the user's adjustments as the primary instruction source.
+- Use web search and return leads supported by current sources.
+- Return only leads that are relevant to the active PipeList and the user's adjustments.
 - A lead must be a specific actionable entity: a named fund, person, company, program, grant, competition, contract, school, partner, or opportunity.
 - Do not return source pages that are merely lists of other leads, directories, databases, rankings, roundups, market maps, article collections, or sector overviews.
 - If a useful source page is a list/directory/roundup, treat it as a research source only: open or follow the entries, extract the individual leads from that page, and return those individual leads instead.
@@ -431,9 +391,10 @@ Research rules:
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
 - Only include contactEmails when a current source visibly provides valid public email addresses. Never invent contact emails.
-- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
-- If the template is deadline-driven, every returned lead must have a verified dueDate on or after ${today}.
-- If the template is relationship-driven, dueDate can be "" unless the source provides a real deadline.
+- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD.
+- If requireFutureDeadline is true, every returned lead must have a verified dueDate on or after ${today}.
+- If requireFutureDeadline is false, dueDate can be "" unless the source provides a real deadline.
+- If officialSourcesOnly is true, prefer official/current sources and verify against official pages before returning a lead.
 - Pick stage from the provided stage ids only. If unsure, use the first stage id.
 - Keep notes useful for the user: concise analysis, prep angle, and practical context. Do not write "AI confidence".
 - sourceEvidence must briefly name the source support used, including the deadline when relevant.
@@ -448,8 +409,8 @@ Research rules:
                 listName,
                 templateLabel,
                 templateKey,
-                templatePolicy: templateInstructions(templateKey, listName, templateLabel, today),
                 deadlineRequired,
+                officialSourcesOnly,
                 stageOptions,
                 userAdjustments: adjustments,
                 existingItems,

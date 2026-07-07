@@ -10,6 +10,9 @@ const db = admin.firestore();
 const PILOT_ATHLETE_COMMUNICATIONS_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 const MACRA_WEB_OFFER_CAMPAIGN_ID = 'macra-web-offer-24h-v1';
 const EMAIL_LOG_COLLECTION = 'email-logs';
+const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
+const PIPELISTS_SUBCOLLECTION = 'pipeLists';
+const PIPELISTS_STATE_DOCUMENT_ID = 'state';
 
 /**
  * Brevo Webhook Event Types:
@@ -267,6 +270,115 @@ const applyStatusUpdate = (
       writePeriodField('status', eventType);
       break;
   }
+};
+
+const updatePipeListsContactEmailStatus = async (args: {
+  ownerUid: string;
+  listId: string;
+  itemIds: string[];
+  eventType: CanonicalBrevoEmailEvent;
+  email: string;
+  messageId?: string;
+  link?: string;
+  now: Date;
+}) => {
+  const ownerUid = String(args.ownerUid || '').trim();
+  const listId = String(args.listId || '').trim();
+  const targetItemIds = new Set(args.itemIds.map((itemId) => String(itemId || '').trim()).filter(Boolean));
+  const targetEmail = String(args.email || '').trim().toLowerCase();
+  if (!ownerUid || !listId || (!targetItemIds.size && !targetEmail)) return;
+
+  const stateRef = db
+    .collection(SIMPBUDGET_USERS_COLLECTION)
+    .doc(ownerUid)
+    .collection(PIPELISTS_SUBCOLLECTION)
+    .doc(PIPELISTS_STATE_DOCUMENT_ID);
+  const stateSnapshot = await stateRef.get();
+  const stateData = stateSnapshot.data() || {};
+  const lists = Array.isArray(stateData.lists) ? stateData.lists : [];
+  const nowIso = args.now.toISOString();
+  let changed = false;
+
+  const status =
+    args.eventType === 'request'
+      ? 'sent'
+      : args.eventType === 'click'
+        ? 'clicked'
+        : args.eventType === 'unsubscribe'
+          ? 'unsubscribed'
+          : args.eventType;
+
+  const updatedLists = lists.map((list: any) => {
+    if (!list || list.id !== listId || !Array.isArray(list.items)) return list;
+
+    const updatedItems = list.items.map((item: any) => {
+      if (!item || typeof item !== 'object') return item;
+      const itemEmails = Array.isArray(item.contactEmails)
+        ? item.contactEmails.map((emailValue: any) => String(emailValue || '').trim().toLowerCase()).filter(Boolean)
+        : [];
+      const matchesItem = targetItemIds.has(String(item.id || '')) || (targetEmail && itemEmails.includes(targetEmail));
+      if (!matchesItem) return item;
+
+      changed = true;
+      const nextItem: Record<string, any> = {
+        ...item,
+        emailStatus: status,
+        lastEmailEvent: status,
+        lastEmailEventAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      if (args.messageId) {
+        nextItem.lastEmailMessageId = args.messageId;
+      }
+
+      switch (args.eventType) {
+        case 'request':
+          nextItem.lastEmailSentAt = item.lastEmailSentAt || nowIso;
+          break;
+        case 'delivered':
+          nextItem.lastEmailDeliveredAt = nowIso;
+          break;
+        case 'opened':
+          nextItem.lastEmailOpenedAt = nowIso;
+          nextItem.emailOpenCount = (Number(item.emailOpenCount) || 0) + 1;
+          break;
+        case 'click':
+          nextItem.lastEmailClickedAt = nowIso;
+          nextItem.emailClickCount = (Number(item.emailClickCount) || 0) + 1;
+          nextItem.lastEmailClickedLink = args.link || item.lastEmailClickedLink || '';
+          break;
+        case 'soft_bounce':
+        case 'hard_bounce':
+        case 'blocked':
+        case 'deferred':
+        case 'spam':
+        case 'unsubscribe':
+        case 'invalid_email':
+        case 'error':
+          nextItem.lastEmailIssueAt = nowIso;
+          break;
+      }
+
+      return nextItem;
+    });
+
+    return { ...list, items: updatedItems };
+  });
+
+  if (!changed) {
+    console.warn(`[brevo-webhook] No PipeLists contact matched event for list ${listId} and email ${targetEmail}`);
+    return;
+  }
+
+  await stateRef.set(
+    {
+      lists: updatedLists,
+      updatedAt: args.now,
+    },
+    { merge: true },
+  );
+  console.log(`[brevo-webhook] Updated PipeLists contact email status ${status} for list ${listId}`);
 };
 
 const updateMacraRetargetingEmailSequenceStatus = async (args: {
@@ -548,6 +660,11 @@ export const handler: Handler = async (event) => {
       let plan: string | null = null;
       let ctaUrlMode: string | null = null;
       let checkoutCampaignId: string | null = null;
+      let pipeListsOwnerUid: string | null = null;
+      let pipeListsListId: string | null = null;
+      let pipeListsItemIds: string[] = [];
+      let pipeListsEmailBatchId: string | null = null;
+      let pipeListsEmailRecordId: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
@@ -564,6 +681,13 @@ export const handler: Handler = async (event) => {
           plan = custom.plan || null;
           ctaUrlMode = custom.ctaUrlMode || null;
           checkoutCampaignId = custom.checkoutCampaignId || null;
+          pipeListsOwnerUid = custom.pipeListsOwnerUid || null;
+          pipeListsListId = custom.pipeListsListId || null;
+          pipeListsItemIds = Array.isArray(custom.pipeListsItemIds)
+            ? custom.pipeListsItemIds.map((itemId: any) => String(itemId || '').trim()).filter(Boolean)
+            : [];
+          pipeListsEmailBatchId = custom.pipeListsEmailBatchId || null;
+          pipeListsEmailRecordId = custom.pipeListsEmailRecordId || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
@@ -663,6 +787,24 @@ export const handler: Handler = async (event) => {
           outreachUpdate.messageId = messageId;
         }
         await outreachRef.set(outreachUpdate, { merge: true });
+      }
+
+      if (pipeListsOwnerUid && pipeListsListId) {
+        await updatePipeListsContactEmailStatus({
+          ownerUid: pipeListsOwnerUid,
+          listId: pipeListsListId,
+          itemIds: pipeListsItemIds,
+          eventType,
+          email,
+          messageId,
+          link,
+          now,
+        }).catch((error) => {
+          console.warn(
+            `[brevo-webhook] Failed to update PipeLists email status for ${pipeListsEmailRecordId || pipeListsEmailBatchId || pipeListsListId}:`,
+            error?.message || error,
+          );
+        });
       }
 
       // If we have a friendId, update the friend's email tracking
