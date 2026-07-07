@@ -681,7 +681,7 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
 
         .hero {
           position: relative;
-          min-height: calc(100vh - 59px);
+          min-height: min(calc(100vh - 59px), 760px);
           display: grid;
           grid-template-columns: minmax(380px, 0.85fr) minmax(560px, 1.15fr);
           overflow: hidden;
@@ -700,7 +700,7 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
           justify-content: space-between;
           min-width: 0;
           overflow: hidden;
-          padding: 80px 56px;
+          padding: 64px 56px 48px;
           border-right: 1px solid var(--border-subtle);
           background: var(--bg-base);
           transition:

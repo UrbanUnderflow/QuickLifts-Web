@@ -445,6 +445,9 @@ const templateCatalog: Record<
   },
 };
 
+const amountFieldLabelForList = (list: Pick<PipeList, 'templateKey'>) =>
+  list.templateKey === 'vc' ? 'Fund Size' : 'Amount / Prize';
+
 const makeId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -3404,7 +3407,7 @@ Research rules:
       ]),
       formatClipboardSection('Financials & Dates', [
         ['ACV', item.acv],
-        ['Amount / Prize', item.amount],
+        [amountFieldLabelForList(activeList), item.amount],
         ['Expected Close', item.expectedCloseDate],
         ['Due Date', item.dueDate],
         ['Contract Term', item.contractTerm],
@@ -4752,7 +4755,7 @@ Research rules:
           ['segment', 'Segment', 'Category, fit, or type'],
           ['decisionMaker', 'Decision Maker', 'Role or name'],
           ['acv', 'ACV', '$'],
-          ['amount', 'Amount / Prize', '$'],
+          ['amount', amountFieldLabelForList(activeList), '$'],
           ['expectedCloseDate', 'Expected Close', 'date'],
           ['contractTerm', 'Contract Term', '12 months'],
           ['pilotStart', 'Start Date', 'date'],
@@ -7352,7 +7355,7 @@ Research rules:
                     { label: 'Segment', value: selectedDetailItem.segment },
                     { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
                     { label: 'ACV', value: selectedDetailItem.acv },
-                    { label: 'Amount / Prize', value: selectedDetailItem.amount },
+                    { label: amountFieldLabelForList(activeList), value: selectedDetailItem.amount },
                     { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
                     { label: 'Due Date', value: selectedDetailItem.dueDate },
                     { label: 'Contract Term', value: selectedDetailItem.contractTerm },
