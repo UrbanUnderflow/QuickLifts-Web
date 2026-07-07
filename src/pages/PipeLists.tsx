@@ -3316,11 +3316,13 @@ const PipelinePage: NextPage = () => {
       setContactEmailSendMessage({ type: 'error', text: `Invalid recipient: ${invalidEmail}` });
       return;
     }
-    if (!contactEmailSubject.trim()) {
+    const sentSubject = contactEmailSubject.trim();
+    const sentMessage = contactEmailBody.trim();
+    if (!sentSubject) {
       setContactEmailSendMessage({ type: 'error', text: 'Add a subject.' });
       return;
     }
-    if (!contactEmailBody.trim()) {
+    if (!sentMessage) {
       setContactEmailSendMessage({ type: 'error', text: 'Add a message.' });
       return;
     }
@@ -3347,8 +3349,8 @@ const PipelinePage: NextPage = () => {
           provider: 'pulse-brevo',
           emailType: contactEmailType,
           toEmails,
-          subject: contactEmailSubject.trim(),
-          message: contactEmailBody.trim(),
+          subject: sentSubject,
+          message: sentMessage,
           listId: activeList.id,
           listName: activeList.name,
           ownerUid: user.uid,
@@ -3388,12 +3390,17 @@ const PipelinePage: NextPage = () => {
               if (!matchingEmail) return item;
 
               const summary = `${emailTypeLabel} sent to ${matchingEmail}.`;
+              const emailLogNotes = [`To: ${matchingEmail}`, `Subject: ${sentSubject}`, '', 'Message:', sentMessage].join('\n');
               const alreadyLogged = item.weeklyLogs.some(
-                (log) => log.systemAction === 'email-sent' && log.summary === summary && log.createdAt.slice(0, 10) === sentAt.slice(0, 10),
+                (log) =>
+                  log.systemAction === 'email-sent' &&
+                  log.summary === summary &&
+                  log.notes === emailLogNotes &&
+                  log.createdAt.slice(0, 10) === sentAt.slice(0, 10),
               );
               const emailLog = createSystemLog(item, 'email-sent', summary);
               emailLog.type = emailLogType;
-              emailLog.notes = contactEmailSubject.trim() ? `Subject: ${contactEmailSubject.trim()}` : '';
+              emailLog.notes = emailLogNotes;
 
               return {
                 ...item,
