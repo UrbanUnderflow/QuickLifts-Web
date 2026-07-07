@@ -54,7 +54,7 @@ import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 type ViewMode = 'pipeline' | 'metrics' | 'logs';
-type DetailModalMode = 'details' | 'logs';
+type DetailModalMode = 'details' | 'logs' | 'email';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
 type InviteStatus = {
@@ -330,6 +330,18 @@ const contactEmailTypeLogType: Record<ContactEmailType, ActivityLogType> = {
   'general-update': 'update',
 };
 
+const contactEmailStatusOptions = [
+  { value: 'not_sent', label: 'Not sent' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'opened', label: 'Opened' },
+  { value: 'clicked', label: 'Clicked' },
+  { value: 'soft_bounce', label: 'Soft bounce' },
+  { value: 'hard_bounce', label: 'Hard bounce' },
+  { value: 'invalid_email', label: 'Invalid email' },
+  { value: 'unsubscribed', label: 'Unsubscribed' },
+] as const;
+
 const logNextStepOptions: Record<ActivityLogType, string[]> = {
   update: ['Review status', 'Send update', 'Follow up', 'Wait for response'],
   application: ['Prepare application', 'Submit application', 'Send supporting materials', 'Wait for results', 'Follow up'],
@@ -571,9 +583,18 @@ const buildFriendAnalysisNotes = (friend: FriendOfBusinessContact) => {
 };
 
 const normalizeEmailStatus = (value: unknown) => String(value || '').trim().toLowerCase();
+const normalizeContactEmailStatusInput = (value: unknown) => {
+  const status = normalizeEmailStatus(value);
+  if (!status) return 'not_sent';
+  if (status === 'request') return 'sent';
+  if (status === 'click') return 'clicked';
+  if (status === 'unsubscribe') return 'unsubscribed';
+  return status;
+};
+
 const emailStatusLabel = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
-  const status = normalizeEmailStatus(item.emailStatus || item.lastEmailEvent);
-  if (!status) return 'Not sent';
+  const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+  if (!status || status === 'not_sent') return 'Not sent';
   if (status === 'request') return 'Sent';
   if (status === 'opened') return 'Opened';
   if (status === 'click' || status === 'clicked') return 'Clicked';
@@ -590,7 +611,7 @@ const emailStatusLabel = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEve
 };
 
 const emailStatusTone = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
-  const status = normalizeEmailStatus(item.emailStatus || item.lastEmailEvent);
+  const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
   if (status === 'opened' || status === 'click' || status === 'clicked') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (status === 'delivered') return 'border-sky-200 bg-sky-50 text-sky-700';
   if (status === 'sent' || status === 'request') return 'border-stone-200 bg-stone-50 text-stone-600';
@@ -3011,7 +3032,7 @@ const PipelinePage: NextPage = () => {
 
     return activeListItems
       .filter((item) => {
-        const matchesStage = stageFilter === 'all' || item.stage === stageFilter;
+        const matchesStage = isInvestorUpdateContactsList || stageFilter === 'all' || item.stage === stageFilter;
         const matchesQuery =
           search.length === 0 ||
           [
@@ -3038,7 +3059,7 @@ const PipelinePage: NextPage = () => {
 
         return left.title.localeCompare(right.title);
       });
-  }, [activeListItems, query, stageFilter]);
+  }, [activeListItems, isInvestorUpdateContactsList, query, stageFilter]);
 
   const countsByStage = useMemo(
     () =>
@@ -3237,7 +3258,7 @@ const PipelinePage: NextPage = () => {
       ),
     );
 
-  const openContactEmailModal = (emails?: string[], subject = '') => {
+  const prepareContactEmailComposer = (emails?: string[], subject = '') => {
     const nextEmails = emails && emails.length > 0 ? normalizeContactEmails(emails) : activeContactEmails;
     setContactEmailType('metrics-update');
     setContactEmailRecipients(nextEmails.join(', '));
@@ -3251,7 +3272,19 @@ const PipelinePage: NextPage = () => {
             text: 'Pulse Brevo is only available to tremaine.grant@gmail.com. Collaborators will need their own email provider before sending.',
           },
     );
+  };
+
+  const openContactEmailModal = (emails?: string[], subject = '') => {
+    prepareContactEmailComposer(emails, subject);
     setIsContactEmailModalOpen(true);
+  };
+
+  const openContactEmailComposerForItem = (item: PipelineItem) => {
+    prepareContactEmailComposer(
+      item.contactEmails,
+      item.organization ? `${item.organization} investor update` : `${item.title} investor update`,
+    );
+    setDetailModalMode('email');
   };
 
   const closeContactEmailModal = () => {
@@ -3832,7 +3865,9 @@ Research rules:
       ['PipeList', activeList.name],
       ['Template', templateCatalog[activeList.templateKey].label],
       ['Organization', item.organization],
-      ['Stage', `${stage.label} (${item.stage})`],
+      isInvestorUpdateContactsList
+        ? ['Email Status', emailStatusLabel(item)]
+        : ['Stage', `${stage.label} (${item.stage})`],
       ['Importance', importanceLabel(item.priority)],
       ...(isInvestorUpdateContactsList ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
       [isInvestorUpdateContactsList ? 'Relationship Owner' : 'Owner', item.owner],
@@ -5408,21 +5443,44 @@ Research rules:
           </label>
         ))}
 
-        <label className="block" htmlFor="pipe-stage">
-          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
-          <select
-            id="pipe-stage"
-            value={draft.stage}
-            onChange={(event) => setDraft((current) => ({ ...current, stage: event.target.value }))}
-            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-          >
-            {activeList.stages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stage.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isInvestorUpdateContactsList ? (
+          <label className="block" htmlFor="pipe-email-status">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email Status</span>
+            <select
+              id="pipe-email-status"
+              value={normalizeContactEmailStatusInput(draft.emailStatus || draft.lastEmailEvent)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  emailStatus: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            >
+              {contactEmailStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="block" htmlFor="pipe-stage">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
+            <select
+              id="pipe-stage"
+              value={draft.stage}
+              onChange={(event) => setDraft((current) => ({ ...current, stage: event.target.value }))}
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            >
+              {activeList.stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="block" htmlFor="pipe-priority">
           <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Importance</span>
@@ -6197,22 +6255,24 @@ Research rules:
                   </div>
 
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
-                      <Filter className="h-4 w-4" />
-                      <select
-                        value={stageFilter}
-                        onChange={(event) => setStageFilter(event.target.value)}
-                        className="bg-transparent text-sm text-stone-700 outline-none"
-                        aria-label="Stage filter"
-                      >
-                        <option value="all">All stages</option>
-                        {activeList.stages.map((stage) => (
-                          <option key={stage.id} value={stage.id}>
-                            {stage.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {!isInvestorUpdateContactsList && (
+                      <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
+                        <Filter className="h-4 w-4" />
+                        <select
+                          value={stageFilter}
+                          onChange={(event) => setStageFilter(event.target.value)}
+                          className="bg-transparent text-sm text-stone-700 outline-none"
+                          aria-label="Stage filter"
+                        >
+                          <option value="all">All stages</option>
+                          {activeList.stages.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     <button
                       type="button"
@@ -6286,39 +6346,53 @@ Research rules:
                 {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
                 {activeList.templateKey === 'vc' && <MessageBanner message={vcSourceEnrichmentMessage} />}
 
-                <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
-                  {activeList.stages.map((stage) => (
-                    <button
-                      key={stage.id}
-                      type="button"
-                      onClick={() => setStageFilter(stageFilter === stage.id ? 'all' : stage.id)}
-                      className={`rounded-lg border px-3 py-3 text-left transition ${
-                        stageFilter === stage.id
-                          ? 'border-stone-900 bg-stone-900 text-white'
-                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
-                      }`}
-                    >
-                      <span className="block truncate text-sm font-semibold">{stage.label}</span>
-                      <span className={stageFilter === stage.id ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
-                        {formatCount(countsByStage[stage.id] || 0, isInvestorUpdateContactsList ? 'contact' : 'item')}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {!isInvestorUpdateContactsList && (
+                  <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
+                    {activeList.stages.map((stage) => (
+                      <button
+                        key={stage.id}
+                        type="button"
+                        onClick={() => setStageFilter(stageFilter === stage.id ? 'all' : stage.id)}
+                        className={`rounded-lg border px-3 py-3 text-left transition ${
+                          stageFilter === stage.id
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                        }`}
+                      >
+                        <span className="block truncate text-sm font-semibold">{stage.label}</span>
+                        <span className={stageFilter === stage.id ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
+                          {formatCount(countsByStage[stage.id] || 0, 'item')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
-                  <div className="hidden min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px] gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid">
+                  <div
+                    className={`hidden gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid ${
+                      isInvestorUpdateContactsList
+                        ? 'min-w-[1180px] grid-cols-[280px_240px_160px_140px_280px_104px]'
+                        : 'min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
+                    }`}
+                  >
                     <span>{isInvestorUpdateContactsList ? 'Contact' : 'Item'}</span>
                     <span>Organization</span>
-                    <span>Stage</span>
-                    <span>{isInvestorUpdateContactsList ? 'Email Status' : isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
-                    <span>Due Date</span>
+                    {isInvestorUpdateContactsList ? (
+                      <span>Email Status</span>
+                    ) : (
+                      <>
+                        <span>Stage</span>
+                        <span>{isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
+                      </>
+                    )}
+                    <span>{isInvestorUpdateContactsList ? 'Follow-Up' : 'Due Date'}</span>
                     <span>Next Step</span>
                     <span className="text-right">Actions</span>
                   </div>
 
                   {filteredItems.length > 0 ? (
-                    <div className="divide-y divide-stone-100 lg:min-w-[1280px]">
+                    <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1180px]' : 'lg:min-w-[1280px]'}`}>
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
@@ -6344,7 +6418,11 @@ Research rules:
                                 setDetailModalMode('details');
                               }
                             }}
-                            className="grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px] lg:items-center lg:gap-4"
+                            className={`grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:items-center lg:gap-4 ${
+                              isInvestorUpdateContactsList
+                                ? 'lg:grid-cols-[280px_240px_160px_140px_280px_104px]'
+                                : 'lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
+                            }`}
                           >
                             <div className="min-w-0">
                               <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
@@ -6365,12 +6443,6 @@ Research rules:
                               <span className="truncate">{item.organization}</span>
                             </div>
 
-                            <div>
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
-                                {stage.label}
-                              </span>
-                            </div>
-
                             {isInvestorUpdateContactsList ? (
                               <div className="min-w-0">
                                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
@@ -6386,9 +6458,17 @@ Research rules:
                                 )}
                               </div>
                             ) : (
-                              <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
-                                {tableValueText}
-                              </p>
+                              <>
+                                <div>
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                </div>
+
+                                <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
+                                  {tableValueText}
+                                </p>
+                              </>
                             )}
 
                             <div className={`min-w-0 text-sm text-stone-600 ${dueDate ? '' : 'hidden lg:block'}`}>
@@ -7790,9 +7870,15 @@ Research rules:
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedDetailStage.tone}`}>
-                      {selectedDetailStage.label}
-                    </span>
+                    {isInvestorUpdateContactsList ? (
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(selectedDetailItem)}`}>
+                        {emailStatusLabel(selectedDetailItem)}
+                      </span>
+                    ) : (
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedDetailStage.tone}`}>
+                        {selectedDetailStage.label}
+                      </span>
+                    )}
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityStyles[selectedDetailItem.priority]}`}>
                       {importanceLabel(selectedDetailItem.priority)}
                     </span>
@@ -7864,7 +7950,7 @@ Research rules:
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {!selectedDetailIsEditing && detailModalMode === 'logs' && (
+                {!selectedDetailIsEditing && detailModalMode !== 'details' && (
                   <button
                     type="button"
                     onClick={() => setDetailModalMode('details')}
@@ -7904,15 +7990,12 @@ Research rules:
                 {isInvestorUpdateContactsList && canModify && !selectedDetailIsEditing && (
                   <button
                     type="button"
-                    onClick={() =>
-                      openContactEmailModal(
-                        selectedDetailItem.contactEmails,
-                        selectedDetailItem.organization
-                          ? `${selectedDetailItem.organization} investor update`
-                          : 'PulseCheck investor update',
-                      )
-                    }
-                    className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                    onClick={() => openContactEmailComposerForItem(selectedDetailItem)}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'email'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
                   >
                     <Mail className="h-4 w-4" />
                     Send email
@@ -7962,6 +8045,116 @@ Research rules:
 
             {selectedDetailIsEditing ? (
               <div className="px-5 py-5">{renderItemEditor()}</div>
+            ) : detailModalMode === 'email' ? (
+              <div className="space-y-5 px-5 py-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex flex-col gap-1">
+                    <h4 className="text-sm font-semibold text-stone-950">Email composer</h4>
+                    <p className="text-sm text-stone-500">
+                      Send a direct update to {selectedDetailItem.title}.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <label className="block" htmlFor="detail-contact-email-provider">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email configuration</span>
+                      <select
+                        id="detail-contact-email-provider"
+                        value="pulse-brevo"
+                        disabled={!isOwner}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      >
+                        <option value="pulse-brevo">Pulse Brevo</option>
+                      </select>
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                        Sends only when signed in as {TREMAINE_OWNER_EMAIL}.
+                      </span>
+                    </label>
+
+                    <label className="block" htmlFor="detail-contact-email-type">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email type</span>
+                      <select
+                        id="detail-contact-email-type"
+                        value={contactEmailType}
+                        onChange={(event) => setContactEmailType(event.target.value as ContactEmailType)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                      >
+                        {(Object.keys(contactEmailTypeLabels) as ContactEmailType[]).map((emailType) => (
+                          <option key={emailType} value={emailType}>
+                            {contactEmailTypeLabels[emailType]}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                        Used for the automatic log and tracking status.
+                      </span>
+                    </label>
+                  </div>
+
+                  <label className="mt-4 block" htmlFor="detail-contact-email-recipients">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Recipients</span>
+                    <textarea
+                      id="detail-contact-email-recipients"
+                      value={contactEmailRecipients}
+                      onChange={(event) => setContactEmailRecipients(event.target.value)}
+                      className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="name@example.com, teammate@example.com"
+                    />
+                    <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                      Use commas, spaces, or new lines. Emails are validated before sending.
+                    </span>
+                  </label>
+
+                  <label className="mt-4 block" htmlFor="detail-contact-email-subject">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Subject</span>
+                    <input
+                      id="detail-contact-email-subject"
+                      value={contactEmailSubject}
+                      onChange={(event) => setContactEmailSubject(event.target.value)}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="PulseCheck investor update"
+                    />
+                  </label>
+
+                  <label className="mt-4 block" htmlFor="detail-contact-email-body">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Message</span>
+                    <textarea
+                      id="detail-contact-email-body"
+                      value={contactEmailBody}
+                      onChange={(event) => setContactEmailBody(event.target.value)}
+                      className="min-h-56 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="Write the update you want to send."
+                    />
+                  </label>
+
+                  <div className="mt-4">
+                    <MessageBanner message={contactEmailSendMessage} />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailModalMode('details');
+                        setContactEmailSendMessage(null);
+                      }}
+                      disabled={isSendingContactEmail}
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendContactEmail}
+                      disabled={isSendingContactEmail || !isOwner}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Mail className="h-4 w-4" />
+                      {isSendingContactEmail ? 'Sending...' : 'Send email'}
+                    </button>
+                  </div>
+                </section>
+              </div>
             ) : detailModalMode === 'logs' ? (
               <div className="space-y-5 px-5 py-5">
                 {canModify ? (
@@ -8132,6 +8325,10 @@ Research rules:
                 {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
                   ...(isInvestorUpdateContactsList
                     ? [
+                        {
+                          label: 'Email Status',
+                          value: emailStatusLabel(selectedDetailItem),
+                        },
                         {
                           label: 'Contact Email',
                           value: selectedDetailItem.contactEmails.join(', '),
