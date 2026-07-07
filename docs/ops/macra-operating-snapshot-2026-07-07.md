@@ -4,13 +4,13 @@
 
 - **Operating system:** Macra Trial-Start Operating System
 - **Snapshot date:** 2026-07-07
-- **Read timestamp:** Pending source read in the population step.
-- **Operating-time note:** Scaffold created before source refresh. Do not treat any section below as observed July 7 performance until the source-read step records exact Firestore/admin evidence and timestamps.
+- **Read timestamp:** `2026-07-07T00:16:52.981Z`
+- **Operating-time note:** The read occurred at **2026-07-06 20:16:52 EDT**, before the 2026-07-07 America/New_York operating day had started. Treat July 7 target-day zeros as pre-day / not-yet-observable, not as final July 7 performance.
 - **Primary metric:** qualified onboarding start to trial start
 - **Primary guardrail:** no onboarding/paywall/pricing/allocation/retargeting/Apple Search Ads changes while experiment data is stale, mostly inferred, or not decision-grade.
 - **Default posture:** refresh active `variant_a` experiment results before making funnel decisions.
 
-Source surfaces to read:
+Source surfaces read for this step:
 
 - Macra Scoreboard: `/admin/emailSequences`; Firestore `appsflyer-scoreboards/macra`
 - AppsFlyer imports: Firestore `appsflyer-aggregate-periods`, `appsflyer-macra-raw-rows`, `appsflyer-macra-users`
@@ -23,43 +23,92 @@ Source surfaces to read:
 
 ### Observed Facts
 
-Pending source read.
+Scoreboard / AppsFlyer import freshness:
 
-Required rows for the population step:
+- Firestore `appsflyer-scoreboards/macra` exists.
+- Scoreboard `updatedAt`: `2026-06-27T08:48:20.605Z`.
+- Scoreboard `importedAt`: `2026-06-27T08:48:20.605Z`.
+- Latest Scoreboard run id visible in Firestore: `macra-appsflyer-csv-period-1782550099524-6ebef9b5`.
+- Firestore `appsflyer-aggregate-periods` returned `20` Macra docs.
+- Latest aggregate-period doc found: `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`.
+- No Firestore `appsflyer-aggregate-periods` doc covers `2026-07-07`.
+- Firestore `appsflyer-macra-raw-rows` returned `0` rows for `eventDate >= 2026-07-03` and `eventDate <= 2026-07-07`.
+
+Latest persisted AppsFlyer full-funnel aggregate, not fresh for July 7:
 
 | Metric | Count | Source | Freshness |
 | --- | ---: | --- | --- |
-| Onboarding starts | Pending | `/admin/emailSequences`; AppsFlyer imports; Firestore user-state cross-check | Pending |
-| Paywall reach | Pending | `/admin/emailSequences`; AppsFlyer imports | Pending |
-| Paywall CTA | Pending | `/admin/emailSequences`; AppsFlyer imports | Pending |
-| Checkout starts | Pending | AppsFlyer checkout event bucket; purchase-log cross-check | Pending |
-| Trial starts | Pending | AppsFlyer trial event bucket; purchase-log trial-success cross-check | Pending |
-| Purchases | Pending | AppsFlyer purchase event bucket; Firestore `Macra-purchase-logs` | Pending |
-| Subscribes | Pending | AppsFlyer subscribe event bucket; Firestore `Macra-purchase-logs` | Pending |
-| Purchase cancels / failures | Pending | AppsFlyer cancel/failure events; Firestore `Macra-purchase-logs` | Pending |
+| Macra onboarding starts | 826 | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, `summary.events.byName.macra_onboarding_started` | Stale for July 7; period ends `2026-06-27` |
+| Paywall reached | 1001 onboarding paywall reached; 14 standalone paywall views | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, paywall event bucket used by `/admin/emailSequences` | Stale for July 7; period ends `2026-06-27` |
+| Paywall CTA pressed | 1553 | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, `macra_paywall_primary_button_pressed` | Stale for July 7; period ends `2026-06-27` |
+| Checkout starts | 143 `af_initiated_checkout`; 93 `macra_subscription_web_checkout_started` | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, `summary.events.byName` | Stale for July 7; do not add these without person-level dedupe |
+| Trial starts | 6 `af_start_trial` | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, trial event bucket used by `/admin/emailSequences` | Stale for July 7; period ends `2026-06-27` |
+| Purchases | 3 `af_purchase` | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, purchase event bucket used by `/admin/emailSequences` | Stale for July 7; period ends `2026-06-27` |
+| Subscribes | 3 `af_subscribe` | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, subscribe event bucket used by `/admin/emailSequences` | Stale for July 7; period ends `2026-06-27` |
+| Purchase cancels / failures | 112 purchase cancels; 13 purchase failures; 2 web checkout failures | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, `summary.events.byName` | Stale for July 7; period ends `2026-06-27` |
+
+Fresh lower-funnel purchase-log read from Firestore `Macra-purchase-logs`:
+
+| Date | Purchase-log rows | Trial-success rows | Successful rows | Canceled rows | Failed rows | Attempted rows | Source |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 2026-07-03 | 0 | 0 | 0 | 0 | 0 | 0 | Firestore `Macra-purchase-logs` |
+| 2026-07-04 | 1 | 0 | 0 | 1 | 0 | 0 | Firestore `Macra-purchase-logs` |
+| 2026-07-05 | 2 | 1 | 1 | 1 | 0 | 0 | Firestore `Macra-purchase-logs` |
+| 2026-07-06 | 0 | 0 | 0 | 0 | 0 | 0 | Firestore `Macra-purchase-logs` |
+| 2026-07-07 | 0 | 0 | 0 | 0 | 0 | 0 | Firestore `Macra-purchase-logs`; target day had not started in EDT at read time |
+
+Fresh user-state read from Firestore `users` where `registrationEntryPoint == "macra"`:
+
+| Date | Macra user docs created | Completed onboarding rows | User-source hints |
+| --- | ---: | ---: | ---: |
+| 2026-07-03 | 10 | 6 | 0 |
+| 2026-07-04 | 10 | 6 | 0 |
+| 2026-07-05 | 7 | 3 | 0 |
+| 2026-07-06 | 3 | 3 | 0 |
+| 2026-07-07 | 0 | 0 | 0 |
+
+Fresh AppsFlyer rows in the July 7 target window:
+
+| Date | Aggregate-period row | Raw rows | AppsFlyer starts | AppsFlyer checkout starts | AppsFlyer trial starts | AppsFlyer purchases |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 2026-07-07 | Missing | 0 | Unverified | Unverified | Unverified | Unverified |
 
 ### Inference
 
-Pending source read. Do not infer July 7 funnel movement until AppsFlyer coverage, purchase logs, and user-state reads are populated with exact timestamps.
+The July 7 full funnel is not observable at this read. The operating day had not started in America/New_York, AppsFlyer / Scoreboard coverage still stops at `2026-06-27`, and no raw AppsFlyer rows cover the July 3-7 rolling window. Fresh first-party evidence shows July 6 user-state movement: `3` Macra user docs and `3` completed onboarding rows, but no July 6 purchase-log rows. That is useful as lower-funnel context, but it is not a refreshed July 7 source-quality read.
 
 ## Source Split
 
 ### Observed Facts
 
-Pending source read.
+Fresh acquisition-source split is unavailable for July 7 because Firestore `appsflyer-aggregate-periods` has no doc covering `2026-07-07`, Firestore `appsflyer-macra-raw-rows` returned `0` rows for the rolling target window, and Firestore `users` has no usable source hints on the rolling Macra user rows.
 
-Required rows for the population step:
+Latest available AppsFlyer aggregate event-volume split:
 
-| Source | Onboarding starts | Checkout starts | Trial starts | Purchases / subscribes | Freshness | Evidence |
-| --- | ---: | ---: | ---: | ---: | --- | --- |
-| Apple Search Ads | Pending | Pending | Pending | Pending | Pending | AppsFlyer media-source split if available |
-| Organic | Pending | Pending | Pending | Pending | Pending | AppsFlyer media-source split if available |
-| Retargeting / lifecycle | Pending | Pending | Pending | Pending | Pending | Retargeting state and email-sequence fields if available |
-| Other / unknown | Pending | Pending | Pending | Pending | Pending | User-state and AppsFlyer fallback attribution |
+| Aggregate period | Organic event volume | Apple Search Ads event volume | Source |
+| --- | ---: | ---: | --- |
+| `2026-06-21` through `2026-06-27` | 24167 | 6652 | Firestore `appsflyer-aggregate-periods/macra_2026-06-21_2026-06-27`, `summary.events.byMediaSource` |
+
+Fresh purchase-log source field split, lower-funnel surface only:
+
+| Date window | `subscription_required` rows | `onboarding_paywall` rows | Apple Search Ads | Organic | Notes |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `2026-07-03` through `2026-07-07` | 1 | 2 | 0 attributed | 0 attributed | Purchase-log `source` names paywall surface, not acquisition source |
+| `2026-07-07` only | 0 | 0 | 0 attributed | 0 attributed | No July 7 purchase-log rows at read time |
+
+Fresh user-source hints:
+
+| Date | Macra user docs created | Source hint status | Source |
+| --- | ---: | --- | --- |
+| 2026-07-03 | 10 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
+| 2026-07-04 | 10 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
+| 2026-07-05 | 7 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
+| 2026-07-06 | 3 | All missing | Firestore `users`, `registrationEntryPoint == "macra"` |
+| 2026-07-07 | 0 | No target-day rows yet | Firestore `users`, `registrationEntryPoint == "macra"` |
 
 ### Inference
 
-Pending source read. If AppsFlyer attribution does not cover 2026-07-07, mark paid-vs-organic source quality as unverified and carry only the latest stale split with a stale label.
+The source split is not decision-grade for July 7. The stale AppsFlyer aggregate still shows Organic carrying most event volume and Apple Search Ads carrying the smaller paid bucket through `2026-06-27`, but there is no fresh Apple Search Ads vs Organic read for July 7 and no user-source hint coverage in first-party rows. Do not change Apple Search Ads spend, organic assumptions, or retargeting behavior from this snapshot.
 
 ## Experiment Snapshot Freshness
 
