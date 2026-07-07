@@ -7,6 +7,10 @@ type SendContactEmailRequest = {
   toEmails?: string[];
   subject?: string;
   message?: string;
+  attachments?: Array<{
+    name?: string;
+    content?: string;
+  }>;
   listId?: string;
   listName?: string;
   ownerUid?: string;
@@ -34,6 +38,9 @@ const cleanText = (value: unknown, maxLength = 5000) =>
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const cleanItemId = (value: unknown) => cleanText(value, 180).replace(/[^\w.-]/g, '').slice(0, 180);
+const cleanAttachmentName = (value: unknown) => cleanText(value, 180).replace(/[\/\\]/g, '-').trim();
+const cleanAttachmentContent = (value: unknown) =>
+  typeof value === 'string' ? value.replace(/^data:[^,]+,/, '').replace(/\s/g, '').slice(0, 10_000_000) : '';
 const cleanEmailType = (value: unknown) => {
   const emailType = cleanText(value, 80).replace(/[^\w-]/g, '');
   return emailType || 'metrics-update';
@@ -46,6 +53,12 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+
+const linkifyEscapedText = (value: string) =>
+  escapeHtml(value).replace(/(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi, (url) => {
+    const href = url.toLowerCase().startsWith('http') ? url : `https://${url}`;
+    return `<a href="${escapeHtml(href)}" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${url}</a>`;
+  });
 
 const verifySimpBudgetAuth = async (authHeader: string | undefined): Promise<VerifiedSimpBudgetUser | null> => {
   if (!authHeader?.startsWith('Bearer ') || !SIMPBUDGET_FIREBASE_API_KEY) return null;
@@ -92,7 +105,7 @@ const buildContactEmailHtml = (args: {
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .map((paragraph) => `<p style="margin:0 0 16px;color:#44403c;font-size:15px;line-height:1.7;">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .map((paragraph) => `<p style="margin:0 0 16px;color:#44403c;font-size:15px;line-height:1.7;">${linkifyEscapedText(paragraph).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
   return `
@@ -145,6 +158,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const listName = cleanText(body.listName, 120) || 'PipeLists';
   const ownerUid = verifiedUser.uid;
   const batchId = cleanText(body.batchId, 120) || String(Date.now());
+  const attachments = Array.isArray(body.attachments)
+    ? body.attachments
+        .map((attachment) => ({
+          name: cleanAttachmentName(attachment?.name),
+          content: cleanAttachmentContent(attachment?.content),
+        }))
+        .filter((attachment) => attachment.name && attachment.content)
+        .slice(0, 5)
+    : [];
   const itemIdsByEmail = new Map<string, string[]>();
 
   if (Array.isArray(body.recipientItems)) {
@@ -179,6 +201,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         toName: toEmail,
         subject,
         htmlContent: buildContactEmailHtml({ message, senderEmail: verifiedUser.email, listName, emailTypeLabel }),
+        attachment: attachments.length > 0 ? attachments : undefined,
         sender: {
           email: process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai',
           name: process.env.BREVO_SENDER_NAME || 'Pulse PipeLists',

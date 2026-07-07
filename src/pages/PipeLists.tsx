@@ -77,6 +77,13 @@ type InviteHistoryEntry = {
 };
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
 type ContactEmailType = 'metrics-update' | 'general-update';
+type ContactEmailAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  content: string;
+};
 type NextStepTooltip = {
   text: string;
   left: number;
@@ -733,6 +740,36 @@ const stripAiConfidenceNote = (value?: string) =>
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+const emailMessageUrlRegex = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+const escapeComposerHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const linkifyComposerText = (value: string) =>
+  escapeComposerHtml(value).replace(emailMessageUrlRegex, (url) => {
+    const href = url.toLowerCase().startsWith('http') ? url : `https://${url}`;
+    return `<a href="${href}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${url}</a>`;
+  });
+
+const linkifyComposerBodyHtml = (value: string) => linkifyComposerText(value).replace(/\n/g, '<br>');
+
+const readFileAsBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      resolve(result.includes(',') ? result.split(',').pop() || '' : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Unable to read attachment.'));
+    reader.readAsDataURL(file);
+  });
+
+const isBackdropClick = (event: React.MouseEvent<HTMLElement>) => event.target === event.currentTarget;
 
 const cleanDealNotes = (value?: string) => {
   const cleaned = stripAiConfidenceNote(value);
@@ -2117,8 +2154,10 @@ const PipelinePage: NextPage = () => {
   const [contactEmailRecipients, setContactEmailRecipients] = useState('');
   const [contactEmailSubject, setContactEmailSubject] = useState('');
   const [contactEmailBody, setContactEmailBody] = useState('');
+  const [contactEmailAttachments, setContactEmailAttachments] = useState<ContactEmailAttachment[]>([]);
   const [contactEmailSendMessage, setContactEmailSendMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isSendingContactEmail, setIsSendingContactEmail] = useState(false);
+  const contactEmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
   const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
   const [isEnrichingVcSources, setIsEnrichingVcSources] = useState(false);
   const [vcSourceEnrichmentMessage, setVcSourceEnrichmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -3149,7 +3188,7 @@ const PipelinePage: NextPage = () => {
     if (!selectedDetailItemId) return undefined;
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && detailModalMode !== 'email') {
         setSelectedDetailItemId('');
         setDetailModalMode('details');
       }
@@ -3157,7 +3196,7 @@ const PipelinePage: NextPage = () => {
 
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [selectedDetailItemId]);
+  }, [detailModalMode, selectedDetailItemId]);
 
   useEffect(() => {
     setLeadCopyMessage(null);
@@ -3169,6 +3208,12 @@ const PipelinePage: NextPage = () => {
     setAttachmentLinkName('');
     setAttachmentLinkUrl('');
   }, [selectedDetailItemId, detailModalMode]);
+
+  useEffect(() => {
+    const editor = contactEmailBodyEditorRef.current;
+    if (!editor || (typeof document !== 'undefined' && document.activeElement === editor)) return;
+    editor.innerHTML = linkifyComposerBodyHtml(contactEmailBody);
+  }, [contactEmailBody, detailModalMode, isContactEmailModalOpen]);
 
   const resetEditor = () => {
     setDraft(defaultDraft(activeList.stages[0]?.id));
@@ -3264,6 +3309,7 @@ const PipelinePage: NextPage = () => {
     setContactEmailRecipients(nextEmails.join(', '));
     setContactEmailSubject(subject);
     setContactEmailBody('');
+    setContactEmailAttachments([]);
     setContactEmailSendMessage(
       isOwner
         ? null
@@ -3291,6 +3337,52 @@ const PipelinePage: NextPage = () => {
     if (isSendingContactEmail) return;
     setIsContactEmailModalOpen(false);
     setContactEmailSendMessage(null);
+  };
+
+  const handleContactEmailAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const nextFiles = Array.from(files).slice(0, Math.max(0, 5 - contactEmailAttachments.length));
+    if (nextFiles.length === 0) {
+      setContactEmailSendMessage({ type: 'error', text: 'You can attach up to 5 files.' });
+      return;
+    }
+
+    const oversizedFile = nextFiles.find((file) => file.size > 7 * 1024 * 1024);
+    if (oversizedFile) {
+      setContactEmailSendMessage({ type: 'error', text: `${oversizedFile.name} is too large. Keep attachments under 7 MB each.` });
+      return;
+    }
+
+    const currentSize = contactEmailAttachments.reduce((total, attachment) => total + attachment.size, 0);
+    const nextSize = nextFiles.reduce((total, file) => total + file.size, 0);
+    if (currentSize + nextSize > 15 * 1024 * 1024) {
+      setContactEmailSendMessage({ type: 'error', text: 'Keep total attachments under 15 MB.' });
+      return;
+    }
+
+    try {
+      const encodedFiles = await Promise.all(
+        nextFiles.map(async (file) => ({
+          id: makeId(),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          content: await readFileAsBase64(file),
+        })),
+      );
+      setContactEmailAttachments((current) => [...current, ...encodedFiles]);
+      setContactEmailSendMessage(null);
+    } catch (error) {
+      setContactEmailSendMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to attach that file.',
+      });
+    }
+  };
+
+  const removeContactEmailAttachment = (attachmentId: string) => {
+    setContactEmailAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
   const handleSendContactEmail = async () => {
@@ -3351,6 +3443,10 @@ const PipelinePage: NextPage = () => {
           toEmails,
           subject: sentSubject,
           message: sentMessage,
+          attachments: contactEmailAttachments.map((attachment) => ({
+            name: attachment.name,
+            content: attachment.content,
+          })),
           listId: activeList.id,
           listName: activeList.name,
           ownerUid: user.uid,
@@ -3364,11 +3460,20 @@ const PipelinePage: NextPage = () => {
       }
 
       const sentCount = Number(result?.sentCount || toEmails.length);
-      setContactEmailSendMessage({
-        type: 'success',
-        text: `Sent ${formatCount(sentCount, 'email')}.`,
-      });
-      setToastMessage({ type: 'success', text: `Sent ${formatCount(sentCount, 'email')}.` });
+      const sendSuccessText = `Sent ${formatCount(sentCount, 'email')}.`;
+      setToastMessage({ type: 'success', text: sendSuccessText });
+      if (detailModalMode === 'email') {
+        setContactEmailSendMessage(null);
+        setDetailModalMode('details');
+      } else {
+        setContactEmailSendMessage({
+          type: 'success',
+          text: sendSuccessText,
+        });
+        if (isContactEmailModalOpen) {
+          setIsContactEmailModalOpen(false);
+        }
+      }
       const resultRows: Array<{ toEmail?: string; messageId?: string }> = Array.isArray(result?.results) ? result.results : [];
       const messageIdsByEmail = new Map<string, string>(
         resultRows
@@ -3390,7 +3495,15 @@ const PipelinePage: NextPage = () => {
               if (!matchingEmail) return item;
 
               const summary = `${emailTypeLabel} sent to ${matchingEmail}.`;
-              const emailLogNotes = [`To: ${matchingEmail}`, `Subject: ${sentSubject}`, '', 'Message:', sentMessage].join('\n');
+              const attachmentNames = contactEmailAttachments.map((attachment) => attachment.name).filter(Boolean);
+              const emailLogNotes = [
+                `To: ${matchingEmail}`,
+                `Subject: ${sentSubject}`,
+                ...(attachmentNames.length > 0 ? [`Attachments: ${attachmentNames.join(', ')}`] : []),
+                '',
+                'Message:',
+                sentMessage,
+              ].join('\n');
               const alreadyLogged = item.weeklyLogs.some(
                 (log) =>
                   log.systemAction === 'email-sent' &&
@@ -3418,6 +3531,7 @@ const PipelinePage: NextPage = () => {
       );
       setContactEmailSubject('');
       setContactEmailBody('');
+      setContactEmailAttachments([]);
     } catch (error) {
       setContactEmailSendMessage({
         type: 'error',
@@ -6705,7 +6819,9 @@ Research rules:
       {isSharePanelOpen && !isSharedView && isOwner && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-10 backdrop-blur-sm sm:py-12"
-          onClick={() => setIsSharePanelOpen(false)}
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsSharePanelOpen(false);
+          }}
         >
           <section
             role="dialog"
@@ -6950,7 +7066,6 @@ Research rules:
       {isContactEmailModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-8 backdrop-blur-sm"
-          onClick={closeContactEmailModal}
         >
           <section
             role="dialog"
@@ -6971,14 +7086,6 @@ Research rules:
                   Send a direct update to contacts in {activeList.name}.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeContactEmailModal}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
-                title="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
@@ -7053,14 +7160,74 @@ Research rules:
 
               <label className="block" htmlFor="contact-email-body">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Message</span>
-                <textarea
-                  id="contact-email-body"
-                  value={contactEmailBody}
-                  onChange={(event) => setContactEmailBody(event.target.value)}
-                  className="min-h-48 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                  placeholder="Write the update you want to send."
-                />
+                <div className="relative">
+                  <div
+                    id="contact-email-body"
+                    ref={contactEmailBodyEditorRef}
+                    role="textbox"
+                    aria-multiline="true"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={(event) => setContactEmailBody(event.currentTarget.innerText.replace(/\u00a0/g, ' '))}
+                    onBlur={(event) => {
+                      const text = event.currentTarget.innerText.replace(/\u00a0/g, ' ');
+                      setContactEmailBody(text);
+                      event.currentTarget.innerHTML = linkifyComposerBodyHtml(text);
+                    }}
+                    className="min-h-48 w-full resize-y overflow-auto rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                  />
+                  {!contactEmailBody && (
+                    <span className="pointer-events-none absolute left-3 top-2 text-sm text-stone-400">
+                      Write the update you want to send.
+                    </span>
+                  )}
+                </div>
               </label>
+
+              <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="block text-xs font-semibold uppercase text-stone-400">Attachments</span>
+                    <span className="mt-1 block text-xs text-stone-400">Up to 5 files, 15 MB total.</span>
+                  </div>
+                  <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:text-stone-950">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Add files
+                    <input
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      onChange={async (event) => {
+                        await handleContactEmailAttachments(event.target.files);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                {contactEmailAttachments.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {contactEmailAttachments.map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-stone-700">{attachment.name}</p>
+                          <p className="text-xs text-stone-400">{formatFileSize(attachment.size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeContactEmailAttachment(attachment.id)}
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-950"
+                          title={`Remove ${attachment.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <MessageBanner message={contactEmailSendMessage} />
             </div>
@@ -7091,7 +7258,9 @@ Research rules:
       {isNewListModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setIsNewListModalOpen(false)}
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsNewListModalOpen(false);
+          }}
         >
           <form
             onSubmit={handleCreateList}
@@ -7168,7 +7337,9 @@ Research rules:
       {isDeleteListModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setIsDeleteListModalOpen(false)}
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsDeleteListModalOpen(false);
+          }}
         >
           <section
             role="dialog"
@@ -7234,7 +7405,9 @@ Research rules:
       {isLeadUrlModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={() => setIsLeadUrlModalOpen(false)}
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsLeadUrlModalOpen(false);
+          }}
         >
           <form
             onSubmit={handleExtractLead}
@@ -7301,7 +7474,9 @@ Research rules:
       {isLeadGenModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={closeLeadGenModal}
+          onClick={(event) => {
+            if (isBackdropClick(event)) closeLeadGenModal();
+          }}
         >
           <section
             role="dialog"
@@ -7658,7 +7833,9 @@ Research rules:
       {isLogModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={closeLogModal}
+          onClick={(event) => {
+            if (isBackdropClick(event)) closeLogModal();
+          }}
         >
           <section
             role="dialog"
@@ -7860,10 +8037,12 @@ Research rules:
       {selectedDetailItem && selectedDetailStage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={() => {
-            resetEditor();
-            setSelectedDetailItemId('');
-            setDetailModalMode('details');
+          onClick={(event) => {
+            if (detailModalMode !== 'email' && isBackdropClick(event)) {
+              resetEditor();
+              setSelectedDetailItemId('');
+              setDetailModalMode('details');
+            }
           }}
         >
           <section
@@ -7941,23 +8120,25 @@ Research rules:
                       </button>
                     </>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetEditor();
-                      setSelectedDetailItemId('');
-                      setDetailModalMode('details');
-                    }}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
-                    title="Close details"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  {detailModalMode !== 'email' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetEditor();
+                        setSelectedDetailItemId('');
+                        setDetailModalMode('details');
+                      }}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                      title="Close details"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {!selectedDetailIsEditing && detailModalMode !== 'details' && (
+                {!selectedDetailIsEditing && detailModalMode !== 'details' && detailModalMode !== 'email' && (
                   <button
                     type="button"
                     onClick={() => setDetailModalMode('details')}
@@ -7967,7 +8148,7 @@ Research rules:
                     Details
                   </button>
                 )}
-                {canModify && !selectedDetailIsEditing && (
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
                     onClick={() => handleEditItem(selectedDetailItem)}
@@ -7977,7 +8158,7 @@ Research rules:
                     Edit
                   </button>
                 )}
-                {!selectedDetailIsEditing && (
+                {!selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
                     onClick={() => {
@@ -7994,21 +8175,17 @@ Research rules:
                     Logs
                   </button>
                 )}
-                {isInvestorUpdateContactsList && canModify && !selectedDetailIsEditing && (
+                {isInvestorUpdateContactsList && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
                     onClick={() => openContactEmailComposerForItem(selectedDetailItem)}
-                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
-                      detailModalMode === 'email'
-                        ? 'bg-stone-900 text-white hover:bg-stone-700'
-                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
-                    }`}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
                   >
                     <Mail className="h-4 w-4" />
                     Send email
                   </button>
                 )}
-                {canModify && !selectedDetailIsEditing && !isLeadSharedView && moveTargetLists.length > 0 && (
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && !isLeadSharedView && moveTargetLists.length > 0 && (
                   <label className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition focus-within:border-stone-400 hover:text-stone-950">
                     <ListPlus className="h-4 w-4" />
                     <span className="sr-only">Move lead to another PipeList</span>
@@ -8125,14 +8302,74 @@ Research rules:
 
                   <label className="mt-4 block" htmlFor="detail-contact-email-body">
                     <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Message</span>
-                    <textarea
-                      id="detail-contact-email-body"
-                      value={contactEmailBody}
-                      onChange={(event) => setContactEmailBody(event.target.value)}
-                      className="min-h-56 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder="Write the update you want to send."
-                    />
+                    <div className="relative">
+                      <div
+                        id="detail-contact-email-body"
+                        ref={contactEmailBodyEditorRef}
+                        role="textbox"
+                        aria-multiline="true"
+                        contentEditable
+                        suppressContentEditableWarning
+                        onInput={(event) => setContactEmailBody(event.currentTarget.innerText.replace(/\u00a0/g, ' '))}
+                        onBlur={(event) => {
+                          const text = event.currentTarget.innerText.replace(/\u00a0/g, ' ');
+                          setContactEmailBody(text);
+                          event.currentTarget.innerHTML = linkifyComposerBodyHtml(text);
+                        }}
+                        className="min-h-56 w-full resize-y overflow-auto rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                      />
+                      {!contactEmailBody && (
+                        <span className="pointer-events-none absolute left-3 top-2 text-sm text-stone-400">
+                          Write the update you want to send.
+                        </span>
+                      )}
+                    </div>
                   </label>
+
+                  <div className="mt-4 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="block text-xs font-semibold uppercase text-stone-400">Attachments</span>
+                        <span className="mt-1 block text-xs text-stone-400">Up to 5 files, 15 MB total.</span>
+                      </div>
+                      <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:text-stone-950">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Add files
+                        <input
+                          type="file"
+                          multiple
+                          className="sr-only"
+                          onChange={async (event) => {
+                            await handleContactEmailAttachments(event.target.files);
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {contactEmailAttachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {contactEmailAttachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-stone-700">{attachment.name}</p>
+                              <p className="text-xs text-stone-400">{formatFileSize(attachment.size)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeContactEmailAttachment(attachment.id)}
+                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-950"
+                              title={`Remove ${attachment.name}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="mt-4">
                     <MessageBanner message={contactEmailSendMessage} />
