@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Head from "next/head";
+import Link from "next/link";
 import {
   addDays,
   endOfMonth,
@@ -16,12 +17,16 @@ import {
   Copy,
   Link as LinkIcon,
   Mail,
+  LogOut,
   RefreshCw,
   Sparkles,
   Trash2,
   Upload,
   Users,
 } from "lucide-react";
+import {
+  signOut,
+} from "firebase/auth";
 import {
   getDownloadURL,
   ref as storageRef,
@@ -250,7 +255,7 @@ const AvatarBubble: React.FC<{
   <img
     src={buildAvatarUrl(name, imageUrl)}
     alt={name}
-    className={`${size} rounded-2xl object-cover border border-white/10 bg-zinc-900`}
+    className={`${size} rounded-lg object-cover border border-stone-200 bg-white`}
   />
 );
 
@@ -267,10 +272,10 @@ const getRequestStatusClassName = (
   status: GroupMeetRequestSummary["status"],
 ) =>
   status === "draft"
-    ? "border border-amber-500/30 bg-amber-500/10 text-amber-200"
+    ? "border border-amber-500/30 bg-amber-500/10 text-amber-700"
     : status === "closed"
-      ? "border border-zinc-700 bg-zinc-900 text-zinc-300"
-      : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+      ? "border border-stone-200 bg-white text-stone-600"
+      : "border border-emerald-500/30 bg-emerald-500/10 text-emerald-700";
 
 const getInviteActionLabel = (
   invite: Pick<GroupMeetInviteSummary, "emailStatus" | "emailedAt">,
@@ -354,7 +359,7 @@ const getInviteDeliveryMeta = (
   if (!invite.email) {
     return {
       badgeText: "No email",
-      badgeClassName: "border-zinc-700 bg-zinc-900 text-zinc-300",
+      badgeClassName: "border-stone-200 bg-white text-stone-600",
       detailText: "No email on file",
     };
   }
@@ -388,7 +393,7 @@ const getInviteDeliveryMeta = (
   if (invite.emailStatus === "manual_only") {
     return {
       badgeText: "Host link only",
-      badgeClassName: "border-zinc-700 bg-zinc-900 text-zinc-300",
+      badgeClassName: "border-stone-200 bg-white text-stone-600",
       detailText: "Host link only",
     };
   }
@@ -1923,49 +1928,85 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   return (
-    <AdminRouteGuard>
-      <div className="min-h-screen bg-black text-white">
+    <AdminRouteGuard showAdminBanner={false}>
+      <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
         <Head>
-          <title>Group Meet | Admin</title>
+          <title>Group Meet | Pulse</title>
         </Head>
 
-        <div className="max-w-7xl mx-auto px-6 py-10">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-8">
+        <nav className="sticky top-0 z-40 border-b border-stone-200/70 bg-[#FAFAF7]/90 backdrop-blur-md">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="Pulse home">
+              <img src="/pulse-logo.svg" alt="Pulse" className="h-8 shrink-0" />
+              <span className="hidden text-sm font-medium text-stone-500 sm:inline">Group Meet</span>
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-500 shadow-sm md:flex">
+                <span className={`h-2 w-2 rounded-full ${loading || creating ? "bg-amber-400" : "bg-emerald-500"}`} />
+                <span>{loading || creating ? "Working" : "Ready"}</span>
+                {activeAdminEmail && (
+                  <>
+                    <span className="text-stone-300">·</span>
+                    <span>{activeAdminEmail}</span>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={loadRequests}
+                disabled={loading}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900 disabled:opacity-50"
+                title="Refresh requests"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => signOut(auth)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
+                title="Sign out"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mb-6 flex flex-col gap-3 border-b border-stone-200 pb-6 md:flex-row md:items-end md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Group Meet</h1>
-              <p className="text-zinc-400 text-sm mt-2 max-w-3xl">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                <span className="text-xs font-semibold uppercase text-stone-400">
+                  Availability planner
+                </span>
+              </div>
+              <h1 className="text-3xl font-bold tracking-normal text-stone-950 md:text-4xl">Group Meet</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">
                 Create a tracked availability request, generate one link per
                 person, and collect responses for a target month.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={loadRequests}
-              disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
           </div>
 
           {message && (
             <div
-              className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
+              className={`mb-6 rounded-md border px-4 py-3 text-sm ${
                 message.type === "success"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                  : "border-red-500/30 bg-red-500/10 text-red-100"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                  : "border-red-500/30 bg-red-500/10 text-red-700"
               }`}
             >
               {message.text}
             </div>
           )}
 
-          <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-4 text-sm text-zinc-300">
+          <div className="mb-6 rounded-lg border border-stone-200 bg-white px-4 py-4 text-sm text-stone-600">
             Active admin identity:{" "}
-            <span className="font-medium text-white">
+            <span className="font-medium text-stone-950">
               {activeAdminEmail || "Unknown"}
             </span>
           </div>
@@ -1976,8 +2017,8 @@ const GroupMeetAdminPage: React.FC = () => {
               onClick={() => setActiveTab("create")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 activeTab === "create"
-                  ? "bg-[#E0FE10] text-black"
-                  : "border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900"
+                  ? "bg-stone-900 text-white"
+                  : "border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:bg-white"
               }`}
             >
               Create request
@@ -1987,8 +2028,8 @@ const GroupMeetAdminPage: React.FC = () => {
               onClick={() => setActiveTab("contacts")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 activeTab === "contacts"
-                  ? "bg-[#E0FE10] text-black"
-                  : "border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900"
+                  ? "bg-stone-900 text-white"
+                  : "border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:bg-white"
               }`}
             >
               Contact list
@@ -1998,8 +2039,8 @@ const GroupMeetAdminPage: React.FC = () => {
               onClick={() => setActiveTab("requests")}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 activeTab === "requests"
-                  ? "bg-[#E0FE10] text-black"
-                  : "border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900"
+                  ? "bg-stone-900 text-white"
+                  : "border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:bg-white"
               }`}
             >
               Requests
@@ -2007,16 +2048,16 @@ const GroupMeetAdminPage: React.FC = () => {
           </div>
 
           <div>
-            <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
+            <section className="rounded-lg border border-stone-200 bg-white p-6">
               {activeTab === "create" ? (
                 <>
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-11 h-11 rounded-2xl bg-[#E0FE10]/10 text-[#E0FE10] flex items-center justify-center">
+                    <div className="w-11 h-11 rounded-lg bg-stone-900/10 text-stone-900 flex items-center justify-center">
                       <Calendar className="w-5 h-5" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold">Create draft</h2>
-                      <p className="text-zinc-400 text-sm">
+                      <p className="text-stone-500 text-sm">
                         Set up the meeting, save it as a draft, and send
                         invitations later from the Requests tab.
                       </p>
@@ -2025,43 +2066,43 @@ const GroupMeetAdminPage: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <label className="block">
-                      <span className="block text-sm text-zinc-300 mb-2">
+                      <span className="block text-sm text-stone-600 mb-2">
                         Meeting title
                       </span>
                       <input
                         value={title}
                         onChange={(event) => setTitle(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                        className="w-full rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                         placeholder="Board sync"
                       />
                     </label>
 
                     <label className="block">
-                      <span className="block text-sm text-zinc-300 mb-2">
+                      <span className="block text-sm text-stone-600 mb-2">
                         Target month
                       </span>
                       <input
                         type="month"
                         value={targetMonth}
                         onChange={(event) => setTargetMonth(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                        className="w-full rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                       />
                     </label>
 
                     <label className="block">
-                      <span className="block text-sm text-zinc-300 mb-2">
+                      <span className="block text-sm text-stone-600 mb-2">
                         Deadline
                       </span>
                       <input
                         type="datetime-local"
                         value={deadlineAt}
                         onChange={(event) => setDeadlineAt(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                        className="w-full rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                       />
                     </label>
 
                     <label className="block">
-                      <span className="block text-sm text-zinc-300 mb-2">
+                      <span className="block text-sm text-stone-600 mb-2">
                         Meeting length
                       </span>
                       <select
@@ -2069,7 +2110,7 @@ const GroupMeetAdminPage: React.FC = () => {
                         onChange={(event) =>
                           setMeetingDurationMinutes(Number(event.target.value))
                         }
-                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                        className="w-full rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                       >
                         <option value={15}>15 minutes</option>
                         <option value={30}>30 minutes</option>
@@ -2081,36 +2122,36 @@ const GroupMeetAdminPage: React.FC = () => {
                   </div>
 
                   <label className="block mt-4">
-                    <span className="block text-sm text-zinc-300 mb-2">
+                    <span className="block text-sm text-stone-600 mb-2">
                       Timezone
                     </span>
                     <input
                       value={timezone}
                       onChange={(event) => setTimezone(event.target.value)}
-                      className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      className="w-full rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                       placeholder="America/New_York"
                     />
                   </label>
 
-                  <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-[#E0FE10]/15 bg-[#E0FE10]/5 px-4 py-4">
+                  <div className="mt-6 flex items-center justify-between gap-4 rounded-lg border border-stone-900/15 bg-stone-900/5 px-4 py-4">
                     <div>
                       <div className="font-medium">Draft-first flow</div>
-                      <div className="text-sm text-zinc-400">
+                      <div className="text-sm text-stone-500">
                         Saving here does not email anyone yet. Drafts move into
                         Requests, where you can review the setup and send
                         invitations when ready.
                       </div>
                     </div>
-                    <div className="rounded-full bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black">
+                    <div className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white">
                       Saves as draft
                     </div>
                   </div>
 
-                  <div className="mt-8 rounded-3xl border border-zinc-800 bg-black/50 p-5">
+                  <div className="mt-8 rounded-lg border border-stone-200 bg-white p-5">
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div>
                         <h3 className="text-lg font-semibold">Host</h3>
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-stone-500">
                           Pick the organizer from your saved contacts, then lock
                           in their availability before the request goes out.
                         </p>
@@ -2124,7 +2165,7 @@ const GroupMeetAdminPage: React.FC = () => {
                     {contacts.length ? (
                       <>
                         <label className="block">
-                          <span className="block text-sm text-zinc-300 mb-2">
+                          <span className="block text-sm text-stone-600 mb-2">
                             Host contact
                           </span>
                           <select
@@ -2141,7 +2182,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 setHost(buildEmptyHost());
                               }
                             }}
-                            className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                            className="w-full rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                           >
                             <option value="">Select a contact</option>
                             {contacts.map((contact) => (
@@ -2154,7 +2195,7 @@ const GroupMeetAdminPage: React.FC = () => {
                         </label>
 
                         {host.contactId && (
-                          <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                          <div className="mt-4 rounded-lg border border-stone-200 bg-white p-4">
                             <div className="flex items-center gap-3">
                               <AvatarBubble
                                 name={host.name}
@@ -2162,7 +2203,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               />
                               <div>
                                 <div className="font-medium">{host.name}</div>
-                                <div className="text-sm text-zinc-400">
+                                <div className="text-sm text-stone-500">
                                   {host.email || "No email on file"}
                                 </div>
                               </div>
@@ -2171,14 +2212,14 @@ const GroupMeetAdminPage: React.FC = () => {
                         )}
                       </>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                      <div className="rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                         Add your contacts first, then come back here to choose
                         the host.
                         <div className="mt-4">
                           <button
                             type="button"
                             onClick={() => setActiveTab("contacts")}
-                            className="rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+                            className="rounded-md border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-white"
                           >
                             Open contact list
                           </button>
@@ -2204,23 +2245,23 @@ const GroupMeetAdminPage: React.FC = () => {
                     <div className="flex items-center justify-between gap-4 mb-4">
                       <div>
                         <h3 className="text-lg font-semibold">Guests</h3>
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-stone-500">
                           Only saved contacts can be invited. Tap the people you
                           want to include in this request.
                         </p>
                       </div>
-                      <div className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+                      <div className="rounded-full border border-stone-200 bg-white px-3 py-2 text-xs text-stone-500">
                         {selectedParticipantContacts.length} selected
                       </div>
                     </div>
 
                     {!contacts.length ? (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                      <div className="rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                         Your guest picker will unlock once you have contacts
                         saved.
                       </div>
                     ) : !availableGuestContacts.length ? (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                      <div className="rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                         Everyone in your contact list is currently being used as
                         the host, so add more contacts to build the guest list.
                       </div>
@@ -2236,10 +2277,10 @@ const GroupMeetAdminPage: React.FC = () => {
                               onClick={() =>
                                 toggleParticipantContact(contact.id)
                               }
-                              className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-colors ${
+                              className={`flex w-full items-center justify-between gap-4 rounded-lg border p-4 text-left transition-colors ${
                                 selected
-                                  ? "border-[#E0FE10]/40 bg-[#E0FE10]/10"
-                                  : "border-zinc-800 bg-black/60 hover:bg-zinc-900/80"
+                                  ? "border-stone-900/40 bg-stone-900/10"
+                                  : "border-stone-200 bg-white hover:bg-stone-100"
                               }`}
                             >
                               <div className="flex items-center gap-3">
@@ -2251,13 +2292,13 @@ const GroupMeetAdminPage: React.FC = () => {
                                   <div className="font-medium">
                                     {contact.name}
                                   </div>
-                                  <div className="text-sm text-zinc-400">
+                                  <div className="text-sm text-stone-500">
                                     {contact.email || "Manual link only"}
                                   </div>
                                 </div>
                               </div>
                               <div
-                                className={`rounded-full px-3 py-2 text-xs font-semibold ${selected ? "bg-[#E0FE10] text-black" : "border border-zinc-700 text-zinc-300"}`}
+                                className={`rounded-full px-3 py-2 text-xs font-semibold ${selected ? "bg-stone-900 text-white" : "border border-stone-200 text-stone-600"}`}
                               >
                                 {selected ? "Selected" : "Add guest"}
                               </div>
@@ -2268,8 +2309,8 @@ const GroupMeetAdminPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="mt-8 flex items-center justify-between gap-4 border-t border-zinc-800 pt-6">
-                    <div className="text-sm text-zinc-400">
+                  <div className="mt-8 flex items-center justify-between gap-4 border-t border-stone-200 pt-6">
+                    <div className="text-sm text-stone-500">
                       Host availability locked in •{" "}
                       {selectedParticipantContacts.length} guest
                       {selectedParticipantContacts.length === 1 ? "" : "s"}{" "}
@@ -2279,7 +2320,7 @@ const GroupMeetAdminPage: React.FC = () => {
                       type="button"
                       onClick={createRequest}
                       disabled={creating}
-                      className="rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                      className="rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                     >
                       {creating ? "Saving…" : "Save draft"}
                     </button>
@@ -2288,12 +2329,12 @@ const GroupMeetAdminPage: React.FC = () => {
               ) : activeTab === "contacts" ? (
                 <>
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-11 h-11 rounded-2xl bg-white/5 text-white flex items-center justify-center">
+                    <div className="w-11 h-11 rounded-lg bg-stone-100 text-stone-950 flex items-center justify-center">
                       <Users className="w-5 h-5" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold">Contact list</h2>
-                      <p className="text-sm text-zinc-400">
+                      <p className="text-sm text-stone-500">
                         Create the reusable profiles here. The meeting builder
                         only pulls from this saved list.
                       </p>
@@ -2304,16 +2345,16 @@ const GroupMeetAdminPage: React.FC = () => {
                     <input
                       value={contactName}
                       onChange={(event) => setContactName(event.target.value)}
-                      className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      className="rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                       placeholder="Contact name"
                     />
                     <input
                       value={contactEmail}
                       onChange={(event) => setContactEmail(event.target.value)}
-                      className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      className="rounded-md border border-stone-200 bg-white px-4 py-3 text-stone-950"
                       placeholder="Email"
                     />
-                    <div className="rounded-xl border border-zinc-800 bg-black px-4 py-3">
+                    <div className="rounded-md border border-stone-200 bg-white px-4 py-3">
                       <input
                         ref={contactImageInputRef}
                         type="file"
@@ -2329,12 +2370,12 @@ const GroupMeetAdminPage: React.FC = () => {
                             size="h-10 w-10"
                           />
                           <div className="min-w-0">
-                            <div className="text-sm text-white truncate">
+                            <div className="text-sm text-stone-950 truncate">
                               {contactImageFile
                                 ? contactImageFile.name
                                 : "Upload contact image"}
                             </div>
-                            <div className="text-xs text-zinc-500">
+                            <div className="text-xs text-stone-400">
                               PNG, JPG, or WEBP
                             </div>
                           </div>
@@ -2355,7 +2396,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                   contactImageInputRef.current.value = "";
                                 }
                               }}
-                              className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900"
+                              className="rounded-lg border border-stone-200 px-3 py-2 text-xs text-stone-600 hover:bg-white"
                             >
                               Clear
                             </button>
@@ -2365,7 +2406,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             onClick={() =>
                               contactImageInputRef.current?.click()
                             }
-                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-900"
+                            className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-sm text-stone-800 hover:bg-white"
                           >
                             <Upload className="h-4 w-4" />
                             {contactImageFile ? "Replace" : "Choose file"}
@@ -2377,26 +2418,26 @@ const GroupMeetAdminPage: React.FC = () => {
                       type="button"
                       onClick={saveContact}
                       disabled={savingContact}
-                      className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                      className="rounded-md bg-stone-900 px-4 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                     >
                       {savingContact ? "Saving…" : "Save contact"}
                     </button>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
+                  <div className="mt-4 rounded-lg border border-stone-200 bg-white px-4 py-4 text-sm text-stone-500">
                     Save yourself here too. The host has to be selected from
                     this list before a Group Meet request can be created.
                   </div>
 
                   <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm text-zinc-400">
+                    <div className="text-sm text-stone-500">
                       {contacts.length} saved contact
                       {contacts.length === 1 ? "" : "s"}
                     </div>
                     <button
                       type="button"
                       onClick={() => setActiveTab("create")}
-                      className="rounded-xl border border-zinc-800 px-4 py-2 text-sm hover:bg-zinc-900"
+                      className="rounded-md border border-stone-200 px-4 py-2 text-sm hover:bg-white"
                     >
                       Back to request builder
                     </button>
@@ -2411,7 +2452,7 @@ const GroupMeetAdminPage: React.FC = () => {
                       return (
                         <div
                           key={contact.id}
-                          className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-black/40 p-4 md:flex-row md:items-center md:justify-between"
+                          className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-4 md:flex-row md:items-center md:justify-between"
                         >
                           <div className="flex items-center gap-3">
                             <AvatarBubble
@@ -2420,19 +2461,19 @@ const GroupMeetAdminPage: React.FC = () => {
                             />
                             <div>
                               <div className="font-medium">{contact.name}</div>
-                              <div className="text-sm text-zinc-400">
+                              <div className="text-sm text-stone-500">
                                 {contact.email || "No email on file"}
                               </div>
                             </div>
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs">
                             {isHost && (
-                              <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-3 py-2 text-[#E0FE10]">
+                              <span className="rounded-full border border-stone-900/30 bg-stone-900/10 px-3 py-2 text-stone-900">
                                 Current host
                               </span>
                             )}
                             {isSelectedGuest && (
-                              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-300">
+                              <span className="rounded-full border border-stone-200 bg-white px-3 py-2 text-stone-600">
                                 Selected guest
                               </span>
                             )}
@@ -2442,7 +2483,7 @@ const GroupMeetAdminPage: React.FC = () => {
                     })}
 
                     {!contacts.length && !contactsLoading && (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                      <div className="rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                         No saved contacts yet.
                       </div>
                     )}
@@ -2451,12 +2492,12 @@ const GroupMeetAdminPage: React.FC = () => {
               ) : (
                 <>
                   <div className="flex items-center gap-3 mb-6">
-                    <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-300 flex items-center justify-center">
+                    <div className="w-11 h-11 rounded-lg bg-blue-500/10 text-blue-700 flex items-center justify-center">
                       <Users className="w-5 h-5" />
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold">Requests</h2>
-                      <p className="text-sm text-zinc-400">
+                      <p className="text-sm text-stone-500">
                         Open drafts, send invitations, and monitor replies after
                         the meeting is live.
                       </p>
@@ -2467,7 +2508,7 @@ const GroupMeetAdminPage: React.FC = () => {
                     {requests.map((request) => (
                       <div
                         key={request.id}
-                        className="rounded-2xl border border-zinc-800 bg-black/40 p-4"
+                        className="rounded-lg border border-stone-200 bg-white p-4"
                       >
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
@@ -2478,7 +2519,7 @@ const GroupMeetAdminPage: React.FC = () => {
 
                               return (
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <div className="font-semibold text-white">
+                                  <div className="font-semibold text-stone-950">
                                     {request.title}
                                   </div>
                                   <span
@@ -2490,21 +2531,21 @@ const GroupMeetAdminPage: React.FC = () => {
                                   </span>
                                   {deadlinePassed &&
                                     request.status !== "closed" && (
-                                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+                                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">
                                         Past deadline
                                       </span>
                                     )}
                                 </div>
                               );
                             })()}
-                            <div className="text-sm text-zinc-400 mt-1">
+                            <div className="text-sm text-stone-500 mt-1">
                               Month {request.targetMonth} • Deadline{" "}
                               {toReadableDateTime(
                                 request.deadlineAt,
                                 request.timezone,
                               )}
                             </div>
-                            <div className="flex flex-wrap gap-3 mt-3 text-xs text-zinc-400">
+                            <div className="flex flex-wrap gap-3 mt-3 text-xs text-stone-500">
                               <span>
                                 {request.participantCount} participants
                               </span>
@@ -2519,7 +2560,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 type="button"
                                 onClick={() => sendDraftInvites(request.id)}
                                 disabled={sendingRequestId === request.id}
-                                className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-3 py-2 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                               >
                                 <Mail className="w-4 h-4" />
                                 {sendingRequestId === request.id
@@ -2530,11 +2571,11 @@ const GroupMeetAdminPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => openRequestModal(request.id)}
-                              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                              className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
                                 selectedRequestId === request.id &&
                                 requestModalOpen
-                                  ? "border-[#E0FE10]/40 bg-[#E0FE10]/10 text-[#E0FE10]"
-                                  : "border-zinc-800 hover:bg-zinc-900"
+                                  ? "border-stone-900/40 bg-stone-900/10 text-stone-900"
+                                  : "border-stone-200 hover:bg-white"
                               }`}
                             >
                               <CheckCircle2 className="w-4 h-4" />
@@ -2543,7 +2584,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => copyAllLinks(request)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-3 py-2 text-sm hover:bg-zinc-900"
+                              className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 text-sm hover:bg-white"
                             >
                               <Copy className="w-4 h-4" />
                               Copy links
@@ -2554,7 +2595,7 @@ const GroupMeetAdminPage: React.FC = () => {
                     ))}
 
                     {!requests.length && !loading && (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
+                      <div className="rounded-lg border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-400">
                         No Group Meet requests yet.
                       </div>
                     )}
@@ -2565,22 +2606,22 @@ const GroupMeetAdminPage: React.FC = () => {
           </div>
 
           {requestModalOpen && (
-            <div className="fixed inset-0 z-50 bg-black/80 p-4 sm:p-6">
-              <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-[32px] border border-zinc-800 bg-[#090c11] shadow-2xl">
-                <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-6 py-5">
+            <div className="fixed inset-0 z-50 bg-stone-950/35 p-4 sm:p-6">
+              <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl">
+                <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5">
                   <div>
-                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                    <div className="text-xs uppercase tracking-[0.2em] text-stone-400">
                       Request detail
                     </div>
-                    <h2 className="mt-2 text-3xl font-semibold text-white">
+                    <h2 className="mt-2 text-3xl font-semibold text-stone-950">
                       {selectedRequest?.title || "Loading request…"}
                     </h2>
                     {selectedRequest && (
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
-                        <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-500">
+                        <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5">
                           {selectedRequest.targetMonth}
                         </span>
-                        <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                        <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5">
                           {selectedRequest.meetingDurationMinutes} min
                         </span>
                         <span
@@ -2594,7 +2635,7 @@ const GroupMeetAdminPage: React.FC = () => {
                           selectedRequest.deadlineAt,
                         ) &&
                           selectedRequest.status !== "closed" && (
-                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-100">
+                            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-700">
                               Past deadline
                             </span>
                           )}
@@ -2605,7 +2646,7 @@ const GroupMeetAdminPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={closeRequestModal}
-                    className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+                    className="rounded-full border border-stone-200 px-4 py-2 text-sm text-stone-600 hover:bg-white"
                   >
                     Close
                   </button>
@@ -2614,10 +2655,10 @@ const GroupMeetAdminPage: React.FC = () => {
                 <div className="flex-1 overflow-y-auto px-6 py-6">
                   {requestModalMessage && (
                     <div
-                      className={`mb-6 rounded-2xl border px-4 py-3 text-sm ${
+                      className={`mb-6 rounded-lg border px-4 py-3 text-sm ${
                         requestModalMessage.type === "success"
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
-                          : "border-red-500/30 bg-red-500/10 text-red-100"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
+                          : "border-red-500/30 bg-red-500/10 text-red-700"
                       }`}
                     >
                       {requestModalMessage.text}
@@ -2625,23 +2666,23 @@ const GroupMeetAdminPage: React.FC = () => {
                   )}
 
                   {detailLoading && (
-                    <div className="rounded-2xl border border-zinc-800 px-4 py-10 text-center text-sm text-zinc-400">
+                    <div className="rounded-lg border border-stone-200 px-4 py-10 text-center text-sm text-stone-500">
                       Loading request details…
                     </div>
                   )}
 
                   {!detailLoading && !selectedRequest && (
-                    <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
+                    <div className="rounded-lg border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-400">
                       Select a request to inspect the full scheduling view.
                     </div>
                   )}
 
                   {!detailLoading && selectedRequest && (
                     <div className="space-y-6">
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                           <div>
-                            <div className="text-sm text-zinc-400">
+                            <div className="text-sm text-stone-500">
                               Deadline{" "}
                               {toReadableDateTime(
                                 selectedRequest.deadlineAt,
@@ -2649,7 +2690,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               )}
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                              <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5">
                                 {
                                   selectedRequest.analysis
                                     .respondedParticipantCount
@@ -2657,14 +2698,14 @@ const GroupMeetAdminPage: React.FC = () => {
                                 /{selectedRequest.analysis.totalParticipants}{" "}
                                 responded
                               </span>
-                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                              <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5">
                                 {
                                   selectedRequest.analysis.fullMatchCandidates
                                     .length
                                 }{" "}
                                 full-match windows
                               </span>
-                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                              <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5">
                                 {selectedRequest.analysis.bestCandidates.length}{" "}
                                 ranked candidates
                               </span>
@@ -2672,7 +2713,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 selectedRequest.deadlineAt,
                               ) &&
                                 selectedRequest.status !== "closed" && (
-                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-100">
+                                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-amber-700">
                                     Deadline passed
                                   </span>
                                 )}
@@ -2690,7 +2731,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 disabled={
                                   sendingRequestId === selectedRequestId
                                 }
-                                className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                               >
                                 <Mail className="w-4 h-4" />
                                 {sendingRequestId === selectedRequestId
@@ -2701,7 +2742,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => copyAllLinks(selectedRequest)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900"
+                              className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-4 py-2.5 text-sm hover:bg-white"
                             >
                               <Copy className="w-4 h-4" />
                               Copy all links
@@ -2710,7 +2751,7 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
 
                         {selectedRequest.status === "draft" && (
-                          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+                          <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-700">
                             This request is still a draft. Guests have not been
                             emailed yet, so nothing is live until you click
                             send.
@@ -2719,7 +2760,7 @@ const GroupMeetAdminPage: React.FC = () => {
 
                         {selectedRequest.analysis.pendingParticipantNames
                           .length > 0 && (
-                          <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+                          <div className="mt-4 rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-700">
                             Waiting on:{" "}
                             {selectedRequest.analysis.pendingParticipantNames.join(
                               ", ",
@@ -2728,13 +2769,13 @@ const GroupMeetAdminPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                           <div>
                             <h3 className="text-xl font-semibold">
                               Send preview email
                             </h3>
-                            <p className="mt-1 text-sm text-zinc-400">
+                            <p className="mt-1 text-sm text-stone-500">
                               Email yourself a real guest link so you can walk
                               through the recipient flow before you send the
                               full batch.
@@ -2748,7 +2789,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             onChange={(event) =>
                               setPreviewRecipientName(event.target.value)
                             }
-                            className="rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                            className="rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                             placeholder="Preview recipient name"
                           />
                           <input
@@ -2756,7 +2797,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             onChange={(event) =>
                               setPreviewRecipientEmail(event.target.value)
                             }
-                            className="rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                            className="rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                             placeholder="Preview recipient email"
                           />
                           <select
@@ -2764,7 +2805,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             onChange={(event) =>
                               setPreviewInviteToken(event.target.value)
                             }
-                            className="rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                            className="rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                           >
                             <option value="">
                               Choose guest link to preview
@@ -2780,13 +2821,13 @@ const GroupMeetAdminPage: React.FC = () => {
                             type="button"
                             onClick={sendPreviewEmail}
                             disabled={previewSending}
-                            className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                            className="rounded-md bg-stone-900 px-4 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                           >
                             {previewSending ? "Sending…" : "Send preview"}
                           </button>
                         </div>
 
-                        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-4 text-sm text-zinc-400">
+                        <div className="mt-4 rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-4 text-sm text-stone-500">
                           The preview email uses the selected participant’s real
                           scheduling link. If you submit availability through
                           it, that response will count for that guest on this
@@ -2794,11 +2835,11 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <h3 className="text-xl font-semibold">
                           Everyone who has entered availability
                         </h3>
-                        <div className="mt-1 text-sm text-zinc-400">
+                        <div className="mt-1 text-sm text-stone-500">
                           These are the people currently contributing to the
                           overlap view.
                         </div>
@@ -2807,7 +2848,7 @@ const GroupMeetAdminPage: React.FC = () => {
                           {respondedInvites.map((invite) => (
                             <div
                               key={invite.token}
-                              className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-4 py-3"
+                              className="flex items-center gap-3 rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3"
                             >
                               <AvatarBubble
                                 name={invite.name}
@@ -2820,7 +2861,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     ? " • Host"
                                     : ""}
                                 </div>
-                                <div className="text-xs text-zinc-500">
+                                <div className="text-xs text-stone-400">
                                   {invite.availabilityCount} slot
                                   {invite.availabilityCount === 1 ? "" : "s"}
                                 </div>
@@ -2829,20 +2870,20 @@ const GroupMeetAdminPage: React.FC = () => {
                           ))}
 
                           {!respondedInvites.length && (
-                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                            <div className="rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                               No one has submitted availability yet.
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <h3 className="text-xl font-semibold">
                               Full availability calendar
                             </h3>
-                            <p className="mt-1 text-sm text-zinc-400">
+                            <p className="mt-1 text-sm text-stone-500">
                               Each date shows the people who have supplied
                               availability for that day. Click a day to inspect
                               the exact submitted times and choose a final
@@ -2851,7 +2892,7 @@ const GroupMeetAdminPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div className="mt-5 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.18em] text-zinc-500">
+                        <div className="mt-5 grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.18em] text-stone-400">
                           {[
                             "Sun",
                             "Mon",
@@ -2892,17 +2933,17 @@ const GroupMeetAdminPage: React.FC = () => {
                                   setCalendarDayModalError(null);
                                 }}
                                 disabled={!inTargetMonth}
-                                className={`min-h-[145px] rounded-2xl border p-3 text-left transition-colors ${
+                                className={`min-h-[145px] rounded-lg border p-3 text-left transition-colors ${
                                   inTargetMonth
                                     ? dayInvites.length
-                                      ? "border-[#E0FE10]/30 bg-[#E0FE10]/6"
-                                      : "border-zinc-800 bg-zinc-950/60"
-                                    : "border-zinc-900 bg-zinc-950/30 text-zinc-700"
+                                      ? "border-stone-300 bg-stone-100"
+                                      : "border-stone-200 bg-[#FAFAF7]"
+                                    : "border-stone-100 bg-stone-50 text-stone-300"
                                 } ${
                                   inTargetMonth
                                     ? selectedCalendarDate === dateKey
-                                      ? "ring-2 ring-[#E0FE10]/70"
-                                      : "hover:border-zinc-700 hover:bg-zinc-900/80 cursor-pointer"
+                                      ? "ring-2 ring-stone-900/70"
+                                      : "hover:border-stone-200 hover:bg-stone-100 cursor-pointer"
                                     : "cursor-default"
                                 }`}
                               >
@@ -2911,7 +2952,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     {format(day, "d")}
                                   </div>
                                   {inTargetMonth && dayInvites.length > 0 && (
-                                    <div className="rounded-full border border-zinc-800 bg-black px-2 py-1 text-[10px] text-zinc-300">
+                                    <div className="rounded-full border border-stone-200 bg-white px-2 py-1 text-[10px] text-stone-600">
                                       {dayInvites.length}/
                                       {
                                         selectedRequest.analysis
@@ -2932,7 +2973,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       />
                                     ))}
                                     {dayInvites.length > 6 && (
-                                      <div className="flex h-8 min-w-[32px] items-center justify-center rounded-full border border-zinc-800 bg-black px-2 text-xs text-zinc-300">
+                                      <div className="flex h-8 min-w-[32px] items-center justify-center rounded-full border border-stone-200 bg-white px-2 text-xs text-stone-600">
                                         +{dayInvites.length - 6}
                                       </div>
                                     )}
@@ -2940,7 +2981,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 )}
 
                                 {inTargetMonth && dayInvites.length > 0 && (
-                                  <div className="mt-3 text-[11px] text-zinc-400">
+                                  <div className="mt-3 text-[11px] text-stone-500">
                                     {dayInvites
                                       .map((invite) => invite.name)
                                       .join(", ")}
@@ -2952,13 +2993,13 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-xl font-semibold">
                               Request settings
                             </h3>
-                            <p className="mt-1 text-sm text-zinc-400">
+                            <p className="mt-1 text-sm text-stone-500">
                               Update the live request without rebuilding the
                               links. If you change the meeting length or
                               timezone, Group Meet clears the final choice and
@@ -2969,7 +3010,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             type="button"
                             onClick={saveRequestEdits}
                             disabled={savingEdits}
-                            className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             {savingEdits ? "Saving…" : "Save request changes"}
@@ -2978,7 +3019,7 @@ const GroupMeetAdminPage: React.FC = () => {
 
                         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                           <label className="block">
-                            <span className="block text-sm text-zinc-300 mb-2">
+                            <span className="block text-sm text-stone-600 mb-2">
                               Meeting title
                             </span>
                             <input
@@ -2986,12 +3027,12 @@ const GroupMeetAdminPage: React.FC = () => {
                               onChange={(event) =>
                                 setEditTitle(event.target.value)
                               }
-                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                              className="w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                             />
                           </label>
 
                           <label className="block">
-                            <span className="block text-sm text-zinc-300 mb-2">
+                            <span className="block text-sm text-stone-600 mb-2">
                               Deadline
                             </span>
                             <input
@@ -3000,12 +3041,12 @@ const GroupMeetAdminPage: React.FC = () => {
                               onChange={(event) =>
                                 setEditDeadlineAt(event.target.value)
                               }
-                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                              className="w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                             />
                           </label>
 
                           <label className="block">
-                            <span className="block text-sm text-zinc-300 mb-2">
+                            <span className="block text-sm text-stone-600 mb-2">
                               Timezone
                             </span>
                             <input
@@ -3013,13 +3054,13 @@ const GroupMeetAdminPage: React.FC = () => {
                               onChange={(event) =>
                                 setEditTimezone(event.target.value)
                               }
-                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                              className="w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                               placeholder="America/New_York"
                             />
                           </label>
 
                           <label className="block">
-                            <span className="block text-sm text-zinc-300 mb-2">
+                            <span className="block text-sm text-stone-600 mb-2">
                               Meeting length
                             </span>
                             <select
@@ -3029,7 +3070,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                   Number(event.target.value),
                                 )
                               }
-                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                              className="w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                             >
                               <option value={15}>15 minutes</option>
                               <option value={30}>30 minutes</option>
@@ -3041,13 +3082,13 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-xl font-semibold">
                               AI recommendation
                             </h3>
-                            <p className="mt-1 text-sm text-zinc-400">
+                            <p className="mt-1 text-sm text-stone-500">
                               The AI summarizes the current overlap picture and
                               suggests a few host-ready options. The host still
                               chooses the final block.
@@ -3061,7 +3102,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               detailLoading ||
                               !selectedRequest.analysis.bestCandidates.length
                             }
-                            className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                           >
                             <Sparkles
                               className={`w-4 h-4 ${recommendLoading ? "animate-pulse" : ""}`}
@@ -3074,11 +3115,11 @@ const GroupMeetAdminPage: React.FC = () => {
 
                         {selectedRequest.aiRecommendation ? (
                           <div className="mt-4 space-y-4">
-                            <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/80 px-4 py-4">
-                              <div className="text-sm text-zinc-200">
+                            <div className="rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-4">
+                              <div className="text-sm text-stone-700">
                                 {selectedRequest.aiRecommendation.summary}
                               </div>
-                              <div className="mt-2 text-xs text-zinc-500">
+                              <div className="mt-2 text-xs text-stone-400">
                                 {selectedRequest.aiRecommendation.generatedAt
                                   ? `Generated ${toReadableDateTime(selectedRequest.aiRecommendation.generatedAt, selectedRequest.timezone)}`
                                   : "Generated just now"}
@@ -3090,11 +3131,11 @@ const GroupMeetAdminPage: React.FC = () => {
 
                             {selectedRequest.aiRecommendation.caveats.length >
                               0 && (
-                              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-4">
-                                <div className="text-sm font-medium text-amber-100 mb-2">
+                              <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-4 py-4">
+                                <div className="text-sm font-medium text-amber-700 mb-2">
                                   Caveats
                                 </div>
-                                <div className="space-y-1 text-sm text-amber-50/90">
+                                <div className="space-y-1 text-sm text-amber-700">
                                   {selectedRequest.aiRecommendation.caveats.map(
                                     (caveat, index) => (
                                       <div key={`caveat-${index}`}>
@@ -3107,13 +3148,13 @@ const GroupMeetAdminPage: React.FC = () => {
                             )}
                           </div>
                         ) : (
-                          <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                          <div className="mt-4 rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                             No AI recommendation yet.
                           </div>
                         )}
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <h3 className="text-xl font-semibold mb-3">
                           Best candidate windows
                         </h3>
@@ -3122,7 +3163,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             (candidate, index) => (
                               <div
                                 key={`${candidate.date}-${candidate.earliestStartMinutes}-${index}`}
-                                className="rounded-2xl border border-zinc-800/80 bg-zinc-950/80 p-4"
+                                className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4"
                               >
                                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                   <div>
@@ -3130,7 +3171,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       #{index + 1} •{" "}
                                       {formatCandidateLabel(candidate)}
                                     </div>
-                                    <div className="text-sm text-zinc-400 mt-1">
+                                    <div className="text-sm text-stone-500 mt-1">
                                       {candidate.participantCount}/
                                       {candidate.totalParticipants} participants
                                       available
@@ -3145,7 +3186,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       onClick={() =>
                                         copyCandidateSummary(candidate)
                                       }
-                                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
+                                      className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs hover:bg-white"
                                     >
                                       <Copy className="w-4 h-4" />
                                       Copy
@@ -3161,7 +3202,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                         )
                                       }
                                       disabled={finalizeLoading}
-                                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                      className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs hover:bg-white disabled:opacity-50"
                                     >
                                       <CheckCircle2 className="w-4 h-4" />
                                       Select final block
@@ -3175,7 +3216,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                   ).map((invite) => (
                                     <div
                                       key={`${candidate.date}-${candidate.earliestStartMinutes}-${invite.token}`}
-                                      className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300"
+                                      className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-600"
                                     >
                                       <AvatarBubble
                                         name={invite.name}
@@ -3191,7 +3232,7 @@ const GroupMeetAdminPage: React.FC = () => {
                           )}
 
                           {!selectedRequest.analysis.bestCandidates.length && (
-                            <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                            <div className="rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                               No candidate meeting windows yet. We either need
                               more responses or the current ranges do not
                               overlap for the selected duration.
@@ -3200,13 +3241,13 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-xl font-semibold">
                               Host final decision
                             </h3>
-                            <p className="mt-1 text-sm text-zinc-400">
+                            <p className="mt-1 text-sm text-stone-500">
                               Save the final block the host wants to move
                               forward with. This is the handoff point before
                               calendar invite automation.
@@ -3215,7 +3256,7 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
 
                         <label className="block mt-4">
-                          <span className="block text-sm text-zinc-300 mb-2">
+                          <span className="block text-sm text-stone-600 mb-2">
                             Host note
                           </span>
                           <textarea
@@ -3224,14 +3265,14 @@ const GroupMeetAdminPage: React.FC = () => {
                               setHostNoteDraft(event.target.value)
                             }
                             rows={3}
-                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950/90 px-4 py-3 text-white"
+                            className="w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-stone-950"
                             placeholder="Optional note about why this block was chosen"
                           />
                         </label>
 
                         {selectedRequest.finalSelection ? (
-                          <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                            <div className="font-medium text-emerald-100">
+                          <div className="mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4">
+                            <div className="font-medium text-emerald-700">
                               Final block:{" "}
                               {formatMonthDate(
                                 selectedRequest.finalSelection.date,
@@ -3245,7 +3286,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 selectedRequest.finalSelection.endMinutes,
                               )}
                             </div>
-                            <div className="text-sm text-emerald-50/90 mt-2">
+                            <div className="text-sm text-emerald-700 mt-2">
                               Selected by{" "}
                               {getFinalSelectionDisplayEmail(selectedRequest)}{" "}
                               on{" "}
@@ -3262,7 +3303,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                   scheduleLoading ||
                                   !selectedRequest.calendarSetup.ready
                                 }
-                                className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                               >
                                 <Calendar className="w-4 h-4" />
                                 {scheduleLoading
@@ -3280,7 +3321,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                   }
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900"
+                                  className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-4 py-2.5 text-sm hover:bg-white"
                                 >
                                   <LinkIcon className="w-4 h-4" />
                                   Open event
@@ -3294,7 +3335,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       sendFinalConfirmationEmail("preview")
                                     }
                                     disabled={confirmationPreviewSending}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 px-4 py-2.5 text-sm hover:bg-zinc-900 disabled:opacity-50"
+                                    className="inline-flex items-center gap-2 rounded-md border border-stone-200 px-4 py-2.5 text-sm hover:bg-white disabled:opacity-50"
                                   >
                                     <Mail className="w-4 h-4" />
                                     {confirmationPreviewSending
@@ -3307,7 +3348,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       sendFinalConfirmationEmail("live")
                                     }
                                     disabled={confirmationEmailSending}
-                                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 hover:bg-emerald-500/15 disabled:opacity-50"
+                                    className="inline-flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-500/15 disabled:opacity-50"
                                   >
                                     <Mail className="w-4 h-4" />
                                     {confirmationEmailSending
@@ -3321,20 +3362,20 @@ const GroupMeetAdminPage: React.FC = () => {
                               )}
                             </div>
                             {selectedRequest.calendarInvite?.organizerEmail && (
-                              <div className="mt-3 text-xs text-emerald-50/80">
+                              <div className="mt-3 text-xs text-emerald-700">
                                 Calendar event organizer:{" "}
                                 {selectedRequest.calendarInvite.organizerEmail}
                               </div>
                             )}
                             {selectedRequest.finalConfirmationEmail?.sentAt && (
-                              <div className="mt-2 text-xs text-emerald-50/80">
+                              <div className="mt-2 text-xs text-emerald-700">
                                 {getFinalConfirmationStatusLabel(
                                   selectedRequest,
                                 )}
                               </div>
                             )}
                             {selectedRequest.finalReminderEmail?.sentAt && (
-                              <div className="mt-1 text-xs text-emerald-50/70">
+                              <div className="mt-1 text-xs text-emerald-600">
                                 {getFinalReminderStatusLabel(selectedRequest)}
                               </div>
                             )}
@@ -3342,7 +3383,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               ?.previewSentAt &&
                               selectedRequest.finalConfirmationEmail
                                 ?.previewRecipientEmail && (
-                                <div className="mt-1 text-xs text-emerald-50/70">
+                                <div className="mt-1 text-xs text-emerald-600">
                                   Preview last sent to{" "}
                                   {
                                     selectedRequest.finalConfirmationEmail
@@ -3358,20 +3399,20 @@ const GroupMeetAdminPage: React.FC = () => {
                                 </div>
                               )}
                             {!selectedRequest.calendarSetup.ready && (
-                              <div className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                              <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
                                 {selectedRequest.calendarSetup.message ||
                                   "Google Calendar is not configured for this request yet."}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                          <div className="mt-4 rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                             No final block selected yet.
                           </div>
                         )}
                       </div>
 
-                      <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                      <div className="rounded-lg border border-stone-200 bg-white p-5">
                         <h3 className="text-xl font-semibold mb-3">
                           Participant breakdown
                         </h3>
@@ -3387,7 +3428,7 @@ const GroupMeetAdminPage: React.FC = () => {
                             return (
                               <div
                                 key={invite.token}
-                                className="rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-4 py-3"
+                                className="rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3"
                               >
                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                   <div className="flex items-center gap-3">
@@ -3402,7 +3443,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                           ? " • Host"
                                           : ""}
                                       </div>
-                                      <div className="text-xs text-zinc-500">
+                                      <div className="text-xs text-stone-400">
                                         {invite.email || "Manual link"} •{" "}
                                         {invite.respondedAt
                                           ? "Responded"
@@ -3426,7 +3467,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                           `Copied ${invite.name}'s link`,
                                         )
                                       }
-                                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
+                                      className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs hover:bg-white"
                                     >
                                       <LinkIcon className="w-4 h-4" />
                                       Copy link
@@ -3442,7 +3483,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                             manualFlexLoading ||
                                             manualFlexSending
                                           }
-                                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                          className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs hover:bg-white disabled:opacity-50"
                                         >
                                           <Sparkles className="w-4 h-4" />
                                           {manualFlexInvite?.token ===
@@ -3464,7 +3505,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                             resendingInviteToken ===
                                             invite.token
                                           }
-                                          className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                          className="inline-flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-1.5 text-xs hover:bg-white disabled:opacity-50"
                                         >
                                           <Mail className="w-4 h-4" />
                                           {resendingInviteToken === invite.token
@@ -3479,7 +3520,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                         disabled={
                                           removingInviteToken === invite.token
                                         }
-                                        className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-100 hover:bg-red-500/10 disabled:opacity-50"
+                                        className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-700 hover:bg-red-500/10 disabled:opacity-50"
                                       >
                                         <Trash2 className="w-4 h-4" />
                                         {removingInviteToken === invite.token
@@ -3495,7 +3536,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     (slot, slotIndex) => (
                                       <span
                                         key={`${invite.token}-${slot.date}-${slot.startMinutes}-${slotIndex}`}
-                                        className="rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300"
+                                        className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-600"
                                       >
                                         {formatMonthDate(slot.date)} •{" "}
                                         {formatMinutesAsTime(slot.startMinutes)}{" "}
@@ -3504,7 +3545,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     ),
                                   )}
                                   {!invite.availabilityEntries.length && (
-                                    <span className="text-xs text-zinc-500">
+                                    <span className="text-xs text-stone-400">
                                       No availability submitted yet.
                                     </span>
                                   )}
@@ -3520,17 +3561,17 @@ const GroupMeetAdminPage: React.FC = () => {
               </div>
 
               {calendarDayModalDate && selectedRequest && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 sm:p-6">
-                  <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-[#090c11] shadow-2xl">
-                    <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-6 py-5">
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-stone-950/35 p-4 sm:p-6">
+                  <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                        <div className="text-xs uppercase tracking-[0.2em] text-stone-400">
                           Availability detail
                         </div>
-                        <h3 className="mt-2 text-2xl font-semibold text-white">
+                        <h3 className="mt-2 text-2xl font-semibold text-stone-950">
                           {formatMonthDate(calendarDayModalDate)}
                         </h3>
-                        <div className="mt-2 text-sm text-zinc-400">
+                        <div className="mt-2 text-sm text-stone-500">
                           Review the submitted time ranges for this day and
                           choose a final meeting block right here.
                         </div>
@@ -3539,7 +3580,7 @@ const GroupMeetAdminPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={closeCalendarDayModal}
-                        className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+                        className="rounded-full border border-stone-200 px-4 py-2 text-sm text-stone-600 hover:bg-white"
                       >
                         Close
                       </button>
@@ -3547,15 +3588,15 @@ const GroupMeetAdminPage: React.FC = () => {
 
                     <div className="flex-1 overflow-y-auto px-6 py-6">
                       <div className="space-y-5">
-                        <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                        <div className="rounded-lg border border-stone-200 bg-white p-4">
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
-                              <div className="text-sm font-medium text-white">
+                              <div className="text-sm font-medium text-stone-950">
                                 {calendarDayModalParticipants.length
                                   ? `${calendarDayModalParticipants.length} participant${calendarDayModalParticipants.length === 1 ? "" : "s"} added time on this day`
                                   : "No submitted availability on this day yet"}
                               </div>
-                              <div className="mt-2 text-sm text-zinc-400">
+                              <div className="mt-2 text-sm text-stone-500">
                                 {calendarDayModalCandidates.length
                                   ? `${calendarDayModalCandidates.length} candidate meeting window${calendarDayModalCandidates.length === 1 ? "" : "s"} can be selected from this date.`
                                   : "There are no ranked overlap windows on this date yet, but you can still inspect the submitted times below."}
@@ -3563,12 +3604,12 @@ const GroupMeetAdminPage: React.FC = () => {
                             </div>
 
                             <div className="flex flex-wrap gap-2 text-xs">
-                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                              <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5 text-stone-600">
                                 {calendarDayModalParticipants.length}/
                                 {selectedRequest.analysis.totalParticipants}{" "}
                                 available
                               </span>
-                              <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                              <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5 text-stone-600">
                                 {selectedRequest.calendarInvite
                                   ? "Will update invite"
                                   : "Will send invite"}
@@ -3578,18 +3619,18 @@ const GroupMeetAdminPage: React.FC = () => {
                         </div>
 
                         {calendarDayModalError && (
-                          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-100">
+                          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-700">
                             {calendarDayModalError}
                           </div>
                         )}
 
-                        <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
+                        <div className="rounded-lg border border-stone-200 bg-white p-5">
                           <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                             <div>
-                              <h4 className="text-lg font-semibold text-white">
+                              <h4 className="text-lg font-semibold text-stone-950">
                                 Meeting windows you can choose right now
                               </h4>
-                              <div className="mt-1 text-sm text-zinc-400">
+                              <div className="mt-1 text-sm text-stone-500">
                                 Selecting one of these times will save the final
                                 block and{" "}
                                 {selectedRequest.calendarInvite
@@ -3599,7 +3640,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               </div>
                             </div>
                             {!selectedRequest.calendarSetup.ready && (
-                              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700">
                                 {selectedRequest.calendarSetup.message ||
                                   "Google Calendar setup is not ready for this request."}
                               </div>
@@ -3625,15 +3666,15 @@ const GroupMeetAdminPage: React.FC = () => {
                                   return (
                                     <div
                                       key={`${candidateKey}-${index}`}
-                                      className={`rounded-2xl border p-4 ${
+                                      className={`rounded-lg border p-4 ${
                                         isCurrentFinalSelection
                                           ? "border-emerald-500/30 bg-emerald-500/10"
-                                          : "border-zinc-800 bg-zinc-950/80"
+                                          : "border-stone-200 bg-[#FAFAF7]"
                                       }`}
                                     >
                                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                         <div>
-                                          <div className="font-medium text-white">
+                                          <div className="font-medium text-stone-950">
                                             {formatMinutesAsTime(
                                               candidate.suggestedStartMinutes,
                                             )}{" "}
@@ -3642,7 +3683,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                               candidate.suggestedEndMinutes,
                                             )}
                                           </div>
-                                          <div className="mt-2 text-sm text-zinc-400">
+                                          <div className="mt-2 text-sm text-stone-500">
                                             {candidate.participantCount}/
                                             {candidate.totalParticipants}{" "}
                                             participants available
@@ -3652,7 +3693,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                           </div>
                                           {candidate.missingParticipantNames
                                             .length > 0 && (
-                                            <div className="mt-2 text-xs text-zinc-500">
+                                            <div className="mt-2 text-xs text-stone-400">
                                               Missing:{" "}
                                               {candidate.missingParticipantNames.join(
                                                 ", ",
@@ -3663,7 +3704,7 @@ const GroupMeetAdminPage: React.FC = () => {
 
                                         <div className="flex flex-wrap gap-2">
                                           {isCurrentFinalSelection && (
-                                            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-100">
+                                            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-700">
                                               Current final block
                                             </span>
                                           )}
@@ -3679,7 +3720,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                               !selectedRequest.calendarSetup
                                                 .ready
                                             }
-                                            className="inline-flex items-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                                            className="inline-flex items-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                                           >
                                             <Calendar className="h-4 w-4" />
                                             {isSubmitting
@@ -3697,7 +3738,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                         ).map((invite) => (
                                           <div
                                             key={`${candidateKey}-${invite.token}`}
-                                            className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300"
+                                            className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-600"
                                           >
                                             <AvatarBubble
                                               name={invite.name}
@@ -3714,18 +3755,18 @@ const GroupMeetAdminPage: React.FC = () => {
                               )}
                             </div>
                           ) : (
-                            <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                            <div className="mt-4 rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                               No ranked candidate meeting windows are available
                               on this date yet.
                             </div>
                           )}
                         </div>
 
-                        <div className="rounded-2xl border border-zinc-800 bg-black/40 p-5">
-                          <h4 className="text-lg font-semibold text-white">
+                        <div className="rounded-lg border border-stone-200 bg-white p-5">
+                          <h4 className="text-lg font-semibold text-stone-950">
                             Submitted availability on this day
                           </h4>
-                          <div className="mt-1 text-sm text-zinc-400">
+                          <div className="mt-1 text-sm text-stone-500">
                             These are the exact time ranges people entered for{" "}
                             {formatMonthDate(calendarDayModalDate)}.
                           </div>
@@ -3735,7 +3776,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               {calendarDayModalParticipants.map((invite) => (
                                 <div
                                   key={`${calendarDayModalDate}-${invite.token}`}
-                                  className="rounded-2xl border border-zinc-800/80 bg-black/50 px-4 py-3"
+                                  className="rounded-lg border border-stone-200 bg-white px-4 py-3"
                                 >
                                   <div className="flex items-center gap-3">
                                     <AvatarBubble
@@ -3743,13 +3784,13 @@ const GroupMeetAdminPage: React.FC = () => {
                                       imageUrl={invite.imageUrl}
                                     />
                                     <div>
-                                      <div className="font-medium text-white">
+                                      <div className="font-medium text-stone-950">
                                         {invite.name}
                                         {invite.participantType === "host"
                                           ? " • Host"
                                           : ""}
                                       </div>
-                                      <div className="text-xs text-zinc-500">
+                                      <div className="text-xs text-stone-400">
                                         {invite.daySlots.length} time slot
                                         {invite.daySlots.length === 1
                                           ? ""
@@ -3762,7 +3803,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     {invite.daySlots.map((slot, slotIndex) => (
                                       <span
                                         key={`${invite.token}-${calendarDayModalDate}-${slot.startMinutes}-${slotIndex}`}
-                                        className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-300"
+                                        className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5 text-xs text-stone-600"
                                       >
                                         {formatMinutesAsTime(slot.startMinutes)}{" "}
                                         - {formatMinutesAsTime(slot.endMinutes)}
@@ -3773,7 +3814,7 @@ const GroupMeetAdminPage: React.FC = () => {
                               ))}
                             </div>
                           ) : (
-                            <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                            <div className="mt-4 rounded-lg border border-dashed border-stone-200 px-4 py-8 text-center text-sm text-stone-400">
                               No one has submitted availability on this day yet.
                             </div>
                           )}
@@ -3785,17 +3826,17 @@ const GroupMeetAdminPage: React.FC = () => {
               )}
 
               {manualFlexInvite && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 p-4">
-                  <div className="w-full max-w-3xl rounded-[28px] border border-zinc-800 bg-[#090c11] shadow-2xl">
-                    <div className="flex items-start justify-between gap-4 border-b border-zinc-800 px-6 py-5">
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-950/35 p-4">
+                  <div className="w-full max-w-3xl rounded-lg border border-stone-200 bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                        <div className="text-xs uppercase tracking-[0.2em] text-stone-400">
                           Manual flex request
                         </div>
-                        <h3 className="mt-2 text-2xl font-semibold text-white">
+                        <h3 className="mt-2 text-2xl font-semibold text-stone-950">
                           {manualFlexInvite.name}
                         </h3>
-                        <div className="mt-2 text-sm text-zinc-400">
+                        <div className="mt-2 text-sm text-stone-500">
                           Preview the exact times we’ll suggest before sending
                           the flex email.
                         </div>
@@ -3804,7 +3845,7 @@ const GroupMeetAdminPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={closeManualFlexModal}
-                        className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-900"
+                        className="rounded-full border border-stone-200 px-4 py-2 text-sm text-stone-600 hover:bg-white"
                       >
                         Close
                       </button>
@@ -3812,13 +3853,13 @@ const GroupMeetAdminPage: React.FC = () => {
 
                     <div className="max-h-[80vh] overflow-y-auto px-6 py-6">
                       {manualFlexLoading && (
-                        <div className="rounded-2xl border border-zinc-800 px-4 py-10 text-center text-sm text-zinc-400">
+                        <div className="rounded-lg border border-stone-200 px-4 py-10 text-center text-sm text-stone-500">
                           Loading flex suggestions…
                         </div>
                       )}
 
                       {!manualFlexLoading && manualFlexError && (
-                        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-100">
+                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-700">
                           {manualFlexError}
                         </div>
                       )}
@@ -3827,25 +3868,25 @@ const GroupMeetAdminPage: React.FC = () => {
                         !manualFlexError &&
                         manualFlexPreview && (
                           <div className="space-y-5">
-                            <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                            <div className="rounded-lg border border-stone-200 bg-white p-4">
                               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                                 <div>
-                                  <div className="text-sm text-zinc-300">
+                                  <div className="text-sm text-stone-600">
                                     {manualFlexPreview.invite.email ||
                                       "No email on file"}
                                   </div>
-                                  <div className="mt-2 text-sm text-zinc-400">
+                                  <div className="mt-2 text-sm text-stone-500">
                                     {manualFlexPreview.detailText}
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2 text-xs">
-                                  <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                                  <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5 text-stone-600">
                                     {getManualFlexStrategyLabel(
                                       manualFlexPreview.strategy,
                                     )}
                                   </span>
                                   {manualFlexPreview.lastManualFlexSentAt && (
-                                    <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                                    <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5 text-stone-600">
                                       Last sent{" "}
                                       {toReadableDateTime(
                                         manualFlexPreview.lastManualFlexSentAt,
@@ -3854,7 +3895,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                       )}
                                     </span>
                                   )}
-                                  <span className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-zinc-300">
+                                  <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5 text-stone-600">
                                     info@fitwithpulse.ai BCC
                                   </span>
                                 </div>
@@ -3867,9 +3908,9 @@ const GroupMeetAdminPage: React.FC = () => {
                                   (option, index) => (
                                     <div
                                       key={`${option.candidateKey}-${index}`}
-                                      className="rounded-2xl border border-zinc-800 bg-black/40 p-4"
+                                      className="rounded-lg border border-stone-200 bg-white p-4"
                                     >
-                                      <div className="font-medium text-white">
+                                      <div className="font-medium text-stone-950">
                                         {formatMonthDate(option.date)} •{" "}
                                         {formatMinutesAsTime(
                                           option.startMinutes,
@@ -3877,14 +3918,14 @@ const GroupMeetAdminPage: React.FC = () => {
                                         -{" "}
                                         {formatMinutesAsTime(option.endMinutes)}
                                       </div>
-                                      <div className="mt-2 text-sm text-zinc-400">
+                                      <div className="mt-2 text-sm text-stone-500">
                                         Works for {option.participantCount} of{" "}
                                         {option.totalParticipants} participants
                                         right now.
                                       </div>
                                       {option.missingParticipantNames.length >
                                         0 && (
-                                        <div className="mt-2 text-xs text-zinc-500">
+                                        <div className="mt-2 text-xs text-stone-400">
                                           Still needed from:{" "}
                                           {option.missingParticipantNames.join(
                                             ", ",
@@ -3896,14 +3937,14 @@ const GroupMeetAdminPage: React.FC = () => {
                                 )}
                               </div>
                             ) : (
-                              <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-10 text-center text-sm text-zinc-500">
+                              <div className="rounded-lg border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-400">
                                 There are no strong flex options to send for
                                 this participant right now.
                               </div>
                             )}
 
-                            <div className="flex flex-col-reverse gap-3 border-t border-zinc-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="text-sm text-zinc-400">
+                            <div className="flex flex-col-reverse gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="text-sm text-stone-500">
                                 The email will contain these one-click time
                                 buttons and add the selected time directly to
                                 the guest’s availability.
@@ -3915,7 +3956,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                   manualFlexSending ||
                                   !manualFlexPreview.options.length
                                 }
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                                className="inline-flex items-center justify-center gap-2 rounded-md bg-stone-900 px-4 py-3 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                               >
                                 <Mail className="w-4 h-4" />
                                 {manualFlexSending

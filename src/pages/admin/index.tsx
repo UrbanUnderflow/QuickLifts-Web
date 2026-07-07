@@ -76,7 +76,7 @@ const adminCardsData = [
     title: "Group Meet",
     description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
     icon: <Calendar className="w-5 h-5" />,
-    link: "/admin/groupMeet"
+    link: "/GroupMeet"
   },
   {
     title: "Pulse Command",

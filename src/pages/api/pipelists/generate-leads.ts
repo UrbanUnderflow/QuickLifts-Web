@@ -56,6 +56,7 @@ type LeadCandidate = {
   hardwareCost: string;
   lossReason: string;
   expansionPath: string;
+  contactEmails: string[];
   rationale: string;
   sourceEvidence: string;
   deadlineStatus: string;
@@ -91,14 +92,15 @@ const leadStringFields = [
   'deadlineStatus',
 ] as const;
 
-const leadProperties = leadStringFields.reduce<Record<string, { type: 'string' }>>((properties, field) => {
+const leadProperties = leadStringFields.reduce<Record<string, unknown>>((properties, field) => {
   properties[field] = { type: 'string' };
   return properties;
 }, {
   priority: { type: 'string' },
+  contactEmails: { type: 'array', items: { type: 'string' } },
 });
 
-const leadRequiredFields = ['priority', ...leadStringFields];
+const leadRequiredFields = ['priority', 'contactEmails', ...leadStringFields];
 
 const leadResponseSchema = {
   type: 'object',
@@ -156,6 +158,18 @@ const getEasternDate = () => {
 };
 
 const isIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const normalizeContactEmails = (value: unknown) => {
+  const rawValues = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[\s,;]+/) : [];
+  return Array.from(
+    new Set(
+      rawValues
+        .map((item) => cleanString(item, 180).toLowerCase())
+        .filter((item) => emailPattern.test(item)),
+    ),
+  );
+};
 
 const isValidUrl = (value: string) => {
   try {
@@ -323,6 +337,7 @@ const sanitizeLead = (
     hardwareCost: cleanString(record.hardwareCost, 120),
     lossReason: cleanString(record.lossReason, 240),
     expansionPath: cleanString(record.expansionPath, 500),
+    contactEmails: normalizeContactEmails(record.contactEmails),
     rationale: cleanString(record.rationale, 700),
     sourceEvidence: cleanString(record.sourceEvidence, 700),
     deadlineStatus: cleanString(record.deadlineStatus, 300),
@@ -415,6 +430,7 @@ Research rules:
 - Each returned lead's sourceUrl must point to that individual lead's official page, LinkedIn/profile page, application page, fund page, or program page. Do not use a directory/list page as sourceUrl unless it is also the official page for that exact lead.
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
+- Only include contactEmails when a current source visibly provides valid public email addresses. Never invent contact emails.
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and must not be before ${today}.
 - If the template is deadline-driven, every returned lead must have a verified dueDate on or after ${today}.
 - If the template is relationship-driven, dueDate can be "" unless the source provides a real deadline.

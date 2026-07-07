@@ -357,6 +357,7 @@ const contractStages: StageConfig[] = pilotContractStages.slice(5);
 
 const vcStages: StageConfig[] = [
   { id: 'targeted', label: 'Targeted', probability: 5, track: 'capital', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'cold-contact', label: 'Cold Contact', probability: 8, track: 'capital', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
   { id: 'intro-requested', label: 'Intro Requested', probability: 10, track: 'capital', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
   { id: 'partner-meeting', label: 'Partner Meeting', probability: 25, track: 'capital', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
   { id: 'diligence', label: 'Diligence', probability: 45, track: 'capital', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
@@ -446,8 +447,9 @@ const templateCatalog: Record<
   },
 };
 
+const isFundSizeList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'vc';
 const amountFieldLabelForList = (list: Pick<PipeList, 'templateKey'>) =>
-  list.templateKey === 'vc' ? 'Fund Size' : 'Amount / Prize';
+  isFundSizeList(list) ? 'Fund Size' : 'Amount / Prize';
 
 const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
@@ -465,6 +467,30 @@ const normalizeContactEmails = (value: unknown): string[] => {
         .filter((email) => email && isValidContactEmail(email)),
     ),
   );
+};
+
+const normalizeLeadInputUrl = (value: string) => {
+  const trimmed = value.trim();
+  const candidate = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : /^[\w.-]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(trimmed)
+      ? `https://${trimmed}`
+      : '';
+
+  if (!candidate) return null;
+
+  try {
+    const parsed = new URL(candidate);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const fallbackLeadTitleFromInput = (value: string) => {
+  const parsedUrl = normalizeLeadInputUrl(value);
+  if (parsedUrl) return parsedUrl.hostname.replace(/^www\./, '');
+  return value.trim();
 };
 
 const makeId = () => {
@@ -1546,7 +1572,22 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const template = templateCatalog[templateKey];
   const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
   const stages =
-    templateKey === 'pitch'
+    templateKey === 'vc'
+      ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
+          if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
+          const insertAfterIndex = templateStage.id === 'cold-contact'
+            ? mergedStages.findIndex((stage) => stage.id === 'targeted')
+            : -1;
+          if (insertAfterIndex >= 0) {
+            return [
+              ...mergedStages.slice(0, insertAfterIndex + 1),
+              templateStage,
+              ...mergedStages.slice(insertAfterIndex + 1),
+            ];
+          }
+          return [...mergedStages, templateStage];
+        }, savedStages)
+      : templateKey === 'pitch'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
           if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
           const insertAfterIndex = templateStage.id === 'application-in-progress'
@@ -1706,7 +1747,10 @@ const parsePercent = (value: string) => {
   return parsed;
 };
 
-const itemValue = (item: PipelineItem) => parseMoney(item.acv || item.amount);
+const itemValue = (item: PipelineItem) => {
+  const acvValue = parseMoney(item.acv);
+  return acvValue > 0 ? acvValue : parseMoney(item.amount);
+};
 
 const formatMoney = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) return '$0';
@@ -1715,6 +1759,12 @@ const formatMoney = (value: number) => {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value);
+};
+
+const itemAmountDisplay = (list: Pick<PipeList, 'templateKey'>, item: PipelineItem) => {
+  if (isFundSizeList(list)) return item.amount || '';
+  const computedValue = itemValue(item);
+  return computedValue > 0 ? formatMoney(computedValue) : '';
 };
 
 const formatFileSize = (bytes: number) => {
@@ -3408,7 +3458,7 @@ Research rules:
   };
 
   const buildLeadDetailsClipboardText = (item: PipelineItem, stage: StageConfig) => {
-    const valueText = item.acv || item.amount ? formatMoney(itemValue(item)) : '';
+    const valueText = itemAmountDisplay(activeList, item);
     const attachmentsText =
       item.attachments.length > 0
         ? item.attachments
@@ -3462,7 +3512,7 @@ Research rules:
         ['Organization', item.organization],
         ['Stage', `${stage.label} (${item.stage})`],
         ['Importance', importanceLabel(item.priority)],
-        ['Value', valueText],
+        [isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText],
         ['Owner', item.owner],
         ['Contact Emails', item.contactEmails.join(', ')],
         ['Segment', item.segment],
@@ -3734,9 +3784,9 @@ Research rules:
     event.preventDefault();
     if (!canModify) return;
 
-    const cleanUrl = leadUrl.trim();
-    if (!cleanUrl) {
-      setLeadExtractMessage({ type: 'error', text: 'Paste a lead URL first.' });
+    const cleanInput = leadUrl.trim();
+    if (!cleanInput) {
+      setLeadExtractMessage({ type: 'error', text: 'Add a lead URL, person, organization, fund, school, or program name first.' });
       return;
     }
 
@@ -3758,7 +3808,7 @@ Research rules:
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          url: cleanUrl,
+          input: cleanInput,
           listName: activeList.name,
           templateLabel: templateCatalog[activeList.templateKey].label,
           templateKey: activeList.templateKey,
@@ -3772,7 +3822,7 @@ Research rules:
 
       const payload = await readApiJson(response, 'Analyze lead returned an unexpected response. Refresh and try again.');
       if (!response.ok || !payload?.item) {
-        throw new Error(payload?.error || 'Unable to analyze that URL.');
+        throw new Error(payload?.error || 'Unable to analyze that lead.');
       }
 
       const extracted = payload.item as Partial<PipelineItem> & {
@@ -3789,10 +3839,10 @@ Research rules:
           ...extracted,
           stage,
           priority: extracted.priority || 'medium',
-          title: extracted.title?.trim() || new URL(cleanUrl).hostname.replace(/^www\./, ''),
+          title: extracted.title?.trim() || fallbackLeadTitleFromInput(cleanInput),
           organization: extracted.organization?.trim() || '',
           contactEmails: normalizeContactEmails(extracted.contactEmails),
-          sourceUrl: cleanUrl,
+          sourceUrl: extracted.sourceUrl?.trim() || normalizeLeadInputUrl(cleanInput)?.toString() || '',
           notes: [
             cleanDealNotes(extracted.notes),
             extracted.missingFields && extracted.missingFields.length > 0
@@ -3866,7 +3916,7 @@ Research rules:
       console.error('[PipeLists] Lead extraction failed:', error);
       setLeadExtractMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to analyze that URL.',
+        text: error instanceof Error ? error.message : 'Unable to analyze that lead.',
       });
       setIsLeadUrlModalOpen(true);
     } finally {
@@ -5646,7 +5696,13 @@ Research rules:
                   {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
                   {renderMetricCard('Active', String(activeItems), 'Not closed won or lost', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
                   {renderMetricCard('Won', String(wonItems), 'Closed or awarded opportunities', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
-                  {renderMetricCard('Open Value', formatMoney(activeOpenValue), 'ACV or amount for active items', <DollarSign className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
+                  {renderMetricCard(
+                    isFundSizeList(activeList) ? 'Fund Size' : 'Open Value',
+                    formatMoney(activeOpenValue),
+                    isFundSizeList(activeList) ? 'Fund sizes for active items' : 'ACV or amount for active items',
+                    <DollarSign className="h-4 w-4" />,
+                    'bg-amber-50 text-amber-700',
+                  )}
                 </div>
 
                 <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm xl:flex-row xl:items-center">
@@ -5737,7 +5793,7 @@ Research rules:
                     <span>Item</span>
                     <span>Organization</span>
                     <span>Stage</span>
-                    <span>Value</span>
+                    <span>{isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
                     <span>Due Date</span>
                     <span>Next Step</span>
                     <span className="text-right">Actions</span>
@@ -5747,7 +5803,8 @@ Research rules:
                     <div className="divide-y divide-stone-100 lg:min-w-[1280px]">
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
-                        const hasItemValue = Boolean(item.acv || item.amount);
+                        const itemValueText = itemAmountDisplay(activeList, item);
+                        const hasItemValue = Boolean(itemValueText);
                         const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
 
@@ -5796,7 +5853,7 @@ Research rules:
                             </div>
 
                             <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
-                              {hasItemValue ? formatMoney(itemValue(item)) : ''}
+                              {itemValueText}
                             </p>
 
                             <div className={`min-w-0 text-sm text-stone-600 ${dueDate ? '' : 'hidden lg:block'}`}>
@@ -6415,7 +6472,7 @@ Research rules:
                 </div>
                 <h3 className="text-xl font-bold text-stone-950">Add new lead</h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Paste a URL for an investor, grant, competition, school, partner, or contract lead. PipeLists will pull what it can and create the item for review.
+                  Paste a URL or type a person, organization, fund, school, program, or partner name. PipeLists will pull what it can and create the item for review.
                 </p>
               </div>
               <button
@@ -6429,14 +6486,14 @@ Research rules:
             </div>
 
             <label className="block" htmlFor="pipe-lead-url">
-              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead URL</span>
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead URL or Name</span>
               <input
                 id="pipe-lead-url"
-                type="url"
+                type="text"
                 value={leadUrl}
                 onChange={(event) => setLeadUrl(event.target.value)}
                 className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                placeholder="https://example.com"
+                placeholder="https://example.com or Wisdom Ventures"
                 autoFocus
               />
             </label>
@@ -7339,8 +7396,8 @@ Research rules:
               <div className="space-y-5 px-5 py-5">
                 {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
                   {
-                    label: 'Value',
-                    value: selectedDetailItem.acv || selectedDetailItem.amount ? formatMoney(itemValue(selectedDetailItem)) : '',
+                    label: isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value',
+                    value: itemAmountDisplay(activeList, selectedDetailItem),
                   },
                   {
                     label: 'Next Date',
@@ -7505,8 +7562,12 @@ Research rules:
                     { label: 'Organization', value: selectedDetailItem.organization },
                     { label: 'Segment', value: selectedDetailItem.segment },
                     { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
-                    { label: 'ACV', value: selectedDetailItem.acv },
-                    { label: amountFieldLabelForList(activeList), value: selectedDetailItem.amount },
+                    ...(isFundSizeList(activeList)
+                      ? []
+                      : [
+                          { label: 'ACV', value: selectedDetailItem.acv },
+                          { label: amountFieldLabelForList(activeList), value: selectedDetailItem.amount },
+                        ]),
                     { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
                     { label: 'Due Date', value: selectedDetailItem.dueDate },
                     { label: 'Contract Term', value: selectedDetailItem.contractTerm },

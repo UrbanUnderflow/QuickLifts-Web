@@ -309,11 +309,11 @@ function PeerTooltip({
   peer: PeerAvailabilityForDate;
 }) {
   return (
-    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-48 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#0b1016] p-3 text-[11px] text-zinc-200 shadow-2xl group-hover:block">
-      <div className="font-medium text-white">{buildParticipantLabel(peer)}</div>
+    <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-48 -translate-x-1/2 rounded-lg border border-stone-200 bg-white p-3 text-[11px] text-stone-700 shadow-2xl group-hover:block">
+      <div className="font-medium text-stone-950">{buildParticipantLabel(peer)}</div>
       <div className="mt-2 space-y-1">
         {peer.daySlots.map((slot) => (
-          <div key={`${peer.token}-${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-white/[0.04] px-2 py-1">
+          <div key={`${peer.token}-${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-[#FAFAF7] px-2 py-1">
             {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
           </div>
         ))}
@@ -331,8 +331,8 @@ function PeerAvatarVisual({
 }) {
   const wrapperClassName =
     size === 'md'
-      ? 'h-10 w-10 rounded-2xl text-sm'
-      : 'h-7 w-7 rounded-xl text-[10px]';
+      ? 'h-10 w-10 rounded-lg text-sm'
+      : 'h-7 w-7 rounded-md text-[10px]';
   const badgeClassName =
     size === 'md'
       ? 'h-4 min-w-[1rem] rounded-full px-1 text-[9px]'
@@ -340,7 +340,7 @@ function PeerAvatarVisual({
 
   return (
     <div
-      className={`relative flex ${wrapperClassName} items-center justify-center overflow-hidden border border-white/10 bg-[#121821] font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.03)]`}
+      className={`relative flex ${wrapperClassName} items-center justify-center overflow-hidden border border-stone-200 bg-stone-900 font-semibold text-white shadow-sm`}
     >
       {peer.imageUrl ? (
         <img src={peer.imageUrl} alt={peer.name} className="h-full w-full object-cover" />
@@ -348,7 +348,7 @@ function PeerAvatarVisual({
         <span>{getParticipantInitials(peer.name)}</span>
       )}
       {peer.participantType === 'host' && (
-        <span className={`absolute -bottom-1 -right-1 flex items-center justify-center border border-[#0b1016] bg-[#E0FE10] font-bold text-black ${badgeClassName}`}>
+        <span className={`absolute -bottom-1 -right-1 flex items-center justify-center border border-white bg-stone-900 font-bold text-white ${badgeClassName}`}>
           H
         </span>
       )}
@@ -374,11 +374,11 @@ function PeerAvatar({
 function PeerAvailabilityBadge({ peer }: { peer: PeerAvailabilityForDate }) {
   return (
     <div className="group relative" title={peer.tooltip}>
-      <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 transition-colors group-hover:bg-white/[0.06]">
+      <div className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2 transition-colors group-hover:bg-stone-100">
         <PeerAvatarVisual peer={peer} size="md" />
         <div>
-          <div className="text-sm font-medium text-white">{buildParticipantLabel(peer)}</div>
-          <div className="text-xs text-zinc-400">
+          <div className="text-sm font-medium text-stone-950">{buildParticipantLabel(peer)}</div>
+          <div className="text-xs text-stone-500">
             {peer.daySlots.length} time slot{peer.daySlots.length === 1 ? '' : 's'} saved
           </div>
         </div>
@@ -719,18 +719,18 @@ export default function GroupMeetAvailabilityPicker({
   };
 
   return (
-    <section className={`rounded-[24px] border border-white/10 bg-white/[0.03] p-3 sm:rounded-[28px] sm:p-6 ${className}`.trim()}>
+    <section className={`rounded-lg border border-stone-200 bg-white p-3 sm:rounded-lg sm:p-6 ${className}`.trim()}>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
         <div>
           <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="text-sm text-stone-500 mt-1">
             {selectedDateCount} day{selectedDateCount === 1 ? '' : 's'} selected
           </p>
-          <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
+          <p className="text-sm text-stone-400 mt-1">{subtitle}</p>
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-[0.18em] text-zinc-500 sm:gap-2 sm:text-xs">
+      <div className="mb-3 grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-[0.18em] text-stone-400 sm:gap-2 sm:text-xs">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
           <div key={day} className="py-2">
             <span className="sm:hidden">{day[0]}</span>
@@ -756,16 +756,16 @@ export default function GroupMeetAvailabilityPicker({
               type="button"
               onClick={() => inTargetMonth && !disabled && openDayEditor(dateKey)}
               disabled={!inTargetMonth || disabled}
-              className={`min-h-[84px] rounded-[18px] border p-1.5 text-left transition-colors sm:min-h-[92px] sm:rounded-2xl sm:p-2 ${
+              className={`min-h-[84px] rounded-lg border p-1.5 text-left transition-colors sm:min-h-[92px] sm:p-2 ${
                 inTargetMonth
                   ? slots.length
-                    ? 'border-[#E0FE10]/50 bg-[#E0FE10]/10 hover:bg-[#E0FE10]/15'
+                    ? 'border-stone-400 bg-stone-900/10 hover:bg-stone-900/15'
                     : importedSuggestionsForDate.length
                       ? 'border-sky-400/25 bg-sky-500/[0.07] hover:bg-sky-500/[0.11]'
                     : peerParticipants.length
                       ? 'border-emerald-400/20 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.1]'
-                    : 'border-white/10 bg-black/30 hover:bg-white/[0.06]'
-                  : 'border-white/5 bg-white/[0.02] text-zinc-700'
+                    : 'border-stone-200 bg-[#FAFAF7] hover:bg-stone-100'
+                  : 'border-stone-100 bg-stone-50 text-stone-300'
               } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
             >
               <div className="text-xs font-medium sm:text-sm">{format(day, 'd')}</div>
@@ -774,7 +774,7 @@ export default function GroupMeetAvailabilityPicker({
                   <div className="mt-2 flex items-center gap-1 sm:hidden">
                     <PeerAvatar key={`${dateKey}-${peerParticipants[0].token}`} peer={peerParticipants[0]} size="sm" />
                     {peerParticipants.length > 1 && (
-                      <div className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
+                      <div className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border border-stone-200 bg-white px-1 text-[10px] font-medium text-stone-700">
                         +{peerParticipants.length - 1}
                       </div>
                     )}
@@ -786,12 +786,12 @@ export default function GroupMeetAvailabilityPicker({
                         <PeerAvatar key={`${dateKey}-${peer.token}`} peer={peer} size="sm" />
                       ))}
                       {peerParticipants.length > 3 && (
-                        <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-xl border border-white/10 bg-black/35 px-1 text-[10px] font-medium text-zinc-200">
+                        <div className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-md border border-stone-200 bg-white px-1 text-[10px] font-medium text-stone-700">
                           +{peerParticipants.length - 3}
                         </div>
                       )}
                     </div>
-                    <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                    <div className="mt-1 text-[10px] uppercase tracking-[0.14em] text-stone-500">
                       {peerParticipants.length} available
                     </div>
                   </div>
@@ -800,7 +800,7 @@ export default function GroupMeetAvailabilityPicker({
               <div className="mt-2">
                 {slots.length > 0 && (
                   <div className="sm:hidden">
-                    <div className="inline-flex items-center rounded-full border border-[#E0FE10]/20 bg-black/35 px-1.5 py-1 text-[9px] font-medium text-zinc-200">
+                    <div className="inline-flex items-center rounded-full border border-stone-200 bg-white px-1.5 py-1 text-[9px] font-medium text-stone-700">
                       {slots.length} slot{slots.length === 1 ? '' : 's'}
                     </div>
                   </div>
@@ -808,13 +808,13 @@ export default function GroupMeetAvailabilityPicker({
                 {!slots.length && importedSuggestionsForDate.length > 0 && (
                   <>
                     <div className="sm:hidden">
-                      <div className="inline-flex items-center rounded-full border border-sky-400/20 bg-black/35 px-1.5 py-1 text-[9px] font-medium text-sky-100">
+                      <div className="inline-flex items-center rounded-full border border-sky-400/20 bg-white px-1.5 py-1 text-[9px] font-medium text-sky-700">
                         Imported
                       </div>
                     </div>
 
                     <div className="hidden sm:block">
-                      <div className="inline-flex items-center rounded-full border border-sky-400/20 bg-black/35 px-2 py-1 text-[10px] font-medium text-sky-100">
+                      <div className="inline-flex items-center rounded-full border border-sky-400/20 bg-white px-2 py-1 text-[10px] font-medium text-sky-700">
                         {importedSuggestionsForDate.length} Google suggestion
                         {importedSuggestionsForDate.length === 1 ? '' : 's'}
                       </div>
@@ -824,12 +824,12 @@ export default function GroupMeetAvailabilityPicker({
 
                 <div className="hidden space-y-1 sm:block">
                   {slots.slice(0, 2).map((slot) => (
-                    <div key={`${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-black/35 px-2 py-1 text-[11px] text-zinc-200">
+                    <div key={`${slot.date}-${slot.startMinutes}-${slot.endMinutes}`} className="rounded-lg bg-white px-2 py-1 text-[11px] text-stone-700">
                       {formatMinutesAsTime(slot.startMinutes)} - {formatMinutesAsTime(slot.endMinutes)}
                     </div>
                   ))}
                   {slots.length > 2 && (
-                    <div className="text-[11px] text-zinc-300">+{slots.length - 2} more</div>
+                    <div className="text-[11px] text-stone-600">+{slots.length - 2} more</div>
                   )}
                 </div>
               </div>
@@ -839,20 +839,20 @@ export default function GroupMeetAvailabilityPicker({
       </div>
 
       {activeDate && (
-        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-[#05070b] sm:items-center sm:bg-black/70 sm:p-4">
-          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-[#0b1016] shadow-2xl sm:h-[min(88vh,840px)] sm:max-w-lg sm:rounded-[28px] sm:border sm:border-white/10">
-            <div className="shrink-0 border-b border-white/10 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:py-5">
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-[#FAFAF7] sm:items-center sm:bg-stone-950/35 sm:p-4">
+          <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(88vh,840px)] sm:max-w-lg sm:rounded-lg sm:border sm:border-stone-200">
+            <div className="shrink-0 border-b border-stone-200 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:py-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-2xl font-semibold">{format(parse(activeDate, 'yyyy-MM-dd', new Date()), 'EEEE, MMMM d')}</h3>
-                  <p className="text-sm text-zinc-400 mt-1">Add one or more time ranges for this day.</p>
+                  <p className="text-sm text-stone-500 mt-1">Add one or more time ranges for this day.</p>
                   <div
                     className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 text-xs ${
                       activeDateIsDirty
-                        ? 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#F4FF8A]'
+                        ? 'border-stone-300 bg-stone-900/10 text-stone-900'
                         : activeDateOriginalSlots.length
-                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
-                          : 'border-white/10 bg-white/[0.03] text-zinc-400'
+                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700'
+                          : 'border-stone-200 bg-white text-stone-500'
                     }`}
                   >
                     {activeDateIsDirty
@@ -865,7 +865,7 @@ export default function GroupMeetAvailabilityPicker({
                 <button
                   type="button"
                   onClick={closeEditor}
-                  className="shrink-0 rounded-full border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                  className="shrink-0 rounded-full border border-stone-200 px-3 py-2 text-sm text-stone-600 hover:bg-stone-100"
                 >
                   Close
                 </button>
@@ -874,9 +874,9 @@ export default function GroupMeetAvailabilityPicker({
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
               {Boolean(activeDatePeerAvailability.length) && (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <div className="text-sm font-medium text-white">Availability on this day</div>
-                  <p className="mt-1 text-sm text-zinc-400">
+                <div className="rounded-lg border border-stone-200 bg-white p-4">
+                  <div className="text-sm font-medium text-stone-950">Availability on this day</div>
+                  <p className="mt-1 text-sm text-stone-500">
                     Hover any profile badge to see the time ranges already saved.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
@@ -888,9 +888,9 @@ export default function GroupMeetAvailabilityPicker({
               )}
 
               {Boolean(activeDateSuggestedRanges.length) && (
-                <div className="mt-5 rounded-2xl border border-dashed border-[#E0FE10]/20 bg-[#E0FE10]/[0.04] p-4">
-                  <div className="text-sm font-medium text-[#F4FF8A]">Suggested times from current responses</div>
-                  <p className="mt-1 text-sm text-zinc-400">
+                <div className="mt-5 rounded-lg border border-dashed border-stone-200 bg-stone-900/[0.04] p-4">
+                  <div className="text-sm font-medium text-stone-900">Suggested times from current responses</div>
+                  <p className="mt-1 text-sm text-stone-500">
                     These windows fit the other people who have already replied for this day.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -899,13 +899,13 @@ export default function GroupMeetAvailabilityPicker({
                         key={`${activeDate}-${range.startMinutes}-${range.endMinutes}`}
                         type="button"
                         onClick={() => applySuggestedRange(range.startMinutes, range.endMinutes)}
-                        className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/[0.08] px-3 py-2 text-left text-sm text-[#F4FF8A] transition-colors hover:bg-[#E0FE10]/[0.14]"
+                        className="rounded-lg border border-stone-300 bg-stone-900/[0.08] px-3 py-2 text-left text-sm text-stone-900 transition-colors hover:bg-stone-900/[0.14]"
                         title={range.participantNames.join(', ')}
                       >
                         <div className="font-medium">
                           {formatMinutesAsTime(range.startMinutes)} - {formatMinutesAsTime(range.endMinutes)}
                         </div>
-                        <div className="mt-1 text-[11px] text-zinc-300">
+                        <div className="mt-1 text-[11px] text-stone-600">
                           Fits {range.participantCount} other {range.participantCount === 1 ? 'person' : 'people'}
                         </div>
                       </button>
@@ -915,9 +915,9 @@ export default function GroupMeetAvailabilityPicker({
               )}
 
               {Boolean(activeDateImportedSuggestions.length) && (
-                <div className="mt-5 rounded-2xl border border-dashed border-sky-400/20 bg-sky-500/[0.05] p-4">
-                  <div className="text-sm font-medium text-sky-100">Imported from Google Calendar</div>
-                  <p className="mt-1 text-sm text-zinc-400">
+                <div className="mt-5 rounded-lg border border-dashed border-sky-400/20 bg-sky-500/[0.05] p-4">
+                  <div className="text-sm font-medium text-sky-700">Imported from Google Calendar</div>
+                  <p className="mt-1 text-sm text-stone-500">
                     These open windows came from your Google Calendar. Tap one to add it to your editable draft before saving.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -926,12 +926,12 @@ export default function GroupMeetAvailabilityPicker({
                         key={`${activeDate}-${range.startMinutes}-${range.endMinutes}-google`}
                         type="button"
                         onClick={() => applyImportedSuggestion(range.startMinutes, range.endMinutes)}
-                        className="rounded-2xl border border-sky-400/25 bg-sky-500/[0.09] px-3 py-2 text-left text-sm text-sky-100 transition-colors hover:bg-sky-500/[0.14]"
+                        className="rounded-lg border border-sky-400/25 bg-sky-500/[0.09] px-3 py-2 text-left text-sm text-sky-700 transition-colors hover:bg-sky-500/[0.14]"
                       >
                         <div className="font-medium">
                           {formatMinutesAsTime(range.startMinutes)} - {formatMinutesAsTime(range.endMinutes)}
                         </div>
-                        <div className="mt-1 text-[11px] text-zinc-300">Imported suggestion</div>
+                        <div className="mt-1 text-[11px] text-stone-600">Imported suggestion</div>
                       </button>
                     ))}
                   </div>
@@ -940,26 +940,26 @@ export default function GroupMeetAvailabilityPicker({
 
               <div className="mt-6">
                 <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm font-medium text-white">Your time ranges</div>
+                  <div className="text-sm font-medium text-stone-950">Your time ranges</div>
                   <button
                     type="button"
                     onClick={addDraftRange}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm hover:bg-white/[0.08] sm:w-auto"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm hover:bg-stone-100 sm:w-auto"
                   >
                     <Plus className="w-4 h-4" />
                     Add time range
                   </button>
                 </div>
 
-                <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-                  <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Quick ranges</div>
+                <div className="mb-4 rounded-lg border border-stone-200 bg-white p-3">
+                  <div className="text-xs uppercase tracking-[0.16em] text-stone-400">Quick ranges</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {QUICK_RANGE_PRESETS.map((preset) => (
                       <button
                         key={preset.label}
                         type="button"
                         onClick={() => applyPresetRange(preset.startMinutes, preset.endMinutes)}
-                        className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/[0.08]"
+                        className="rounded-full border border-stone-200 bg-white px-3 py-2 text-sm text-stone-600 transition-colors hover:bg-stone-100"
                       >
                         {preset.label}
                       </button>
@@ -986,48 +986,48 @@ export default function GroupMeetAvailabilityPicker({
                     return (
                       <div
                         key={`range-${index}`}
-                        className={`rounded-2xl border p-3 ${
+                        className={`rounded-lg border p-3 ${
                           range.source === 'suggested'
-                            ? 'border-[#E0FE10]/30 bg-[#E0FE10]/[0.05]'
+                            ? 'border-stone-300 bg-stone-900/[0.05]'
                             : range.source === 'google_calendar'
                               ? 'border-sky-400/30 bg-sky-500/[0.06]'
-                            : 'border-white/10 bg-black/30'
+                            : 'border-stone-200 bg-[#FAFAF7]'
                         }`}
                       >
                         <div className="grid min-w-0 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                           <label className="block min-w-0">
-                            <span className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500 sm:text-xs sm:tracking-[0.18em]">
+                            <span className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-stone-400 sm:text-xs sm:tracking-[0.18em]">
                               Start
                               {range.source === 'suggested' && (
-                                <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-[#F4FF8A]">
+                                <span className="rounded-full border border-stone-300 bg-stone-900/10 px-2 py-0.5 text-[10px] tracking-[0.12em] text-stone-900">
                                   Suggested
                                 </span>
                               )}
                               {range.source === 'google_calendar' && (
-                                <span className="rounded-full border border-sky-400/25 bg-sky-500/[0.10] px-2 py-0.5 text-[10px] tracking-[0.12em] text-sky-100">
+                                <span className="rounded-full border border-sky-400/25 bg-sky-500/[0.10] px-2 py-0.5 text-[10px] tracking-[0.12em] text-sky-700">
                                   Imported
                                 </span>
                               )}
                             </span>
-                            <div className="min-w-0 overflow-hidden rounded-xl">
+                            <div className="min-w-0 overflow-hidden rounded-md">
                               <input
                                 type="time"
                                 value={range.start}
                                 onChange={(event) => updateDraftRange(index, 'start', event.target.value)}
-                                className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-sm text-white [font-variant-numeric:tabular-nums] sm:h-auto sm:text-base"
+                                className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-3 text-sm text-stone-950 [font-variant-numeric:tabular-nums] sm:h-auto sm:text-base"
                                 style={{ minWidth: 0 }}
                               />
                             </div>
                           </label>
 
                           <label className="block min-w-0">
-                            <span className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-zinc-500 sm:text-xs sm:tracking-[0.18em]">End</span>
-                            <div className="min-w-0 overflow-hidden rounded-xl">
+                            <span className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-stone-400 sm:text-xs sm:tracking-[0.18em]">End</span>
+                            <div className="min-w-0 overflow-hidden rounded-md">
                               <input
                                 type="time"
                                 value={range.end}
                                 onChange={(event) => updateDraftRange(index, 'end', event.target.value)}
-                                className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-xl border border-white/10 bg-[#05070b] px-3 py-3 text-sm text-white [font-variant-numeric:tabular-nums] sm:h-auto sm:text-base"
+                                className="block h-11 w-full min-w-0 max-w-full appearance-none rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-3 text-sm text-stone-950 [font-variant-numeric:tabular-nums] sm:h-auto sm:text-base"
                                 style={{ minWidth: 0 }}
                               />
                             </div>
@@ -1037,7 +1037,7 @@ export default function GroupMeetAvailabilityPicker({
                             <button
                               type="button"
                               onClick={() => removeDraftRange(index)}
-                              className="inline-flex h-11 items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 sm:mt-0 sm:h-auto sm:px-3"
+                              className="inline-flex h-11 items-center justify-center rounded-md border border-stone-200 px-4 py-3 text-sm text-stone-600 hover:bg-stone-100 sm:mt-0 sm:h-auto sm:px-3"
                               aria-label={`Remove time range ${index + 1}`}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1045,17 +1045,17 @@ export default function GroupMeetAvailabilityPicker({
                           </div>
                         </div>
 
-                        <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2 text-xs">
+                        <div className="mt-3 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs">
                           {hasValidRange ? (
                             <span
                               className={
-                                matchingPeers.length ? 'text-emerald-100' : 'text-zinc-400'
+                                matchingPeers.length ? 'text-emerald-700' : 'text-stone-500'
                               }
                             >
                               {formatPeerMatchSummary(matchingPeers)}
                             </span>
                           ) : (
-                            <span className="text-zinc-500">
+                            <span className="text-stone-400">
                               Enter a valid range to see who else is free then.
                             </span>
                           )}
@@ -1065,7 +1065,7 @@ export default function GroupMeetAvailabilityPicker({
                   })}
 
                   {!draftRanges.length && (
-                    <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+                    <div className="rounded-lg border border-dashed border-stone-200 px-4 py-6 text-center text-sm text-stone-400">
                       No time ranges for this day yet.
                     </div>
                   )}
@@ -1073,11 +1073,11 @@ export default function GroupMeetAvailabilityPicker({
               </div>
 
               {Boolean(duplicableDates.length) && (
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="mt-5 rounded-lg border border-stone-200 bg-white p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <div className="text-sm font-medium text-white">Copy this schedule to other dates</div>
-                      <p className="mt-1 text-sm text-zinc-400">
+                      <div className="text-sm font-medium text-stone-950">Copy this schedule to other dates</div>
+                      <p className="mt-1 text-sm text-stone-500">
                         Use this when your schedule repeats and you want to reuse the same windows quickly.
                       </p>
                     </div>
@@ -1086,21 +1086,21 @@ export default function GroupMeetAvailabilityPicker({
                       <button
                         type="button"
                         onClick={selectMatchingWeekdayDates}
-                        className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                        className="rounded-md border border-stone-200 px-3 py-2 text-xs text-stone-600 hover:bg-stone-100"
                       >
                         Repeat weekly
                       </button>
                       <button
                         type="button"
                         onClick={selectWeekdayDates}
-                        className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                        className="rounded-md border border-stone-200 px-3 py-2 text-xs text-stone-600 hover:bg-stone-100"
                       >
                         Weekdays
                       </button>
                       <button
                         type="button"
                         onClick={() => setDuplicateDates([])}
-                        className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5"
+                        className="rounded-md border border-stone-200 px-3 py-2 text-xs text-stone-600 hover:bg-stone-100"
                       >
                         Clear copies
                       </button>
@@ -1117,8 +1117,8 @@ export default function GroupMeetAvailabilityPicker({
                           onClick={() => toggleDuplicateDate(entry.date)}
                           className={`rounded-full border px-3 py-2 text-sm transition-colors ${
                             selected
-                              ? 'border-[#E0FE10]/60 bg-[#E0FE10]/15 text-[#F4FF8A]'
-                              : 'border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]'
+                              ? 'border-stone-500 bg-stone-900/15 text-stone-900'
+                              : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-100'
                           }`}
                         >
                           {entry.label}
@@ -1127,7 +1127,7 @@ export default function GroupMeetAvailabilityPicker({
                     })}
                   </div>
 
-                  <div className="mt-3 text-xs text-zinc-500">
+                  <div className="mt-3 text-xs text-stone-400">
                     {duplicateDates.length
                       ? `These dates will be overwritten with the same time ranges when you save.`
                       : 'Choose the dates that should receive the same schedule when you save this day.'}
@@ -1136,9 +1136,9 @@ export default function GroupMeetAvailabilityPicker({
               )}
             </div>
 
-            <div className="shrink-0 border-t border-white/10 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:py-4">
+            <div className="shrink-0 border-t border-stone-200 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:py-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm text-zinc-400">
+                <div className="text-sm text-stone-500">
                   {activeDateIsDirty
                     ? 'Unsaved changes are ready to save.'
                     : activeDateOriginalSlots.length
@@ -1152,14 +1152,14 @@ export default function GroupMeetAvailabilityPicker({
                       onChange(availabilityEntries.filter((slot) => slot.date !== activeDate));
                       closeEditor();
                     }}
-                    className="flex-1 rounded-xl border border-white/10 px-4 py-3 text-sm text-zinc-300 hover:bg-white/5 sm:flex-none"
+                    className="flex-1 rounded-md border border-stone-200 px-4 py-3 text-sm text-stone-600 hover:bg-stone-100 sm:flex-none"
                   >
                     Clear day
                   </button>
                   <button
                     type="button"
                     onClick={saveDayRanges}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black hover:bg-lime-300 sm:flex-none"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-stone-900 px-4 py-3 text-sm font-semibold text-white hover:bg-stone-700 sm:flex-none"
                   >
                     <Clock className="w-4 h-4" />
                     {duplicateDates.length ? `Save + copy to ${duplicateDates.length}` : 'Save day'}
