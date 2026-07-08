@@ -59,7 +59,7 @@ const escapeHtml = (value: string) =>
 const linkifyEscapedText = (value: string) =>
   escapeHtml(value).replace(/(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi, (url) => {
     const href = url.toLowerCase().startsWith('http') ? url : `https://${url}`;
-    return `<a href="${escapeHtml(href)}" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${url}</a>`;
+    return `<a href="${escapeHtml(href)}">${url}</a>`;
   });
 
 const verifySimpBudgetAuth = async (authHeader: string | undefined): Promise<VerifiedSimpBudgetUser | null> => {
@@ -107,27 +107,17 @@ const buildContactEmailHtml = (args: {
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean)
-    .map((paragraph) => `<p style="margin:0 0 16px;color:#44403c;font-size:15px;line-height:1.7;">${linkifyEscapedText(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .map((paragraph) => `<p>${linkifyEscapedText(paragraph).replace(/\n/g, '<br>')}</p>`)
     .join('');
 
   return `
-    <div style="margin:0;padding:0;background:#f6f6f3;color:#1c1917;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-      <div style="max-width:680px;margin:0 auto;padding:30px 18px;">
-        <div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
-          <div style="padding:30px 32px 22px;border-bottom:1px solid #f1f0ee;">
-            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#78716c;font-weight:800;">Pulse Intelligence Labs</div>
-            <h1 style="margin:12px 0 0;font-size:28px;line-height:1.18;color:#111111;">${escapeHtml(args.emailTypeLabel)}</h1>
-          </div>
-          <div style="padding:30px 32px 14px;">
-            ${paragraphs}
-          </div>
-          <div style="padding:22px 32px 30px;color:#57534e;font-size:14px;line-height:1.6;">
-            <div style="font-weight:800;color:#111111;">Tremaine Grant</div>
-            <div>Founder &amp; CEO · <a href="https://pulseintelligencelabs.com" style="color:#57534e;text-decoration:underline;text-underline-offset:3px;">Pulse Intelligence Labs</a></div>
-            <a href="mailto:${escapeHtml(args.senderEmail)}" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${escapeHtml(args.senderEmail)}</a>
-          </div>
-        </div>
-      </div>
+    <div>
+      ${paragraphs}
+      <p>
+        <strong>Tremaine Grant</strong><br>
+        Founder &amp; CEO · <a href="https://pulseintelligencelabs.com">Pulse Intelligence Labs</a><br>
+        <a href="mailto:${escapeHtml(args.senderEmail)}">${escapeHtml(args.senderEmail)}</a>
+      </p>
     </div>
   `;
 };
