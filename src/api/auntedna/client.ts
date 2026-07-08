@@ -479,7 +479,7 @@ export const auntEDNAClient = new AuntEDNAClient();
  */
 export function buildPulseCallbackUrl(userId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pulsefitness.app';
-  return `${baseUrl}/.netlify/functions/auntedna-callback?userId=${userId}`;
+  return `${baseUrl}/.netlify/functions/clinical-callback?userId=${userId}`;
 }
 
 /**

@@ -20,7 +20,7 @@ const {
   normalizeWebhookEvent,
   toUnixSeconds,
   verifyWebhookSignature,
-} = require('../auntedna-callback').__test;
+} = require('../clinical-callback').__test;
 
 function signedEvent(rawBody, secret) {
   const signature = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
@@ -28,7 +28,7 @@ function signedEvent(rawBody, secret) {
 }
 
 test('verifyWebhookSignature accepts a valid HMAC hex signature', () => {
-  process.env.AUNTEDNA_WEBHOOK_SECRET = 'test-secret';
+  process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET = 'test-secret';
   const rawBody = JSON.stringify({ webhookEventId: 'evt-1' });
   const result = verifyWebhookSignature(signedEvent(rawBody, 'test-secret'), rawBody);
   assert.equal(result.ok, true);
@@ -36,7 +36,7 @@ test('verifyWebhookSignature accepts a valid HMAC hex signature', () => {
 });
 
 test('verifyWebhookSignature rejects a tampered body', () => {
-  process.env.AUNTEDNA_WEBHOOK_SECRET = 'test-secret';
+  process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET = 'test-secret';
   const rawBody = JSON.stringify({ webhookEventId: 'evt-1' });
   const result = verifyWebhookSignature(signedEvent(rawBody, 'test-secret'), rawBody + 'tampered');
   assert.equal(result.ok, false);
@@ -44,7 +44,7 @@ test('verifyWebhookSignature rejects a tampered body', () => {
 });
 
 test('verifyWebhookSignature fails closed when the secret is unset outside mock mode', () => {
-  delete process.env.AUNTEDNA_WEBHOOK_SECRET;
+  delete process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET;
   delete process.env.AUNTEDNA_MOCK;
   const result = verifyWebhookSignature({ headers: {} }, '{}');
   assert.equal(result.ok, false);
@@ -70,7 +70,7 @@ test('normalizeWebhookEvent extracts allow-listed fields and drops everything el
   assert.equal(normalized.eventType, 'clinician.assigned');
   assert.equal(normalized.webhookEventId, 'evt-42');
   assert.equal(normalized.pulseEscalationId, 'esc-1');
-  assert.equal(normalized.auntEdnaCaseId, 'ae-case-9');
+  assert.equal(normalized.clinicalCaseId, 'ae-case-9');
   assert.equal(normalized.assignmentLabel, 'Campus Support Lane');
   assert.equal(normalized.statusCategory, 'assigned');
   assert.equal(normalized.occurredAt, 1765432100);
@@ -83,7 +83,7 @@ test('normalizeWebhookEvent reads fields nested under data and maps event type t
     data: { webhookEventId: 'evt-7', caseId: 'ae-case-2', status: 'closed' },
   });
   assert.equal(normalized.webhookEventId, 'evt-7');
-  assert.equal(normalized.auntEdnaCaseId, 'ae-case-2');
+  assert.equal(normalized.clinicalCaseId, 'ae-case-2');
   assert.equal(normalized.statusCategory, 'closed');
 });
 
@@ -95,7 +95,7 @@ test('toUnixSeconds handles seconds, milliseconds, and ISO strings', () => {
   assert.equal(toUnixSeconds(undefined), null);
 });
 
-test('buildEscalationMirror writes only the coarse auntEdnaCase map plus activity timestamp', () => {
+test('buildEscalationMirror writes only the coarse clinicalCase map plus activity timestamp', () => {
   const mirror = buildEscalationMirror(
     normalizeWebhookEvent({
       event: 'escalation.created',
@@ -106,12 +106,12 @@ test('buildEscalationMirror writes only the coarse auntEdnaCase map plus activit
     }),
     1765432200,
   );
-  assert.deepEqual(Object.keys(mirror).sort(), ['auntEdnaCase', 'auntEdnaCaseId', 'incidentLastActivityAt']);
-  assert.equal(mirror.auntEdnaCaseId, 'ae-case-9');
+  assert.deepEqual(Object.keys(mirror).sort(), ['clinicalCase', 'clinicalCaseId', 'incidentLastActivityAt']);
+  assert.equal(mirror.clinicalCaseId, 'ae-case-9');
   assert.equal(mirror.incidentLastActivityAt, 1765432200);
-  assert.equal(mirror.auntEdnaCase.statusCategory, 'created');
-  assert.equal(mirror.auntEdnaCase.createdAt, 1765432100);
-  assert.equal(mirror.auntEdnaCase.lastEventId, 'evt-1');
+  assert.equal(mirror.clinicalCase.statusCategory, 'created');
+  assert.equal(mirror.clinicalCase.createdAt, 1765432100);
+  assert.equal(mirror.clinicalCase.lastEventId, 'evt-1');
 });
 
 test('buildEscalationMirror flags follow-up for triage and clears it on booking/resolution', () => {
@@ -119,21 +119,21 @@ test('buildEscalationMirror flags follow-up for triage and clears it on booking/
     normalizeWebhookEvent({ event: 'triage.requested', webhookEventId: 'e1', pulseEscalationId: 'esc-1' }),
     100,
   );
-  assert.equal(triage.auntEdnaCase.followUpRequired, true);
+  assert.equal(triage.clinicalCase.followUpRequired, true);
 
   const booked = buildEscalationMirror(
     normalizeWebhookEvent({ event: 'appointment.booked', webhookEventId: 'e2', pulseEscalationId: 'esc-1' }),
     200,
   );
-  assert.equal(booked.auntEdnaCase.followUpRequired, false);
-  assert.equal(booked.auntEdnaCase.appointmentBookedAt, 200);
+  assert.equal(booked.clinicalCase.followUpRequired, false);
+  assert.equal(booked.clinicalCase.appointmentBookedAt, 200);
 
   const resolved = buildEscalationMirror(
     normalizeWebhookEvent({ event: 'case.resolved', webhookEventId: 'e3', pulseEscalationId: 'esc-1' }),
     300,
   );
-  assert.equal(resolved.auntEdnaCase.followUpRequired, false);
-  assert.equal(resolved.auntEdnaCase.resolvedAt, 300);
+  assert.equal(resolved.clinicalCase.followUpRequired, false);
+  assert.equal(resolved.clinicalCase.resolvedAt, 300);
 });
 
 test('buildEscalationMirror mirrors watchlist and check-in workflow state without clinical content', () => {
@@ -147,27 +147,27 @@ test('buildEscalationMirror mirrors watchlist and check-in workflow state withou
     }),
     400,
   );
-  assert.equal(watchlist.auntEdnaCase.watchList, true);
-  assert.equal(watchlist.auntEdnaCase.appState, 'protective');
-  assert.equal(watchlist.auntEdnaCase.returnToTrainingStatus, 'not_cleared');
-  assert.equal(watchlist.auntEdnaCase.watchListEnteredAt, 400);
-  assert.equal('clinicalSummary' in watchlist.auntEdnaCase, false);
+  assert.equal(watchlist.clinicalCase.watchList, true);
+  assert.equal(watchlist.clinicalCase.appState, 'protective');
+  assert.equal(watchlist.clinicalCase.returnToTrainingStatus, 'not_cleared');
+  assert.equal(watchlist.clinicalCase.watchListEnteredAt, 400);
+  assert.equal('clinicalSummary' in watchlist.clinicalCase, false);
 
   const cleared = buildEscalationMirror(
     normalizeWebhookEvent({ event: 'watchlist.cleared_for_training', webhookEventId: 'evt-watch-2' }),
     500,
   );
-  assert.equal(cleared.auntEdnaCase.returnToTrainingStatus, 'cleared');
-  assert.equal(cleared.auntEdnaCase.followUpRequired, false);
+  assert.equal(cleared.clinicalCase.returnToTrainingStatus, 'cleared');
+  assert.equal(cleared.clinicalCase.followUpRequired, false);
 
   const missed = buildEscalationMirror(
     normalizeWebhookEvent({ event: 'checkin.missed', webhookEventId: 'evt-checkin-1' }),
     600,
   );
-  assert.equal(missed.auntEdnaCase.checkInMissedAt, 600);
-  assert.equal(missed.auntEdnaCase.followUpRequired, true);
+  assert.equal(missed.clinicalCase.checkInMissedAt, 600);
+  assert.equal(missed.clinicalCase.followUpRequired, true);
 });
 
 test('buildEventDocId sanitizes slashes in partner event ids', () => {
-  assert.equal(buildEventDocId('evt/with/slashes'), 'auntedna_evt_with_slashes');
+  assert.equal(buildEventDocId('evt/with/slashes'), 'clinical_evt_with_slashes');
 });

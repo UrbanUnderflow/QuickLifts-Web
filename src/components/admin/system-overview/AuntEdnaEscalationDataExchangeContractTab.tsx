@@ -119,7 +119,7 @@ Content-Type: application/json
     { "id": "...", "title": "...", "content": "...", "category": "...", "severity": "..." }
   ],
   "escalationTimestamp": 1765432100000,
-  "pulseApiCallback": "https://<pulse-environment>/.netlify/functions/auntedna-callback"
+  "pulseApiCallback": "https://<pulse-environment>/.netlify/functions/clinical-callback"
 }`;
 
 const CLASSIFICATION_VOCABULARY_ROWS = [
@@ -195,7 +195,7 @@ const AUNTEDNA_ONLY_ROWS = [
 ];
 
 const HYBRID_ROWS = [
-  ['Shared correlation ids', '`pulseEscalationId`, `auntEdnaCaseId`, `handoffId`, `webhookEventId`', 'Both systems need these to reconcile the same case without copying full records.'],
+  ['Shared correlation ids', '`pulseEscalationId`, provider case id normalized to `clinicalCaseId`, `handoffId`, `webhookEventId`', 'Both systems need these to reconcile the same case without copying full records.'],
   ['Receipt and delivery state', '`sent`, `received`, `accepted`, `failed`, `retrying`, `manual_fallback`', 'PulseCheck owns send attempts; AuntEdna owns receipt acknowledgment.'],
   ['Case status category', '`created`, `triage_requested`, `assigned`, `appointment_booked`, `crisis_invoked`, `resolved`, `closed`', 'Coarse status only. This drives UI and workflow suppression without exposing clinical notes.'],
   ['Assignment label', 'Display-safe provider pool, clinician lane, campus support lane, or external profile label', 'Useful for operators and dashboards; not a clinical note.'],
@@ -215,7 +215,7 @@ const PULSECHECK_ONLY_ROWS = [
 ];
 
 const WEBHOOK_ROWS = [
-  ['`escalation.created`', 'AuntEdna accepted the handoff and created a case.', 'PulseCheck stores `auntEdnaCaseId`, status, receipt timestamp, and event id.'],
+  ['`escalation.created`', 'AuntEdna accepted the handoff and created a case.', 'PulseCheck stores the provider case id as `clinicalCaseId`, plus status, receipt timestamp, and event id.'],
   ['`triage.requested`', 'AuntEdna needs more information or athlete intake action.', 'PulseCheck prompts the correct actor or flags operator follow-up without exposing clinical detail.'],
   ['`clinician.assigned`', 'A clinician or provider lane was assigned.', 'PulseCheck stores a display-safe assignment label and the assignment timestamp only.'],
   ['`appointment.booked`', 'A care appointment exists.', 'PulseCheck shows operational follow-up state; it does not store appointment notes or clinical content.'],
