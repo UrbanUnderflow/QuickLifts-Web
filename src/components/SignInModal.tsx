@@ -3922,112 +3922,111 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
 
         .amh-access-shell {
-          background: #020408;
-          color: #ffffff;
+          background: #f7f7f4;
+          color: #1c1917;
         }
 
         .amh-access-bg {
           background:
-            radial-gradient(circle at 18% 12%, rgba(224, 254, 16, 0.14), transparent 28rem),
-            radial-gradient(circle at 82% 18%, rgba(103, 232, 249, 0.1), transparent 30rem),
-            linear-gradient(90deg, rgba(2, 4, 8, 0.97) 0%, rgba(2, 4, 8, 0.82) 45%, rgba(2, 4, 8, 0.48) 100%),
-            linear-gradient(180deg, rgba(2, 4, 8, 0.18) 0%, rgba(2, 4, 8, 0.96) 100%),
+            linear-gradient(90deg, rgba(247, 247, 244, 0.98) 0%, rgba(247, 247, 244, 0.94) 42%, rgba(247, 247, 244, 0.72) 72%, rgba(247, 247, 244, 0.38) 100%),
+            linear-gradient(180deg, rgba(247, 247, 244, 0.58) 0%, #f7f7f4 100%),
             url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
         }
 
         .amh-brand-row {
-          color: rgba(255, 255, 255, 0.92);
+          color: #1c1917;
         }
 
         .amh-mark {
-          border: 1px solid rgba(224, 254, 16, 0.34);
-          background: rgba(224, 254, 16, 0.12);
-          color: #e0fe10;
+          border: 1px solid #e7e5e4;
+          background: #1c1917;
+          color: #ffffff;
         }
 
         .amh-access-copy h1 {
-          max-width: 680px;
-          color: #ffffff;
+          max-width: 720px;
+          color: #0c0a09;
           font-weight: 850;
           letter-spacing: 0;
         }
 
         .amh-access-copy p {
-          color: rgba(255, 255, 255, 0.7);
+          color: #6b625d;
         }
 
         .amh-proof-grid div,
         .amh-form-shell {
-          border-color: rgba(255, 255, 255, 0.12);
-          background: rgba(17, 18, 21, 0.78);
-          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+          border-color: #e7e5e4;
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 18px 46px rgba(28, 25, 23, 0.08);
         }
 
         .amh-proof-grid div::before {
           content: "";
           width: 62px;
           height: 7px;
-          background: #e0fe10;
+          background: #10b981;
         }
 
         .amh-proof-grid strong {
-          color: #e0fe10;
+          color: #0c0a09;
           font-size: 1.85rem;
           line-height: 1;
         }
 
         .amh-proof-grid span {
-          color: rgba(255, 255, 255, 0.68);
+          color: #78716c;
           font-weight: 750;
         }
 
         .amh-kicker {
-          color: #e0fe10;
+          color: #10b981;
           letter-spacing: 0.22em;
         }
 
         .amh-login-panel h2,
         .amh-council-profile h2 {
-          color: #ffffff;
+          color: #0c0a09;
         }
 
         .amh-panel-copy,
         .amh-switch {
-          color: rgba(255, 255, 255, 0.62);
+          color: #78716c;
         }
 
         .amh-provider-button.dark {
-          border-color: rgba(255, 255, 255, 0.14);
-          background: #020408;
+          border-color: #e7e5e4;
+          background: #1c1917;
           color: #ffffff;
         }
 
         .amh-provider-button.light {
+          border: 1px solid #e7e5e4;
           background: #ffffff;
-          color: #111215;
+          color: #1c1917;
         }
 
         .amh-divider {
-          color: rgba(255, 255, 255, 0.5);
+          color: #a8a29e;
         }
 
         .amh-divider:before {
-          background: rgba(255, 255, 255, 0.12);
+          background: #e7e5e4;
         }
 
         .amh-divider span {
-          background: rgba(17, 18, 21, 0.96);
+          background: #ffffff;
         }
 
         .amh-fields label,
         .amh-reset-field,
         .amh-council-profile label {
-          color: rgba(255, 255, 255, 0.76);
+          color: #78716c;
         }
 
         .amh-fields label span,
         .amh-password-wrap button {
-          color: rgba(255, 255, 255, 0.44);
+          color: #a8a29e;
         }
 
         .amh-fields input,
@@ -4036,36 +4035,42 @@ const SignInModal: React.FC<SignInModalProps> = ({
         .amh-council-profile textarea,
         .amh-avatar-preview,
         .amh-upload-button {
-          border-color: rgba(255, 255, 255, 0.12);
-          background: rgba(255, 255, 255, 0.06);
-          color: #ffffff;
+          border-color: #e7e5e4;
+          background: #ffffff;
+          color: #1c1917;
+        }
+
+        .amh-fields input::placeholder,
+        .amh-reset-field input::placeholder,
+        .amh-council-profile input::placeholder,
+        .amh-council-profile textarea::placeholder {
+          color: #a8a29e;
         }
 
         .amh-fields input:focus,
         .amh-reset-field input:focus,
         .amh-council-profile input:focus,
         .amh-council-profile textarea:focus {
-          border-color: rgba(224, 254, 16, 0.58);
-          box-shadow: 0 0 0 4px rgba(224, 254, 16, 0.12);
+          border-color: #10b981;
+          box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
         }
 
         .amh-label-row button,
         .amh-switch button,
         .amh-muted-button {
-          color: #e0fe10;
+          color: #047857;
         }
 
         .amh-submit {
-          background: #e0fe10;
-          color: #020408;
-          box-shadow: 0 18px 48px rgba(224, 254, 16, 0.12);
+          background: #1c1917;
+          color: #ffffff;
+          box-shadow: 0 16px 36px rgba(28, 25, 23, 0.16);
         }
 
         @media (max-width: 980px) {
           .amh-access-bg {
             background:
-              radial-gradient(circle at 20% 8%, rgba(224, 254, 16, 0.12), transparent 20rem),
-              linear-gradient(180deg, rgba(2, 4, 8, 0.96) 0%, rgba(2, 4, 8, 0.86) 56%, rgba(2, 4, 8, 0.96) 100%),
+              linear-gradient(180deg, rgba(247, 247, 244, 0.98) 0%, rgba(247, 247, 244, 0.9) 48%, #f7f7f4 100%),
               url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
           }
         }

@@ -447,7 +447,7 @@ const AthleticMindHub: NextPage = () => {
       <PageHead
         pageOgUrl="https://fitwithpulse.ai/athletic-mind-hub"
         pageOgImage="/athletic-mind-hub/council-workspace.png"
-        themeColor="#294036"
+        themeColor="#f7f7f4"
         metaData={{
           pageId: 'athletic-mind-hub',
           pageTitle: 'Athletic Mind Hub | Pulse',
@@ -2037,116 +2037,115 @@ const AthleticMindHub: NextPage = () => {
         }
 
         :global(body) {
-          background: #020408;
+          background: #f7f7f4;
         }
 
         .hubShell {
-          background:
-            radial-gradient(circle at 14% 10%, rgba(224, 254, 16, 0.12), transparent 28rem),
-            radial-gradient(circle at 84% 14%, rgba(103, 232, 249, 0.08), transparent 30rem),
-            linear-gradient(180deg, #020408 0%, #05070a 56%, #020408 100%);
-          color: rgba(255, 255, 255, 0.78);
+          background: #f7f7f4;
+          color: #1c1917;
         }
 
         .hero {
-          min-height: 650px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          min-height: 620px;
+          color: #1c1917;
+          border-bottom: 1px solid #e7e5e4;
+          background: #f7f7f4;
         }
 
         .heroBackdrop {
           background:
-            linear-gradient(90deg, rgba(2, 4, 8, 0.96) 0%, rgba(2, 4, 8, 0.76) 45%, rgba(2, 4, 8, 0.34) 100%),
-            linear-gradient(180deg, rgba(2, 4, 8, 0.2) 0%, rgba(2, 4, 8, 0.96) 100%),
+            linear-gradient(90deg, rgba(247, 247, 244, 0.98) 0%, rgba(247, 247, 244, 0.94) 43%, rgba(247, 247, 244, 0.66) 72%, rgba(247, 247, 244, 0.3) 100%),
+            linear-gradient(180deg, rgba(247, 247, 244, 0.62) 0%, #f7f7f4 100%),
             url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
-          opacity: 0.95;
+          opacity: 1;
         }
 
         .brandMark {
-          color: #ffffff;
+          color: #1c1917;
           letter-spacing: 0;
         }
 
         .brainMark {
-          border: 1px solid rgba(224, 254, 16, 0.34);
-          background: rgba(224, 254, 16, 0.12);
-          color: #e0fe10;
+          border: 1px solid #e7e5e4;
+          background: #1c1917;
+          color: #ffffff;
         }
 
         .hubNavLinks,
         .accountPill,
         .signedInPill {
-          border-color: rgba(255, 255, 255, 0.12);
-          background: rgba(10, 13, 18, 0.72);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          border-color: #e7e5e4;
+          background: rgba(255, 255, 255, 0.88);
+          box-shadow: 0 8px 24px rgba(28, 25, 23, 0.06);
         }
 
         .hubNavLinks a,
         .signedInPill,
         .signedInPill.muted,
         .accountPill {
-          color: rgba(255, 255, 255, 0.72);
+          color: #57534e;
         }
 
         .hubNavLinks a:hover {
-          background: rgba(224, 254, 16, 0.12);
-          color: #ffffff;
+          background: #f5f5f4;
+          color: #1c1917;
         }
 
         .signedInPill strong {
-          color: #ffffff;
+          color: #1c1917;
         }
 
         .signedInPill button,
         .signedInPill .pillButton {
-          background: #e0fe10;
-          color: #05070a;
+          background: #1c1917;
+          color: #ffffff;
         }
 
         .eyebrow {
-          color: #e0fe10;
+          color: #10b981;
           font-size: 0.72rem;
-          letter-spacing: 0.32em;
+          letter-spacing: 0.24em;
         }
 
         h1 {
           max-width: 820px;
-          color: #ffffff;
+          color: #0c0a09;
           font-weight: 850;
         }
 
         .heroText {
-          color: rgba(255, 255, 255, 0.72);
+          color: #6b625d;
         }
 
         .primaryAction {
-          background: #e0fe10;
-          color: #020408;
-          box-shadow: 0 18px 48px rgba(224, 254, 16, 0.14);
+          background: #1c1917;
+          color: #ffffff;
+          box-shadow: 0 16px 36px rgba(28, 25, 23, 0.16);
         }
 
         .secondaryAction {
-          border-color: rgba(255, 255, 255, 0.14);
-          background: rgba(255, 255, 255, 0.06);
-          color: rgba(255, 255, 255, 0.84);
+          border-color: #e7e5e4;
+          background: rgba(255, 255, 255, 0.8);
+          color: #57534e;
         }
 
         .opsPanel {
           display: grid;
           gap: 22px;
           align-self: end;
-          border: 1px solid rgba(255, 255, 255, 0.13);
+          border: 1px solid #e7e5e4;
           border-radius: 8px;
-          background: rgba(10, 13, 18, 0.74);
-          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-          backdrop-filter: blur(18px);
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 24px 70px rgba(28, 25, 23, 0.1);
+          backdrop-filter: blur(16px);
           padding: 22px;
         }
 
         .opsPanelHeader,
         .opsRows div,
         .signalCard {
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          background: rgba(255, 255, 255, 0.045);
+          border: 1px solid #e7e5e4;
+          background: #ffffff;
         }
 
         .opsPanelHeader {
@@ -2154,10 +2153,10 @@ const AthleticMindHub: NextPage = () => {
           align-items: center;
           justify-content: space-between;
           border-radius: 8px;
-          color: #e0fe10;
+          color: #10b981;
           font-size: 0.74rem;
           font-weight: 900;
-          letter-spacing: 0.28em;
+          letter-spacing: 0.24em;
           padding: 12px 14px;
         }
 
@@ -2167,7 +2166,7 @@ const AthleticMindHub: NextPage = () => {
         }
 
         .opsHeadline strong {
-          color: #ffffff;
+          color: #0c0a09;
           font-size: clamp(1.45rem, 3vw, 2.25rem);
           line-height: 1;
         }
@@ -2177,7 +2176,7 @@ const AthleticMindHub: NextPage = () => {
         .signalCard p,
         .workspaceIntro p,
         .softText {
-          color: rgba(255, 255, 255, 0.58);
+          color: #78716c;
         }
 
         .opsRows {
@@ -2199,7 +2198,7 @@ const AthleticMindHub: NextPage = () => {
         }
 
         .opsRows strong {
-          color: #ffffff;
+          color: #1c1917;
           font-size: 0.94rem;
           overflow-wrap: anywhere;
         }
@@ -2211,7 +2210,7 @@ const AthleticMindHub: NextPage = () => {
           grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 14px;
           width: min(1180px, calc(100% - 40px));
-          margin: -44px auto 0;
+          margin: -38px auto 0;
         }
 
         .signalCard {
@@ -2221,25 +2220,25 @@ const AthleticMindHub: NextPage = () => {
           gap: 12px;
           border-radius: 8px;
           padding: 22px;
-          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+          box-shadow: 0 18px 46px rgba(28, 25, 23, 0.08);
         }
 
         .signalCard::before {
           content: "";
           width: 74px;
           height: 8px;
-          background: #e0fe10;
+          background: #10b981;
         }
 
         .signalCard strong {
-          color: #e0fe10;
+          color: #0c0a09;
           font-size: clamp(2.1rem, 4vw, 3.4rem);
           line-height: 0.96;
           overflow-wrap: anywhere;
         }
 
         .signalCard span {
-          color: #ffffff;
+          color: #1c1917;
           font-size: 1.04rem;
           font-weight: 900;
           line-height: 1.18;
@@ -2252,7 +2251,7 @@ const AthleticMindHub: NextPage = () => {
 
         .workspace {
           gap: 20px;
-          padding-top: 72px;
+          padding-top: 70px;
         }
 
         .workspaceIntro {
@@ -2264,7 +2263,7 @@ const AthleticMindHub: NextPage = () => {
 
         .workspaceIntro h2 {
           margin: 0;
-          color: #ffffff;
+          color: #0c0a09;
           font-size: clamp(2rem, 4.5vw, 4.4rem);
           line-height: 0.98;
           letter-spacing: 0;
@@ -2276,7 +2275,7 @@ const AthleticMindHub: NextPage = () => {
         }
 
         .timeline {
-          border-top: 1px solid rgba(255, 255, 255, 0.18);
+          border-top: 1px solid #e7e5e4;
           padding-top: 18px;
         }
 
@@ -2289,7 +2288,7 @@ const AthleticMindHub: NextPage = () => {
         .wikiEntryHeader h4,
         .emptyState h3,
         .accessState h2 {
-          color: #ffffff;
+          color: #0c0a09;
         }
 
         .timelineHeader,
@@ -2298,11 +2297,11 @@ const AthleticMindHub: NextPage = () => {
         .wikiAppearance .timelineHeader,
         .wikiArticleHeader,
         .wikiSectionTitle {
-          border-color: rgba(255, 255, 255, 0.13);
+          border-color: #e7e5e4;
         }
 
         .timelineHeader {
-          color: #e0fe10;
+          color: #10b981;
         }
 
         .panel,
@@ -2312,9 +2311,9 @@ const AthleticMindHub: NextPage = () => {
         .emptyState,
         .wikiInlineEditor,
         .wikiEmptyArticle {
-          border-color: rgba(255, 255, 255, 0.12);
-          background: rgba(17, 18, 21, 0.78);
-          box-shadow: none;
+          border-color: #e7e5e4;
+          background: #ffffff;
+          box-shadow: 0 14px 36px rgba(28, 25, 23, 0.06);
         }
 
         .updateMeta,
@@ -2327,24 +2326,24 @@ const AthleticMindHub: NextPage = () => {
         .contactDetails,
         .invitePanel small,
         .permissionRow small {
-          color: rgba(255, 255, 255, 0.52);
+          color: #78716c;
         }
 
         .priority,
         .typePill,
         .authorChip {
-          background: rgba(224, 254, 16, 0.12);
-          color: #e0fe10;
+          background: #ecfdf5;
+          color: #047857;
         }
 
         .priority.high {
-          background: rgba(103, 232, 249, 0.12);
-          color: #67e8f9;
+          background: #eff6ff;
+          color: #2563eb;
         }
 
         .priority.urgent {
-          background: rgba(248, 113, 113, 0.14);
-          color: #fca5a5;
+          background: #fff1f2;
+          color: #be123c;
         }
 
         .updateCard p,
@@ -2355,7 +2354,7 @@ const AthleticMindHub: NextPage = () => {
         .accessState p,
         .roleNotice p,
         .permissionRow small {
-          color: rgba(255, 255, 255, 0.66);
+          color: #57534e;
         }
 
         .workspace .iconButton,
@@ -2365,9 +2364,9 @@ const AthleticMindHub: NextPage = () => {
         .workspace .secondaryAction,
         .wikiWorkspace .secondaryAction,
         .inviteLinkBox button {
-          border-color: rgba(255, 255, 255, 0.12);
-          background: rgba(255, 255, 255, 0.06);
-          color: rgba(255, 255, 255, 0.84);
+          border-color: #e7e5e4;
+          background: #ffffff;
+          color: #57534e;
         }
 
         .wikiWorkspace {
@@ -2375,13 +2374,13 @@ const AthleticMindHub: NextPage = () => {
         }
 
         .wikiChrome {
-          border-top: 1px solid rgba(255, 255, 255, 0.18);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          border-top: 1px solid #e7e5e4;
+          border-bottom: 1px solid #e7e5e4;
           padding-top: 22px;
         }
 
         .wikiLogo {
-          color: #e0fe10;
+          color: #10b981;
         }
 
         .wikiLogo strong,
@@ -2397,9 +2396,9 @@ const AthleticMindHub: NextPage = () => {
         input,
         select,
         textarea {
-          border-color: rgba(255, 255, 255, 0.12);
-          background: rgba(255, 255, 255, 0.06);
-          color: #ffffff;
+          border-color: #e7e5e4;
+          background: #ffffff;
+          color: #1c1917;
         }
 
         .wikiSearchBar {
@@ -2408,59 +2407,59 @@ const AthleticMindHub: NextPage = () => {
 
         input::placeholder,
         textarea::placeholder {
-          color: rgba(255, 255, 255, 0.34);
+          color: #a8a29e;
         }
 
         input:focus,
         select:focus,
         textarea:focus {
-          border-color: rgba(224, 254, 16, 0.58);
-          box-shadow: 0 0 0 4px rgba(224, 254, 16, 0.12);
+          border-color: #10b981;
+          box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
         }
 
         .wikiTextButton,
         .wikiContents a,
         .resourceLink,
         .contactDetails a {
-          color: #67e8f9;
+          color: #2563eb;
         }
 
         .wikiTextButton:hover {
-          background: rgba(103, 232, 249, 0.1);
+          background: #f5f5f4;
         }
 
         .wikiArticleTabs {
-          color: rgba(255, 255, 255, 0.48);
+          color: #78716c;
         }
 
         .wikiArticleTabs span:first-child {
-          border-color: #e0fe10;
-          color: #ffffff;
+          border-color: #1c1917;
+          color: #1c1917;
         }
 
         .wikiArticleEntry + .wikiArticleEntry,
         .changeRow,
         .permissionRow {
-          border-color: rgba(255, 255, 255, 0.1);
+          border-color: #e7e5e4;
         }
 
         .changeRow span {
-          color: #e0fe10;
+          color: #10b981;
         }
 
         .accessState {
-          color: #e0fe10;
+          color: #10b981;
         }
 
         .toast {
-          background: #e0fe10;
-          color: #020408;
+          background: #1c1917;
+          color: #ffffff;
         }
 
         @media (max-width: 920px) {
           .heroBackdrop {
             background:
-              linear-gradient(180deg, rgba(2, 4, 8, 0.96) 0%, rgba(2, 4, 8, 0.84) 58%, rgba(2, 4, 8, 0.96) 100%),
+              linear-gradient(180deg, rgba(247, 247, 244, 0.98) 0%, rgba(247, 247, 244, 0.9) 48%, #f7f7f4 100%),
               url('/athletic-mind-hub/council-workspace.png') center / cover no-repeat;
           }
 
