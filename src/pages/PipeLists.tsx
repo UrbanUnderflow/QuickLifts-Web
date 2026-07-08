@@ -1005,6 +1005,26 @@ const sanitizeComposerBodyHtml = (value: string) =>
     .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/\sstyle=(?:"[^"]*"|'[^']*')/gi, '');
 
+const composerHtmlHasBreakMarkup = (value: string) => /<br\s*\/?>|<\/?(div|p)\b/i.test(value);
+
+const normalizeComposerBodyHtml = (html: string, textFallback = '') => {
+  const sanitized = sanitizeComposerBodyHtml(html);
+  if (!sanitized.trim()) return textFallback ? linkifyComposerBodyHtml(textFallback) : '';
+  const normalized = sanitized.replace(/\r?\n/g, '<br>');
+  if (!composerHtmlHasBreakMarkup(normalized) && textFallback.includes('\n') && !/<a\b/i.test(normalized)) {
+    return linkifyComposerBodyHtml(textFallback);
+  }
+  return normalized
+    .replace(/<div><br><\/div>/gi, '<br>')
+    .replace(/<\/div><div>/gi, '<br>')
+    .replace(/^<div>/i, '')
+    .replace(/<\/div>$/i, '')
+    .replace(/<p><br><\/p>/gi, '<br>')
+    .replace(/<\/p><p>/gi, '<br><br>')
+    .replace(/^<p>/i, '')
+    .replace(/<\/p>$/i, '');
+};
+
 const normalizeComposerHref = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return '';
@@ -3642,12 +3662,19 @@ const PipelinePage: NextPage = () => {
     const editor = contactEmailBodyEditorRef.current;
     if (!editor || (typeof document !== 'undefined' && document.activeElement === editor)) return;
     editor.innerHTML = contactEmailBodyHtml || linkifyComposerBodyHtml(contactEmailBody);
-  }, [contactEmailBody, contactEmailBodyHtml, detailModalMode, isContactEmailModalOpen]);
+  }, [detailModalMode, isContactEmailModalOpen, selectedDetailItemId]);
 
   const syncContactEmailComposerState = (editor: HTMLDivElement) => {
     const text = editor.innerText.replace(/\u00a0/g, ' ');
     setContactEmailBody(text);
-    setContactEmailBodyHtml(sanitizeComposerBodyHtml(editor.innerHTML));
+    setContactEmailBodyHtml(normalizeComposerBodyHtml(editor.innerHTML, text));
+  };
+
+  const commitContactEmailComposerState = (editor: HTMLDivElement) => {
+    const text = editor.innerText.replace(/\u00a0/g, ' ');
+    const html = normalizeComposerBodyHtml(editor.innerHTML, text);
+    setContactEmailBody(text);
+    setContactEmailBodyHtml(html);
   };
 
   const saveContactEmailSelection = () => {
@@ -7848,11 +7875,8 @@ Research rules:
                     onMouseUp={saveContactEmailSelection}
                     onKeyUp={saveContactEmailSelection}
                     onInput={(event) => syncContactEmailComposerState(event.currentTarget)}
-                    onBlur={(event) => {
-                      syncContactEmailComposerState(event.currentTarget);
-                      event.currentTarget.innerHTML = sanitizeComposerBodyHtml(event.currentTarget.innerHTML);
-                    }}
-                    className="min-h-48 w-full resize-y overflow-auto rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                    onBlur={(event) => commitContactEmailComposerState(event.currentTarget)}
+                    className="min-h-48 w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
                   />
                   {renderComposerLinkPopover()}
                   {!contactEmailBody && (
@@ -9003,11 +9027,8 @@ Research rules:
                         onMouseUp={saveContactEmailSelection}
                         onKeyUp={saveContactEmailSelection}
                         onInput={(event) => syncContactEmailComposerState(event.currentTarget)}
-                        onBlur={(event) => {
-                          syncContactEmailComposerState(event.currentTarget);
-                          event.currentTarget.innerHTML = sanitizeComposerBodyHtml(event.currentTarget.innerHTML);
-                        }}
-                        className="min-h-56 w-full resize-y overflow-auto rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                        onBlur={(event) => commitContactEmailComposerState(event.currentTarget)}
+                        className="min-h-56 w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
                       />
                       {renderComposerLinkPopover()}
                       {!contactEmailBody && (
