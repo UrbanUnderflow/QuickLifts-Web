@@ -3643,27 +3643,34 @@ const PipelinePage: NextPage = () => {
         throw new Error(result?.error || 'Unable to send email.');
       }
 
-      const sentCount = Number(result?.sentCount || toEmails.length);
-      const sendSuccessText = `Sent ${formatCount(sentCount, 'email')}.`;
-      setToastMessage({ type: 'success', text: sendSuccessText });
-      if (detailModalMode === 'email') {
-        setContactEmailSendMessage(null);
-        setDetailModalMode('details');
-      } else {
-        setContactEmailSendMessage({
-          type: 'success',
-          text: sendSuccessText,
-        });
-        if (isContactEmailModalOpen) {
-          setIsContactEmailModalOpen(false);
-        }
+      const resultRows: Array<{ toEmail?: string; messageId?: string; skipped?: boolean; suppressed?: boolean; suppressionReason?: string }> =
+        Array.isArray(result?.results) ? result.results : [];
+      const sentRows = resultRows.filter((row) => row?.toEmail && row.skipped !== true);
+      const skippedRows = resultRows.filter((row) => row?.skipped === true);
+      const sentCount = Number.isFinite(Number(result?.sentCount)) ? Number(result.sentCount) : sentRows.length || toEmails.length;
+      const skippedCount = Number.isFinite(Number(result?.skippedCount)) ? Number(result.skippedCount) : skippedRows.length;
+
+      if (sentCount <= 0) {
+        const skippedReason = skippedRows.find((row) => row.suppressionReason)?.suppressionReason;
+        const skippedText = skippedReason
+          ? `No new email was sent. Brevo skipped the recipient because of ${skippedReason.replace(/[_-]/g, ' ')}.`
+          : 'No new email was sent. Brevo skipped this request, likely because it matched an existing send or recipient suppression.';
+        setContactEmailSendMessage({ type: 'error', text: skippedText });
+        setToastMessage({ type: 'error', text: skippedText });
+        return;
       }
-      const resultRows: Array<{ toEmail?: string; messageId?: string }> = Array.isArray(result?.results) ? result.results : [];
+
+      const sendSuccessText =
+        skippedCount > 0
+          ? `Sent ${formatCount(sentCount, 'email')} and skipped ${formatCount(skippedCount, 'recipient')}.`
+          : `Sent ${formatCount(sentCount, 'email')}.`;
       const messageIdsByEmail = new Map<string, string>(
         resultRows
+          .filter((row) => row.skipped !== true)
           .map((row): [string, string] => [String(row.toEmail || '').toLowerCase(), String(row.messageId || '')])
           .filter(([email]) => Boolean(email)),
       );
+      const sentEmails = new Set(sentRows.map((row) => String(row.toEmail || '').toLowerCase()).filter(Boolean));
       const sentAt = new Date().toISOString();
       const emailTypeLabel = contactEmailTypeLabels[contactEmailType];
       const emailLogType = contactEmailTypeLogType[contactEmailType];
@@ -3677,13 +3684,16 @@ const PipelinePage: NextPage = () => {
             items: list.items.map((item) => {
               const matchingEmail = normalizeContactEmails(item.contactEmails).find((email) => toEmails.includes(email));
               if (!matchingEmail) return item;
+              if (sentEmails.size > 0 && !sentEmails.has(matchingEmail)) return item;
 
               const summary = `${emailTypeLabel} sent to ${matchingEmail}.`;
               const attachmentNames = contactEmailAttachments.map((attachment) => attachment.name).filter(Boolean);
+              const messageId = messageIdsByEmail.get(matchingEmail) || '';
               const emailLogNotes = [
                 `To: ${matchingEmail}`,
                 `Subject: ${sentSubject}`,
                 ...(attachmentNames.length > 0 ? [`Attachments: ${attachmentNames.join(', ')}`] : []),
+                ...(messageId ? [`Message ID: ${messageId}`] : []),
                 '',
                 'Message:',
                 sentMessage,
@@ -3705,7 +3715,7 @@ const PipelinePage: NextPage = () => {
                 lastEmailType: contactEmailType,
                 lastEmailEvent: 'sent',
                 lastEmailSentAt: sentAt,
-                lastEmailMessageId: messageIdsByEmail.get(matchingEmail) || item.lastEmailMessageId,
+                lastEmailMessageId: messageId || item.lastEmailMessageId,
                 updatedAt: sentAt,
                 weeklyLogs: alreadyLogged ? item.weeklyLogs : [emailLog, ...item.weeklyLogs],
               };
@@ -3713,6 +3723,19 @@ const PipelinePage: NextPage = () => {
           };
         }),
       );
+      setToastMessage({ type: 'success', text: sendSuccessText });
+      if (detailModalMode === 'email') {
+        setContactEmailSendMessage(null);
+        setDetailModalMode('details');
+      } else {
+        setContactEmailSendMessage({
+          type: 'success',
+          text: sendSuccessText,
+        });
+        if (isContactEmailModalOpen) {
+          setIsContactEmailModalOpen(false);
+        }
+      }
       setContactEmailSubject('');
       setContactEmailBody('');
       setContactEmailAttachments([]);
