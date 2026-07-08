@@ -37,6 +37,18 @@ const ACTIONS: Array<{
     writes: false,
   },
   {
+    id: 'status',
+    label: 'Athlete Status',
+    description: 'Checks the partner-side status endpoint for a test athlete id.',
+    writes: false,
+  },
+  {
+    id: 'care-state',
+    label: 'Care State',
+    description: 'Checks protective app state and return-to-training state for a test athlete id.',
+    writes: false,
+  },
+  {
     id: 'athlete-upsert',
     label: 'Athlete Upsert',
     description: 'Creates or updates a synthetic athlete in the clinical partner sandbox.',
@@ -46,6 +58,12 @@ const ACTIONS: Array<{
     id: 'escalation-create',
     label: 'Create Escalation',
     description: 'Creates a synthetic clinical escalation using the bridge packet.',
+    writes: true,
+  },
+  {
+    id: 'resolve',
+    label: 'Resolve Escalation',
+    description: 'Marks a known synthetic escalation id as resolved through the partner endpoint.',
     writes: true,
   },
   {
@@ -105,6 +123,7 @@ const ClinicalTestUnitPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [organizationId, setOrganizationId] = useState('pulsecheck-smoke-org');
   const [teamId, setTeamId] = useState('pulsecheck-smoke-team');
+  const [escalationId, setEscalationId] = useState('');
   const [result, setResult] = useState<ClinicalBridgeSmokeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -132,6 +151,7 @@ const ClinicalTestUnitPage: React.FC = () => {
           tier: 3,
           category: 'clinical_bridge_smoke_test',
         },
+        escalationId: escalationId || undefined,
       });
       setResult(response);
     } catch (err) {
@@ -234,6 +254,17 @@ const ClinicalTestUnitPage: React.FC = () => {
                     />
                   </label>
                 </div>
+                {action === 'resolve' ? (
+                  <label className="block text-sm font-medium text-zinc-300">
+                    Escalation id to resolve
+                    <input
+                      value={escalationId}
+                      onChange={(event) => setEscalationId(event.target.value)}
+                      placeholder="Synthetic escalation id from a prior create test"
+                      className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-[#d7ff00]/60"
+                    />
+                  </label>
+                ) : null}
               </div>
 
               <label className="mt-5 flex items-start gap-3 rounded-lg border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">
