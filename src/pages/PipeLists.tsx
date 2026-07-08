@@ -328,7 +328,7 @@ const logTypeLabels: Record<ActivityLogType, string> = {
 };
 
 const contactEmailTypeLabels: Record<ContactEmailType, string> = {
-  'metrics-update': 'Metrics Update',
+  'metrics-update': 'Investor Update',
   'general-update': 'General Update',
 };
 

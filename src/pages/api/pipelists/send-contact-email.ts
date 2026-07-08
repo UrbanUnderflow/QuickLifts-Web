@@ -27,6 +27,8 @@ type VerifiedSimpBudgetUser = {
 };
 
 const OWNER_EMAIL = 'tremaine.grant@gmail.com';
+const INVESTOR_UPDATE_SENDER_EMAIL = process.env.INVESTOR_UPDATE_SENDER_EMAIL || 'tre@fitwithpulse.ai';
+const INVESTOR_UPDATE_SENDER_NAME = process.env.INVESTOR_UPDATE_SENDER_NAME || 'Tremaine Grant';
 const SIMPBUDGET_FIREBASE_API_KEY =
   process.env.SIMPBUDGET_FIREBASE_API_KEY?.trim() ||
   process.env.NEXT_PUBLIC_SIMPBUDGET_FIREBASE_API_KEY?.trim() ||
@@ -109,18 +111,20 @@ const buildContactEmailHtml = (args: {
     .join('');
 
   return `
-    <div style="margin:0;padding:0;background:#f7f7f4;color:#1c1917;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
-      <div style="max-width:640px;margin:0 auto;padding:32px 18px;">
-        <div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:14px;overflow:hidden;">
-          <div style="padding:28px 28px 18px;border-bottom:1px solid #f1f0ee;">
-            <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#78716c;font-weight:700;">Pulse PipeLists</div>
-            <h1 style="margin:12px 0 0;font-size:24px;line-height:1.2;color:#111111;">${escapeHtml(args.emailTypeLabel)}</h1>
+    <div style="margin:0;padding:0;background:#f6f6f3;color:#1c1917;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+      <div style="max-width:680px;margin:0 auto;padding:30px 18px;">
+        <div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;overflow:hidden;">
+          <div style="padding:30px 32px 22px;border-bottom:1px solid #f1f0ee;">
+            <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#78716c;font-weight:800;">Pulse Intelligence Labs</div>
+            <h1 style="margin:12px 0 0;font-size:28px;line-height:1.18;color:#111111;">${escapeHtml(args.emailTypeLabel)}</h1>
           </div>
-          <div style="padding:26px 28px;">
+          <div style="padding:30px 32px 14px;">
             ${paragraphs}
           </div>
-          <div style="padding:18px 28px;border-top:1px solid #f1f0ee;color:#a8a29e;font-size:12px;line-height:1.6;">
-            Sent by ${escapeHtml(args.senderEmail)} from ${escapeHtml(args.listName || 'PipeLists')}.
+          <div style="padding:22px 32px 30px;color:#57534e;font-size:14px;line-height:1.6;">
+            <div style="font-weight:800;color:#111111;">Tremaine Grant</div>
+            <div>Founder &amp; CEO · Pulse Intelligence Labs</div>
+            <a href="mailto:${escapeHtml(args.senderEmail)}" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${escapeHtml(args.senderEmail)}</a>
           </div>
         </div>
       </div>
@@ -153,7 +157,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const subject = cleanText(body.subject, 180);
   const message = cleanText(body.message, 12000);
   const emailType = cleanEmailType(body.emailType);
-  const emailTypeLabel = emailType === 'general-update' ? 'General Update' : 'Metrics Update';
+  const emailTypeLabel = emailType === 'general-update' ? 'General Update' : 'Investor Update';
   const listId = cleanText(body.listId, 120);
   const listName = cleanText(body.listName, 120) || 'PipeLists';
   const ownerUid = verifiedUser.uid;
@@ -200,13 +204,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         toEmail,
         toName: toEmail,
         subject,
-        htmlContent: buildContactEmailHtml({ message, senderEmail: verifiedUser.email, listName, emailTypeLabel }),
+        htmlContent: buildContactEmailHtml({ message, senderEmail: INVESTOR_UPDATE_SENDER_EMAIL, listName, emailTypeLabel }),
         attachment: attachments.length > 0 ? attachments : undefined,
         sender: {
-          email: process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai',
-          name: process.env.BREVO_SENDER_NAME || 'Pulse PipeLists',
+          email: INVESTOR_UPDATE_SENDER_EMAIL,
+          name: INVESTOR_UPDATE_SENDER_NAME,
         },
-        replyTo: { email: verifiedUser.email, name: 'Tremaine Grant' },
+        replyTo: { email: INVESTOR_UPDATE_SENDER_EMAIL, name: 'Tremaine Grant' },
         tags: ['pipelists', 'investor-update-contact', emailType],
         headers: {
           'X-Mailin-custom': JSON.stringify({
