@@ -77,6 +77,7 @@ type InviteHistoryEntry = {
 };
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
 type ContactEmailType = 'metrics-update' | 'general-update';
+type LogEmailFilter = 'all' | 'investor-update' | 'general-update';
 type ContactEmailAttachment = {
   id: string;
   name: string;
@@ -332,6 +333,12 @@ const contactEmailTypeLabels: Record<ContactEmailType, string> = {
   'general-update': 'General Update',
 };
 
+const logEmailFilterLabels: Record<LogEmailFilter, string> = {
+  all: 'All email activity',
+  'investor-update': 'Investor Update emails',
+  'general-update': 'General Update emails',
+};
+
 const contactEmailTypeLogType: Record<ContactEmailType, ActivityLogType> = {
   'metrics-update': 'metrics',
   'general-update': 'update',
@@ -409,16 +416,29 @@ const parseEmailLogNotes = (notes: string) => {
   return {
     to: readMeta('To'),
     subject: readMeta('Subject'),
+    status: readMeta('Status'),
     attachments: readMeta('Attachments'),
+    link: readMeta('Link'),
+    messageId: readMeta('Message ID'),
     message,
   };
+};
+
+const emailFilterForLog = (log: ActivityLog): LogEmailFilter | null => {
+  if (log.systemAction !== 'email-sent') return null;
+  return log.type === 'update' ? 'general-update' : 'investor-update';
+};
+
+const emailStatusHasActivity = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent' | 'weeklyLogs'>) => {
+  const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+  return status !== 'not_sent' || item.weeklyLogs.some((log) => log.systemAction === 'email-sent');
 };
 
 const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
   if (log.systemAction !== 'email-sent' || !log.notes || log.notes === log.summary) return null;
   const details = parseEmailLogNotes(log.notes);
 
-  if (!details.to && !details.subject && !details.message) {
+  if (!details.to && !details.subject && !details.status && !details.link && !details.message) {
     return <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>;
   }
 
@@ -437,11 +457,29 @@ const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
             <div className="mt-0.5 break-words font-medium text-stone-700">{details.subject}</div>
           </div>
         )}
+        {details.status && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Status</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.status}</div>
+          </div>
+        )}
       </div>
       {details.attachments && (
         <div className="mt-3">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Attachments</div>
           <div className="mt-0.5 break-words font-medium text-stone-700">{details.attachments}</div>
+        </div>
+      )}
+      {details.link && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Clicked Link</div>
+          <div className="mt-0.5 break-words font-medium text-stone-700">{details.link}</div>
+        </div>
+      )}
+      {details.messageId && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Message ID</div>
+          <div className="mt-0.5 break-words font-medium text-stone-700">{details.messageId}</div>
         </div>
       )}
       {details.message && (
@@ -661,6 +699,7 @@ const normalizeContactEmailStatusInput = (value: unknown) => {
   const status = normalizeEmailStatus(value);
   if (!status) return 'not_sent';
   if (status === 'request') return 'sent';
+  if (status === 'unique_opened' || status === 'uniqueopened' || status === 'proxy_open' || status === 'unique_proxy_open' || status === 'uniqueproxyopen') return 'opened';
   if (status === 'click') return 'clicked';
   if (status === 'unsubscribe') return 'unsubscribed';
   return status;
@@ -2243,6 +2282,8 @@ const PipelinePage: NextPage = () => {
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
   const [logListFilter, setLogListFilter] = useState<string>('all');
+  const [logEmailFilter, setLogEmailFilter] = useState<LogEmailFilter>('all');
+  const [logRecipientFilter, setLogRecipientFilter] = useState<string>('');
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [logTargetListId, setLogTargetListId] = useState<string>(initialLists[0].id);
   const [logTargetItemId, setLogTargetItemId] = useState<string>(initialLists[0].items[0]?.id || '');
@@ -3117,8 +3158,20 @@ const PipelinePage: NextPage = () => {
   );
 
   const filteredLogRows = useMemo(
-    () => allLogRows.filter(({ list }) => logListFilter === 'all' || list.id === logListFilter),
-    [allLogRows, logListFilter],
+    () =>
+      allLogRows.filter(({ list, log }) => {
+        const matchesList = logListFilter === 'all' || list.id === logListFilter;
+        if (!matchesList) return false;
+
+        const matchesEmailType = logEmailFilter === 'all' || emailFilterForLog(log) === logEmailFilter;
+        if (!matchesEmailType) return false;
+
+        const recipient = logRecipientFilter.trim().toLowerCase();
+        if (!recipient) return true;
+        const details = parseEmailLogNotes(log.notes || '');
+        return details.to.toLowerCase() === recipient;
+      }),
+    [allLogRows, logEmailFilter, logListFilter, logRecipientFilter],
   );
 
   const logTargetList = lists.find((list) => list.id === logTargetListId) || activeList;
@@ -3398,6 +3451,18 @@ const PipelinePage: NextPage = () => {
       item.organization ? `${item.organization} investor update` : `${item.title} investor update`,
     );
     setDetailModalMode('email');
+  };
+
+  const openEmailActivityForItem = (item: PipelineItem) => {
+    const recipient = normalizeContactEmails(item.contactEmails)[0] || '';
+    const emailFilter: LogEmailFilter = item.lastEmailType === 'general-update' ? 'general-update' : 'investor-update';
+    setActiveListId(activeList.id);
+    setLogListFilter(activeList.id);
+    setLogEmailFilter(emailFilter);
+    setLogRecipientFilter(recipient);
+    setSelectedDetailItemId('');
+    setSelectedLogItemId(item.id);
+    setViewMode('logs');
   };
 
   const closeContactEmailModal = () => {
@@ -6311,6 +6376,21 @@ Research rules:
                         </option>
                       ))}
                     </select>
+                    <label className="sr-only" htmlFor="log-email-filter">
+                      Filter logs by email type
+                    </label>
+                    <select
+                      id="log-email-filter"
+                      value={logEmailFilter}
+                      onChange={(event) => setLogEmailFilter(event.target.value as LogEmailFilter)}
+                      className="h-11 min-w-[210px] rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+                    >
+                      {(Object.keys(logEmailFilterLabels) as LogEmailFilter[]).map((filter) => (
+                        <option key={filter} value={filter}>
+                          {logEmailFilterLabels[filter]}
+                        </option>
+                      ))}
+                    </select>
                     <span className="text-sm text-stone-400">
                       {formatCount(filteredLogRows.length, 'log')}
                     </span>
@@ -6327,6 +6407,21 @@ Research rules:
                     </button>
                   )}
                 </div>
+
+                {logRecipientFilter && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-500 shadow-sm">
+                    <span>
+                      Showing {logEmailFilterLabels[logEmailFilter]} for <strong className="text-stone-800">{logRecipientFilter}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLogRecipientFilter('')}
+                      className="inline-flex h-8 items-center rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                    >
+                      Clear recipient
+                    </button>
+                  </div>
+                )}
 
                 <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
                   <div className="border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400">
@@ -6637,9 +6732,26 @@ Research rules:
 
                             {isInvestorUpdateContactsList ? (
                               <div className="min-w-0">
-                                <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
-                                  {emailStatusLabel(item)}
-                                </span>
+                                {emailStatusHasActivity(item) ? (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openEmailActivityForItem(item);
+                                    }}
+                                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold transition hover:shadow-sm ${emailStatusTone(item)}`}
+                                    title={`View email activity for ${item.title}`}
+                                  >
+                                    View
+                                  </button>
+                                ) : (
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
+                                    Not sent
+                                  </span>
+                                )}
+                                {emailStatusHasActivity(item) && (
+                                  <p className="mt-1 truncate text-xs font-medium text-stone-500">{emailStatusLabel(item)}</p>
+                                )}
                                 {item.contactEmails[0] && <p className="mt-1 truncate text-xs text-stone-500">{item.contactEmails[0]}</p>}
                                 {(item.emailOpenCount > 0 || item.emailClickCount > 0) && (
                                   <p className="mt-1 truncate text-xs text-stone-400">

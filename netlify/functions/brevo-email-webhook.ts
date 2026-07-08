@@ -272,6 +272,106 @@ const applyStatusUpdate = (
   }
 };
 
+const pipeListsEmailTypeLabel = (emailType?: string) =>
+  emailType === 'general-update' ? 'General Update' : 'Investor Update';
+
+const pipeListsEmailEventLabel = (eventType: CanonicalBrevoEmailEvent) => {
+  switch (eventType) {
+    case 'request':
+      return 'sent';
+    case 'delivered':
+      return 'delivered';
+    case 'opened':
+      return 'opened';
+    case 'click':
+      return 'clicked';
+    case 'unsubscribe':
+      return 'unsubscribed';
+    case 'soft_bounce':
+      return 'soft bounced';
+    case 'hard_bounce':
+      return 'hard bounced';
+    case 'invalid_email':
+      return 'invalid email';
+    default:
+      return eventType.replace(/_/g, ' ');
+  }
+};
+
+const pipeListsEmailStatusRank = (status: string) => {
+  switch (status) {
+    case 'request':
+    case 'sent':
+      return 1;
+    case 'delivered':
+      return 2;
+    case 'opened':
+      return 3;
+    case 'click':
+    case 'clicked':
+      return 4;
+    case 'soft_bounce':
+    case 'hard_bounce':
+    case 'blocked':
+    case 'deferred':
+    case 'spam':
+    case 'unsubscribe':
+    case 'unsubscribed':
+    case 'invalid_email':
+    case 'error':
+      return 10;
+    default:
+      return 0;
+  }
+};
+
+const buildPipeListsEmailEventLog = (args: {
+  itemId: string;
+  emailType?: string;
+  eventType: CanonicalBrevoEmailEvent;
+  email: string;
+  messageId?: string;
+  link?: string;
+  nowIso: string;
+}) => {
+  const typeLabel = pipeListsEmailTypeLabel(args.emailType);
+  const eventLabel = pipeListsEmailEventLabel(args.eventType);
+  const statusLabel = eventLabel.charAt(0).toUpperCase() + eventLabel.slice(1);
+  const stableEventKey =
+    args.eventType === 'opened'
+      ? 'opened'
+      : args.eventType === 'click'
+        ? `click-${String(args.link || '').slice(0, 80)}`
+        : args.eventType;
+
+  return {
+    id: ['email-event', args.messageId || args.email, stableEventKey].join('-').replace(/[^\w.-]/g, '-').slice(0, 180),
+    type: args.emailType === 'general-update' ? 'update' : 'metrics',
+    weekOf: args.nowIso.slice(0, 10),
+    summary: `${typeLabel} ${eventLabel} by ${args.email}.`,
+    nextStep: '',
+    followUpDate: '',
+    rosteredAthletes: '',
+    completedCheckIns: '',
+    checkInRate: '',
+    biometricSyncRate: '',
+    signalEvents: '',
+    noraEngagementRate: '',
+    noraSessions: '',
+    escalations: '',
+    staffFeedbackScore: '',
+    notes: [
+      `To: ${args.email}`,
+      `Status: ${statusLabel}`,
+      args.link ? `Link: ${args.link}` : '',
+      args.messageId ? `Message ID: ${args.messageId}` : '',
+    ].filter(Boolean).join('\n'),
+    createdAt: args.nowIso,
+    systemAction: 'email-sent',
+    relatedItemId: args.itemId,
+  };
+};
+
 const updatePipeListsContactEmailStatus = async (args: {
   ownerUid: string;
   listId: string;
@@ -321,11 +421,16 @@ const updatePipeListsContactEmailStatus = async (args: {
       if (!matchesItem) return item;
 
       changed = true;
+      const currentStatus = String(item.emailStatus || item.lastEmailEvent || '').trim().toLowerCase();
+      const displayStatus =
+        pipeListsEmailStatusRank(status) >= pipeListsEmailStatusRank(currentStatus)
+          ? status
+          : currentStatus;
       const nextItem: Record<string, any> = {
         ...item,
-        emailStatus: status,
+        emailStatus: displayStatus,
         lastEmailType: args.emailType || item.lastEmailType || '',
-        lastEmailEvent: status,
+        lastEmailEvent: displayStatus,
         lastEmailEventAt: nowIso,
         updatedAt: nowIso,
       };
@@ -360,6 +465,23 @@ const updatePipeListsContactEmailStatus = async (args: {
         case 'error':
           nextItem.lastEmailIssueAt = nowIso;
           break;
+      }
+
+      if (args.eventType !== 'request') {
+        const eventLog = buildPipeListsEmailEventLog({
+          itemId: String(item.id || ''),
+          emailType: args.emailType,
+          eventType: args.eventType,
+          email: targetEmail || itemEmails[0] || args.email,
+          messageId: args.messageId,
+          link: args.link,
+          nowIso,
+        });
+        const currentLogs = Array.isArray(item.weeklyLogs) ? item.weeklyLogs : [];
+        const hasEventLog = currentLogs.some((log: any) => log && log.id === eventLog.id);
+        nextItem.weeklyLogs = hasEventLog
+          ? currentLogs.map((log: any) => (log && log.id === eventLog.id ? { ...log, ...eventLog } : log))
+          : [eventLog, ...currentLogs];
       }
 
       return nextItem;
