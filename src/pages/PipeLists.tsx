@@ -20,6 +20,8 @@ import {
   BarChart3,
   Building2,
   Calendar,
+  ChevronDown,
+  ChevronRight,
   CheckCircle2,
   ClipboardList,
   Clock,
@@ -2297,6 +2299,7 @@ const PipelinePage: NextPage = () => {
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(() => new Set());
   const [logListFilter, setLogListFilter] = useState<string>('all');
   const [logEmailFilter, setLogEmailFilter] = useState<LogEmailFilter>('all');
   const [logRecipientFilter, setLogRecipientFilter] = useState<string>('');
@@ -3515,6 +3518,18 @@ const PipelinePage: NextPage = () => {
     setSelectedDetailItemId('');
     setSelectedLogItemId(item.id);
     setViewMode('logs');
+  };
+
+  const toggleExpandedLog = (logId: string) => {
+    setExpandedLogIds((current) => {
+      const next = new Set(current);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
   };
 
   const closeContactEmailModal = () => {
@@ -6504,8 +6519,12 @@ Research rules:
                   </div>
                   {filteredLogRows.length > 0 ? (
                     <div className="divide-y divide-stone-100">
-                      {filteredLogRows.map(({ list, item, log }) => (
-                        <article key={`${list.id}-${item.id}-${log.id}`} className="px-4 py-4">
+                      {filteredLogRows.map(({ list, item, log }) => {
+                        const logRowId = `${list.id}-${item.id}-${log.id}`;
+                        const isExpanded = expandedLogIds.has(logRowId);
+
+                        return (
+                        <article key={logRowId} className="px-4 py-4">
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
@@ -6513,26 +6532,39 @@ Research rules:
                                   {logDisplayLabel(log)}
                                 </span>
                                 <span className="text-xs text-stone-400">{log.weekOf}</span>
-                                <span className="text-xs text-stone-400">{list.name}</span>
-                                {log.followUpDate && (
+                                {isExpanded && <span className="text-xs text-stone-400">{list.name}</span>}
+                                {isExpanded && log.followUpDate && (
                                   <span className="text-xs text-stone-400">
                                     {followUpDateLabel(log.nextStep)} {log.followUpDate}
                                   </span>
                                 )}
                               </div>
                               <h4 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h4>
-                              <p className="mt-1 text-sm text-stone-500">
-                                {item.title}
-                                {item.organization ? ` · ${item.organization}` : ''}
-                              </p>
-                              {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
-                              {log.systemAction === 'email-sent' ? (
-                                <EmailLogDetails log={log} />
-                              ) : (
-                                log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                              {isExpanded && (
+                                <>
+                                  <p className="mt-1 text-sm text-stone-500">
+                                    {item.title}
+                                    {item.organization ? ` · ${item.organization}` : ''}
+                                  </p>
+                                  {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                                  {log.systemAction === 'email-sent' ? (
+                                    <EmailLogDetails log={log} />
+                                  ) : (
+                                    log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                                  )}
+                                </>
                               )}
                             </div>
                             <div className="flex items-center gap-2 self-start">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandedLog(logRowId)}
+                                aria-expanded={isExpanded}
+                                className="inline-flex h-9 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                              >
+                                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                {isExpanded ? 'Collapse' : 'Expand'}
+                              </button>
                               {log.systemAction === 'item-deleted' && canRestoreDeletedItem(item) && (
                                 <button
                                   type="button"
@@ -6567,7 +6599,8 @@ Research rules:
                             </div>
                           </div>
                         </article>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="px-4 py-16 text-center">
