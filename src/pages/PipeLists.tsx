@@ -80,6 +80,12 @@ type InviteHistoryEntry = {
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
 type ContactEmailType = 'metrics-update' | 'general-update';
 type LogEmailFilter = 'all' | 'investor-update' | 'general-update';
+type SyncedEmailStatus = 'sent' | 'delivered' | 'opened' | 'clicked' | 'soft_bounce' | 'hard_bounce' | 'blocked' | 'deferred' | 'spam' | 'unsubscribed' | 'invalid_email' | 'error';
+type SyncedEmailEventSummary = {
+  status: SyncedEmailStatus;
+  eventAt: string | null;
+  link?: string;
+};
 type ContactEmailAttachment = {
   id: string;
   name: string;
@@ -750,6 +756,72 @@ const emailStatusTone = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEven
     return 'border-rose-200 bg-rose-50 text-rose-700';
   }
   return 'border-stone-200 bg-white text-stone-400';
+};
+
+const emailStatusRank = (status: string) => {
+  const normalized = normalizeContactEmailStatusInput(status);
+  if (normalized === 'sent') return 1;
+  if (normalized === 'delivered') return 2;
+  if (normalized === 'opened') return 3;
+  if (normalized === 'click' || normalized === 'clicked') return 4;
+  if (['soft_bounce', 'hard_bounce', 'blocked', 'deferred', 'spam', 'unsubscribe', 'unsubscribed', 'invalid_email', 'error'].includes(normalized)) return 10;
+  return 0;
+};
+
+const emailEventSummaryLabel = (status: SyncedEmailStatus) => {
+  if (status === 'clicked') return 'clicked';
+  if (status === 'opened') return 'opened';
+  if (status === 'delivered') return 'delivered';
+  if (status === 'sent') return 'sent';
+  if (status === 'unsubscribed') return 'unsubscribed';
+  return status.replace(/_/g, ' ');
+};
+
+const emailEventStatusLabel = (status: SyncedEmailStatus) =>
+  emailEventSummaryLabel(status)
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const buildSyncedEmailEventLog = (args: {
+  item: Pick<PipelineItem, 'id' | 'contactEmails' | 'lastEmailType'>;
+  status: SyncedEmailStatus;
+  messageId: string;
+  eventAt: string;
+  link?: string;
+}): ActivityLog => {
+  const emailType: ContactEmailType = args.item.lastEmailType === 'general-update' ? 'general-update' : 'metrics-update';
+  const email = normalizeContactEmails(args.item.contactEmails)[0] || '';
+  const label = contactEmailTypeLabels[emailType];
+  const eventLabel = emailEventSummaryLabel(args.status);
+  const stableEventKey = args.status === 'clicked' && args.link ? `clicked-${args.link.slice(0, 80)}` : args.status;
+
+  return {
+    id: ['email-event', args.messageId, stableEventKey].join('-').replace(/[^\w.-]/g, '-').slice(0, 180),
+    type: contactEmailTypeLogType[emailType],
+    weekOf: args.eventAt.slice(0, 10),
+    summary: `${label} ${eventLabel} by ${email || 'recipient'}.`,
+    nextStep: '',
+    followUpDate: '',
+    rosteredAthletes: '',
+    completedCheckIns: '',
+    checkInRate: '',
+    biometricSyncRate: '',
+    signalEvents: '',
+    noraEngagementRate: '',
+    noraSessions: '',
+    escalations: '',
+    staffFeedbackScore: '',
+    notes: [
+      email ? `To: ${email}` : '',
+      `Status: ${emailEventStatusLabel(args.status)}`,
+      args.link ? `Link: ${args.link}` : '',
+      `Message ID: ${args.messageId}`,
+    ].filter(Boolean).join('\n'),
+    createdAt: args.eventAt,
+    systemAction: 'email-sent',
+    relatedItemId: args.item.id,
+  };
 };
 
 const normalizeLeadInputUrl = (value: string) => {
@@ -2282,6 +2354,7 @@ const PipelinePage: NextPage = () => {
   const [contactEmailSendMessage, setContactEmailSendMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isSendingContactEmail, setIsSendingContactEmail] = useState(false);
   const contactEmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
+  const emailStatusSyncCheckedAtRef = useRef<Map<string, number>>(new Map());
   const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
   const [isEnrichingVcSources, setIsEnrichingVcSources] = useState(false);
   const [vcSourceEnrichmentMessage, setVcSourceEnrichmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -3358,6 +3431,131 @@ const PipelinePage: NextPage = () => {
       setDetailModalMode('details');
     }
   }, [activeList.items, selectedDetailItemId]);
+
+  const applySyncedEmailStatus = (args: {
+    listId: string;
+    itemId: string;
+    messageId: string;
+    summary: SyncedEmailEventSummary;
+  }) => {
+    const eventAt = args.summary.eventAt || new Date().toISOString();
+    const normalizedStatus = normalizeContactEmailStatusInput(args.summary.status);
+    if (!normalizedStatus || normalizedStatus === 'sent') return;
+
+    setLists((currentLists) =>
+      currentLists.map((list) => {
+        if (list.id !== args.listId) return list;
+
+        return {
+          ...list,
+          items: list.items.map((item) => {
+            if (item.id !== args.itemId) return item;
+            const currentStatus = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+            if (emailStatusRank(normalizedStatus) < emailStatusRank(currentStatus)) return item;
+
+            const eventLog = buildSyncedEmailEventLog({
+              item,
+              status: args.summary.status,
+              messageId: args.messageId,
+              eventAt,
+              link: args.summary.link,
+            });
+            const hasEventLog = item.weeklyLogs.some((log) => log.id === eventLog.id);
+
+            return {
+              ...item,
+              emailStatus: normalizedStatus,
+              lastEmailEvent: normalizedStatus,
+              lastEmailEventAt: eventAt,
+              lastEmailMessageId: args.messageId,
+              lastEmailDeliveredAt:
+                normalizedStatus === 'delivered' || normalizedStatus === 'opened' || normalizedStatus === 'clicked'
+                  ? item.lastEmailDeliveredAt || eventAt
+                  : item.lastEmailDeliveredAt,
+              lastEmailOpenedAt:
+                normalizedStatus === 'opened' || normalizedStatus === 'clicked' ? eventAt : item.lastEmailOpenedAt,
+              lastEmailClickedAt: normalizedStatus === 'clicked' ? eventAt : item.lastEmailClickedAt,
+              emailOpenCount:
+                normalizedStatus === 'opened' && currentStatus !== 'opened' && currentStatus !== 'clicked'
+                  ? Math.max(1, Number(item.emailOpenCount) || 0)
+                  : item.emailOpenCount,
+              emailClickCount:
+                normalizedStatus === 'clicked' && currentStatus !== 'clicked'
+                  ? Math.max(1, Number(item.emailClickCount) || 0)
+                  : item.emailClickCount,
+              lastEmailClickedLink: normalizedStatus === 'clicked' ? args.summary.link || item.lastEmailClickedLink : item.lastEmailClickedLink,
+              updatedAt: eventAt,
+              weeklyLogs: hasEventLog ? item.weeklyLogs : [eventLog, ...item.weeklyLogs],
+            };
+          }),
+        };
+      }),
+    );
+  };
+
+  useEffect(() => {
+    if (!user || !isOwner || isSharedView) return undefined;
+    if (viewMode !== 'logs' && detailModalMode !== 'logs') return undefined;
+
+    const candidates = new Map<string, { listId: string; itemId: string; messageId: string }>();
+    const addCandidate = (listId: string, item: PipelineItem) => {
+      const messageId = item.lastEmailMessageId.trim();
+      const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+      if (!messageId || emailStatusRank(status) >= emailStatusRank('opened')) return;
+      candidates.set(messageId, { listId, itemId: item.id, messageId });
+    };
+
+    if (detailModalMode === 'logs' && selectedDetailItem) {
+      addCandidate(activeList.id, selectedDetailItem);
+    }
+    if (viewMode === 'logs') {
+      filteredLogRows.forEach(({ list, item }) => addCandidate(list.id, item));
+    }
+
+    const now = Date.now();
+    const staleAfterMs = 20_000;
+    const pending = Array.from(candidates.values())
+      .filter((candidate) => now - (emailStatusSyncCheckedAtRef.current.get(candidate.messageId) || 0) > staleAfterMs)
+      .slice(0, 8);
+    if (pending.length === 0) return undefined;
+
+    let cancelled = false;
+    pending.forEach((candidate) => {
+      emailStatusSyncCheckedAtRef.current.set(candidate.messageId, now);
+    });
+
+    const syncStatuses = async () => {
+      const idToken = await user.getIdToken();
+      await Promise.all(
+        pending.map(async (candidate) => {
+          try {
+            const response = await fetch('/api/pipelists/check-email-events', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idToken}`,
+              },
+              body: JSON.stringify({ messageId: candidate.messageId }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (cancelled || !response.ok || result?.success === false || !result?.summary) return;
+            applySyncedEmailStatus({
+              ...candidate,
+              summary: result.summary as SyncedEmailEventSummary,
+            });
+          } catch (error) {
+            console.warn('[PipeLists] Unable to sync Brevo email status:', error);
+          }
+        }),
+      );
+    };
+
+    syncStatuses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeList.id, detailModalMode, filteredLogRows, isOwner, isSharedView, selectedDetailItem, user, viewMode]);
 
   useEffect(() => {
     if (!selectedDetailItemId) return undefined;
