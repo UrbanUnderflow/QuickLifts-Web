@@ -392,7 +392,7 @@ const logDisplayLabel = (log: ActivityLog) => {
   if (log.systemAction === 'item-deleted') return 'Item Deleted';
   if (log.systemAction === 'item-restored') return 'Item Restored';
   if (log.systemAction === 'item-moved') return 'Item Moved';
-  if (log.systemAction === 'email-sent') return 'Email Sent';
+  if (log.systemAction === 'email-sent') return emailLogDisplayLabel(log);
   return logTypeLabels[log.type];
 };
 
@@ -422,6 +422,22 @@ const parseEmailLogNotes = (notes: string) => {
     messageId: readMeta('Message ID'),
     message,
   };
+};
+
+const emailLogDisplayLabel = (log: ActivityLog) => {
+  const details = parseEmailLogNotes(log.notes || '');
+  const status = normalizeContactEmailStatusInput(details.status);
+
+  if (status === 'opened') return 'Email Opened';
+  if (status === 'click' || status === 'clicked') return 'Email Clicked';
+  if (status === 'delivered') return 'Email Delivered';
+  if (status === 'sent' || status === 'request') return 'Email Sent';
+  if (status === 'unsubscribed' || status === 'unsubscribe') return 'Email Unsubscribed';
+  if (['soft_bounce', 'hard_bounce', 'blocked', 'deferred', 'spam', 'invalid_email', 'error'].includes(status)) {
+    return 'Email Issue';
+  }
+
+  return 'Email Sent';
 };
 
 const emailFilterForLog = (log: ActivityLog): LogEmailFilter | null => {
