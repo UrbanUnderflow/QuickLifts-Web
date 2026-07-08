@@ -7,6 +7,7 @@ type SendContactEmailRequest = {
   toEmails?: string[];
   subject?: string;
   message?: string;
+  messageHtml?: string;
   attachments?: Array<{
     name?: string;
     content?: string;
@@ -62,6 +63,68 @@ const linkifyEscapedText = (value: string) =>
     return `<a href="${escapeHtml(href)}">${url}</a>`;
   });
 
+const cleanHref = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const href = /^(https?:\/\/|mailto:)/i.test(trimmed)
+    ? trimmed
+    : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+      ? `mailto:${trimmed}`
+      : `https://${trimmed}`;
+  try {
+    const parsed = new URL(href);
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+};
+
+const stripHtmlTags = (value: string) => value.replace(/<[^>]*>/g, '');
+
+const sanitizeComposerMessageHtml = (value: unknown) => {
+  if (typeof value !== 'string') return '';
+  let html = value.trim().slice(0, 50_000);
+  if (!html) return '';
+
+  html = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\sstyle=(?:"[^"]*"|'[^']*')/gi, '');
+
+  const anchors: string[] = [];
+  html = html.replace(/<a\b[^>]*href=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_match, _quote, href, text) => {
+    const safeHref = cleanHref(String(href || ''));
+    const safeText = stripHtmlTags(String(text || '')).trim();
+    if (!safeHref || !safeText) return escapeHtml(safeText);
+    const token = `@@PIPELISTS_LINK_${anchors.length}@@`;
+    anchors.push(
+      `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${escapeHtml(
+        safeText,
+      )}</a>`,
+    );
+    return token;
+  });
+
+  const plainWithBreaks = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(div|p)>/gi, '\n')
+    .replace(/<(div|p)\b[^>]*>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  if (!plainWithBreaks) return '';
+
+  const linked = linkifyEscapedText(plainWithBreaks).replace(/@@PIPELISTS_LINK_(\d+)@@/g, (_match, index) => anchors[Number(index)] || '');
+  return linked
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+};
+
 const verifySimpBudgetAuth = async (authHeader: string | undefined): Promise<VerifiedSimpBudgetUser | null> => {
   if (!authHeader?.startsWith('Bearer ') || !SIMPBUDGET_FIREBASE_API_KEY) return null;
   const idToken = authHeader.split('Bearer ')[1]?.trim();
@@ -99,16 +162,19 @@ const verifySimpBudgetAuth = async (authHeader: string | undefined): Promise<Ver
 
 const buildContactEmailHtml = (args: {
   message: string;
+  messageHtml?: string;
   senderEmail: string;
   listName: string;
   emailTypeLabel: string;
 }) => {
-  const paragraphs = args.message
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .map((paragraph) => `<p>${linkifyEscapedText(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('');
+  const paragraphs =
+    sanitizeComposerMessageHtml(args.messageHtml) ||
+    args.message
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((paragraph) => `<p>${linkifyEscapedText(paragraph).replace(/\n/g, '<br>')}</p>`)
+      .join('');
 
   return `
     <div>
@@ -146,6 +212,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const invalidEmails = toEmails.filter((email) => !isValidEmail(email));
   const subject = cleanText(body.subject, 180);
   const message = cleanText(body.message, 12000);
+  const messageHtml = typeof body.messageHtml === 'string' ? body.messageHtml : '';
   const emailType = cleanEmailType(body.emailType);
   const emailTypeLabel = emailType === 'general-update' ? 'General Update' : 'Investor Update';
   const listId = cleanText(body.listId, 120);
@@ -194,7 +261,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         toEmail,
         toName: toEmail,
         subject,
-        htmlContent: buildContactEmailHtml({ message, senderEmail: INVESTOR_UPDATE_SENDER_EMAIL, listName, emailTypeLabel }),
+        htmlContent: buildContactEmailHtml({ message, messageHtml, senderEmail: INVESTOR_UPDATE_SENDER_EMAIL, listName, emailTypeLabel }),
         attachment: attachments.length > 0 ? attachments : undefined,
         sender: {
           email: INVESTOR_UPDATE_SENDER_EMAIL,

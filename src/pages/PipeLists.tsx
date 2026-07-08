@@ -409,6 +409,53 @@ const displayLogSummary = (log: ActivityLog) => {
   return summary.replace(/^Metrics Update sent/i, 'Investor Update sent');
 };
 
+const pipeTimestampToDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === 'object') {
+    const timestampLike = value as {
+      seconds?: unknown;
+      nanoseconds?: unknown;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+      toDate?: unknown;
+    };
+    if (typeof timestampLike.toDate === 'function') {
+      const parsed = timestampLike.toDate();
+      return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+    }
+    const seconds = typeof timestampLike.seconds === 'number' ? timestampLike.seconds : timestampLike._seconds;
+    const nanoseconds = typeof timestampLike.nanoseconds === 'number' ? timestampLike.nanoseconds : timestampLike._nanoseconds;
+    if (typeof seconds === 'number') {
+      const parsed = new Date(seconds * 1000 + (typeof nanoseconds === 'number' ? Math.floor(nanoseconds / 1_000_000) : 0));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+  }
+  return null;
+};
+
+const logTimestampDate = (log: ActivityLog) =>
+  pipeTimestampToDate(log.createdAt) || pipeTimestampToDate(log.weekOf) || (log.weekOf ? pipeTimestampToDate(`${log.weekOf}T00:00:00`) : null);
+
+const logTimestampMs = (log: ActivityLog) => logTimestampDate(log)?.getTime() || 0;
+
+const formatLogTimestamp = (log: ActivityLog) => {
+  const createdAt = logTimestampDate(log);
+  const dateLabel = log.weekOf || (createdAt ? createdAt.toISOString().slice(0, 10) : '');
+  if (!createdAt) return dateLabel;
+
+  const timeLabel = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(createdAt);
+
+  return `${dateLabel} · ${timeLabel}`;
+};
+
 const parseEmailLogNotes = (notes: string) => {
   const lines = notes.replace(/\r\n/g, '\n').split('\n');
   const messageIndex = lines.findIndex((line) => line.trim().toLowerCase() === 'message:');
@@ -951,6 +998,29 @@ const linkifyComposerText = (value: string) =>
   });
 
 const linkifyComposerBodyHtml = (value: string) => linkifyComposerText(value).replace(/\n/g, '<br>');
+
+const sanitizeComposerBodyHtml = (value: string) =>
+  value
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\sstyle=(?:"[^"]*"|'[^']*')/gi, '');
+
+const normalizeComposerHref = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const href = /^(https?:\/\/|mailto:)/i.test(trimmed)
+    ? trimmed
+    : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+      ? `mailto:${trimmed}`
+      : `https://${trimmed}`;
+  try {
+    const parsed = new URL(href);
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+};
 
 const readFileAsBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -1692,6 +1762,7 @@ const normalizeStageId = (stage: string, listStages: StageConfig[]) => {
 
 const normalizeActivityLog = (log: Partial<ActivityLog>): ActivityLog => {
   const now = new Date().toISOString();
+  const createdAt = pipeTimestampToDate(log.createdAt)?.toISOString() || (log.weekOf ? `${log.weekOf}T00:00:00.000Z` : now);
   const hasMetrics =
     log.rosteredAthletes ||
     log.completedCheckIns ||
@@ -1721,7 +1792,7 @@ const normalizeActivityLog = (log: Partial<ActivityLog>): ActivityLog => {
     escalations: log.escalations || '',
     staffFeedbackScore: log.staffFeedbackScore || '',
     notes: log.notes || '',
-    createdAt: log.createdAt || now,
+    createdAt,
     ...(log.systemAction ? { systemAction: log.systemAction } : {}),
     relatedItemId: log.relatedItemId || '',
     restorableUntil: log.restorableUntil || '',
@@ -1931,19 +2002,7 @@ const formatCount = (count: number, singular: string) => {
   return `${count} ${plural}`;
 };
 
-const timestampToDate = (value: unknown): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
-    const parsed = value.toDate();
-    return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
-  }
-  return null;
-};
+const timestampToDate = pipeTimestampToDate;
 
 const formatInviteTimestamp = (value: unknown) => {
   const date = timestampToDate(value);
@@ -2348,10 +2407,13 @@ const PipelinePage: NextPage = () => {
   const [contactEmailRecipients, setContactEmailRecipients] = useState('');
   const [contactEmailSubject, setContactEmailSubject] = useState('');
   const [contactEmailBody, setContactEmailBody] = useState('');
+  const [contactEmailBodyHtml, setContactEmailBodyHtml] = useState('');
   const [contactEmailAttachments, setContactEmailAttachments] = useState<ContactEmailAttachment[]>([]);
   const [contactEmailSendMessage, setContactEmailSendMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isSendingContactEmail, setIsSendingContactEmail] = useState(false);
+  const [composerLinkPopover, setComposerLinkPopover] = useState<{ left: number; top: number; url: string; error: string } | null>(null);
   const contactEmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
+  const contactEmailSelectionRef = useRef<Range | null>(null);
   const emailStatusSyncCheckedAtRef = useRef<Map<string, number>>(new Map());
   const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
   const [isEnrichingVcSources, setIsEnrichingVcSources] = useState(false);
@@ -3275,11 +3337,7 @@ const PipelinePage: NextPage = () => {
             log,
           })),
         )
-        .sort((left, right) => {
-          const leftDate = left.log.weekOf || left.log.createdAt;
-          const rightDate = right.log.weekOf || right.log.createdAt;
-          return rightDate.localeCompare(leftDate);
-        }),
+        .sort((left, right) => logTimestampMs(right.log) - logTimestampMs(left.log)),
     [allItemRows],
   );
 
@@ -3583,8 +3641,124 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     const editor = contactEmailBodyEditorRef.current;
     if (!editor || (typeof document !== 'undefined' && document.activeElement === editor)) return;
-    editor.innerHTML = linkifyComposerBodyHtml(contactEmailBody);
-  }, [contactEmailBody, detailModalMode, isContactEmailModalOpen]);
+    editor.innerHTML = contactEmailBodyHtml || linkifyComposerBodyHtml(contactEmailBody);
+  }, [contactEmailBody, contactEmailBodyHtml, detailModalMode, isContactEmailModalOpen]);
+
+  const syncContactEmailComposerState = (editor: HTMLDivElement) => {
+    const text = editor.innerText.replace(/\u00a0/g, ' ');
+    setContactEmailBody(text);
+    setContactEmailBodyHtml(sanitizeComposerBodyHtml(editor.innerHTML));
+  };
+
+  const saveContactEmailSelection = () => {
+    const editor = contactEmailBodyEditorRef.current;
+    if (!editor || typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    contactEmailSelectionRef.current = range.cloneRange();
+  };
+
+  const openComposerLinkPopover = () => {
+    const editor = contactEmailBodyEditorRef.current;
+    if (!editor || typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : contactEmailSelectionRef.current;
+    if (!range || !editor.contains(range.commonAncestorContainer) || !range.toString().trim()) {
+      setContactEmailSendMessage({ type: 'error', text: 'Highlight text in the message before adding a link.' });
+      return;
+    }
+    contactEmailSelectionRef.current = range.cloneRange();
+    const editorRect = editor.getBoundingClientRect();
+    const rangeRect = range.getBoundingClientRect();
+    const popoverWidth = 300;
+    const left = Math.min(Math.max(rangeRect.left - editorRect.left, 8), Math.max(editorRect.width - popoverWidth - 8, 8));
+    const top = Math.max(rangeRect.bottom - editorRect.top + 8, 8);
+    setComposerLinkPopover({ left, top, url: '', error: '' });
+  };
+
+  const applyComposerLink = () => {
+    const editor = contactEmailBodyEditorRef.current;
+    const range = contactEmailSelectionRef.current;
+    const href = normalizeComposerHref(composerLinkPopover?.url || '');
+    if (!composerLinkPopover || !editor || !range) return;
+    if (!href) {
+      setComposerLinkPopover({ ...composerLinkPopover, error: 'Enter a valid URL or email address.' });
+      return;
+    }
+
+    const selectionText = range.toString();
+    if (!selectionText.trim()) {
+      setComposerLinkPopover({ ...composerLinkPopover, error: 'Highlight text first.' });
+      return;
+    }
+
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer';
+    anchor.textContent = selectionText;
+    anchor.style.color = '#2563eb';
+    anchor.style.textDecoration = 'underline';
+    anchor.style.textUnderlineOffset = '3px';
+
+    editor.focus();
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    range.deleteContents();
+    range.insertNode(anchor);
+    range.setStartAfter(anchor);
+    range.setEndAfter(anchor);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    syncContactEmailComposerState(editor);
+    setComposerLinkPopover(null);
+  };
+
+  const renderComposerLinkPopover = () =>
+    composerLinkPopover ? (
+      <div
+        className="absolute z-20 w-[300px] rounded-lg border border-stone-200 bg-white p-3 shadow-xl"
+        style={{ left: composerLinkPopover.left, top: composerLinkPopover.top }}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <label className="block">
+          <span className="mb-1 block text-[10px] font-semibold uppercase text-stone-400">Link address</span>
+          <input
+            value={composerLinkPopover.url}
+            onChange={(event) => setComposerLinkPopover({ ...composerLinkPopover, url: event.target.value, error: '' })}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                applyComposerLink();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setComposerLinkPopover(null);
+              }
+            }}
+            autoFocus
+            className="h-10 w-full rounded-md border border-stone-200 px-3 text-sm outline-none focus:border-stone-400"
+            placeholder="https://example.com"
+          />
+        </label>
+        {composerLinkPopover.error && <p className="mt-2 text-xs text-rose-600">{composerLinkPopover.error}</p>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setComposerLinkPopover(null)}
+            className="h-8 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600"
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={applyComposerLink} className="h-8 rounded-full bg-stone-950 px-3 text-xs font-semibold text-white">
+            OK
+          </button>
+        </div>
+      </div>
+    ) : null;
 
   const resetEditor = () => {
     setDraft(defaultDraft(activeList.stages[0]?.id));
@@ -3680,7 +3854,9 @@ const PipelinePage: NextPage = () => {
     setContactEmailRecipients(nextEmails.join(', '));
     setContactEmailSubject(subject);
     setContactEmailBody('');
+    setContactEmailBodyHtml('');
     setContactEmailAttachments([]);
+    setComposerLinkPopover(null);
     setContactEmailSendMessage(
       isOwner
         ? null
@@ -3838,6 +4014,7 @@ const PipelinePage: NextPage = () => {
           toEmails,
           subject: sentSubject,
           message: sentMessage,
+          messageHtml: contactEmailBodyHtml || linkifyComposerBodyHtml(sentMessage),
           attachments: contactEmailAttachments.map((attachment) => ({
             name: attachment.name,
             content: attachment.content,
@@ -3949,6 +4126,8 @@ const PipelinePage: NextPage = () => {
       }
       setContactEmailSubject('');
       setContactEmailBody('');
+      setContactEmailBodyHtml('');
+      setComposerLinkPopover(null);
       setContactEmailAttachments([]);
     } catch (error) {
       setContactEmailSendMessage({
@@ -6727,7 +6906,7 @@ Research rules:
                                 <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
                                   {logDisplayLabel(log)}
                                 </span>
-                                <span className="text-xs text-stone-400">{log.weekOf}</span>
+                                <span className="text-xs text-stone-400">{formatLogTimestamp(log)}</span>
                                 {isExpanded && <span className="text-xs text-stone-400">{list.name}</span>}
                                 {isExpanded && log.followUpDate && (
                                   <span className="text-xs text-stone-400">
@@ -7646,7 +7825,18 @@ Research rules:
               </label>
 
               <label className="block" htmlFor="contact-email-body">
-                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Message</span>
+                <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
+                  Message
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={openComposerLinkPopover}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold normal-case text-stone-600 transition hover:text-stone-950"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Link
+                  </button>
+                </span>
                 <div className="relative">
                   <div
                     id="contact-email-body"
@@ -7655,14 +7845,16 @@ Research rules:
                     aria-multiline="true"
                     contentEditable
                     suppressContentEditableWarning
-                    onInput={(event) => setContactEmailBody(event.currentTarget.innerText.replace(/\u00a0/g, ' '))}
+                    onMouseUp={saveContactEmailSelection}
+                    onKeyUp={saveContactEmailSelection}
+                    onInput={(event) => syncContactEmailComposerState(event.currentTarget)}
                     onBlur={(event) => {
-                      const text = event.currentTarget.innerText.replace(/\u00a0/g, ' ');
-                      setContactEmailBody(text);
-                      event.currentTarget.innerHTML = linkifyComposerBodyHtml(text);
+                      syncContactEmailComposerState(event.currentTarget);
+                      event.currentTarget.innerHTML = sanitizeComposerBodyHtml(event.currentTarget.innerHTML);
                     }}
                     className="min-h-48 w-full resize-y overflow-auto rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
                   />
+                  {renderComposerLinkPopover()}
                   {!contactEmailBody && (
                     <span className="pointer-events-none absolute left-3 top-2 text-sm text-stone-400">
                       Write the update you want to send.
@@ -8788,7 +8980,18 @@ Research rules:
                   </label>
 
                   <label className="mt-4 block" htmlFor="detail-contact-email-body">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Message</span>
+                    <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
+                      Message
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={openComposerLinkPopover}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold normal-case text-stone-600 transition hover:text-stone-950"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        Link
+                      </button>
+                    </span>
                     <div className="relative">
                       <div
                         id="detail-contact-email-body"
@@ -8797,14 +9000,16 @@ Research rules:
                         aria-multiline="true"
                         contentEditable
                         suppressContentEditableWarning
-                        onInput={(event) => setContactEmailBody(event.currentTarget.innerText.replace(/\u00a0/g, ' '))}
+                        onMouseUp={saveContactEmailSelection}
+                        onKeyUp={saveContactEmailSelection}
+                        onInput={(event) => syncContactEmailComposerState(event.currentTarget)}
                         onBlur={(event) => {
-                          const text = event.currentTarget.innerText.replace(/\u00a0/g, ' ');
-                          setContactEmailBody(text);
-                          event.currentTarget.innerHTML = linkifyComposerBodyHtml(text);
+                          syncContactEmailComposerState(event.currentTarget);
+                          event.currentTarget.innerHTML = sanitizeComposerBodyHtml(event.currentTarget.innerHTML);
                         }}
                         className="min-h-56 w-full resize-y overflow-auto rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
                       />
+                      {renderComposerLinkPopover()}
                       {!contactEmailBody && (
                         <span className="pointer-events-none absolute left-3 top-2 text-sm text-stone-400">
                           Write the update you want to send.
@@ -9002,32 +9207,51 @@ Research rules:
                   </div>
                   {selectedDetailItem.weeklyLogs.length > 0 ? (
                     <div className="divide-y divide-stone-100">
-                      {selectedDetailItem.weeklyLogs.map((log) => (
-                        <article key={log.id} className="px-4 py-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
-                                  {logDisplayLabel(log)}
-                                </span>
-                                <span className="text-xs text-stone-400">{log.weekOf}</span>
-                                {log.followUpDate && (
-                                  <span className="text-xs text-stone-400">
-                                    {followUpDateLabel(log.nextStep)} {log.followUpDate}
+                      {[...selectedDetailItem.weeklyLogs].sort((left, right) => logTimestampMs(right) - logTimestampMs(left)).map((log) => {
+                        const detailLogRowId = `${activeList.id}-${selectedDetailItem.id}-${log.id}`;
+                        const isExpanded = expandedLogIds.has(detailLogRowId);
+
+                        return (
+                          <article key={log.id} className="px-4 py-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                    {logDisplayLabel(log)}
                                   </span>
+                                  <span className="text-xs text-stone-400">{formatLogTimestamp(log)}</span>
+                                  {isExpanded && log.followUpDate && (
+                                    <span className="text-xs text-stone-400">
+                                      {followUpDateLabel(log.nextStep)} {log.followUpDate}
+                                    </span>
+                                  )}
+                                </div>
+                                <h5 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h5>
+                                {isExpanded && (
+                                  <>
+                                    {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                                    {log.systemAction === 'email-sent' ? (
+                                      <EmailLogDetails log={log} />
+                                    ) : (
+                                      log.notes &&
+                                      log.notes !== log.summary && (
+                                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                                      )
+                                    )}
+                                  </>
                                 )}
                               </div>
-                              <h5 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h5>
-                              {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
-                              {log.systemAction === 'email-sent' ? (
-                                <EmailLogDetails log={log} />
-                              ) : (
-                                log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
-                              )}
-                            </div>
-                            {canModify && (
-                              <div className="flex items-center gap-2">
-                                {log.systemAction === 'item-deleted' && canRestoreDeletedItem(selectedDetailItem) && (
+                              <div className="flex items-center gap-2 self-start">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandedLog(detailLogRowId)}
+                                  aria-expanded={isExpanded}
+                                  className="inline-flex h-9 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                >
+                                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  {isExpanded ? 'Collapse' : 'Expand'}
+                                </button>
+                                {canModify && log.systemAction === 'item-deleted' && canRestoreDeletedItem(selectedDetailItem) && (
                                   <button
                                     type="button"
                                     onClick={() => handleRestoreDeletedItem(activeList.id, selectedDetailItem.id)}
@@ -9036,19 +9260,21 @@ Research rules:
                                     Undo Delete
                                   </button>
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteLog(selectedDetailItem.id, log.id)}
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
-                                  title="Delete log"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                {canModify && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLog(selectedDetailItem.id, log.id)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                    title="Delete log"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </article>
-                      ))}
+                            </div>
+                          </article>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="px-4 py-12 text-center text-sm text-stone-400">No logs yet.</div>
@@ -9300,13 +9526,16 @@ Research rules:
                   </div>
                   {selectedDetailItem.weeklyLogs.length > 0 ? (
                     <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
-                      {selectedDetailItem.weeklyLogs.slice(0, 3).map((log) => (
+                      {[...selectedDetailItem.weeklyLogs]
+                        .sort((left, right) => logTimestampMs(right) - logTimestampMs(left))
+                        .slice(0, 3)
+                        .map((log) => (
                         <article key={log.id} className="bg-white px-4 py-3">
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
                               <p className="text-sm font-semibold text-stone-900">{displayLogSummary(log)}</p>
                               <p className="mt-1 text-xs text-stone-400">
-                                {log.weekOf} · {logDisplayLabel(log)}
+                                {formatLogTimestamp(log)} · {logDisplayLabel(log)}
                               </p>
                               {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
                             </div>
