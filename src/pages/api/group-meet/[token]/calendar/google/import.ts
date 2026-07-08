@@ -106,7 +106,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error: any) {
     const message = toPublicGuestCalendarErrorMessage(error);
-    const requiresReconnect = /reconnected|read-only calendar access|insufficient authentication scopes|insufficient scopes/i.test(
+    const requiresReconnect = /reconnected|read-only calendar access|free\/busy availability access|insufficient authentication scopes|insufficient scopes/i.test(
       `${message} ${error?.message || ''}`
     );
     const nextCalendarImport: Record<string, unknown> = {

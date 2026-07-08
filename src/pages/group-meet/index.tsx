@@ -12,7 +12,7 @@ const highlights = [
     body: 'Guests can add availability manually, import Google Calendar suggestions, review them, edit them, and save only what they approve.',
   },
   {
-    title: 'Read-only Google access',
+    title: 'Free/busy Google access',
     body: 'When a guest connects Google Calendar, Group Meet reads busy blocks to suggest open times. It does not create, edit, or delete calendar events.',
   },
 ];
@@ -34,7 +34,7 @@ const workflow = [
 
 const googleDataPoints = [
   'Google account basic profile information needed for sign-in context, such as email address.',
-  'Read-only Google Calendar busy blocks for the selected month so Group Meet can suggest availability windows.',
+  'Free/busy Google Calendar blocks for the selected month so Group Meet can suggest availability windows.',
   'No calendar-writing permissions. Group Meet does not create, update, or delete events in a guest calendar during import.',
   'No automatic submission. Imported suggestions stay editable until the guest saves availability manually.',
 ];
@@ -48,7 +48,7 @@ const faq = [
   {
     question: 'What does Group Meet do with Google Calendar access?',
     answer:
-      'Group Meet uses read-only calendar access to inspect busy blocks for the scheduling window and turn them into editable suggestions. It does not create, edit, or delete events during the guest import flow.',
+      'Group Meet uses free/busy calendar access to inspect busy blocks for the scheduling window and turn them into editable suggestions. It does not create, edit, or delete events during the guest import flow.',
   },
   {
     question: 'Can a guest review imported suggestions before saving?',
@@ -70,7 +70,7 @@ const GroupMeetHomePage: NextPage = () => {
         <title>Group Meet | Pulse</title>
         <meta
           name="description"
-          content="Group Meet is Pulse's invite-only scheduling tool for collecting availability, optionally importing read-only Google Calendar busy blocks, and finding overlap for a target month."
+          content="Group Meet is Pulse's invite-only scheduling tool for collecting availability, optionally importing Google Calendar free/busy blocks, and finding overlap for a target month."
         />
         <link rel="canonical" href="https://fitwithpulse.ai/group-meet" />
         <meta property="og:title" content="Group Meet | Pulse" />

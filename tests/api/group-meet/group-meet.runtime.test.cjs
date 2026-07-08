@@ -465,13 +465,15 @@ test('guest Google Calendar config retries after an initial Secret Manager failu
 
     let secretReadCount = 0;
     const oauthClientOptions = [];
+    const oauthAuthUrlOptions = [];
 
     class MockOAuth2Client {
       constructor(options) {
         oauthClientOptions.push(options);
       }
 
-      generateAuthUrl() {
+      generateAuthUrl(options) {
+        oauthAuthUrlOptions.push(options);
         return 'https://accounts.google.com/o/oauth2/v2/auth?mock=1';
       }
     }
@@ -514,6 +516,7 @@ test('guest Google Calendar config retries after an initial Secret Manager failu
         secondUrl,
         secretReadCount,
         oauthClientOptions,
+        oauthAuthUrlOptions,
       }));
     })().catch((error) => {
       console.error(error && error.stack ? error.stack : String(error));
@@ -542,6 +545,11 @@ test('guest Google Calendar config retries after an initial Secret Manager failu
       redirectUri: 'https://fitwithpulse.ai/api/group-meet/calendar/google/callback',
     },
   ]);
+  assert.equal(
+    payload.oauthAuthUrlOptions[0].scope,
+    'openid email https://www.googleapis.com/auth/calendar.freebusy'
+  );
+  assert.equal(payload.oauthAuthUrlOptions[0].access_type, 'offline');
 });
 
 test('guest Google Calendar config defaults to the canonical Secret Manager secret name without an env pointer', { concurrency: false }, () => {
@@ -758,7 +766,7 @@ test('guest Google debug classification explains generic config-unavailable fail
   assert.match(debug.hint, /group-meet-guest-google-oauth/);
 });
 
-test('guest Google scope helper recognizes the required read-only calendar scope', { concurrency: false }, () => {
+test('guest Google scope helper recognizes free-busy calendar scopes', { concurrency: false }, () => {
   const { hasRequiredGuestCalendarScopes } = loadGuestGoogleCalendarRuntime({
     secretManagerMock: async () => {
       throw new Error('Secret Manager mock should not be called.');
@@ -766,13 +774,17 @@ test('guest Google scope helper recognizes the required read-only calendar scope
   });
 
   assert.equal(
+    hasRequiredGuestCalendarScopes('openid email https://www.googleapis.com/auth/calendar.freebusy'),
+    true
+  );
+  assert.equal(
     hasRequiredGuestCalendarScopes('openid email https://www.googleapis.com/auth/calendar.readonly'),
     true
   );
   assert.equal(hasRequiredGuestCalendarScopes('openid email'), false);
 });
 
-test('guest Google access token helper forces reconnect when the stored grant lacks calendar.readonly', { concurrency: false }, async () => {
+test('guest Google access token helper forces reconnect when the stored grant lacks free-busy calendar access', { concurrency: false }, async () => {
   const previous = new Map(GUEST_CALENDAR_ENV_KEYS.map((key) => [key, process.env[key]]));
 
   for (const key of GUEST_CALENDAR_ENV_KEYS) {
@@ -810,14 +822,14 @@ test('guest Google access token helper forces reconnect when the stored grant la
             },
           },
         }),
-      /reconnected so Group Meet can request read-only calendar access/i
+      /reconnected so Group Meet can request free\/busy availability access/i
     );
 
     assert.equal(
       toPublicGuestCalendarErrorMessage(
         new Error('Request had insufficient authentication scopes.')
       ),
-      'Google Calendar needs to be reconnected so Group Meet can request read-only calendar access.'
+      'Google Calendar needs to be reconnected so Group Meet can request free/busy availability access.'
     );
   } finally {
     for (const key of GUEST_CALENDAR_ENV_KEYS) {

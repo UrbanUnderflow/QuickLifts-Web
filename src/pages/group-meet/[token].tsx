@@ -395,28 +395,28 @@ const GroupMeetInvitePage: React.FC = () => {
       : 'Tap the days that work, add one or more time windows, and save when you are ready.';
 
   return (
-    <div className="min-h-screen bg-[#05070b] text-white">
+    <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
       <Head>
         <title>{invite ? `${invite.request.title} | Group Meet` : 'Group Meet'}</title>
       </Head>
 
       <div className="max-w-5xl mx-auto px-5 py-8 sm:px-8 sm:py-12">
         {loading ? (
-          <div className="rounded-3xl border border-white/10 bg-white/5 px-6 py-16 text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#E0FE10]" />
-            <div className="text-zinc-300">Loading your Group Meet invite…</div>
+          <div className="rounded-lg border border-stone-200 bg-white px-6 py-16 text-center shadow-sm">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-stone-900" />
+            <div className="text-stone-500">Loading your Group Meet invite...</div>
           </div>
         ) : !invite ? (
-          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-16 text-center">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-6 py-16 text-center shadow-sm">
             <div className="text-xl font-semibold mb-2">Invite unavailable</div>
-            <div className="text-zinc-300">This link may be invalid or expired.</div>
+            <div className="text-red-700">This link may be invalid or expired.</div>
           </div>
         ) : (
           <>
-            <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(224,254,16,0.12),_transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 sm:p-8">
+            <section className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-zinc-300">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
                     <Calendar className="w-3.5 h-3.5" />
                     Group Meet
                   </div>
@@ -424,27 +424,27 @@ const GroupMeetInvitePage: React.FC = () => {
                     <img
                       src={invite.imageUrl}
                       alt={invite.name}
-                      className="mt-4 h-14 w-14 rounded-2xl object-cover border border-white/10"
+                      className="mt-4 h-14 w-14 rounded-lg object-cover border border-stone-200"
                     />
                   )}
-                  <h1 className="mt-4 text-3xl sm:text-4xl font-semibold">{invite.request.title}</h1>
-                  <p className="mt-3 max-w-2xl text-zinc-300">
+                  <h1 className="mt-4 text-3xl sm:text-4xl font-semibold text-stone-950">{invite.request.title}</h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
                     Hi {invite.name}. Tap any day that works for you, add one or more time windows, and save your availability. You can still come back later to update it if needed.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                  <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
-                    <div className="text-zinc-400">Target month</div>
-                    <div className="mt-1 font-medium">{format(parse(`${invite.request.targetMonth}-01`, 'yyyy-MM-dd', new Date()), 'MMMM yyyy')}</div>
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3">
+                    <div className="text-stone-500">Target month</div>
+                    <div className="mt-1 font-medium text-stone-950">{format(parse(`${invite.request.targetMonth}-01`, 'yyyy-MM-dd', new Date()), 'MMMM yyyy')}</div>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
-                    <div className="text-zinc-400">Meeting length</div>
-                    <div className="mt-1 font-medium">{invite.request.meetingDurationMinutes} minutes</div>
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3">
+                    <div className="text-stone-500">Meeting length</div>
+                    <div className="mt-1 font-medium text-stone-950">{invite.request.meetingDurationMinutes} minutes</div>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
-                    <div className="text-zinc-400">Deadline</div>
-                    <div className="mt-1 font-medium">
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3">
+                    <div className="text-stone-500">Deadline</div>
+                    <div className="mt-1 font-medium text-stone-950">
                       {invite.request.deadlineAt
                         ? new Date(invite.request.deadlineAt).toLocaleString('en-US', {
                             dateStyle: 'medium',
@@ -460,10 +460,10 @@ const GroupMeetInvitePage: React.FC = () => {
 
             {message && (
               <div
-                className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
+                className={`mt-6 rounded-lg border px-4 py-3 text-sm ${
                   message.type === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
-                    : 'border-red-500/30 bg-red-500/10 text-red-100'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+                    : 'border-red-500/30 bg-red-500/10 text-red-700'
                 }`}
               >
                 {message.text}
@@ -471,34 +471,34 @@ const GroupMeetInvitePage: React.FC = () => {
             )}
 
             {deadlinePassedButStillOpen && (
-              <div className="mt-6 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              <div className="mt-6 rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
                 The deadline has passed, but this request is still open. You can continue adding or updating your availability.
               </div>
             )}
 
-            <section className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+            <section className="mt-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="max-w-3xl">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-zinc-300">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
                     <Calendar className="w-3.5 h-3.5" />
                     Google Calendar
                   </div>
-                  <h2 className="mt-3 text-xl font-semibold text-white">Optional calendar import</h2>
-                  <p className="mt-2 text-sm leading-6 text-zinc-400">{googleCalendarHint}</p>
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
-                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                  <h2 className="mt-3 text-xl font-semibold text-stone-950">Optional calendar import</h2>
+                  <p className="mt-2 text-sm leading-6 text-stone-500">{googleCalendarHint}</p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-stone-600">
+                    <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
                       {googleCalendarStatusLabel}
                     </span>
-                    <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                    <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
                       Manual save stays in control
                     </span>
                     {calendarImport?.connectedEmail && (
-                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                      <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
                         {calendarImport.connectedEmail}
                       </span>
                     )}
                     {calendarImport?.lastImportedAt && (
-                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                      <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
                         Last imported {new Date(calendarImport.lastImportedAt).toLocaleString()}
                       </span>
                     )}
@@ -511,7 +511,7 @@ const GroupMeetInvitePage: React.FC = () => {
                       type="button"
                       onClick={startGoogleCalendarConnect}
                       disabled={calendarAction === 'connect' || isClosed}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-60 sm:w-auto"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-60 sm:w-auto"
                     >
                       {calendarAction === 'connect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                       Connect Google Calendar
@@ -522,7 +522,7 @@ const GroupMeetInvitePage: React.FC = () => {
                         type="button"
                         onClick={importGoogleCalendarAvailability}
                         disabled={calendarAction === 'import' || isClosed}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-60 sm:w-auto"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-60 sm:w-auto"
                       >
                         {calendarAction === 'import' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                         Import availability
@@ -531,7 +531,7 @@ const GroupMeetInvitePage: React.FC = () => {
                         type="button"
                         onClick={disconnectGoogleCalendar}
                         disabled={calendarAction === 'disconnect'}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-5 py-3 font-medium text-zinc-200 hover:bg-white/[0.06] disabled:opacity-60 sm:w-auto"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-stone-200 bg-white px-5 py-3 font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-60 sm:w-auto"
                       >
                         {calendarAction === 'disconnect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                         Disconnect
@@ -545,8 +545,8 @@ const GroupMeetInvitePage: React.FC = () => {
             <div className="mt-6">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
                 <div>
-                  <h2 className="text-xl font-semibold">Pick your availability</h2>
-                  <p className="text-sm text-zinc-400 mt-1">
+                  <h2 className="text-xl font-semibold text-stone-950">Pick your availability</h2>
+                  <p className="text-sm text-stone-500 mt-1">
                     {invite.responseSubmittedAt ? `Last saved ${new Date(invite.responseSubmittedAt).toLocaleString()}` : 'Nothing saved yet'}
                   </p>
                 </div>
@@ -555,41 +555,40 @@ const GroupMeetInvitePage: React.FC = () => {
                   type="button"
                   onClick={submitAvailability}
                   disabled={saving || isClosed}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   {isClosed ? 'Availability closed' : 'Save availability'}
                 </button>
               </div>
 
-                <GroupMeetAvailabilityPicker
-                  targetMonth={invite.request.targetMonth}
-                  availabilityEntries={availabilityEntries}
-                  importedSuggestions={importedSuggestions}
-                  peerAvailability={invite.peerAvailability}
-                  meetingDurationMinutes={invite.request.meetingDurationMinutes}
-                  currentParticipant={{
+              <GroupMeetAvailabilityPicker
+                targetMonth={invite.request.targetMonth}
+                availabilityEntries={availabilityEntries}
+                importedSuggestions={importedSuggestions}
+                peerAvailability={invite.peerAvailability}
+                meetingDurationMinutes={invite.request.meetingDurationMinutes}
+                currentParticipant={{
                   token: invite.token,
                   name: invite.name,
                   imageUrl: invite.imageUrl || null,
                   participantType: invite.participantType,
-                  }}
-                  onChange={setAvailabilityEntries}
-                  disabled={isClosed}
-                  title="Calendar"
-                  subtitle={pickerSubtitle}
-                />
-              </div>
+                }}
+                onChange={setAvailabilityEntries}
+                disabled={isClosed}
+                title="Calendar"
+                subtitle={pickerSubtitle}
+              />
+            </div>
 
-            <section className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
-              <div className="text-sm text-zinc-400">
+            <section className="mt-6 rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
+              <div className="text-sm text-stone-500">
                 Tip: if a day works, tap it and add as many windows as you want. Keep it lightweight. We just need the ranges that are actually good for you.
               </div>
             </section>
           </>
         )}
       </div>
-
     </div>
   );
 };
