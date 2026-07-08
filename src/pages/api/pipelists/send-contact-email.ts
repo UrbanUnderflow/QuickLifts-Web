@@ -123,7 +123,7 @@ const buildContactEmailHtml = (args: {
           </div>
           <div style="padding:22px 32px 30px;color:#57534e;font-size:14px;line-height:1.6;">
             <div style="font-weight:800;color:#111111;">Tremaine Grant</div>
-            <div>Founder &amp; CEO · Pulse Intelligence Labs</div>
+            <div>Founder &amp; CEO · <a href="https://pulseintelligencelabs.com" style="color:#57534e;text-decoration:underline;text-underline-offset:3px;">Pulse Intelligence Labs</a></div>
             <a href="mailto:${escapeHtml(args.senderEmail)}" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${escapeHtml(args.senderEmail)}</a>
           </div>
         </div>
