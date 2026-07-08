@@ -53,7 +53,7 @@ const verifySimpBudgetAuth = async (authHeader: string | undefined): Promise<Ver
   }
 };
 
-const normalizeBrevoEvent = (value: unknown): BrevoEventSummary['status'] | '' => {
+export const normalizeBrevoEvent = (value: unknown): BrevoEventSummary['status'] | '' => {
   const event = cleanText(value, 80);
   if (event === 'opened' || event === 'unique_opened' || event === 'uniqueOpened' || event === 'proxy_open' || event === 'unique_proxy_open' || event === 'uniqueProxyOpen') return 'opened';
   if (event === 'click' || event === 'clicks' || event === 'clicked') return 'clicked';
@@ -114,7 +114,7 @@ const normalizeEventDate = (event: Record<string, unknown>) => {
   return null;
 };
 
-const summarizeBrevoEvents = (events: Array<Record<string, unknown>>): BrevoEventSummary | null => {
+export const summarizeBrevoEvents = (events: Array<Record<string, unknown>>): BrevoEventSummary | null => {
   let best: BrevoEventSummary | null = null;
   let bestRank = 0;
 

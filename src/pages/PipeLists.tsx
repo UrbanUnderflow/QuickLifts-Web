@@ -53,6 +53,11 @@ import {
 import PageHead from '../components/PageHead';
 import { auth as quickLiftsAuth, db as quickLiftsDb } from '../api/firebase/config';
 import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase/simpBudgetConfig';
+import {
+  buildSyncedEmailEventLog,
+  emailStatusRank,
+  type SyncedEmailEventSummary,
+} from '../utils/pipelistsEmailEventSync';
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 type ViewMode = 'pipeline' | 'metrics' | 'logs';
@@ -80,12 +85,6 @@ type InviteHistoryEntry = {
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
 type ContactEmailType = 'metrics-update' | 'general-update';
 type LogEmailFilter = 'all' | 'investor-update' | 'general-update';
-type SyncedEmailStatus = 'sent' | 'delivered' | 'opened' | 'clicked' | 'soft_bounce' | 'hard_bounce' | 'blocked' | 'deferred' | 'spam' | 'unsubscribed' | 'invalid_email' | 'error';
-type SyncedEmailEventSummary = {
-  status: SyncedEmailStatus;
-  eventAt: string | null;
-  link?: string;
-};
 type ContactEmailAttachment = {
   id: string;
   name: string;
@@ -756,72 +755,6 @@ const emailStatusTone = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEven
     return 'border-rose-200 bg-rose-50 text-rose-700';
   }
   return 'border-stone-200 bg-white text-stone-400';
-};
-
-const emailStatusRank = (status: string) => {
-  const normalized = normalizeContactEmailStatusInput(status);
-  if (normalized === 'sent') return 1;
-  if (normalized === 'delivered') return 2;
-  if (normalized === 'opened') return 3;
-  if (normalized === 'click' || normalized === 'clicked') return 4;
-  if (['soft_bounce', 'hard_bounce', 'blocked', 'deferred', 'spam', 'unsubscribe', 'unsubscribed', 'invalid_email', 'error'].includes(normalized)) return 10;
-  return 0;
-};
-
-const emailEventSummaryLabel = (status: SyncedEmailStatus) => {
-  if (status === 'clicked') return 'clicked';
-  if (status === 'opened') return 'opened';
-  if (status === 'delivered') return 'delivered';
-  if (status === 'sent') return 'sent';
-  if (status === 'unsubscribed') return 'unsubscribed';
-  return status.replace(/_/g, ' ');
-};
-
-const emailEventStatusLabel = (status: SyncedEmailStatus) =>
-  emailEventSummaryLabel(status)
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-
-const buildSyncedEmailEventLog = (args: {
-  item: Pick<PipelineItem, 'id' | 'contactEmails' | 'lastEmailType'>;
-  status: SyncedEmailStatus;
-  messageId: string;
-  eventAt: string;
-  link?: string;
-}): ActivityLog => {
-  const emailType: ContactEmailType = args.item.lastEmailType === 'general-update' ? 'general-update' : 'metrics-update';
-  const email = normalizeContactEmails(args.item.contactEmails)[0] || '';
-  const label = contactEmailTypeLabels[emailType];
-  const eventLabel = emailEventSummaryLabel(args.status);
-  const stableEventKey = args.status === 'clicked' && args.link ? `clicked-${args.link.slice(0, 80)}` : args.status;
-
-  return {
-    id: ['email-event', args.messageId, stableEventKey].join('-').replace(/[^\w.-]/g, '-').slice(0, 180),
-    type: contactEmailTypeLogType[emailType],
-    weekOf: args.eventAt.slice(0, 10),
-    summary: `${label} ${eventLabel} by ${email || 'recipient'}.`,
-    nextStep: '',
-    followUpDate: '',
-    rosteredAthletes: '',
-    completedCheckIns: '',
-    checkInRate: '',
-    biometricSyncRate: '',
-    signalEvents: '',
-    noraEngagementRate: '',
-    noraSessions: '',
-    escalations: '',
-    staffFeedbackScore: '',
-    notes: [
-      email ? `To: ${email}` : '',
-      `Status: ${emailEventStatusLabel(args.status)}`,
-      args.link ? `Link: ${args.link}` : '',
-      `Message ID: ${args.messageId}`,
-    ].filter(Boolean).join('\n'),
-    createdAt: args.eventAt,
-    systemAction: 'email-sent',
-    relatedItemId: args.item.id,
-  };
 };
 
 const normalizeLeadInputUrl = (value: string) => {
