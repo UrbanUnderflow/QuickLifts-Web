@@ -431,6 +431,31 @@ const parseEmailLogNotes = (notes: string) => {
   };
 };
 
+const writeTextToClipboard = async (text: string) => {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === 'undefined') {
+    throw new Error('Clipboard is not available in this browser.');
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const didCopy = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!didCopy) {
+    throw new Error('Clipboard is not available in this browser.');
+  }
+};
+
 const emailLogDisplayLabel = (log: ActivityLog) => {
   const details = parseEmailLogNotes(log.notes || '');
   const status = normalizeContactEmailStatusInput(details.status);
@@ -458,12 +483,40 @@ const emailStatusHasActivity = (item: Pick<PipelineItem, 'emailStatus' | 'lastEm
 };
 
 const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
+  const [messageCopyState, setMessageCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const messageCopyResetRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (messageCopyResetRef.current !== null) {
+        window.clearTimeout(messageCopyResetRef.current);
+      }
+    };
+  }, []);
+
   if (log.systemAction !== 'email-sent' || !log.notes || log.notes === log.summary) return null;
   const details = parseEmailLogNotes(log.notes);
 
   if (!details.to && !details.subject && !details.status && !details.link && !details.message) {
     return <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>;
   }
+
+  const handleCopyMessage = async () => {
+    if (!details.message) return;
+
+    try {
+      await writeTextToClipboard(details.message);
+      setMessageCopyState('copied');
+    } catch (error) {
+      console.error('[PipeLists] Copy email log message failed:', error);
+      setMessageCopyState('error');
+    }
+
+    if (messageCopyResetRef.current !== null) {
+      window.clearTimeout(messageCopyResetRef.current);
+    }
+    messageCopyResetRef.current = window.setTimeout(() => setMessageCopyState('idle'), 1800);
+  };
 
   return (
     <div className="mt-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3 text-sm text-stone-600">
@@ -507,7 +560,19 @@ const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
       )}
       {details.message && (
         <div className="mt-3 border-t border-stone-200 pt-3">
-          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">Message</div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Message</div>
+            <button
+              type="button"
+              onClick={handleCopyMessage}
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+              title="Copy email message"
+              aria-label="Copy email message"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {messageCopyState === 'copied' ? 'Copied' : messageCopyState === 'error' ? 'Try again' : 'Copy'}
+            </button>
+          </div>
           <div className="whitespace-pre-wrap break-words rounded-md bg-white px-3 py-3 leading-6 text-stone-700">
             {details.message}
           </div>
