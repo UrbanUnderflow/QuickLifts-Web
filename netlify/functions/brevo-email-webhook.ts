@@ -142,6 +142,51 @@ const getWebhookEventTime = (webhookEvent: BrevoWebhookEvent, fallback: Date) =>
   return fallback;
 };
 
+const parseCustomPayload = (raw: unknown): Record<string, any> => {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw as Record<string, any>;
+  if (typeof raw !== 'string') return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const readWebhookCustomPayload = (webhookEvent: BrevoWebhookEvent): Record<string, any> => {
+  const eventRecord = webhookEvent as Record<string, any>;
+  const direct =
+    eventRecord['X-Mailin-custom'] ||
+    eventRecord['x-mailin-custom'] ||
+    eventRecord['X-Mailin-Custom'] ||
+    eventRecord['x-mailin-customs'] ||
+    eventRecord.custom ||
+    eventRecord.headers?.['X-Mailin-custom'] ||
+    eventRecord.headers?.['x-mailin-custom'];
+
+  return parseCustomPayload(direct);
+};
+
+const readStoredBrevoCustomPayload = async (messageId?: string): Promise<Record<string, any>> => {
+  if (!messageId) return {};
+
+  const directSnapshot = await db.collection(EMAIL_LOG_COLLECTION).doc(buildBrevoEmailLogDocId(messageId)).get();
+  const directData = directSnapshot.data() || {};
+  if (directData.custom && typeof directData.custom === 'object') {
+    return directData.custom;
+  }
+
+  const querySnapshot = await db
+    .collection(EMAIL_LOG_COLLECTION)
+    .where('messageId', '==', messageId)
+    .limit(1)
+    .get();
+  const queryData = querySnapshot.docs[0]?.data() || {};
+  return queryData.custom && typeof queryData.custom === 'object' ? queryData.custom : {};
+};
+
 const updateEmailLogFromBrevoEvent = async (args: {
   webhookEvent: BrevoWebhookEvent;
   eventType: CanonicalBrevoEmailEvent;
@@ -791,33 +836,33 @@ export const handler: Handler = async (event) => {
       let pipeListsEmailBatchId: string | null = null;
       let pipeListsEmailRecordId: string | null = null;
       
-      if (webhookEvent['X-Mailin-custom']) {
-        try {
-          const custom = JSON.parse(webhookEvent['X-Mailin-custom']);
-          friendId = custom.friendId || null;
-          emailRecordId = custom.emailRecordId || null;
-          updatePeriodId = custom.updatePeriodId || null;
-          pilotAthleteCommunicationId = custom.pilotAthleteCommunicationId || null;
-          signingRequestId = custom.signingRequestId || null;
-          emailSequenceId = custom.emailSequenceId || null;
-          campaignId = custom.campaignId || null;
-          product = custom.product || null;
-          userId = custom.userId || null;
-          plan = custom.plan || null;
-          ctaUrlMode = custom.ctaUrlMode || null;
-          checkoutCampaignId = custom.checkoutCampaignId || null;
-          pipeListsOwnerUid = custom.pipeListsOwnerUid || null;
-          pipeListsListId = custom.pipeListsListId || null;
-          pipeListsItemIds = Array.isArray(custom.pipeListsItemIds)
-            ? custom.pipeListsItemIds.map((itemId: any) => String(itemId || '').trim()).filter(Boolean)
-            : [];
-          pipeListsEmailType = custom.pipeListsEmailType || null;
-          pipeListsEmailBatchId = custom.pipeListsEmailBatchId || null;
-          pipeListsEmailRecordId = custom.pipeListsEmailRecordId || null;
-        } catch (e) {
-          console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
-        }
-      }
+      const webhookCustom = readWebhookCustomPayload(webhookEvent);
+      const storedCustom = await readStoredBrevoCustomPayload(messageId).catch((error) => {
+        console.warn('[brevo-webhook] Failed to read stored Brevo custom payload:', error?.message || error);
+        return {};
+      });
+      const custom = { ...storedCustom, ...webhookCustom };
+
+      friendId = custom.friendId || null;
+      emailRecordId = custom.emailRecordId || null;
+      updatePeriodId = custom.updatePeriodId || null;
+      pilotAthleteCommunicationId = custom.pilotAthleteCommunicationId || null;
+      signingRequestId = custom.signingRequestId || null;
+      emailSequenceId = custom.emailSequenceId || null;
+      campaignId = custom.campaignId || null;
+      product = custom.product || null;
+      userId = custom.userId || null;
+      plan = custom.plan || null;
+      ctaUrlMode = custom.ctaUrlMode || null;
+      checkoutCampaignId = custom.checkoutCampaignId || null;
+      pipeListsOwnerUid = custom.pipeListsOwnerUid || null;
+      pipeListsListId = custom.pipeListsListId || null;
+      pipeListsItemIds = Array.isArray(custom.pipeListsItemIds)
+        ? custom.pipeListsItemIds.map((itemId: any) => String(itemId || '').trim()).filter(Boolean)
+        : [];
+      pipeListsEmailType = custom.pipeListsEmailType || null;
+      pipeListsEmailBatchId = custom.pipeListsEmailBatchId || null;
+      pipeListsEmailRecordId = custom.pipeListsEmailRecordId || null;
 
       const macraSequenceId =
         [emailSequenceId, campaignId].find((sequenceId) =>

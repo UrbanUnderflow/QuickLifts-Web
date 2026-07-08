@@ -13,7 +13,7 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, query as firestoreQuery, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   Activity,
@@ -2539,6 +2539,42 @@ const PipelinePage: NextPage = () => {
 
     return unsubscribe;
   }, [leadShareId, shareId]);
+
+  useEffect(() => {
+    if (isSharedView || shareId || leadShareId || !isOwner || !user || !dataReady) return undefined;
+
+    const stateRef = doc(
+      simpBudgetDb,
+      SIMPBUDGET_USERS_COLLECTION,
+      user.uid,
+      PIPELISTS_SUBCOLLECTION,
+      PIPELISTS_STATE_DOCUMENT_ID,
+    );
+
+    return onSnapshot(
+      stateRef,
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        const data = snapshot.data() as { lists?: Partial<PipeList>[] };
+        if (!Array.isArray(data.lists) || data.lists.length === 0) return;
+
+        const nextLists = mergeRecommendedPitchCompetitions(
+          purgeExpiredDeletedItems(data.lists.map(normalizeList)),
+        );
+
+        setLists((currentLists) => {
+          if (JSON.stringify(currentLists) === JSON.stringify(nextLists)) return currentLists;
+          return nextLists;
+        });
+        setActiveListId((currentId) =>
+          nextLists.some((list) => list.id === currentId) ? currentId : nextLists[0]?.id || initialLists[0].id,
+        );
+      },
+      (error) => {
+        console.warn('[PipeLists] Live email status sync failed:', error);
+      },
+    );
+  }, [dataReady, isOwner, isSharedView, leadShareId, shareId, user]);
 
   useEffect(() => {
     if (!shareId) return;
