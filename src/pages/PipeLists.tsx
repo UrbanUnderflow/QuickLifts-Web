@@ -389,6 +389,73 @@ const logDisplayLabel = (log: ActivityLog) => {
   return logTypeLabels[log.type];
 };
 
+const displayLogSummary = (log: ActivityLog) => {
+  const summary = log.summary || log.notes || 'Untitled log';
+  if (log.systemAction !== 'email-sent') return summary;
+  return summary.replace(/^Metrics Update sent/i, 'Investor Update sent');
+};
+
+const parseEmailLogNotes = (notes: string) => {
+  const lines = notes.replace(/\r\n/g, '\n').split('\n');
+  const messageIndex = lines.findIndex((line) => line.trim().toLowerCase() === 'message:');
+  const metaLines = messageIndex >= 0 ? lines.slice(0, messageIndex) : lines;
+  const message = messageIndex >= 0 ? lines.slice(messageIndex + 1).join('\n').trim() : '';
+  const readMeta = (label: string) => {
+    const prefix = `${label}:`;
+    const row = metaLines.find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+    return row ? row.trim().slice(prefix.length).trim() : '';
+  };
+
+  return {
+    to: readMeta('To'),
+    subject: readMeta('Subject'),
+    attachments: readMeta('Attachments'),
+    message,
+  };
+};
+
+const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
+  if (log.systemAction !== 'email-sent' || !log.notes || log.notes === log.summary) return null;
+  const details = parseEmailLogNotes(log.notes);
+
+  if (!details.to && !details.subject && !details.message) {
+    return <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>;
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3 text-sm text-stone-600">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {details.to && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">To</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.to}</div>
+          </div>
+        )}
+        {details.subject && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Subject</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.subject}</div>
+          </div>
+        )}
+      </div>
+      {details.attachments && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Attachments</div>
+          <div className="mt-0.5 break-words font-medium text-stone-700">{details.attachments}</div>
+        </div>
+      )}
+      {details.message && (
+        <div className="mt-3 border-t border-stone-200 pt-3">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-stone-400">Message</div>
+          <div className="whitespace-pre-wrap break-words rounded-md bg-white px-3 py-3 leading-6 text-stone-700">
+            {details.message}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const generalStages: StageConfig[] = [
   { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
   { id: 'contacted', label: 'Contacted', probability: 20, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
@@ -6283,13 +6350,17 @@ Research rules:
                                   </span>
                                 )}
                               </div>
-                              <h4 className="mt-2 text-sm font-semibold text-stone-950">{log.summary || log.notes || 'Untitled log'}</h4>
+                              <h4 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h4>
                               <p className="mt-1 text-sm text-stone-500">
                                 {item.title}
                                 {item.organization ? ` · ${item.organization}` : ''}
                               </p>
                               {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
-                              {log.notes && log.notes !== log.summary && <p className="mt-1 text-sm leading-6 text-stone-500">{log.notes}</p>}
+                              {log.systemAction === 'email-sent' ? (
+                                <EmailLogDetails log={log} />
+                              ) : (
+                                log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 self-start">
                               {log.systemAction === 'item-deleted' && canRestoreDeletedItem(item) && (
@@ -8530,9 +8601,13 @@ Research rules:
                                   </span>
                                 )}
                               </div>
-                              <h5 className="mt-2 text-sm font-semibold text-stone-950">{log.summary || log.notes || 'Untitled log'}</h5>
+                              <h5 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h5>
                               {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
-                              {log.notes && log.notes !== log.summary && <p className="mt-1 text-sm leading-6 text-stone-500">{log.notes}</p>}
+                              {log.systemAction === 'email-sent' ? (
+                                <EmailLogDetails log={log} />
+                              ) : (
+                                log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                              )}
                             </div>
                             {canModify && (
                               <div className="flex items-center gap-2">
@@ -8813,7 +8888,7 @@ Research rules:
                         <article key={log.id} className="bg-white px-4 py-3">
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div>
-                              <p className="text-sm font-semibold text-stone-900">{log.summary || log.notes || logDisplayLabel(log)}</p>
+                              <p className="text-sm font-semibold text-stone-900">{displayLogSummary(log)}</p>
                               <p className="mt-1 text-xs text-stone-400">
                                 {log.weekOf} · {logDisplayLabel(log)}
                               </p>
