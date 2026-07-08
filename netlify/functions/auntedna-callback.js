@@ -15,6 +15,9 @@
 //   clinician.assigned    -> store display-safe assignment label + timestamp only
 //   appointment.booked    -> operational follow-up state, no appointment notes
 //   crisis.invoked        -> record crisis pathway state (safety mode stays on)
+//   watchlist.entered     -> record protective workflow state only
+//   watchlist.removed     -> clear protective workflow state only
+//   checkin.*             -> record check-in workflow timestamp only
 //   case.resolved         -> record resolved/closed status category + timestamp
 //
 // What it does, in order:
@@ -66,6 +69,13 @@ const EVENT_STATUS_CATEGORY = {
   'clinician.assigned': 'assigned',
   'appointment.booked': 'appointment_booked',
   'crisis.invoked': 'crisis_invoked',
+  'watchlist.entered': 'watchlist_entered',
+  'watchlist.updated': 'watchlist_updated',
+  'watchlist.removed': 'watchlist_removed',
+  'watchlist.cleared_for_training': 'cleared_for_training',
+  'checkin.scheduled': 'checkin_scheduled',
+  'checkin.completed': 'checkin_completed',
+  'checkin.missed': 'checkin_missed',
   'case.resolved': 'resolved',
 };
 
@@ -75,6 +85,13 @@ const STATUS_CATEGORIES = new Set([
   'assigned',
   'appointment_booked',
   'crisis_invoked',
+  'watchlist_entered',
+  'watchlist_updated',
+  'watchlist_removed',
+  'cleared_for_training',
+  'checkin_scheduled',
+  'checkin_completed',
+  'checkin_missed',
   'resolved',
   'closed',
 ]);
@@ -263,10 +280,44 @@ function buildEscalationMirror(webhookEvent, receivedAtSeconds) {
       break;
     case 'crisis.invoked':
       caseMirror.crisisInvokedAt = occurredAt;
+      caseMirror.appState = 'protective';
+      caseMirror.returnToTrainingStatus = 'not_cleared';
+      break;
+    case 'watchlist.entered':
+      caseMirror.watchList = true;
+      caseMirror.watchListEnteredAt = occurredAt;
+      caseMirror.appState = 'protective';
+      caseMirror.returnToTrainingStatus = 'not_cleared';
+      break;
+    case 'watchlist.updated':
+      caseMirror.watchListUpdatedAt = occurredAt;
+      caseMirror.watchList = true;
+      break;
+    case 'watchlist.cleared_for_training':
+      caseMirror.clearedForTrainingAt = occurredAt;
+      caseMirror.returnToTrainingStatus = 'cleared';
+      caseMirror.followUpRequired = false;
+      break;
+    case 'watchlist.removed':
+      caseMirror.watchList = false;
+      caseMirror.watchListRemovedAt = occurredAt;
+      caseMirror.appState = 'normal';
+      caseMirror.followUpRequired = false;
+      break;
+    case 'checkin.scheduled':
+      caseMirror.checkInScheduledAt = occurredAt;
+      break;
+    case 'checkin.completed':
+      caseMirror.checkInCompletedAt = occurredAt;
+      break;
+    case 'checkin.missed':
+      caseMirror.checkInMissedAt = occurredAt;
+      caseMirror.followUpRequired = true;
       break;
     case 'case.resolved':
       caseMirror.resolvedAt = occurredAt;
       caseMirror.followUpRequired = false;
+      caseMirror.returnToTrainingStatus = 'pending_review';
       break;
     default:
       break;

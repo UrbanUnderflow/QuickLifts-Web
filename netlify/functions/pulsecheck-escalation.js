@@ -23,6 +23,11 @@ const {
   writePilotMetricOpsStatus,
   isTrueCareEscalationClassification,
 } = require('./utils/pulsecheck-pilot-metrics');
+const {
+  buildPulseCallbackUrl,
+  createClinicalBridge,
+  resolveClinicalBridgeConfig,
+} = require('./lib/clinical-bridge');
 
 // Escalation Tier enum values
 const EscalationTier = {
@@ -88,10 +93,7 @@ const HOTLINE_SUPPORT_RESOURCE = Object.freeze({
   url: 'https://988lifeline.org',
 });
 
-// AuntEDNA placeholder URLs (replace with real endpoints)
-const AUNTEDNA_BASE_URL = process.env.AUNTEDNA_API_URL || 'https://api.auntedna.com/v1';
-const AUNTEDNA_API_KEY = process.env.AUNTEDNA_API_KEY || '';
-const USE_MOCK = process.env.AUNTEDNA_MOCK === 'true' || !AUNTEDNA_API_KEY;
+const clinicalBridgeConfig = resolveClinicalBridgeConfig();
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -1598,7 +1600,7 @@ async function refreshPilotOutcomeRollupsForAthlete(userId, timestampMs) {
 }
 
 /**
- * Perform clinical handoff to AuntEDNA
+ * Perform clinical handoff through the provider-neutral clinical bridge.
  */
 async function performClinicalHandoff(userId, conversationId, escalationId, escalationData) {
   if (escalationData?.handoffStatus === HandoffStatus.Completed && escalationData?.clinicalReferenceId) {
@@ -1683,7 +1685,7 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
     conversationSummary: summary,
     relevantMentalNotes: mentalNotes,
     escalationTimestamp: Date.now(),
-    pulseApiCallback: `${process.env.URL || 'https://pulsefitness.app'}/.netlify/functions/auntedna-callback`
+    pulseApiCallback: buildPulseCallbackUrl()
   };
 
   // Update handoff status
@@ -1729,32 +1731,22 @@ async function performClinicalHandoff(userId, conversationId, escalationId, esca
 
   await refreshPilotOutcomeRollupsForAthlete(userId, initiatedAt * 1000);
 
-  // Send to AuntEDNA
+  // Send through the clinical bridge. AuntEdna is the current provider, but
+  // PulseCheck should only depend on the bridge contract here.
   let result;
-  if (USE_MOCK) {
-    // Mock response
-    result = {
-      success: true,
-      escalationId: `ae-${escalationId.slice(0, 8)}`,
-      status: escalationData.tier === EscalationTier.CriticalRisk ? 'assigned' : 'received',
-      estimatedContactTime: escalationData.tier === EscalationTier.CriticalRisk ? 'Within 15 minutes' : 'Within 24 hours'
-    };
-    console.log('[pulsecheck-escalation] Mock AuntEDNA response:', result);
-  } else {
-    try {
-      const response = await fetch(`${AUNTEDNA_BASE_URL}/escalations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${AUNTEDNA_API_KEY}`
-        },
-        body: JSON.stringify(payload)
-      });
-      result = await response.json();
-    } catch (err) {
-      console.error('[pulsecheck-escalation] AuntEDNA request failed:', err);
-      result = { success: false, error: err.message };
-    }
+  try {
+    result = await createClinicalBridge().createEscalation(payload);
+    console.log('[pulsecheck-escalation] Clinical bridge response:', {
+      provider: clinicalBridgeConfig.provider,
+      mock: Boolean(result.mock),
+      success: result.success,
+      status: result.status,
+      escalationId: result.escalationId || null,
+      requestId: result.requestId || null,
+    });
+  } catch (err) {
+    console.error('[pulsecheck-escalation] Clinical bridge request failed:', err);
+    result = { success: false, error: err.message };
   }
 
   // Update final status

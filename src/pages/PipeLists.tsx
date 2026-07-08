@@ -1025,6 +1025,41 @@ const normalizeComposerBodyHtml = (html: string, textFallback = '') => {
     .replace(/<\/p>$/i, '');
 };
 
+const serializeComposerNodeToHtml = (node: ChildNode, linkifyText = true): string => {
+  if (node.nodeType === 3) {
+    const escaped = escapeComposerHtml(node.textContent || '').replace(/\r?\n/g, '<br>');
+    return linkifyText ? escaped.replace(emailMessageUrlRegex, (url) => {
+      const href = url.toLowerCase().startsWith('http') ? url : `https://${url}`;
+      return `<a href="${escapeComposerHtml(href)}" target="_blank" rel="noreferrer">${url}</a>`;
+    }) : escaped;
+  }
+  if (node.nodeType !== 1) return '';
+
+  const element = node as HTMLElement;
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === 'br') return '<br>';
+
+  const childHtml = Array.from(element.childNodes)
+    .map((child) => serializeComposerNodeToHtml(child, tagName !== 'a'))
+    .join('');
+
+  if (tagName === 'a') {
+    const href = normalizeComposerHref(element.getAttribute('href') || '');
+    return href ? `<a href="${escapeComposerHtml(href)}" target="_blank" rel="noreferrer">${childHtml}</a>` : childHtml;
+  }
+  if (tagName === 'div') return childHtml ? `${childHtml}<br>` : '<br>';
+  if (tagName === 'p') return childHtml ? `${childHtml}<br><br>` : '<br><br>';
+  return childHtml;
+};
+
+const serializeComposerEditorHtml = (editor: HTMLDivElement) =>
+  normalizeComposerBodyHtml(
+    Array.from(editor.childNodes)
+      .map((node) => serializeComposerNodeToHtml(node))
+      .join(''),
+    editor.innerText.replace(/\u00a0/g, ' '),
+  );
+
 const normalizeComposerHref = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return '';
@@ -3667,14 +3702,15 @@ const PipelinePage: NextPage = () => {
   const syncContactEmailComposerState = (editor: HTMLDivElement) => {
     const text = editor.innerText.replace(/\u00a0/g, ' ');
     setContactEmailBody(text);
-    setContactEmailBodyHtml(normalizeComposerBodyHtml(editor.innerHTML, text));
+    setContactEmailBodyHtml(serializeComposerEditorHtml(editor));
   };
 
   const commitContactEmailComposerState = (editor: HTMLDivElement) => {
     const text = editor.innerText.replace(/\u00a0/g, ' ');
-    const html = normalizeComposerBodyHtml(editor.innerHTML, text);
+    const html = serializeComposerEditorHtml(editor);
     setContactEmailBody(text);
     setContactEmailBodyHtml(html);
+    editor.innerHTML = html;
   };
 
   const saveContactEmailSelection = () => {

@@ -136,6 +136,38 @@ test('buildEscalationMirror flags follow-up for triage and clears it on booking/
   assert.equal(resolved.auntEdnaCase.resolvedAt, 300);
 });
 
+test('buildEscalationMirror mirrors watchlist and check-in workflow state without clinical content', () => {
+  const watchlist = buildEscalationMirror(
+    normalizeWebhookEvent({
+      event: 'watchlist.entered',
+      webhookEventId: 'evt-watch-1',
+      pulseEscalationId: 'esc-1',
+      caseId: 'ae-case-1',
+      clinicalSummary: 'should never persist',
+    }),
+    400,
+  );
+  assert.equal(watchlist.auntEdnaCase.watchList, true);
+  assert.equal(watchlist.auntEdnaCase.appState, 'protective');
+  assert.equal(watchlist.auntEdnaCase.returnToTrainingStatus, 'not_cleared');
+  assert.equal(watchlist.auntEdnaCase.watchListEnteredAt, 400);
+  assert.equal('clinicalSummary' in watchlist.auntEdnaCase, false);
+
+  const cleared = buildEscalationMirror(
+    normalizeWebhookEvent({ event: 'watchlist.cleared_for_training', webhookEventId: 'evt-watch-2' }),
+    500,
+  );
+  assert.equal(cleared.auntEdnaCase.returnToTrainingStatus, 'cleared');
+  assert.equal(cleared.auntEdnaCase.followUpRequired, false);
+
+  const missed = buildEscalationMirror(
+    normalizeWebhookEvent({ event: 'checkin.missed', webhookEventId: 'evt-checkin-1' }),
+    600,
+  );
+  assert.equal(missed.auntEdnaCase.checkInMissedAt, 600);
+  assert.equal(missed.auntEdnaCase.followUpRequired, true);
+});
+
 test('buildEventDocId sanitizes slashes in partner event ids', () => {
   assert.equal(buildEventDocId('evt/with/slashes'), 'auntedna_evt_with_slashes');
 });

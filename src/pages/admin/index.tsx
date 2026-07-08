@@ -145,6 +145,12 @@ const adminCardsData = [
     link: "/staff/clinical-escalations"
   },
   {
+    title: "Clinical Test Unit",
+    description: "Smoke test the clinical bridge endpoints from one admin surface: health, status, care state, synthetic athlete upsert, escalation create, and resolve.",
+    icon: <FlaskConical className="w-5 h-5" />,
+    link: "/admin/clinicalTestUnit"
+  },
+  {
     title: "Legacy Roster Migration",
     description: "Backfill legacy coach-athlete rosters into PulseCheck organizations and teams, then track cutover readiness before removing the old bridge.",
     icon: <Users2 className="w-5 h-5" />,
