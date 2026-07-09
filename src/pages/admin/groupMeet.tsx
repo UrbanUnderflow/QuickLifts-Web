@@ -448,6 +448,15 @@ const GroupMeetAdminPage: React.FC = () => {
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<
     string | null
   >(null);
+  const [requestCalendarDragSource, setRequestCalendarDragSource] = useState<{
+    date: string;
+    token: string;
+  } | null>(null);
+  const [requestCalendarDragOverDate, setRequestCalendarDragOverDate] =
+    useState<string | null>(null);
+  const [calendarCopyingDate, setCalendarCopyingDate] = useState<string | null>(
+    null,
+  );
   const [calendarDayModalDate, setCalendarDayModalDate] = useState<
     string | null
   >(null);
@@ -488,6 +497,7 @@ const GroupMeetAdminPage: React.FC = () => {
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const suppressNextRequestCalendarClickRef = useRef(false);
   const [hostNoteDraft, setHostNoteDraft] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editDeadlineAt, setEditDeadlineAt] = useState("");
@@ -1923,6 +1933,92 @@ const GroupMeetAdminPage: React.FC = () => {
       invite.availabilityEntries.some((slot) => slot.date === date),
     );
 
+  const clearRequestCalendarDragState = () => {
+    setRequestCalendarDragSource(null);
+    setRequestCalendarDragOverDate(null);
+  };
+
+  const copyRequestCalendarAvailability = async (
+    sourceDate: string,
+    targetDate: string,
+  ) => {
+    if (!selectedRequest || !selectedRequestId || sourceDate === targetDate) {
+      return false;
+    }
+
+    const sourceInvites = resolveSelectedInvitesForDate(sourceDate);
+    if (sourceInvites.length !== 1) {
+      setRequestModalMessage({
+        type: "error",
+        text:
+          sourceInvites.length > 1
+            ? "Choose a day with one participant before dragging availability to another date."
+            : "That source day does not have availability to copy.",
+      });
+      return false;
+    }
+
+    const sourceInvite = sourceInvites[0];
+    const sourceSlots = sourceInvite.availabilityEntries.filter(
+      (slot) => slot.date === sourceDate,
+    );
+    if (!sourceSlots.length) {
+      setRequestModalMessage({
+        type: "error",
+        text: "That source day does not have time ranges to copy.",
+      });
+      return false;
+    }
+
+    setCalendarCopyingDate(targetDate);
+    setRequestModalMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const copiedSlots = sourceSlots.map((slot) => ({
+        ...slot,
+        date: targetDate,
+      }));
+      const availabilityEntries = [
+        ...sourceInvite.availabilityEntries.filter(
+          (slot) => slot.date !== targetDate,
+        ),
+        ...copiedSlots,
+      ];
+      const response = await fetch(
+        `/api/admin/group-meet/${encodeURIComponent(selectedRequestId)}/invites/${encodeURIComponent(sourceInvite.token)}`,
+        {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ availabilityEntries }),
+        },
+      );
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to copy availability.");
+      }
+
+      setRequestModalMessage({
+        type: "success",
+        text: `${sourceInvite.name}'s availability was copied from ${formatMonthDate(sourceDate)} to ${formatMonthDate(targetDate)}.`,
+      });
+      setSelectedCalendarDate(targetDate);
+      await Promise.all([loadRequests(), loadRequestDetail(selectedRequestId)]);
+      return true;
+    } catch (error: any) {
+      const errorText =
+        error?.message || "Failed to copy availability to that date.";
+      setRequestModalMessage({ type: "error", text: errorText });
+      setMessage({ type: "error", text: errorText });
+      return false;
+    } finally {
+      setCalendarCopyingDate(null);
+    }
+  };
+
   const getHostInvite = (
     request: Pick<GroupMeetRequestSummary, "invites">,
   ) => request.invites.find((invite) => invite.participantType === "host");
@@ -3087,18 +3183,95 @@ const GroupMeetAdminPage: React.FC = () => {
                             );
                             const dayInvites =
                               resolveSelectedInvitesForDate(dateKey);
+                            const canDragCopyDay =
+                              inTargetMonth &&
+                              !calendarCopyingDate &&
+                              dayInvites.length === 1;
+                            const isDragSource =
+                              requestCalendarDragSource?.date === dateKey;
+                            const isDropTarget =
+                              requestCalendarDragOverDate === dateKey &&
+                              requestCalendarDragSource?.date !== dateKey;
 
                             return (
                               <button
                                 type="button"
                                 key={dateKey}
-                                onClick={() => {
+                                draggable={canDragCopyDay}
+                                onClick={(event) => {
+                                  if (suppressNextRequestCalendarClickRef.current) {
+                                    event.preventDefault();
+                                    suppressNextRequestCalendarClickRef.current =
+                                      false;
+                                    return;
+                                  }
                                   if (!inTargetMonth) return;
                                   setSelectedCalendarDate(dateKey);
                                   setCalendarDayModalDate(dateKey);
                                   setCalendarDayModalError(null);
                                 }}
-                                disabled={!inTargetMonth}
+                                onDragStart={(event) => {
+                                  if (!canDragCopyDay) {
+                                    event.preventDefault();
+                                    return;
+                                  }
+                                  const sourceInvite = dayInvites[0];
+                                  event.dataTransfer.effectAllowed = "copy";
+                                  event.dataTransfer.setData(
+                                    "text/plain",
+                                    JSON.stringify({
+                                      date: dateKey,
+                                      token: sourceInvite.token,
+                                    }),
+                                  );
+                                  setRequestCalendarDragSource({
+                                    date: dateKey,
+                                    token: sourceInvite.token,
+                                  });
+                                }}
+                                onDragOver={(event) => {
+                                  if (
+                                    !inTargetMonth ||
+                                    calendarCopyingDate ||
+                                    !requestCalendarDragSource ||
+                                    requestCalendarDragSource.date === dateKey
+                                  ) {
+                                    return;
+                                  }
+                                  event.preventDefault();
+                                  event.dataTransfer.dropEffect = "copy";
+                                  setRequestCalendarDragOverDate(dateKey);
+                                }}
+                                onDragLeave={(event) => {
+                                  const relatedTarget =
+                                    event.relatedTarget as Node | null;
+                                  if (
+                                    !relatedTarget ||
+                                    !event.currentTarget.contains(relatedTarget)
+                                  ) {
+                                    setRequestCalendarDragOverDate((current) =>
+                                      current === dateKey ? null : current,
+                                    );
+                                  }
+                                }}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  const sourceDate =
+                                    requestCalendarDragSource?.date || "";
+                                  suppressNextRequestCalendarClickRef.current =
+                                    Boolean(sourceDate);
+                                  void copyRequestCalendarAvailability(
+                                    sourceDate,
+                                    dateKey,
+                                  ).then((copied) => {
+                                    suppressNextRequestCalendarClickRef.current =
+                                      copied;
+                                    clearRequestCalendarDragState();
+                                  });
+                                }}
+                                onDragEnd={clearRequestCalendarDragState}
+                                disabled={!inTargetMonth || Boolean(calendarCopyingDate)}
                                 className={`min-h-[145px] rounded-lg border p-3 text-left transition-colors ${
                                   inTargetMonth
                                     ? dayInvites.length
@@ -3111,7 +3284,28 @@ const GroupMeetAdminPage: React.FC = () => {
                                       ? "ring-2 ring-stone-900/70"
                                       : "hover:border-stone-200 hover:bg-stone-100 cursor-pointer"
                                     : "cursor-default"
+                                } ${
+                                  canDragCopyDay
+                                    ? "cursor-grab active:cursor-grabbing"
+                                    : ""
+                                } ${
+                                  isDragSource
+                                    ? "scale-[0.98] opacity-70 ring-2 ring-stone-300"
+                                    : ""
+                                } ${
+                                  isDropTarget
+                                    ? "border-stone-900 bg-stone-900/15 ring-2 ring-stone-900/30"
+                                    : ""
+                                } ${
+                                  calendarCopyingDate === dateKey
+                                    ? "opacity-70"
+                                    : ""
                                 }`}
+                                title={
+                                  canDragCopyDay
+                                    ? `Drag to copy ${dayInvites[0].name}'s availability to another day.`
+                                    : undefined
+                                }
                               >
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="text-sm font-medium">

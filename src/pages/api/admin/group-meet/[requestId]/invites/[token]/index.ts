@@ -4,6 +4,7 @@ import admin, {
 } from "../../../../../../../lib/firebase-admin";
 import {
   computeGroupMeetAnalysis,
+  normalizeGroupMeetAvailabilitySlots,
   resolveGroupMeetStatusFromInvites,
 } from "../../../../../../../lib/groupMeet";
 import {
@@ -27,7 +28,7 @@ export default async function handler(
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (req.method !== "DELETE") {
+  if (req.method !== "DELETE" && req.method !== "PATCH") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
@@ -67,18 +68,77 @@ export default async function handler(
     }
 
     const inviteData = inviteDoc.data() || {};
-    if (inviteData.participantType === "host") {
-      return res.status(400).json({
-        error: "The host cannot be removed from the request.",
-      });
-    }
-
     const requestData = requestDoc.data() || {};
     const targetMonth =
       typeof requestData.targetMonth === "string"
         ? requestData.targetMonth
         : "";
     const deadlineAt = toIso(requestData.deadlineAt);
+
+    if (req.method === "PATCH") {
+      const availabilityEntries = normalizeGroupMeetAvailabilitySlots(
+        req.body?.availabilityEntries,
+        targetMonth,
+      );
+      const hasResponse = availabilityEntries.length > 0;
+
+      await inviteRef.set(
+        {
+          availabilityEntries,
+          hasResponse,
+          responseSubmittedAt: hasResponse
+            ? inviteData.responseSubmittedAt ||
+              admin.firestore.FieldValue.serverTimestamp()
+            : null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedByEmail: adminUser.email || null,
+        },
+        { merge: true },
+      );
+
+      const invitesSnapshot = await requestRef
+        .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
+        .orderBy("createdAt", "asc")
+        .get();
+      const invites = invitesSnapshot.docs.map((docSnap) =>
+        mapGroupMeetInviteDetail(docSnap, targetMonth),
+      );
+      const responseCount = invites.filter(
+        (invite) => invite.respondedAt || invite.availabilityEntries.length > 0,
+      ).length;
+
+      await requestRef.set(
+        {
+          responseCount,
+          aiRecommendation: null,
+          status: resolveGroupMeetStatusFromInvites(
+            deadlineAt,
+            requestData.status,
+            invites,
+            {
+              finalSelection: requestData.finalSelection || null,
+              calendarInvite: requestData.calendarInvite || null,
+            },
+          ),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedByEmail: adminUser.email || null,
+        },
+        { merge: true },
+      );
+
+      return res.status(200).json({
+        success: true,
+        invite: mapGroupMeetInviteDetail(await inviteRef.get(), targetMonth),
+        responseCount,
+      });
+    }
+
+    if (inviteData.participantType === "host") {
+      return res.status(400).json({
+        error: "The host cannot be removed from the request.",
+      });
+    }
+
     const removedInviteName = inviteData.name || "Guest";
 
     await inviteRef.delete();

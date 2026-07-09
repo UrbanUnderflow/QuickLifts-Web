@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   addDays,
   endOfMonth,
@@ -404,6 +404,10 @@ export default function GroupMeetAvailabilityPicker({
   const [activeDate, setActiveDate] = useState<string | null>(null);
   const [draftRanges, setDraftRanges] = useState<DayRangeDraft[]>([]);
   const [duplicateDates, setDuplicateDates] = useState<string[]>([]);
+  const [dragSourceDate, setDragSourceDate] = useState<string | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const suppressNextDayClickRef = useRef(false);
 
   const calendarDays = useMemo(() => {
     if (!/^\d{4}-\d{2}$/.test(targetMonth || '')) {
@@ -566,6 +570,7 @@ export default function GroupMeetAvailabilityPicker({
       (participantAvailabilityByDate.get(date) || []).filter((peer) => !peer.isCurrentUser),
       meetingDurationMinutes
     );
+    setCopyFeedback(null);
     setActiveDate(date);
     setDuplicateDates([]);
     setDraftRanges(
@@ -591,6 +596,62 @@ export default function GroupMeetAvailabilityPicker({
             ]
           : [createDraftRange('09:00', '10:00')]
     );
+  };
+
+  const getCopyableSlotsForDate = (date: string) => {
+    const savedSlots = slotsByDate.get(date) || [];
+    if (savedSlots.length) {
+      return sortAvailabilitySlots(savedSlots);
+    }
+
+    return sortAvailabilitySlots(
+      (importedSuggestionsByDate.get(date) || []).map((suggestion) => ({
+        date,
+        startMinutes: suggestion.startMinutes,
+        endMinutes: suggestion.endMinutes,
+      }))
+    );
+  };
+
+  const copyAvailabilityToDate = (sourceDate: string, targetDate: string) => {
+    if (disabled || !sourceDate || !targetDate || sourceDate === targetDate) {
+      return false;
+    }
+
+    const sourceHasSavedSlots = Boolean((slotsByDate.get(sourceDate) || []).length);
+    const sourceSlots = getCopyableSlotsForDate(sourceDate);
+    if (!sourceSlots.length) {
+      return false;
+    }
+
+    const copiedSlots = sourceSlots.map((slot) => ({
+      ...slot,
+      date: targetDate,
+    }));
+
+    onChange(
+      sortAvailabilitySlots([
+        ...availabilityEntries.filter(
+          (slot) =>
+            slot.date !== targetDate &&
+            (sourceHasSavedSlots || slot.date !== sourceDate)
+        ),
+        ...(sourceHasSavedSlots ? [] : sourceSlots),
+        ...copiedSlots,
+      ])
+    );
+    setCopyFeedback(
+      `${format(parse(sourceDate, 'yyyy-MM-dd', new Date()), 'MMM d')} copied to ${format(
+        parse(targetDate, 'yyyy-MM-dd', new Date()),
+        'MMM d'
+      )}. Save changes to keep it.`
+    );
+    return true;
+  };
+
+  const clearDragState = () => {
+    setDragSourceDate(null);
+    setDragOverDate(null);
   };
 
   const closeEditor = () => {
@@ -727,6 +788,11 @@ export default function GroupMeetAvailabilityPicker({
             {selectedDateCount} day{selectedDateCount === 1 ? '' : 's'} selected
           </p>
           <p className="text-sm text-stone-400 mt-1">{subtitle}</p>
+          {copyFeedback && (
+            <div className="mt-3 inline-flex rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700">
+              {copyFeedback}
+            </div>
+          )}
         </div>
       </div>
 
@@ -749,12 +815,65 @@ export default function GroupMeetAvailabilityPicker({
           const slots = slotsByDate.get(dateKey) || [];
           const importedSuggestionsForDate = importedSuggestionsByDate.get(dateKey) || [];
           const peerParticipants = participantAvailabilityByDate.get(dateKey) || [];
+          const canDragCopy =
+            inTargetMonth &&
+            !disabled &&
+            (slots.length > 0 || importedSuggestionsForDate.length > 0);
+          const isDragSource = dragSourceDate === dateKey;
+          const isDropTarget = dragOverDate === dateKey && dragSourceDate !== dateKey;
 
           return (
             <button
               key={dateKey}
               type="button"
-              onClick={() => inTargetMonth && !disabled && openDayEditor(dateKey)}
+              draggable={canDragCopy}
+              onClick={(event) => {
+                if (suppressNextDayClickRef.current) {
+                  event.preventDefault();
+                  suppressNextDayClickRef.current = false;
+                  return;
+                }
+                if (inTargetMonth && !disabled) {
+                  openDayEditor(dateKey);
+                }
+              }}
+              onDragStart={(event) => {
+                if (!canDragCopy) {
+                  event.preventDefault();
+                  return;
+                }
+                event.dataTransfer.effectAllowed = 'copy';
+                event.dataTransfer.setData('text/plain', dateKey);
+                setCopyFeedback(null);
+                setDragSourceDate(dateKey);
+              }}
+              onDragOver={(event) => {
+                const sourceDate = dragSourceDate || event.dataTransfer.getData('text/plain');
+                if (!inTargetMonth || disabled || !sourceDate || sourceDate === dateKey) {
+                  return;
+                }
+                if (!getCopyableSlotsForDate(sourceDate).length) {
+                  return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'copy';
+                setDragOverDate(dateKey);
+              }}
+              onDragLeave={(event) => {
+                const relatedTarget = event.relatedTarget as Node | null;
+                if (!relatedTarget || !event.currentTarget.contains(relatedTarget)) {
+                  setDragOverDate((current) => (current === dateKey ? null : current));
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const sourceDate = dragSourceDate || event.dataTransfer.getData('text/plain');
+                const copied = copyAvailabilityToDate(sourceDate, dateKey);
+                suppressNextDayClickRef.current = copied;
+                clearDragState();
+              }}
+              onDragEnd={clearDragState}
               disabled={!inTargetMonth || disabled}
               className={`min-h-[84px] rounded-lg border p-1.5 text-left transition-colors sm:min-h-[92px] sm:p-2 ${
                 inTargetMonth
@@ -766,7 +885,12 @@ export default function GroupMeetAvailabilityPicker({
                       ? 'border-emerald-400/20 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.1]'
                     : 'border-stone-200 bg-[#FAFAF7] hover:bg-stone-100'
                   : 'border-stone-100 bg-stone-50 text-stone-300'
+              } ${canDragCopy ? 'cursor-grab active:cursor-grabbing' : ''} ${
+                isDragSource ? 'scale-[0.98] opacity-70 ring-2 ring-stone-300' : ''
+              } ${
+                isDropTarget ? 'border-stone-900 bg-stone-900/15 ring-2 ring-stone-900/30' : ''
               } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+              title={canDragCopy ? 'Drag to another day to copy these time ranges.' : undefined}
             >
               <div className="text-xs font-medium sm:text-sm">{format(day, 'd')}</div>
               {Boolean(peerParticipants.length) && (
