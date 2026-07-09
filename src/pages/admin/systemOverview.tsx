@@ -131,6 +131,7 @@ import PulseSystemDesignLanguageTab from "../../components/admin/system-overview
 import PulseEducationOfferingsTab from "../../components/admin/system-overview/PulseEducationOfferingsTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
 import AuntEdnaEscalationDataExchangeContractTab from "../../components/admin/system-overview/AuntEdnaEscalationDataExchangeContractTab";
+import ClinicalBridgePayloadSchemasTab from "../../components/admin/system-overview/ClinicalBridgePayloadSchemasTab";
 import AuntEdnaPilotAuthorizationMemoTab from "../../components/admin/system-overview/AuntEdnaPilotAuthorizationMemoTab";
 import AuntEdnaExhibitATab from "../../components/admin/system-overview/AuntEdnaExhibitATab";
 import AuntEdnaExhibitBTab from "../../components/admin/system-overview/AuntEdnaExhibitBTab";
@@ -369,6 +370,7 @@ const SYSTEM_TABS: SystemTab[] = [
     sectionIds: [
       "auntedna-integration-strategy",
       "auntedna-escalation-data-exchange-contract",
+      "clinical-bridge-payload-schemas",
       "auntedna-pilot-authorization-memo",
       "auntedna-exhibit-a-data-architecture",
       "auntedna-exhibit-b-performance-standards",
@@ -2114,6 +2116,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "auntedna-escalation-data-exchange-contract":
         return <AuntEdnaEscalationDataExchangeContractTab />;
+
+      case "clinical-bridge-payload-schemas":
+        return <ClinicalBridgePayloadSchemasTab />;
 
       case "auntedna-pilot-authorization-memo":
         return <AuntEdnaPilotAuthorizationMemoTab />;
