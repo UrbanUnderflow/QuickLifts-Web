@@ -2496,6 +2496,12 @@ const PipelinePage: NextPage = () => {
   const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
   const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
   const [leadGenMessage, setLeadGenMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isPastedLeadListModalOpen, setIsPastedLeadListModalOpen] = useState(false);
+  const [pastedLeadList, setPastedLeadList] = useState('');
+  const [isAnalyzingPastedLeadList, setIsAnalyzingPastedLeadList] = useState(false);
+  const [analyzedPastedLeads, setAnalyzedPastedLeads] = useState<GeneratedLead[]>([]);
+  const [addedPastedLeadKeys, setAddedPastedLeadKeys] = useState<string[]>([]);
+  const [pastedLeadListMessage, setPastedLeadListMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isImportingFriends, setIsImportingFriends] = useState(false);
   const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isContactEmailModalOpen, setIsContactEmailModalOpen] = useState(false);
@@ -4264,6 +4270,23 @@ const PipelinePage: NextPage = () => {
     setIsLeadGenModalOpen(false);
   };
 
+  const openPastedLeadListModal = () => {
+    if (!canModify || !isContactListActive) return;
+    setPastedLeadList('');
+    setAnalyzedPastedLeads([]);
+    setAddedPastedLeadKeys([]);
+    setPastedLeadListMessage(null);
+    setIsPastedLeadListModalOpen(true);
+    setSelectedDetailItemId('');
+    setDetailModalMode('details');
+    setViewMode('pipeline');
+  };
+
+  const closePastedLeadListModal = () => {
+    if (isAnalyzingPastedLeadList) return;
+    setIsPastedLeadListModalOpen(false);
+  };
+
   const handleImportFriendsOfBusiness = async () => {
     if (!isOwner || !canManageActiveList || !isInvestorUpdateContactsList || isImportingFriends) return;
 
@@ -4432,6 +4455,141 @@ const PipelinePage: NextPage = () => {
       sourceEvidence: lead.sourceEvidence?.trim() || '',
       deadlineStatus: lead.deadlineStatus?.trim() || '',
     };
+  };
+
+  const handleAnalyzePastedLeadList = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || !isContactListActive || isAnalyzingPastedLeadList) return;
+
+    const rawList = pastedLeadList.trim();
+    if (!rawList) {
+      setPastedLeadListMessage({ type: 'error', text: 'Paste at least one person, organization, or profile link to analyze.' });
+      return;
+    }
+
+    if (rawList.length > 16000) {
+      setPastedLeadListMessage({ type: 'error', text: 'Keep each pasted batch under 16,000 characters so it can be reviewed reliably.' });
+      return;
+    }
+
+    setIsAnalyzingPastedLeadList(true);
+    setAnalyzedPastedLeads([]);
+    setAddedPastedLeadKeys([]);
+    setPastedLeadListMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before analyzing this list.');
+      }
+
+      const normalizedBrief = normalizeLeadSearchBrief(leadSearchBrief, activeList);
+      const stageOptions = activeList.stages.map((stage) => ({
+        id: stage.id,
+        label: stage.label,
+        probability: stage.probability,
+      }));
+      const existingItems = activeListItems.map((item) => ({
+        title: item.title,
+        organization: item.organization,
+        sourceUrl: item.sourceUrl,
+        contactEmails: item.contactEmails,
+      }));
+
+      const response = await fetch(getLeadSearchBridgeUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
+        },
+        body: JSON.stringify({
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.1,
+          max_output_tokens: 5000,
+          tools: [{ type: 'web_search' }],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'pipelists_pasted_contact_analysis',
+              strict: true,
+              schema: leadSearchResponseSchema,
+            },
+          },
+          input: [
+            {
+              role: 'system',
+              content: `You are a contact-research analyst for PipeLists, a relationship CRM.
+
+Research the user's pasted list entry by entry using current web sources. The pasted text may contain names, organizations, profile URLs, copied list rows, or short descriptions.
+
+Rules:
+- Return one result for each clear, distinct person or organization you can identify, up to 25 total results.
+- Do not return a directory, article, search result, or list of people as a contact. If an entry is a directory or list, resolve the actual people or organizations named in it instead.
+- Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl.
+- Never invent roles, organizations, email addresses, dates, relationship history, or source links.
+- Include contactEmails only when a valid email is visibly published by the source. Otherwise return an empty array.
+- For a person, title must be the person's name and organization should be their current role or organization. For an organization, title and organization may match when no individual is named.
+- Use the provided stage ids only. For new contacts, default to the first stage unless the pasted text clearly establishes a stronger relationship status.
+- Keep notes blank unless there is material relationship context, an introduction path, a concrete partnership angle, or a specific constraint.
+- rationale should explain the useful relationship angle in one concise sentence. sourceEvidence should identify the supporting source and what it establishes. deadlineStatus should be "no fixed deadline" for contact research.
+- Omit anything that cannot be identified with enough confidence to give a credible sourceUrl.
+- Return JSON only.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  listName: activeList.name,
+                  templateLabel: templateCatalog[activeList.templateKey].label,
+                  searchBrief: normalizedBrief,
+                  stageOptions,
+                  existingItems,
+                  pastedList: rawList,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+
+      const payload = await readApiJson(response, 'List analysis returned an unexpected response. Refresh and try again.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Unable to analyze this list.'));
+      }
+
+      const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
+      const rawLeads = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads : [];
+      const uniqueLeads = new Map<string, GeneratedLead>();
+
+      rawLeads.forEach((lead: Partial<GeneratedLead>) => {
+        const sanitizedLead = sanitizeGeneratedLead(lead);
+        const key = generatedLeadKey(sanitizedLead);
+        if (!activeLeadKeys.has(key) && !uniqueLeads.has(key)) {
+          uniqueLeads.set(key, sanitizedLead);
+        }
+      });
+
+      const nextLeads = Array.from(uniqueLeads.values()).slice(0, 25);
+      setAnalyzedPastedLeads(nextLeads);
+      setPastedLeadListMessage(
+        nextLeads.length > 0
+          ? { type: 'success', text: `Analyzed ${formatCount(nextLeads.length, 'contact')}. Review each one before adding it.` }
+          : { type: 'info', text: 'No new contacts could be verified from this list. Try including names, organizations, or profile links.' },
+      );
+    } catch (error) {
+      console.error('[PipeLists] Pasted contact analysis failed:', error);
+      setPastedLeadListMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to analyze this list.',
+      });
+    } finally {
+      setIsAnalyzingPastedLeadList(false);
+    }
   };
 
   const handleGenerateLeads = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -4627,6 +4785,54 @@ Research rules:
     setStageFilter('all');
     setViewMode('pipeline');
     setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
+  };
+
+  const handleAddAnalyzedPastedLead = (lead: GeneratedLead) => {
+    if (!canModify) return;
+    const key = generatedLeadKey(lead);
+    if (activeLeadKeys.has(key) || addedPastedLeadKeys.includes(key)) {
+      setPastedLeadListMessage({ type: 'info', text: `${lead.title} is already in this PipeList.` });
+      return;
+    }
+
+    const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
+    const nextItemBase = createItem(
+      {
+        ...defaultDraft(stage),
+        ...lead,
+        stage,
+        priority: lead.priority || 'medium',
+        // Keep research rationale in the review card, not in the contact record.
+        notes: cleanDealNotes(lead.notes),
+      },
+      makeId(),
+    );
+    const nextItem: PipelineItem = {
+      ...nextItemBase,
+      weeklyLogs: [
+        createSystemLog(
+          nextItemBase,
+          'item-created',
+          `Added ${nextItemBase.title} to ${activeList.name}.`,
+        ),
+      ],
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: [nextItem, ...list.items],
+            }
+          : list,
+      ),
+    );
+    setAddedPastedLeadKeys((currentKeys) => [...currentKeys, key]);
+    setSelectedLogItemId(nextItem.id);
+    setStageFilter('all');
+    setViewMode('pipeline');
+    setPastedLeadListMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
 
   const formatClipboardSection = (title: string, rows: Array<[string, string | number | undefined]>) => {
@@ -7319,6 +7525,16 @@ Research rules:
                           <Search className="h-4 w-4" />
                           Find leads
                         </button>
+                        {isContactListActive && (
+                          <button
+                            type="button"
+                            onClick={openPastedLeadListModal}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <ListPlus className="h-4 w-4" />
+                            Analyze list
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={openLeadUrlModal}
@@ -7609,6 +7825,16 @@ Research rules:
                             <Search className="h-4 w-4" />
                             Find leads
                           </button>
+                          {isContactListActive && (
+                            <button
+                              type="button"
+                              onClick={openPastedLeadListModal}
+                              className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                            >
+                              <ListPlus className="h-4 w-4" />
+                              Analyze list
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={openLeadUrlModal}
@@ -8759,6 +8985,178 @@ Research rules:
                   >
                     <Search className="h-4 w-4" />
                     Search leads
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
+
+      {isPastedLeadListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) closePastedLeadListModal();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-pasted-list-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="border-b border-stone-100 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                    <ListPlus className="h-4 w-4" />
+                  </div>
+                  <h3 id="pipe-pasted-list-title" className="text-xl font-bold text-stone-950">
+                    Analyze pasted list
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Paste names, organizations, emails, profile links, or copied list rows. PipeLists will verify and enrich each contact before you add it to {activeList.name}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePastedLeadListModal}
+                  disabled={isAnalyzingPastedLeadList}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {isAnalyzingPastedLeadList ? (
+              <div className="px-5 py-12 text-center">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+                <h4 className="text-base font-semibold text-stone-950">Analyzing your list</h4>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-500">
+                  Resolving each entry, finding credible sources, and mapping the contacts for review.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleAnalyzePastedLeadList} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
+                <label className="block" htmlFor="pipe-pasted-lead-list">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Paste a contact list</span>
+                  <textarea
+                    id="pipe-pasted-lead-list"
+                    value={pastedLeadList}
+                    onChange={(event) => setPastedLeadList(event.target.value)}
+                    className="min-h-44 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={'Jane Doe - Atlanta Hawks\nJohn Smith, Emory Sports Medicine\nhttps://example.com/team'}
+                    autoFocus
+                  />
+                  <p className="mt-2 text-xs leading-5 text-stone-400">
+                    Include one contact or source per line when possible. Lists, directories, and profiles are resolved into individual contacts rather than added as generic leads.
+                  </p>
+                </label>
+
+                <div className="mt-4">
+                  <MessageBanner message={pastedLeadListMessage} />
+                </div>
+
+                {analyzedPastedLeads.length > 0 && (
+                  <div className="mt-5 border-t border-stone-100 pt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold uppercase tracking-normal text-stone-400">Review contacts</h4>
+                      <span className="text-sm text-stone-500">{formatCount(analyzedPastedLeads.length, 'contact')}</span>
+                    </div>
+
+                    <div className="max-h-[46vh] space-y-3 overflow-y-auto pr-1">
+                      {analyzedPastedLeads.map((lead) => {
+                        const stage = getStage(activeList, lead.stage);
+                        const key = generatedLeadKey(lead);
+                        const alreadyAdded = addedPastedLeadKeys.includes(key);
+                        const alreadyInList = activeLeadKeys.has(key);
+                        const addDisabled = alreadyAdded || alreadyInList;
+
+                        return (
+                          <article key={key} className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <h5 className="break-words text-base font-semibold text-stone-950">{lead.title}</h5>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  {lead.organization && <span>{lead.organization}</span>}
+                                  {lead.segment && <span>{lead.segment}</span>}
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleAddAnalyzedPastedLead(lead)}
+                                disabled={addDisabled}
+                                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                              >
+                                {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                {alreadyAdded ? 'Added' : alreadyInList ? 'In list' : 'Add'}
+                              </button>
+                            </div>
+
+                            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                              {lead.rationale && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Fit:</span> {lead.rationale}
+                                </p>
+                              )}
+                              {lead.nextStep && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Next:</span> {lead.nextStep}
+                                </p>
+                              )}
+                              {lead.sourceEvidence && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Source:</span> {lead.sourceEvidence}
+                                </p>
+                              )}
+                              {lead.contactEmails.length > 0 && (
+                                <p className="break-all">
+                                  <span className="font-semibold text-stone-800">Email:</span> {lead.contactEmails.join(', ')}
+                                </p>
+                              )}
+                            </div>
+
+                            {lead.sourceUrl && (
+                              <div className="mt-3 text-sm">
+                                <a
+                                  href={lead.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                >
+                                  View source
+                                </a>
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2 border-t border-stone-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={closePastedLeadListModal}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {analyzedPastedLeads.length > 0 ? 'Analyze again' : 'Analyze list'}
                   </button>
                 </div>
               </form>
