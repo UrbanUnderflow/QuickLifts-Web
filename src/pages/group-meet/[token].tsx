@@ -208,8 +208,14 @@ const GroupMeetInvitePage: React.FC = () => {
     );
   }, [router.isReady, router.pathname, router.query]);
 
-  const submitAvailability = async () => {
-    if (!invite) return;
+  const saveAvailability = async (
+    nextAvailabilityEntries: GroupMeetAvailabilitySlot[],
+    options?: {
+      successText?: string;
+      errorText?: string;
+    }
+  ) => {
+    if (!invite) return null;
     setSaving(true);
     setMessage(null);
 
@@ -217,24 +223,42 @@ const GroupMeetInvitePage: React.FC = () => {
       const response = await fetch(`/api/group-meet/${encodeURIComponent(invite.token)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availabilityEntries }),
+        body: JSON.stringify({ availabilityEntries: nextAvailabilityEntries }),
       });
 
       const payload = (await response.json().catch(() => ({}))) as Partial<InviteResponse> & { error?: string };
       if (!response.ok || !payload.invite) {
-        throw new Error(payload.error || 'Failed to save availability.');
+        throw new Error(payload.error || options?.errorText || 'Failed to save availability.');
       }
 
       setInvite(payload.invite);
       setAvailabilityEntries(Array.isArray(payload.invite.availabilityEntries) ? payload.invite.availabilityEntries : []);
       setImportedSuggestions([]);
       setCalendarImport(payload.invite.calendarImport || null);
-      setMessage({ type: 'success', text: 'Availability saved.' });
+      setMessage({ type: 'success', text: options?.successText || 'Availability saved automatically.' });
+      return payload.invite;
     } catch (error: any) {
-      setMessage({ type: 'error', text: error?.message || 'Failed to save availability.' });
+      setMessage({ type: 'error', text: error?.message || options?.errorText || 'Failed to save availability.' });
+      return null;
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAvailabilityChange = (nextAvailabilityEntries: GroupMeetAvailabilitySlot[]) => {
+    const previousAvailabilityEntries = availabilityEntries;
+    setAvailabilityEntries(nextAvailabilityEntries);
+
+    void saveAvailability(nextAvailabilityEntries, {
+      successText: nextAvailabilityEntries.length
+        ? 'Availability saved automatically.'
+        : 'Availability cleared.',
+      errorText: 'Failed to automatically save availability.',
+    }).then((savedInvite) => {
+      if (!savedInvite) {
+        setAvailabilityEntries(previousAvailabilityEntries);
+      }
+    });
   };
 
   const startGoogleCalendarConnect = async () => {
@@ -316,19 +340,22 @@ const GroupMeetInvitePage: React.FC = () => {
       const mergedAvailability = mergeAvailabilitySlots(availabilityEntries, importedSlots);
       const addedSlotCount = mergedAvailability.length - availabilityEntries.length;
 
-      setAvailabilityEntries(mergedAvailability);
-      setImportedSuggestions([]);
-
-      if (payload.calendarImport !== undefined) {
-        setCalendarImport(payload.calendarImport || null);
+      if (addedSlotCount > 0) {
+        setAvailabilityEntries(mergedAvailability);
+        setImportedSuggestions([]);
+        await saveAvailability(mergedAvailability, {
+          successText: `Imported and saved ${addedSlotCount} Google Calendar ${addedSlotCount === 1 ? 'time slot' : 'time slots'}.`,
+          errorText: 'Google Calendar imported times, but automatic save failed.',
+        });
+      } else {
+        if (payload.calendarImport !== undefined) {
+          setCalendarImport(payload.calendarImport || null);
+        }
+        setMessage({
+          type: 'success',
+          text: 'Google Calendar is connected. No new availability windows were added because your saved availability already includes the importable times for this month.',
+        });
       }
-
-      setMessage({
-        type: 'success',
-        text: addedSlotCount > 0
-          ? `Imported ${addedSlotCount} Google Calendar ${addedSlotCount === 1 ? 'time slot' : 'time slots'} into your draft. Review or edit them, then press Save availability when you're ready.`
-          : 'Google Calendar is connected. No new availability windows were added because your draft already includes the importable times for this month.',
-      });
     } catch (error: any) {
       setMessage({ type: 'error', text: error?.message || 'Failed to import Google Calendar availability.' });
     } finally {
@@ -384,15 +411,15 @@ const GroupMeetInvitePage: React.FC = () => {
       : 'Connected'
     : 'Not connected';
   const googleCalendarHint = googleCalendarConnected
-    ? 'Import busy blocks from Google Calendar to prefill your draft availability. Nothing is submitted until you press Save availability.'
-    : 'Optionally connect Google Calendar to prefill your draft availability from busy-block data. We never submit anything automatically.';
+    ? 'Import busy blocks from Google Calendar to add availability. New imported windows save automatically.'
+    : 'Optionally connect Google Calendar to add availability from busy-block data. New imported windows save automatically.';
   const isClosed = invite?.request.status === 'closed';
   const deadlinePassedButStillOpen = Boolean(invite?.deadlinePassed && !isClosed);
   const pickerSubtitle = googleCalendarConnected
-    ? 'Tap the days that work, add your times, or import Google Calendar to prefill your draft. Hover the guest images to see who has already replied.'
+    ? 'Tap the days that work, add your times, or import Google Calendar. Changes save automatically.'
     : deadlinePassedButStillOpen
       ? 'The deadline has passed, but you can still add or update your availability here.'
-      : 'Tap the days that work, add one or more time windows, and save when you are ready.';
+      : 'Tap the days that work and add one or more time windows. Changes save automatically.';
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
@@ -429,7 +456,7 @@ const GroupMeetInvitePage: React.FC = () => {
                   )}
                   <h1 className="mt-4 text-3xl sm:text-4xl font-semibold text-stone-950">{invite.request.title}</h1>
                   <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
-                    Hi {invite.name}. Tap any day that works for you, add one or more time windows, and save your availability. You can still come back later to update it if needed.
+                    Hi {invite.name}. Tap any day that works for you and add one or more time windows. Group Meet saves changes automatically, and you can still come back later to update them.
                   </p>
                 </div>
 
@@ -490,7 +517,7 @@ const GroupMeetInvitePage: React.FC = () => {
                       {googleCalendarStatusLabel}
                     </span>
                     <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
-                      Manual save stays in control
+                      Auto-save is on
                     </span>
                     {calendarImport?.connectedEmail && (
                       <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
@@ -547,19 +574,18 @@ const GroupMeetInvitePage: React.FC = () => {
                 <div>
                   <h2 className="text-xl font-semibold text-stone-950">Pick your availability</h2>
                   <p className="text-sm text-stone-500 mt-1">
-                    {invite.responseSubmittedAt ? `Last saved ${new Date(invite.responseSubmittedAt).toLocaleString()}` : 'Nothing saved yet'}
+                    {saving
+                      ? 'Saving changes...'
+                      : invite.responseSubmittedAt
+                        ? `Last saved ${new Date(invite.responseSubmittedAt).toLocaleString()}`
+                        : 'Nothing saved yet'}
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={submitAvailability}
-                  disabled={saving || isClosed}
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-50"
-                >
+                <div className="inline-flex items-center justify-center gap-2 rounded-md border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-700">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                  {isClosed ? 'Availability closed' : 'Save availability'}
-                </button>
+                  {isClosed ? 'Availability closed' : saving ? 'Saving automatically' : 'Auto-save on'}
+                </div>
               </div>
 
               <GroupMeetAvailabilityPicker
@@ -574,7 +600,7 @@ const GroupMeetInvitePage: React.FC = () => {
                   imageUrl: invite.imageUrl || null,
                   participantType: invite.participantType,
                 }}
-                onChange={setAvailabilityEntries}
+                onChange={handleAvailabilityChange}
                 disabled={isClosed}
                 title="Calendar"
                 subtitle={pickerSubtitle}
@@ -583,7 +609,7 @@ const GroupMeetInvitePage: React.FC = () => {
 
             <section className="mt-6 rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
               <div className="text-sm text-stone-500">
-                Tip: if a day works, tap it and add as many windows as you want. Keep it lightweight. We just need the ranges that are actually good for you.
+                Tip: if a day works, tap it and add as many windows as you want. Once a day is added, Group Meet saves it automatically.
               </div>
             </section>
           </>

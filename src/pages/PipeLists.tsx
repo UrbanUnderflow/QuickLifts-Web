@@ -799,6 +799,27 @@ const normalizeContactEmails = (value: unknown): string[] => {
   );
 };
 
+const contactNameFromEmail = (value: string) => {
+  const email = normalizeContactEmails(value)[0];
+  if (!email) return '';
+
+  const localPart = email.split('@')[0]?.split('+')[0] || '';
+  const parts = localPart
+    .split(/[._-]+/)
+    .map((part) => part.replace(/[^a-zA-Z']/g, '').trim())
+    .filter((part) => part.length > 1);
+
+  if (parts.length < 2) return '';
+
+  const genericParts = new Set(['admin', 'billing', 'contact', 'hello', 'info', 'mail', 'support', 'team']);
+  if (parts.some((part) => genericParts.has(part.toLowerCase()))) return '';
+
+  return parts
+    .slice(0, 3)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+};
+
 const normalizeBasicText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
 const fullFriendName = (friend: FriendOfBusinessContact) =>
@@ -3866,8 +3887,10 @@ const PipelinePage: NextPage = () => {
       return false;
     }
 
+    const inferredContactName = tokens.map(contactNameFromEmail).find(Boolean) || '';
     setDraft((current) => ({
       ...current,
+      title: isContactListActive && !current.title.trim() && inferredContactName ? inferredContactName : current.title,
       contactEmails: Array.from(new Set([...current.contactEmails, ...tokens])),
     }));
     setContactEmailInput('');
@@ -4961,6 +4984,84 @@ Research rules:
       return;
     }
 
+    const directContactEmail = isContactListActive ? normalizeContactEmails(cleanInput)[0] : '';
+    if (directContactEmail) {
+      const stage = normalizeStageId(activeList.stages[0]?.id || 'sourced', activeList.stages);
+      const inferredContactName = contactNameFromEmail(directContactEmail);
+      const nextItemBase = createItem(
+        {
+          ...defaultDraft(stage),
+          title: inferredContactName || directContactEmail,
+          organization: '',
+          contactEmails: [directContactEmail],
+          stage,
+        },
+        makeId(),
+      );
+      const nextItem: PipelineItem = {
+        ...nextItemBase,
+        weeklyLogs: [
+          createSystemLog(
+            nextItemBase,
+            'item-created',
+            `Added ${nextItemBase.title} to ${activeList.name}.`,
+          ),
+        ],
+      };
+
+      setLists((currentLists) =>
+        currentLists.map((list) =>
+          list.id === activeList.id
+            ? {
+                ...list,
+                items: [nextItem, ...list.items],
+              }
+            : list,
+        ),
+      );
+      setStageFilter('all');
+      setSelectedDetailItemId(nextItem.id);
+      setSelectedLogItemId(nextItem.id);
+      setDetailModalMode('details');
+      setDraft({
+        ...defaultDraft(nextItem.stage),
+        title: nextItem.title,
+        organization: nextItem.organization,
+        owner: nextItem.owner,
+        contactEmails: nextItem.contactEmails,
+        stage: nextItem.stage,
+        priority: nextItem.priority,
+        amount: nextItem.amount,
+        dueDate: nextItem.dueDate,
+        nextStep: nextItem.nextStep,
+        notes: nextItem.notes,
+        sourceUrl: nextItem.sourceUrl,
+        segment: nextItem.segment,
+        decisionMaker: nextItem.decisionMaker,
+        acv: nextItem.acv,
+        expectedCloseDate: nextItem.expectedCloseDate,
+        contractTerm: nextItem.contractTerm,
+        pilotScope: nextItem.pilotScope,
+        athleteCount: nextItem.athleteCount,
+        pilotStart: nextItem.pilotStart,
+        pilotEnd: nextItem.pilotEnd,
+        conversionLikelihood: nextItem.conversionLikelihood,
+        grossMargin: nextItem.grossMargin,
+        partnerCost: nextItem.partnerCost,
+        hardwareCost: nextItem.hardwareCost,
+        lossReason: nextItem.lossReason,
+        expansionPath: nextItem.expansionPath,
+        attachments: nextItem.attachments,
+      });
+      setEditingItemId(nextItem.id);
+      setIsEditorOpen(true);
+      setLeadUrl('');
+      setLeadExtractMessage(null);
+      setIsLeadUrlModalOpen(false);
+      setViewMode('pipeline');
+      return;
+    }
+
     setIsLeadUrlModalOpen(false);
     setIsAnalyzingLead(true);
     setLeadExtractMessage(null);
@@ -5267,9 +5368,12 @@ Research rules:
       return;
     }
 
+    const normalizedContactEmails = Array.from(new Set([...draft.contactEmails, ...pendingContactTokens]));
+    const inferredContactName = normalizedContactEmails.map(contactNameFromEmail).find(Boolean) || '';
     const draftToSave = {
       ...draft,
-      contactEmails: Array.from(new Set([...draft.contactEmails, ...pendingContactTokens])),
+      title: isContactListActive && !draft.title.trim() && inferredContactName ? inferredContactName : draft.title,
+      contactEmails: normalizedContactEmails,
       notes: cleanDealNotes(draft.notes),
     };
     if (!draftToSave.title.trim() && !draftToSave.organization.trim()) return;
@@ -8250,9 +8354,11 @@ Research rules:
                 <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
                   <Sparkles className="h-4 w-4" />
                 </div>
-                <h3 className="text-xl font-bold text-stone-950">Add new lead</h3>
+                <h3 className="text-xl font-bold text-stone-950">{isContactListActive ? 'Add contact' : 'Add new lead'}</h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Paste a URL or type a person, organization, fund, school, program, or partner name. PipeLists will pull what it can and create the item for review.
+                  {isContactListActive
+                    ? 'Enter an email, URL, person, or organization. PipeLists will create the contact for review.'
+                    : 'Paste a URL or type a person, organization, fund, school, program, or partner name. PipeLists will pull what it can and create the item for review.'}
                 </p>
               </div>
               <button
@@ -8266,14 +8372,14 @@ Research rules:
             </div>
 
             <label className="block" htmlFor="pipe-lead-url">
-              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead URL or Name</span>
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Email, URL, or Name' : 'Lead URL or Name'}</span>
               <input
                 id="pipe-lead-url"
                 type="text"
                 value={leadUrl}
                 onChange={(event) => setLeadUrl(event.target.value)}
                 className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                placeholder="https://example.com or Wisdom Ventures"
+                placeholder={isContactListActive ? 'jane.doe@example.com or Jane Doe' : 'https://example.com or Wisdom Ventures'}
                 autoFocus
               />
             </label>

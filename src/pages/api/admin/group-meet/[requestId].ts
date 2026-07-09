@@ -60,7 +60,9 @@ async function buildRequestDetail(
     createdByEmail: requestData.createdByEmail || null,
     createdAt: toIso(requestData.createdAt),
     participantCount: Number(requestData.participantCount) || invites.length,
-    responseCount: invites.filter((invite) => invite.respondedAt).length,
+    responseCount: invites.filter(
+      (invite) => invite.respondedAt || invite.availabilityEntries.length > 0,
+    ).length,
     status: resolveGroupMeetStatusFromInvites(
       deadlineAt,
       requestData.status,

@@ -405,6 +405,62 @@ const getInviteDeliveryMeta = (
   };
 };
 
+const getInviteCalendarImportMeta = (
+  invite: Pick<GroupMeetInviteSummary, "availabilityCount" | "calendarImport">,
+  timezone: string,
+) => {
+  const calendarImport = invite.calendarImport;
+  if (!calendarImport) return null;
+
+  const lastSyncedLabel = calendarImport.lastSyncedAt
+    ? toReadableDateTime(calendarImport.lastSyncedAt, timezone)
+    : null;
+  const connectedLabel = calendarImport.connectedAt
+    ? toReadableDateTime(calendarImport.connectedAt, timezone)
+    : null;
+  const hasSavedAvailability = invite.availabilityCount > 0;
+
+  if (calendarImport.lastSyncStatus === "success") {
+    return {
+      badgeText: "Calendar imported",
+      badgeClassName:
+        hasSavedAvailability
+          ? "border-sky-500/30 bg-sky-500/10 text-sky-700"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-700",
+      detailText: hasSavedAvailability
+        ? `Google Calendar imported${lastSyncedLabel ? ` ${lastSyncedLabel}` : ""}`
+        : `Google Calendar imported${lastSyncedLabel ? ` ${lastSyncedLabel}` : ""}, but no availability was saved.`,
+      emptyText:
+        "Google Calendar was imported, but the guest still needs to press Save availability for dates to count.",
+    };
+  }
+
+  if (calendarImport.lastSyncStatus === "error" || calendarImport.status === "error") {
+    return {
+      badgeText: "Calendar error",
+      badgeClassName: "border-red-500/30 bg-red-500/10 text-red-700",
+      detailText:
+        calendarImport.lastSyncError ||
+        "Google Calendar import hit an error before availability was saved.",
+      emptyText:
+        calendarImport.lastSyncError ||
+        "Google Calendar import hit an error before availability was saved.",
+    };
+  }
+
+  if (calendarImport.status === "connected") {
+    return {
+      badgeText: "Calendar connected",
+      badgeClassName: "border-sky-500/30 bg-sky-500/10 text-sky-700",
+      detailText: `Google Calendar connected${connectedLabel ? ` ${connectedLabel}` : ""}, but availability has not been saved yet.`,
+      emptyText:
+        "Google Calendar is connected, but no imported or manual availability has been saved yet.",
+    };
+  }
+
+  return null;
+};
+
 const getManualFlexStrategyLabel = (
   strategy: ApiManualFlexPreviewResponse["strategy"],
 ) => {
@@ -3782,6 +3838,11 @@ const GroupMeetAdminPage: React.FC = () => {
                               invite,
                               selectedRequest.timezone,
                             );
+                            const inviteCalendarImport =
+                              getInviteCalendarImportMeta(
+                                invite,
+                                selectedRequest.timezone,
+                              );
                             const inviteActionLabel =
                               getInviteActionLabel(invite);
 
@@ -3810,6 +3871,9 @@ const GroupMeetAdminPage: React.FC = () => {
                                           : "Waiting"}{" "}
                                         • {invite.availabilityCount} slots •{" "}
                                         {inviteDelivery.detailText}
+                                        {inviteCalendarImport
+                                          ? ` • ${inviteCalendarImport.detailText}`
+                                          : ""}
                                       </div>
                                     </div>
                                   </div>
@@ -3819,6 +3883,13 @@ const GroupMeetAdminPage: React.FC = () => {
                                     >
                                       {inviteDelivery.badgeText}
                                     </div>
+                                    {inviteCalendarImport && (
+                                      <div
+                                        className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs ${inviteCalendarImport.badgeClassName}`}
+                                      >
+                                        {inviteCalendarImport.badgeText}
+                                      </div>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -3905,8 +3976,15 @@ const GroupMeetAdminPage: React.FC = () => {
                                     ),
                                   )}
                                   {!invite.availabilityEntries.length && (
-                                    <span className="text-xs text-stone-400">
-                                      No availability submitted yet.
+                                    <span
+                                      className={`text-xs ${
+                                        inviteCalendarImport?.emptyText
+                                          ? "text-amber-700"
+                                          : "text-stone-400"
+                                      }`}
+                                    >
+                                      {inviteCalendarImport?.emptyText ||
+                                        "No availability submitted yet."}
                                     </span>
                                   )}
                                 </div>
