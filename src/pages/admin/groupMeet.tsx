@@ -120,6 +120,7 @@ type ApiConfirmationEmailResponse = {
   skipped?: boolean;
   messageId?: string | null;
   mode?: "preview" | "live";
+  emailPurpose?: "confirmation" | "update";
   sentCount?: number;
   failedCount?: number;
   skippedCount?: number;
@@ -131,6 +132,7 @@ type ApiConfirmationEmailResponse = {
     skippedCount: number;
     recipientCount: number;
     mode: "automatic";
+    emailPurpose?: "confirmation" | "update";
   };
   errors?: string[];
 };
@@ -1607,13 +1609,18 @@ const GroupMeetAdminPage: React.FC = () => {
 
       await loadRequestDetail(selectedRequestId);
       const confirmationEmail = schedulePayload.confirmationEmail || null;
+      const scheduleEmailPurpose =
+        confirmationEmail?.emailPurpose ||
+        (hadCalendarInvite ? "update" : "confirmation");
       const successText =
         confirmationEmail && confirmationEmail.sentCount > 0
           ? hadCalendarInvite
-            ? `Meeting time selected, Google Calendar invite updated, and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
+            ? `Meeting time selected, Google Calendar invite updated, and ${scheduleEmailPurpose === "update" ? "update" : "confirmation"} email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
             : `Meeting time selected, Google Calendar invite sent, and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
           : confirmationEmail && confirmationEmail.failedCount > 0
-            ? "Meeting time selected and Google Calendar invite created, but the Group Meet confirmation email needs a manual resend."
+            ? hadCalendarInvite
+              ? "Meeting time selected and Google Calendar invite updated, but the Group Meet update email needs a manual resend."
+              : "Meeting time selected and Google Calendar invite created, but the Group Meet confirmation email needs a manual resend."
             : hadCalendarInvite
               ? "Meeting time selected and Google Calendar invite updated."
               : "Meeting time selected and Google Calendar invite sent.";
@@ -1659,12 +1666,21 @@ const GroupMeetAdminPage: React.FC = () => {
       }
       await loadRequestDetail(selectedRequestId);
       const confirmationEmail = payload.confirmationEmail || null;
+      const scheduleEmailPurpose =
+        confirmationEmail?.emailPurpose ||
+        (selectedRequest.calendarInvite ? "update" : "confirmation");
       const successText =
         confirmationEmail && confirmationEmail.sentCount > 0
-          ? `Google Calendar invite created and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
+          ? selectedRequest.calendarInvite
+            ? `Google Calendar invite updated and ${scheduleEmailPurpose === "update" ? "update" : "confirmation"} email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
+            : `Google Calendar invite created and confirmation email sent to ${confirmationEmail.sentCount} guest${confirmationEmail.sentCount === 1 ? "" : "s"}.`
           : confirmationEmail && confirmationEmail.failedCount > 0
-            ? "Google Calendar invite created, but the Group Meet confirmation email needs a manual resend."
-            : "Google Calendar invite created.";
+            ? selectedRequest.calendarInvite
+              ? "Google Calendar invite updated, but the Group Meet update email needs a manual resend."
+              : "Google Calendar invite created, but the Group Meet confirmation email needs a manual resend."
+            : selectedRequest.calendarInvite
+              ? "Google Calendar invite updated."
+              : "Google Calendar invite created.";
       setMessage({ type: "success", text: successText });
       setRequestModalMessage({ type: "success", text: successText });
     } catch (error: any) {
@@ -1683,7 +1699,10 @@ const GroupMeetAdminPage: React.FC = () => {
     }
   };
 
-  const sendFinalConfirmationEmail = async (mode: "preview" | "live") => {
+  const sendFinalConfirmationEmail = async (
+    mode: "preview" | "live",
+    emailPurpose: "confirmation" | "update" = "confirmation",
+  ) => {
     if (!selectedRequestId || !selectedRequest?.finalSelection) return;
 
     if (mode === "preview" && !activeAdminEmail) {
@@ -1711,6 +1730,7 @@ const GroupMeetAdminPage: React.FC = () => {
           headers,
           body: JSON.stringify({
             mode,
+            emailPurpose,
             recipientName: auth.currentUser?.displayName || "Preview Recipient",
             recipientEmail: activeAdminEmail || "",
           }),
@@ -1730,11 +1750,13 @@ const GroupMeetAdminPage: React.FC = () => {
 
       await loadRequestDetail(selectedRequestId);
 
-      let successText = "Confirmation email sent.";
+      const emailLabel =
+        emailPurpose === "update" ? "Meeting update" : "Confirmation";
+      let successText = `${emailLabel} email sent.`;
       if (mode === "preview") {
         successText = payload.skipped
-          ? `Confirmation preview email was skipped for ${activeAdminEmail}.`
-          : `Confirmation preview email sent to ${activeAdminEmail}.`;
+          ? `${emailLabel} preview email was skipped for ${activeAdminEmail}.`
+          : `${emailLabel} preview email sent to ${activeAdminEmail}.`;
       } else {
         const sentCount = Number(payload.sentCount) || 0;
         const failedCount = Number(payload.failedCount) || 0;
@@ -1747,8 +1769,8 @@ const GroupMeetAdminPage: React.FC = () => {
           .filter(Boolean)
           .join(" • ");
         successText = failedCount
-          ? `Confirmation email send finished with issues: ${summary}.`
-          : `Confirmation email sent. ${summary}.`;
+          ? `${emailLabel} email send finished with issues: ${summary}.`
+          : `${emailLabel} email sent. ${summary}.`;
       }
 
       setMessage({ type: "success", text: successText });
@@ -3773,6 +3795,22 @@ const GroupMeetAdminPage: React.FC = () => {
                                             ?.sentAt
                                         ? "Resend confirmation"
                                         : "Send confirmation email"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      sendFinalConfirmationEmail(
+                                        "live",
+                                        "update",
+                                      )
+                                    }
+                                    disabled={confirmationEmailSending}
+                                    className="inline-flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-700 hover:bg-amber-500/15 disabled:opacity-50"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                    {confirmationEmailSending
+                                      ? "Sending update…"
+                                      : "Send update email"}
                                   </button>
                                 </>
                               )}

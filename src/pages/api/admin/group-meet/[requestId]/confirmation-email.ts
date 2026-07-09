@@ -11,6 +11,7 @@ import { requireAdminRequest } from "../../_auth";
 
 type ConfirmationEmailBody = {
   mode?: "preview" | "live";
+  emailPurpose?: "confirmation" | "update";
   recipientName?: string;
   recipientEmail?: string;
 };
@@ -36,6 +37,8 @@ export default async function handler(
 
   const body = (req.body || {}) as ConfirmationEmailBody;
   const mode = body.mode === "preview" ? "preview" : "live";
+  const emailPurpose: "confirmation" | "update" =
+    body.emailPurpose === "update" ? "update" : "confirmation";
   const recipientName = (
     body.recipientName ||
     adminUser.email ||
@@ -103,6 +106,7 @@ export default async function handler(
         calendarInvite,
         recipientName,
         recipientEmail,
+        emailPurpose,
       });
 
       if (!previewResult.success) {
@@ -118,6 +122,8 @@ export default async function handler(
             sentByEmail:
               requestData.finalConfirmationEmail?.sentByEmail || null,
             sendMode: requestData.finalConfirmationEmail?.sendMode || null,
+            emailPurpose:
+              requestData.finalConfirmationEmail?.emailPurpose || null,
             recipientCount:
               Number(requestData.finalConfirmationEmail?.recipientCount) || 0,
             previewSentAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -133,6 +139,7 @@ export default async function handler(
         skipped: Boolean(previewResult.skipped),
         messageId: previewResult.messageId || null,
         mode: "preview",
+        emailPurpose,
       });
     }
 
@@ -144,6 +151,7 @@ export default async function handler(
       calendarInvite,
       invites,
       mode: "manual",
+      emailPurpose,
     });
 
     if (sendResult.sentCount > 0) {
@@ -153,6 +161,7 @@ export default async function handler(
             sentAt: admin.firestore.FieldValue.serverTimestamp(),
             sentByEmail: adminUser.email || null,
             sendMode: "manual",
+            emailPurpose,
             recipientCount: sendResult.sentCount,
             previewSentAt:
               requestData.finalConfirmationEmail?.previewSentAt || null,
@@ -180,6 +189,7 @@ export default async function handler(
     return res.status(200).json({
       success: true,
       mode: "live",
+      emailPurpose,
       sentCount: sendResult.sentCount,
       failedCount: sendResult.failedCount,
       skippedCount: sendResult.skippedCount,

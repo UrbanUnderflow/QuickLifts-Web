@@ -175,6 +175,7 @@ export type GroupMeetFinalConfirmationEmail = {
   sentAt: string | null;
   sentByEmail: string | null;
   sendMode: "automatic" | "manual" | null;
+  emailPurpose: "confirmation" | "update" | null;
   recipientCount: number;
   previewSentAt: string | null;
   previewRecipientEmail: string | null;

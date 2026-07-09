@@ -92,6 +92,11 @@ async function buildRequestDetail(
             finalConfirmationEmailData.sendMode === "manual"
               ? finalConfirmationEmailData.sendMode
               : null,
+          emailPurpose:
+            finalConfirmationEmailData.emailPurpose === "confirmation" ||
+            finalConfirmationEmailData.emailPurpose === "update"
+              ? finalConfirmationEmailData.emailPurpose
+              : null,
           recipientCount: Math.max(
             0,
             Number(finalConfirmationEmailData.recipientCount) || 0,

@@ -54,6 +54,10 @@ export default async function handler(
 
     const timezone = requestData.timezone || "America/New_York";
     const title = requestData.title || "Group Meet";
+    const existingCalendarInvite = requestData.calendarInvite || null;
+    const emailPurpose: "confirmation" | "update" = existingCalendarInvite
+      ? "update"
+      : "confirmation";
     const invitesSnapshot = await requestRef
       .collection(INVITES_SUBCOLLECTION)
       .orderBy("createdAt", "asc")
@@ -69,7 +73,7 @@ export default async function handler(
       finalSelection,
       aiSummary: requestData.aiRecommendation?.summary || null,
       invites,
-      existingInvite: requestData.calendarInvite || null,
+      existingInvite: existingCalendarInvite,
     });
 
     const existingFinalConfirmationEmail =
@@ -86,6 +90,7 @@ export default async function handler(
       skippedCount: number;
       recipientCount: number;
       mode: "automatic";
+      emailPurpose: "confirmation" | "update";
     } = {
       attempted: false,
       sentCount: 0,
@@ -93,6 +98,7 @@ export default async function handler(
       skippedCount: 0,
       recipientCount: 0,
       mode: "automatic",
+      emailPurpose,
     };
 
     if (shouldAutoSendFinalConfirmation) {
@@ -105,6 +111,7 @@ export default async function handler(
           calendarInvite,
           invites,
           mode: "automatic",
+          emailPurpose,
         });
 
       confirmationEmailResult = {
@@ -114,6 +121,7 @@ export default async function handler(
         skippedCount: finalConfirmationSendResult.skippedCount,
         recipientCount: finalConfirmationSendResult.recipientCount,
         mode: "automatic",
+        emailPurpose,
       };
     }
 
@@ -123,6 +131,7 @@ export default async function handler(
             sentAt: admin.firestore.FieldValue.serverTimestamp(),
             sentByEmail: adminUser.email || null,
             sendMode: "automatic",
+            emailPurpose,
             recipientCount: confirmationEmailResult.sentCount,
             previewSentAt:
               existingFinalConfirmationEmail?.previewSentAt || null,

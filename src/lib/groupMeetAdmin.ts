@@ -107,6 +107,10 @@ export function mapGroupMeetFinalConfirmationEmail(
       data.sendMode === "automatic" || data.sendMode === "manual"
         ? data.sendMode
         : null,
+    emailPurpose:
+      data.emailPurpose === "confirmation" || data.emailPurpose === "update"
+        ? data.emailPurpose
+        : null,
     recipientCount: Math.max(0, Number(data.recipientCount) || 0),
     previewSentAt: toIso(data.previewSentAt),
     previewRecipientEmail:
@@ -213,6 +217,7 @@ async function sendSingleGroupMeetFinalConfirmationEmail(args: {
   finalSelection: GroupMeetFinalSelection;
   calendarInvite: GroupMeetCalendarInvite;
   mode: "automatic" | "manual" | "preview";
+  emailPurpose?: "confirmation" | "update";
   previewIntroText?: string | null;
 }) {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
@@ -229,14 +234,20 @@ async function sendSingleGroupMeetFinalConfirmationEmail(args: {
       ? undefined
       : [{ email: "info@fitwithpulse.ai", name: "Pulse Info" }];
   const subjectPrefix = args.mode === "preview" ? "[Preview] " : "";
-  const subject = `${subjectPrefix}${args.requestTitle}: final meeting time selected`;
+  const emailPurpose = args.emailPurpose || "confirmation";
+  const isUpdateEmail = emailPurpose === "update";
+  const subject = isUpdateEmail
+    ? `${subjectPrefix}${args.requestTitle}: meeting time updated`
+    : `${subjectPrefix}${args.requestTitle}: final meeting time selected`;
   const finalBlockLabel = buildGroupMeetFinalBlockLabel({
     finalSelection: args.finalSelection,
     timezone: args.timezone,
   });
+  const selectionSignature =
+    buildGroupMeetFinalSelectionSignature(args.finalSelection);
   const previewBanner =
     args.mode === "preview"
-      ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Preview email:</strong> this is how the final Group Meet confirmation email will look when it goes out to guests.</p>`
+      ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Preview email:</strong> this is how the Group Meet ${isUpdateEmail ? "update" : "confirmation"} email will look when it goes out to guests.</p>`
       : "";
   const previewIntroText = (args.previewIntroText || "").trim();
   const introParagraph =
@@ -263,16 +274,18 @@ async function sendSingleGroupMeetFinalConfirmationEmail(args: {
       <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
       ${introParagraph}
       <p>
-        Group Meet has successfully selected the final meeting block for
-        <strong>${escapeHtml(args.requestTitle)}</strong>.
-        Looking forward to hosting you.
+        ${
+          isUpdateEmail
+            ? `The meeting time for <strong>${escapeHtml(args.requestTitle)}</strong> has been updated. Please use the new time below and check your calendar for the updated invite.`
+            : `Group Meet has successfully selected the final meeting block for <strong>${escapeHtml(args.requestTitle)}</strong>. Looking forward to hosting you.`
+        }
       </p>
       <p>
-        Final time: <strong>${escapeHtml(finalBlockLabel)}</strong><br/>
+        ${isUpdateEmail ? "Updated time" : "Final time"}: <strong>${escapeHtml(finalBlockLabel)}</strong><br/>
         Timezone: <strong>${escapeHtml(args.timezone)}</strong>
       </p>
       <p>
-        A Google Calendar invite has been created and sent to
+        A Google Calendar invite has been ${isUpdateEmail ? "updated" : "created"} and sent to
         <strong>${escapeHtml(args.recipientEmail)}</strong>.
         This is a gentle reminder to check your calendar and confirm the meeting details there.
       </p>
@@ -292,14 +305,22 @@ async function sendSingleGroupMeetFinalConfirmationEmail(args: {
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
     bcc: internalBcc,
-    tags: ["group-meet", "group-meet-final-confirmation"],
+    tags: [
+      "group-meet",
+      isUpdateEmail
+        ? "group-meet-meeting-update"
+        : "group-meet-final-confirmation",
+    ],
     idempotencyKey:
       args.mode === "automatic"
         ? buildEmailDedupeKey([
-            "group-meet-final-confirmation-v1",
+            isUpdateEmail
+              ? "group-meet-meeting-update-v1"
+              : "group-meet-final-confirmation-v2",
             args.requestId,
             args.recipientEmail.toLowerCase(),
             args.calendarInvite.eventId,
+            selectionSignature,
           ])
         : undefined,
     idempotencyMetadata:
@@ -309,6 +330,8 @@ async function sendSingleGroupMeetFinalConfirmationEmail(args: {
             recipientEmail: args.recipientEmail.toLowerCase(),
             eventId: args.calendarInvite.eventId,
             mode: args.mode,
+            emailPurpose,
+            selectionSignature,
           }
         : undefined,
     bypassDailyRecipientLimit: true,
@@ -339,6 +362,7 @@ export async function sendGroupMeetFinalConfirmationEmailBatch(args: {
   calendarInvite: GroupMeetCalendarInvite;
   invites: GroupMeetInviteDetail[];
   mode: "automatic" | "manual";
+  emailPurpose?: "confirmation" | "update";
 }) {
   const recipients = buildGroupMeetFinalConfirmationRecipientInvites(
     args.invites,
@@ -354,6 +378,7 @@ export async function sendGroupMeetFinalConfirmationEmailBatch(args: {
         finalSelection: args.finalSelection,
         calendarInvite: args.calendarInvite,
         mode: args.mode,
+        emailPurpose: args.emailPurpose || "confirmation",
       }),
     ),
   );
@@ -386,7 +411,9 @@ export async function sendGroupMeetFinalConfirmationPreviewEmail(args: {
   calendarInvite: GroupMeetCalendarInvite;
   recipientName: string;
   recipientEmail: string;
+  emailPurpose?: "confirmation" | "update";
 }) {
+  const emailPurpose = args.emailPurpose || "confirmation";
   return sendSingleGroupMeetFinalConfirmationEmail({
     requestId: args.requestId,
     requestTitle: args.requestTitle,
@@ -396,8 +423,11 @@ export async function sendGroupMeetFinalConfirmationPreviewEmail(args: {
     finalSelection: args.finalSelection,
     calendarInvite: args.calendarInvite,
     mode: "preview",
+    emailPurpose,
     previewIntroText:
-      "The real Google Calendar invite has already been created separately. This preview shows the companion Group Meet confirmation email guests receive right after that happens.",
+      emailPurpose === "update"
+        ? "The real Google Calendar invite has already been updated separately. This preview shows the companion Group Meet update email guests receive after a meeting time changes."
+        : "The real Google Calendar invite has already been created separately. This preview shows the companion Group Meet confirmation email guests receive right after that happens.",
   });
 }
 
