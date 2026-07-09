@@ -106,7 +106,8 @@ type TemplateKey =
   | 'university-pilot'
   | 'contract'
   | 'partner'
-  | 'investor-metrics';
+  | 'investor-metrics'
+  | 'contacts';
 
 type StageTrack = 'build' | 'run' | 'capital' | 'general';
 type StageOutcome = 'open' | 'won' | 'lost';
@@ -648,6 +649,16 @@ const investorContactStages: StageConfig[] = [
   { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 
+const contactStages: StageConfig[] = [
+  { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'cold-contact', label: 'Cold Contact', probability: 15, track: 'general', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { id: 'contacted', label: 'Contacted', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'engaged', label: 'Engaged', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'follow-up-needed', label: 'Follow-Up Needed', probability: 60, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'active-relationship', label: 'Active Relationship', probability: 80, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
 const pilotContractStages: StageConfig[] = [
   { id: 'identified', label: 'Identified', probability: 10, track: 'build', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
   { id: 'engaged', label: 'Engaged', probability: 25, track: 'build', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
@@ -752,14 +763,23 @@ const templateCatalog: Record<
     accent: 'bg-stone-700',
     stages: investorContactStages,
   },
+  contacts: {
+    label: 'Contacts',
+    defaultName: 'Contacts',
+    description: 'A simple relationship list with contact details, follow-ups, notes, and email tracking.',
+    accent: 'bg-neutral-500',
+    stages: contactStages,
+  },
 };
 
 const isFundSizeList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'vc';
 const amountFieldLabelForList = (list: Pick<PipeList, 'templateKey'>) =>
   isFundSizeList(list) ? 'Fund Size' : 'Amount / Prize';
-const isInvestorContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+const isInvestorUpdateContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
   list.templateKey === 'investor-metrics' || list.name.trim().toLowerCase() === 'investor update contacts';
-const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) => (isInvestorContactList(list) ? 'contact' : 'opportunity');
+const isContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+  list.templateKey === 'contacts' || isInvestorUpdateContactList(list);
+const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) => (isContactList(list) ? 'contact' : 'opportunity');
 
 const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
@@ -1934,7 +1954,7 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const template = templateCatalog[templateKey];
   const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
   const stages =
-    templateKey === 'investor-metrics'
+    templateKey === 'investor-metrics' || templateKey === 'contacts'
       ? template.stages
       : templateKey === 'vc'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
@@ -2579,7 +2599,8 @@ const PipelinePage: NextPage = () => {
   const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
   const canManageWorkspace = !isSharedView && Boolean(user);
   const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
-  const isInvestorUpdateContactsList = isInvestorContactList(activeList);
+  const isContactListActive = isContactList(activeList);
+  const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -4650,21 +4671,21 @@ Research rules:
         ? ['Email Status', emailStatusLabel(item)]
         : ['Stage', `${stage.label} (${item.stage})`],
       ['Importance', importanceLabel(item.priority)],
-      ...(isInvestorUpdateContactsList ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
-      [isInvestorUpdateContactsList ? 'Relationship Owner' : 'Owner', item.owner],
+      ...(isContactListActive ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
+      [isContactListActive ? 'Relationship Owner' : 'Owner', item.owner],
       ['Contact Emails', item.contactEmails.join(', ')],
       ['Segment', item.segment],
-      [isInvestorUpdateContactsList ? 'Relationship Context' : 'Decision Maker', item.decisionMaker],
+      [isContactListActive ? 'Relationship Context' : 'Decision Maker', item.decisionMaker],
       ['Next Step', item.nextStep],
       ['Source URL', item.sourceUrl],
     ];
-    const timelineRows: Array<[string, string | number | undefined]> = isInvestorUpdateContactsList
+    const timelineRows: Array<[string, string | number | undefined]> = isContactListActive
       ? [
-          ['Next Update Date', item.expectedCloseDate],
+          [isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', item.expectedCloseDate],
           ['Follow-Up Date', item.dueDate],
           ['First Contacted', item.pilotStart],
           ['Last Contacted', item.pilotEnd],
-          ['Update Cadence', item.athleteCount],
+          ...(isInvestorUpdateContactsList ? [['Update Cadence', item.athleteCount] as [string, string | number | undefined]] : []),
         ]
       : [
           ['ACV', item.acv],
@@ -4678,8 +4699,8 @@ Research rules:
         ];
 
     return [
-      formatClipboardSection(isInvestorUpdateContactsList ? 'Contact Details' : 'Lead Details', detailRows),
-      formatClipboardSection(isInvestorUpdateContactsList ? 'Relationship Dates' : 'Financials & Dates', timelineRows),
+      formatClipboardSection(isContactListActive ? 'Contact Details' : 'Lead Details', detailRows),
+      formatClipboardSection(isContactListActive ? 'Relationship Dates' : 'Financials & Dates', timelineRows),
       formatClipboardSection('Scope & Expansion', [
         ['Scope', item.pilotScope],
         ['Count', item.athleteCount],
@@ -6178,17 +6199,17 @@ Research rules:
   const renderItemEditor = () => (
     <form id="pipe-item-editor-form" onSubmit={handleSaveItem} className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {(isInvestorUpdateContactsList
+        {(isContactListActive
           ? [
               ['title', 'Contact Name', 'Name'],
               ['organization', 'Role / Organization', 'Partner, investor, advisor'],
               ['owner', 'Relationship Owner', 'Owner'],
               ['segment', 'Segment', 'Investor, operator, advisor'],
               ['decisionMaker', 'Relationship Context', 'How they know us or why they matter'],
-              ['expectedCloseDate', 'Next Update Date', 'date'],
+              ['expectedCloseDate', isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', 'date'],
               ['pilotStart', 'First Contacted', 'date'],
               ['pilotEnd', 'Last Contacted', 'date'],
-              ['athleteCount', 'Update Cadence', 'Monthly, quarterly'],
+              ...(isInvestorUpdateContactsList ? [['athleteCount', 'Update Cadence', 'Monthly, quarterly']] : []),
               ['sourceUrl', 'Source URL', 'https://example.com'],
             ]
           : [
@@ -6263,6 +6284,29 @@ Research rules:
           </label>
         )}
 
+        {isContactListActive && !isInvestorUpdateContactsList && (
+          <label className="block" htmlFor="pipe-email-status">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email Status</span>
+            <select
+              id="pipe-email-status"
+              value={normalizeContactEmailStatusInput(draft.emailStatus || draft.lastEmailEvent)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  emailStatus: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            >
+              {contactEmailStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <label className="block" htmlFor="pipe-priority">
           <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Importance</span>
           <select
@@ -6280,7 +6324,7 @@ Research rules:
         </label>
 
         <label className="block" htmlFor="pipe-dueDate">
-          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isInvestorUpdateContactsList ? 'Follow-Up Date' : 'Due Date'}</span>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Follow-Up Date' : 'Due Date'}</span>
           <input
             id="pipe-dueDate"
             type="date"
@@ -6677,6 +6721,7 @@ Research rules:
                     type="button"
                     onClick={() => {
                       setActiveListId(list.id);
+                      setViewMode('pipeline');
                       setStageFilter('all');
                       setSelectedLogItemId('');
                       setLogDraft(defaultLogDraft(list.templateKey));
@@ -7060,6 +7105,13 @@ Research rules:
                       {renderMetricCard('Delivered', String(deliveredEmailItems), 'Emails delivered by Brevo', <CheckCircle2 className="h-4 w-4" />, 'bg-indigo-50 text-indigo-700')}
                       {renderMetricCard('Opened', String(openedEmailItems), 'Contacts who opened an email', <ClipboardList className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
                     </>
+                  ) : isContactListActive ? (
+                    <>
+                      {renderMetricCard('Contacts', String(activeListItems.length), 'People in this list', <Users className="h-4 w-4" />)}
+                      {renderMetricCard('Active', String(activeItems), 'Contacts not paused', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Follow-Ups', String(dueSoonItems), 'Contacts due soon', <ClipboardList className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
+                      {renderMetricCard('Emailed', String(sentEmailItems), 'Contacts with an email sent', <Mail className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                    </>
                   ) : (
                     <>
                       {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
@@ -7118,7 +7170,7 @@ Research rules:
                       Clear
                     </button>
 
-                    {isInvestorUpdateContactsList && (
+                    {isContactListActive && (
                       <>
                         <button
                           type="button"
@@ -7128,7 +7180,7 @@ Research rules:
                           <Mail className="h-4 w-4" />
                           Send email
                         </button>
-                        {isOwner && canManageActiveList && (
+                        {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
                           <button
                             type="button"
                             onClick={handleImportFriendsOfBusiness}
@@ -7136,7 +7188,7 @@ Research rules:
                             className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Users className="h-4 w-4" />
-                            {isImportingFriends ? 'Importing...' : 'Import contacts'}
+                          {isImportingFriends ? 'Importing...' : 'Import contacts'}
                           </button>
                         )}
                       </>
@@ -7169,7 +7221,7 @@ Research rules:
                           className="inline-flex h-11 items-center gap-2 rounded-md bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                         >
                           <Plus className="h-4 w-4" />
-                          {isInvestorUpdateContactsList ? 'Add contact' : 'Add new lead'}
+                          {isContactListActive ? 'Add contact' : 'Add new lead'}
                         </button>
                       </>
                     )}
@@ -7206,30 +7258,37 @@ Research rules:
                     className={`hidden gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid ${
                       isInvestorUpdateContactsList
                         ? 'min-w-[1180px] grid-cols-[280px_240px_160px_140px_280px_104px]'
-                        : 'min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
+                        : isContactListActive
+                          ? 'min-w-[1320px] grid-cols-[260px_220px_140px_150px_140px_280px_104px]'
+                          : 'min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
                     }`}
                   >
-                    <span>{isInvestorUpdateContactsList ? 'Contact' : 'Item'}</span>
+                    <span>{isContactListActive ? 'Contact' : 'Item'}</span>
                     <span>Organization</span>
                     {isInvestorUpdateContactsList ? (
                       <span>Email Status</span>
+                    ) : isContactListActive ? (
+                      <>
+                        <span>Stage</span>
+                        <span>Email Status</span>
+                      </>
                     ) : (
                       <>
                         <span>Stage</span>
                         <span>{isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
                       </>
                     )}
-                    <span>{isInvestorUpdateContactsList ? 'Follow-Up' : 'Due Date'}</span>
+                    <span>{isContactListActive ? 'Follow-Up' : 'Due Date'}</span>
                     <span>Next Step</span>
                     <span className="text-right">Actions</span>
                   </div>
 
                   {filteredItems.length > 0 ? (
-                    <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1180px]' : 'lg:min-w-[1280px]'}`}>
+                    <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1180px]' : isContactListActive ? 'lg:min-w-[1320px]' : 'lg:min-w-[1280px]'}`}>
                       {filteredItems.map((item) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
-                        const tableValueText = isInvestorUpdateContactsList ? item.contactEmails[0] || '' : itemValueText;
+                        const tableValueText = isContactListActive ? item.contactEmails[0] || '' : itemValueText;
                         const hasItemValue = Boolean(tableValueText);
                         const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
@@ -7254,7 +7313,9 @@ Research rules:
                             className={`grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:items-center lg:gap-4 ${
                               isInvestorUpdateContactsList
                                 ? 'lg:grid-cols-[280px_240px_160px_140px_280px_104px]'
-                                : 'lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
+                                : isContactListActive
+                                  ? 'lg:grid-cols-[260px_220px_140px_150px_140px_280px_104px]'
+                                  : 'lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
                             }`}
                           >
                             <div className="min-w-0">
@@ -7307,6 +7368,37 @@ Research rules:
                                   </p>
                                 )}
                               </div>
+                            ) : isContactListActive ? (
+                              <>
+                                <div>
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                </div>
+                                <div className="min-w-0">
+                                  {emailStatusHasActivity(item) ? (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openEmailActivityForItem(item);
+                                      }}
+                                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold transition hover:shadow-sm ${emailStatusTone(item)}`}
+                                      title={`View email activity for ${item.title}`}
+                                    >
+                                      View
+                                    </button>
+                                  ) : (
+                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
+                                      Not sent
+                                    </span>
+                                  )}
+                                  {emailStatusHasActivity(item) && (
+                                    <p className="mt-1 truncate text-xs font-medium text-stone-500">{emailStatusLabel(item)}</p>
+                                  )}
+                                  {item.contactEmails[0] && <p className="mt-1 truncate text-xs text-stone-500">{item.contactEmails[0]}</p>}
+                                </div>
+                              </>
                             ) : (
                               <>
                                 <div>
@@ -7388,9 +7480,9 @@ Research rules:
                     </div>
                   ) : (
                     <div className="px-4 py-16 text-center">
-                      <p className="text-sm font-semibold text-stone-900">{isInvestorUpdateContactsList ? 'No contacts found' : 'No items found'}</p>
+                      <p className="text-sm font-semibold text-stone-900">{isContactListActive ? 'No contacts found' : 'No items found'}</p>
                       <p className="mt-1 text-sm text-stone-500">
-                        {isInvestorUpdateContactsList ? 'Adjust the filter or add a new contact.' : 'Adjust the filter or add a new item.'}
+                        {isContactListActive ? 'Adjust the filter or add a new contact.' : 'Adjust the filter or add a new item.'}
                       </p>
                       {canModify && (
                         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -7419,7 +7511,7 @@ Research rules:
                             className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                           >
                             <Plus className="h-4 w-4" />
-                            {isInvestorUpdateContactsList ? 'Add contact' : 'Add new lead'}
+                            {isContactListActive ? 'Add contact' : 'Add new lead'}
                           </button>
                         </div>
                       )}
@@ -8914,7 +9006,7 @@ Research rules:
                     Logs
                   </button>
                 )}
-                {isInvestorUpdateContactsList && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                {isContactListActive && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
                     onClick={() => openContactEmailComposerForItem(selectedDetailItem)}
@@ -9341,8 +9433,16 @@ Research rules:
             ) : (
               <div className="space-y-5 px-5 py-5">
                 {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
-                  ...(isInvestorUpdateContactsList
+                  ...(isContactListActive
                     ? [
+                        ...(isInvestorUpdateContactsList
+                          ? []
+                          : [
+                              {
+                                label: 'Stage',
+                                value: selectedDetailStage.label,
+                              },
+                            ]),
                         {
                           label: 'Email Status',
                           value: emailStatusLabel(selectedDetailItem),
@@ -9359,7 +9459,7 @@ Research rules:
                         },
                       ]),
                   {
-                    label: isInvestorUpdateContactsList ? 'Next Follow-Up' : 'Next Date',
+                    label: isContactListActive ? 'Next Follow-Up' : 'Next Date',
                     value: selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd,
                   },
                 ])}
@@ -9514,19 +9614,19 @@ Research rules:
                 </section>
 
                 {renderDetailSection(
-                  isInvestorUpdateContactsList ? 'Contact Details' : 'Pipeline Details',
-                  isInvestorUpdateContactsList
+                  isContactListActive ? 'Contact Details' : 'Pipeline Details',
+                  isContactListActive
                     ? [
                         { label: 'Relationship Owner', value: selectedDetailItem.owner },
                         { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
                         { label: 'Role / Organization', value: selectedDetailItem.organization },
                         { label: 'Segment', value: selectedDetailItem.segment },
                         { label: 'Relationship Context', value: selectedDetailItem.decisionMaker },
-                        { label: 'Next Update Date', value: selectedDetailItem.expectedCloseDate },
+                        { label: isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', value: selectedDetailItem.expectedCloseDate },
                         { label: 'Follow-Up Date', value: selectedDetailItem.dueDate },
                         { label: 'First Contacted', value: selectedDetailItem.pilotStart },
                         { label: 'Last Contacted', value: selectedDetailItem.pilotEnd },
-                        { label: 'Update Cadence', value: selectedDetailItem.athleteCount },
+                        ...(isInvestorUpdateContactsList ? [{ label: 'Update Cadence', value: selectedDetailItem.athleteCount }] : []),
                       ]
                     : [
                         { label: 'Owner', value: selectedDetailItem.owner },
