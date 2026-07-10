@@ -61,7 +61,7 @@ import {
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 type ViewMode = 'pipeline' | 'metrics' | 'logs';
-type DetailModalMode = 'details' | 'logs' | 'email';
+type DetailModalMode = 'details' | 'logs' | 'email' | 'research';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
 type InviteStatus = {
@@ -178,6 +178,8 @@ type PipelineItem = {
   organization: string;
   owner: string;
   contactEmails: string[];
+  contactPhone: string;
+  linkedinUrl: string;
   emailStatus: string;
   lastEmailType: string;
   lastEmailEvent: string;
@@ -822,6 +824,11 @@ const contactNameFromEmail = (value: string) => {
 
 const normalizeBasicText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
+const normalizeResearchText = (value: unknown) => {
+  const text = normalizeBasicText(value);
+  return /^(?:n\/?a|not available|not found|unknown|none|null|undefined)$/i.test(text) ? '' : text;
+};
+
 const fullFriendName = (friend: FriendOfBusinessContact) =>
   [friend.firstName, friend.lastName]
     .map(normalizeBasicText)
@@ -961,6 +968,8 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   organization: '',
   owner: '',
   contactEmails: [],
+  contactPhone: '',
+  linkedinUrl: '',
   emailStatus: '',
   lastEmailType: '',
   lastEmailEvent: '',
@@ -1158,6 +1167,8 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   return {
     ...draft,
     contactEmails: normalizeContactEmails(draft.contactEmails),
+    contactPhone: draft.contactPhone.trim(),
+    linkedinUrl: normalizeLeadInputUrl(draft.linkedinUrl)?.toString() || '',
     notes: cleanDealNotes(draft.notes),
     id,
     weeklyLogs: [],
@@ -1446,6 +1457,8 @@ const leadSearchStringFields = [
   'title',
   'organization',
   'owner',
+  'contactPhone',
+  'linkedinUrl',
   'stage',
   'amount',
   'dueDate',
@@ -1923,6 +1936,8 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     organization: item.organization || '',
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
+    contactPhone: item.contactPhone || '',
+    linkedinUrl: normalizeLeadInputUrl(item.linkedinUrl || '')?.toString() || '',
     emailStatus: item.emailStatus || '',
     lastEmailType: item.lastEmailType || '',
     lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
@@ -2533,6 +2548,10 @@ const PipelinePage: NextPage = () => {
   const [contactEmailError, setContactEmailError] = useState('');
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
+  const [itemResearchPrompt, setItemResearchPrompt] = useState('');
+  const [isResearchingItem, setIsResearchingItem] = useState(false);
+  const [itemResearchResult, setItemResearchResult] = useState<GeneratedLead | null>(null);
+  const [itemResearchMessage, setItemResearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(() => new Set());
   const [logListFilter, setLogListFilter] = useState<string>('all');
@@ -3993,6 +4012,183 @@ const PipelinePage: NextPage = () => {
     setDetailModalMode('email');
   };
 
+  const openItemResearch = (item: PipelineItem) => {
+    if (!canModify) return;
+    setItemResearchPrompt('');
+    setItemResearchResult(null);
+    setItemResearchMessage(null);
+    setSelectedDetailItemId(item.id);
+    setDetailModalMode('research');
+  };
+
+  const handleResearchItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || !selectedDetailItem || isResearchingItem) return;
+
+    const researchRequest = itemResearchPrompt.trim();
+    if (!researchRequest) {
+      setItemResearchMessage({ type: 'error', text: 'Describe what you want to learn about this contact or opportunity.' });
+      return;
+    }
+
+    if (researchRequest.length > 4000) {
+      setItemResearchMessage({ type: 'error', text: 'Keep the research request under 4,000 characters.' });
+      return;
+    }
+
+    setIsResearchingItem(true);
+    setItemResearchResult(null);
+    setItemResearchMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before researching this lead.');
+      }
+
+      const response = await fetch(getLeadSearchBridgeUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
+        },
+        body: JSON.stringify({
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.1,
+          max_output_tokens: 3200,
+          tools: [{ type: 'web_search' }],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'pipelists_lead_research',
+              strict: true,
+              schema: leadSearchResponseSchema,
+            },
+          },
+          input: [
+            {
+              role: 'system',
+              content: `You are a meticulous research assistant for PipeLists. Research exactly one existing contact or lead using current web sources and the user's specific request.
+
+Return one enriched result only. Validate every claim against a credible source. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
+
+Preserve the identity of the existing record unless a source corrects it. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  listName: activeList.name,
+                  templateLabel: templateCatalog[activeList.templateKey].label,
+                  researchRequest,
+                  existingLead: {
+                    title: selectedDetailItem.title,
+                    organization: selectedDetailItem.organization,
+                    contactEmails: selectedDetailItem.contactEmails,
+                    contactPhone: selectedDetailItem.contactPhone,
+                    linkedinUrl: selectedDetailItem.linkedinUrl,
+                    sourceUrl: selectedDetailItem.sourceUrl,
+                    segment: selectedDetailItem.segment,
+                    relationshipContext: selectedDetailItem.decisionMaker,
+                    notes: selectedDetailItem.notes,
+                  },
+                  allowedStages: activeList.stages.map((stage) => ({ id: stage.id, label: stage.label })),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+
+      const payload = await readApiJson(response, 'Lead research returned an unexpected response. Refresh and try again.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Unable to research this lead.'));
+      }
+
+      const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
+      const rawResult = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads[0] : null;
+      if (!rawResult || typeof rawResult !== 'object') {
+        throw new Error('Research did not return a usable result. Try a more specific request.');
+      }
+
+      const result = sanitizeGeneratedLead(rawResult as Partial<GeneratedLead>);
+      if (!result.sourceUrl || !result.rationale) {
+        throw new Error('Research did not return enough verified information. Try asking for a specific organization, title, or contact detail.');
+      }
+
+      setItemResearchResult(result);
+      setItemResearchMessage({ type: 'success', text: 'Research is ready to review. Apply it only when the findings look right.' });
+    } catch (error) {
+      console.error('[PipeLists] Item research failed:', error);
+      setItemResearchMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to research this lead.',
+      });
+    } finally {
+      setIsResearchingItem(false);
+    }
+  };
+
+  const handleApplyItemResearch = () => {
+    if (!canModify || !selectedDetailItem || !itemResearchResult) return;
+
+    const result = itemResearchResult;
+    const contactEmails = Array.from(
+      new Set([...normalizeContactEmails(selectedDetailItem.contactEmails), ...normalizeContactEmails(result.contactEmails)]),
+    );
+    const researchNotes = cleanDealNotes(result.notes);
+    const emailSearchNote = contactEmails.length === 0 ? 'Contact email could not be found in public sources.' : '';
+    const notes = Array.from(new Set([cleanDealNotes(selectedDetailItem.notes), researchNotes, emailSearchNote].filter(Boolean))).join('\n\n');
+    const now = new Date().toISOString();
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) =>
+                item.id === selectedDetailItem.id
+                  ? {
+                      ...item,
+                      title: result.title || item.title,
+                      organization: result.organization || item.organization,
+                      owner: result.owner || item.owner,
+                      contactEmails,
+                      contactPhone: result.contactPhone || item.contactPhone,
+                      linkedinUrl: result.linkedinUrl || item.linkedinUrl,
+                      sourceUrl: result.sourceUrl || item.sourceUrl,
+                      segment: result.segment || item.segment,
+                      decisionMaker: result.decisionMaker || item.decisionMaker,
+                      nextStep: result.nextStep || item.nextStep,
+                      notes,
+                      updatedAt: now,
+                      weeklyLogs: [
+                        {
+                          ...defaultLogDraft(activeList.templateKey),
+                          id: makeId(),
+                          summary: `Applied research to ${item.title}.`,
+                          notes: `Research request: ${itemResearchPrompt.trim()}`,
+                          createdAt: now,
+                        },
+                        ...item.weeklyLogs,
+                      ],
+                    }
+                  : item,
+              ),
+            }
+          : list,
+      ),
+    );
+    setDetailModalMode('details');
+    setItemResearchResult(null);
+    setToastMessage({ type: 'success', text: `Applied research to ${selectedDetailItem.title}.` });
+  };
+
   const openEmailActivityForItem = (item: PipelineItem) => {
     const recipient = normalizeContactEmails(item.contactEmails)[0] || '';
     const emailFilter: LogEmailFilter = item.lastEmailType === 'general-update' ? 'general-update' : 'investor-update';
@@ -4425,35 +4621,37 @@ const PipelinePage: NextPage = () => {
 
     return {
       ...defaultDraft(stage),
-      title: lead.title?.trim() || lead.organization?.trim() || 'Untitled opportunity',
-      organization: lead.organization?.trim() || '',
-      owner: lead.owner?.trim() || '',
+      title: normalizeResearchText(lead.title) || normalizeResearchText(lead.organization) || 'Untitled opportunity',
+      organization: normalizeResearchText(lead.organization),
+      owner: normalizeResearchText(lead.owner),
       contactEmails: normalizeContactEmails((lead as { contactEmails?: unknown }).contactEmails),
+      contactPhone: normalizeResearchText(lead.contactPhone),
+      linkedinUrl: normalizeLeadInputUrl(normalizeResearchText(lead.linkedinUrl))?.toString() || '',
       stage,
       priority,
-      amount: lead.amount?.trim() || '',
-      dueDate: lead.dueDate?.trim() || '',
-      nextStep: lead.nextStep?.trim() || '',
-      notes: cleanDealNotes(lead.notes),
-      sourceUrl: lead.sourceUrl?.trim() || '',
-      segment: lead.segment?.trim() || '',
-      decisionMaker: lead.decisionMaker?.trim() || '',
-      acv: lead.acv?.trim() || '',
-      expectedCloseDate: lead.expectedCloseDate?.trim() || '',
-      contractTerm: lead.contractTerm?.trim() || '',
-      pilotScope: lead.pilotScope?.trim() || '',
-      athleteCount: lead.athleteCount?.trim() || '',
-      pilotStart: lead.pilotStart?.trim() || '',
-      pilotEnd: lead.pilotEnd?.trim() || '',
-      conversionLikelihood: lead.conversionLikelihood?.trim() || '',
-      grossMargin: lead.grossMargin?.trim() || '',
-      partnerCost: lead.partnerCost?.trim() || '',
-      hardwareCost: lead.hardwareCost?.trim() || '',
-      lossReason: lead.lossReason?.trim() || '',
-      expansionPath: lead.expansionPath?.trim() || '',
-      rationale: lead.rationale?.trim() || '',
-      sourceEvidence: lead.sourceEvidence?.trim() || '',
-      deadlineStatus: lead.deadlineStatus?.trim() || '',
+      amount: normalizeResearchText(lead.amount),
+      dueDate: normalizeResearchText(lead.dueDate),
+      nextStep: normalizeResearchText(lead.nextStep),
+      notes: cleanDealNotes(normalizeResearchText(lead.notes)),
+      sourceUrl: normalizeLeadInputUrl(normalizeResearchText(lead.sourceUrl))?.toString() || '',
+      segment: normalizeResearchText(lead.segment),
+      decisionMaker: normalizeResearchText(lead.decisionMaker),
+      acv: normalizeResearchText(lead.acv),
+      expectedCloseDate: normalizeResearchText(lead.expectedCloseDate),
+      contractTerm: normalizeResearchText(lead.contractTerm),
+      pilotScope: normalizeResearchText(lead.pilotScope),
+      athleteCount: normalizeResearchText(lead.athleteCount),
+      pilotStart: normalizeResearchText(lead.pilotStart),
+      pilotEnd: normalizeResearchText(lead.pilotEnd),
+      conversionLikelihood: normalizeResearchText(lead.conversionLikelihood),
+      grossMargin: normalizeResearchText(lead.grossMargin),
+      partnerCost: normalizeResearchText(lead.partnerCost),
+      hardwareCost: normalizeResearchText(lead.hardwareCost),
+      lossReason: normalizeResearchText(lead.lossReason),
+      expansionPath: normalizeResearchText(lead.expansionPath),
+      rationale: normalizeResearchText(lead.rationale),
+      sourceEvidence: normalizeResearchText(lead.sourceEvidence),
+      deadlineStatus: normalizeResearchText(lead.deadlineStatus),
     };
   };
 
@@ -4528,14 +4726,16 @@ Research the user's pasted list entry by entry using current web sources. The pa
 Rules:
 - Return one result for each clear, distinct person or organization you can identify, up to 25 total results.
 - Do not return a directory, article, search result, or list of people as a contact. If an entry is a directory or list, resolve the actual people or organizations named in it instead.
-- Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl.
+- Do a real enrichment pass for every person: search the name and organization, then specifically search for their published email, LinkedIn profile, and public business phone number before returning a result.
+- Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl. sourceUrl must be a valid http(s) URL. Never use placeholders such as "N/A" or "not found".
 - Never invent roles, organizations, email addresses, dates, relationship history, or source links.
-- Include contactEmails only when a valid email is visibly published by the source. Otherwise return an empty array.
-- For a person, title must be the person's name and organization should be their current role or organization. For an organization, title and organization may match when no individual is named.
+- Include contactEmails only when a valid email is visibly published by a credible source. Otherwise return an empty array after checking; do not guess email patterns.
+- Include linkedinUrl only for a valid public LinkedIn profile URL. Include contactPhone only for a publicly published business phone number. Leave either field as an empty string when no credible source provides it.
+- For a person, title must be the person's name and organization should identify their current role and organization. For an organization, title and organization may match when no individual is named.
 - Use the provided stage ids only. For new contacts, default to the first stage unless the pasted text clearly establishes a stronger relationship status.
 - Keep notes blank unless there is material relationship context, an introduction path, a concrete partnership angle, or a specific constraint.
 - rationale should explain the useful relationship angle in one concise sentence. sourceEvidence should identify the supporting source and what it establishes. deadlineStatus should be "no fixed deadline" for contact research.
-- Omit anything that cannot be identified with enough confidence to give a credible sourceUrl.
+- Omit anything that cannot be identified with enough confidence to give a credible sourceUrl, role/organization, and direct relationship angle.
 - Return JSON only.`,
             },
             {
@@ -4565,9 +4765,14 @@ Rules:
       const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
       const rawLeads = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads : [];
       const uniqueLeads = new Map<string, GeneratedLead>();
+      let excludedUnverifiedCount = 0;
 
       rawLeads.forEach((lead: Partial<GeneratedLead>) => {
         const sanitizedLead = sanitizeGeneratedLead(lead);
+        if (!sanitizedLead.sourceUrl || !sanitizedLead.organization || !sanitizedLead.rationale) {
+          excludedUnverifiedCount += 1;
+          return;
+        }
         const key = generatedLeadKey(sanitizedLead);
         if (!activeLeadKeys.has(key) && !uniqueLeads.has(key)) {
           uniqueLeads.set(key, sanitizedLead);
@@ -4578,7 +4783,10 @@ Rules:
       setAnalyzedPastedLeads(nextLeads);
       setPastedLeadListMessage(
         nextLeads.length > 0
-          ? { type: 'success', text: `Analyzed ${formatCount(nextLeads.length, 'contact')}. Review each one before adding it.` }
+          ? {
+              type: 'success',
+              text: `Analyzed ${formatCount(nextLeads.length, 'contact')}. Review each one before adding it.${excludedUnverifiedCount ? ` Excluded ${formatCount(excludedUnverifiedCount, 'unverified result')}.` : ''}`,
+            }
           : { type: 'info', text: 'No new contacts could be verified from this list. Try including names, organizations, or profile links.' },
       );
     } catch (error) {
@@ -4802,8 +5010,11 @@ Research rules:
         ...lead,
         stage,
         priority: lead.priority || 'medium',
-        // Keep research rationale in the review card, not in the contact record.
-        notes: cleanDealNotes(lead.notes),
+        // Keep research rationale in the review card, but make an unsuccessful public-email search explicit.
+        notes:
+          normalizeContactEmails(lead.contactEmails).length > 0
+            ? cleanDealNotes(lead.notes)
+            : 'Contact email could not be found in public sources.',
       },
       makeId(),
     );
@@ -4903,6 +5114,7 @@ Research rules:
       ...(isContactListActive ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
       [isContactListActive ? 'Relationship Owner' : 'Owner', item.owner],
       ['Contact Emails', item.contactEmails.join(', ')],
+      ...(isContactListActive ? [['Phone', item.contactPhone], ['LinkedIn', item.linkedinUrl]] as [string, string | number | undefined][] : []),
       ['Segment', item.segment],
       [isContactListActive ? 'Relationship Context' : 'Decision Maker', item.decisionMaker],
       ['Next Step', item.nextStep],
@@ -6520,6 +6732,8 @@ Research rules:
               ['pilotStart', 'First Contacted', 'date'],
               ['pilotEnd', 'Last Contacted', 'date'],
               ...(isInvestorUpdateContactsList ? [['athleteCount', 'Update Cadence', 'Monthly, quarterly']] : []),
+              ['contactPhone', 'Phone', 'Public business phone'],
+              ['linkedinUrl', 'LinkedIn URL', 'https://linkedin.com/in/...'],
               ['sourceUrl', 'Source URL', 'https://example.com'],
             ]
           : [
@@ -6537,11 +6751,11 @@ Research rules:
               ['athleteCount', 'Count', '42'],
               ['sourceUrl', 'Source URL', 'https://example.com'],
             ]).map(([key, label, placeholder]) => (
-          <label key={key} className={key === 'sourceUrl' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
+          <label key={key} className={key === 'sourceUrl' || key === 'linkedinUrl' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
             <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
             <input
               id={`pipe-${key}`}
-              type={placeholder === 'date' ? 'date' : 'text'}
+              type={placeholder === 'date' ? 'date' : key === 'sourceUrl' || key === 'linkedinUrl' ? 'url' : 'text'}
               value={String(draft[key as keyof ItemDraft] || '')}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -8648,9 +8862,9 @@ Research rules:
             onClick={(event) => event.stopPropagation()}
             className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
           >
-            <div className="border-b border-stone-100 px-5 py-4">
+            <div className="sticky top-0 z-10 border-b border-stone-100 bg-white px-5 py-4">
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
                     <Search className="h-4 w-4" />
                   </div>
@@ -9019,6 +9233,25 @@ Research rules:
                   <p className="mt-1 text-sm leading-6 text-stone-500">
                     Paste names, organizations, emails, profile links, or copied list rows. PipeLists will verify and enrich each contact before you add it to {activeList.name}.
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={closePastedLeadListModal}
+                      disabled={isAnalyzingPastedLeadList}
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      form="pipe-pasted-lead-list-form"
+                      disabled={isAnalyzingPastedLeadList}
+                      className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isAnalyzingPastedLeadList ? 'Analyzing' : analyzedPastedLeads.length > 0 ? 'Analyze again' : 'Analyze list'}
+                    </button>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -9041,7 +9274,7 @@ Research rules:
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleAnalyzePastedLeadList} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
+              <form id="pipe-pasted-lead-list-form" onSubmit={handleAnalyzePastedLeadList} className="max-h-[calc(100vh-12.75rem)] overflow-y-auto px-5 py-5">
                 <label className="block" htmlFor="pipe-pasted-lead-list">
                   <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Paste a contact list</span>
                   <textarea
@@ -9117,15 +9350,20 @@ Research rules:
                                   <span className="font-semibold text-stone-800">Source:</span> {lead.sourceEvidence}
                                 </p>
                               )}
-                              {lead.contactEmails.length > 0 && (
-                                <p className="break-all">
-                                  <span className="font-semibold text-stone-800">Email:</span> {lead.contactEmails.join(', ')}
+                              <p className="break-all">
+                                <span className="font-semibold text-stone-800">Email:</span>{' '}
+                                {lead.contactEmails.length > 0 ? lead.contactEmails.join(', ') : 'No public email found'}
+                              </p>
+                              {lead.contactPhone && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Phone:</span> {lead.contactPhone}
                                 </p>
                               )}
                             </div>
 
-                            {lead.sourceUrl && (
-                              <div className="mt-3 text-sm">
+                            {(lead.sourceUrl || lead.linkedinUrl) && (
+                              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                                {lead.sourceUrl && (
                                 <a
                                   href={lead.sourceUrl}
                                   target="_blank"
@@ -9134,6 +9372,17 @@ Research rules:
                                 >
                                   View source
                                 </a>
+                                )}
+                                {lead.linkedinUrl && (
+                                  <a
+                                    href={lead.linkedinUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                  >
+                                    LinkedIn
+                                  </a>
+                                )}
                               </div>
                             )}
                           </article>
@@ -9143,22 +9392,6 @@ Research rules:
                   </div>
                 )}
 
-                <div className="mt-5 flex justify-end gap-2 border-t border-stone-100 pt-4">
-                  <button
-                    type="button"
-                    onClick={closePastedLeadListModal}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    {analyzedPastedLeads.length > 0 ? 'Analyze again' : 'Analyze list'}
-                  </button>
-                </div>
               </form>
             )}
           </section>
@@ -9510,6 +9743,20 @@ Research rules:
                     Logs
                   </button>
                 )}
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => openItemResearch(selectedDetailItem)}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'research'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Research
+                  </button>
+                )}
                 {isContactListActive && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
@@ -9743,6 +9990,122 @@ Research rules:
                     </button>
                   </div>
                 </section>
+              </div>
+            ) : detailModalMode === 'research' ? (
+              <div className="space-y-5 px-5 py-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-stone-950">Research {selectedDetailItem.title}</h4>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">
+                      Ask for the information that would help you decide how to approach this relationship.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleResearchItem}>
+                    <label className="block" htmlFor="detail-item-research-prompt">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Research prompt</span>
+                      <textarea
+                        id="detail-item-research-prompt"
+                        value={itemResearchPrompt}
+                        onChange={(event) => setItemResearchPrompt(event.target.value)}
+                        className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        placeholder="Find Bob's current role, the best public contact information, his LinkedIn profile, and a specific reason to reach out."
+                        autoFocus
+                      />
+                    </label>
+
+                    <div className="mt-4">
+                      <MessageBanner message={itemResearchMessage} />
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetailModalMode('details')}
+                        disabled={isResearchingItem}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isResearchingItem}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {isResearchingItem ? 'Researching...' : itemResearchResult ? 'Research again' : 'Research'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                {itemResearchResult && (
+                  <section className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-stone-400">Suggested updates</p>
+                        <h4 className="mt-1 text-lg font-semibold text-stone-950">{itemResearchResult.title}</h4>
+                        {itemResearchResult.organization && <p className="mt-1 text-sm text-stone-500">{itemResearchResult.organization}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleApplyItemResearch}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Apply findings
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                      <p>
+                        <span className="font-semibold text-stone-800">Email:</span>{' '}
+                        {itemResearchResult.contactEmails.length > 0 ? itemResearchResult.contactEmails.join(', ') : 'No public email found'}
+                      </p>
+                      {itemResearchResult.contactPhone && (
+                        <p>
+                          <span className="font-semibold text-stone-800">Phone:</span> {itemResearchResult.contactPhone}
+                        </p>
+                      )}
+                      {itemResearchResult.rationale && (
+                        <p className="md:col-span-2">
+                          <span className="font-semibold text-stone-800">Why it matters:</span> {itemResearchResult.rationale}
+                        </p>
+                      )}
+                      {itemResearchResult.nextStep && (
+                        <p className="md:col-span-2">
+                          <span className="font-semibold text-stone-800">Suggested next step:</span> {itemResearchResult.nextStep}
+                        </p>
+                      )}
+                      {itemResearchResult.sourceEvidence && (
+                        <p className="md:col-span-2">
+                          <span className="font-semibold text-stone-800">Source:</span> {itemResearchResult.sourceEvidence}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                      <a
+                        href={itemResearchResult.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                      >
+                        View source
+                      </a>
+                      {itemResearchResult.linkedinUrl && (
+                        <a
+                          href={itemResearchResult.linkedinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                        >
+                          LinkedIn
+                        </a>
+                      )}
+                    </div>
+                  </section>
+                )}
               </div>
             ) : detailModalMode === 'logs' ? (
               <div className="space-y-5 px-5 py-5">
@@ -10123,6 +10486,22 @@ Research rules:
                     ? [
                         { label: 'Relationship Owner', value: selectedDetailItem.owner },
                         { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
+                        { label: 'Phone', value: selectedDetailItem.contactPhone },
+                        {
+                          label: 'LinkedIn',
+                          value: selectedDetailItem.linkedinUrl ? (
+                            <a
+                              href={selectedDetailItem.linkedinUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                            >
+                              View profile
+                            </a>
+                          ) : (
+                            ''
+                          ),
+                        },
                         { label: 'Role / Organization', value: selectedDetailItem.organization },
                         { label: 'Segment', value: selectedDetailItem.segment },
                         { label: 'Relationship Context', value: selectedDetailItem.decisionMaker },
