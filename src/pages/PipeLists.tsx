@@ -4073,7 +4073,7 @@ const PipelinePage: NextPage = () => {
               role: 'system',
               content: `You are a meticulous research assistant for PipeLists. Research exactly one existing contact or lead using current web sources and the user's specific request.
 
-Return one enriched result only. Validate every claim against a credible source. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
+Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: run focused searches for the person's name plus organization, then separately look for a public work email, LinkedIn profile, and business phone number. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
 
 Preserve the identity of the existing record unless a source corrects it. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
             },
@@ -4116,13 +4116,35 @@ Preserve the identity of the existing record unless a source corrects it. Provid
         throw new Error('Research did not return a usable result. Try a more specific request.');
       }
 
-      const result = sanitizeGeneratedLead(rawResult as Partial<GeneratedLead>);
-      if (!result.sourceUrl || !result.rationale) {
-        throw new Error('Research did not return enough verified information. Try asking for a specific organization, title, or contact detail.');
+      const suggestedResult = sanitizeGeneratedLead(rawResult as Partial<GeneratedLead>);
+      const result: GeneratedLead = {
+        ...suggestedResult,
+        title: suggestedResult.title === 'Untitled opportunity' ? selectedDetailItem.title : suggestedResult.title,
+        organization: suggestedResult.organization || selectedDetailItem.organization,
+        owner: suggestedResult.owner || selectedDetailItem.owner,
+        sourceUrl: suggestedResult.sourceUrl || normalizeLeadInputUrl(selectedDetailItem.sourceUrl)?.toString() || '',
+        segment: suggestedResult.segment || selectedDetailItem.segment,
+        decisionMaker: suggestedResult.decisionMaker || selectedDetailItem.decisionMaker,
+      };
+      if (!result.sourceUrl) {
+        throw new Error('Research needs a credible source URL. Add one to this lead first, then try again.');
       }
 
+      const foundNewPublicData = Boolean(
+        suggestedResult.contactEmails.length ||
+          suggestedResult.contactPhone ||
+          suggestedResult.linkedinUrl ||
+          suggestedResult.rationale ||
+          suggestedResult.sourceEvidence ||
+          suggestedResult.nextStep ||
+          suggestedResult.notes,
+      );
       setItemResearchResult(result);
-      setItemResearchMessage({ type: 'success', text: 'Research is ready to review. Apply it only when the findings look right.' });
+      setItemResearchMessage(
+        foundNewPublicData
+          ? { type: 'success', text: 'Research is ready to review. Apply it only when the findings look right.' }
+          : { type: 'info', text: 'Research confirmed the current record but did not find new public contact details. You can refine the prompt or keep the record as is.' },
+      );
     } catch (error) {
       console.error('[PipeLists] Item research failed:', error);
       setItemResearchMessage({
