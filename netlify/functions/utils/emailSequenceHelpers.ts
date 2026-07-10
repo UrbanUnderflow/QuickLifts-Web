@@ -680,6 +680,7 @@ export async function sendBrevoTransactionalEmail(args: {
   bcc?: Array<{ email: string; name?: string }>;
   scheduledAt?: string;
   sender?: { email: string; name?: string };
+  preserveSenderEmail?: boolean;
   replyTo?: { email: string; name?: string };
   idempotencyKey?: string;
   idempotencyMetadata?: Record<string, any>;
@@ -724,7 +725,10 @@ export async function sendBrevoTransactionalEmail(args: {
     };
   }
 
-  const senderEmail = resolveAutomatedSenderEmail(args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL);
+  const configuredSenderEmail = args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL;
+  const senderEmail = args.preserveSenderEmail
+    ? (configuredSenderEmail || DEFAULT_AUTOMATED_SENDER_EMAIL).trim().toLowerCase()
+    : resolveAutomatedSenderEmail(configuredSenderEmail);
   const senderName = args.sender?.name || process.env.BREVO_SENDER_NAME || 'Pulse';
   const nowMs = Date.now();
   const runId = `brevo-${nowMs}-${Math.random().toString(36).slice(2, 10)}`;
