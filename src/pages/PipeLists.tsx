@@ -948,7 +948,13 @@ const normalizeLinkedInProfileUrl = (value: string) => {
   const isLinkedIn = hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com');
   const isProfileOrCompany = /^\/(?:in|pub|company)\//.test(path);
   const slug = path.split('/').filter(Boolean).pop() || '';
-  const isSyntheticSlug = /(?:^|-)(?:12345678|123456789|00000000|000000000|username|example)(?:-|$)/i.test(slug);
+  const trailingSlugToken = slug.split('-').pop() || '';
+  const hasLowVarietyHexTail =
+    /^[a-f0-9]{8,}$/i.test(trailingSlugToken)
+    && new Set(trailingSlugToken.toLowerCase().split('')).size <= 4;
+  const isSyntheticSlug =
+    /(?:^|-)(?:12345678|123456789|00000000|000000000|username|example)(?:-|$)/i.test(slug)
+    || hasLowVarietyHexTail;
 
   return isLinkedIn && isProfileOrCompany && !isSyntheticSlug ? parsed.toString() : '';
 };
@@ -975,6 +981,36 @@ const normalizeLinkedInProfileUrlForLead = (value: string, title: string, organi
   const organizationMatches = organizationTokens.length >= 2 && organizationTokens.every((token) => slugTokens.includes(token));
 
   return titleMatches || organizationMatches ? normalizedUrl : '';
+};
+
+const verifyLinkedInProfileUrlForLead = async ({
+  url,
+  title,
+  organization,
+  idToken,
+}: {
+  url: string;
+  title: string;
+  organization: string;
+  idToken: string;
+}) => {
+  const normalizedUrl = normalizeLinkedInProfileUrlForLead(url, title, organization);
+  if (!normalizedUrl) return '';
+
+  try {
+    const response = await fetch('/api/pipelists/verify-linkedin-url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ url: normalizedUrl }),
+    });
+    const payload = await response.json().catch(() => null);
+    return response.ok && payload?.verified === true && typeof payload.url === 'string' ? payload.url : '';
+  } catch {
+    return '';
+  }
 };
 
 const displayProfileUrl = (value: string) => value.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/\/$/, '');
@@ -4285,11 +4321,18 @@ Preserve the identity of the existing record unless a source corrects it. Provid
       }
 
       const suggestedResult = sanitizeGeneratedLead(rawResult as Partial<GeneratedLead>);
+      const verifiedLinkedInUrl = await verifyLinkedInProfileUrlForLead({
+        url: suggestedResult.linkedinUrl,
+        title: suggestedResult.title === 'Untitled opportunity' ? selectedDetailItem.title : suggestedResult.title,
+        organization: suggestedResult.organization || selectedDetailItem.organization,
+        idToken,
+      });
       const result: GeneratedLead = {
         ...suggestedResult,
         title: suggestedResult.title === 'Untitled opportunity' ? selectedDetailItem.title : suggestedResult.title,
         organization: suggestedResult.organization || selectedDetailItem.organization,
         owner: suggestedResult.owner || selectedDetailItem.owner,
+        linkedinUrl: verifiedLinkedInUrl,
         sourceUrl: suggestedResult.sourceUrl || normalizeLeadInputUrl(selectedDetailItem.sourceUrl)?.toString() || '',
         segment: suggestedResult.segment || selectedDetailItem.segment,
         decisionMaker: suggestedResult.decisionMaker || selectedDetailItem.decisionMaker,
@@ -4310,7 +4353,12 @@ Preserve the identity of the existing record unless a source corrects it. Provid
       setItemResearchResult(result);
       setItemResearchMessage(
         foundNewPublicData
-          ? { type: 'success', text: 'Research is ready to review. Apply it only when the findings look right.' }
+          ? {
+              type: 'success',
+              text: suggestedResult.linkedinUrl && !verifiedLinkedInUrl
+                ? 'Research is ready to review. The suggested LinkedIn URL was not verified, so it was removed.'
+                : 'Research is ready to review. Apply it only when the findings look right.',
+            }
           : { type: 'info', text: 'Research confirmed the current record but did not find new public contact details. You can refine the prompt or keep the record as is.' },
       );
     } catch (error) {
@@ -4350,7 +4398,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
                       owner: result.owner || item.owner,
                       contactEmails,
                       contactPhone: result.contactPhone || item.contactPhone,
-                      linkedinUrl: result.linkedinUrl || item.linkedinUrl,
+                      linkedinUrl: result.linkedinUrl,
                       sourceUrl: result.sourceUrl || item.sourceUrl,
                       segment: result.segment || item.segment,
                       decisionMaker: result.decisionMaker || item.decisionMaker,
