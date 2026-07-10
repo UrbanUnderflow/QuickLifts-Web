@@ -37,6 +37,7 @@ import {
   ListPlus,
   LogOut,
   Mail,
+  MessageCircle,
   Paperclip,
   Plus,
   Search,
@@ -61,7 +62,7 @@ import {
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 type ViewMode = 'pipeline' | 'metrics' | 'logs';
-type DetailModalMode = 'details' | 'logs' | 'email' | 'research';
+type DetailModalMode = 'details' | 'logs' | 'email' | 'research' | 'ask';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
 type InviteStatus = {
@@ -935,6 +936,20 @@ const normalizeLeadInputUrl = (value: string) => {
   }
 };
 
+const normalizeLinkedInProfileUrl = (value: string) => {
+  const parsed = normalizeLeadInputUrl(value);
+  if (!parsed) return '';
+
+  const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const isLinkedIn = hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com');
+  const isProfileOrCompany = /^\/(?:in|pub|company)\//.test(path);
+
+  return isLinkedIn && isProfileOrCompany ? parsed.toString() : '';
+};
+
+const displayProfileUrl = (value: string) => value.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/\/$/, '');
+
 const fallbackLeadTitleFromInput = (value: string) => {
   const parsedUrl = normalizeLeadInputUrl(value);
   if (parsedUrl) return parsedUrl.hostname.replace(/^www\./, '');
@@ -1168,7 +1183,7 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
     ...draft,
     contactEmails: normalizeContactEmails(draft.contactEmails),
     contactPhone: draft.contactPhone.trim(),
-    linkedinUrl: normalizeLeadInputUrl(draft.linkedinUrl)?.toString() || '',
+    linkedinUrl: normalizeLinkedInProfileUrl(draft.linkedinUrl),
     notes: cleanDealNotes(draft.notes),
     id,
     weeklyLogs: [],
@@ -1937,7 +1952,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
     contactPhone: item.contactPhone || '',
-    linkedinUrl: normalizeLeadInputUrl(item.linkedinUrl || '')?.toString() || '',
+    linkedinUrl: normalizeLinkedInProfileUrl(item.linkedinUrl || ''),
     emailStatus: item.emailStatus || '',
     lastEmailType: item.lastEmailType || '',
     lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
@@ -2552,6 +2567,10 @@ const PipelinePage: NextPage = () => {
   const [isResearchingItem, setIsResearchingItem] = useState(false);
   const [itemResearchResult, setItemResearchResult] = useState<GeneratedLead | null>(null);
   const [itemResearchMessage, setItemResearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [itemAskPrompt, setItemAskPrompt] = useState('');
+  const [itemAskResponse, setItemAskResponse] = useState('');
+  const [isAskingItem, setIsAskingItem] = useState(false);
+  const [itemAskMessage, setItemAskMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(() => new Set());
   const [logListFilter, setLogListFilter] = useState<string>('all');
@@ -4021,6 +4040,114 @@ const PipelinePage: NextPage = () => {
     setDetailModalMode('research');
   };
 
+  const openItemAsk = (item: PipelineItem) => {
+    if (!canModify) return;
+    setItemAskPrompt('');
+    setItemAskResponse('');
+    setItemAskMessage(null);
+    setSelectedDetailItemId(item.id);
+    setDetailModalMode('ask');
+  };
+
+  const handleAskItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || !selectedDetailItem || isAskingItem) return;
+
+    const askRequest = itemAskPrompt.trim();
+    if (!askRequest) {
+      setItemAskMessage({ type: 'error', text: 'Ask a question or describe what you want help with.' });
+      return;
+    }
+
+    if (askRequest.length > 4000) {
+      setItemAskMessage({ type: 'error', text: 'Keep the request under 4,000 characters.' });
+      return;
+    }
+
+    setIsAskingItem(true);
+    setItemAskResponse('');
+    setItemAskMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before asking about this lead.');
+      }
+
+      const response = await fetch(getLeadSearchBridgeUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
+        },
+        body: JSON.stringify({
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.3,
+          max_output_tokens: 2200,
+          tools: [{ type: 'web_search' }],
+          input: [
+            {
+              role: 'system',
+              content: `You are the practical AI assistant inside PipeLists. Answer the user's request using the current lead context and current web sources when useful. Be concise and useful. If the user asks for an outreach message, draft a natural message they can copy, tailored to the relationship and platform they named. Do not claim that a message was sent, do not invent facts or contact details, and clearly label assumptions. Return plain text with readable paragraphs and bullets when helpful.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  request: askRequest,
+                  list: {
+                    name: activeList.name,
+                    description: activeList.description,
+                  },
+                  lead: {
+                    title: selectedDetailItem.title,
+                    organization: selectedDetailItem.organization,
+                    owner: selectedDetailItem.owner,
+                    contactEmails: selectedDetailItem.contactEmails,
+                    contactPhone: selectedDetailItem.contactPhone,
+                    linkedinUrl: selectedDetailItem.linkedinUrl,
+                    stage: getStage(activeList, selectedDetailItem.stage).label,
+                    segment: selectedDetailItem.segment,
+                    relationshipContext: selectedDetailItem.decisionMaker,
+                    nextStep: selectedDetailItem.nextStep,
+                    notes: selectedDetailItem.notes,
+                    sourceUrl: selectedDetailItem.sourceUrl,
+                  },
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+
+      const payload = await readApiJson(response, 'Ask AI returned an unexpected response. Refresh and try again.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Unable to answer this request.'));
+      }
+
+      const answer = getResponsesApiText(payload).trim();
+      if (!answer) {
+        throw new Error('Ask AI returned an empty answer. Try asking in a different way.');
+      }
+
+      setItemAskResponse(answer);
+      setItemAskMessage({ type: 'success', text: 'Answer ready.' });
+    } catch (error) {
+      console.error('[PipeLists] Ask AI failed:', error);
+      setItemAskMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to answer this request.',
+      });
+    } finally {
+      setIsAskingItem(false);
+    }
+  };
+
   const handleResearchItem = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify || !selectedDetailItem || isResearchingItem) return;
@@ -4073,7 +4200,7 @@ const PipelinePage: NextPage = () => {
               role: 'system',
               content: `You are a meticulous research assistant for PipeLists. Research exactly one existing contact or lead using current web sources and the user's specific request.
 
-Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: run focused searches for the person's name plus organization, then separately look for a public work email, LinkedIn profile, and business phone number. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
+Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: execute each suggested search query and follow the most likely official/profile result. For linkedinUrl, only return a direct profile or company page URL with a linkedin.com/in/, linkedin.com/pub/, or linkedin.com/company/ path. Do not return a LinkedIn feed, search results page, homepage, or generic directory URL. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
 
 Preserve the identity of the existing record unless a source corrects it. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
             },
@@ -4095,6 +4222,12 @@ Preserve the identity of the existing record unless a source corrects it. Provid
                     relationshipContext: selectedDetailItem.decisionMaker,
                     notes: selectedDetailItem.notes,
                   },
+                  suggestedSearchQueries: [
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}"`,
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}" site:linkedin.com/in`,
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}" email`,
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}" phone`,
+                  ],
                   allowedStages: activeList.stages.map((stage) => ({ id: stage.id, label: stage.label })),
                 },
                 null,
@@ -4648,7 +4781,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
       owner: normalizeResearchText(lead.owner),
       contactEmails: normalizeContactEmails((lead as { contactEmails?: unknown }).contactEmails),
       contactPhone: normalizeResearchText(lead.contactPhone),
-      linkedinUrl: normalizeLeadInputUrl(normalizeResearchText(lead.linkedinUrl))?.toString() || '',
+      linkedinUrl: normalizeLinkedInProfileUrl(normalizeResearchText(lead.linkedinUrl)),
       stage,
       priority,
       amount: normalizeResearchText(lead.amount),
@@ -9400,9 +9533,9 @@ Research rules:
                                     href={lead.linkedinUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
-                                  >
-                                    LinkedIn
+                                  className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                >
+                                  {displayProfileUrl(lead.linkedinUrl)}
                                   </a>
                                 )}
                               </div>
@@ -9779,6 +9912,20 @@ Research rules:
                     Research
                   </button>
                 )}
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => openItemAsk(selectedDetailItem)}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'ask'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Ask AI
+                  </button>
+                )}
                 {isContactListActive && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
@@ -10122,10 +10269,78 @@ Research rules:
                           rel="noreferrer"
                           className="font-medium text-sky-700 underline-offset-4 hover:underline"
                         >
-                          LinkedIn
+                          {displayProfileUrl(itemResearchResult.linkedinUrl)}
                         </a>
                       )}
                     </div>
+                  </section>
+                )}
+              </div>
+            ) : detailModalMode === 'ask' ? (
+              <div className="space-y-5 px-5 py-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-stone-950">Ask about {selectedDetailItem.title}</h4>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">
+                      Ask for a draft, recommendation, summary, or next step using this lead’s context.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleAskItem}>
+                    <label className="block" htmlFor="detail-item-ask-prompt">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Ask anything</span>
+                      <textarea
+                        id="detail-item-ask-prompt"
+                        value={itemAskPrompt}
+                        onChange={(event) => setItemAskPrompt(event.target.value)}
+                        className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        placeholder="Draft a short LinkedIn note to Rich that mentions Atlanta Track Club and asks for a brief conversation."
+                        autoFocus
+                      />
+                    </label>
+
+                    <div className="mt-4">
+                      <MessageBanner message={itemAskMessage} />
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetailModalMode('details')}
+                        disabled={isAskingItem}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isAskingItem}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        {isAskingItem ? 'Thinking...' : itemAskResponse ? 'Ask again' : 'Ask AI'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                {itemAskResponse && (
+                  <section className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold text-stone-950">Answer</h4>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(itemAskResponse);
+                          setToastMessage({ type: 'success', text: 'Answer copied to clipboard.' });
+                        }}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-600 transition hover:text-stone-950"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-7 text-stone-700">{itemAskResponse}</div>
                   </section>
                 )}
               </div>
@@ -10518,7 +10733,7 @@ Research rules:
                               rel="noreferrer"
                               className="font-medium text-sky-700 underline-offset-4 hover:underline"
                             >
-                              View profile
+                              {displayProfileUrl(selectedDetailItem.linkedinUrl)}
                             </a>
                           ) : (
                             ''
