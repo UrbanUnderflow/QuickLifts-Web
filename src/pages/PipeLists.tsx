@@ -307,6 +307,9 @@ const FRIENDS_OF_BUSINESS_COLLECTION = 'friends-of-business';
 const PIPELISTS_LEAD_SEARCH_MODEL = 'gpt-4o-mini';
 const PIPELISTS_REMOTE_BRIDGE_ORIGIN = 'https://fitwithpulse.ai';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
+const CONTACT_EMAIL_SENDERS = ['hello@fitwithpulse.ai', 'info@fitwithpulse.ai', 'tre@fitwithpulse.ai'] as const;
+type ContactEmailSender = (typeof CONTACT_EMAIL_SENDERS)[number];
+const DEFAULT_CONTACT_EMAIL_SENDER: ContactEmailSender = 'tre@fitwithpulse.ai';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
 const SOFT_DELETE_RESTORE_DAYS = 30;
 
@@ -944,8 +947,34 @@ const normalizeLinkedInProfileUrl = (value: string) => {
   const path = parsed.pathname.toLowerCase();
   const isLinkedIn = hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com');
   const isProfileOrCompany = /^\/(?:in|pub|company)\//.test(path);
+  const slug = path.split('/').filter(Boolean).pop() || '';
+  const isSyntheticSlug = /(?:^|-)(?:12345678|123456789|00000000|000000000|username|example)(?:-|$)/i.test(slug);
 
-  return isLinkedIn && isProfileOrCompany ? parsed.toString() : '';
+  return isLinkedIn && isProfileOrCompany && !isSyntheticSlug ? parsed.toString() : '';
+};
+
+const identityTokens = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 1)
+    .filter((token) => !['and', 'at', 'the', 'of', 'for', 'inc', 'llc', 'university', 'college'].includes(token));
+
+const normalizeLinkedInProfileUrlForLead = (value: string, title: string, organization: string) => {
+  const normalizedUrl = normalizeLinkedInProfileUrl(value);
+  if (!normalizedUrl) return '';
+
+  const parsed = normalizeLeadInputUrl(normalizedUrl);
+  if (!parsed) return '';
+
+  const slugTokens = identityTokens(parsed.pathname.split('/').filter(Boolean).pop() || '');
+  const titleTokens = identityTokens(title);
+  const organizationTokens = identityTokens(organization);
+  const titleMatches = titleTokens.length >= 2 && titleTokens.every((token) => slugTokens.includes(token));
+  const organizationMatches = organizationTokens.length >= 2 && organizationTokens.every((token) => slugTokens.includes(token));
+
+  return titleMatches || organizationMatches ? normalizedUrl : '';
 };
 
 const displayProfileUrl = (value: string) => value.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/\/$/, '');
@@ -1183,7 +1212,7 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
     ...draft,
     contactEmails: normalizeContactEmails(draft.contactEmails),
     contactPhone: draft.contactPhone.trim(),
-    linkedinUrl: normalizeLinkedInProfileUrl(draft.linkedinUrl),
+    linkedinUrl: normalizeLinkedInProfileUrlForLead(draft.linkedinUrl, draft.title, draft.organization),
     notes: cleanDealNotes(draft.notes),
     id,
     weeklyLogs: [],
@@ -1944,15 +1973,17 @@ const normalizeAttachment = (attachment: Partial<LeadAttachment>): LeadAttachmen
 const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): PipelineItem => {
   const now = new Date().toISOString();
   const stage = normalizeStageId(item.stage || listStages[0]?.id || 'sourced', listStages);
+  const title = item.title || 'Untitled opportunity';
+  const organization = item.organization || '';
   return {
     ...createItem(defaultDraft(stage), item.id || makeId()),
     ...item,
-    title: item.title || 'Untitled opportunity',
-    organization: item.organization || '',
+    title,
+    organization,
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
     contactPhone: item.contactPhone || '',
-    linkedinUrl: normalizeLinkedInProfileUrl(item.linkedinUrl || ''),
+    linkedinUrl: normalizeLinkedInProfileUrlForLead(item.linkedinUrl || '', title, organization),
     emailStatus: item.emailStatus || '',
     lastEmailType: item.lastEmailType || '',
     lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
@@ -2536,6 +2567,7 @@ const PipelinePage: NextPage = () => {
   const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isContactEmailModalOpen, setIsContactEmailModalOpen] = useState(false);
   const [contactEmailType, setContactEmailType] = useState<ContactEmailType>('metrics-update');
+  const [contactEmailSender, setContactEmailSender] = useState<ContactEmailSender>(DEFAULT_CONTACT_EMAIL_SENDER);
   const [contactEmailRecipients, setContactEmailRecipients] = useState('');
   const [contactEmailSubject, setContactEmailSubject] = useState('');
   const [contactEmailBody, setContactEmailBody] = useState('');
@@ -4002,6 +4034,7 @@ const PipelinePage: NextPage = () => {
   const prepareContactEmailComposer = (emails?: string[], subject = '') => {
     const nextEmails = emails && emails.length > 0 ? normalizeContactEmails(emails) : activeContactEmails;
     setContactEmailType('metrics-update');
+    setContactEmailSender(DEFAULT_CONTACT_EMAIL_SENDER);
     setContactEmailRecipients(nextEmails.join(', '));
     setContactEmailSubject(subject);
     setContactEmailBody('');
@@ -4202,6 +4235,8 @@ const PipelinePage: NextPage = () => {
 
 Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: execute each suggested search query and follow the most likely official/profile result. For linkedinUrl, only return a direct profile or company page URL with a linkedin.com/in/, linkedin.com/pub/, or linkedin.com/company/ path. Do not return a LinkedIn feed, search results page, homepage, or generic directory URL. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
 
+LinkedIn verification is strict: treat any existing LinkedIn URL as untrusted. Never construct a profile URL from a person's name, never reuse a URL just because its slug looks plausible, and never return a profile unless a web result or the profile page itself confirms the exact person's name and current organization or role. If that exact match cannot be verified, return an empty linkedinUrl.
+
 Preserve the identity of the existing record unless a source corrects it. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
             },
             {
@@ -4356,6 +4391,12 @@ Preserve the identity of the existing record unless a source corrects it. Provid
     setViewMode('logs');
   };
 
+  const openLogsForItem = (item: PipelineItem) => {
+    setSelectedDetailItemId(item.id);
+    setSelectedLogItemId(item.id);
+    setDetailModalMode('logs');
+  };
+
   const toggleExpandedLog = (logId: string) => {
     setExpandedLogIds((current) => {
       const next = new Set(current);
@@ -4474,6 +4515,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
         },
         body: JSON.stringify({
           provider: 'pulse-brevo',
+          fromEmail: contactEmailSender,
           emailType: contactEmailType,
           toEmails,
           subject: sentSubject,
@@ -4542,6 +4584,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
               const attachmentNames = contactEmailAttachments.map((attachment) => attachment.name).filter(Boolean);
               const messageId = messageIdsByEmail.get(matchingEmail) || '';
               const emailLogNotes = [
+                `From: ${contactEmailSender}`,
                 `To: ${matchingEmail}`,
                 `Subject: ${sentSubject}`,
                 ...(attachmentNames.length > 0 ? [`Attachments: ${attachmentNames.join(', ')}`] : []),
@@ -4774,14 +4817,17 @@ Preserve the identity of the existing record unless a source corrects it. Provid
     const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
     const priority = lead.priority === 'high' || lead.priority === 'low' ? lead.priority : 'medium';
 
+    const title = normalizeResearchText(lead.title) || normalizeResearchText(lead.organization) || 'Untitled opportunity';
+    const organization = normalizeResearchText(lead.organization);
+
     return {
       ...defaultDraft(stage),
-      title: normalizeResearchText(lead.title) || normalizeResearchText(lead.organization) || 'Untitled opportunity',
-      organization: normalizeResearchText(lead.organization),
+      title,
+      organization,
       owner: normalizeResearchText(lead.owner),
       contactEmails: normalizeContactEmails((lead as { contactEmails?: unknown }).contactEmails),
       contactPhone: normalizeResearchText(lead.contactPhone),
-      linkedinUrl: normalizeLinkedInProfileUrl(normalizeResearchText(lead.linkedinUrl)),
+      linkedinUrl: normalizeLinkedInProfileUrlForLead(normalizeResearchText(lead.linkedinUrl), title, organization),
       stage,
       priority,
       amount: normalizeResearchText(lead.amount),
@@ -4882,6 +4928,7 @@ Rules:
 - Return one result for each clear, distinct person or organization you can identify, up to 25 total results.
 - Do not return a directory, article, search result, or list of people as a contact. If an entry is a directory or list, resolve the actual people or organizations named in it instead.
 - Do a real enrichment pass for every person: search the name and organization, then specifically search for their published email, LinkedIn profile, and public business phone number before returning a result.
+- Treat every LinkedIn URL as untrusted until independently verified. Never construct a URL from a name or accept a guessed slug. Only return a direct LinkedIn URL when the search result or profile page confirms the exact person's name and current organization or role. Otherwise return an empty linkedinUrl.
 - Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl. sourceUrl must be a valid http(s) URL. Never use placeholders such as "N/A" or "not found".
 - Never invent roles, organizations, email addresses, dates, relationship history, or source links.
 - Include contactEmails only when a valid email is visibly published by a credible source. Otherwise return an empty array after checking; do not guess email patterns.
@@ -7959,7 +8006,7 @@ Research rules:
                     ) : isContactListActive ? (
                       <>
                         <span>Stage</span>
-                        <span>Email Status</span>
+                        <span>Log Status</span>
                       </>
                     ) : (
                       <>
@@ -8065,26 +8112,22 @@ Research rules:
                                   </span>
                                 </div>
                                 <div className="min-w-0">
-                                  {emailStatusHasActivity(item) ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="inline-flex rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                      {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
+                                    </span>
                                     <button
                                       type="button"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        openEmailActivityForItem(item);
+                                        openLogsForItem(item);
                                       }}
-                                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold transition hover:shadow-sm ${emailStatusTone(item)}`}
-                                      title={`View email activity for ${item.title}`}
+                                      className="inline-flex rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                                      title={`View logs for ${item.title}`}
                                     >
                                       View
                                     </button>
-                                  ) : (
-                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
-                                      Not sent
-                                    </span>
-                                  )}
-                                  {emailStatusHasActivity(item) && (
-                                    <p className="mt-1 truncate text-xs font-medium text-stone-500">{emailStatusLabel(item)}</p>
-                                  )}
+                                  </div>
                                   {item.contactEmails[0] && <p className="mt-1 truncate text-xs text-stone-500">{item.contactEmails[0]}</p>}
                                 </div>
                               </>
@@ -8609,6 +8652,7 @@ Research rules:
             </div>
 
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="grid gap-4 lg:grid-cols-2">
               <label className="block" htmlFor="contact-email-provider">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email configuration</span>
                 <select
@@ -8623,6 +8667,21 @@ Research rules:
                   Uses the Brevo sender configured in Netlify. This option only sends when signed in as {TREMAINE_OWNER_EMAIL}.
                 </span>
               </label>
+
+              <label className="block" htmlFor="contact-email-sender">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">From</span>
+                <select
+                  id="contact-email-sender"
+                  value={contactEmailSender}
+                  onChange={(event) => setContactEmailSender(event.target.value as ContactEmailSender)}
+                  disabled={!isOwner}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                >
+                  {CONTACT_EMAIL_SENDERS.map((email) => <option key={email} value={email}>{email}</option>)}
+                </select>
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">The address recipients see as the sender and reply-to.</span>
+              </label>
+              </div>
 
               <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -9990,7 +10049,7 @@ Research rules:
                     </p>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="grid gap-4 lg:grid-cols-3">
                     <label className="block" htmlFor="detail-contact-email-provider">
                       <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email configuration</span>
                       <select
@@ -10004,6 +10063,20 @@ Research rules:
                       <span className="mt-1.5 block text-xs leading-5 text-stone-400">
                         Sends only when signed in as {TREMAINE_OWNER_EMAIL}.
                       </span>
+                    </label>
+
+                    <label className="block" htmlFor="detail-contact-email-sender">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">From</span>
+                      <select
+                        id="detail-contact-email-sender"
+                        value={contactEmailSender}
+                        onChange={(event) => setContactEmailSender(event.target.value as ContactEmailSender)}
+                        disabled={!isOwner}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      >
+                        {CONTACT_EMAIL_SENDERS.map((email) => <option key={email} value={email}>{email}</option>)}
+                      </select>
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">Used as both sender and reply-to.</span>
                     </label>
 
                     <label className="block" htmlFor="detail-contact-email-type">

@@ -3,6 +3,7 @@ import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../ne
 
 type SendContactEmailRequest = {
   provider?: 'pulse-brevo';
+  fromEmail?: string;
   emailType?: string;
   toEmails?: string[];
   subject?: string;
@@ -30,6 +31,7 @@ type VerifiedSimpBudgetUser = {
 const OWNER_EMAIL = 'tremaine.grant@gmail.com';
 const INVESTOR_UPDATE_SENDER_EMAIL = process.env.INVESTOR_UPDATE_SENDER_EMAIL || 'tre@fitwithpulse.ai';
 const INVESTOR_UPDATE_SENDER_NAME = process.env.INVESTOR_UPDATE_SENDER_NAME || 'Tremaine Grant';
+const ALLOWED_SENDER_EMAILS = ['hello@fitwithpulse.ai', 'info@fitwithpulse.ai', 'tre@fitwithpulse.ai'] as const;
 const SIMPBUDGET_FIREBASE_API_KEY =
   process.env.SIMPBUDGET_FIREBASE_API_KEY?.trim() ||
   process.env.NEXT_PUBLIC_SIMPBUDGET_FIREBASE_API_KEY?.trim() ||
@@ -206,6 +208,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, error: 'Select a configured email provider.' });
   }
 
+  const requestedSenderEmail = cleanEmail(body.fromEmail) || cleanEmail(INVESTOR_UPDATE_SENDER_EMAIL);
+  if (!ALLOWED_SENDER_EMAILS.some((email) => email === requestedSenderEmail)) {
+    return res.status(400).json({ success: false, error: 'Select an approved From address.' });
+  }
+  const senderName = requestedSenderEmail === 'tre@fitwithpulse.ai' ? INVESTOR_UPDATE_SENDER_NAME : 'Pulse';
+
   const toEmails = Array.isArray(body.toEmails)
     ? Array.from(new Set(body.toEmails.map(cleanEmail).filter(Boolean))).slice(0, 100)
     : [];
@@ -261,13 +269,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         toEmail,
         toName: toEmail,
         subject,
-        htmlContent: buildContactEmailHtml({ message, messageHtml, senderEmail: INVESTOR_UPDATE_SENDER_EMAIL, listName, emailTypeLabel }),
+        htmlContent: buildContactEmailHtml({ message, messageHtml, senderEmail: requestedSenderEmail, listName, emailTypeLabel }),
         attachment: attachments.length > 0 ? attachments : undefined,
         sender: {
-          email: INVESTOR_UPDATE_SENDER_EMAIL,
-          name: INVESTOR_UPDATE_SENDER_NAME,
+          email: requestedSenderEmail,
+          name: senderName,
         },
-        replyTo: { email: INVESTOR_UPDATE_SENDER_EMAIL, name: 'Tremaine Grant' },
+        replyTo: { email: requestedSenderEmail, name: senderName },
         tags: ['pipelists', 'investor-update-contact', emailType],
         headers: {
           'X-Mailin-custom': JSON.stringify({
@@ -287,7 +295,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           feature: 'PipeLists contact email',
           batchId,
           recipientEmail: toEmail,
-          senderEmail: verifiedUser.email,
+          senderEmail: requestedSenderEmail,
           listId,
           listName,
           emailType,
