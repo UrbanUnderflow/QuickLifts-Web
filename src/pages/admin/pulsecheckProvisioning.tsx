@@ -79,6 +79,7 @@ import type {
   PulseCheckTeamEscalationRoute,
   PulseCheckTeamPlanStatus,
   PulseCheckTeamStatus,
+  PulseCheckYouthTrack,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { resolvePulseCheckInvitePreviewImage } from '../../utils/pulsecheckInviteLinks';
 
@@ -192,6 +193,12 @@ const TEAM_COMMERCIAL_MODEL_OPTIONS: Array<{ value: PulseCheckTeamCommercialMode
 const TEAM_PLAN_STATUS_OPTIONS: Array<{ value: PulseCheckTeamPlanStatus; label: string }> = [
   { value: 'inactive', label: 'Inactive' },
   { value: 'active', label: 'Active' },
+];
+
+const YOUTH_TRACK_OPTIONS: Array<{ value: PulseCheckYouthTrack; label: string; description: string }> = [
+  { value: 'junior', label: 'Junior', description: 'Default guided pathway with open Nora chat removed.' },
+  { value: 'rookie', label: 'Rookie', description: 'Youth-first guided pathway with parent/Home Team support.' },
+  { value: 'pro', label: 'Pro', description: 'Institutional / governed experience with direct Nora chat enabled.' },
 ];
 
 // The revenue recipient is now a specific person; keep the legacy role field in
@@ -3923,15 +3930,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           <div className="pcp-commercial-footer" style={{ alignItems: 'flex-start' }}>
                                             <div>
                                               <div className="pcp-card-copy">
-                                                Control whether this team uses athlete-paid access or a bypassed team plan, and where referral revenue routes.
+                                                Control whether this team uses athlete-paid access or a bypassed team plan, where referral revenue routes, and which PulseCheck athlete experience is enabled.
                                               </div>
                                             </div>
                                             <div className="pcp-commercial-badge">
-                                              {teamPlanBypass
-                                                ? 'Team Plan Active'
-                                                : teamCommercialDraft.commercialModel === 'athlete-pay'
-                                                  ? 'Athlete Paid Access'
-                                                  : 'Team Plan Inactive'}
+                                              {`${(teamCommercialDraft.youthTrack || 'junior').toUpperCase()} Track`}
                                             </div>
                                           </div>
                                           <div className="pcp-commercial-shell">
@@ -3969,6 +3972,26 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 >
                                                   {TEAM_PLAN_STATUS_OPTIONS.map((option) => (
                                                     <option key={option.value} value={option.value}>{option.label}</option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Youth Track</span>
+                                                <select
+                                                  className="pcp-finp pcp-select"
+                                                  value={teamCommercialDraft.youthTrack || 'junior'}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'youthTrack',
+                                                      event.target.value as PulseCheckYouthTrack
+                                                    )
+                                                  }
+                                                >
+                                                  {YOUTH_TRACK_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                      {option.label} — {option.description}
+                                                    </option>
                                                   ))}
                                                 </select>
                                               </label>
@@ -5112,6 +5135,20 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         >
                           {TEAM_COMMERCIAL_MODEL_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Youth Track</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.commercialConfig.youthTrack}
+                          onChange={(event) => handleTeamCommercialFieldChange('youthTrack', event.target.value as PulseCheckYouthTrack)}
+                        >
+                          {YOUTH_TRACK_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label} — {option.description}
+                            </option>
                           ))}
                         </select>
                       </label>

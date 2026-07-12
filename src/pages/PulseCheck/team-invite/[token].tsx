@@ -112,12 +112,15 @@ const normalizeInviteCommercialSnapshot = (
     String(candidate.commercialModel || defaults.commercialModel).trim() === 'team-plan' ? 'team-plan' : 'athlete-pay';
   const teamPlanStatus =
     String(candidate.teamPlanStatus || defaults.teamPlanStatus).trim() === 'active' ? 'active' : 'inactive';
+  const youthTrackRaw = String(candidate.youthTrack || defaults.youthTrack).trim();
+  const youthTrack = youthTrackRaw === 'pro' || youthTrackRaw === 'rookie' ? youthTrackRaw : 'junior';
   const referralRevenueSharePct = Number.isFinite(Number(candidate.referralRevenueSharePct))
     ? Math.max(0, Math.min(100, Number(candidate.referralRevenueSharePct)))
     : defaults.referralRevenueSharePct;
   const snapshot: PulseCheckTeamCommercialSnapshot = {
     commercialModel,
     teamPlanStatus,
+    youthTrack,
     referralKickbackEnabled:
       typeof candidate.referralKickbackEnabled === 'boolean'
         ? candidate.referralKickbackEnabled

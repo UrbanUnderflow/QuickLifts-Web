@@ -113,6 +113,8 @@ type TemplateKey =
 type StageTrack = 'build' | 'run' | 'capital' | 'general';
 type StageOutcome = 'open' | 'won' | 'lost';
 
+const LEAD_SEARCH_PROMPT_MAX_LENGTH = 10000;
+
 type StageConfig = {
   id: string;
   label: string;
@@ -4984,8 +4986,8 @@ Rules:
       return;
     }
 
-    if (searchPrompt.length > 8000) {
-      setLeadGenMessage({ type: 'error', text: 'Keep the search prompt under 8,000 characters.' });
+    if (searchPrompt.length > LEAD_SEARCH_PROMPT_MAX_LENGTH) {
+      setLeadGenMessage({ type: 'error', text: 'Keep the search prompt at 10,000 characters or fewer.' });
       return;
     }
 
@@ -9123,12 +9125,26 @@ Research rules:
             ) : (
               <form onSubmit={handleGenerateLeads} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
                 <label className="block" htmlFor="pipe-lead-search-prompt">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Prompt</span>
+                  <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
+                    <span>Prompt</span>
+                    <span
+                      className={
+                        leadSearchPrompt.length >= LEAD_SEARCH_PROMPT_MAX_LENGTH
+                          ? 'text-red-600'
+                          : leadSearchPrompt.length >= LEAD_SEARCH_PROMPT_MAX_LENGTH * 0.9
+                            ? 'text-amber-600'
+                            : 'text-stone-400'
+                      }
+                    >
+                      {leadSearchPrompt.length.toLocaleString()} / {LEAD_SEARCH_PROMPT_MAX_LENGTH.toLocaleString()}
+                    </span>
+                  </span>
                   <textarea
                     id="pipe-lead-search-prompt"
                     autoFocus
                     value={leadSearchPrompt}
                     onChange={(event) => setLeadSearchPrompt(event.target.value)}
+                    maxLength={LEAD_SEARCH_PROMPT_MAX_LENGTH}
                     className="min-h-52 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   />
                 </label>

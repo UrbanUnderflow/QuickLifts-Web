@@ -37,6 +37,7 @@ export type PulseCheckAthleteEntryOnboardingStep = 'name' | 'consent' | 'researc
 export type PulseCheckResearchConsentStatus = 'not-required' | 'pending' | 'accepted' | 'declined';
 export type PulseCheckTeamCommercialModel = 'athlete-pay' | 'team-plan';
 export type PulseCheckTeamPlanStatus = 'inactive' | 'active';
+export type PulseCheckYouthTrack = 'pro' | 'junior' | 'rookie';
 export type PulseCheckRevenueRecipientRole = 'team-admin' | 'coach' | 'organization-owner';
 export type PulseCheckTeamMembershipRole =
   | 'team-admin'
@@ -102,6 +103,7 @@ export interface PulseCheckOnboardingTrackerState {
 export interface PulseCheckTeamCommercialConfig {
   commercialModel: PulseCheckTeamCommercialModel;
   teamPlanStatus: PulseCheckTeamPlanStatus;
+  youthTrack: PulseCheckYouthTrack;
   referralKickbackEnabled: boolean;
   referralRevenueSharePct: number;
   revenueRecipientRole: PulseCheckRevenueRecipientRole;
@@ -122,6 +124,7 @@ export interface PulseCheckTeamCommercialSnapshot extends PulseCheckTeamCommerci
 export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommercialConfig => ({
   commercialModel: 'athlete-pay',
   teamPlanStatus: 'inactive',
+  youthTrack: 'junior',
   referralKickbackEnabled: false,
   referralRevenueSharePct: 0,
   revenueRecipientRole: 'team-admin',

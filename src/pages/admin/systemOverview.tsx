@@ -54,6 +54,7 @@ import PulseCheckProtocolLaunchQaMatrixTab from "../../components/admin/system-o
 import SimFamilySpecTab from "../../components/admin/system-overview/SimFamilySpecTab";
 import AthleteJourneyTab from "../../components/admin/system-overview/AthleteJourneyTab";
 import CoachJourneyTab from "../../components/admin/system-overview/CoachJourneyTab";
+import PulseCheckYouthPathwaysTab from "../../components/admin/system-overview/PulseCheckYouthPathwaysTab";
 import PulseCheckModeratedCheckInSpecTab from "../../components/admin/system-overview/PulseCheckModeratedCheckInSpecTab";
 import PulseClubActivationArchitectureTab from "../../components/admin/system-overview/PulseClubActivationArchitectureTab";
 import SmartRoutesV1ArchitectureTab from "../../components/admin/system-overview/SmartRoutesV1ArchitectureTab";
@@ -276,6 +277,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "sim-family-specs",
       "athlete-journey",
       "coach-journey",
+      "pulsecheck-youth-pathways",
       "notification-systems-architecture",
       "pulsecheck-runtime-architecture",
       "pulsecheck-state-signal-layer",
@@ -1897,6 +1899,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "coach-journey":
         return <CoachJourneyTab />;
+
+      case "pulsecheck-youth-pathways":
+        return <PulseCheckYouthPathwaysTab />;
 
       case "pulsecheck-nora-moderated-checkin-spec":
         return <PulseCheckModeratedCheckInSpecTab />;

@@ -59,6 +59,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'sim-family-specs', label: 'Sim FamilySpecs', description: 'Complete specifications for each simulation family.' },
     { id: 'athlete-journey', label: 'Athlete Journey', description: 'Recommended entry, progression, and system flow for athlete adoption.' },
     { id: 'coach-journey', label: 'Coach Journey', description: 'Recommended entry, setup, and daily operating flow for coaches using PulseCheck.' },
+    { id: 'pulsecheck-youth-pathways', label: 'Youth Pathways', description: 'Junior, Rookie, and Home Team operating model for guided youth mental readiness without open-ended Nora chat.' },
     { id: 'pulsecheck-runtime-architecture', label: 'Runtime Stack', description: 'Parent artifact for the PulseCheck runtime operating model, state logic, assignment rules, escalation bridges, and QA posture.' },
     { id: 'pulsecheck-state-signal-layer', label: 'State Signal Layer', description: 'Operational state inference, confidence bands, freshness rules, and routing outputs for Nora.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-checkin-signal-layer-integration-spec', label: 'Check-In Integration Spec', description: 'AI-native contract between readiness check-in, enriched state snapshots, bounded assignment candidate sets, Nora chat context, and daily task materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },

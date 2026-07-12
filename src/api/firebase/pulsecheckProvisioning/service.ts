@@ -211,6 +211,13 @@ const normalizeRevenueRecipientRole = (value: unknown): PulseCheckRevenueRecipie
 };
 const normalizeTeamEscalationRoute = (value: unknown): PulseCheckTeamEscalationRoute =>
   normalizeString(typeof value === 'string' ? value : '') === 'hotline' ? 'hotline' : 'clinician';
+const normalizeYouthTrack = (value: unknown): PulseCheckTeamCommercialConfig['youthTrack'] => {
+  const normalized = normalizeString(typeof value === 'string' ? value : '');
+  if (normalized === 'junior' || normalized === 'rookie') {
+    return normalized;
+  }
+  return normalized === 'pro' ? 'pro' : 'junior';
+};
 const normalizeReferralRevenueSharePct = (value: unknown) => {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) return 0;
@@ -225,6 +232,7 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    youthTrack: normalizeYouthTrack(candidate.youthTrack ?? defaults.youthTrack),
     referralKickbackEnabled:
       typeof candidate.referralKickbackEnabled === 'boolean'
         ? candidate.referralKickbackEnabled
