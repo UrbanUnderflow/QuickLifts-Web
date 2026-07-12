@@ -157,22 +157,6 @@ type LeadAttachment = {
   createdBy: string;
 };
 
-type LeadSearchBrief = {
-  productName: string;
-  productContext: string;
-  searchFocus: string;
-  targetAudience: string;
-  opportunityTypes: string;
-  preferredSources: string;
-  mustInclude: string;
-  mustExclude: string;
-  positioning: string;
-  requireFutureDeadline: boolean;
-  officialSourcesOnly: boolean;
-  includeAdjacentFit: boolean;
-  leadCount: number;
-};
-
 type PipelineItem = {
   id: string;
   title: string;
@@ -231,7 +215,6 @@ type PipeList = {
   templateKey: TemplateKey;
   stages: StageConfig[];
   items: PipelineItem[];
-  searchBrief?: LeadSearchBrief;
   createdAt: string;
 };
 
@@ -292,6 +275,15 @@ type GeneratedLead = ItemDraft & {
   rationale: string;
   sourceEvidence: string;
   deadlineStatus: string;
+};
+
+type SourceVerificationResult = {
+  url: string;
+  valid: boolean;
+  status: number;
+  finalUrl: string;
+  title: string;
+  reason?: string;
 };
 
 const STORAGE_KEY = 'pulse-pipe-lists-v2';
@@ -1459,80 +1451,6 @@ const generatedLeadKey = (lead: Pick<ItemDraft, 'title' | 'organization' | 'sour
     ? normalizeOpportunityKey(lead.sourceUrl)
     : normalizeOpportunityKey(`${lead.title} ${lead.organization}`);
 
-const isIsoDateOnOrAfter = (dateValue: string, minimumDate: string) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return false;
-
-  const dateTime = new Date(`${dateValue}T12:00:00`).getTime();
-  const minimumTime = new Date(`${minimumDate}T00:00:00`).getTime();
-  return !Number.isNaN(dateTime) && dateTime >= minimumTime;
-};
-
-const clampLeadGenCount = (value: number) => Math.min(10, Math.max(3, value));
-
-const defaultLeadSearchBrief = (_list: PipeList): LeadSearchBrief => {
-  return {
-    productName: '',
-    productContext: '',
-    searchFocus: '',
-    targetAudience: '',
-    opportunityTypes: '',
-    preferredSources: '',
-    mustInclude: '',
-    mustExclude: '',
-    positioning: '',
-    requireFutureDeadline: false,
-    officialSourcesOnly: false,
-    includeAdjacentFit: false,
-    leadCount: 6,
-  };
-};
-
-const normalizeLeadSearchBrief = (brief: Partial<LeadSearchBrief> | undefined, list: PipeList): LeadSearchBrief => {
-  const fallback = defaultLeadSearchBrief(list);
-  const readString = (field: keyof LeadSearchBrief) =>
-    typeof brief?.[field] === 'string' ? (brief[field] as string) : (fallback[field] as string);
-
-  return {
-    productName: readString('productName'),
-    productContext: readString('productContext'),
-    searchFocus: readString('searchFocus'),
-    targetAudience: readString('targetAudience'),
-    opportunityTypes: readString('opportunityTypes'),
-    preferredSources: readString('preferredSources'),
-    mustInclude: readString('mustInclude'),
-    mustExclude: readString('mustExclude'),
-    positioning: readString('positioning'),
-    requireFutureDeadline: brief?.requireFutureDeadline ?? fallback.requireFutureDeadline,
-    officialSourcesOnly: brief?.officialSourcesOnly ?? fallback.officialSourcesOnly,
-    includeAdjacentFit: brief?.includeAdjacentFit ?? fallback.includeAdjacentFit,
-    leadCount: clampLeadGenCount(Number(brief?.leadCount) || fallback.leadCount),
-  };
-};
-
-const buildLeadSearchPrompt = (brief: LeadSearchBrief) =>
-  [
-    brief.productName ? `Product / company: ${brief.productName}` : '',
-    brief.productContext ? `Product context: ${brief.productContext}` : '',
-    brief.searchFocus ? `Search focus: ${brief.searchFocus}` : '',
-    brief.targetAudience ? `Target buyer / audience: ${brief.targetAudience}` : '',
-    brief.opportunityTypes ? `Opportunity types: ${brief.opportunityTypes}` : '',
-    brief.preferredSources ? `Preferred sources: ${brief.preferredSources}` : '',
-    brief.includeAdjacentFit
-      ? 'Include adjacent-fit leads when there is a practical positioning or outreach path.'
-      : '',
-    brief.requireFutureDeadline
-      ? 'Require a current or future application/submission deadline. Exclude undated, expired, closed, or already-passed opportunities.'
-      : '',
-    brief.officialSourcesOnly
-      ? 'Use official/current sources first and verify against official pages before returning a lead.'
-      : '',
-    brief.mustInclude ? `Must include: ${brief.mustInclude}` : '',
-    brief.mustExclude ? `Must exclude: ${brief.mustExclude}` : '',
-    brief.positioning ? `Positioning guidance: ${brief.positioning}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-
 const leadSearchStringFields = [
   'title',
   'organization',
@@ -1765,10 +1683,7 @@ const createList = (
     items,
     createdAt: new Date().toISOString(),
   };
-  return {
-    ...list,
-    searchBrief: defaultLeadSearchBrief(list),
-  };
+  return list;
 };
 
 const initialLists: PipeList[] = [
@@ -2115,10 +2030,7 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
     items: Array.isArray(list.items) ? list.items.map((item) => normalizeItem(item, stages)) : [],
     createdAt: list.createdAt || new Date().toISOString(),
   };
-  return {
-    ...normalizedList,
-    searchBrief: normalizeLeadSearchBrief(list.searchBrief, normalizedList),
-  };
+  return normalizedList;
 };
 
 const normalizeShareEmails = (emails: unknown) =>
@@ -2588,7 +2500,7 @@ const PipelinePage: NextPage = () => {
   const [isAnalyzingLead, setIsAnalyzingLead] = useState(false);
   const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isLeadGenModalOpen, setIsLeadGenModalOpen] = useState(false);
-  const [leadSearchBrief, setLeadSearchBrief] = useState<LeadSearchBrief>(() => defaultLeadSearchBrief(initialLists[0]));
+  const [leadSearchPrompt, setLeadSearchPrompt] = useState('');
   const [isGeneratingLeads, setIsGeneratingLeads] = useState(false);
   const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
   const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
@@ -3339,36 +3251,6 @@ const PipelinePage: NextPage = () => {
     };
   }, [accessibleShareDocs, dataReady, isOwner, isSharedView, lists, normalizedUserEmail, profile, user]);
 
-  const leadSearchPromptPreview = useMemo(() => buildLeadSearchPrompt(leadSearchBrief), [leadSearchBrief]);
-  const persistLeadSearchBrief = (brief: LeadSearchBrief = leadSearchBrief) => {
-    const normalizedBrief = normalizeLeadSearchBrief(brief, activeList);
-
-    setLeadSearchBrief(normalizedBrief);
-    setLists((currentLists) =>
-      currentLists.map((list) =>
-        list.id === activeList.id
-          ? {
-              ...list,
-              searchBrief: normalizedBrief,
-            }
-          : list,
-      ),
-    );
-
-    return normalizedBrief;
-  };
-  const updateLeadSearchBrief = <Key extends keyof LeadSearchBrief>(field: Key, value: LeadSearchBrief[Key]) => {
-    setLeadSearchBrief((currentBrief) => ({
-      ...currentBrief,
-      [field]: value,
-    }));
-  };
-  const updateAndPersistLeadSearchBrief = <Key extends keyof LeadSearchBrief>(field: Key, value: LeadSearchBrief[Key]) => {
-    persistLeadSearchBrief({
-      ...leadSearchBrief,
-      [field]: value,
-    });
-  };
   const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
 
   useEffect(() => {
@@ -4269,7 +4151,7 @@ const PipelinePage: NextPage = () => {
               role: 'system',
               content: `You are a meticulous research assistant for PipeLists. Research exactly one existing contact or lead using current web sources and the user's specific request.
 
-Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: execute each suggested search query and follow the most likely official/profile result. For linkedinUrl, only return a direct profile or company page URL with a linkedin.com/in/, linkedin.com/pub/, or linkedin.com/company/ path. Do not return a LinkedIn feed, search results page, homepage, or generic directory URL. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a valid http(s) URL. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
+Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: execute each suggested search query and follow the most likely official/profile result. For linkedinUrl, only return a direct profile or company page URL with a linkedin.com/in/, linkedin.com/pub/, or linkedin.com/company/ path. Do not return a LinkedIn feed, search results page, homepage, or generic directory URL. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a real, current, reachable page that supports this exact lead. Do not return a 404, dead, placeholder, search-result, directory, or generic homepage URL, and never construct a URL from a name. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
 
 LinkedIn verification is strict: treat any existing LinkedIn URL as untrusted. Never construct a profile URL from a person's name, never reuse a URL just because its slug looks plausible, and never return a profile unless a web result or the profile page itself confirms the exact person's name and current organization or role. If that exact match cannot be verified, return an empty linkedinUrl.
 
@@ -4340,6 +4222,14 @@ Preserve the identity of the existing record unless a source corrects it. Provid
       if (!result.sourceUrl) {
         throw new Error('Research needs a credible source URL. Add one to this lead first, then try again.');
       }
+
+      const sourceVerification = await verifySourceUrls([result.sourceUrl], idToken);
+      const normalizedSourceUrl = normalizeLeadInputUrl(result.sourceUrl)?.toString() || result.sourceUrl;
+      const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+      if (!sourceCheck?.valid) {
+        throw new Error('Research returned a source link that could not be verified. Try again or add the correct source URL manually.');
+      }
+      result.sourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || result.sourceUrl)?.toString() || result.sourceUrl;
 
       const foundNewPublicData = Boolean(
         suggestedResult.contactEmails.length ||
@@ -4443,6 +4333,29 @@ Preserve the identity of the existing record unless a source corrects it. Provid
     setSelectedDetailItemId(item.id);
     setSelectedLogItemId(item.id);
     setDetailModalMode('logs');
+  };
+
+  const verifySourceUrls = async (urls: string[], idToken: string) => {
+    const uniqueUrls = Array.from(new Set(urls.map((url) => normalizeLeadInputUrl(url)?.toString() || '').filter(Boolean))).slice(0, 40);
+    if (uniqueUrls.length === 0) return new Map<string, SourceVerificationResult>();
+
+    const response = await fetch('/api/pipelists/verify-source', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ urls: uniqueUrls }),
+    });
+    const payload = await readApiJson(response, 'Source verification returned an unexpected response.');
+    if (!response.ok) {
+      throw new Error(getApiErrorMessage(payload, 'Unable to verify source links.'));
+    }
+
+    const results = payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown }).results)
+      ? (payload as { results: SourceVerificationResult[] }).results
+      : [];
+    return new Map(results.map((result) => [normalizeLeadInputUrl(result.url)?.toString() || result.url, result]));
   };
 
   const toggleExpandedLog = (logId: string) => {
@@ -4696,7 +4609,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
 
   const openLeadGenModal = () => {
     if (!canModify) return;
-    setLeadSearchBrief(normalizeLeadSearchBrief(activeList.searchBrief, activeList));
+    setLeadSearchPrompt('');
     setGeneratedLeads([]);
     setAddedGeneratedLeadKeys([]);
     setLeadGenMessage(null);
@@ -4708,8 +4621,8 @@ Preserve the identity of the existing record unless a source corrects it. Provid
 
   const closeLeadGenModal = () => {
     if (isGeneratingLeads) return;
-    persistLeadSearchBrief();
     setIsLeadGenModalOpen(false);
+    setLeadSearchPrompt('');
   };
 
   const openPastedLeadListModal = () => {
@@ -4931,7 +4844,6 @@ Preserve the identity of the existing record unless a source corrects it. Provid
         throw new Error('Please sign in again before analyzing this list.');
       }
 
-      const normalizedBrief = normalizeLeadSearchBrief(leadSearchBrief, activeList);
       const stageOptions = activeList.stages.map((stage) => ({
         id: stage.id,
         label: stage.label,
@@ -4977,7 +4889,7 @@ Rules:
 - Do not return a directory, article, search result, or list of people as a contact. If an entry is a directory or list, resolve the actual people or organizations named in it instead.
 - Do a real enrichment pass for every person: search the name and organization, then specifically search for their published email, LinkedIn profile, and public business phone number before returning a result.
 - Treat every LinkedIn URL as untrusted until independently verified. Never construct a URL from a name or accept a guessed slug. Only return a direct LinkedIn URL when the search result or profile page confirms the exact person's name and current organization or role. Otherwise return an empty linkedinUrl.
-- Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl. sourceUrl must be a valid http(s) URL. Never use placeholders such as "N/A" or "not found".
+- Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl. sourceUrl must be a real, current, reachable page supporting that exact contact. Do not return a 404, dead, placeholder, search-result, directory, or generic homepage URL, and never construct a URL from a name. Never use placeholders such as "N/A" or "not found".
 - Never invent roles, organizations, email addresses, dates, relationship history, or source links.
 - Include contactEmails only when a valid email is visibly published by a credible source. Otherwise return an empty array after checking; do not guess email patterns.
 - Include linkedinUrl only for a valid public LinkedIn profile URL. Include contactPhone only for a publicly published business phone number. Leave either field as an empty string when no credible source provides it.
@@ -4994,7 +4906,6 @@ Rules:
                 {
                   listName: activeList.name,
                   templateLabel: templateCatalog[activeList.templateKey].label,
-                  searchBrief: normalizedBrief,
                   stageOptions,
                   existingItems,
                   pastedList: rawList,
@@ -5017,15 +4928,28 @@ Rules:
       const uniqueLeads = new Map<string, GeneratedLead>();
       let excludedUnverifiedCount = 0;
 
-      rawLeads.forEach((lead: Partial<GeneratedLead>) => {
-        const sanitizedLead = sanitizeGeneratedLead(lead);
-        if (!sanitizedLead.sourceUrl || !sanitizedLead.organization || !sanitizedLead.rationale) {
+      const rawLeadRecords = rawLeads as Partial<GeneratedLead>[];
+      const sanitizedCandidates = rawLeadRecords.map((lead) => sanitizeGeneratedLead(lead));
+      const sourceVerification = await verifySourceUrls(
+        sanitizedCandidates.map((lead) => lead.sourceUrl),
+        idToken,
+      );
+
+      rawLeadRecords.forEach((_, index) => {
+        const sanitizedLead = sanitizedCandidates[index];
+        const normalizedSourceUrl = normalizeLeadInputUrl(sanitizedLead.sourceUrl)?.toString() || sanitizedLead.sourceUrl;
+        const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+        if (!sourceCheck?.valid || !sanitizedLead.sourceUrl || !sanitizedLead.organization || !sanitizedLead.rationale) {
           excludedUnverifiedCount += 1;
           return;
         }
-        const key = generatedLeadKey(sanitizedLead);
+        const verifiedLead = {
+          ...sanitizedLead,
+          sourceUrl: normalizeLeadInputUrl(sourceCheck.finalUrl || sanitizedLead.sourceUrl)?.toString() || sanitizedLead.sourceUrl,
+        };
+        const key = generatedLeadKey(verifiedLead);
         if (!activeLeadKeys.has(key) && !uniqueLeads.has(key)) {
-          uniqueLeads.set(key, sanitizedLead);
+          uniqueLeads.set(key, verifiedLead);
         }
       });
 
@@ -5054,6 +4978,17 @@ Rules:
     event.preventDefault();
     if (!canModify || isGeneratingLeads) return;
 
+    const searchPrompt = leadSearchPrompt.trim();
+    if (!searchPrompt) {
+      setLeadGenMessage({ type: 'error', text: 'Add a prompt describing the leads you want to find.' });
+      return;
+    }
+
+    if (searchPrompt.length > 8000) {
+      setLeadGenMessage({ type: 'error', text: 'Keep the search prompt under 8,000 characters.' });
+      return;
+    }
+
     setIsGeneratingLeads(true);
     setGeneratedLeads([]);
     setAddedGeneratedLeadKeys([]);
@@ -5067,10 +5002,6 @@ Rules:
       }
 
       const today = getEasternDate();
-      const normalizedBrief = normalizeLeadSearchBrief(leadSearchBrief, activeList);
-      const userAdjustments = buildLeadSearchPrompt(normalizedBrief);
-      persistLeadSearchBrief(normalizedBrief);
-      const deadlineRequired = normalizedBrief.requireFutureDeadline;
       const stageOptions = activeList.stages.map((stage) => ({
         id: stage.id,
         label: stage.label,
@@ -5112,16 +5043,15 @@ Rules:
 Current date: ${today}.
 
 Research rules:
-- Use the user's search brief as the primary instruction source.
+- Use the user's prompt as the primary instruction source. Do not add assumptions, targeting criteria, deadline requirements, product details, or opportunity types that the user did not provide.
 - Use web search and return leads supported by current sources.
-- Return only leads that are relevant to the active PipeList and the user's search brief.
+- Return only leads that are relevant to the active PipeList and the user's prompt.
 - Avoid duplicates already in the user's list.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
+- Every sourceUrl must be a real, current, reachable page supporting that exact lead. Do not return a 404, dead, placeholder, search-result, directory, or generic homepage URL, and never construct a URL from a name.
 - Only include contactEmails when the source visibly provides valid email addresses. Never invent contact emails.
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD.
-- If requireFutureDeadline is true in the search brief, every returned lead must have a verified dueDate on or after ${today}.
-- If requireFutureDeadline is false, dueDate can be "" unless the source provides a real deadline.
-- If officialSourcesOnly is true in the search brief, prefer official/current sources and verify against official pages before returning a lead.
+- dueDate can be "" unless the source provides a real deadline or the user's prompt explicitly requires one.
 - Pick stage from the provided stage ids only. If unsure, use the first stage id.
 - Keep notes blank unless there is deal-moving context: risk, eligibility nuance, budget/funding detail, buyer angle, procurement constraint, strategic fit, or prep detail. Do not summarize what the page is. Do not write generic "may be relevant" notes or "AI confidence".
 - sourceEvidence must briefly name the source support used, including the deadline when relevant.
@@ -5132,14 +5062,12 @@ Research rules:
               role: 'user',
               content: JSON.stringify(
                 {
-                  requestedLeadCount: normalizedBrief.leadCount,
+                  requestedLeadCount: 6,
                   listName: activeList.name,
                   templateLabel: templateCatalog[activeList.templateKey].label,
                   templateKey: activeList.templateKey,
-                  searchBrief: normalizedBrief,
-                  deadlineRequired,
+                  searchPrompt,
                   stageOptions,
-                  userAdjustments,
                   existingItems,
                 },
                 null,
@@ -5160,7 +5088,24 @@ Research rules:
       const sanitizedLeads: GeneratedLead[] = rawLeads.length > 0
         ? rawLeads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
         : [];
-      const nextLeads = sanitizedLeads.filter((lead) => !normalizedBrief.requireFutureDeadline || isIsoDateOnOrAfter(lead.dueDate, today));
+      const sourceVerification = await verifySourceUrls(
+        sanitizedLeads.map((lead) => lead.sourceUrl),
+        idToken,
+      );
+      const verifiedLeads = sanitizedLeads
+        .filter((lead) => {
+          const normalizedSourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || lead.sourceUrl;
+          return sourceVerification.get(normalizedSourceUrl)?.valid;
+        })
+        .map((lead) => {
+          const normalizedSourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || lead.sourceUrl;
+          const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+          return {
+            ...lead,
+            sourceUrl: normalizeLeadInputUrl(sourceCheck?.finalUrl || lead.sourceUrl)?.toString() || lead.sourceUrl,
+          };
+        });
+      const nextLeads = verifiedLeads;
 
       setGeneratedLeads(nextLeads);
       setLeadGenMessage(
@@ -5169,15 +5114,15 @@ Research rules:
               type: 'success',
               text:
                 sanitizedLeads.length > nextLeads.length
-                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Filtered out expired matches.`
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Excluded matches with unverified source links.`
                   : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.`,
             }
           : {
               type: 'info',
               text:
                 sanitizedLeads.length > 0
-                  ? 'The search only found expired matches. Try widening the search or turning off future deadline.'
-                  : 'No new leads matched this search. Try widening the adjustments.',
+                  ? 'The search found leads, but their source links could not be verified. Try revising the prompt to request official or direct sources.'
+                  : 'No new leads matched this search. Try revising the prompt.',
             },
       );
     } catch (error) {
@@ -5773,6 +5718,17 @@ Research rules:
         extracted.stage || activeList.stages[0]?.id || 'sourced',
         activeList.stages,
       );
+      const extractedSourceUrl = extracted.sourceUrl?.trim() || normalizeLeadInputUrl(cleanInput)?.toString() || '';
+      if (!extractedSourceUrl) {
+        throw new Error('The lead did not include a source link that can be verified. Add the official page and try again.');
+      }
+      const sourceVerification = await verifySourceUrls([extractedSourceUrl], idToken);
+      const normalizedExtractedSourceUrl = normalizeLeadInputUrl(extractedSourceUrl)?.toString() || extractedSourceUrl;
+      const sourceCheck = sourceVerification.get(normalizedExtractedSourceUrl);
+      if (!sourceCheck?.valid) {
+        throw new Error('The source link could not be verified. Check that the page is current and try again.');
+      }
+      const verifiedSourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || extractedSourceUrl)?.toString() || extractedSourceUrl;
       const nextItemBase = createItem(
         {
           ...defaultDraft(stage),
@@ -5782,7 +5738,7 @@ Research rules:
           title: extracted.title?.trim() || fallbackLeadTitleFromInput(cleanInput),
           organization: extracted.organization?.trim() || '',
           contactEmails: normalizeContactEmails(extracted.contactEmails),
-          sourceUrl: extracted.sourceUrl?.trim() || normalizeLeadInputUrl(cleanInput)?.toString() || '',
+          sourceUrl: verifiedSourceUrl,
           notes: cleanDealNotes(extracted.notes),
         },
         makeId(),
@@ -5926,9 +5882,16 @@ Research rules:
             skippedCount += 1;
             continue;
           }
+          const sourceVerification = await verifySourceUrls([normalizedSourceUrl], idToken);
+          const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+          if (!sourceCheck?.valid) {
+            skippedCount += 1;
+            continue;
+          }
+          const verifiedSourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || normalizedSourceUrl)?.toString() || normalizedSourceUrl;
 
           updatesByItemId.set(item.id, {
-            sourceUrl: normalizedSourceUrl,
+            sourceUrl: verifiedSourceUrl,
             organization: item.organization.trim() ? item.organization : extracted.organization?.trim() || '',
             amount: item.amount.trim() ? item.amount : extracted.amount?.trim() || '',
             segment: item.segment.trim() ? item.segment : extracted.segment?.trim() || '',
@@ -9134,7 +9097,7 @@ Research rules:
                     Find leads
                   </h3>
                   <p className="mt-1 text-sm leading-6 text-stone-500">
-                    Tune the search, then review each recommendation before it goes into {activeList.name}.
+                    Describe the leads you want to find, then review each recommendation before it goes into {activeList.name}.
                   </p>
                 </div>
                 <button
@@ -9159,195 +9122,16 @@ Research rules:
               </div>
             ) : (
               <form onSubmit={handleGenerateLeads} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
-                <div className="grid gap-4 md:grid-cols-[1fr_160px]">
-                  <label className="block" htmlFor="pipe-lead-brief-product">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                      Product / company
-                    </span>
-                    <input
-                      id="pipe-lead-brief-product"
-                      value={leadSearchBrief.productName}
-                      onChange={(event) => updateLeadSearchBrief('productName', event.target.value)}
-                      onBlur={() => persistLeadSearchBrief()}
-                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder="PulseCheck"
-                    />
-                  </label>
-
-                  <label className="block" htmlFor="pipe-lead-gen-count">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead count</span>
-                    <input
-                      id="pipe-lead-gen-count"
-                      type="number"
-                      min={3}
-                      max={10}
-                      value={leadSearchBrief.leadCount}
-                      onChange={(event) => updateLeadSearchBrief('leadCount', clampLeadGenCount(Number(event.target.value) || 3))}
-                      onBlur={() => persistLeadSearchBrief()}
-                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                    />
-                    <p className="mt-2 text-xs leading-5 text-stone-400">3 to 10 leads.</p>
-                  </label>
-                </div>
-
-                <label className="mt-4 block" htmlFor="pipe-lead-brief-focus">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                    Search focus
-                  </span>
+                <label className="block" htmlFor="pipe-lead-search-prompt">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Prompt</span>
                   <textarea
-                    id="pipe-lead-brief-focus"
-                    value={leadSearchBrief.searchFocus}
-                    onChange={(event) => updateLeadSearchBrief('searchFocus', event.target.value)}
-                    onBlur={() => persistLeadSearchBrief()}
-                    className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                    placeholder="What kind of leads should this PipeList search for?"
+                    id="pipe-lead-search-prompt"
+                    autoFocus
+                    value={leadSearchPrompt}
+                    onChange={(event) => setLeadSearchPrompt(event.target.value)}
+                    className="min-h-52 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   />
                 </label>
-
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="block" htmlFor="pipe-lead-brief-audience">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                      Target buyer / audience
-                    </span>
-                    <textarea
-                      id="pipe-lead-brief-audience"
-                      value={leadSearchBrief.targetAudience}
-                      onChange={(event) => updateLeadSearchBrief('targetAudience', event.target.value)}
-                      onBlur={() => persistLeadSearchBrief()}
-                      className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder="Who should these leads be for?"
-                    />
-                  </label>
-
-                  <label className="block" htmlFor="pipe-lead-brief-types">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                      Opportunity types
-                    </span>
-                    <textarea
-                      id="pipe-lead-brief-types"
-                      value={leadSearchBrief.opportunityTypes}
-                      onChange={(event) => updateLeadSearchBrief('opportunityTypes', event.target.value)}
-                      onBlur={() => persistLeadSearchBrief()}
-                      className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder="Grants, pitch competitions, investors, pilots..."
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
-                    <input
-                      type="checkbox"
-                      checked={leadSearchBrief.requireFutureDeadline}
-                      onChange={(event) => updateAndPersistLeadSearchBrief('requireFutureDeadline', event.target.checked)}
-                      className="h-4 w-4 rounded border-stone-300"
-                    />
-                    Future deadline
-                  </label>
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
-                    <input
-                      type="checkbox"
-                      checked={leadSearchBrief.officialSourcesOnly}
-                      onChange={(event) => updateAndPersistLeadSearchBrief('officialSourcesOnly', event.target.checked)}
-                      className="h-4 w-4 rounded border-stone-300"
-                    />
-                    Official sources
-                  </label>
-                  <label className="flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
-                    <input
-                      type="checkbox"
-                      checked={leadSearchBrief.includeAdjacentFit}
-                      onChange={(event) => updateAndPersistLeadSearchBrief('includeAdjacentFit', event.target.checked)}
-                      className="h-4 w-4 rounded border-stone-300"
-                    />
-                    Adjacent fit
-                  </label>
-                </div>
-
-                <details className="mt-4 rounded-lg border border-stone-200 bg-white">
-                  <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-stone-700">
-                    Advanced brief
-                  </summary>
-                  <div className="space-y-4 border-t border-stone-100 p-4">
-                    <label className="block" htmlFor="pipe-lead-brief-context">
-                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                        Product context
-                      </span>
-                      <textarea
-                        id="pipe-lead-brief-context"
-                        value={leadSearchBrief.productContext}
-                        onChange={(event) => updateLeadSearchBrief('productContext', event.target.value)}
-                        onBlur={() => persistLeadSearchBrief()}
-                        className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      />
-                    </label>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block" htmlFor="pipe-lead-brief-sources">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                          Preferred sources
-                        </span>
-                        <textarea
-                          id="pipe-lead-brief-sources"
-                          value={leadSearchBrief.preferredSources}
-                          onChange={(event) => updateLeadSearchBrief('preferredSources', event.target.value)}
-                          onBlur={() => persistLeadSearchBrief()}
-                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                        />
-                      </label>
-
-                      <label className="block" htmlFor="pipe-lead-brief-positioning">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                          Positioning
-                        </span>
-                        <textarea
-                          id="pipe-lead-brief-positioning"
-                          value={leadSearchBrief.positioning}
-                          onChange={(event) => updateLeadSearchBrief('positioning', event.target.value)}
-                          onBlur={() => persistLeadSearchBrief()}
-                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="block" htmlFor="pipe-lead-brief-include">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                          Must include
-                        </span>
-                        <textarea
-                          id="pipe-lead-brief-include"
-                          value={leadSearchBrief.mustInclude}
-                          onChange={(event) => updateLeadSearchBrief('mustInclude', event.target.value)}
-                          onBlur={() => persistLeadSearchBrief()}
-                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                        />
-                      </label>
-
-                      <label className="block" htmlFor="pipe-lead-brief-exclude">
-                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                          Must exclude
-                        </span>
-                        <textarea
-                          id="pipe-lead-brief-exclude"
-                          value={leadSearchBrief.mustExclude}
-                          onChange={(event) => updateLeadSearchBrief('mustExclude', event.target.value)}
-                          onBlur={() => persistLeadSearchBrief()}
-                          className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                        />
-                      </label>
-                    </div>
-
-                    <details className="rounded-md border border-stone-200 bg-[#FAFAF7]">
-                      <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase text-stone-400">
-                        Prompt preview
-                      </summary>
-                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-stone-200 px-3 py-3 text-xs leading-5 text-stone-600">
-                        {leadSearchPromptPreview}
-                      </pre>
-                    </details>
-                  </div>
-                </details>
 
                 <div className="mt-4">
                   <MessageBanner message={leadGenMessage} />
