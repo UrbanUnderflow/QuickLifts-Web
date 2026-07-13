@@ -723,7 +723,22 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'voice' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'coverage' | 'voice' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+
+// ── Coverage audit (read-only rollup of every expected cue vs sim-audio-assets) ──
+type CoverageRow = {
+  label: string;
+  cueKey: string;
+  present: boolean;
+};
+
+type CoverageSection = {
+  id: string;
+  title: string;
+  generateHint: string;
+  rows: CoverageRow[];
+  note?: string;
+};
 
 type RegistrySimAudioAssetEntry = {
   variantId: string;
@@ -1785,6 +1800,12 @@ const FixedNarrationCard: React.FC<{
 const AdminAiVoice: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminAudioTab>('voice');
 
+  // Coverage audit state (read-only rollup; see Coverage tab)
+  const [coverageSections, setCoverageSections] = useState<CoverageSection[]>([]);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
+  const [coverageLoadedAt, setCoverageLoadedAt] = useState<Date | null>(null);
+
   // Voice config state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2614,6 +2635,121 @@ const AdminAiVoice: React.FC = () => {
     }
   };
 
+  // ── Coverage audit loader: every expected cue checked against the
+  // sim-audio-assets inventory, in one pass. Read-only; generation
+  // stays on the per-section tabs.
+  const loadCoverage = async () => {
+    setCoverageLoading(true);
+    setCoverageError(null);
+    try {
+      const checkCueSet = async (
+        cues: Array<{ cueKey: string; prompt: string; label?: string }>,
+        engineKey: string,
+      ): Promise<CoverageRow[]> => {
+        const rows = await Promise.all(cues.map(async (cue) => {
+          const docId = buildGeneratedDocId(engineKey, cue.cueKey, cue.prompt);
+          const snap = await getDoc(doc(db, 'sim-audio-assets', docId));
+          return {
+            label: cue.label || cue.cueKey,
+            cueKey: cue.cueKey,
+            present: snap.exists() && Boolean((snap.data() as any)?.downloadURL),
+          };
+        }));
+        return rows;
+      };
+
+      // Published sim variants: stored audio is only expected for audio
+      // archetypes; visual archetypes narrate live and carry no assets.
+      const variantsSnap = await getDocs(collection(db, SIM_VARIANTS_COLLECTION));
+      const simRows: CoverageRow[] = [];
+      let visualOnlyPublished = 0;
+      variantsSnap.docs.forEach((variantDoc) => {
+        const data = variantDoc.data() as Record<string, any>;
+        if (typeof data.publishedModuleId !== 'string' || !data.publishedModuleId) return;
+        const archetype = typeof data.archetypeOverride === 'string'
+          ? data.archetypeOverride
+          : typeof data.runtimeConfig?.archetype === 'string'
+            ? data.runtimeConfig.archetype
+            : null;
+        const attached = Object.values(
+          (data.runtimeConfig?.audioAssets ?? data.buildArtifact?.stimulusModel?.audioAssets ?? {}) as Record<string, SimAudioAssetRef>,
+        ).filter((asset) => Boolean(asset?.downloadURL)).length;
+        const needsAudio = archetype === 'audio_channel' || archetype === 'combined_channel';
+        if (!needsAudio) {
+          visualOnlyPublished += 1;
+          return;
+        }
+        simRows.push({
+          label: `${String(data.name ?? variantDoc.id)} (${String(data.family ?? 'family?')})`,
+          cueKey: `${attached} audio asset(s) attached`,
+          present: attached > 0,
+        });
+      });
+
+      const [protocolRows, vpRows, runAlertRows, macraRows, tutorialRows] = await Promise.all([
+        checkCueSet(PROTOCOL_SOUND_CUES, PROTOCOL_ENGINE_KEY),
+        checkCueSet(VP_RESET_CUES, VP_ENGINE_KEY),
+        checkCueSet(RUN_ALERT_CUES, RUN_ALERT_ENGINE_KEY),
+        checkCueSet(MACRA_ONBOARDING_NARRATION_CUES, MACRA_ONBOARDING_ENGINE_KEY),
+        checkCueSet(PULSECHECK_TUTORIAL_NARRATION_CUES, PULSECHECK_TUTORIAL_ENGINE_KEY),
+      ]);
+
+      setCoverageSections([
+        {
+          id: 'protocols',
+          title: 'Protocol Library — signature + runtime sounds',
+          generateHint: 'Generate on the Protocols tab',
+          rows: protocolRows,
+        },
+        {
+          id: 'sims',
+          title: 'Sim Library — published variants with audio archetypes',
+          generateHint: 'Generate on the Registry Sims tab',
+          rows: simRows,
+          note: visualOnlyPublished > 0
+            ? `${visualOnlyPublished} published variant(s) use visual-only archetypes: no stored audio expected, spoken narration is live TTS.`
+            : undefined,
+        },
+        {
+          id: 'visionPro',
+          title: 'Vision Pro reset chamber',
+          generateHint: 'Generate on the Vision Pro tab',
+          rows: vpRows,
+        },
+        {
+          id: 'runAlerts',
+          title: 'Run alerts',
+          generateHint: 'Generate on the Run Alerts tab',
+          rows: runAlertRows,
+        },
+        {
+          id: 'macra',
+          title: 'Macra onboarding voice',
+          generateHint: 'Generate on the Macra Onboarding tab',
+          rows: macraRows,
+        },
+        {
+          id: 'tutorial',
+          title: 'PulseCheck tutorial voice',
+          generateHint: 'Generate on the PulseCheck Tutorial tab',
+          rows: tutorialRows,
+        },
+      ]);
+      setCoverageLoadedAt(new Date());
+    } catch (e: any) {
+      setCoverageError(e?.message || 'Failed to load narration coverage');
+    } finally {
+      setCoverageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'coverage' && !coverageLoading && coverageSections.length === 0) {
+      loadCoverage();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   useEffect(() => {
     loadConfig();
     loadVPAssets();
@@ -3042,6 +3178,13 @@ const AdminAiVoice: React.FC = () => {
               onClick={() => setActiveTab('voice')}
             />
             <AudioTabButton
+              active={activeTab === 'coverage'}
+              icon={<CheckCircle className="h-4 w-4" />}
+              label="Coverage Audit"
+              description="One-screen rollup of every expected audio cue vs what's actually generated in sim-audio-assets."
+              onClick={() => setActiveTab('coverage')}
+            />
+            <AudioTabButton
               active={activeTab === 'macraOnboarding'}
               icon={<Smartphone className="h-4 w-4" />}
               label="Macra Onboarding"
@@ -3098,6 +3241,93 @@ const AdminAiVoice: React.FC = () => {
               onClick={() => setActiveTab('runAlerts')}
             />
           </div>
+
+          {/* ════════════════════════
+              SECTION 0: COVERAGE AUDIT
+          ════════════════════════ */}
+          {activeTab === 'coverage' && (
+            <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl mb-6 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <div className="font-semibold text-white">Narration &amp; Audio Coverage</div>
+                  <div className="text-xs text-zinc-500">
+                    Every expected cue checked against the sim-audio-assets inventory{coverageLoadedAt ? ` · checked ${coverageLoadedAt.toLocaleTimeString()}` : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={loadCoverage}
+                  disabled={coverageLoading}
+                  className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:text-zinc-100 disabled:opacity-50"
+                >
+                  {coverageLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  Re-run audit
+                </button>
+              </div>
+
+              <div className="mb-4 rounded-xl border border-sky-700/40 bg-sky-950/30 px-4 py-3 text-xs leading-relaxed text-sky-200">
+                Spoken module narration (intros, phase cues, completion lines in sims and protocols) is synthesized live at
+                playback via ElevenLabs — it is not a stored asset and cannot be "missing" from a library. If a module
+                plays silently on iOS, that is a failed live TTS call (iOS falls back to silence, web falls back to
+                browser speech). This audit covers the STORED audio: protocol signatures, runtime beds, sim variant
+                audio packages, and pre-generated voice lines.
+              </div>
+
+              {coverageError && (
+                <div className="mb-4 rounded-xl border border-rose-700/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{coverageError}</div>
+              )}
+
+              {coverageLoading && coverageSections.length === 0 ? (
+                <div className="flex items-center gap-2 py-8 text-zinc-400 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Auditing every cue against sim-audio-assets…
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {coverageSections.map((section) => {
+                    const presentCount = section.rows.filter((r) => r.present).length;
+                    const missing = section.rows.filter((r) => !r.present);
+                    const complete = section.rows.length > 0 && missing.length === 0;
+                    return (
+                      <div key={section.id} className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${complete ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-rose-500/30 bg-rose-500/10 text-rose-200'}`}>
+                            {presentCount} / {section.rows.length} generated
+                          </span>
+                          <span className="text-sm font-medium text-zinc-100">{section.title}</span>
+                          {!complete && <span className="text-xs text-zinc-500">{section.generateHint}</span>}
+                        </div>
+                        {section.note && (
+                          <div className="mt-2 text-xs text-zinc-500">{section.note}</div>
+                        )}
+                        {missing.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            {missing.map((row) => (
+                              <div key={row.cueKey + row.label} className="flex flex-wrap items-center gap-2 rounded-lg border border-rose-800/40 bg-rose-950/20 px-3 py-1.5 text-xs">
+                                <span className="text-rose-200">{row.label}</span>
+                                <span className="font-mono text-rose-300/60">{row.cueKey}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {presentCount > 0 && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">Show {presentCount} generated</summary>
+                            <div className="mt-2 space-y-1">
+                              {section.rows.filter((r) => r.present).map((row) => (
+                                <div key={row.cueKey + row.label} className="flex flex-wrap items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs">
+                                  <span className="text-zinc-300">{row.label}</span>
+                                  <span className="font-mono text-zinc-600">{row.cueKey}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ════════════════════════
               SECTION 1: AI VOICE

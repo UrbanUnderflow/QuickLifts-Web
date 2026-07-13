@@ -12,7 +12,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, PulseCheck elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-06-10',
+  lastUpdated: '2026-07-12',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -60,6 +60,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'athlete-journey', label: 'Athlete Journey', description: 'Recommended entry, progression, and system flow for athlete adoption.' },
     { id: 'coach-journey', label: 'Coach Journey', description: 'Recommended entry, setup, and daily operating flow for coaches using PulseCheck.' },
     { id: 'pulsecheck-youth-pathways', label: 'Youth Pathways', description: 'Junior, Rookie, and Home Team operating model for guided youth mental readiness without open-ended Nora chat.' },
+    { id: 'pulsecheck-junior-track-curriculum-spec', label: 'Junior Track Guided Curriculum', description: 'Implemented Duolingo-style junior curriculum: pillars/units/lessons/checkpoints, junior-progress model, Nora lesson conversations (junior triggers), morning check-in on the shared signal pipe, seeding via /admin/juniorCurriculum, and open safety items.', parentSectionId: 'pulsecheck-youth-pathways' },
     { id: 'pulsecheck-runtime-architecture', label: 'Runtime Stack', description: 'Parent artifact for the PulseCheck runtime operating model, state logic, assignment rules, escalation bridges, and QA posture.' },
     { id: 'pulsecheck-state-signal-layer', label: 'State Signal Layer', description: 'Operational state inference, confidence bands, freshness rules, and routing outputs for Nora.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-checkin-signal-layer-integration-spec', label: 'Check-In Integration Spec', description: 'AI-native contract between readiness check-in, enriched state snapshots, bounded assignment candidate sets, Nora chat context, and daily task materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
@@ -95,6 +96,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-phase-j-session-schema-contract', label: 'Phase J Schema Contract', description: 'Implementation-facing Firestore and TypeScript contract for Phase J session candidates, clarification prompts, confirmation events, canonical session records, athlete session patterns, confidence transitions, actor precedence, indexes, and provenance requirements.', parentSectionId: 'pulsecheck-contextual-sports-detection-engine' },
     { id: 'pulsecheck-phase-j-reviewer-debug-surface', label: 'Phase J Reviewer Surface', description: 'Admin reviewer/debug skeleton for inspecting candidate -> context -> prompt -> answer -> session record -> load contribution traces, provenance, confidence transitions, filters, and operator hold/confirm/dismiss actions.', parentSectionId: 'pulsecheck-contextual-sports-detection-engine' },
     { id: 'pulsecheck-adaptive-framing-layer-spec', label: 'Adaptation Framing Layer', description: 'Athlete-safe Nora translation layer, Anthropic bridge boundary, guardrail enforcement, audit logging, and remaining kill-switch/server-enforcement gaps.' },
+    { id: 'pulsecheck-athlete-data-framing-doctrine', label: 'Athlete Data Framing Doctrine', description: 'All-tracks data policy: athletes feel known, not measured. Numbers with coaches, biometrics + sports intel steer silently, data reaches athletes as body literacy and next moves. Register dial per track; pro device-card migration; the WHOOP-veto countermeasure.', parentSectionId: 'pulsecheck-adaptive-framing-layer-spec' },
     { id: 'pulsecheck-curriculum-layer-spec', label: 'Daily Curriculum Layer', description: 'Proactive six-exercise curriculum layer for three active protocols, three active simulations, mastery rotation, assignment-intent transparency, reminders, rollups, coach overrides, iOS read surfaces, and current implementation gaps.' },
     { id: 'pulsecheck-nora-conversation-orchestrator-spec', label: 'Nora Conversation Orchestrator', description: 'Reactive trigger sweep, conversation state machine, athlete reply endpoint, timeout sweep, and Phase C action-delivery integration.' },
     { id: 'pulsecheck-nora-guard-spec', label: 'Nora Guard', description: 'Pilot message-review inbox for Nora conversations, redaction, revoke controls, technical evidence, consent disclosure, and current logging-control limitations.' },

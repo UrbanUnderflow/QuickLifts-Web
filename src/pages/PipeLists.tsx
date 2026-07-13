@@ -113,7 +113,25 @@ type TemplateKey =
 type StageTrack = 'build' | 'run' | 'capital' | 'general';
 type StageOutcome = 'open' | 'won' | 'lost';
 
-const LEAD_SEARCH_PROMPT_MAX_LENGTH = 10000;
+const LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH = 20000;
+const LEAD_SEARCH_DEFAULT_COUNT = 6;
+const LEAD_SEARCH_MAX_COUNT = 30;
+
+const estimateLeadCountFromPrompt = (prompt: string) => {
+  const explicitCount = Array.from(
+    prompt.matchAll(/\b(\d{1,2})\s+(?:new\s+)?(?:early[- ]stage\s+)?(?:vc\s+)?(?:funds?|leads?|contacts?|investors?|organizations?)\b/gi),
+  ).reduce((largest, match) => Math.max(largest, Number(match[1]) || 0), 0);
+  const structuredCounts = [
+    /^\s*AUM\s*:/gim,
+    /^\s*Stage\s*:/gim,
+    /^\s*GEO\s*:/gim,
+    /^\s*Check size\s*:/gim,
+    /^\s*Fund type\s*:/gim,
+  ].map((pattern) => prompt.match(pattern)?.length || 0);
+  const estimatedCount = Math.max(explicitCount, ...structuredCounts);
+
+  return Math.min(LEAD_SEARCH_MAX_COUNT, Math.max(LEAD_SEARCH_DEFAULT_COUNT, estimatedCount));
+};
 
 type StageConfig = {
   id: string;
@@ -277,6 +295,8 @@ type GeneratedLead = ItemDraft & {
   rationale: string;
   sourceEvidence: string;
   deadlineStatus: string;
+  sourceVerified?: boolean;
+  sourceVerificationReason?: string;
 };
 
 type SourceVerificationResult = {
@@ -4986,11 +5006,6 @@ Rules:
       return;
     }
 
-    if (searchPrompt.length > LEAD_SEARCH_PROMPT_MAX_LENGTH) {
-      setLeadGenMessage({ type: 'error', text: 'Keep the search prompt at 10,000 characters or fewer.' });
-      return;
-    }
-
     setIsGeneratingLeads(true);
     setGeneratedLeads([]);
     setAddedGeneratedLeadKeys([]);
@@ -5015,6 +5030,8 @@ Rules:
         sourceUrl: item.sourceUrl,
         dueDate: item.dueDate,
       }));
+      const requestedLeadCount = estimateLeadCountFromPrompt(searchPrompt);
+      const isStructuredExtraction = requestedLeadCount > LEAD_SEARCH_DEFAULT_COUNT;
 
       const response = await fetch(getLeadSearchBridgeUrl(), {
         method: 'POST',
@@ -5027,7 +5044,7 @@ Rules:
         body: JSON.stringify({
           model: PIPELISTS_LEAD_SEARCH_MODEL,
           temperature: 0.15,
-          max_output_tokens: 3500,
+          max_output_tokens: Math.min(14000, Math.max(5000, requestedLeadCount * 450)),
           tools: [{ type: 'web_search' }],
           text: {
             format: {
@@ -5046,6 +5063,8 @@ Current date: ${today}.
 
 Research rules:
 - Use the user's prompt as the primary instruction source. Do not add assumptions, targeting criteria, deadline requirements, product details, or opportunity types that the user did not provide.
+- When the prompt contains a pasted list or article with multiple named entries, extract every distinct named entry up to requestedLeadCount. Treat this as an extraction job, not a request to return a smaller sample.
+- For pasted structured content, preserve the supplied names and facts. Use web search to locate and verify a supporting source for each entry rather than replacing the entries with different recommendations.
 - Use web search and return leads supported by current sources.
 - Return only leads that are relevant to the active PipeList and the user's prompt.
 - Avoid duplicates already in the user's list.
@@ -5064,7 +5083,8 @@ Research rules:
               role: 'user',
               content: JSON.stringify(
                 {
-                  requestedLeadCount: 6,
+                  requestedLeadCount,
+                  taskMode: isStructuredExtraction ? 'extract_all_named_entries' : 'discover_leads',
                   listName: activeList.name,
                   templateLabel: templateCatalog[activeList.templateKey].label,
                   templateKey: activeList.templateKey,
@@ -5094,20 +5114,20 @@ Research rules:
         sanitizedLeads.map((lead) => lead.sourceUrl),
         idToken,
       );
-      const verifiedLeads = sanitizedLeads
-        .filter((lead) => {
-          const normalizedSourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || lead.sourceUrl;
-          return sourceVerification.get(normalizedSourceUrl)?.valid;
-        })
-        .map((lead) => {
+      const nextLeads = sanitizedLeads.map((lead) => {
           const normalizedSourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || lead.sourceUrl;
           const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+          const sourceVerified = Boolean(sourceCheck?.valid);
           return {
             ...lead,
-            sourceUrl: normalizeLeadInputUrl(sourceCheck?.finalUrl || lead.sourceUrl)?.toString() || lead.sourceUrl,
+            sourceUrl: sourceVerified
+              ? normalizeLeadInputUrl(sourceCheck?.finalUrl || lead.sourceUrl)?.toString() || lead.sourceUrl
+              : lead.sourceUrl,
+            sourceVerified,
+            sourceVerificationReason: sourceVerified ? '' : sourceCheck?.reason || 'The source URL could not be verified.',
           };
         });
-      const nextLeads = verifiedLeads;
+      const unverifiedCount = nextLeads.filter((lead) => !lead.sourceVerified).length;
 
       setGeneratedLeads(nextLeads);
       setLeadGenMessage(
@@ -5115,8 +5135,8 @@ Research rules:
           ? {
               type: 'success',
               text:
-                sanitizedLeads.length > nextLeads.length
-                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Excluded matches with unverified source links.`
+                unverifiedCount > 0
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. ${formatCount(unverifiedCount, 'lead')} need source verification before they can be added.`
                   : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.`,
             }
           : {
@@ -9129,14 +9149,14 @@ Research rules:
                     <span>Prompt</span>
                     <span
                       className={
-                        leadSearchPrompt.length >= LEAD_SEARCH_PROMPT_MAX_LENGTH
+                        leadSearchPrompt.length > LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH
                           ? 'text-red-600'
-                          : leadSearchPrompt.length >= LEAD_SEARCH_PROMPT_MAX_LENGTH * 0.9
+                          : leadSearchPrompt.length >= LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH * 0.9
                             ? 'text-amber-600'
                             : 'text-stone-400'
                       }
                     >
-                      {leadSearchPrompt.length.toLocaleString()} / {LEAD_SEARCH_PROMPT_MAX_LENGTH.toLocaleString()}
+                      {leadSearchPrompt.length.toLocaleString()} / {LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH.toLocaleString()}
                     </span>
                   </span>
                   <textarea
@@ -9144,9 +9164,13 @@ Research rules:
                     autoFocus
                     value={leadSearchPrompt}
                     onChange={(event) => setLeadSearchPrompt(event.target.value)}
-                    maxLength={LEAD_SEARCH_PROMPT_MAX_LENGTH}
                     className="min-h-52 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   />
+                  {leadSearchPrompt.length > LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH && (
+                    <span className="mt-2 block rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium normal-case text-amber-800">
+                      This prompt is over the recommended 20,000-character limit. You can still search, but results may be incomplete or unpredictable.
+                    </span>
+                  )}
                 </label>
 
                 <div className="mt-4">
@@ -9168,7 +9192,8 @@ Research rules:
                         const key = generatedLeadKey(lead);
                         const alreadyAdded = addedGeneratedLeadKeys.includes(key);
                         const alreadyInList = activeLeadKeys.has(key);
-                        const addDisabled = alreadyAdded || alreadyInList;
+                        const sourceNeedsVerification = lead.sourceVerified === false;
+                        const addDisabled = alreadyAdded || alreadyInList || sourceNeedsVerification;
 
                         return (
                           <article
@@ -9190,6 +9215,11 @@ Research rules:
                                   <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${stage.tone}`}>
                                     {stage.label}
                                   </span>
+                                  {sourceNeedsVerification && (
+                                    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
+                                      Source needs verification
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
@@ -9200,7 +9230,7 @@ Research rules:
                                 className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
                               >
                                 {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                                {alreadyAdded ? 'Added' : alreadyInList ? 'In list' : 'Add'}
+                                {alreadyAdded ? 'Added' : alreadyInList ? 'In list' : sourceNeedsVerification ? 'Verify source' : 'Add'}
                               </button>
                             </div>
 
@@ -9238,6 +9268,9 @@ Research rules:
                                 >
                                   View source
                                 </a>
+                              )}
+                              {sourceNeedsVerification && lead.sourceVerificationReason && (
+                                <span className="text-amber-700">{lead.sourceVerificationReason}</span>
                               )}
                             </div>
                           </article>

@@ -4093,44 +4093,64 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[200] overflow-y-auto bg-black text-white">
-      <div className="mx-auto grid min-h-screen w-full max-w-[1600px] gap-6 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(460px,600px)] lg:px-10 lg:py-8 xl:gap-10 xl:px-14">
-        <section className="hidden min-h-[calc(100vh-4rem)] flex-col justify-between rounded-lg border border-zinc-800 bg-[#090b0f] p-8 lg:flex xl:p-10">
-          <div className="flex items-center gap-4">
-            <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
-            <div className="h-8 w-px bg-zinc-800" />
+      {/* Full-bleed hero backdrop — mirrors ProductPortfolioHome's hero:
+          brand video under a black gradient with the lime/violet wash. */}
+      <video
+        className="pointer-events-none fixed inset-0 h-full w-full object-cover"
+        autoPlay
+        muted
+        loop
+        controls={false}
+        playsInline
+        preload="auto"
+        poster="/pil-og-source.jpg"
+        disablePictureInPicture
+        tabIndex={-1}
+        aria-hidden="true"
+      >
+        <source src="/pil-hero.mp4" type="video/mp4" />
+      </video>
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/70 via-black/40 to-black" />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-tr from-[#E0FE10]/10 via-transparent to-[#8B5CF6]/10 mix-blend-overlay" />
+
+      <div className="relative z-10 mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,500px)] lg:gap-16">
+        <section className="hidden flex-col justify-center lg:flex">
+          <div className="flex items-center gap-3">
+            <img src="/pulse-logo-white.svg" alt="Pulse" className="h-7" />
+            <div className="h-7 w-px bg-white/15" />
             <div>
               <div className="text-sm font-semibold text-white">Fit With Pulse</div>
-              <div className="text-xs text-zinc-500">FitClub, rounds, creators, and training tools</div>
+              <div className="text-xs text-zinc-400">FitClub, rounds, creators, and training tools</div>
             </div>
           </div>
 
-          <div className="max-w-4xl">
-            <div className="mb-5 inline-flex items-center rounded-full border border-[#E0FE10]/25 bg-[#E0FE10]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#E0FE10]">
+          <div className="mt-14">
+            <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#E0FE10]">
               Member access
-            </div>
-            <h1 className="max-w-4xl font-['Thunder'] text-6xl font-bold leading-none tracking-normal text-white xl:text-8xl">
+            </span>
+            <h1 className="mt-6 max-w-xl text-5xl font-semibold leading-none text-white xl:text-6xl">
               Train, track, compete, and keep moving.
             </h1>
-            <p className="mt-6 max-w-2xl font-['HK Grotesk'] text-lg leading-8 text-zinc-300 xl:text-xl xl:leading-9">
+            <p className="mt-6 max-w-xl text-xl leading-relaxed text-zinc-200">
               Sign in once to get back into your FitClub tools, creator pages, rounds, client programming, and Pulse account settings.
             </p>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="mt-12 grid gap-3 xl:grid-cols-3">
             {[
               { label: 'FitClub', value: 'Group training access' },
               { label: 'Rounds', value: 'Challenges and wins' },
               { label: 'Creators', value: 'Pages and programs' },
             ].map((item) => (
-              <div key={item.label} className="rounded-lg border border-zinc-800 bg-[#12151b] p-5">
+              <div key={item.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                 <div className="text-sm font-semibold text-white">{item.label}</div>
-                <div className="mt-2 text-sm leading-6 text-zinc-500">{item.value}</div>
+                <div className="mt-1 text-xs leading-5 text-zinc-400">{item.value}</div>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="relative flex min-h-[calc(100vh-2.5rem)] flex-col overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-900 p-6 shadow-2xl shadow-black/35 sm:p-8 lg:min-h-[calc(100vh-4rem)] xl:p-10">
+        <section className="relative flex flex-col rounded-2xl border border-white/10 bg-black/60 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-8">
         {mounted && window.location.hostname === 'localhost' && (
           <div className="absolute top-4 left-4 z-20 flex items-center gap-2 max-w-[calc(100%-4rem)] overflow-hidden">
             <DevModeToggle />

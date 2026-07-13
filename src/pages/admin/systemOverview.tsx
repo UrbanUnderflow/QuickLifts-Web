@@ -80,6 +80,8 @@ import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/s
 import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
 import PulseCheckAdaptiveFramingLayerSpecTab from "../../components/admin/system-overview/PulseCheckAdaptiveFramingLayerSpecTab";
 import PulseCheckCurriculumLayerSpecTab from "../../components/admin/system-overview/PulseCheckCurriculumLayerSpecTab";
+import PulseCheckJuniorTrackCurriculumSpecTab from "../../components/admin/system-overview/PulseCheckJuniorTrackCurriculumSpecTab";
+import PulseCheckAthleteDataFramingDoctrineTab from "../../components/admin/system-overview/PulseCheckAthleteDataFramingDoctrineTab";
 import PulseCheckNoraConversationOrchestratorSpecTab from "../../components/admin/system-overview/PulseCheckNoraConversationOrchestratorSpecTab";
 import PulseCheckNoraGuardSpecTab from "../../components/admin/system-overview/PulseCheckNoraGuardSpecTab";
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
@@ -278,6 +280,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "athlete-journey",
       "coach-journey",
       "pulsecheck-youth-pathways",
+      "pulsecheck-junior-track-curriculum-spec",
       "notification-systems-architecture",
       "pulsecheck-runtime-architecture",
       "pulsecheck-state-signal-layer",
@@ -311,6 +314,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-sports-intelligence-aggregation-inference-contract",
       "pulsecheck-sports-intelligence-mock-report-baselines",
       "pulsecheck-adaptive-framing-layer-spec",
+      "pulsecheck-athlete-data-framing-doctrine",
       "pulsecheck-curriculum-layer-spec",
       "pulsecheck-nora-conversation-orchestrator-spec",
       "pulsecheck-nora-guard-spec",
@@ -1903,6 +1907,9 @@ const SystemOverviewPage: React.FC = () => {
       case "pulsecheck-youth-pathways":
         return <PulseCheckYouthPathwaysTab />;
 
+      case "pulsecheck-junior-track-curriculum-spec":
+        return <PulseCheckJuniorTrackCurriculumSpecTab />;
+
       case "pulsecheck-nora-moderated-checkin-spec":
         return <PulseCheckModeratedCheckInSpecTab />;
 
@@ -1965,6 +1972,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-adaptive-framing-layer-spec":
         return <PulseCheckAdaptiveFramingLayerSpecTab />;
+
+      case "pulsecheck-athlete-data-framing-doctrine":
+        return <PulseCheckAthleteDataFramingDoctrineTab />;
 
       case "pulsecheck-curriculum-layer-spec":
         return <PulseCheckCurriculumLayerSpecTab />;

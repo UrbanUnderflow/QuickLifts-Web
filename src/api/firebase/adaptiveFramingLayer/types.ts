@@ -38,8 +38,29 @@ export const CONVERSATION_TRIGGERS = [
   'calendar-sport-event',
   'behavioral-drift',
   'morning-checkin-tone',
+  // Junior Track guided curriculum (PulseCheck repo, docs/specs/
+  // junior-track-guided-curriculum-spec.md). Opened by
+  // junior-lesson-conversation.ts. junior-lesson-close is reserved:
+  // today the close beat is the action turn of the open conversation.
+  'junior-lesson-open',
+  'junior-lesson-close',
+  'junior-unit-checkpoint',
 ] as const;
 export type ConversationTrigger = (typeof CONVERSATION_TRIGGERS)[number];
+
+// Triggers whose conversation branch is synthesized in-memory by the
+// function that opens them, rather than seeded in the Phase B
+// conversation tree: morning-checkin-tone builds its branch from the
+// iOS noraResponse strings (record-morning-checkin.ts); the junior
+// triggers build theirs from `junior-curriculum/{lessonId}` docs
+// (junior-lesson-conversation.ts). Tests use this to know which
+// triggers must NOT appear in the seed.
+export const SYNTHESIZED_CONVERSATION_TRIGGERS: readonly ConversationTrigger[] = [
+  'morning-checkin-tone',
+  'junior-lesson-open',
+  'junior-lesson-close',
+  'junior-unit-checkpoint',
+];
 
 // Doctrine: forbidden performance-priming markers. Athletes never see numeric
 // values for these; coaches see evidence-rich. Erlacher et al. 2014 basis.

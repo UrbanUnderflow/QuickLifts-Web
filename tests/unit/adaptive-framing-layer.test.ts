@@ -197,10 +197,9 @@ test('conversation tree — seed has one branch per Phase B-eligible trigger', a
   const { seed, types } = await loadModules();
 
   // Some triggers intentionally synthesize their conversation branch
-  // in-memory (e.g. morning-checkin-tone — record-morning-checkin.ts
-  // builds the branch from the iOS noraResponse strings as the single
-  // source of truth). Those triggers don't appear in the seed.
-  const SYNTHETIC_BRANCH_TRIGGERS = new Set(['morning-checkin-tone']);
+  // in-memory (morning check-in, junior curriculum) and don't appear in
+  // the seed. The shared allowlist in types.ts is the source of truth.
+  const SYNTHETIC_BRANCH_TRIGGERS = new Set(types.SYNTHESIZED_CONVERSATION_TRIGGERS as readonly string[]);
   const expectedSeededTriggers = (types.CONVERSATION_TRIGGERS as readonly string[])
     .filter((t) => !SYNTHETIC_BRANCH_TRIGGERS.has(t))
     .sort();

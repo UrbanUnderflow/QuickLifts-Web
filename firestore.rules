@@ -158,6 +158,8 @@ service cloud.firestore {
         'coach-team-schedule',
         'company-config',
         'document-notes',
+        'junior-curriculum',
+        'junior-progress',
         'programming-access',
         'pulsecheck-invite-activities',
         'pulsecheck-invite-links',
@@ -695,6 +697,24 @@ service cloud.firestore {
         || pcCanManageTeam(resource.data.teamId)
       );
       allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // Junior Track guided curriculum content. Athletes read lessons; the
+    // seed + module mapping surface (/admin/juniorCurriculum, client SDK)
+    // is the only writer. Module mapping is a launch gate — athlete
+    // clients must never be able to alter content or mappings.
+    match /junior-curriculum/{lessonId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdminUser();
+    }
+
+    // Junior Track per-athlete progress: own-document access. Admins may
+    // read for support; deletes are admin-only (progress is never
+    // athlete-destructible).
+    match /junior-progress/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdminUser());
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isAdminUser();
     }
 
     // PulseCheck invite activity log (page views, redemption events, email sends).

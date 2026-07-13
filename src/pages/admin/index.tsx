@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ClipboardList, ShieldAlert, ShieldCheck, MonitorPlay } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, XCircle, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical, Settings2, Wallet, ClipboardCheck, ClipboardList, ShieldAlert, ShieldCheck, MonitorPlay, GraduationCap } from 'lucide-react';
 
 interface AdminCardProps {
   title: string;
@@ -125,6 +125,12 @@ const adminCardsData = [
     description: "Daily Curriculum Layer — proactive 1 protocol + 1 sim per day per athlete, balanced across composure / focus / decisioning. Engine config, pillar weights, 30-day adherence rollups.",
     icon: <Brain className="w-5 h-5" />,
     link: "/admin/curriculumLayer"
+  },
+  {
+    title: "Junior Track Curriculum",
+    description: "PulseCheck Junior guided curriculum — preview the 30 bundled lessons/checkpoints by pillar and unit, see what's seeded, one-click idempotent seed of junior-curriculum.",
+    icon: <GraduationCap className="w-5 h-5" />,
+    link: "/admin/juniorCurriculum"
   },
   {
     title: "Adaptation Framing Layer",
