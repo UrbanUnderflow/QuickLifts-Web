@@ -4,7 +4,6 @@ import {
   signInWithPopup,
   OAuthProvider,
   UserCredential,
-  createUserWithEmailAndPassword
 } from "firebase/auth";
 import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { Camera, X, Eye, EyeOff } from "lucide-react";
@@ -131,6 +130,10 @@ const SignedInBadge: React.FC<{ user: { username?: string; profileImage?: { prof
   );
 };
 
+const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pulse_magic_link_email';
+const MAGIC_LINK_INVITE_CODE_STORAGE_KEY = 'pulse_magic_link_invite_code';
+const MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY = 'pulse_magic_link_legal_accepted';
+
 const SignInModal: React.FC<SignInModalProps> = ({
   isVisible,
   closable = false,
@@ -159,7 +162,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
   const [legalFlowContext, setLegalFlowContext] = useState<'signup' | 'signin'>('signup');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [showError, setShowError] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -445,7 +450,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setHasAcceptedLegal(false);
       setLegalFlowContext('signup');
       setIsForgotPassword(false); // Reset forgot password state
+      setEmailAuthMode('magic');
       setResetEmailSent(false);
+      setMagicLinkSent(false);
     }
   }, [currentUser?.id, isVisible]); // Only depend on user ID, not whole object + visibility guard
 
@@ -822,6 +829,50 @@ const SignInModal: React.FC<SignInModalProps> = ({
     localStorage.setItem("authFlowLogs", JSON.stringify(currentLogs));
   };
 
+  async function ensureEmailLinkFirestoreUser(firebaseUser: any) {
+    let firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
+    if (!firestoreUser) {
+      if (!firebaseUser.email) {
+        throw new Error('Magic link sign-in did not provide an email address.');
+      }
+
+      const partnerSource = await resolvePartnerSourceFromQuery(router.query);
+      const storedInviteCode =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(MAGIC_LINK_INVITE_CODE_STORAGE_KEY) || ''
+          : '';
+      const acceptedLegalFromMagicLink =
+        typeof window !== 'undefined' &&
+        window.localStorage.getItem(MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY) === 'true';
+      firestoreUser = new User(firebaseUser.uid, {
+        id: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName || '',
+        registrationComplete: false,
+        subscriptionType: SubscriptionType.unsubscribed,
+        legalAcceptance: acceptedLegalFromMagicLink
+          ? buildCurrentLegalAcceptance('web-modal-signup-email-link', new Date(), {
+              termsPath: legalTheme.termsPath,
+              privacyPath: legalTheme.privacyPath,
+            })
+          : null,
+        ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
+        ...(partnerSource ? { partnerSource } : {}),
+        ...(inviteCode || storedInviteCode ? { gymInviteCode: inviteCode || storedInviteCode } : {}),
+      });
+      await userService.createUser(firebaseUser.uid, firestoreUser);
+    } else if (!firestoreUser.email && firebaseUser.email) {
+      await userService.updateUser(firebaseUser.uid, {
+        email: firebaseUser.email,
+        updatedAt: new Date(),
+      });
+      firestoreUser.email = firebaseUser.email;
+    }
+
+    userService.nonUICurrentUser = firestoreUser;
+    return firestoreUser;
+  }
+
   useEffect(() => {
     // GUARDED: Don't run when modal is hidden to prevent infinite loop
     if (!isVisible) return;
@@ -971,6 +1022,46 @@ const SignInModal: React.FC<SignInModalProps> = ({
       isMounted = false;
     };
    }, [isVisible, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose]);
+
+  useEffect(() => {
+    if (!isVisible || typeof window === 'undefined') return;
+    if (!authService.isMagicLink(window.location.href)) return;
+
+    let isMounted = true;
+
+    const completeEmailLink = async () => {
+      const storedEmail = window.localStorage.getItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+      if (!storedEmail) {
+        setError('Enter your email and request a fresh magic link on this device.');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        const result = await authService.completeMagicLink(storedEmail, window.location.href);
+        if (!isMounted) return;
+
+        window.localStorage.removeItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+        window.localStorage.removeItem(MAGIC_LINK_INVITE_CODE_STORAGE_KEY);
+        window.localStorage.removeItem(MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY);
+        await ensureEmailLinkFirestoreUser(result.user);
+        await handleSignInSuccess(result.user);
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('[SignInModal] Magic link completion failed:', err);
+        setError(err instanceof Error ? err.message : 'Magic link sign-in failed. Please request a new link.');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    completeEmailLink();
+
+    return () => {
+      isMounted = false;
+    };
+   }, [isVisible]);
 
    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1226,40 +1317,50 @@ const SignInModal: React.FC<SignInModalProps> = ({
       return;
     }
 
-    if (!isSignUp) {
+    if (!email.trim()) {
+      setError("Please enter your email address");
+      return;
+    }
+
+    if (isSignUp && !hasAcceptedLegal) {
+      setErrors((prev) => ({
+        ...prev,
+        legal: 'You must agree to the Terms and Privacy Policy before creating an account',
+      }));
+      setError('Please agree to the Terms and Privacy Policy to continue');
+      setShowError(true);
+      return;
+    }
+
+    if (!isSignUp && emailAuthMode === 'password') {
+      if (!password) {
+        setError("Please enter your password");
+        return;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
-        
+
         const result = await authService.signInWithEmail(email, password);
         const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
-        userService.nonUICurrentUser = userDoc; // Use nonUICurrentUser
-
-        console.log('[SignInModal] User document:', {
-          hasUsername: !!userDoc?.username,
-          subscriptionType: userDoc?.subscriptionType,
-          timestamp: new Date().toISOString()
-        });
+        userService.nonUICurrentUser = userDoc;
 
         if (userDoc) {
           if (!userHasAcceptedCurrentLegal(userDoc)) {
-            console.log('[SignInModal] Existing user missing legal acceptance, opening legal step');
             openLegalAcceptanceStep('signin');
             setIsLoading(false);
             return;
           }
 
           if (needsAthleticCouncilProfile(userDoc)) {
-            console.log('[SignInModal] Athletic Mind user needs council profile completion');
             setIsSignUp(true);
             setSignUpStep('profile');
             setIsLoading(false);
             return;
           }
 
-          // Check if username is missing
           if (!isAthleticMindHubFlow && !userDoc.username) {
-            console.log('[SignInModal] User missing username, starting registration');
             setIsSignUp(true);
             setSignUpStep('profile');
             setIsLoading(false);
@@ -1267,196 +1368,66 @@ const SignInModal: React.FC<SignInModalProps> = ({
           }
 
           const betaUserHasAccess = await userService.getBetaUserAccess(userDoc.email, userDoc);
-          console.log('[SignInModal] Beta access check:', {
-            hasAccess: betaUserHasAccess,
-            timestamp: new Date().toISOString()
-          });
-
           if (betaUserHasAccess || userDoc.subscriptionType !== SubscriptionType.unsubscribed) {
-            console.log('[SignInModal] User has access, attempting to close modal');
-            handleSignInSuccess(result.user);
+            await handleSignInSuccess(result.user);
             return;
           }
 
           if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !shouldBypassSubscriptionGate) {
-            console.log('[SignInModal] Unsubscribed user, redirecting');
             onClose?.();
             router.push('/pricing');
             return;
           } else if (shouldBypassSubscriptionGate) {
-            console.log('[SignInModal] User on bypass page, skipping subscription requirement');
+            await handleSignInSuccess(result.user);
+            return;
           }
         }
       } catch (err) {
-        console.error("[SignInModal] Error during sign-in:", err);
-        setError(err instanceof Error ? err.message : 'An error occurred');
-        onSignInError?.(err instanceof Error ? err : new Error('An error occurred'));
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        console.log('[SignInModal] In sign-up flow with step:', {
-          signUpStep,
-          email,
-          hasPassword: !!password,
-          passwordLength: password ? password.length : 0,
-          timestamp: new Date().toISOString()
-        });
-        
-        // If we're at the initial step, just validate the email and move to password step
-        if (signUpStep === "initial") {
-          console.log('[SignInModal] Moving from initial to password step:', {
-            email,
-            timestamp: new Date().toISOString()
-          });
-          
-          // Validate email
-          if (!email) {
-            setError("Please enter your email address");
-            setIsLoading(false);
-            return;
-          }
-          
-          // Move to password step
-          setSignUpStep("password");
-          setShowError(false);
-          setIsLoading(false);
-          return;
-        }
-        
-        // If we're at the password step, create the account with email and password
-        if (signUpStep === "password") {
-          console.log('[SignInModal] Creating account with email/password:', {
-            email,
-            passwordLength: password.length,
-            timestamp: new Date().toISOString()
-          });
-          
-          // Validate password
-          if (!password) {
-            setError("Please enter a password");
-            setIsLoading(false);
-            return;
-          }
-          
-          if (!hasUppercase || !hasNumber || !hasMinLength || !passwordsMatch) {
-            setError("Please ensure your password meets all requirements");
-            setShowError(true);
-            setIsLoading(false);
-            return;
-          }
-
-          if (!hasAcceptedLegal) {
-            setErrors((prev) => ({
-              ...prev,
-              legal: 'You must agree to the Terms and Privacy Policy before creating an account',
-            }));
-            setError('Please agree to the Terms and Privacy Policy to continue');
-            setShowError(true);
-            setIsLoading(false);
-            return;
-          }
-          
-          try {
-            const partnerSource = await resolvePartnerSourceFromQuery(router.query);
-            // Create the Firebase Auth user
-            const { user } = await createUserWithEmailAndPassword(auth, email, password);
-            console.log('[SignInModal] Auth User created successfully:', { uid: user.uid, email: user.email, inviteCode: inviteCode || null });
-
-            if (user) {
-              if (!user.email) {
-                  console.error('[SignInModal] Email/Password sign-up completed but no email was provided. This should not happen.');
-                  setError('Sign-up failed: An unexpected error occurred (missing email).');
-                  setIsLoading(false);
-                  return; // Stop execution
-              }
-
-              // Create a new local User object for Firestore
-              const newUser = new User(user.uid, {
-                id: user.uid,
-                email: user.email,
-                subscriptionType: SubscriptionType.unsubscribed, // Default for new user
-                registrationComplete: false, // Explicitly false initially
-                legalAcceptance: buildCurrentLegalAcceptance('web-modal-signup-email', new Date(), {
-                  termsPath: legalTheme.termsPath,
-                  privacyPath: legalTheme.privacyPath,
-                }),
-                createdAt: new Date(), // Add createdAt
-                updatedAt: new Date(),  // Add updatedAt
-                ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
-                ...(partnerSource ? { partnerSource } : {}),
-                // If a gym inviteCode was provided, persist it so backend can resolve it
-                ...(inviteCode ? { gymInviteCode: inviteCode } : {})
-                // Other fields will be default/null
-              });
-
-              // *** IMMEDIATELY CREATE FIRESTORE DOC ***
-              console.log('[SignInModal] Attempting to create initial Firestore document...');
-              try {
-                  await userService.createUser(user.uid, newUser);
-                  console.log('[SignInModal] Initial Firestore document created/updated successfully.');
-              } catch (firestoreError) {
-                  console.error('[SignInModal] FATAL: Failed to create initial Firestore document:', firestoreError);
-                  // Handle this critical error appropriately
-                  setError('Failed to initialize user profile. Please try again or contact support.');
-                  setIsLoading(false);
-                  return; // Stop execution if Firestore creation fails
-              }
-              // *** --- ***
-
-              // Intentionally do NOT send the welcome email here.
-              // For iOS + web parity, we only send the welcome email AFTER username selection,
-              // and we delay it ~2 minutes after completion. (See `/sign-up` and iOS Registration flow.)
-
-              // Update local/Redux state - AuthWrapper will pick this up via onAuthStateChanged
-              userService.nonUICurrentUser = newUser;
-              console.log('[SignInModal] New user state set locally. AuthWrapper should take over.');
-
-              if (isAthleticMindHubFlow) {
-                setIsSignUp(true);
-                setSignUpStep('profile');
-                setIsLoading(false);
-                return;
-              }
-
-              // No need to setSignUpStep here - AuthWrapper handles it
-
-              setShowError(false);
-
-              // Optional: Notify parent immediately if needed, though AuthWrapper's logic might suffice
-              // onSignUpSuccess?.(user);
-            }
-          } catch (createUserError: any) {
-              // ... (existing error handling, including email-already-in-use) ...
-               console.error("[SignInModal] Error creating user:", createUserError);
-              // Specific handling for email-already-in-use
-              if (createUserError.code === 'auth/email-already-in-use') {
-                  setError('This email is already in use. Please sign in or use a different email.');
-                  setSignUpStep('initial'); // Go back to the email step
-              } else {
-                  // Handle other errors generically
-                  setError(createUserError instanceof Error ? createUserError.message : 'Error creating account');
-              }
-             // Keep loading spinner active on error? Maybe only set false on success?
-             // setIsLoading(false); // Commented out - let finally handle it?
-          } finally {
-              // Reset loading state only if it hasn't been reset by a specific error case above
-              // Or simply always reset it here? Let's always reset for simplicity for now.
-              setIsLoading(false); 
-          }
-        }
-      } catch (err) {
-        const error = err as Error;
-        console.error("Error during sign-up:", error);
+        console.error("[SignInModal] Error during password sign-in:", err);
+        const error = err instanceof Error ? err : new Error('An error occurred');
         setError(error.message);
-        onSignUpError?.(error);
+        onSignInError?.(error);
       } finally {
         setIsLoading(false);
       }
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const magicLinkUrl = typeof window !== 'undefined' ? window.location.href : undefined;
+      await authService.sendMagicLink(normalizedEmail, magicLinkUrl);
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(MAGIC_LINK_EMAIL_STORAGE_KEY, normalizedEmail);
+        if (inviteCode) {
+          window.localStorage.setItem(MAGIC_LINK_INVITE_CODE_STORAGE_KEY, inviteCode);
+        } else {
+          window.localStorage.removeItem(MAGIC_LINK_INVITE_CODE_STORAGE_KEY);
+        }
+        if (isSignUp && hasAcceptedLegal) {
+          window.localStorage.setItem(MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY, 'true');
+        } else {
+          window.localStorage.removeItem(MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY);
+        }
+      }
+
+      setMagicLinkSent(true);
+      setShowError(false);
+    } catch (err) {
+      console.error("[SignInModal] Error sending magic link:", err);
+      const error = err instanceof Error ? err : new Error('Could not send magic link');
+      setError(error.message);
+      if (isSignUp) {
+        onSignUpError?.(error);
+      } else {
+        onSignInError?.(error);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2879,6 +2850,32 @@ const SignInModal: React.FC<SignInModalProps> = ({
       </div>
 
       <div className="space-y-6">
+        {!isSignUp && (
+          <div className="grid grid-cols-2 rounded-lg border border-zinc-700 bg-zinc-900/70 p-1">
+            {[
+              { mode: 'magic' as const, label: 'Magic link' },
+              { mode: 'password' as const, label: 'Password' },
+            ].map((item) => (
+              <button
+                key={item.mode}
+                type="button"
+                onClick={() => {
+                  setEmailAuthMode(item.mode);
+                  setMagicLinkSent(false);
+                  setError(null);
+                }}
+                className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
+                  emailAuthMode === item.mode
+                    ? 'bg-[#E0FE10] text-black'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
             Email
@@ -2889,6 +2886,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             onChange={(e) => {
               setEmail(e.target.value);
               setShowError(false);
+              setMagicLinkSent(false);
             }}
             className={`w-full bg-zinc-800 border rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors ${
               errors.email ? "border-red-500" : "border-zinc-600"
@@ -2897,6 +2895,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
           />
           {showError && errors.email && (
             <div className="text-red-400 text-sm mt-2">{errors.email}</div>
+          )}
+          {magicLinkSent && (
+            <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm leading-6 text-emerald-200">
+              Check your email for a magic sign-in link. Open it on this device to continue.
+            </div>
           )}
         </div>
 
@@ -2919,13 +2922,19 @@ const SignInModal: React.FC<SignInModalProps> = ({
           </div>
         )}
 
-        {!isSignUp && (
+        {!isSignUp && emailAuthMode === 'magic' && (
+          <p className="text-sm leading-6 text-zinc-500">
+            No password needed. We&apos;ll send a secure email link for this sign-in.
+          </p>
+        )}
+
+        {!isSignUp && emailAuthMode === 'password' && (
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="block text-sm font-medium text-zinc-300 font-['HK Grotesk']">
                 Password
               </label>
-              <button 
+              <button
                 type="button"
                 onClick={() => setIsForgotPassword(true)}
                 className="text-[#E0FE10] text-sm hover:underline"
@@ -2933,21 +2942,22 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 Forgot your password?
               </button>
             </div>
-            <div className="relative"> {/* Added: Relative container for input and button */}
+            <div className="relative">
               <input
-                type={showPassword ? "text" : "password"} // Changed to use showPassword state
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   setShowError(false);
                 }}
-                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors" // Added pr-10
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
                 placeholder="Enter your password"
+                autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5" // Removed inline style
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -3065,6 +3075,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setAthleticCouncilBio("");
     setHasAcceptedLegal(false);
     setLegalFlowContext('signup');
+    setEmailAuthMode('magic');
   };
 
   // Add debug logging for props (ONLY when visible to prevent loop)
@@ -3247,8 +3258,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
       ? "Create Account"
       : signUpStep === "legal"
       ? legalTheme.primaryLabel
-      : "Continue with Email"
-    : "Sign In";
+      : "Send magic link"
+    : emailAuthMode === 'password'
+    ? "Sign in with password"
+    : "Send magic link";
 
   const renderAthleticMindInitialStep = () => (
     <div className="amh-login-panel">
@@ -4199,15 +4212,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
                     : { background: '#E0FE10', color: '#000' }
                 }
               >
-                {isSignUp
-                  ? signUpStep === "profile"
-                    ? "Complete"
+                  {isSignUp
+                    ? signUpStep === "profile"
+                      ? "Complete"
                     : signUpStep === "password"
                     ? "Create Account"
                     : signUpStep === "legal"
                     ? legalTheme.primaryLabel
-                    : "Continue with Email"
-                  : "Sign In"}
+                    : isLoading
+                    ? "Sending..."
+                    : "Send magic link"
+                  : isLoading
+                  ? "Sending..."
+                  : emailAuthMode === 'password'
+                  ? "Sign in with password"
+                  : "Send magic link"}
               </button>
             </div>
           )}

@@ -301,7 +301,7 @@ function taxonomyFields(simIdOrExerciseId: string) {
   };
 }
 
-const SEEDED_EXERCISES: MentalExercise[] = [
+export const SEEDED_EXERCISES: MentalExercise[] = [
   // -------------------------------------------------------------------------
   // BREATHING EXERCISES
   // -------------------------------------------------------------------------

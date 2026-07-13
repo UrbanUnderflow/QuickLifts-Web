@@ -8,12 +8,18 @@ import {
   Smartphone, Zap, CheckCircle, MessageSquare, ChevronDown, ChevronUp,
   Loader2, Wand2, RotateCcw, Eye,
 } from 'lucide-react';
-import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../api/firebase/config';
 import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAssetService';
 import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
 import { SIM_VARIANTS_COLLECTION } from '../../api/firebase/mentaltraining/collections';
+import {
+  buildModuleNarrationScripts,
+  hashNarrationText,
+  MODULE_NARRATION_ENGINE_KEY,
+  type ModuleNarrationScript,
+} from '../../api/firebase/mentaltraining/moduleNarrationScripts';
 import { persistVoiceConfig, speakStep, stopNarration } from '../../utils/tts';
 import { NORA_DYNAMIC_LINES, type NoraDynamicLine } from '../../lib/noraOnboardingVoice';
 import { resolvePulseCheckFunctionUrl } from '../../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
@@ -723,7 +729,11 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'coverage' | 'voice' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'coverage' | 'voice' | 'moduleNarrations' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+
+// Every spoken line Nora narrates across sims and protocols, derived from
+// the module configs so stored clips byte-match runtime speech.
+const MODULE_NARRATION_SCRIPTS: ModuleNarrationScript[] = buildModuleNarrationScripts();
 
 // ── Coverage audit (read-only rollup of every expected cue vs sim-audio-assets) ──
 type CoverageRow = {
@@ -1806,6 +1816,16 @@ const AdminAiVoice: React.FC = () => {
   const [coverageError, setCoverageError] = useState<string | null>(null);
   const [coverageLoadedAt, setCoverageLoadedAt] = useState<Date | null>(null);
 
+  // Module narration state (pre-generated spoken clips per sim/protocol)
+  const [moduleNarrationAssets, setModuleNarrationAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [moduleNarrationLoading, setModuleNarrationLoading] = useState(false);
+  const [moduleNarrationLoadError, setModuleNarrationLoadError] = useState<string | null>(null);
+  const [moduleNarrationGenerating, setModuleNarrationGenerating] = useState<Record<string, boolean>>({});
+  const [moduleNarrationGenErrors, setModuleNarrationGenErrors] = useState<Record<string, string>>({});
+  const [moduleNarrationBulkRunning, setModuleNarrationBulkRunning] = useState(false);
+  const [moduleNarrationPlayingId, setModuleNarrationPlayingId] = useState<string | null>(null);
+  const moduleNarrationAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Voice config state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2635,6 +2655,129 @@ const AdminAiVoice: React.FC = () => {
     }
   };
 
+  // ── Module narrations: pre-generated spoken clips for every sim and
+  // protocol line, so iOS plays stored audio and live TTS is only the
+  // fallback. Assets are keyed by cueKey + a hash of the exact text
+  // (promptHash) that iOS matches at playback.
+  const loadModuleNarrationAssets = async () => {
+    setModuleNarrationLoading(true);
+    setModuleNarrationLoadError(null);
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'sim-audio-assets'),
+        where('engineKey', '==', MODULE_NARRATION_ENGINE_KEY),
+      ));
+      const byCueKey = new Map<string, SimAudioAssetRef & { prompt?: string }>();
+      snap.docs.forEach((assetDoc) => {
+        const data = assetDoc.data() as SimAudioAssetRef & { prompt?: string };
+        if (data?.cueKey && data?.downloadURL) byCueKey.set(data.cueKey, data);
+      });
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      MODULE_NARRATION_SCRIPTS.forEach((script) => {
+        const candidate = byCueKey.get(script.cueKey);
+        // A stale clip (script text changed since generation) counts as
+        // missing so the dashboard prompts a regeneration.
+        results[script.cueKey] = candidate && candidate.prompt === script.text ? candidate : null;
+      });
+      setModuleNarrationAssets(results);
+    } catch (e: any) {
+      setModuleNarrationLoadError(e?.message || 'Failed to load module narrations');
+    } finally {
+      setModuleNarrationLoading(false);
+    }
+  };
+
+  const generateModuleNarration = async (script: ModuleNarrationScript) => {
+    setModuleNarrationGenerating((prev) => ({ ...prev, [script.cueKey]: true }));
+    setModuleNarrationGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[script.cueKey];
+      return next;
+    });
+    try {
+      const speech = await generateSpeechBlob(script.text);
+      const assetId = buildGeneratedDocId(MODULE_NARRATION_ENGINE_KEY, script.cueKey, script.text);
+      const path = `sim-audio-assets/${vpSlugify(MODULE_NARRATION_ENGINE_KEY)}/${script.cueKey}/${assetId}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, speech.blob, { contentType: speech.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      const now = Date.now();
+      const assetRecord: SimAudioAssetRef = {
+        id: assetId,
+        cueKey: script.cueKey,
+        label: script.label,
+        prompt: script.text,
+        provider: speech.providerId,
+        format: 'mp3',
+        contentType: speech.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: moduleNarrationAssets[script.cueKey]?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, 'sim-audio-assets', assetId), {
+        ...assetRecord,
+        family: MODULE_NARRATION_ENGINE_KEY,
+        engineKey: MODULE_NARRATION_ENGINE_KEY,
+        archetype: 'voice_channel',
+        app: 'pulsecheck',
+        moduleId: script.moduleId,
+        slot: script.slot,
+        // iOS resolves stored narration by hashing the runtime text —
+        // promptHash must always be hashNarrationText(prompt).
+        promptHash: hashNarrationText(script.text),
+      });
+
+      setModuleNarrationAssets((prev) => ({ ...prev, [script.cueKey]: assetRecord }));
+    } catch (e: any) {
+      const msg = e?.message || 'Generation failed';
+      setModuleNarrationGenErrors((prev) => ({ ...prev, [script.cueKey]: msg }));
+      console.error(`[Module Narration] ${script.cueKey}:`, msg);
+    } finally {
+      setModuleNarrationGenerating((prev) => ({ ...prev, [script.cueKey]: false }));
+    }
+  };
+
+  const generateMissingModuleNarrations = async () => {
+    if (moduleNarrationBulkRunning) return;
+    setModuleNarrationBulkRunning(true);
+    try {
+      for (const script of MODULE_NARRATION_SCRIPTS) {
+        if (!moduleNarrationAssets[script.cueKey]?.downloadURL) {
+          // Sequential on purpose: ElevenLabs rate limits, and each clip
+          // is only a few seconds of synthesis.
+          // eslint-disable-next-line no-await-in-loop
+          await generateModuleNarration(script);
+        }
+      }
+    } finally {
+      setModuleNarrationBulkRunning(false);
+    }
+  };
+
+  const stopModuleNarrationPlayback = () => {
+    if (moduleNarrationAudioRef.current) {
+      moduleNarrationAudioRef.current.pause();
+      moduleNarrationAudioRef.current.currentTime = 0;
+      moduleNarrationAudioRef.current = null;
+    }
+    setModuleNarrationPlayingId(null);
+  };
+
+  const playModuleNarration = (cueKey: string, url: string) => {
+    stopModuleNarrationPlayback();
+    setModuleNarrationPlayingId(cueKey);
+    const audio = new Audio(url);
+    moduleNarrationAudioRef.current = audio;
+    audio.volume = 0.9;
+    audio.play().catch(() => setModuleNarrationPlayingId(null));
+    audio.onended = () => setModuleNarrationPlayingId(null);
+    audio.onerror = () => setModuleNarrationPlayingId(null);
+  };
+
   // ── Coverage audit loader: every expected cue checked against the
   // sim-audio-assets inventory, in one pass. Read-only; generation
   // stays on the per-section tabs.
@@ -2694,7 +2837,34 @@ const AdminAiVoice: React.FC = () => {
         checkCueSet(PULSECHECK_TUTORIAL_NARRATION_CUES, PULSECHECK_TUTORIAL_ENGINE_KEY),
       ]);
 
+      // Module narrations: one query, matched by cueKey + exact text so
+      // stale clips (script changed since generation) read as missing.
+      const narrationSnap = await getDocs(query(
+        collection(db, 'sim-audio-assets'),
+        where('engineKey', '==', MODULE_NARRATION_ENGINE_KEY),
+      ));
+      const narrationByCueKey = new Map<string, { prompt?: string; downloadURL?: string }>();
+      narrationSnap.docs.forEach((assetDoc) => {
+        const data = assetDoc.data() as { cueKey?: string; prompt?: string; downloadURL?: string };
+        if (data?.cueKey && data?.downloadURL) narrationByCueKey.set(data.cueKey, data);
+      });
+      const moduleNarrationRows: CoverageRow[] = MODULE_NARRATION_SCRIPTS.map((script) => {
+        const candidate = narrationByCueKey.get(script.cueKey);
+        return {
+          label: script.label,
+          cueKey: script.cueKey,
+          present: Boolean(candidate && candidate.prompt === script.text),
+        };
+      });
+
       setCoverageSections([
+        {
+          id: 'moduleNarrations',
+          title: 'Module spoken narrations — every sim + protocol line',
+          generateHint: 'Generate on the Module Narrations tab',
+          rows: moduleNarrationRows,
+          note: 'Engine in-run cues with live state (round counters, scores) remain live TTS by design.',
+        },
         {
           id: 'protocols',
           title: 'Protocol Library — signature + runtime sounds',
@@ -2759,6 +2929,7 @@ const AdminAiVoice: React.FC = () => {
     loadRunAlertAssets();
     loadMacraOnboardingAssets();
     loadPulseCheckTutorialAssets();
+    loadModuleNarrationAssets();
     return () => {
       stopNarration();
       stopSoundEffect();
@@ -3185,6 +3356,13 @@ const AdminAiVoice: React.FC = () => {
               onClick={() => setActiveTab('coverage')}
             />
             <AudioTabButton
+              active={activeTab === 'moduleNarrations'}
+              icon={<Mic2 className="h-4 w-4" />}
+              label="Module Narrations"
+              description="Pre-generated Nora spoken clips for every sim and protocol — stored audio first, live TTS only as fallback."
+              onClick={() => setActiveTab('moduleNarrations')}
+            />
+            <AudioTabButton
               active={activeTab === 'macraOnboarding'}
               icon={<Smartphone className="h-4 w-4" />}
               label="Macra Onboarding"
@@ -3328,6 +3506,126 @@ const AdminAiVoice: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* ════════════════════════
+              SECTION 0.5: MODULE NARRATIONS
+          ════════════════════════ */}
+          {activeTab === 'moduleNarrations' && (() => {
+            const generatedCount = MODULE_NARRATION_SCRIPTS.filter((s) => moduleNarrationAssets[s.cueKey]?.downloadURL).length;
+            const moduleGroups = MODULE_NARRATION_SCRIPTS.reduce<Record<string, { moduleName: string; category: string; scripts: ModuleNarrationScript[] }>>((acc, script) => {
+              acc[script.moduleId] ||= { moduleName: script.moduleName, category: script.category, scripts: [] };
+              acc[script.moduleId].scripts.push(script);
+              return acc;
+            }, {});
+            return (
+              <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl mb-6 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div>
+                    <div className="font-semibold text-white">Module Spoken Narrations</div>
+                    <div className="text-xs text-zinc-500">
+                      Every line Nora speaks in the sim and protocol players, pre-generated with the configured voice.
+                      iOS plays these stored clips and only falls back to live TTS on a miss.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${generatedCount === MODULE_NARRATION_SCRIPTS.length ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-amber-500/30 bg-amber-500/10 text-amber-200'}`}>
+                      {generatedCount} / {MODULE_NARRATION_SCRIPTS.length} generated
+                    </span>
+                    <button
+                      onClick={loadModuleNarrationAssets}
+                      disabled={moduleNarrationLoading || moduleNarrationBulkRunning}
+                      className="flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-sm text-zinc-300 transition hover:text-zinc-100 disabled:opacity-50"
+                    >
+                      {moduleNarrationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    </button>
+                    <button
+                      onClick={generateMissingModuleNarrations}
+                      disabled={moduleNarrationBulkRunning || generatedCount === MODULE_NARRATION_SCRIPTS.length}
+                      className="flex items-center gap-2 rounded-xl border border-[#E0FE10]/40 bg-[#E0FE10]/10 px-4 py-2 text-sm font-medium text-[#E0FE10] transition hover:bg-[#E0FE10]/20 disabled:opacity-50"
+                    >
+                      {moduleNarrationBulkRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {moduleNarrationBulkRunning ? 'Generating…' : `Generate ${MODULE_NARRATION_SCRIPTS.length - generatedCount} Missing`}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mb-4 rounded-xl border border-sky-700/40 bg-sky-950/30 px-4 py-3 text-xs leading-relaxed text-sky-200">
+                  Clips are matched to playback by an exact hash of the spoken text. If a module's copy or config changes,
+                  its clips show as stale/missing here — regenerate them. Engine in-run cues that contain live state
+                  (round counters, scores) remain live TTS by design. Changing the Nora voice on the Voice tab does not
+                  retroactively update stored clips; regenerate after a voice change.
+                </div>
+
+                {moduleNarrationLoadError && (
+                  <div className="mb-4 rounded-xl border border-rose-700/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{moduleNarrationLoadError}</div>
+                )}
+
+                <div className="space-y-4">
+                  {Object.entries(moduleGroups).map(([moduleId, group]) => {
+                    const groupGenerated = group.scripts.filter((s) => moduleNarrationAssets[s.cueKey]?.downloadURL).length;
+                    const groupComplete = groupGenerated === group.scripts.length;
+                    return (
+                      <div key={moduleId} className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+                        <div className="flex flex-wrap items-center gap-3 mb-3">
+                          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${groupComplete ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-amber-500/30 bg-amber-500/10 text-amber-200'}`}>
+                            {groupGenerated} / {group.scripts.length}
+                          </span>
+                          <span className="text-sm font-medium text-zinc-100">{group.moduleName}</span>
+                          <span className="text-xs uppercase tracking-wide text-zinc-600">{group.category}</span>
+                          <span className="font-mono text-xs text-zinc-600">{moduleId}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {group.scripts.map((script) => {
+                            const asset = moduleNarrationAssets[script.cueKey];
+                            const isGenerating = Boolean(moduleNarrationGenerating[script.cueKey]);
+                            const genError = moduleNarrationGenErrors[script.cueKey];
+                            return (
+                              <div key={script.cueKey} className="rounded-lg border border-zinc-800/70 bg-zinc-900/40 px-3 py-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="w-20 shrink-0 font-mono text-xs text-zinc-500">{script.slot}</span>
+                                  <span className="flex-1 min-w-[200px] text-xs text-zinc-300">{script.text}</span>
+                                  {asset?.downloadURL ? (
+                                    <>
+                                      <button
+                                        onClick={() => (moduleNarrationPlayingId === script.cueKey ? stopModuleNarrationPlayback() : playModuleNarration(script.cueKey, asset.downloadURL))}
+                                        className="flex items-center gap-1 rounded-lg border border-zinc-700 px-2 py-1 text-xs text-zinc-300 transition hover:text-white"
+                                      >
+                                        {moduleNarrationPlayingId === script.cueKey ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3" />}
+                                        {moduleNarrationPlayingId === script.cueKey ? 'Stop' : 'Play'}
+                                      </button>
+                                      <button
+                                        onClick={() => generateModuleNarration(script)}
+                                        disabled={isGenerating || moduleNarrationBulkRunning}
+                                        className="rounded-lg border border-zinc-700 px-2 py-1 text-xs text-zinc-400 transition hover:text-zinc-200 disabled:opacity-50"
+                                      >
+                                        {isGenerating ? 'Regenerating…' : 'Regenerate'}
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => generateModuleNarration(script)}
+                                      disabled={isGenerating || moduleNarrationBulkRunning}
+                                      className="flex items-center gap-1 rounded-lg border border-[#E0FE10]/40 bg-[#E0FE10]/10 px-2.5 py-1 text-xs font-medium text-[#E0FE10] transition hover:bg-[#E0FE10]/20 disabled:opacity-50"
+                                    >
+                                      {isGenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                                      {isGenerating ? 'Generating…' : 'Generate'}
+                                    </button>
+                                  )}
+                                </div>
+                                {genError && (
+                                  <div className="mt-1 text-xs text-rose-300">{genError}</div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ════════════════════════
               SECTION 1: AI VOICE

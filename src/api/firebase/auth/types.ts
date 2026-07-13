@@ -15,6 +15,9 @@ export interface SignUpData {
   export interface AuthService {
     signUpWithEmail: (data: SignUpData) => Promise<UserCredential>;
     signInWithEmail: (email: string, password: string) => Promise<UserCredential>;
+    sendMagicLink: (email: string, redirectUrl?: string) => Promise<boolean>;
+    isMagicLink: (url: string) => boolean;
+    completeMagicLink: (email: string, url: string) => Promise<UserCredential>;
     signInWithGoogle: () => Promise<UserCredential>;
     signInWithApple: () => Promise<void>;
     resetPassword: (email: string) => Promise<boolean>;

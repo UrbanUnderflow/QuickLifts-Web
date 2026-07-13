@@ -107,6 +107,7 @@ const DevModeToggle: React.FC = () => {
 type ViewState = 'login' | 'signup' | 'forgot';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
+const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pulsecheck_magic_link_email';
 
 const PulseCheckLoginPage: NextPage = () => {
   const router = useRouter();
@@ -124,8 +125,10 @@ const PulseCheckLoginPage: NextPage = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
+  const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   const legacyFlowMessage = useMemo(() => {
     if (legacyFlow === 'athlete-referral-retired') {
@@ -225,43 +228,75 @@ const PulseCheckLoginPage: NextPage = () => {
     return firestoreUser;
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!authService.isMagicLink(window.location.href)) return;
+
+    let isMounted = true;
+
+    const completeEmailLink = async () => {
+      const storedEmail = window.localStorage.getItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+      if (!storedEmail) {
+        setError('Enter your email and request a fresh magic link on this device.');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        const result = await authService.completeMagicLink(storedEmail, window.location.href);
+        if (!isMounted) return;
+        window.localStorage.removeItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+        await ensureFirestoreUser(result.user);
+        enterApp();
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('[PulseCheck Login] Magic link completion failed:', err);
+        setError(err instanceof Error ? err.message : 'Magic link sign-in failed. Please request a new link.');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    completeEmailLink();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [enterApp]);
+
   // ──────────────────────────────────────────────────
   // AUTH HANDLERS — mirrors SignInModal exactly
   // ──────────────────────────────────────────────────
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please enter your email and password.');
+    if (!email.trim()) {
+      setError('Please enter your email address.');
       return;
     }
     setIsLoading(true);
     setError(null);
     try {
-      const result = await authService.signInWithEmail(email, password);
-      await ensureFirestoreUser(result.user);
-      enterApp();
-    } catch (err: any) {
-      console.error('[PulseCheck Login] Email sign-in error:', err);
-      switch (err.code) {
-        case 'auth/user-not-found':
-          setError('No account found with this email address.');
-          break;
-        case 'auth/wrong-password':
-          setError('Incorrect password. Please try again.');
-          break;
-        case 'auth/invalid-email':
-          setError('Invalid email address.');
-          break;
-        case 'auth/too-many-requests':
-          setError('Too many attempts. Please wait a moment and try again.');
-          break;
-        case 'auth/invalid-credential':
-          setError('Invalid email or password. Please try again.');
-          break;
-        default:
-          setError(err.message || 'Sign in failed. Please try again.');
+      const normalizedEmail = email.trim().toLowerCase();
+      if (emailAuthMode === 'password') {
+        if (!password) {
+          setError('Please enter your password.');
+          setIsLoading(false);
+          return;
+        }
+
+        const result = await authService.signInWithEmail(normalizedEmail, password);
+        await ensureFirestoreUser(result.user);
+        enterApp();
+      } else {
+        await authService.sendMagicLink(normalizedEmail, window.location.href);
+        window.localStorage.setItem(MAGIC_LINK_EMAIL_STORAGE_KEY, normalizedEmail);
+        setMagicLinkSent(true);
       }
+    } catch (err: any) {
+      console.error('[PulseCheck Login] Email auth error:', err);
+      setError(err.message || 'Sign-in failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -654,6 +689,31 @@ const PulseCheckLoginPage: NextPage = () => {
 
                     {/* Email form */}
                     <form onSubmit={handleEmailSignIn} className="space-y-4">
+                      <div className="grid grid-cols-2 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        {[
+                          { mode: 'magic' as const, label: 'Magic link' },
+                          { mode: 'password' as const, label: 'Password' },
+                        ].map((item) => (
+                          <button
+                            key={item.mode}
+                            type="button"
+                            onClick={() => {
+                              setEmailAuthMode(item.mode);
+                              setError(null);
+                              setMagicLinkSent(false);
+                            }}
+                            className={`rounded-lg px-3 py-2 text-sm font-semibold transition-all duration-200 ${
+                              emailAuthMode === item.mode
+                                ? 'text-[#050506]'
+                                : 'text-zinc-500 hover:text-zinc-300'
+                            }`}
+                            style={emailAuthMode === item.mode ? { background: '#E0FE10' } : undefined}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+
                       <div>
                         <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 font-medium mb-2">
                           Email
@@ -661,7 +721,7 @@ const PulseCheckLoginPage: NextPage = () => {
                         <input
                           type="email"
                           value={email}
-                          onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                          onChange={(e) => { setEmail(e.target.value); setError(null); setMagicLinkSent(false); }}
                           placeholder="you@program.edu"
                           className="w-full rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
                           style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
@@ -669,40 +729,65 @@ const PulseCheckLoginPage: NextPage = () => {
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 font-medium mb-2">
-                          Password
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            value={password}
-                            onChange={(e) => { setPassword(e.target.value); setError(null); }}
-                            placeholder="••••••••"
-                            className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
-                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-                            autoComplete="current-password"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
-                          >
-                            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
+                      {emailAuthMode === 'password' && (
+                        <div>
+                          <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 font-medium mb-2">
+                            Password
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showPassword ? 'text' : 'password'}
+                              value={password}
+                              onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                              placeholder="••••••••"
+                              className="w-full rounded-xl px-4 py-3 pr-11 text-sm text-white placeholder:text-zinc-600 outline-none transition-all duration-200 focus:ring-1 focus:ring-[#E0FE10]/60"
+                              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                              autoComplete="current-password"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                              aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                          <div className="mt-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => { setView('forgot'); setError(null); setResetSent(false); }}
+                              className="text-xs font-medium text-[#E0FE10] transition-colors hover:text-[#F1FF63]"
+                            >
+                              Forgot password?
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* Forgot password */}
-                      <div className="text-right">
-                        <button
-                          type="button"
-                          onClick={() => { setView('forgot'); setError(null); setResetSent(false); }}
-                          className="text-xs font-medium text-[#E0FE10] transition-colors hover:text-[#F1FF63]"
+                      {emailAuthMode === 'magic' && magicLinkSent ? (
+                        <motion.div
+                          initial={{ opacity: 0, y: -4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="rounded-xl p-4"
+                          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}
                         >
-                          Forgot password?
-                        </button>
-                      </div>
+                          <div className="flex items-start gap-3">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-400" />
+                            <p className="text-sm leading-6 text-emerald-100">
+                              Magic link sent. Open it from this device to enter the coach dashboard.
+                            </p>
+                          </div>
+                        </motion.div>
+                      ) : emailAuthMode === 'magic' ? (
+                        <p className="text-sm leading-6 text-zinc-500">
+                          No password needed. We&apos;ll send a secure email link tied to your PulseCheck invite.
+                        </p>
+                      ) : (
+                        <p className="text-sm leading-6 text-zinc-500">
+                          Use this only if your account already has a password.
+                        </p>
+                      )}
 
                       {/* Submit */}
                       <button
@@ -718,24 +803,12 @@ const PulseCheckLoginPage: NextPage = () => {
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <>
-                            Sign In
+                            {emailAuthMode === 'password' ? 'Sign in with password' : 'Send magic link'}
                             <ArrowRight className="h-4 w-4" />
                           </>
                         )}
                       </button>
                     </form>
-
-                    {/* Switch to sign up */}
-                    <p className="mt-6 text-center text-sm text-zinc-500">
-                      Don't have an account?{' '}
-                      <button
-                        type="button"
-                        onClick={() => { setView('signup'); setError(null); setPassword(''); setConfirmPassword(''); }}
-                        className="font-semibold text-[#E0FE10] transition-colors hover:text-[#F1FF63]"
-                      >
-                        Create one
-                      </button>
-                    </p>
                   </motion.div>
                 )}
 

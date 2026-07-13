@@ -6,6 +6,9 @@ import {
   GoogleAuthProvider,
   browserPopupRedirectResolver,
   OAuthProvider,
+  isSignInWithEmailLink,
+  sendSignInLinkToEmail,
+  signInWithEmailLink,
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
@@ -52,6 +55,39 @@ export const authMethods: AuthService = {
 
   async signInWithEmail(email: string, password: string) {
     return signInWithEmailAndPassword(auth, email, password);
+  },
+
+  async sendMagicLink(email: string, redirectUrl?: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Please enter your email address.');
+    }
+
+    const fallbackUrl =
+      typeof window !== 'undefined'
+        ? window.location.href
+        : 'https://fitwithpulse.ai';
+    const url = redirectUrl || fallbackUrl;
+
+    await sendSignInLinkToEmail(auth, normalizedEmail, {
+      url,
+      handleCodeInApp: true,
+    });
+
+    return true;
+  },
+
+  isMagicLink(url: string) {
+    return isSignInWithEmailLink(auth, url);
+  },
+
+  async completeMagicLink(email: string, url: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('Please enter your email address to finish sign-in.');
+    }
+
+    return signInWithEmailLink(auth, normalizedEmail, url);
   },
 
   async signInWithGoogle() {
