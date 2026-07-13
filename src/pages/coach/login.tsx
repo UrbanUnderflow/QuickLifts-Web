@@ -255,21 +255,75 @@ const CoachLogin: NextPage = () => {
 
   return (
     <div
-      className="relative flex min-h-screen items-center justify-center overflow-hidden px-4"
-      style={{ background: 'linear-gradient(180deg, #0c0b14 0%, #07060c 100%)', fontFamily: 'Switzer, sans-serif' }}
+      className="relative min-h-screen overflow-hidden bg-black text-white"
+      style={{ fontFamily: 'Switzer, sans-serif' }}
     >
       <Head>
         <title>Coach sign in | PulseCheck</title>
         <meta name="robots" content="noindex,nofollow" />
       </Head>
 
-      {/* Ambient glow */}
+      <video
+        className="pointer-events-none fixed inset-0 h-full w-full object-cover"
+        autoPlay
+        muted
+        loop
+        controls={false}
+        playsInline
+        preload="auto"
+        poster="/pil-og-source.jpg"
+        disablePictureInPicture
+        tabIndex={-1}
+        aria-hidden="true"
+      >
+        <source src="/pil-hero.mp4" type="video/mp4" />
+      </video>
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/75 via-black/45 to-black" />
       <div
-        className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[520px] -translate-x-1/2 rounded-full blur-3xl"
-        style={{ background: `radial-gradient(circle, ${PC_PURPLE}33 0%, transparent 70%)` }}
+        className="pointer-events-none fixed inset-0 mix-blend-overlay"
+        style={{ background: `linear-gradient(45deg, ${PC_PURPLE}2b 0%, transparent 42%, ${PC_PURPLE_SOFT}24 100%)` }}
       />
 
-      <div className="relative z-10 w-full max-w-sm">
+      <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,500px)] lg:gap-16">
+        <section className="hidden flex-col justify-center lg:flex">
+          <div className="flex items-center gap-3">
+            <img src="/pulseCheckIcon.png" alt="PulseCheck" className="h-11 w-11 rounded-2xl" />
+            <div>
+              <div className="text-sm font-semibold text-white">PulseCheck</div>
+              <div className="text-xs text-zinc-400">Coach dashboard and team workspace</div>
+            </div>
+          </div>
+
+          <div className="mt-14">
+            <span
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em]"
+              style={{ color: PC_PURPLE_SOFT }}
+            >
+              Coach access
+            </span>
+            <h1 className="mt-6 max-w-xl text-5xl font-semibold leading-none text-white xl:text-6xl">
+              Open the mental performance command center.
+            </h1>
+            <p className="mt-6 max-w-xl text-xl leading-relaxed text-zinc-200">
+              Sign in to monitor teams, review athlete check-ins, manage staff access, and guide PulseCheck programming from one secure workspace.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-3 xl:grid-cols-3">
+            {[
+              { label: 'Teams', value: 'Role-aware access' },
+              { label: 'Check-ins', value: 'Wellness signal review' },
+              { label: 'Nora', value: 'Coach support tools' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                <div className="text-sm font-semibold text-white">{item.label}</div>
+                <div className="mt-1 text-xs leading-5 text-zinc-400">{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="relative flex flex-col rounded-2xl border border-white/10 bg-black/65 p-6 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-8">
         <div className="mb-7 flex flex-col items-center text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/pulseCheckIcon.png" alt="PulseCheck" className="mb-4 h-12 w-12 rounded-2xl" />
@@ -279,7 +333,7 @@ const CoachLogin: NextPage = () => {
           </p>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-2xl">
+        <div>
           {error && (
             <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2.5 text-sm text-red-200">
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -467,7 +521,8 @@ const CoachLogin: NextPage = () => {
         <p className="mt-6 text-center text-xs" style={{ color: PC_PURPLE_SOFT }}>
           PulseCheck — Coaching Platform
         </p>
-      </div>
+        </section>
+      </main>
     </div>
   );
 };
