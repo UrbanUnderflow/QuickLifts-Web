@@ -212,6 +212,27 @@ export const simModuleLibraryService = {
   },
 
   /**
+   * Push the SEEDED_EXERCISES content (names, descriptions, instructions,
+   * prompts, configs) onto EXISTING library docs. seedExercises() only
+   * creates missing docs, so copy fixes in the seed never reach prod
+   * without this. Merge-writes so runtime-added fields survive.
+   */
+  async syncSeededCopy(): Promise<{ updated: number }> {
+    const batch = writeBatch(db);
+    let updated = 0;
+    for (const exercise of SEEDED_EXERCISES) {
+      const payload = exerciseToFirestore(exercise);
+      // Write BOTH collections: iOS resolves from the legacy
+      // mental-exercises collection first, then sim-modules.
+      batch.set(doc(db, COLLECTION, exercise.id), payload, { merge: true });
+      batch.set(doc(db, 'mental-exercises', exercise.id), payload, { merge: true });
+      updated++;
+    }
+    await batch.commit();
+    return { updated };
+  },
+
+  /**
    * Seed the exercise library with default exercises
    */
   async seedExercises(): Promise<{ created: number; skipped: number }> {
@@ -721,7 +742,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
         duration: 180,
         progressionLevel: 1,
         instructions: [
-          'Choose a focal point - a spot on the wall, a small object, or a point on your equipment.',
+          'Lock your eyes on the glowing dot on screen - that is your focal point. In competition you will use a spot on the wall or your equipment, but today the dot is your target.',
           'Focus ONLY on that point.',
           'Notice its color, texture, shape. Don\'t analyze, just observe.',
           'When your mind wanders (it will), gently return.',

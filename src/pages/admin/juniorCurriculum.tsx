@@ -38,6 +38,7 @@ import {
 } from 'firebase/firestore';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { auth, db } from '../../api/firebase/config';
+import { simModuleLibraryService } from '../../api/firebase/mentaltraining/exerciseLibraryService';
 import curriculumData from '../../../scripts/data/junior-curriculum.json';
 
 type JuniorLessonSeed = {
@@ -130,6 +131,7 @@ const JuniorCurriculumPage: React.FC = () => {
   const [exercises, setExercises] = useState<ExerciseOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [syncingCopy, setSyncingCopy] = useState(false);
   const [mappingLessonId, setMappingLessonId] = useState<string | null>(null);
   // Lesson whose mapping is being changed: mapped rows show a Reassign
   // button and only reveal the dropdown while this matches their id.
@@ -383,6 +385,28 @@ const JuniorCurriculumPage: React.FC = () => {
                   className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:text-zinc-100"
                 >
                   <RefreshCw className="h-4 w-4" /> Refresh
+                </button>
+                <button
+                  onClick={async () => {
+                    if (syncingCopy) return;
+                    if (!window.confirm('Push seeded module copy (names, instructions, prompts, configs) onto the existing library docs in the active Firestore database? Merge-writes; runtime fields survive.')) return;
+                    setSyncingCopy(true);
+                    setError(null);
+                    try {
+                      const result = await simModuleLibraryService.syncSeededCopy();
+                      setActionResult(`Synced seeded copy onto ${result.updated} library modules.`);
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setSyncingCopy(false);
+                    }
+                  }}
+                  disabled={syncingCopy}
+                  title="Pushes copy fixes from the bundled module seed (e.g. instruction wording) onto existing sim-modules docs."
+                  className="flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:text-zinc-100 disabled:opacity-50"
+                >
+                  {syncingCopy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  {syncingCopy ? 'Syncing…' : 'Sync Module Copy'}
                 </button>
                 <button
                   onClick={runSeed}

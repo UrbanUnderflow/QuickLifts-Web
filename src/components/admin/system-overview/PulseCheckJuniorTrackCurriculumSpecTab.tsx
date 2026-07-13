@@ -166,6 +166,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
             'Crisis detection is NOT wired into the Nora reply pipeline (recordTier3Escalation has no callers). Junior replies, including checkpoint reflections about feelings, now enter that pipeline. Decide alongside consent work whether a crisis-detection pass gates broad rollout.',
             'Age gating / parental consent does not exist; team-level provisioning (commercialConfig.youthTrack) currently stands in for it. Parked deliberately, tracked in the source spec open questions.',
             'Below-neutral junior check-ins get the same inline treatment as everything else today; pro escalates below-neutral into a focused chat. Candidate follow-up: coach notification for junior drained/off patterns.',
+            'Android parity (2026-07-13): full junior surface shipped in android/ (PulseCheckJuniorClient + JuniorTrackScreens; REST pattern, remote-only curriculum, bounded choices, three-pillar daily goal). Gap: the four sim engine games are not ported — the five sim-mapped lessons show an honest "not on Android yet" state; porting the engines is the next Android milestone.',
           ]}
         />
       </SectionBlock>
