@@ -17,6 +17,7 @@ const PC_PURPLE = '#8B5CF6';
 const PC_PURPLE_SOFT = '#A78BFA';
 const PC_PURPLE_DEEP = '#7C3AED';
 const DEFAULT_DEST = '/coach/dashboard';
+const MAGIC_LINK_EMAIL_STORAGE_KEY = 'coach_magic_link_email';
 
 type Provider = 'email' | 'google' | 'apple' | null;
 
@@ -33,11 +34,13 @@ const CoachLogin: NextPage = () => {
   const currentUser = useUser();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState<Provider>(null);
   const [error, setError] = useState<string | null>(null);
   const [forgotMode, setForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   const isBusy = pending !== null;
   const dest = safeRedirect(router.query.redirect);
@@ -70,20 +73,68 @@ const CoachLogin: NextPage = () => {
     return firestoreUser;
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!authService.isMagicLink(window.location.href)) return;
+
+    let isMounted = true;
+
+    const completeMagicLink = async () => {
+      const storedEmail = window.localStorage.getItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+      if (!storedEmail) {
+        setError('Enter your email and request a fresh magic link on this device.');
+        return;
+      }
+
+      try {
+        setPending('email');
+        setError(null);
+        const result = await authService.completeMagicLink(storedEmail, window.location.href);
+        if (!isMounted) return;
+        window.localStorage.removeItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+        await ensureFirestoreUser(result.user);
+        goToApp();
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('[Coach Login] Magic link completion failed:', err);
+        setError(err instanceof Error ? err.message : 'Magic link sign-in failed. Please request a new link.');
+      } finally {
+        if (isMounted) setPending(null);
+      }
+    };
+
+    completeMagicLink();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [goToApp]);
+
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError('Please enter your email and password.');
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+    if (emailAuthMode === 'password' && !password) {
+      setError('Please enter your password.');
       return;
     }
     try {
       setPending('email');
       setError(null);
-      const result = await authService.signInWithEmail(email, password);
-      await ensureFirestoreUser(result.user);
-      goToApp();
+      const normalizedEmail = email.trim().toLowerCase();
+      if (emailAuthMode === 'password') {
+        const result = await authService.signInWithEmail(normalizedEmail, password);
+        await ensureFirestoreUser(result.user);
+        goToApp();
+      } else {
+        await authService.sendMagicLink(normalizedEmail, window.location.href);
+        window.localStorage.setItem(MAGIC_LINK_EMAIL_STORAGE_KEY, normalizedEmail);
+        setMagicLinkSent(true);
+      }
     } catch (err: any) {
-      console.error('[Coach Login] Email sign-in error:', err);
+      console.error('[Coach Login] Email auth error:', err);
       switch (err?.code) {
         case 'auth/user-not-found':
           setError('No account found with this email address.');
@@ -101,6 +152,7 @@ const CoachLogin: NextPage = () => {
         default:
           setError(err?.message || 'Sign in failed. Please try again.');
       }
+    } finally {
       setPending(null);
     }
   };
@@ -256,15 +308,44 @@ const CoachLogin: NextPage = () => {
           ) : (
             <>
               <form onSubmit={forgotMode ? handleForgotPassword : handleEmailSignIn} className="space-y-3">
+                {!forgotMode && (
+                  <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                    {[
+                      { mode: 'magic' as const, label: 'Magic link' },
+                      { mode: 'password' as const, label: 'Password' },
+                    ].map((item) => (
+                      <button
+                        key={item.mode}
+                        type="button"
+                        onClick={() => {
+                          setEmailAuthMode(item.mode);
+                          setError(null);
+                          setMagicLinkSent(false);
+                        }}
+                        className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                          emailAuthMode === item.mode
+                            ? 'text-white'
+                            : 'text-zinc-500 hover:text-zinc-300'
+                        }`}
+                        style={emailAuthMode === item.mode ? { background: PC_PURPLE } : undefined}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setMagicLinkSent(false);
+                  }}
                   placeholder="Email"
                   autoComplete="email"
                   className={inputCls}
                 />
-                {!forgotMode && (
+                {!forgotMode && emailAuthMode === 'password' && (
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -285,6 +366,24 @@ const CoachLogin: NextPage = () => {
                   </div>
                 )}
 
+                {!forgotMode && emailAuthMode === 'magic' && (
+                  magicLinkSent ? (
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.08] px-3 py-2.5 text-sm leading-6 text-emerald-100">
+                      Magic link sent. Open it from this device to enter the coach dashboard.
+                    </div>
+                  ) : (
+                    <p className="text-sm leading-6 text-zinc-500">
+                      No password needed. We&apos;ll send a secure email link tied to your PulseCheck invite.
+                    </p>
+                  )
+                )}
+
+                {!forgotMode && emailAuthMode === 'password' && (
+                  <p className="text-sm leading-6 text-zinc-500">
+                    Use this only if your account already has a password.
+                  </p>
+                )}
+
                 <button
                   type="submit"
                   disabled={isBusy}
@@ -292,22 +391,24 @@ const CoachLogin: NextPage = () => {
                   style={{ background: `linear-gradient(135deg, ${PC_PURPLE} 0%, ${PC_PURPLE_DEEP} 100%)` }}
                 >
                   {pending === 'email' && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {forgotMode ? 'Send reset link' : 'Sign in'}
+                  {forgotMode ? 'Send reset link' : emailAuthMode === 'password' ? 'Sign in with password' : 'Send magic link'}
                 </button>
               </form>
 
-              <div className="mt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotMode((m) => !m);
-                    setError(null);
-                  }}
-                  className="text-xs text-zinc-500 hover:text-zinc-300"
-                >
-                  {forgotMode ? 'Back to sign in' : 'Forgot password?'}
-                </button>
-              </div>
+              {(forgotMode || emailAuthMode === 'password') && (
+                <div className="mt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotMode((m) => !m);
+                      setError(null);
+                    }}
+                    className="text-xs text-zinc-500 hover:text-zinc-300"
+                  >
+                    {forgotMode ? 'Back to sign in' : 'Forgot password?'}
+                  </button>
+                </div>
+              )}
 
               {!forgotMode && (
                 <>
