@@ -295,7 +295,7 @@ export const recordAthleteReply = async (
 
     const actionText = enforceConversationTurnText(
       translation?.phrasing ||
-        "Got it — let's keep it simple today. Hydrate, eat well, and check in tomorrow.",
+        "Got it. I'll keep that in mind for today's training.",
       'nora-action',
       updatedTurns,
     );

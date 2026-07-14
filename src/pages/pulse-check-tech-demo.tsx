@@ -7,6 +7,8 @@ const DEMO_TITLE = 'PulseCheck Tech Demo | Pulse Intelligence Labs';
 const DEMO_DESCRIPTION = 'A focused PulseCheck tech demo page for investors and reviewers.';
 const VIDEO_SRC = 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/webassets%2Fpulse-check-tech-demo.mp4?alt=media&token=de71c561-351d-459d-9d06-dc534b80d000';
 const VIDEO_DURATION_SECONDS = 1111;
+const PITCH_DECK_HREF = '/investor-docs/Pulse_Intelligence_Labs_Deck.pdf';
+const PITCH_DECK_FILENAME = 'Pulse_Intelligence_Labs_Deck.pdf';
 
 const resolveDemoHost = (host: string | undefined | string[]) => {
   const normalizedHost = Array.isArray(host) ? host[0] ?? '' : host ?? '';
@@ -284,6 +286,13 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
               >
                 PulseCheck Mind
               </a>
+              <a
+                href={PITCH_DECK_HREF}
+                className="nav-deck-link"
+                download={PITCH_DECK_FILENAME}
+              >
+                Download Pitch Deck
+              </a>
               <span className="live-indicator">
                 <span className="live-dot" />
                 Tech Demo
@@ -452,9 +461,9 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
                     to $100M ARR, and the capital plan. Together they tell the full fundability story.
                   </p>
                   <a
-                    href="/investor-docs/Pulse_Intelligence_Labs_Deck.pdf"
+                    href={PITCH_DECK_HREF}
                     className="context-link"
-                    download="Pulse_Intelligence_Labs_Deck.pdf"
+                    download={PITCH_DECK_FILENAME}
                   >
                     View the Deck
                   </a>
@@ -657,6 +666,27 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
 
         .nav-site-link:hover {
           color: var(--accent-lime);
+        }
+
+        .nav-deck-link {
+          display: inline-flex;
+          align-items: center;
+          min-height: 36px;
+          padding: 0 16px;
+          border: 1px solid rgba(167, 139, 250, 0.58);
+          border-radius: 999px;
+          background: rgba(167, 139, 250, 0.08);
+          color: var(--accent-lime);
+          text-decoration: none;
+          white-space: nowrap;
+          transition: background 0.24s ease, border-color 0.24s ease, color 0.24s ease, transform 0.24s ease;
+        }
+
+        .nav-deck-link:hover {
+          border-color: rgba(167, 139, 250, 0.88);
+          background: var(--accent-gradient);
+          color: #ffffff;
+          transform: translateY(-1px);
         }
 
         .live-dot {
@@ -1444,6 +1474,20 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
             font-size: 10px;
           }
 
+          .nav-inner {
+            gap: 12px;
+          }
+
+          .nav-site-link,
+          .live-indicator {
+            display: none;
+          }
+
+          .nav-deck-link {
+            min-height: 32px;
+            padding: 0 12px;
+          }
+
           .demo-nav {
             padding: 14px 0;
           }
@@ -1540,6 +1584,12 @@ const PulseCheckTechDemoPage: React.FC<PulseCheckTechDemoPageProps> = ({ ogMeta 
           .footer-meta-strip {
             align-items: flex-start;
             flex-direction: column;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .logo-text {
+            display: none;
           }
         }
       `}</style>

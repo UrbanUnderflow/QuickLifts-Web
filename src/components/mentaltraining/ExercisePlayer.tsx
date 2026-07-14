@@ -150,7 +150,7 @@ const PROTOCOL_VISUALS_BY_EXERCISE_ID: Record<string, ProtocolVisualConfig> = {
     gradientClass: 'from-fuchsia-700 to-purple-800',
   },
   'breathing-physiological-sigh': {
-    label: 'Physiological Sigh',
+    label: 'Double-Breath Reset',
     Icon: LungsProtocolIcon,
     accentHex: '#06B6D4',
     gradientClass: 'from-cyan-400 to-cyan-600',

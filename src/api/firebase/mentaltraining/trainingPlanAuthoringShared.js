@@ -33,7 +33,7 @@ const PROTOCOL_LIBRARY = {
   },
   acute_downshift: {
     id: 'protocol-physiological-sigh',
-    label: 'Physiological Sigh',
+    label: 'Double-Breath Reset',
     protocolClass: 'regulation',
     durationSeconds: 120,
   },

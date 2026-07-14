@@ -1292,6 +1292,17 @@ const GroupMeetAdminPage: React.FC = () => {
 
   const openManualFlexModal = async (invite: GroupMeetInviteSummary) => {
     if (!selectedRequestId) return;
+    if (
+      selectedRequest?.status === "closed" ||
+      selectedRequest?.finalSelection ||
+      selectedRequest?.calendarInvite
+    ) {
+      const errorText =
+        "This Group Meet request already has a final meeting time, so flex requests are disabled.";
+      setMessage({ type: "error", text: errorText });
+      setRequestModalMessage({ type: "error", text: errorText });
+      return;
+    }
 
     setCalendarDayModalDate(null);
     setCalendarDayModalError(null);
@@ -1334,6 +1345,18 @@ const GroupMeetAdminPage: React.FC = () => {
 
   const sendManualFlexEmail = async () => {
     if (!selectedRequestId || !manualFlexInvite) return;
+    if (
+      selectedRequest?.status === "closed" ||
+      selectedRequest?.finalSelection ||
+      selectedRequest?.calendarInvite
+    ) {
+      const errorText =
+        "This Group Meet request already has a final meeting time, so flex requests are disabled.";
+      setManualFlexError(errorText);
+      setMessage({ type: "error", text: errorText });
+      setRequestModalMessage({ type: "error", text: errorText });
+      return;
+    }
 
     setManualFlexSending(true);
     setManualFlexError(null);
@@ -3942,7 +3965,10 @@ const GroupMeetAdminPage: React.FC = () => {
                                       Copy link
                                     </button>
                                     {invite.email &&
-                                      invite.participantType !== "host" && (
+                                      invite.participantType !== "host" &&
+                                      selectedRequest.status !== "closed" &&
+                                      !selectedRequest.finalSelection &&
+                                      !selectedRequest.calendarInvite && (
                                         <button
                                           type="button"
                                           onClick={() =>

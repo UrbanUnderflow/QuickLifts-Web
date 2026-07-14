@@ -185,7 +185,7 @@ const SEEDED_PROTOCOL_PRACTICE_SPECS: ProtocolPracticeSpec[] = [
     legacyExerciseId: 'breathing-physiological-sigh',
     protocolFamilyId: 'regulation-acute_downshift',
     protocolVariantId: 'regulation-acute_downshift--physiological-sigh',
-    title: 'Physiological Sigh Practice',
+    title: 'Double-Breath Reset Practice',
     inputModes: ['text', 'voice', 'mixed'],
     practiceIntro: 'Now let’s put this into practice. Answer me directly so we can turn that spike into a usable downshift.',
     evaluationLead: 'Here is how your acute-downshift rep looked.',

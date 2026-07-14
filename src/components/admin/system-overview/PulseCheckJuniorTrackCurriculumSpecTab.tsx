@@ -160,6 +160,25 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
         />
       </SectionBlock>
 
+      <SectionBlock icon={BookOpenCheck} title="Module Interactivity Rebuild (2026-07-13)">
+        <DataTable
+          columns={['Mechanic', 'Modules', 'How it trains']}
+          rows={[
+            ['choiceDrill', 'Adversity Response, both Reframes, Process Over Outcome, Growth Mindset', 'Scenario, bounded choices, coaching feedback per pick, optional timed decision window for automaticity.'],
+            ['guidedDwell', 'Highlight Reel, Competition Walkthrough, Evidence Journal, Confidence Inventory, Affirmations', 'Pick N chips, then a paced timed dwell on each pick, then a close line.'],
+            ['lockedReplay', 'Perfect Execution Replay', 'Scene setup, then N timed mental run-throughs with a "Lock It In" tap at the key moment.'],
+          ]}
+        />
+        <BulletList
+          items={[
+            'Why: 11 of 26 modules played as passive read-and-tap-Next step lists; 5 junior lessons ran on the 3 passive visualization modules. The interaction config on the module doc replaces that renderer on iOS (InteractiveModuleContent.swift) and Android (JuniorInteractivePlayer).',
+            'Every input is a bounded chip, extending the junior no-free-text rule across the pro track for these modules. Modules with an interaction config never route to the Nora chat handoff: the drill is the training.',
+            'Rollout: click "Sync Module Copy" on /admin/juniorCurriculum (writes interaction to both sim-modules and mental-exercises), then regenerate narrations on /admin/ai-voice (interaction prompts and feedback lines are pre-generated; retired per-step clips drop out of coverage automatically).',
+            'Known gap: the web /mental-training player still renders these modules as prompt steps.',
+          ]}
+        />
+      </SectionBlock>
+
       <SectionBlock icon={ShieldCheck} title="Open Safety Items">
         <BulletList
           items={[

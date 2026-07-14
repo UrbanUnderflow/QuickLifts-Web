@@ -127,6 +127,83 @@ export interface SimBuildArtifact {
   sourceFingerprint: string;
 }
 
+// ============================================================================
+// MODULE INTERACTION (in-player interactive mechanics)
+// ============================================================================
+// Replaces passive "read a step, tap Next" playback for visualization,
+// mindset, and confidence modules with a real in-player drill. A module WITH
+// an `interaction` config renders the mechanic instead of PromptExerciseContent
+// and never routes to the Nora chat handoff — the drill IS the training.
+// All choices are bounded (no free text), which keeps the youth track safe.
+
+/** One selectable answer inside a choiceDrill round. */
+export type ModuleInteractionChoice = {
+  text: string;
+  /** True for the choice that trains the skill (the reset, the reframe, the correct sort). */
+  isTarget?: boolean;
+  /** Short coaching line shown (and spoken) after this choice is picked. */
+  feedback?: string;
+};
+
+/** One scenario in a choiceDrill. */
+export type ModuleInteractionRound = {
+  prompt: string;
+  choices: ModuleInteractionChoice[];
+  /** Optional decision window; when set the round is timed for automaticity. */
+  windowSeconds?: number;
+};
+
+export type ModuleInteractionKind = 'choiceDrill' | 'guidedDwell' | 'lockedReplay';
+
+export type ModuleInteraction = {
+  kind: ModuleInteractionKind;
+  // choiceDrill: scenario -> bounded choices -> coaching feedback, xN rounds.
+  rounds?: ModuleInteractionRound[];
+  // guidedDwell: pick N chips, then a paced timed dwell on each pick.
+  pickPrompt?: string;
+  pickChoices?: string[];
+  pickCount?: number;
+  dwellSeconds?: number;
+  /** Static per-dwell guidance (narrated once per dwell; the picked chip is shown on screen). */
+  dwellPrompt?: string;
+  // lockedReplay: short setup, then N timed mental run-throughs with a lock tap.
+  setupPrompts?: string[];
+  loops?: number;
+  loopSeconds?: number;
+  loopPrompt?: string;
+  /** Label on the lock button, e.g. "Lock It In". */
+  lockCue?: string;
+  /** Closing line for guidedDwell and lockedReplay (narrated). */
+  closePrompt?: string;
+};
+
+// ============================================================================
+// MODULE REFLECTION (post-session probing questions)
+// ============================================================================
+// Asked at the END of every module, before the mood check: 1-2 bounded
+// questions that measure how effective the module was and where the athlete
+// feels weakest. Scale questions render as 1-10 chips; choice questions as
+// authored chips. No free text on any track. Answers persist on the
+// completion record keyed by question id, so effectiveness is queryable
+// per module over time.
+
+export type ModuleReflectionQuestion = {
+  /** Stable key the answer is stored under in the completion record. */
+  id: string;
+  /** Athlete-facing question, written to be spoken by Nora. */
+  prompt: string;
+  kind: 'scale' | 'choice';
+  /** kind 'choice': the bounded answer chips. */
+  choices?: string[];
+  /** kind 'scale': anchor labels for 1 and 10. */
+  scaleLowLabel?: string;
+  scaleHighLabel?: string;
+};
+
+export type ModuleReflection = {
+  questions: ModuleReflectionQuestion[];
+};
+
 /**
  * SimModule - A reusable simulation module template
  * Collection: sim-modules
@@ -144,6 +221,11 @@ export interface MentalExercise {
   origin: string; // Who uses this technique — e.g., 'Navy SEALs', 'Stanford Neuroscience Lab'
   neuroscience: string; // The science behind why this works
   overview: ExerciseOverview; // Quick-glance table for athlete understanding
+  /** In-player interactive mechanic. When present, the players render this
+   *  instead of passive prompt playback and skip the Nora chat handoff. */
+  interaction?: ModuleInteraction;
+  /** Post-session probing questions, asked before the mood check. */
+  reflection?: ModuleReflection;
   iconName: string;
   isActive: boolean;
   sortOrder: number;
@@ -1680,6 +1762,12 @@ export function exerciseToFirestore(exercise: MentalExercise): Record<string, an
     updatedAt: exercise.updatedAt,
   };
 
+  if (exercise.interaction) {
+    data.interaction = exercise.interaction;
+  }
+  if (exercise.reflection) {
+    data.reflection = exercise.reflection;
+  }
   if (exercise.simSpecId) {
     data.simSpecId = exercise.simSpecId;
   }

@@ -33,7 +33,7 @@ function spec(
 
 export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
   spec('regulation-acute_downshift', {
-    label: 'Physiological Sigh',
+    label: 'Double-Breath Reset',
     variantKey: 'physiological-sigh',
     category: ExerciseCategory.Breathing,
     deliveryMode: 'guided_breathing',

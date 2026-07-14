@@ -710,6 +710,7 @@ const grantStages: StageConfig[] = [
   { id: 'submitted', label: 'Submitted', probability: 55, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
   { id: 'finalist', label: 'Finalist', probability: 75, track: 'general', tone: 'bg-orange-50 text-orange-700 border-orange-100' },
   { id: 'awarded', label: 'Awarded', probability: 100, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'ineligible', label: 'Ineligible', probability: 0, track: 'general', tone: 'bg-rose-50 text-rose-700 border-rose-100', outcome: 'lost' },
   { id: 'declined', label: 'Declined', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 

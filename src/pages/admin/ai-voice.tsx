@@ -3551,9 +3551,11 @@ const AdminAiVoice: React.FC = () => {
 
                 <div className="mb-4 rounded-xl border border-sky-700/40 bg-sky-950/30 px-4 py-3 text-xs leading-relaxed text-sky-200">
                   Clips are matched to playback by an exact hash of the spoken text. If a module's copy or config changes,
-                  its clips show as stale/missing here — regenerate them. Engine in-run cues that contain live state
-                  (round counters, scores) remain live TTS by design. Changing the Nora voice on the Voice tab does not
-                  retroactively update stored clips; regenerate after a voice change.
+                  its clips show as stale/missing here — regenerate them. Static in-sim rule readouts and Reset game
+                  phase cues are pre-generated; only cues containing live state (round counters, scores, "Rep X of Y"
+                  practice lines, sim summaries) remain live TTS by design. Sims running a custom build artifact whose
+                  name or athlete description differs from the seed fall back to live TTS for their intro. Changing the
+                  Nora voice on the Voice tab does not retroactively update stored clips; regenerate after a voice change.
                 </div>
 
                 {moduleNarrationLoadError && (

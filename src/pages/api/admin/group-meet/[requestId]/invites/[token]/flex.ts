@@ -1,6 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin, { getFirebaseAdminApp } from '../../../../../../../lib/firebase-admin';
-import { computeGroupMeetAnalysis } from '../../../../../../../lib/groupMeet';
+import {
+  computeGroupMeetAnalysis,
+  resolveGroupMeetStatusFromInvites,
+} from '../../../../../../../lib/groupMeet';
 import {
   buildGroupMeetManualFlexPreview,
   getGroupMeetEasternDateKey,
@@ -83,6 +86,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const requestData = requestDoc.data() || {};
+    if (
+      requestData.status === 'closed' ||
+      requestData.finalSelection ||
+      requestData.calendarInvite
+    ) {
+      return res.status(409).json({
+        error:
+          'This Group Meet request already has a final meeting time, so flex requests are disabled.',
+      });
+    }
+
     const targetMonth = typeof requestData.targetMonth === 'string' ? requestData.targetMonth : '';
     const meetingDurationMinutes = Math.max(15, Number(requestData.meetingDurationMinutes) || 30);
     const invitesSnapshot = await requestRef
@@ -90,6 +104,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .orderBy('createdAt', 'asc')
       .get();
     const invites = invitesSnapshot.docs.map((docSnap) => mapGroupMeetInviteDetail(docSnap, targetMonth));
+    const resolvedStatus = resolveGroupMeetStatusFromInvites(
+      toIso(requestData.deadlineAt),
+      requestData.status,
+      invites,
+      {
+        finalSelection: requestData.finalSelection || null,
+        calendarInvite: requestData.calendarInvite || null,
+      },
+    );
+    if (resolvedStatus !== 'collecting') {
+      return res.status(409).json({
+        error: 'Flex requests can only be sent while this Group Meet request is collecting availability.',
+      });
+    }
+
     const invite = invites.find((entry) => entry.token === token) || null;
     const inviteDoc = invitesSnapshot.docs.find((docSnap) => docSnap.id === token) || null;
     const rawInviteData = inviteDoc?.data() || {};

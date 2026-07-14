@@ -626,3 +626,5 @@
 # Macra: pull AppsFlyer installs + in-app events (raw-data Pull API, last 7 days) for the retargeting scoreboard
 [functions.scheduled-sync-macra-appsflyer]
   schedule = "30 6 * * *"  # Daily at 6:30 AM UTC
+[functions."pipelists-deadline-reminders"]
+  schedule = "0 14 * * *"

@@ -56,7 +56,7 @@ const PATHWAY_SEQUENCES: Record<MentalPathway, { exerciseId: string; name: strin
     { exerciseId: 'breathing-box', name: 'Box Breathing' },
   ],
   [MentalPathway.ArousalMastery]: [
-    { exerciseId: 'breathing-physiological-sigh', name: 'Physiological Sigh' },
+    { exerciseId: 'breathing-physiological-sigh', name: 'Double-Breath Reset' },
     { exerciseId: 'breathing-arousal-control', name: 'Arousal Control Breathing' },
     { exerciseId: 'breathing-recovery', name: 'Recovery Breathing' },
   ],
@@ -434,7 +434,7 @@ export const recommendationService = {
         name: 'Arousal Mastery',
         description: 'For athletes whose primary challenge is anxiety or energy management',
         exerciseSequence: [
-          { step: 1, exerciseId: 'breathing-physiological-sigh', exerciseName: 'Physiological Sigh', weeksRange: '5-6', isFoundation: true, isApplication: false },
+          { step: 1, exerciseId: 'breathing-physiological-sigh', exerciseName: 'Double-Breath Reset', weeksRange: '5-6', isFoundation: true, isApplication: false },
           { step: 2, exerciseId: 'breathing-arousal-control', exerciseName: 'Arousal Control Breathing', weeksRange: '7-8', isFoundation: true, isApplication: true },
           { step: 3, exerciseId: 'breathing-recovery', exerciseName: 'Recovery Breathing', weeksRange: '9-10', isFoundation: false, isApplication: true },
         ],

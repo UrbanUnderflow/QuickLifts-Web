@@ -1,7 +1,7 @@
 [
   {
     "id": "protocol-physiological-sigh",
-    "label": "Physiological Sigh",
+    "label": "Double-Breath Reset",
     "legacyExerciseId": "breathing-physiological-sigh",
     "protocolClass": "regulation",
     "category": "breathing",

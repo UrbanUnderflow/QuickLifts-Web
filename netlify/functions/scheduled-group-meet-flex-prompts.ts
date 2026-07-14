@@ -47,6 +47,14 @@ export async function runScheduledGroupMeetFlexPrompts(now = new Date()) {
       continue;
     }
 
+    if (
+      requestData.status === 'closed' ||
+      requestData.finalSelection ||
+      requestData.calendarInvite
+    ) {
+      continue;
+    }
+
     const invitesSnapshot = await requestDoc.ref
       .collection(GROUP_MEET_INVITES_SUBCOLLECTION)
       .orderBy('createdAt', 'asc')
@@ -58,7 +66,15 @@ export async function runScheduledGroupMeetFlexPrompts(now = new Date()) {
     const invites = invitesSnapshot.docs.map((docSnap) =>
       mapGroupMeetInviteDetail(docSnap, targetMonth)
     );
-    const resolvedStatus = resolveGroupMeetStatusFromInvites(deadlineAt, requestData.status, invites);
+    const resolvedStatus = resolveGroupMeetStatusFromInvites(
+      deadlineAt,
+      requestData.status,
+      invites,
+      {
+        finalSelection: requestData.finalSelection || null,
+        calendarInvite: requestData.calendarInvite || null,
+      }
+    );
 
     if (resolvedStatus !== 'collecting') {
       continue;

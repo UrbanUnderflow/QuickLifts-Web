@@ -2,6 +2,23 @@ import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import * as admin from 'firebase-admin';
 import { recordAthleteReply } from '../../src/api/firebase/noraConversation/orchestrator';
+import { translateForAthlete } from '../../src/api/firebase/adaptiveFramingLayer/translationService';
+
+// Hard time budget for the Claude translation on the reply path. The
+// synchronous Netlify function caps at ~10s; a cold start plus a full
+// model generation was blowing through it, so the athlete saw "That
+// didn't send" even though nothing was wrong with their reply. If the
+// model can't answer inside the budget, the orchestrator's authored
+// fallback action line delivers instead — the reply is never lost.
+const TRANSLATE_BUDGET_MS = 3500;
+
+const timeBudgetedTranslate: typeof translateForAthlete = (input, deps) =>
+  Promise.race([
+    translateForAthlete(input, deps),
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), TRANSLATE_BUDGET_MS);
+    }),
+  ]) as ReturnType<typeof translateForAthlete>;
 
 /**
  * POST /.netlify/functions/nora-athlete-reply
@@ -52,7 +69,7 @@ export const handler: Handler = async (event) => {
   }
 
   await initAdmin();
-  const db = getFirestore();
+  const db = await getFirestore();
 
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
   const auth = await verifyAuth(authHeader);
@@ -91,7 +108,7 @@ export const handler: Handler = async (event) => {
   try {
     const updated = await recordAthleteReply(
       { conversationId, text },
-      { firestore: db },
+      { firestore: db, translate: timeBudgetedTranslate },
     );
     return { statusCode: 200, headers: RESPONSE_HEADERS, body: JSON.stringify({ ok: true, conversation: updated }) };
   } catch (err: any) {

@@ -100,7 +100,7 @@ const sendNotification = async (
 
 export const handler: Handler = async () => {
   await initAdmin();
-  const db = getFirestore();
+  const db = await getFirestore();
   const messaging = (await import('firebase-admin')).messaging();
   const nowUtc = new Date();
 

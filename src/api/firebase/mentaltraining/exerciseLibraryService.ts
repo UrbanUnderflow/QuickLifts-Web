@@ -329,7 +329,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'breathing-box',
     name: 'Box Breathing',
-    description: 'A 4-phase breathing pattern used by Navy SEALs and elite athletes to calm the nervous system and sharpen focus. Equal inhale, hold, exhale, and hold phases create a rhythmic cycle that overrides the body\'s fight-or-flight response within minutes.',
+    description: 'Breathe in, hold, breathe out, hold. Navy SEALs and elite athletes use this square pattern to calm down and lock in. A few rounds quiet your body\'s alarm system.',
     category: ExerciseCategory.Breathing,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 4,
@@ -341,7 +341,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
           { name: 'inhale', duration: 4, instruction: 'Breathe in slowly through your nose' },
           { name: 'hold', duration: 4, instruction: 'Hold your breath gently' },
           { name: 'exhale', duration: 4, instruction: 'Exhale slowly through your mouth' },
-          { name: 'holdEmpty', duration: 4, instruction: 'Hold empty' },
+          { name: 'holdEmpty', duration: 4, instruction: 'Hold, lungs empty' },
         ],
         cycles: 6,
         totalDuration: 240,
@@ -350,17 +350,22 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     benefits: [
       'Reduces stress and anxiety',
       'Improves focus and concentration',
-      'Activates parasympathetic nervous system',
+      'Flips on your body\'s calm-down system',
       'Can be done anywhere',
     ],
     bestFor: ['pre-competition', 'anxiety', 'between sets', 'anger management'],
+    reflection: {
+      questions: [
+        { id: 'calm-level', prompt: 'How calm is your body right now?', kind: 'scale', scaleLowLabel: 'Still wired', scaleHighLabel: 'Fully calm' },
+      ],
+    },
     origin: 'Developed and used by U.S. Navy SEALs during BUD/S training and combat operations. Former Navy SEAL Commander Mark Divine popularized the technique, crediting it as a core tool for maintaining composure under extreme pressure. Now standard practice across Special Operations, FBI Hostage Rescue Teams, and elite athletic programs.',
     neuroscience: 'The equal-phase breathing pattern stimulates the vagus nerve, directly activating the parasympathetic nervous system and lowering cortisol levels within 90 seconds. The breath-hold phases increase CO₂ tolerance, which reduces the brain\'s panic threshold. fMRI studies show Box Breathing decreases amygdala reactivity (the brain\'s fear center) while increasing prefrontal cortex activity — the region responsible for decision-making under pressure.',
     overview: {
       when: 'Pre-competition, between sets, or during acute stress',
       focus: 'Calming the nervous system and sharpening mental clarity',
       timeScale: '4 minutes (6 cycles)',
-      skill: 'Autonomic nervous system regulation',
+      skill: 'Steadying your whole system on command',
       analogy: 'Like hitting the reset button on a frozen computer — it clears the system and restores control',
     },
     iconName: 'square',
@@ -371,8 +376,8 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   },
   {
     id: 'breathing-physiological-sigh',
-    name: 'Physiological Sigh',
-    description: 'The fastest known way to reduce stress in real-time. A double inhale followed by a long exhale mimics the body\'s natural calming reflex — the same involuntary pattern your body uses during deep sleep to reset blood oxygen levels.',
+    name: 'Double-Breath Reset',
+    description: 'The fastest known way to calm down in the moment. Two breaths in, one long breath out. It copies the reset your body does on its own in deep sleep. Sport science calls it the physiological sigh.',
     category: ExerciseCategory.Breathing,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 2,
@@ -392,10 +397,15 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     benefits: [
       'Fastest stress relief technique',
       'Works in 1-3 breaths',
-      'Backed by Stanford neuroscience research',
-      'Perfect for acute anxiety',
+      'Backed by Stanford research',
+      'Great when nerves spike fast',
     ],
     bestFor: ['immediate stress relief', 'panic', 'right before competing', 'racing heart'],
+    reflection: {
+      questions: [
+        { id: 'calm-level', prompt: 'How calm is your body right now?', kind: 'scale', scaleLowLabel: 'Still wired', scaleHighLabel: 'Fully calm' },
+      ],
+    },
     origin: 'Discovered by Stanford University neuroscientist Dr. Andrew Huberman and published in Cell Reports Medicine (2023). The study was the first controlled trial to prove that a specific breathing pattern outperforms meditation for real-time stress reduction. Now adopted by U.S. Olympic training programs and professional sports teams.',
     neuroscience: 'The double inhale maximally inflates the alveoli (tiny air sacs in the lungs), which offloads CO₂ more efficiently than a single breath. The extended exhale activates the parasympathetic nervous system via the vagus nerve. In Huberman\'s clinical trial, just 5 minutes of cyclic sighing produced the greatest reduction in resting heart rate and self-reported anxiety compared to box breathing, meditation, and mindfulness — making it the most efficient stress-reduction tool ever measured in a laboratory setting.',
     overview: {
@@ -414,7 +424,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'breathing-478',
     name: '4-7-8 Relaxation Breathing',
-    description: 'A powerful relaxation technique with a 4-7-8 pattern. The extended exhale and prolonged hold phases activate the body\'s deepest relaxation response — often called a "natural tranquilizer for the nervous system."',
+    description: 'Breathe in for 4, hold for 7, out for 8. The long hold and slow exhale switch on your body\'s deepest calm. Built for winding down.',
     category: ExerciseCategory.Breathing,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 5,
@@ -438,13 +448,18 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Calms racing thoughts',
     ],
     bestFor: ['evening wind-down', 'sleep prep', 'deep relaxation', 'post-competition'],
+    reflection: {
+      questions: [
+        { id: 'calm-level', prompt: 'How calm is your body right now?', kind: 'scale', scaleLowLabel: 'Still wired', scaleHighLabel: 'Fully calm' },
+      ],
+    },
     origin: 'Developed by Dr. Andrew Weil, integrative medicine pioneer at the University of Arizona, based on pranayama — the ancient yogic discipline of breath regulation practiced for over 3,000 years. Used by military personnel for sleep optimization and by professional athletes for post-competition wind-down and sleep quality improvement.',
     neuroscience: 'The 4-7-8 ratio creates an exhale-dominant breathing cycle that shifts the autonomic nervous system from sympathetic (fight-or-flight) to parasympathetic (rest-and-digest). The 7-second hold increases CO₂ in the bloodstream, which paradoxically relaxes smooth muscle tissue throughout the body. Research shows this pattern reduces norepinephrine levels (the brain\'s alertness chemical) within 4 cycles, making it one of the most effective non-pharmaceutical sleep aids available.',
     overview: {
       when: 'Evening wind-down, post-competition, or when sleep is critical',
       focus: 'Deep relaxation and sleep preparation',
       timeScale: '5 minutes (4 cycles)',
-      skill: 'Parasympathetic activation for recovery',
+      skill: 'Switching on recovery mode',
       analogy: 'Like dimming all the lights in a house before bed — each cycle turns off another system',
     },
     iconName: 'moon',
@@ -456,7 +471,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'breathing-activation',
     name: 'Activation Breathing',
-    description: 'Short, powerful inhale-dominant breaths designed to increase energy, arousal, and readiness before competition. The opposite of calming breathwork — this activates your system when you need to come alive.',
+    description: 'Short, strong breaths that bring your energy up before you compete. The opposite of calming breathing: this wakes your whole system up when you feel flat.',
     category: ExerciseCategory.Breathing,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 2,
@@ -474,18 +489,23 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     },
     benefits: [
       'Increases energy and alertness',
-      'Activates sympathetic nervous system',
+      'Turns your energy dial up',
       'Gets you "amped up"',
       'Good for heavy lifts',
     ],
     bestFor: ['feeling flat', 'pre-heavy lift', 'activation', 'need energy'],
+    reflection: {
+      questions: [
+        { id: 'energy-level', prompt: 'How much energy do you have right now?', kind: 'scale', scaleLowLabel: 'Still flat', scaleHighLabel: 'Fired up' },
+      ],
+    },
     origin: 'Derived from Wim Hof Method breathing and Tummo (inner fire) meditation practiced by Tibetan monks. Wim Hof — known as "The Iceman" — used this technique to climb Mount Everest in shorts and run a marathon in the Arctic barefoot. Adapted by military special operations units and combat athletes for pre-engagement arousal control.',
     neuroscience: 'Inhale-dominant breathing deliberately activates the sympathetic nervous system, increasing adrenaline and norepinephrine release. The short, forceful exhales prevent over-oxygenation while driving up heart rate and core body temperature. Research published in PNAS (2014) demonstrated that practitioners of this technique could voluntarily influence their innate immune response and adrenaline levels — something previously thought impossible by modern medicine.',
     overview: {
       when: 'Pre-competition when energy is low, before heavy lifts, or when you feel flat',
-      focus: 'Increasing energy, arousal, and competitive fire',
+      focus: 'Raising energy and competitive fire',
       timeScale: '2 minutes (15 cycles)',
-      skill: 'Voluntary arousal activation',
+      skill: 'Turning your energy up on command',
       analogy: 'Like revving an engine before a drag race — controlled power on demand',
     },
     iconName: 'zap',
@@ -497,7 +517,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'breathing-recovery',
     name: 'Recovery Breathing',
-    description: 'Post-competition or post-workout breathing designed to accelerate your body\'s return to baseline. Systematically clears residual adrenaline and cortisol so your recovery window begins immediately.',
+    description: 'For after games and hard training. Slow breathing that clears out the stress your body built up so recovery starts right away.',
     category: ExerciseCategory.Breathing,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 5,
@@ -514,12 +534,17 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       },
     },
     benefits: [
-      'Accelerates recovery',
-      'Clears stress hormones',
-      'Returns body to baseline',
-      'Helps process performance',
+      'Speeds up recovery',
+      'Clears leftover stress',
+      'Brings your body back to steady',
+      'Helps you let the game go',
     ],
     bestFor: ['post-competition', 'post-workout', 'recovery', 'coming down'],
+    reflection: {
+      questions: [
+        { id: 'recovery-level', prompt: 'How settled does your body feel right now?', kind: 'scale', scaleLowLabel: 'Still revved', scaleHighLabel: 'Back to steady' },
+      ],
+    },
     origin: 'Standard protocol in U.S. military post-mission debrief sequences and used by Formula 1 drivers after races to accelerate physiological recovery. The exhale-dominant ratio is modeled on techniques from the Russian Special Forces (Spetsnaz) Systema training system, which emphasizes breath-led recovery under operational stress.',
     neuroscience: 'The extended exhale-to-inhale ratio (nearly 2:1) rapidly downregulates the sympathetic nervous system and accelerates cortisol clearance from the bloodstream. Research from the Journal of Sports Science & Medicine shows that structured post-exercise breathing reduces heart rate recovery time by up to 30% and lowers salivary cortisol levels significantly faster than passive rest alone. This accelerates the body\'s transition from catabolic (breakdown) to anabolic (repair) states.',
     overview: {
@@ -542,7 +567,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'viz-competition-walkthrough',
     name: 'Competition Walkthrough',
-    description: 'A detailed mental rehearsal of an upcoming competition from arrival to completion. You experience the entire event before it happens — the venue, the energy, the crowd, and your flawless execution — building familiarity that eliminates surprise on game day.',
+    description: 'Walk through your whole competition day in your head before it happens: the arrival, the warm-up, the first play. When game day comes, your brain has already been there, so nothing feels new.',
     category: ExerciseCategory.Visualization,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 10,
@@ -557,9 +582,9 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
           'Move to your warm-up area. Begin your routine. Feel your body loosening up.',
           'Notice your confidence building with each movement.',
           'See yourself stepping up to compete. Feel the equipment in your hands.',
-          'Execute your performance perfectly. See every detail of your technique.',
+          'Run your performance perfectly. See every detail.',
           'Feel the satisfaction of successful execution.',
-          'See yourself responding with composure regardless of outcome.',
+          'See yourself staying calm no matter how it goes.',
         ],
         imageryType: 'competition',
         duration: 600,
@@ -567,11 +592,32 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     },
     benefits: [
       'Reduces novelty and anxiety',
-      'Builds neural pathways',
+      'Builds game-day familiarity',
       'Increases familiarity with venue',
       'Improves confidence',
     ],
     bestFor: ['competition prep', '3-7 days out', 'new venue', 'big events'],
+    reflection: {
+      questions: [
+        { id: 'image-clarity', prompt: 'How clearly could you see the scenes?', kind: 'scale', scaleLowLabel: 'Fuzzy', scaleHighLabel: 'Like a movie' },
+      ],
+    },
+    interaction: {
+      kind: 'guidedDwell',
+      pickPrompt: 'Pick the three parts of competition day you want to walk through in detail.',
+      pickChoices: [
+        'Arriving at the venue',
+        'Warming up',
+        'The moments right before I compete',
+        'Executing my first play',
+        'Handling a mistake',
+        'Closing it out strong',
+      ],
+      pickCount: 3,
+      dwellSeconds: 30,
+      dwellPrompt: 'Build the scene around you. What do you see? What do you hear? Walk through it like you are already there.',
+      closePrompt: 'You have already been here in your mind. On game day, nothing will feel new.',
+    },
     origin: 'Used by Navy SEALs before every mission (called "dirt diving" — mentally rehearsing every phase of an operation). Fighter pilots call it "chair flying" — sitting in a chair and mentally flying an entire sortie before entering the cockpit. Michael Phelps\' coach Bob Bowman had him visualize every race nightly for years, including scenarios where things went wrong (his goggles filled with water at the 2008 Olympics — he still won gold because he had already "done it" in his mind).',
     neuroscience: 'The brain fires the exact same neural pathways during vivid visualization as during physical execution — a phenomenon called "functional equivalence." MRI studies show that mental rehearsal activates the motor cortex, premotor cortex, and supplementary motor areas at nearly identical levels to real movement. Research from the Journal of Neurophysiology found that athletes who combined physical practice with mental rehearsal showed 35% greater strength gains than those who only trained physically. Your brain literally cannot distinguish between a vividly imagined experience and a real one.',
     overview: {
@@ -590,7 +636,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'viz-perfect-execution',
     name: 'Perfect Execution Replay',
-    description: 'Mental rehearsal of a specific skill performed perfectly. Each mental rep reinforces correct neural pathways, overwrites bad muscle memory, and builds the kind of deep confidence that comes from repetition — even when your body is resting.',
+    description: 'Practice one skill perfectly in your head. Every perfect mental run makes the pattern stronger in your brain, replaces old mistakes, and builds real confidence, even while your body rests.',
     category: ExerciseCategory.Visualization,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 5,
@@ -601,7 +647,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
           'Close your eyes and take three calming breaths.',
           'Choose one specific skill you want to perfect.',
           'See yourself in the starting position.',
-          'Execute the movement at real-time speed in your mind.',
+          'Run the movement at game speed in your mind.',
           'Feel every part - the tension, the release, the timing.',
           'See the successful result.',
           'Feel the satisfaction of perfect execution.',
@@ -614,17 +660,35 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     benefits: [
       'Reinforces technique',
       'Builds muscle memory',
-      'Overwrites bad reps',
-      'Maintains skills during injury',
+      'Replaces old mistakes',
+      'Keeps skills sharp while injured',
     ],
     bestFor: ['before training', 'after mistakes', 'injury rehab', 'skill refinement'],
+    reflection: {
+      questions: [
+        { id: 'run-quality', prompt: 'How clean were your mental runs?', kind: 'scale', scaleLowLabel: 'Choppy', scaleHighLabel: 'Perfect' },
+        { id: 'breakdown-spot', prompt: 'Where did the replay break down?', kind: 'choice', choices: ['The start', 'The key moment', 'The finish', 'It didn\'t'] },
+      ],
+    },
+    interaction: {
+      kind: 'lockedReplay',
+      setupPrompts: [
+        'Choose one specific skill you want to perfect. One movement, not a whole game.',
+        'See yourself in the starting position. Build the scene: the surface under you, the sounds around you.',
+      ],
+      loops: 5,
+      loopSeconds: 20,
+      loopPrompt: 'Run the movement in your mind at real speed. When you hit the key moment perfectly, lock it in.',
+      lockCue: 'Lock It In',
+      closePrompt: 'Five perfect runs, locked in. Your brain just practiced winning.',
+    },
     origin: 'Core technique in Soviet-era sports psychology programs that dominated Olympic competition for decades. Soviet researchers discovered that athletes who spent 75% of their time on mental rehearsal and 25% on physical training outperformed those who trained only physically. Now a foundational practice for NFL quarterbacks (Tom Brady, Peyton Manning), NBA shooters, and Olympic gymnasts worldwide.',
     neuroscience: 'Mental repetition strengthens the same synaptic connections as physical repetition through a process called Hebbian learning ("neurons that fire together, wire together"). A landmark study in the Journal of Neurophysiology found that mental practice alone produced a 22% increase in muscle strength, compared to 30% for physical practice — meaning mental reps are roughly 73% as effective as real ones. For injured athletes, mental rehearsal prevents neural pathway degradation and can maintain up to 50% of skill proficiency during recovery.',
     overview: {
       when: 'Before training, after mistakes, or during injury recovery',
       focus: 'Reinforcing perfect technique through mental repetition',
-      timeScale: '5 minutes (5-10 mental reps)',
-      skill: 'Neural pathway reinforcement',
+      timeScale: '5 minutes (5-10 mental run-throughs)',
+      skill: 'Locking in perfect technique',
       analogy: 'Like tracing the same pencil line over and over — each pass makes the groove deeper and more permanent',
     },
     iconName: 'target',
@@ -636,7 +700,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'viz-highlight-reel',
     name: 'Highlight Reel',
-    description: 'A mental compilation of your greatest performances and achievements. Instead of hoping you\'ll perform well, you replay concrete evidence that you already have — building unshakable confidence grounded in fact, not wishful thinking.',
+    description: 'Your greatest moments, replayed on demand. Instead of hoping you\'ll play well, you replay proof that you already have. Confidence built on facts.',
     category: ExerciseCategory.Visualization,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 5,
@@ -645,12 +709,12 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       config: {
         prompts: [
           'Close your eyes and take three calming breaths.',
-          'Think of 5 of your best performance moments.',
+          'Think of 3 of your best performance moments.',
           'Replay the first moment vividly - see, hear, feel everything.',
-          'Linger on the feeling of success for 30 seconds.',
+          'Stay with the feeling of success for 30 seconds.',
           'Move to the next moment. Same vivid detail.',
           'Connect all the moments: "This is who I am. This is what I\'m capable of."',
-          'Open your eyes carrying that feeling of capability.',
+          'Open your eyes and carry that feeling with you.',
         ],
         imageryType: 'highlight',
         duration: 300,
@@ -658,17 +722,38 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     },
     benefits: [
       'Builds confidence',
-      'Reminds you of capability',
-      'Evidence-based self-belief',
+      'Reminds you what you can do',
+      'Belief built on proof',
       'Counters self-doubt',
     ],
     bestFor: ['low confidence', 'before competition', 'after setbacks', 'injury recovery'],
+    reflection: {
+      questions: [
+        { id: 'confidence-level', prompt: 'How strong is your confidence right now?', kind: 'scale', scaleLowLabel: 'Shaky', scaleHighLabel: 'Unshakable' },
+      ],
+    },
+    interaction: {
+      kind: 'guidedDwell',
+      pickPrompt: 'Pick three moments when you played your best. Choose the ones you can still see clearly.',
+      pickChoices: [
+        'A game I won',
+        'A skill I finally landed',
+        'A moment my team counted on me',
+        'A comeback after a mistake',
+        'A practice where everything clicked',
+        'A time I stayed calm under pressure',
+      ],
+      pickCount: 3,
+      dwellSeconds: 25,
+      dwellPrompt: 'Put yourself back inside this moment. See it. Hear it. Feel what it felt like in your body.',
+      closePrompt: 'Those moments are proof. This is who you are. Carry that feeling with you today.',
+    },
     origin: 'Used extensively by sports psychologists working with U.S. Olympic teams and Cirque du Soleil performers. Dr. Michael Gervais — performance psychologist for the Seattle Seahawks and Red Bull Stratos (Felix Baumgartner\'s space jump) — credits the Highlight Reel as one of the most reliable confidence-building tools in elite sport. LeBron James and Kobe Bryant were known to mentally replay their best moments before high-stakes games.',
     neuroscience: 'Reliving peak performances triggers the release of dopamine and serotonin — the same neurochemicals produced during the original experience. This creates a positive feedback loop: the brain associates your identity with success rather than anxiety. Research from the University of Chicago shows that vivid recall of past successes activates the ventromedial prefrontal cortex, which is directly responsible for self-concept and belief formation. Over time, this literally rewires your brain\'s default narrative about who you are as a competitor.',
     overview: {
       when: 'Before competition, after setbacks, or when confidence is low',
       focus: 'Replaying proof of your capability to build unshakable belief',
-      timeScale: '5 minutes (5 peak moments)',
+      timeScale: '5 minutes (3 peak moments)',
       skill: 'Evidence-based confidence building',
       analogy: 'Like watching your own game-winning highlight reel before stepping onto the field',
     },
@@ -681,7 +766,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'viz-adversity-response',
     name: 'Adversity Response Imagery',
-    description: 'Mental rehearsal of how you\'ll respond when things go wrong. Like a vaccine for stress — you give your brain controlled doses of adversity in a safe environment so when real adversity hits on game day, the neural pathways are already built and your response is automatic.',
+    description: 'Practice your comeback before you need it. Like a vaccine for stress: your brain gets small, safe doses of things going wrong, so when it happens for real your response is already automatic.',
     category: ExerciseCategory.Visualization,
     difficulty: ExerciseDifficulty.Advanced,
     durationMinutes: 8,
@@ -690,13 +775,13 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       config: {
         prompts: [
           'Close your eyes. Think of 3 things that could go wrong in competition.',
-          'For each scenario, visualize: The problem occurring...',
-          'Your initial reaction - notice it, don\'t fight it.',
-          'Your centering breath.',
+          'See the problem happening.',
+          'Notice your first reaction. Don\'t fight it.',
+          'Take your reset breath.',
           'Your positive self-talk response.',
-          'Your refocused attention.',
+          'Bring your focus back.',
           'Your successful recovery.',
-          'Always end with successful performance despite adversity.',
+          'Always end with you finishing strong anyway.',
         ],
         imageryType: 'adversity',
         duration: 480,
@@ -706,9 +791,73 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Prepares for "what ifs"',
       'Builds resilience',
       'Reduces anxiety about failure',
-      'Creates recovery plans',
+      'Gives you a comeback plan',
     ],
     bestFor: ['competition prep', 'anxiety about what ifs', 'after setbacks', 'building resilience'],
+    reflection: {
+      questions: [
+        { id: 'readiness', prompt: 'How ready do you feel for things going wrong?', kind: 'scale', scaleLowLabel: 'Not ready', scaleHighLabel: 'Bring it on' },
+      ],
+    },
+    interaction: {
+      kind: 'choiceDrill',
+      rounds: [
+        {
+          prompt: 'First play of the game and you make a mistake everyone sees. What is your next move?',
+          choices: [
+            {
+              text: 'Take one slow breath and reset my focus',
+              isTarget: true,
+              feedback: 'That is the reset. One breath, and the next play is all that exists.',
+            },
+            {
+              text: 'Replay the mistake to figure out what went wrong',
+              feedback: 'That keeps you stuck in the last play. Reset first, review after the game.',
+            },
+            {
+              text: 'Go extra hard to make up for it right away',
+              feedback: 'Forcing it usually stacks a second mistake on the first. Reset, then attack.',
+            },
+          ],
+        },
+        {
+          prompt: 'The referee makes a call you know is wrong. Your frustration is rising. What do you do?',
+          choices: [
+            {
+              text: 'Breathe, drop my shoulders, next play',
+              isTarget: true,
+              feedback: 'Calls will go against you. The athletes who reset fastest win the next play.',
+            },
+            {
+              text: 'Argue so they get the next call right',
+              feedback: 'The call is done. Arguing spends focus the next play needs.',
+            },
+            {
+              text: 'Hold onto it and think about it all game',
+              feedback: 'Carrying it splits your attention for the rest of the game. Let the reset clear it.',
+            },
+          ],
+        },
+        {
+          prompt: 'It is late in the game and your body is tired. Your team needs one more play from you. What is your response?',
+          choices: [
+            {
+              text: 'Slow my breathing and lock into just the next ten seconds',
+              isTarget: true,
+              feedback: 'Tired minds wander. Shrinking the game to ten seconds keeps you sharp.',
+            },
+            {
+              text: 'Think about how tired I am and hope it ends fast',
+              feedback: 'Attention on tiredness makes it louder. Aim your focus at the next task instead.',
+            },
+            {
+              text: 'Start imagining what happens if we lose',
+              feedback: 'Playing the ending in your head steals the focus this moment needs.',
+            },
+          ],
+        },
+      ],
+    },
     origin: 'Derived from Stress Inoculation Training (SIT) developed by the U.S. military for Special Operations forces. Navy SEALs don\'t just visualize success before a mission — they visualize everything that could go wrong, and then visualize themselves adapting and executing anyway. The concept mirrors immunology: just as a vaccine introduces a small controlled dose of a pathogen to build immunity, stress inoculation introduces controlled mental adversity to build psychological resilience.',
     neuroscience: 'Adversity visualization activates the anterior cingulate cortex (ACC) — the brain region responsible for error detection and adaptive response. By repeatedly simulating adversity and practicing recovery, the brain builds dedicated neural circuits for rapid adaptation. Research from the Journal of Applied Sport Psychology shows that athletes who practice adversity imagery show 40% faster cognitive recovery after setbacks during competition compared to those who only visualize success. The technique also reduces amygdala hijack — the phenomenon where acute stress bypasses rational thinking.',
     overview: {
@@ -744,7 +893,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
         instructions: [
           'Lock your eyes on the glowing dot on screen - that is your focal point. In competition you will use a spot on the wall or your equipment, but today the dot is your target.',
           'Focus ONLY on that point.',
-          'Notice its color, texture, shape. Don\'t analyze, just observe.',
+          'Notice its color, its shape, its glow. Don\'t think about it, just watch it.',
           'When your mind wanders (it will), gently return.',
           'Count how many times you have to return - that\'s your focus fitness score.',
         ],
@@ -757,6 +906,12 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Measurable progress',
     ],
     bestFor: ['focus training', 'attention problems', 'beginners', 'daily practice'],
+    reflection: {
+      questions: [
+        { id: 'focus-slips', prompt: 'How many times did your focus slip away?', kind: 'choice', choices: ['0 to 1', '2 to 3', '4 to 6', '7 or more'] },
+        { id: 'focus-level', prompt: 'How focused did you feel overall?', kind: 'scale', scaleLowLabel: 'Scattered', scaleHighLabel: 'Locked in' },
+      ],
+    },
     origin: 'Rooted in Zen Buddhist meditation (Zazen) practiced for over 2,500 years, and adapted by U.S. Army sniper training programs where single-point focus is the difference between mission success and failure. Modern sports psychologists at the U.S. Olympic Training Center use this as the foundational exercise for all attention training.',
     neuroscience: 'Single-point focus training strengthens the dorsolateral prefrontal cortex (DLPFC) — the brain\'s attention control center. Research from the University of Wisconsin shows that consistent focus practice increases cortical thickness in attention-related brain regions within 8 weeks. Each time you notice your mind wandering and redirect it back, you perform one "rep" of attention training — literally building the neural muscle that controls concentration during competition.',
     overview: {
@@ -764,7 +919,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       focus: 'Training your mind to stay locked on one thing without wandering',
       timeScale: '3 minutes',
       skill: 'Foundational attention control',
-      analogy: 'Like doing bicep curls for your brain — each redirect is one rep of focus',
+      analogy: 'Like strength training for your brain: every redirect makes the focus muscle stronger',
     },
     iconName: 'crosshair',
     isActive: true,
@@ -787,8 +942,8 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
         progressionLevel: 2,
         instructions: [
           'Choose the state you need most: Calm, Confident, Focused, Aggressive, or Relaxed.',
-          'Select a word that resonates: "Strong", "Flow", "Ready", "Trust", "Now", "Let go".',
-          'Use breathing to get into the desired state.',
+          'Pick a word that feels right: "Strong", "Flow", "Ready", "Trust", "Now", "Let go".',
+          'Use your breathing to build the feeling you want.',
           'At the peak of that feeling, say your word (out loud or internally).',
           'Repeat 10-15 times to anchor the word to the state.',
           'In competition, say your anchor word to trigger the state.',
@@ -802,6 +957,11 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Gets stronger with practice',
     ],
     bestFor: ['pre-competition', 'between attempts', 'recovering from mistakes', 'state management'],
+    reflection: {
+      questions: [
+        { id: 'anchor-strength', prompt: 'How strongly does your word pull you into the state?', kind: 'scale', scaleLowLabel: 'Not yet', scaleHighLabel: 'Instantly' },
+      ],
+    },
     origin: 'Used by Olympic gold medalist skier Lindsey Vonn, who would repeat "attack" before every run. Military close-quarters battle (CQB) teams use short anchor words to instantly coordinate state-shifts during operations. Performance psychologist Dr. Jim Afremow popularized the technique in "The Champion\'s Mind," documenting its use across NFL, NBA, and MLB programs.',
     neuroscience: 'Anchor words work through classical conditioning (Pavlovian association). By repeatedly pairing a word with a desired physiological and psychological state, the brain creates a conditioned shortcut. Over time, the anchor word alone triggers the associated neural cascade — releasing specific neurotransmitter cocktails (dopamine for confidence, norepinephrine for alertness, serotonin for calm) within milliseconds. Research shows that anchored words become more powerful with each repetition, eventually requiring no conscious effort to trigger the desired state.',
     overview: {
@@ -820,7 +980,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'focus-body-scan',
     name: 'Body Scan Awareness',
-    description: 'A systematic mental scan of your body to notice tension, increase awareness, and release unnecessary tightness.',
+    description: 'A head-to-toe scan of your body to find hidden tension and let it go.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 5,
@@ -839,7 +999,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
           'Now scan the chest, ribs, stomach, and low back. Let the breath move through this area without trying to control it.',
           'Bring attention to the hips, thighs, knees, calves, ankles, and feet. Let the legs get heavy. Let the feet be still.',
           'Now sense the whole body at once. If one area is still tight, breathe toward it gently, then let the next exhale take a little of that effort with it.',
-          'Stay with this quieter body for a few more breaths. When the session ends, open your eyes slowly and bring this easier tension level into your next rep.',
+          'Stay with this quieter body for a few more breaths. When the session ends, open your eyes slowly and bring this easier tension level into whatever you do next.',
         ],
       },
     },
@@ -850,6 +1010,12 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Good warm-up for performance',
     ],
     bestFor: ['pre-competition', 'before technical work', 'rest periods', 'sleep prep'],
+    reflection: {
+      questions: [
+        { id: 'tension-spot', prompt: 'Where were you holding the most tension?', kind: 'choice', choices: ['Head and jaw', 'Neck and shoulders', 'Chest and stomach', 'Hips and legs'] },
+        { id: 'calm-level', prompt: 'How relaxed is your body now?', kind: 'scale', scaleLowLabel: 'Still tight', scaleHighLabel: 'Fully loose' },
+      ],
+    },
     origin: 'Adapted from the Body Scan meditation technique developed by Dr. Jon Kabat-Zinn at the University of Massachusetts Medical School as part of Mindfulness-Based Stress Reduction (MBSR). Used by the U.S. Marine Corps Mindfulness-Based Mind Fitness Training (MMFT) program, and by NFL teams including the Seattle Seahawks under coach Pete Carroll\'s mindfulness-based performance culture.',
     neuroscience: 'Body scanning activates the insular cortex — the brain region responsible for interoception (internal body awareness). Athletes with higher interoceptive accuracy demonstrate superior reaction times, better injury prevention, and more refined movement quality. Research published in Frontiers in Human Neuroscience shows that regular body scan practice increases grey matter density in the insula, leading to heightened proprioception — the ability to sense exactly where your body is in space, which is critical for athletic performance.',
     overview: {
@@ -881,7 +1047,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       config: {
         type: 'reframe',
         prompts: [
-          'Write down the pressure thoughts you have before competition.',
+          'Notice the pressure thoughts you have before competition.',
           'For each thought, create a privilege-based alternative:',
           '"I can\'t mess this up" → "This matters. That\'s exciting."',
           '"Everyone is counting on me" → "I get to perform for people I care about."',
@@ -899,13 +1065,80 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Works for any high-stakes situation',
     ],
     bestFor: ['competition anxiety', 'high-stakes moments', 'fear of failure', 'overthinking'],
+    reflection: {
+      questions: [
+        { id: 'belief-level', prompt: 'How much do you believe the reframe right now?', kind: 'scale', scaleLowLabel: 'Not yet', scaleHighLabel: 'Fully' },
+      ],
+    },
+    interaction: {
+      kind: 'choiceDrill',
+      rounds: [
+        {
+          prompt: 'The thought hits: "Everyone is watching. I cannot mess this up." Pick the reframe.',
+          windowSeconds: 15,
+          choices: [
+            {
+              text: '"Everyone is watching because this moment matters. I earned it."',
+              isTarget: true,
+              feedback: 'That is the privilege frame. Same moment, same stakes, new meaning.',
+            },
+            {
+              text: '"Do not think about the crowd."',
+              feedback: 'Trying not to think about it keeps it center stage. Replace the thought instead.',
+            },
+            {
+              text: '"If I mess up, they will all see it."',
+              feedback: 'That is the threat frame talking. Flip it: they are here because this matters.',
+            },
+          ],
+        },
+        {
+          prompt: '"There is so much riding on this game." Pick the reframe.',
+          windowSeconds: 15,
+          choices: [
+            {
+              text: '"Big stakes mean I get to do something that counts."',
+              isTarget: true,
+              feedback: 'Pressure is proof the moment is worth something. You want games that count.',
+            },
+            {
+              text: '"Pretend it is just another practice."',
+              feedback: 'Pretending shrinks the moment. The reframe keeps its size and changes its meaning.',
+            },
+            {
+              text: '"I wish this mattered less."',
+              feedback: 'You trained for moments that matter. Wishing them smaller wastes them.',
+            },
+          ],
+        },
+        {
+          prompt: '"Coach gave me the hardest assignment tonight." Pick the reframe.',
+          windowSeconds: 15,
+          choices: [
+            {
+              text: '"I got picked because they believe I can handle it."',
+              isTarget: true,
+              feedback: 'Exactly. Hard assignments are trust with a jersey on.',
+            },
+            {
+              text: '"Why did it have to be me?"',
+              feedback: 'That question spends energy on the draw, not the job. Flip it to trust.',
+            },
+            {
+              text: '"I hope I do not let everyone down."',
+              feedback: 'Hope aimed at avoiding failure plays defense. Claim the assignment instead.',
+            },
+          ],
+        },
+      ],
+    },
     origin: 'Coined by Billie Jean King, who famously said "Pressure is a privilege." Refined by Dr. Michael Gervais (Seattle Seahawks, Red Bull) and sports psychologist Dr. Jim Loehr, who used pressure reframing with 16 world #1-ranked tennis players. The U.S. Army\'s Comprehensive Soldier Fitness (CSF) program integrated this technique into pre-deployment resilience training for 1.1 million soldiers.',
     neuroscience: 'Cognitive reframing activates the ventrolateral prefrontal cortex, which modulates the amygdala\'s threat response. When you consciously reinterpret pressure as privilege, fMRI studies show a measurable reduction in amygdala activation and a corresponding increase in reward-center (nucleus accumbens) activity. Your body\'s physiological stress response — elevated heart rate, adrenaline release — remains identical, but the brain interprets it as excitement rather than threat, fundamentally changing performance outcomes.',
     overview: {
       when: 'When pressure feels overwhelming or before high-stakes moments',
       focus: 'Transforming the perception of pressure from threat to opportunity',
       timeScale: '5 minutes (journaling exercise)',
-      skill: 'Cognitive reappraisal of stress',
+      skill: 'Reframing pressure as opportunity',
       analogy: 'Like flipping a switch — same electricity, different light',
     },
     iconName: 'gift',
@@ -917,7 +1150,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'mindset-nerves-excitement',
     name: 'Nerves to Excitement Reframe',
-    description: 'Anxiety and excitement have identical physical symptoms. Learn to interpret those sensations as excitement.',
+    description: 'Nerves and excitement feel exactly the same in your body. Learn to call that feeling what it really is: ready.',
     category: ExerciseCategory.Mindset,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 3,
@@ -929,7 +1162,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
           'Notice the symptoms: Racing heart, butterflies, sweaty palms.',
           'Instead of "I\'m so nervous", say "I\'m so excited".',
           'Instead of "My heart is racing because I\'m scared", say "My heart is racing because I\'m ready".',
-          'Embrace the arousal: "This feeling means I\'m about to do something that matters."',
+          'Welcome the energy: "This feeling means I\'m about to do something that matters."',
           'Channel the energy into movement - dynamic warm-up, shaking out limbs.',
           'Script: "These butterflies aren\'t fear. They\'re fuel. I\'m not nervous - I\'m READY."',
         ],
@@ -943,13 +1176,80 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Changes your experience of nerves',
     ],
     bestFor: ['pre-competition nerves', 'physical anxiety symptoms', 'butterflies', 'racing heart'],
+    reflection: {
+      questions: [
+        { id: 'belief-level', prompt: 'How much do you believe the reframe right now?', kind: 'scale', scaleLowLabel: 'Not yet', scaleHighLabel: 'Fully' },
+      ],
+    },
+    interaction: {
+      kind: 'choiceDrill',
+      rounds: [
+        {
+          prompt: 'Racing heart in the locker room. What is it telling you?',
+          windowSeconds: 12,
+          choices: [
+            {
+              text: '"My body is getting me ready to compete."',
+              isTarget: true,
+              feedback: 'Correct read. A racing heart is your engine warming up, not a warning light.',
+            },
+            {
+              text: '"Something is wrong with me."',
+              feedback: 'Nothing is wrong. Excitement and nerves feel identical in the body. You choose the label.',
+            },
+            {
+              text: '"I have to calm down completely before I can play."',
+              feedback: 'You do not need zero energy. You need to point the energy somewhere.',
+            },
+          ],
+        },
+        {
+          prompt: 'Butterflies right before your name gets called. What do they mean?',
+          windowSeconds: 12,
+          choices: [
+            {
+              text: '"This means I am about to do something that matters."',
+              isTarget: true,
+              feedback: 'Yes. Butterflies show up for moments worth caring about.',
+            },
+            {
+              text: '"I am too nervous for this."',
+              feedback: 'Same feeling, wrong label. Call it ready instead of nervous and watch what changes.',
+            },
+            {
+              text: '"Maybe I should not have signed up for this."',
+              feedback: 'The feeling is not a verdict on you. It is energy waiting for a job.',
+            },
+          ],
+        },
+        {
+          prompt: 'Hands buzzing, energy spiking during warm-up. Final call: what is this feeling?',
+          windowSeconds: 12,
+          choices: [
+            {
+              text: '"Fuel. I am ready."',
+              isTarget: true,
+              feedback: 'That is the switch. These butterflies are not fear. They are fuel.',
+            },
+            {
+              text: '"Fear. I should back off."',
+              feedback: 'Backing off wastes the energy your body just handed you. Spend it on the first play.',
+            },
+            {
+              text: '"A problem I need to fix before I start."',
+              feedback: 'It is not a problem. It is the exact state great first plays come from.',
+            },
+          ],
+        },
+      ],
+    },
     origin: 'Based on groundbreaking research by Harvard Business School professor Alison Wood Brooks, published in the Journal of Experimental Psychology (2014). The study proved that saying "I am excited" before a high-pressure task significantly improved performance compared to saying "I am calm" or saying nothing. NBA player Steph Curry and tennis champion Rafael Nadal are known practitioners of this reframing technique.',
     neuroscience: 'Anxiety and excitement produce neurologically identical physiological responses — elevated heart rate, increased cortisol, heightened arousal. The only difference is cognitive appraisal. Brooks\' research showed that reappraising anxiety as excitement ("excitation transfer") is far easier than trying to calm down because it doesn\'t require shifting arousal levels — only the brain\'s interpretation. This leverages the concept of "cognitive reappraisal," which engages the prefrontal cortex to relabel the amygdala\'s signal from "danger" to "opportunity."',
     overview: {
       when: 'When you feel butterflies, racing heart, or pre-game jitters',
       focus: 'Relabeling anxiety symptoms as excitement and fuel',
       timeScale: '3 minutes (instant reframe)',
-      skill: 'Arousal reinterpretation',
+      skill: 'Relabeling nerves as readiness',
       analogy: 'Same engine, different gear — anxiety and excitement are the same fuel, just channeled differently',
     },
     iconName: 'sparkles',
@@ -961,7 +1261,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'mindset-process-focus',
     name: 'Process Over Outcome',
-    description: 'Train your mind to focus on controllable execution rather than uncontrollable results.',
+    description: 'Put your focus on what you can control and let go of what you can\'t. The score follows the work.',
     category: ExerciseCategory.Mindset,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 5,
@@ -970,7 +1270,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       config: {
         type: 'process_focus',
         prompts: [
-          'Define your process goals: What actions give you the best chance of success?',
+          'Name your process goals: the actions that give you the best chance to succeed.',
           'Create 1-3 word process phrases: "Tight core", "Quick feet", "Smooth release".',
           'When outcome thoughts arise, acknowledge and redirect:',
           '"I notice I\'m thinking about winning. That\'s not in my control right now."',
@@ -987,6 +1287,106 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Better relationship with outcomes',
     ],
     bestFor: ['outcome anxiety', 'results focus', 'choking', 'performance evaluation'],
+    reflection: {
+      questions: [
+        { id: 'outcome-pull', prompt: 'What pulls your focus to results the most?', kind: 'choice', choices: ['The scoreboard', 'What coach thinks', 'What teammates think', 'My own expectations'] },
+      ],
+    },
+    interaction: {
+      kind: 'choiceDrill',
+      rounds: [
+        {
+          prompt: 'Sort it fast: "My effort on every play."',
+          windowSeconds: 8,
+          choices: [
+            {
+              text: 'Mine to control',
+              isTarget: true,
+              feedback: 'Yours, always. Effort never depends on the scoreboard.',
+            },
+            {
+              text: 'Out of my control',
+              feedback: 'Effort is the one thing that is always yours. Own it.',
+            },
+          ],
+        },
+        {
+          prompt: 'Sort it fast: "The referee\'s calls."',
+          windowSeconds: 8,
+          choices: [
+            {
+              text: 'Mine to control',
+              feedback: 'You will never control the whistle. Spend zero focus there.',
+            },
+            {
+              text: 'Out of my control',
+              isTarget: true,
+              feedback: 'Right. The whistle is not yours. Your response to it is.',
+            },
+          ],
+        },
+        {
+          prompt: 'Sort it fast: "My first step after the whistle."',
+          windowSeconds: 8,
+          choices: [
+            {
+              text: 'Mine to control',
+              isTarget: true,
+              feedback: 'Yours. First steps are pure process, and process is where you live.',
+            },
+            {
+              text: 'Out of my control',
+              feedback: 'Look again. Your first step is one hundred percent yours.',
+            },
+          ],
+        },
+        {
+          prompt: 'Sort it fast: "The weather and the field conditions."',
+          windowSeconds: 8,
+          choices: [
+            {
+              text: 'Mine to control',
+              feedback: 'Both teams play in the same rain. It is not yours to carry.',
+            },
+            {
+              text: 'Out of my control',
+              isTarget: true,
+              feedback: 'Right. Conditions are shared. Adjusting to them is the part you own.',
+            },
+          ],
+        },
+        {
+          prompt: 'Sort it fast: "How I talk to myself after a mistake."',
+          windowSeconds: 8,
+          choices: [
+            {
+              text: 'Mine to control',
+              isTarget: true,
+              feedback: 'Yours. The voice in your helmet is the most coachable thing you have.',
+            },
+            {
+              text: 'Out of my control',
+              feedback: 'It feels automatic, but self-talk is trainable. That is why this drill exists.',
+            },
+          ],
+        },
+        {
+          prompt: 'Sort it fast: "The final score."',
+          windowSeconds: 8,
+          choices: [
+            {
+              text: 'Mine to control',
+              feedback: 'The score is the echo of a hundred plays. Control the plays, not the echo.',
+            },
+            {
+              text: 'Out of my control',
+              isTarget: true,
+              feedback: 'Right. Outcomes follow process. Pour everything into the next play and let the score take care of itself.',
+            },
+          ],
+        },
+      ],
+    },
     origin: 'Central to Nick Saban\'s "The Process" philosophy that produced 7 national championships at Alabama. Also a cornerstone of Phil Jackson\'s coaching with the Chicago Bulls and LA Lakers, and used by U.S. Special Operations to keep operators focused on execution rather than mission outcome during high-stakes operations.',
     neuroscience: 'Outcome focus activates the brain\'s default mode network (DMN) — the system responsible for self-referential thinking, rumination, and worry. Process focus deactivates the DMN and engages the task-positive network (TPN), which controls present-moment execution and motor coordination. Research from the University of Chicago on "choking under pressure" shows that athletes who focus on process actions reduce working memory interference by up to 60%, freeing cognitive resources for actual performance execution.',
     overview: {
@@ -1031,6 +1431,73 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Opens up possibility',
     ],
     bestFor: ['fixed mindset', 'fear of failure', 'self-limiting beliefs', 'after setbacks'],
+    reflection: {
+      questions: [
+        { id: 'growth-belief', prompt: 'How much do you believe you can get better at this?', kind: 'scale', scaleLowLabel: 'Not sure', scaleHighLabel: 'No doubt' },
+      ],
+    },
+    interaction: {
+      kind: 'choiceDrill',
+      rounds: [
+        {
+          prompt: 'The thought: "I am just not good at reading the defense." Pick the growth response.',
+          windowSeconds: 15,
+          choices: [
+            {
+              text: '"I am not good at reading defenses YET."',
+              isTarget: true,
+              feedback: 'One word changes the whole sentence. Yet turns a wall into a staircase.',
+            },
+            {
+              text: '"Some players just have that instinct."',
+              feedback: 'Instinct is built from thousands of looks. They practiced theirs. You can too.',
+            },
+            {
+              text: '"I will avoid plays where I have to read it."',
+              feedback: 'Avoiding it locks the skill at its current level. Exposure is how it grows.',
+            },
+          ],
+        },
+        {
+          prompt: '"She is just naturally better than me." Pick the growth response.',
+          windowSeconds: 15,
+          choices: [
+            {
+              text: '"She is ahead of me today. Training closes gaps."',
+              isTarget: true,
+              feedback: 'Today is a snapshot, not a ceiling. Gaps close on purpose.',
+            },
+            {
+              text: '"Some people are born with it."',
+              feedback: 'Every highlight you envy was built one practice at a time.',
+            },
+            {
+              text: '"There is no point competing with that."',
+              feedback: 'Chasing someone better is the fastest way to improve. That is the point.',
+            },
+          ],
+        },
+        {
+          prompt: '"I keep failing at this move." Pick the growth response.',
+          windowSeconds: 15,
+          choices: [
+            {
+              text: '"Every miss shows me exactly what to fix next."',
+              isTarget: true,
+              feedback: 'Misses are data. Athletes who read the data improve twice as fast.',
+            },
+            {
+              text: '"I am clearly not built for this move."',
+              feedback: 'Struggle is what learning feels like from the inside. It is not a verdict.',
+            },
+            {
+              text: '"I will stop trying it in games."',
+              feedback: 'Hiding the move keeps it weak. Failing at it in practice is how it gets game-ready.',
+            },
+          ],
+        },
+      ],
+    },
     origin: 'Based on Dr. Carol Dweck\'s landmark research at Stanford University, published in "Mindset: The New Psychology of Success" (2006). The growth mindset framework has been adopted by Microsoft\'s corporate culture (CEO Satya Nadella credits it as transformational), the U.S. Naval Academy\'s leadership development program, and elite sports organizations including the Golden State Warriors and Manchester United.',
     neuroscience: 'Dweck\'s research showed that people with growth mindsets have measurably different brain activity when encountering errors — their anterior cingulate cortex (ACC) shows increased activation, indicating the brain is processing errors as learning opportunities rather than threats. Over time, growth mindset practice increases neuroplasticity itself — the brain\'s ability to form new connections and rewire existing ones. Studies show that simply believing intelligence and ability are malleable (not fixed) increases dopamine release during challenging tasks, creating a self-reinforcing cycle of effort and reward.',
     overview: {
@@ -1053,7 +1520,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'confidence-evidence-journal',
     name: 'Evidence Journal',
-    description: 'Build confidence on facts, not feelings. Daily practice of recording proof that you are prepared and capable.',
+    description: 'Confidence built on facts, not feelings. Collect proof that you are prepared and getting better.',
     category: ExerciseCategory.Confidence,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 3,
@@ -1079,6 +1546,27 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Stable confidence source',
     ],
     bestFor: ['daily practice', 'low confidence', 'pre-competition', 'imposter syndrome'],
+    reflection: {
+      questions: [
+        { id: 'confidence-level', prompt: 'How solid does your confidence feel right now?', kind: 'scale', scaleLowLabel: 'Borrowed', scaleHighLabel: 'Earned' },
+      ],
+    },
+    interaction: {
+      kind: 'guidedDwell',
+      pickPrompt: 'Bank three pieces of real evidence from your training and games. Facts only, no hype.',
+      pickChoices: [
+        'A skill that used to be hard and is now easy',
+        'A moment I performed under pressure',
+        'Work I put in that nobody saw',
+        'A weakness I have already improved',
+        'A time my coach trusted me in a big spot',
+        'A goal I set and actually hit',
+      ],
+      pickCount: 3,
+      dwellSeconds: 20,
+      dwellPrompt: 'Get specific. Picture the exact day, the exact moment this happened. That is evidence, not hype.',
+      closePrompt: 'Confidence built on evidence does not crack under pressure. You just banked yours.',
+    },
     origin: 'Developed by sports psychologist Dr. Jim Loehr at the Human Performance Institute, originally for world-class tennis players. Used by Olympic gold medalists, Navy SEAL candidates during Hell Week (instructors encourage maintaining a "proof journal" of small wins), and adopted by the New England Patriots\' mental performance staff.',
     neuroscience: 'Writing activates the reticular activating system (RAS) — the brain\'s relevance filter. When you physically write evidence of your capability, the RAS begins prioritizing similar positive data in future experiences, creating an upward spiral of confidence. Journaling also engages the left prefrontal cortex, which processes factual information, building confidence on logical evidence rather than emotional volatility. Studies show that athletes with evidence journals demonstrate 25% higher self-efficacy scores than those relying on verbal affirmations alone.',
     overview: {
@@ -1097,7 +1585,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'confidence-power-pose',
     name: 'Power Posing',
-    description: 'Use physical posture to influence mental state. Expansive postures increase testosterone and decrease cortisol.',
+    description: 'Use physical posture to influence mental state. Standing big and open sends strength signals to your brain and turns down stress.',
     category: ExerciseCategory.Confidence,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 2,
@@ -1124,6 +1612,11 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Research-backed technique',
     ],
     bestFor: ['pre-competition', 'before presentations', 'after setbacks', 'need quick boost'],
+    reflection: {
+      questions: [
+        { id: 'presence-level', prompt: 'How big do you feel right now?', kind: 'scale', scaleLowLabel: 'Small', scaleHighLabel: 'Ten feet tall' },
+      ],
+    },
     origin: 'Based on research by Harvard social psychologist Amy Cuddy, whose TED Talk on body language became the second most-viewed TED Talk in history. While the testosterone/cortisol claims from the original study were debated, subsequent research (published in Psychological Science, 2017) confirmed that expansive postures do increase subjective feelings of power and risk tolerance. Used by Wall Street traders, trial lawyers, and combat athletes before high-stakes performances.',
     neuroscience: 'Expansive postures activate the brain\'s postural feedback loop — the body sends "dominance" signals to the brain via proprioceptive neurons, which the brain interprets as genuine confidence. This is an example of embodied cognition: the body influences the mind just as the mind influences the body. While the hormonal claims remain debated, replicated studies confirm that power posing increases subjective feelings of confidence, pain tolerance, and willingness to take action — all critical for competitive performance.',
     overview: {
@@ -1142,7 +1635,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'confidence-affirmations',
     name: 'Sport-Specific Affirmations',
-    description: 'Personal statements of capability based on real evidence. Not generic positivity - specific, evidence-based belief.',
+    description: 'Statements about you that are actually true. Not fake positivity: belief backed by the work you have done.',
     category: ExerciseCategory.Confidence,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 3,
@@ -1171,6 +1664,27 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Gets stronger with repetition',
     ],
     bestFor: ['morning routine', 'pre-competition', 'daily practice', 'building belief'],
+    reflection: {
+      questions: [
+        { id: 'confidence-level', prompt: 'How solid does your confidence feel right now?', kind: 'scale', scaleLowLabel: 'Borrowed', scaleHighLabel: 'Earned' },
+      ],
+    },
+    interaction: {
+      kind: 'guidedDwell',
+      pickPrompt: 'Build your statements. Pick the three that are true of you when you play your best.',
+      pickChoices: [
+        'I attack the first play like it is the last',
+        'I reset faster than anyone out there',
+        'I have done the work. I am prepared',
+        'Pressure sharpens me',
+        'My preparation shows up when it counts',
+        'I trust my training and let it fly',
+      ],
+      pickCount: 3,
+      dwellSeconds: 15,
+      dwellPrompt: 'Say it in your head like you mean it, three times, slow. Feel where it lands in your body.',
+      closePrompt: 'Those statements are yours. Use them in the locker room, at the line, whenever you need them.',
+    },
     origin: 'Muhammad Ali was the most famous practitioner — "I am the greatest" was not arrogance, it was systematic self-programming. Modern sports psychology has refined this into evidence-based affirmations (grounded in real data, not generic positivity). Used by U.S. Special Operations candidates during selection, NFL pre-game routines, and by performance coach Tony Robbins with Fortune 500 CEOs and professional athletes.',
     neuroscience: 'Repetitive self-statements activate the brain\'s self-referential processing network, centered in the medial prefrontal cortex. When affirmations are specific, present-tense, and evidence-based, they bypass the brain\'s natural skepticism filter and gradually rewrite the neural narrative around self-identity. fMRI research from the University of Pennsylvania shows that self-affirmation activates the ventromedial prefrontal cortex and posterior cingulate cortex — the same regions associated with self-valuation and future-oriented thinking — effectively programming the brain to expect success.',
     overview: {
@@ -1189,7 +1703,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'confidence-inventory',
     name: 'Confidence Inventory',
-    description: 'A structured assessment of all the reasons you should believe in yourself. Creates a comprehensive case for confidence.',
+    description: 'Take stock of every reason you have to believe in yourself. Build your case, piece by piece.',
     category: ExerciseCategory.Confidence,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 10,
@@ -1215,6 +1729,29 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Evidence-based belief',
     ],
     bestFor: ['competition prep', 'major events', 'confidence review', 'self-doubt'],
+    reflection: {
+      questions: [
+        { id: 'confidence-level', prompt: 'How solid does your confidence feel right now?', kind: 'scale', scaleLowLabel: 'Borrowed', scaleHighLabel: 'Earned' },
+      ],
+    },
+    interaction: {
+      kind: 'guidedDwell',
+      pickPrompt: 'Take stock. Pick the three strengths you bring to every single game.',
+      pickChoices: [
+        'My conditioning',
+        'My technique',
+        'My game sense',
+        'My composure',
+        'My work ethic',
+        'My leadership',
+        'My speed and quickness',
+        'My toughness',
+      ],
+      pickCount: 3,
+      dwellSeconds: 20,
+      dwellPrompt: 'Recall one specific moment this strength showed up in a game or practice. Hold that picture.',
+      closePrompt: 'That is your inventory. Nobody can carry those into the game for you, and nobody can take them away.',
+    },
     origin: 'Used by Dr. Jim Loehr and the Human Performance Institute for preparing athletes for Grand Slam tennis, Olympic finals, and NFL playoffs. The systematic approach was inspired by military pre-mission checklists — just as Special Operations teams verify every piece of equipment before a mission, athletes verify every source of readiness before competition.',
     neuroscience: 'The Confidence Inventory leverages the brain\'s confirmation bias constructively. By systematically reviewing evidence across multiple domains (physical, technical, mental, experiential, social), the brain creates a comprehensive "proof network" that makes confident beliefs the path of least resistance. This multi-domain approach activates distributed neural networks rather than relying on a single source, creating a more robust and resilient confidence structure that is resistant to single-point failures (e.g., one bad practice doesn\'t collapse your entire belief system).',
     overview: {
@@ -1237,7 +1774,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'focus-3-second-reset',
     name: 'Reset',
-    description: 'Mental recovery training — how fast can you recover after something goes wrong? Reset simulates disruption, measures your recovery time, and tracks improvement over sessions. The single most important mental skill in competitive athletics.',
+    description: 'How fast can you bounce back when something goes wrong? Reset throws a disruption at you, times your recovery, and tracks you getting faster. The most important mental skill in sports.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 3,
@@ -1257,6 +1794,11 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       'Measurable improvement over time',
     ],
     bestFor: ['mistake recovery', 'pre-competition', 'in-season training', 'pressure performance'],
+    reflection: {
+      questions: [
+        { id: 'effort-level', prompt: 'How hard did that feel?', kind: 'scale', scaleLowLabel: 'Easy', scaleHighLabel: 'Maxed out' },
+      ],
+    },
     origin: 'Grounded in Attentional Control Theory (Eysenck & Calvo, 1992; Eysenck et al., 2007) and cognitive flexibility research. Military Special Operations units train disruption-recovery cycles to build automatic reset responses under fire. Professional athletes like Navy SEAL-trained MMA fighters and Formula 1 drivers use similar rapid-recovery drills to maintain performance after errors.',
     neuroscience: 'Reset targets the prefrontal cortex\'s ability to reassert executive control after the amygdala hijacks attention during a disruption. Each round trains the brain to shorten the "attentional blink" — the cognitive gap between disruption and refocused execution. Research shows this gap is trainable and can be reduced by 40-60% with consistent practice, leading to measurably faster recovery from mistakes during competition.',
     overview: {
@@ -1276,7 +1818,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'focus-noise-gate',
     name: 'Noise Gate',
-    description: 'Train selective attention by locking onto the live signal while visual and audio clutter compete for your focus.',
+    description: 'Train your ability to lock onto what matters while sights and sounds compete for your focus.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 3,
@@ -1292,14 +1834,19 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     benefits: [
       'Improves target filtering under clutter',
       'Builds tolerance for audio and visual distraction',
-      'Sharpens selective attention under time pressure',
+      'Sharpens focus on the right target under time pressure',
     ],
     bestFor: ['crowd noise', 'visual clutter', 'distraction control', 'recognition speed'],
+    reflection: {
+      questions: [
+        { id: 'effort-level', prompt: 'How hard did that feel?', kind: 'scale', scaleLowLabel: 'Easy', scaleHighLabel: 'Maxed out' },
+      ],
+    },
     origin: 'Built from attention-systems research and sport concentration training used to help athletes ignore bait, clutter, and crowd noise.',
     neuroscience: 'Noise Gate targets the attentional selection network by forcing the brain to preserve task-relevant information while suppressing distractors. Repeated practice should reduce the performance cost of irrelevant signals.',
     overview: {
       when: 'Before noisy competition environments or when athletes are losing the right target to clutter',
-      focus: 'Selective attention under distraction',
+      focus: 'Holding the right target under distraction',
       timeScale: '2-4 minutes',
       skill: 'Holding the live signal while noise rises',
       analogy: 'Like tuning a radio until only the station you need comes through clearly',
@@ -1314,7 +1861,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'decision-brake-point',
     name: 'Brake Point',
-    description: 'Tap Commit for GO, GREEN, CLEAR, or OPEN. Tap Brake for STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, or ABORT.',
+    description: 'One tap decides each round. Commit when it\'s a go. Brake when it\'s a trap. Trains you to stop yourself at full speed.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 3,
@@ -1328,18 +1875,23 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       },
     },
     benefits: [
-      'Commit only on GO, GREEN, CLEAR, or OPEN',
-      'Brake on STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, or ABORT',
-      'One tap decides the round',
+      'Trains split-second stop decisions',
+      'Cuts false starts',
+      'Builds control at full speed',
     ],
     bestFor: ['fake-outs', 'false starts', 'impulsive decisions', 'decision control'],
+    reflection: {
+      questions: [
+        { id: 'effort-level', prompt: 'How hard did that feel?', kind: 'scale', scaleLowLabel: 'Easy', scaleHighLabel: 'Maxed out' },
+      ],
+    },
     origin: 'Grounded in executive-function research on inhibitory control and adapted for pressure-heavy sport decisions.',
     neuroscience: 'Brake Point targets inhibitory control by training rapid suppression of prepotent responses before error cascades can form.',
     overview: {
       when: 'When athletes are overcommitting, biting on fakes, or false-starting',
       focus: 'Braking stop and fake words fast',
       timeScale: '2-3 minutes',
-      skill: 'Response inhibition',
+      skill: 'Braking on command',
       analogy: 'Like hitting the brakes before a skid turns into a crash',
     },
     iconName: 'octagon-x',
@@ -1352,7 +1904,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'decision-signal-window',
     name: 'Signal Window',
-    description: 'Compress the decision window and force the athlete to choose the real signal before the opportunity disappears.',
+    description: 'Pick the real signal before the window closes. Fakes look real, time is short, and one choice decides the round.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Intermediate,
     durationMinutes: 3,
@@ -1367,17 +1919,22 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     },
     benefits: [
       'Improves read-and-react speed',
-      'Sharpens signal discrimination',
-      'Reduces decoy susceptibility',
+      'Sharpens telling real cues from fakes',
+      'Makes you harder to bait',
     ],
     bestFor: ['tight reads', 'recognition speed', 'ambiguous signals', 'decision clarity'],
+    reflection: {
+      questions: [
+        { id: 'effort-level', prompt: 'How hard did that feel?', kind: 'scale', scaleLowLabel: 'Easy', scaleHighLabel: 'Maxed out' },
+      ],
+    },
     origin: 'Inspired by perceptual-cognitive training work on signal discrimination and fast decision-making.',
     neuroscience: 'Signal Window forces faster signal selection under ambiguity, strengthening the link between selective attention and decisive action.',
     overview: {
       when: 'For athletes who know what to do but do not read it fast enough',
       focus: 'Correct reads under tight time pressure',
       timeScale: '2-3 minutes',
-      skill: 'Signal discrimination',
+      skill: 'Reading the real signal',
       analogy: 'Like catching the green light before it turns red',
     },
     iconName: 'scan-eye',
@@ -1390,7 +1947,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'decision-sequence-shift',
     name: 'Sequence Shift',
-    description: 'Force quick adaptation when rules or priorities change mid-rep so the athlete can re-stabilize without freezing.',
+    description: 'The rules change mid-game. Can you switch without freezing? Trains your brain to drop the old plan and run the new one instantly.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Advanced,
     durationMinutes: 3,
@@ -1404,11 +1961,16 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
       },
     },
     benefits: [
-      'Improves working-memory updating',
-      'Builds faster re-stabilization after rule changes',
+      'Keeps you sharp when the plan changes',
+      'Gets you back on track faster after a switch',
       'Strengthens mental flexibility',
     ],
     bestFor: ['audibles', 'assignment changes', 'install work', 'rule switching'],
+    reflection: {
+      questions: [
+        { id: 'effort-level', prompt: 'How hard did that feel?', kind: 'scale', scaleLowLabel: 'Easy', scaleHighLabel: 'Maxed out' },
+      ],
+    },
     origin: 'Grounded in executive-function research on updating and attentional shifting.',
     neuroscience: 'Sequence Shift recruits working-memory updating and attentional shifting so athletes can preserve structure even when instructions change mid-flow.',
     overview: {
@@ -1428,7 +1990,7 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'focus-endurance-lock',
     name: 'Endurance Lock',
-    description: 'Extended focus rep designed to expose late-session lapses, variance, and fatigue-driven decision decay.',
+    description: 'A long focus session that shows where your attention slips as you get tired. Trains you to stay sharp late in the game.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Advanced,
     durationMinutes: 6,
@@ -1438,15 +2000,20 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
         type: 'single_point',
         duration: 360,
         progressionLevel: 4,
-        instructions: ['Stay locked in as time-on-task accumulates and the rep gets mentally heavier.'],
+        instructions: ['Stay locked in as the session stretches on and holding focus gets mentally heavier.'],
       },
     },
     benefits: [
-      'Reveals fatigability',
+      'Shows where tiredness hits your focus',
       'Measures late-session sharpness',
-      'Builds sustained attention under accumulating load',
+      'Builds focus that lasts the whole game',
     ],
-    bestFor: ['late-game focus', 'fatigability', 'consistency', 'extended reps'],
+    bestFor: ['late-game focus', 'fatigability', 'consistency', 'long sessions'],
+    reflection: {
+      questions: [
+        { id: 'effort-level', prompt: 'How hard did that feel?', kind: 'scale', scaleLowLabel: 'Easy', scaleHighLabel: 'Maxed out' },
+      ],
+    },
     origin: 'Built from concentration training and mental-fatigue literature on time-on-task breakdown.',
     neuroscience: 'Endurance Lock turns duration into the stressor. It measures how quickly performance decays as cognitive load accumulates.',
     overview: {
