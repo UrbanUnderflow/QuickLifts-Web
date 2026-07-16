@@ -188,7 +188,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const { roundIdRedirect, loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
   const isPulseCheckPage = router.pathname === '/PulseCheck' || router.asPath === '/PulseCheck' || router.asPath.startsWith('/PulseCheck?') || router.asPath.startsWith('/PulseCheck/');
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
-  const isOnAdminPage = router.pathname.startsWith('/admin/') || router.asPath.startsWith('/admin/');
+  const isOnAdminPage = router.pathname.startsWith('/admin/')
+    || router.asPath.startsWith('/admin/')
+    || router.pathname === '/curriculum-outline'
+    || router.asPath.startsWith('/curriculum-outline');
   const modalRoutePath = (router.asPath || router.pathname || '').split('?')[0].split('#')[0] || '/';
   const normalizedModalRoutePath = (modalRoutePath === '/' ? '/' : modalRoutePath.replace(/\/$/, '')).toLowerCase();
   const effectiveVariant = normalizedModalRoutePath === '/athletic-mind-hub' || normalizedModalRoutePath.startsWith('/athletic-mind-hub/')

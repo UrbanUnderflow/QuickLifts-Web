@@ -127,10 +127,10 @@ const adminCardsData = [
     link: "/admin/curriculumLayer"
   },
   {
-    title: "Junior Track Curriculum",
-    description: "PulseCheck Junior guided curriculum — preview the 30 bundled lessons/checkpoints by pillar and unit, see what's seeded, one-click idempotent seed of junior-curriculum.",
+    title: "Curriculum Outline",
+    description: "PulseCheck curriculum outline by track — Rookie (7-12), Junior (13-17), and Pro (18+), with the Junior guided curriculum seed and module mapping workflow.",
     icon: <GraduationCap className="w-5 h-5" />,
-    link: "/admin/juniorCurriculum"
+    link: "/curriculum-outline"
   },
   {
     title: "Adaptation Framing Layer",

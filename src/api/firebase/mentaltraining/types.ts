@@ -1810,6 +1810,8 @@ export function exerciseFromFirestore(id: string, data: Record<string, any>): Me
     origin: data.origin || '',
     neuroscience: data.neuroscience || '',
     overview: data.overview || { when: '', focus: '', timeScale: '', skill: '', analogy: '' },
+    interaction: data.interaction,
+    reflection: data.reflection,
     iconName: data.iconName || 'brain',
     isActive: data.isActive ?? true,
     sortOrder: data.sortOrder || 0,

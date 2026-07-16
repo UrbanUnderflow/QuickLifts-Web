@@ -142,13 +142,13 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
               owner: 'Content',
             },
             {
-              title: 'Seed from /admin/juniorCurriculum',
+              title: 'Seed from /curriculum-outline',
               body: 'Admin-gated page previews all 30 docs grouped by pillar/unit with per-doc seeded status, validates (including the rep-ban), and batch-writes idempotently using the CLIENT Firebase SDK with the signed-in admin account — no server credentials, works on localhost, follows the global prod/dev database selector. Writes are gated by firestore.rules (junior-curriculum is admin-write-only; junior-progress is own-document). CLI fallback: scripts/seedJuniorCurriculum.cjs.',
               owner: 'Ops',
             },
             {
               title: 'Map every lesson to a real module (launch gate)',
-              body: 'Each lesson row on /admin/juniorCurriculum shows its module status (mapped, missing, chat-handoff, other-category) with a dropdown of junior-safe exercises. There is NO playback fallback: iOS refuses to play unmapped or handoff-mapped lessons. The page header shows "all modules mapped" or the blocked count. Re-seeding preserves manual mappings.',
+              body: 'Each lesson row on /curriculum-outline shows its module status (mapped, missing, chat-handoff, other-category) with a dropdown of junior-safe exercises. There is NO playback fallback: iOS refuses to play unmapped or handoff-mapped lessons. The page header shows "all modules mapped" or the blocked count. Re-seeding preserves manual mappings.',
               owner: 'Content + Ops',
             },
             {
@@ -173,7 +173,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
           items={[
             'Why: 11 of 26 modules played as passive read-and-tap-Next step lists; 5 junior lessons ran on the 3 passive visualization modules. The interaction config on the module doc replaces that renderer on iOS (InteractiveModuleContent.swift) and Android (JuniorInteractivePlayer).',
             'Every input is a bounded chip, extending the junior no-free-text rule across the pro track for these modules. Modules with an interaction config never route to the Nora chat handoff: the drill is the training.',
-            'Rollout: click "Sync Module Copy" on /admin/juniorCurriculum (writes interaction to both sim-modules and mental-exercises), then regenerate narrations on /admin/ai-voice (interaction prompts and feedback lines are pre-generated; retired per-step clips drop out of coverage automatically).',
+            'Rollout: click "Sync Module Copy" on /curriculum-outline (writes interaction to both sim-modules and mental-exercises), then regenerate narrations on /admin/ai-voice (interaction prompts and feedback lines are pre-generated; retired per-step clips drop out of coverage automatically).',
             'Known gap: the web /mental-training player still renders these modules as prompt steps.',
           ]}
         />

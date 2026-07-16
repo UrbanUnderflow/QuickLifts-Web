@@ -157,6 +157,7 @@ service cloud.firestore {
         'coach-nora-vault',
         'coach-team-schedule',
         'company-config',
+        'curriculum-notes',
         'document-notes',
         'junior-curriculum',
         'junior-progress',
@@ -700,12 +701,18 @@ service cloud.firestore {
     }
 
     // Junior Track guided curriculum content. Athletes read lessons; the
-    // seed + module mapping surface (/admin/juniorCurriculum, client SDK)
+    // seed + module mapping surface (/curriculum-outline, client SDK)
     // is the only writer. Module mapping is a launch gate — athlete
     // clients must never be able to alter content or mappings.
     match /junior-curriculum/{lessonId} {
       allow read: if isSignedIn();
       allow create, update, delete: if isAdminUser();
+    }
+
+    // Admin-authored curriculum feedback. Notes may contain internal product
+    // decisions, so both reading and writing stay inside the admin surface.
+    match /curriculum-notes/{noteId} {
+      allow read, create, update, delete: if isAdminUser();
     }
 
     // Junior Track per-athlete progress: own-document access. Admins may

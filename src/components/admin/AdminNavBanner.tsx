@@ -32,6 +32,13 @@ const titleizeAdminPath = (pathname: string): string => {
 
   if (!cleaned) return 'Dashboard';
 
+  const titleOverrides: Record<string, string> = {
+    juniorCurriculum: 'Curriculum Outline',
+    'curriculum-outline': 'Curriculum Outline',
+  };
+
+  if (titleOverrides[cleaned]) return titleOverrides[cleaned];
+
   return cleaned
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[-_]+/g, ' ')
