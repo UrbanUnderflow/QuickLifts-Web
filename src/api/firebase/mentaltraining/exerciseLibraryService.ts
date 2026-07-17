@@ -801,6 +801,19 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
     },
     interaction: {
       kind: 'choiceDrill',
+      // The "what ifs" elicitation, restored as a bounded pick phase in front
+      // of the rounds. A resolved scenario pack swaps pickChoices for its
+      // whatIfChips; chips are taps, never narrated, never free text.
+      pickPrompt: 'Before we start: pick the three that feel most real for you. These are your what ifs.',
+      pickChoices: [
+        'A mistake everyone sees',
+        'A call that goes against me',
+        'Falling behind early',
+        'Getting tired late',
+        'Letting my team or coach down',
+        'A stronger opponent than expected',
+      ],
+      pickCount: 3,
       rounds: [
         {
           prompt: 'First play of the game and you make a mistake everyone sees. What is your next move?',
@@ -853,6 +866,434 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
             {
               text: 'Start imagining what happens if we lose',
               feedback: 'Playing the ending in your head steals the focus this moment needs.',
+            },
+          ],
+        },
+      ],
+      // Sport scenario packs (spec: sport-scenario-packs-spec.md). Resolved on
+      // device from User.sport via scenarioArchetypeForSport / the Swift
+      // mirror. Each pack mirrors the base beats: R1 early visible mistake,
+      // R2 uncontrollable or authority moment, R3 late fatigue with the
+      // outcome on the line. Unmatched sports keep the base content above.
+      scenarioPacks: [
+        {
+          archetype: 'invasion',
+          label: 'Field & court team sports',
+          // Base rounds already speak this language; the pack adds chips only.
+          whatIfChips: [
+            'A turnover everyone sees',
+            'A bad call against us',
+            'Getting subbed out early',
+            'Falling behind fast',
+            'My matchup winning early',
+            'Letting a teammate down',
+          ],
+        },
+        {
+          archetype: 'net_racket',
+          label: 'Net & racket sports',
+          whatIfChips: [
+            'A double fault on a big point',
+            'A bad line call',
+            'Losing a long first set',
+            'Wind or conditions wrecking my rhythm',
+            'An opponent who returns everything',
+            'Tired legs in a third set',
+          ],
+          rounds: [
+            {
+              prompt: 'You double fault on the very first point of the match. What is your next move?',
+              choices: [
+                {
+                  text: 'Run my between-point routine: breathe, reset, next point',
+                  isTarget: true,
+                  feedback: 'That is the reset. The scoreboard cannot follow you into the next point unless you carry it there.',
+                },
+                {
+                  text: 'Rush the next serve to erase the mistake fast',
+                  feedback: 'Rushing stacks a second error on the first. The routine is what makes the next serve clean.',
+                },
+                {
+                  text: 'Start changing my whole service motion',
+                  feedback: 'Mid-match rebuilds break more than they fix. Trust the motion you trained. Reset the mind, not the mechanics.',
+                },
+              ],
+            },
+            {
+              prompt: 'A line call goes against you on a point you clearly won. What do you do?',
+              choices: [
+                {
+                  text: 'Breathe out long, walk my reset ritual, play the next point',
+                  isTarget: true,
+                  feedback: 'Calls even out over a career, but focus spent arguing never comes back. Next point.',
+                },
+                {
+                  text: 'Argue until they overturn it',
+                  feedback: 'The call is locked. Every second spent fighting it is a second the next point loses.',
+                },
+                {
+                  text: 'Carry it and aim for the lines to prove a point',
+                  feedback: 'Anger aims at small targets badly. Clear it first, then pick smart targets.',
+                },
+              ],
+            },
+            {
+              prompt: 'Third set, legs heavy, and the rallies keep getting longer. What is your response?',
+              choices: [
+                {
+                  text: 'Slow my breathing between points and play one point at a time',
+                  isTarget: true,
+                  feedback: 'Tired matches are won between points. Shrink the match to the next serve.',
+                },
+                {
+                  text: 'Go for winners early to end points fast',
+                  feedback: 'Forcing winners on tired legs feeds errors. Shorten your thinking, not the rally.',
+                },
+                {
+                  text: 'Start thinking about how much is left',
+                  feedback: 'Counting what is left makes legs heavier. The only rally that exists is this one.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          archetype: 'race',
+          label: 'Races against the clock',
+          whatIfChips: [
+            'A slow start',
+            'Someone passing me mid-race',
+            'Going out too fast and paying for it',
+            'Rough conditions on race day',
+            'An equipment problem',
+            'The hurt arriving earlier than expected',
+          ],
+          rounds: [
+            {
+              prompt: 'Your start is bad and the field gets a jump on you. What is your next move?',
+              choices: [
+                {
+                  text: 'Settle into my race plan and trust my pacing',
+                  isTarget: true,
+                  feedback: 'Races are lost chasing the first hundred meters. Your plan already accounts for a bad start. Run it.',
+                },
+                {
+                  text: 'Sprint immediately to get it all back',
+                  feedback: 'Panic surges borrow energy the last third owns. A steady reel-in beats instant payback.',
+                },
+                {
+                  text: 'Decide the race is already gone',
+                  feedback: 'One bad start decides nothing. The race is long, and your response is the race.',
+                },
+              ],
+            },
+            {
+              prompt: 'Mid-race, a competitor surges past you looking strong. What do you do?',
+              choices: [
+                {
+                  text: 'Relax my shoulders, hold my rhythm, race my plan',
+                  isTarget: true,
+                  feedback: 'You cannot control their race, only yours. Most surges come back to you.',
+                },
+                {
+                  text: 'Chase the surge right now',
+                  feedback: 'Covering every move burns the finish you trained for. Respond on your terms, not theirs.',
+                },
+                {
+                  text: 'Let it convince me they are just better today',
+                  feedback: 'A surge is information, not a verdict. Stay in your race and make them prove it lasts.',
+                },
+              ],
+            },
+            {
+              prompt: 'The hurt arrives with a third of the race still left. What is your response?',
+              choices: [
+                {
+                  text: 'Slow one breath, relax my form, break the race into small pieces',
+                  isTarget: true,
+                  feedback: 'Pain shrinks when the task shrinks. Next buoy, next lap, next lamppost.',
+                },
+                {
+                  text: 'Focus on how much it hurts and hang on',
+                  feedback: 'Attention feeds whatever it aims at. Aim it at form cues, not the burn.',
+                },
+                {
+                  text: 'Bargain with myself about easing off',
+                  feedback: 'Negotiating mid-race always ends in surrender. Decide once: form, breathe, next piece.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          archetype: 'judged',
+          label: 'Judged sports',
+          whatIfChips: [
+            'A fall on my first event',
+            'A lower score than I earned',
+            'A long wait before my turn',
+            'Someone hitting a huge routine right before me',
+            'A shaky warmup',
+            'One routine left to make it count',
+          ],
+          rounds: [
+            {
+              prompt: 'You wobble hard on your first landing and everyone sees it. What is your next move?',
+              choices: [
+                {
+                  text: 'Exhale, reset my posture, give the next element everything',
+                  isTarget: true,
+                  feedback: 'One deduction is a number. The rest of the routine is still yours to win.',
+                },
+                {
+                  text: 'Replay the wobble while I keep performing',
+                  feedback: 'A routine performed in the past tense falls apart. The next element deserves your whole mind.',
+                },
+                {
+                  text: 'Oversell everything after it to make up the points',
+                  feedback: 'Forcing difficulty you did not train invites the bigger mistake. Hit what you own.',
+                },
+              ],
+            },
+            {
+              prompt: 'Your score comes up lower than you know the routine deserved. What do you do?',
+              choices: [
+                {
+                  text: 'One long breath, let it go, prepare the next event',
+                  isTarget: true,
+                  feedback: 'Judges score the past. You still control everything about the next routine.',
+                },
+                {
+                  text: 'Keep arguing with the score in my head all meet',
+                  feedback: 'A silent argument with a scoreboard uses the exact focus your next event needs.',
+                },
+                {
+                  text: 'Add difficulty I have not trained to force a bigger score',
+                  feedback: 'Panic upgrades break routines. Earn it back with execution, not gambles.',
+                },
+              ],
+            },
+            {
+              prompt: 'Last rotation. Your body is tired and you have one routine left. What is your response?',
+              choices: [
+                {
+                  text: 'Slow my breathing and walk through my routine one element at a time',
+                  isTarget: true,
+                  feedback: 'Tired bodies follow clear minds. One element at a time is how finals are hit.',
+                },
+                {
+                  text: 'Think about everything riding on this routine',
+                  feedback: 'Stakes belong to the audience. You only need the first element, then the next.',
+                },
+                {
+                  text: 'Rush through it to get it over with',
+                  feedback: 'Rushing is how tired turns into broken. Your tempo is part of your training. Keep it.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          archetype: 'precision',
+          label: 'Precision & target sports',
+          whatIfChips: [
+            'A blow-up start',
+            'Wind picking up',
+            'A bad bounce that costs me',
+            "Someone else's pace throwing me off",
+            'A miss I should never miss',
+            'Protecting a lead late',
+          ],
+          rounds: [
+            {
+              prompt: 'Your first hole, end, or frame goes badly wrong. What is your next move?',
+              choices: [
+                {
+                  text: 'Full reset routine: breathe, pick my target, commit',
+                  isTarget: true,
+                  feedback: 'That is the reset. In a long round, one bad start is noise if you refuse to repeat it.',
+                },
+                {
+                  text: 'Start fixing my mechanics right now',
+                  feedback: 'Mid-round surgery breaks more than it fixes. Trust the training. Reset the mind.',
+                },
+                {
+                  text: 'Press to win it all back on the next shot',
+                  feedback: 'Pressing turns one mistake into three. The next shot only needs to be your normal one.',
+                },
+              ],
+            },
+            {
+              prompt: 'A gust of wind, a noise, a bad bounce takes a good shot and ruins it. What do you do?',
+              choices: [
+                {
+                  text: 'Accept it, breathe, run my routine for the next shot',
+                  isTarget: true,
+                  feedback: 'You control the process, never the bounce. The routine is the only thing worth protecting.',
+                },
+                {
+                  text: 'Get angry about the unfairness of it',
+                  feedback: 'The wind does not care, and the next shot does not either. Spend focus where it scores.',
+                },
+                {
+                  text: 'Start steering shots to avoid more bad luck',
+                  feedback: 'Steering is fear wearing a strategy costume. Commit fully or step off and reset.',
+                },
+              ],
+            },
+            {
+              prompt: 'You are in the lead late, and your hands notice. What is your response?',
+              choices: [
+                {
+                  text: 'Slow everything down: long exhale, routine, one target',
+                  isTarget: true,
+                  feedback: 'Nerves late means it matters. The routine turns shaky hands back into trained hands.',
+                },
+                {
+                  text: 'Think about what happens if I lose it from here',
+                  feedback: 'Protecting a lead is still just one shot at a time. Play to your target, not the outcome.',
+                },
+                {
+                  text: 'Speed up to get finished before the nerves win',
+                  feedback: 'Fast finishes feed the nerves. Your tempo is your anchor. Keep it.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          archetype: 'combat',
+          label: 'Combat sports',
+          whatIfChips: [
+            'Giving up the first score',
+            'A call that goes against me',
+            'An opponent stronger than expected',
+            'Getting caught early',
+            'My gas tank emptying',
+            'A hostile crowd',
+          ],
+          rounds: [
+            {
+              prompt: 'Your opponent scores first, fast. What is your next move?',
+              choices: [
+                {
+                  text: 'Reset breath, back to my stance, back to my game plan',
+                  isTarget: true,
+                  feedback: 'The first score is information, not a verdict. Your plan is built for the whole match.',
+                },
+                {
+                  text: 'Charge in wild to take it back right now',
+                  feedback: 'Wild trades are how one score becomes three. Composed pressure beats panic pressure.',
+                },
+                {
+                  text: 'Start worrying I am outmatched',
+                  feedback: 'One exchange proves nothing. Fight the match in front of you, not the story in your head.',
+                },
+              ],
+            },
+            {
+              prompt: "The official's call goes against you and it feels wrong. What do you do?",
+              choices: [
+                {
+                  text: 'Exhale, drop my shoulders, fight the next exchange',
+                  isTarget: true,
+                  feedback: 'Calls are gone the moment they are made. The next exchange is still fully yours.',
+                },
+                {
+                  text: 'Protest until it changes',
+                  feedback: 'The call is locked and your opponent is not waiting. Reset first.',
+                },
+                {
+                  text: 'Fight angry to make the official regret it',
+                  feedback: 'Anger telegraphs. Cold focus scores. Clear it, then attack on purpose.',
+                },
+              ],
+            },
+            {
+              prompt: 'Final round. Your gas tank is low and so is theirs. What is your response?',
+              choices: [
+                {
+                  text: 'Slow one breath and win the next exchange only',
+                  isTarget: true,
+                  feedback: 'Deep water rewards the calmer mind. One exchange at a time is how tired matches are won.',
+                },
+                {
+                  text: 'Think about how exhausted I am',
+                  feedback: 'They are tired too. Whoever aims attention at the task instead of the tank takes the round.',
+                },
+                {
+                  text: 'Coast and hope the scorecards are kind',
+                  feedback: 'Hope is not a strategy. Pick the next exchange and go win it.',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          archetype: 'attempt',
+          label: 'Attempt sports',
+          whatIfChips: [
+            'Missing my opener',
+            'A no-count call from the judges',
+            'A long wait between attempts',
+            'Someone else hitting a huge attempt',
+            'Feeling flat in warmups',
+            'One attempt left to make it count',
+          ],
+          rounds: [
+            {
+              prompt: 'You miss your opening attempt. What is your next move?',
+              choices: [
+                {
+                  text: 'Reset routine, trust the plan, treat attempt two like attempt one',
+                  isTarget: true,
+                  feedback: 'Openers get missed at every meet that matters. The plan has room for it. The reset is the plan.',
+                },
+                {
+                  text: 'Change my whole approach before the next attempt',
+                  feedback: 'Panic edits break trained patterns. One miss means execute, not rebuild.',
+                },
+                {
+                  text: 'Start doing the math on bombing out',
+                  feedback: 'Counting disasters recruits your focus against you. One attempt exists: the next one.',
+                },
+              ],
+            },
+            {
+              prompt: 'The judges give you a no-count on an attempt you thought was good. What do you do?',
+              choices: [
+                {
+                  text: 'One long breath, let it go, lock into the next attempt',
+                  isTarget: true,
+                  feedback: 'The call is final and the bar does not care. Your next attempt is untouched by it.',
+                },
+                {
+                  text: 'Argue the call in my head for the rest of the meet',
+                  feedback: 'A grudge occupies the exact focus your next attempt needs. Clear it.',
+                },
+                {
+                  text: 'Rush my next attempt while I am fired up',
+                  feedback: 'Heat without routine misses. Channel it through the same setup you always run.',
+                },
+              ],
+            },
+            {
+              prompt: 'Final attempt of the day and everything rides on it. What is your response?',
+              choices: [
+                {
+                  text: 'Slow my breath, run my setup routine, commit completely',
+                  isTarget: true,
+                  feedback: 'The routine is rehearsed courage. Same setup, same cues, full commitment.',
+                },
+                {
+                  text: 'Think about everything that depends on this one',
+                  feedback: 'Stakes add weight the bar does not have. Your only job is the same attempt you have made a thousand times.',
+                },
+                {
+                  text: 'Hold a little back to be safe',
+                  feedback: 'Half commitment is how final attempts get missed. Decide before you step in: all of it.',
+                },
+              ],
             },
           ],
         },

@@ -293,7 +293,7 @@ type PulseRitualSound = {
   label: string;
   description: string;
   icon: React.ReactNode;
-  category: 'onboarding' | 'daily' | 'milestone' | 'navigation' | 'pulsecheck-moment';
+  category: 'onboarding' | 'daily' | 'milestone' | 'navigation' | 'pulsecheck-moment' | 'pulsecheck-utility';
   /// Filename (without extension) used by the iOS bundle. Pair with
   /// the call site in HapticsService / SoundService.
   file: string;
@@ -685,7 +685,88 @@ const PULSECHECK_SOUNDS: PulseRitualSound[] = [
   },
 ];
 
-const ALL_SFX_SOUNDS: PulseRitualSound[] = [...RITUAL_SOUNDS, ...PULSECHECK_SOUNDS];
+// Navigation and selection utilities — heard dozens of times per
+// session, so these must be the quietest sounds in the whole set.
+// Near-subliminal texture, never a chime.
+const PULSECHECK_UTILITY_SOUNDS: PulseRitualSound[] = [
+  {
+    id: 'pulsecheck-tab-change',
+    label: 'Tab Change',
+    description:
+      'Main tab bar switch (Home / Path / Profile). The most frequent sound in the app — near-subliminal, must never grate.',
+    icon: <Music className="w-4 h-4" />,
+    category: 'pulsecheck-utility',
+    file: 'pulsecheck-tab-change',
+    prompt:
+      'Very soft dark felt tap with a faint short airy sweep, minimal and premium, near-subliminal interface navigation tick, extremely short, no music, no speech, no reverb tail',
+    durationSeconds: 0.4,
+    promptInfluence: 0.45,
+    pairedHapticNote: 'MainTabView selectedTab onChange, with HapticsService.selection()',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-select',
+    label: 'Selection Tick',
+    description:
+      'Chip and option selection everywhere: check-in chips, reflection choices, pillar tabs, pickers. Played in quick succession — the softest sound in the set.',
+    icon: <Music className="w-4 h-4" />,
+    category: 'pulsecheck-utility',
+    file: 'pulsecheck-select',
+    prompt:
+      'Tiny soft matte click like a smooth precise switch engaging, dark and quiet, the quietest possible confirmation tick, extremely short, no music, no speech, no reverb',
+    durationSeconds: 0.35,
+    promptInfluence: 0.45,
+    pairedHapticNote: 'Alongside every HapticsService.selection() call (pillar tabs, chips)',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-primary-action',
+    label: 'Primary Action',
+    description:
+      'Pressing a primary CTA that starts training: Start This Step, Start buttons on daily cards. A confident beginning, not a celebration.',
+    icon: <Zap className="w-4 h-4" />,
+    category: 'pulsecheck-utility',
+    file: 'pulsecheck-primary-action',
+    prompt:
+      'Short confident soft low thud with a subtle brief rising airy accent, premium button press that starts something, dark and restrained, very short, no music, no speech',
+    durationSeconds: 0.5,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'Start buttons: JuniorPathView currentNodeCard, JuniorHomeView todo cards',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-drill-hit',
+    label: 'Drill Hit',
+    description:
+      'Correct pick in a choice drill round (interactive modules). Tight and satisfying, restrained — the athlete hears this while training.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'pulsecheck-utility',
+    file: 'pulsecheck-drill-hit',
+    prompt:
+      'Quick bright soft ping with a tight satisfying snap, correct answer confirmation, modern and restrained, very short, no music, no speech, no reverb tail',
+    durationSeconds: 0.6,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'InteractiveModuleContent choice drill select() when isTarget',
+    priority: 'medium',
+  },
+  {
+    id: 'pulsecheck-drill-miss',
+    label: 'Drill Miss',
+    description:
+      'Wrong pick in a choice drill round. Neutral information, never punishment — no buzzer energy, junior athletes hear this too.',
+    icon: <Music className="w-4 h-4" />,
+    category: 'pulsecheck-utility',
+    file: 'pulsecheck-drill-miss',
+    prompt:
+      'Soft low muted double thud, gentle neutral miss cue, warm and dark, never harsh or punishing, very short, no buzzer, no music, no speech',
+    durationSeconds: 0.5,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'InteractiveModuleContent choice drill select() when not isTarget',
+    priority: 'medium',
+  },
+];
+
+const ALL_SFX_SOUNDS: PulseRitualSound[] = [...RITUAL_SOUNDS, ...PULSECHECK_SOUNDS, ...PULSECHECK_UTILITY_SOUNDS];
 
 const RITUAL_CATEGORY_LABELS: Record<string, string> = {
   onboarding: 'Onboarding Moments',
@@ -693,9 +774,10 @@ const RITUAL_CATEGORY_LABELS: Record<string, string> = {
   milestone: 'Milestone Moments',
   navigation: 'Navigation & Movement',
   'pulsecheck-moment': 'PulseCheck · Path & Ceremony Moments',
+  'pulsecheck-utility': 'PulseCheck · Navigation & Selection',
 };
 
-const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['onboarding', 'daily', 'milestone', 'navigation', 'pulsecheck-moment'];
+const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['onboarding', 'daily', 'milestone', 'navigation', 'pulsecheck-moment', 'pulsecheck-utility'];
 
 const RITUAL_PRIORITY_BADGE: Record<PulseRitualSound['priority'], { label: string; classes: string }> = {
   high: { label: 'Priority · High', classes: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' },
@@ -834,7 +916,7 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'coverage' | 'voice' | 'moduleNarrations' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'coverage' | 'voice' | 'moduleNarrations' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'pulsecheckSfx' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
 
 // Every spoken line Nora narrates across sims and protocols, derived from
 // the module configs so stored clips byte-match runtime speech.
@@ -3508,6 +3590,13 @@ const AdminAiVoice: React.FC = () => {
               onClick={() => setActiveTab('ritual')}
             />
             <AudioTabButton
+              active={activeTab === 'pulsecheckSfx'}
+              icon={<Volume2 className="h-4 w-4" />}
+              label="PulseCheck Moments"
+              description="Path and ceremony moment SFX for the PulseCheck app: dark, premium, athletic. Delivered over the air."
+              onClick={() => setActiveTab('pulsecheckSfx')}
+            />
+            <AudioTabButton
               active={activeTab === 'registrySims'}
               icon={<Volume2 className="h-4 w-4" />}
               label="Registry Sims"
@@ -4253,17 +4342,22 @@ const AdminAiVoice: React.FC = () => {
           </div>
           )}
 
-          {activeTab === 'ritual' && (
+          {(activeTab === 'ritual' || activeTab === 'pulsecheckSfx') && (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
             <div className="mb-6 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/25 flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-teal-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-white">App Sound Effects</div>
+                <div className="font-semibold text-white">
+                  {activeTab === 'ritual' ? 'Pulse Ritual Sound Effects' : 'PulseCheck Moment Sound Effects'}
+                </div>
                 <div className="text-xs text-zinc-500">
-                  {RITUAL_SOUNDS.length} Pulse Ritual sounds (soft, intentional, peaceful) + {PULSECHECK_SOUNDS.length} PulseCheck moment sounds (dark, premium, athletic).
-                  Generated audio is persisted to Firebase Storage and survives reloads. Ritual downloads into the iOS bundle; PulseCheck sounds reach devices over the air via <code className="font-mono">pulsecheck-sfx-assets</code>.
+                  {activeTab === 'ritual' ? (
+                    <>Soft, intentional, peaceful — {RITUAL_SOUNDS.length} sounds. Generated audio is persisted to Firebase Storage and survives reloads — download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.mp3</code>.</>
+                  ) : (
+                    <>Dark, premium, athletic — {PULSECHECK_SOUNDS.length} sounds for path and ceremony moments. Delivered over the air via <code className="font-mono">pulsecheck-sfx-assets</code>: the app hydrates + caches on launch, so regens reach devices without a rebuild.</>
+                  )}
                 </div>
                 {ritualLoadError && (
                   <div className="mt-2 text-[11px] text-red-300">{ritualLoadError}</div>
@@ -4295,7 +4389,7 @@ const AdminAiVoice: React.FC = () => {
 
             <div className="space-y-8">
               {RITUAL_CATEGORY_ORDER.map((cat) => {
-                const sounds = ALL_SFX_SOUNDS.filter((s) => s.category === cat);
+                const sounds = (activeTab === 'pulsecheckSfx' ? PULSECHECK_SOUNDS : RITUAL_SOUNDS).filter((s) => s.category === cat);
                 if (sounds.length === 0) return null;
                 return (
                   <div key={cat} className="rounded-2xl border border-white/[0.06] bg-black/10">

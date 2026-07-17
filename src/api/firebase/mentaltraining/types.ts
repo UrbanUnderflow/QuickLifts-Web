@@ -155,11 +155,47 @@ export type ModuleInteractionRound = {
 
 export type ModuleInteractionKind = 'choiceDrill' | 'guidedDwell' | 'lockedReplay';
 
+// ── Sport scenario packs ────────────────────────────────────────────────────
+// A second archetype axis on the sports intelligence layer: SportsInsight
+// archetypes weight biometrics; scenario archetypes describe what adversity
+// looks like in the athlete's sport. Named "scenario packs" deliberately —
+// `variant` already means sim build variants (variantRegistryService) and
+// protocol variants (pulsecheckProtocolVariantSpecs).
+// Resolution happens on device from User.sport via the keyword mapper in
+// sportScenarioArchetypes.ts (Swift mirror in SportsIntelligenceReasoningLayer).
+// Spec: PulseCheck/docs/specs/sport-scenario-packs-spec.md
+
+export type SportScenarioArchetype =
+  | 'invasion'
+  | 'net_racket'
+  | 'race'
+  | 'judged'
+  | 'precision'
+  | 'combat'
+  | 'attempt'
+  | 'general';
+
+/** Sport-specific content overlay for a choiceDrill. Anything a pack does not
+ *  override inherits the base content and its pre-generated narration clip. */
+export type ScenarioPack = {
+  archetype: SportScenarioArchetype;
+  /** Admin-facing label, e.g. "Net & racket sports". */
+  label: string;
+  /** Sport-specific "what could go wrong" chips for the pick phase. */
+  whatIfChips?: string[];
+  /** Full replacement for the base choiceDrill rounds (rounds do not overlay). */
+  rounds?: ModuleInteractionRound[];
+};
+
 export type ModuleInteraction = {
   kind: ModuleInteractionKind;
   // choiceDrill: scenario -> bounded choices -> coaching feedback, xN rounds.
   rounds?: ModuleInteractionRound[];
+  /** choiceDrill only: sport scenario packs resolved from User.sport on device. */
+  scenarioPacks?: ScenarioPack[];
   // guidedDwell: pick N chips, then a paced timed dwell on each pick.
+  // For choiceDrill, a non-empty pickChoices adds a chip-pick phase before the
+  // rounds (the "what ifs" elicitation); picks are bounded, never free text.
   pickPrompt?: string;
   pickChoices?: string[];
   pickCount?: number;

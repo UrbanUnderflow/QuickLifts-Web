@@ -222,6 +222,11 @@ function interactionScripts(interaction: ModuleInteraction): Array<{ slot: strin
   };
 
   if (interaction.kind === 'choiceDrill') {
+    // Pick phase ("what ifs" elicitation) — narrated once before the rounds
+    // when pickChoices is present. Chips themselves are taps, never spoken.
+    if ((interaction.pickChoices ?? []).length > 0) {
+      push('pick-prompt', 'Pick Prompt', interaction.pickPrompt);
+    }
     (interaction.rounds ?? []).forEach((round, roundIndex) => {
       push(`drill-round-${roundIndex + 1}`, `Round ${roundIndex + 1} Prompt`, round.prompt);
       (round.choices ?? []).forEach((choice, choiceIndex) => {
@@ -230,6 +235,27 @@ function interactionScripts(interaction: ModuleInteraction): Array<{ slot: strin
           `Round ${roundIndex + 1} Feedback ${choiceIndex + 1}`,
           choice.feedback,
         );
+      });
+    });
+    // Sport scenario packs: every pack round prompt/feedback needs its own
+    // pre-generated clip (iOS narrates resolved pack text verbatim, so the
+    // byte-hash must resolve against these lines). Packs without rounds
+    // (chips-only overlays) add no lines.
+    (interaction.scenarioPacks ?? []).forEach((pack) => {
+      const packLabel = pack.label || pack.archetype;
+      (pack.rounds ?? []).forEach((round, roundIndex) => {
+        push(
+          `pack-${pack.archetype}-round-${roundIndex + 1}`,
+          `${packLabel} — Round ${roundIndex + 1} Prompt`,
+          round.prompt,
+        );
+        (round.choices ?? []).forEach((choice, choiceIndex) => {
+          push(
+            `pack-${pack.archetype}-round-${roundIndex + 1}-feedback-${choiceIndex + 1}`,
+            `${packLabel} — Round ${roundIndex + 1} Feedback ${choiceIndex + 1}`,
+            choice.feedback,
+          );
+        });
       });
     });
   }
