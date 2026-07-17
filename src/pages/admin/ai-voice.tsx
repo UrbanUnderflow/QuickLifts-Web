@@ -293,7 +293,7 @@ type PulseRitualSound = {
   label: string;
   description: string;
   icon: React.ReactNode;
-  category: 'onboarding' | 'daily' | 'milestone' | 'navigation';
+  category: 'onboarding' | 'daily' | 'milestone' | 'navigation' | 'pulsecheck-moment';
   /// Filename (without extension) used by the iOS bundle. Pair with
   /// the call site in HapticsService / SoundService.
   file: string;
@@ -583,14 +583,119 @@ const RITUAL_SOUNDS: PulseRitualSound[] = [
   },
 ];
 
+// ──────────────────────────────────────────────────────────
+// PULSECHECK MOMENT SFX
+// Same generation pipeline as Pulse Ritual, different sonic
+// identity: dark, premium, athletic — restrained impact over
+// softness. Delivered to iOS via `pulsecheck-sfx-assets/{id}`
+// (PulseCheck SoundService hydrates + caches on app open, so
+// regens reach devices without an app rebuild).
+// ──────────────────────────────────────────────────────────
+
+const PULSECHECK_SOUNDS: PulseRitualSound[] = [
+  {
+    id: 'pulsecheck-path-step-advance',
+    label: 'Path Step Advance',
+    description:
+      'Fires as a finished step fills in on the junior Path trail (spring pop + medium haptic). The most frequent moment sound — quiet, deep, satisfying, never a fanfare.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'pulsecheck-path-step-advance',
+    prompt:
+      'Single deep soft percussive thump with a very short bright crystalline tick at the end, dark and premium, tight and dry, satisfying progress confirmation, very short, no music, no speech, no reverb tail',
+    durationSeconds: 0.8,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'HapticsService.stepAdvance() in JuniorPathView.syncMoments()',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-path-dot-stamp',
+    label: 'Adherence Dot Stamp',
+    description:
+      'Fires once per day as today\'s Showing Up dot stamps in on the Path (rigid haptic). A firm stamp press — the sound of showing up.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'pulsecheck-path-dot-stamp',
+    prompt:
+      'Quick firm rubber stamp press onto paper with a subtle low wooden thud, tight and dry, decisive and satisfying, very short, no music, no speech, no reverb tail',
+    durationSeconds: 0.6,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'HapticsService.stamp() in JuniorPathView.syncMoments()',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-rank-earned',
+    label: 'Rank Earned',
+    description:
+      'Ceremony sound for passing a checkpoint gate and earning a rank (STEADY, LOCKED IN, CLUTCH...). Identity moment — restrained triumph, esports rank-up energy without cheese.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'pulsecheck-rank-earned',
+    prompt:
+      'Rising three-note synth swell resolving into a bright restrained metallic shimmer, dark arena atmosphere, modern esports rank-up, confident and premium, no cheesy fanfare, no music melody, no speech',
+    durationSeconds: 2.4,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'HapticsService.celebrate() — rank gate ceremony (upcoming)',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-trophy-earned',
+    label: 'Trophy Earned',
+    description:
+      'An adherence milestone lands in the trophy case (First Step, 7 Days Strong, The Comeback...). Warm and golden, one beat of celebration.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'pulsecheck-trophy-earned',
+    prompt:
+      'Single warm golden bell strike with a soft short whoosh landing into place, celebratory but minimal and premium, brief sparkle decay, no music, no speech',
+    durationSeconds: 1.6,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'HapticsService.celebrate() — trophy fly-in (upcoming)',
+    priority: 'medium',
+  },
+  {
+    id: 'pulsecheck-season-unlock',
+    label: 'Guided Season Unlock',
+    description:
+      'The finale: Foundation complete, the Guided Season lock opens. The single most produced moment in the app — cinematic arrival, gold giving way to teal.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'pulsecheck-season-unlock',
+    prompt:
+      'Heavy metal lock unlatching followed by a deep cinematic bloom swell with airy shimmer rising over two seconds, triumphant arrival, dark premium and emotional, no melody, no speech',
+    durationSeconds: 3.5,
+    promptInfluence: 0.55,
+    pairedHapticNote: 'HapticsService.celebrate() — Foundation finale ceremony (upcoming)',
+    priority: 'medium',
+  },
+  {
+    id: 'pulsecheck-day-complete',
+    label: 'All Three Trained',
+    description:
+      'Plays once per day on Home when the athlete finishes all three pillars. Quiet resolution, the day settling closed — heard daily, must never grate.',
+    icon: <CheckCircle className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'pulsecheck-day-complete',
+    prompt:
+      'Three quick soft ascending marimba-like notes resolving into a gentle warm settle, quiet daily completion, dark and calm, satisfying resolution, no reverb tail, no speech',
+    durationSeconds: 1.4,
+    promptInfluence: 0.5,
+    pairedHapticNote: 'JuniorHomeView dayCompleteBanner appearance',
+    priority: 'medium',
+  },
+];
+
+const ALL_SFX_SOUNDS: PulseRitualSound[] = [...RITUAL_SOUNDS, ...PULSECHECK_SOUNDS];
+
 const RITUAL_CATEGORY_LABELS: Record<string, string> = {
   onboarding: 'Onboarding Moments',
   daily: 'Daily Cadence',
   milestone: 'Milestone Moments',
   navigation: 'Navigation & Movement',
+  'pulsecheck-moment': 'PulseCheck · Path & Ceremony Moments',
 };
 
-const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['onboarding', 'daily', 'milestone', 'navigation'];
+const RITUAL_CATEGORY_ORDER: PulseRitualSound['category'][] = ['onboarding', 'daily', 'milestone', 'navigation', 'pulsecheck-moment'];
 
 const RITUAL_PRIORITY_BADGE: Record<PulseRitualSound['priority'], { label: string; classes: string }> = {
   high: { label: 'Priority · High', classes: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25' },
@@ -3078,6 +3183,18 @@ const AdminAiVoice: React.FC = () => {
   // silently losing the audio.
 
   const RITUAL_SFX_COLLECTION = 'ritual-sfx-assets';
+  const PULSECHECK_SFX_COLLECTION = 'pulsecheck-sfx-assets';
+
+  // PulseCheck moment sounds ride the exact same generate/refine/persist
+  // rails as Pulse Ritual — only the Firestore collection, Storage
+  // folder, and family tag differ, resolved per sound.
+  const isPulseCheckSfx = (sound: PulseRitualSound) => sound.category === 'pulsecheck-moment';
+  const sfxCollectionFor = (sound: PulseRitualSound) =>
+    isPulseCheckSfx(sound) ? PULSECHECK_SFX_COLLECTION : RITUAL_SFX_COLLECTION;
+  const sfxStorageFolderFor = (sound: PulseRitualSound) =>
+    isPulseCheckSfx(sound) ? 'pulsecheck-sfx' : 'ritual-sfx';
+  const sfxFamilyFor = (sound: PulseRitualSound) =>
+    isPulseCheckSfx(sound) ? 'pulsecheck' : 'pulse-ritual';
 
   const loadRitualAssets = async () => {
     setRitualLoading(true);
@@ -3086,8 +3203,8 @@ const AdminAiVoice: React.FC = () => {
       const results: Record<string, SimAudioAssetRef | null> = {};
       const prompts: Record<string, string> = {};
       await Promise.all(
-        RITUAL_SOUNDS.map(async (sound) => {
-          const snap = await getDoc(doc(db, RITUAL_SFX_COLLECTION, sound.id));
+        ALL_SFX_SOUNDS.map(async (sound) => {
+          const snap = await getDoc(doc(db, sfxCollectionFor(sound), sound.id));
           if (snap.exists()) {
             const data = snap.data() as SimAudioAssetRef & { effectivePrompt?: string };
             results[sound.id] = data;
@@ -3134,7 +3251,7 @@ const AdminAiVoice: React.FC = () => {
 
       // Upload to Firebase Storage at a stable path so previews on
       // future visits keep working.
-      const path = `ritual-sfx/${sound.id}/${sound.file}.mp3`;
+      const path = `${sfxStorageFolderFor(sound)}/${sound.id}/${sound.file}.mp3`;
       const sRef = storageRef(storage, path);
       const snapshot = await uploadBytes(sRef, sfx.blob, { contentType: sfx.contentType });
       const downloadURL = await getDownloadURL(snapshot.ref);
@@ -3168,9 +3285,9 @@ const AdminAiVoice: React.FC = () => {
           ? [...existingHistory, { at: now, feedback: feedbackForHistory, prompt: overridePrompt }]
           : existingHistory;
 
-      await setDoc(doc(db, RITUAL_SFX_COLLECTION, sound.id), {
+      await setDoc(doc(db, sfxCollectionFor(sound), sound.id), {
         ...assetRecord,
-        family: 'pulse-ritual',
+        family: sfxFamilyFor(sound),
         category: sound.category,
         file: sound.file,
         priority: sound.priority,
@@ -3252,7 +3369,7 @@ const AdminAiVoice: React.FC = () => {
     const existing = ritualAssets[sound.id];
     if (existing) {
       await setDoc(
-        doc(db, RITUAL_SFX_COLLECTION, sound.id),
+        doc(db, sfxCollectionFor(sound), sound.id),
         { effectivePrompt: sound.prompt },
         { merge: true }
       );
@@ -4143,10 +4260,10 @@ const AdminAiVoice: React.FC = () => {
                 <Sparkles className="w-4 h-4 text-teal-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-semibold text-white">Pulse Ritual Sound Effects</div>
+                <div className="font-semibold text-white">App Sound Effects</div>
                 <div className="text-xs text-zinc-500">
-                  Soft, intentional, peaceful — {RITUAL_SOUNDS.length} sounds segmented from the Community + PulseCheck libraries.
-                  Generated audio is persisted to Firebase Storage and survives reloads — download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.mp3</code>.
+                  {RITUAL_SOUNDS.length} Pulse Ritual sounds (soft, intentional, peaceful) + {PULSECHECK_SOUNDS.length} PulseCheck moment sounds (dark, premium, athletic).
+                  Generated audio is persisted to Firebase Storage and survives reloads. Ritual downloads into the iOS bundle; PulseCheck sounds reach devices over the air via <code className="font-mono">pulsecheck-sfx-assets</code>.
                 </div>
                 {ritualLoadError && (
                   <div className="mt-2 text-[11px] text-red-300">{ritualLoadError}</div>
@@ -4178,7 +4295,7 @@ const AdminAiVoice: React.FC = () => {
 
             <div className="space-y-8">
               {RITUAL_CATEGORY_ORDER.map((cat) => {
-                const sounds = RITUAL_SOUNDS.filter((s) => s.category === cat);
+                const sounds = ALL_SFX_SOUNDS.filter((s) => s.category === cat);
                 if (sounds.length === 0) return null;
                 return (
                   <div key={cat} className="rounded-2xl border border-white/[0.06] bg-black/10">

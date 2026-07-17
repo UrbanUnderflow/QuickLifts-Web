@@ -371,7 +371,23 @@ const INTERACTION_KIND_LABELS: Record<string, string> = {
   lockedReplay: 'Locked replay',
 };
 
-const ModulePreviewModal: React.FC<{ target: PreviewTarget; devMode: boolean; onClose: () => void }> = ({ target, devMode, onClose }) => {
+type ModulePreviewModalProps = {
+  target: PreviewTarget;
+  devMode: boolean;
+  openNoteCount: number;
+  openNoteKind?: CurriculumNoteKind;
+  onAddNote: () => void;
+  onClose: () => void;
+};
+
+const ModulePreviewModal: React.FC<ModulePreviewModalProps> = ({
+  target,
+  devMode,
+  openNoteCount,
+  openNoteKind,
+  onAddNote,
+  onClose,
+}) => {
   const { exercise, lesson } = target;
   const data = exercise.data;
   const cfg = data?.exerciseConfig?.config || {};
@@ -410,8 +426,8 @@ const ModulePreviewModal: React.FC<{ target: PreviewTarget; devMode: boolean; on
         className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-200 px-5 py-4 sm:px-6">
-          <div>
+        <div className="flex shrink-0 flex-col gap-3 border-b border-stone-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6">
+          <div className="min-w-0">
             <div className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Module preview</div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 id="module-preview-title" className="mt-1 text-xl font-semibold text-stone-950 sm:text-2xl">{exercise.name}</h2>
@@ -427,7 +443,20 @@ const ModulePreviewModal: React.FC<{ target: PreviewTarget; devMode: boolean; on
             </div>
             {devMode && <div className="mt-1 font-mono text-xs text-stone-400">{exercise.id}</div>}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onAddNote}
+              className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold shadow-sm transition ${openNoteCount && openNoteKind ? NOTE_KIND_META[openNoteKind].badge : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-950'}`}
+              aria-label={`Add note for ${exercise.name}`}
+              title={openNoteCount ? `${openNoteCount} open note${openNoteCount === 1 ? '' : 's'} for this module` : `Add note for ${exercise.name}`}
+            >
+              {openNoteCount ? <MessageSquareText className="h-4 w-4" aria-hidden="true" /> : <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />}
+              <span>Add note</span>
+              {openNoteCount > 0 && (
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-stone-900 px-1.5 py-0.5 text-[10px] text-white">{openNoteCount}</span>
+              )}
+            </button>
             <button
               type="button"
               onClick={() => setIsPlaying(true)}
@@ -1090,6 +1119,21 @@ const JuniorCurriculumPage: React.FC = () => {
     if (!date) return 'Just now';
     return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
   };
+
+  const previewNoteTarget = preview
+    ? { id: `module:${preview.exercise.id}`, label: `Module: ${preview.exercise.name}` }
+    : null;
+  const previewOpenNotes = previewNoteTarget ? notesForTarget(previewNoteTarget.id) : [];
+  const previewOpenNoteKind: CurriculumNoteKind | undefined = previewOpenNotes.some((note) => note.kind === 'issue')
+    ? 'issue'
+    : previewOpenNotes.some((note) => note.kind === 'update')
+      ? 'update'
+      : previewOpenNotes.length
+        ? 'idea'
+        : undefined;
+  const noteComposerOptions = noteTargetOptions.some((target) => target.id === noteComposerTarget.id)
+    ? noteTargetOptions
+    : [noteComposerTarget, ...noteTargetOptions];
 
   // -------------------------------------------------------------------------
   // Clean (default) lesson row — content only, click to preview.
@@ -1902,7 +1946,16 @@ const JuniorCurriculumPage: React.FC = () => {
           </main>
         </div>
       </div>
-      {preview && <ModulePreviewModal target={preview} devMode={devMode} onClose={() => setPreview(null)} />}
+      {preview && previewNoteTarget && (
+        <ModulePreviewModal
+          target={preview}
+          devMode={devMode}
+          openNoteCount={previewOpenNotes.length}
+          openNoteKind={previewOpenNoteKind}
+          onAddNote={() => openNotesPanel(previewNoteTarget)}
+          onClose={() => setPreview(null)}
+        />
+      )}
       {notesOpen && (
         <div className="fixed inset-0 z-[80] flex justify-end bg-stone-950/35 backdrop-blur-[1px]" role="dialog" aria-modal="true" aria-label={`${activeTrack.label} curriculum notes`}>
           <button type="button" className="min-w-0 flex-1 cursor-default" onClick={() => setNotesOpen(false)} aria-label="Close notes" />
@@ -1938,12 +1991,12 @@ const JuniorCurriculumPage: React.FC = () => {
                   <select
                     value={noteComposerTarget.id}
                     onChange={(event) => {
-                      const target = noteTargetOptions.find((option) => option.id === event.target.value);
+                      const target = noteComposerOptions.find((option) => option.id === event.target.value);
                       if (target) setNoteComposerTarget(target);
                     }}
                     className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-800 outline-none transition focus:border-stone-400 focus:bg-white"
                   >
-                    {noteTargetOptions.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
+                    {noteComposerOptions.map((target) => <option key={target.id} value={target.id}>{target.label}</option>)}
                   </select>
                 </label>
 

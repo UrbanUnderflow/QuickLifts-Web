@@ -40,6 +40,17 @@ service firebase.storage {
       allow write: if isAuthenticated() && request.auth.uid == coachId;
     }
 
+    // App sound-effect assets generated from /admin/ai-voice. Public
+    // read (clients also use tokened downloadURLs); admin-only write.
+    match /ritual-sfx/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /pulsecheck-sfx/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Default deny for everything else (tight by default).
     match /{allPaths=**} {
       allow read, write: if false;
