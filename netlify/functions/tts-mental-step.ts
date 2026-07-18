@@ -118,7 +118,24 @@ export const handler: Handler = async (event) => {
       );
 
       if (!response.ok) {
-        return json(502, { error: 'ElevenLabs TTS generation failed' });
+        // Pass the upstream reason through: 401 quota_exceeded (out of
+        // credits), 401 invalid_api_key, 429 too_many_concurrent_requests
+        // (rate limit) all look identical as a bare 502. The ai-voice
+        // dashboard surfaces this error string verbatim in the console.
+        let detail = '';
+        try {
+          const raw = await response.text();
+          try {
+            const payload = JSON.parse(raw);
+            detail = payload?.detail?.status || payload?.detail?.message || raw.slice(0, 200);
+          } catch {
+            detail = raw.slice(0, 200);
+          }
+        } catch {}
+        console.error('[tts-mental-step] ElevenLabs error', response.status, detail);
+        return json(502, {
+          error: `ElevenLabs TTS generation failed (upstream ${response.status}${detail ? `: ${detail}` : ''})`,
+        });
       }
 
       const buf = Buffer.from(await response.arrayBuffer());
