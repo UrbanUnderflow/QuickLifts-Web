@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
-import { db, storage } from '../../api/firebase/config';
+import { auth, db, storage } from '../../api/firebase/config';
 import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAssetService';
 import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
 import { SIM_VARIANTS_COLLECTION } from '../../api/firebase/mentaltraining/collections';
@@ -60,6 +60,9 @@ const SOUND_EFFECTS: {
   category: 'splash' | 'celebration' | 'workout' | 'notification' | 'ui' | 'pulsecheck';
   file: string;    // path relative to /audio/ or iOS bundle name
   platform: 'community' | 'pulsecheck' | 'both';
+  prompt: string;
+  durationSeconds: number;
+  generationMode?: 'sfx' | 'speech';
 }[] = [
   // ── PulseCheck
   {
@@ -70,6 +73,8 @@ const SOUND_EFFECTS: {
     category: 'splash',
     file: 'pulse-splash',
     platform: 'pulsecheck',
+    prompt: 'Soothing mindful app-launch sound with a soft low pulse, gentle airy bloom, and a clean peaceful resolve, premium mental-focus identity, no speech, no melody, no harsh transients',
+    durationSeconds: 3,
   },
   {
     id: 'pc-mind-coach',
@@ -79,6 +84,8 @@ const SOUND_EFFECTS: {
     category: 'pulsecheck',
     file: 'mind-coach-greeting',
     platform: 'pulsecheck',
+    prompt: 'Warm restrained welcome cue for a trusted mental performance coach arriving, soft felt tone with a subtle luminous shimmer, calm and human, no speech, no melody',
+    durationSeconds: 2,
   },
   {
     id: 'pc-action-card',
@@ -88,6 +95,8 @@ const SOUND_EFFECTS: {
     category: 'pulsecheck',
     file: 'action-card-appear',
     platform: 'pulsecheck',
+    prompt: 'Short subtle premium chime as a mental training action card enters, soft rounded attack with a faint focused shimmer, confident and calm, no speech, no melody',
+    durationSeconds: 1,
   },
   {
     id: 'pc-message-received',
@@ -97,6 +106,8 @@ const SOUND_EFFECTS: {
     category: 'notification',
     file: 'message-received',
     platform: 'pulsecheck',
+    prompt: 'Gentle incoming coach-message notification, two soft warm tones with a clear but non-urgent arrival, mindful and premium, no speech, no harsh digital ping',
+    durationSeconds: 1.2,
   },
   {
     id: 'pc-message-sent',
@@ -106,6 +117,8 @@ const SOUND_EFFECTS: {
     category: 'ui',
     file: 'message-sent',
     platform: 'pulsecheck',
+    prompt: 'Very short soft message-send confirmation, smooth tactile tick with a tiny airy release, restrained and reassuring, no speech, no melody, no reverb tail',
+    durationSeconds: 0.5,
   },
   {
     id: 'pc-breathing-gong',
@@ -115,6 +128,8 @@ const SOUND_EFFECTS: {
     category: 'pulsecheck',
     file: 'breathing-gong',
     platform: 'pulsecheck',
+    prompt: 'Single calming meditation bowl gong for paced breathing, warm rounded fundamental with a smooth natural decay, centered and peaceful, no speech, no background music',
+    durationSeconds: 8,
   },
   {
     id: 'pc-success-chime',
@@ -124,6 +139,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'success-chime',
     platform: 'pulsecheck',
+    prompt: 'Brief restrained success chime for completing a mental training task, warm ascending two-note resolve with a soft shimmer, proud but never game-like, no speech',
+    durationSeconds: 1.5,
   },
   {
     id: 'pc-subtle-click',
@@ -133,6 +150,8 @@ const SOUND_EFFECTS: {
     category: 'ui',
     file: 'subtle-click',
     platform: 'pulsecheck',
+    prompt: 'Tiny soft matte interface click, precise and tactile like a smooth switch engaging, near-subliminal, dark and premium, no speech, no music, no reverb',
+    durationSeconds: 0.35,
   },
 
   // ── Pulse Community App
@@ -144,6 +163,8 @@ const SOUND_EFFECTS: {
     category: 'splash',
     file: 'PulseBeat1',
     platform: 'community',
+    prompt: 'Signature Fit With Pulse launch heartbeat, two deep warm athletic heart pulses followed by a subtle modern energy bloom, confident and welcoming, no speech, no melody',
+    durationSeconds: 3,
   },
   {
     id: 'community-big-celebration',
@@ -153,6 +174,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'bigCelebration',
     platform: 'community',
+    prompt: 'Major fitness achievement celebration with an energetic rising impact, bright layered sparkles, and a triumphant clean finish, bold and modern, no speech, no recognizable melody',
+    durationSeconds: 5,
   },
   {
     id: 'community-medium-celebration',
@@ -162,6 +185,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'mediumCelebration',
     platform: 'community',
+    prompt: 'Medium fitness milestone celebration, upbeat rising tonal burst with crisp sparkle accents and a satisfying resolve, energetic but compact, no speech, no recognizable melody',
+    durationSeconds: 3,
   },
   {
     id: 'community-mini-celebration',
@@ -171,6 +196,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'miniCelebration',
     platform: 'community',
+    prompt: 'Tiny upbeat fitness win confirmation, quick bright pop with a short sparkling tail, satisfying and friendly, no speech, no melody, under one second',
+    durationSeconds: 0.8,
   },
   {
     id: 'community-success',
@@ -180,6 +207,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'success',
     platform: 'community',
+    prompt: 'Clean universal success cue for a saved workout or submitted check-in, warm two-note confirmation with a polished digital finish, positive and concise, no speech',
+    durationSeconds: 1.2,
   },
   {
     id: 'community-great-job',
@@ -189,6 +218,9 @@ const SOUND_EFFECTS: {
     category: 'workout',
     file: 'greatJob',
     platform: 'community',
+    prompt: 'Great job!',
+    durationSeconds: 1.5,
+    generationMode: 'speech',
   },
   {
     id: 'community-checkin',
@@ -198,6 +230,8 @@ const SOUND_EFFECTS: {
     category: 'notification',
     file: 'chekin',
     platform: 'community',
+    prompt: 'Friendly athlete check-in notification, quick warm arrival chime with a light energetic pulse, social and welcoming, no speech, no harsh alarm tone',
+    durationSeconds: 1.2,
   },
   {
     id: 'community-nearby-checkin-success',
@@ -207,6 +241,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'nearby-checkin-success',
     platform: 'community',
+    prompt: 'Nearby event check-in success celebration, bright location ping resolving into a cheerful compact sparkle burst, rewarding and social, no speech, no melody',
+    durationSeconds: 2,
   },
   {
     id: 'community-start-clock',
@@ -216,6 +252,8 @@ const SOUND_EFFECTS: {
     category: 'workout',
     file: 'startClock',
     platform: 'community',
+    prompt: 'Crisp athletic timer-start signal, short three-part electronic count-in resolving to a decisive start beep, clear in a gym, no speech, no music',
+    durationSeconds: 1.5,
   },
   {
     id: 'community-half-way',
@@ -225,6 +263,9 @@ const SOUND_EFFECTS: {
     category: 'workout',
     file: 'half-way-there',
     platform: 'community',
+    prompt: 'Halfway there.',
+    durationSeconds: 1.5,
+    generationMode: 'speech',
   },
   {
     id: 'community-10s-left',
@@ -234,6 +275,9 @@ const SOUND_EFFECTS: {
     category: 'workout',
     file: '10-seconds-left',
     platform: 'community',
+    prompt: 'Ten seconds left.',
+    durationSeconds: 1.5,
+    generationMode: 'speech',
   },
   {
     id: 'community-5s-left',
@@ -243,6 +287,9 @@ const SOUND_EFFECTS: {
     category: 'workout',
     file: '5-seconds-left',
     platform: 'community',
+    prompt: 'Five seconds left.',
+    durationSeconds: 1.5,
+    generationMode: 'speech',
   },
   {
     id: 'community-completion',
@@ -252,6 +299,8 @@ const SOUND_EFFECTS: {
     category: 'workout',
     file: 'Completion1',
     platform: 'community',
+    prompt: 'End-of-set workout completion sound, decisive athletic impact resolving into a bright uplifting finish, satisfying after intense effort, no speech, no melody',
+    durationSeconds: 2,
   },
   {
     id: 'community-chain-reaction',
@@ -261,6 +310,8 @@ const SOUND_EFFECTS: {
     category: 'celebration',
     file: 'chain_reaction',
     platform: 'community',
+    prompt: 'Rapid cascading combo celebration, a sequence of energetic rising pops and sparkling impacts that accelerates into a compact payoff, playful and modern, no speech',
+    durationSeconds: 2.5,
   },
 ];
 
@@ -282,8 +333,8 @@ const CATEGORY_ORDER = ['splash', 'pulsecheck', 'celebration', 'workout', 'notif
 // No mechanical clicks. No game-y dings. Singing bowls, water,
 // breath, warm felt taps. Sounds that lower the heart rate.
 //
-// Generation: hand each `prompt` to the ElevenLabs SFX endpoint via
-// the existing `generateSfxBlob(...)` helper, then download the
+// Generation: hand each `prompt` to the OpenAI audio model through
+// the authenticated OpenAI bridge, then download the
 // returned blob as `{file}.mp3` to drop into the Pulse Ritual iOS
 // bundle under Resources/Sounds/.
 // ──────────────────────────────────────────────────────────
@@ -297,13 +348,13 @@ type PulseRitualSound = {
   /// Filename (without extension) used by the iOS bundle. Pair with
   /// the call site in HapticsService / SoundService.
   file: string;
-  /// ElevenLabs SFX prompt — describes the desired sonic texture in
+  /// Sound-design prompt — describes the desired sonic texture in
   /// natural language. Tuned for the "calming, intentional" voice.
   prompt: string;
   durationSeconds: number;
-  /// Lower influence (~0.3) gives ElevenLabs more freedom; higher
-  /// (~0.6) sticks closer to the prompt text. Soft / abstract cues
-  /// usually sound better with lower influence.
+  /// Lower influence (~0.3) gives the model more freedom; higher
+  /// (~0.6) asks it to follow the prompt more literally. Soft / abstract
+  /// cues usually sound better with lower influence.
   promptInfluence?: number;
   /// Existing iOS trigger point the sound should fire alongside.
   /// Helps the engineer wire `SoundService.play(...)` next to the
@@ -916,7 +967,7 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'coverage' | 'voice' | 'moduleNarrations' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'ritual' | 'pulsecheckSfx' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'coverage' | 'voice' | 'moduleNarrations' | 'macraOnboarding' | 'pulseCheckTutorial' | 'appLibrary' | 'pulseCheckAppSounds' | 'ritual' | 'pulsecheckSfx' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
 
 // Every spoken line Nora narrates across sims and protocols, derived from
 // the module configs so stored clips byte-match runtime speech.
@@ -1423,10 +1474,14 @@ const RegistrySimAssetCard: React.FC<{
 // ──────────────────────────────────────────────────────────
 const SoundCard: React.FC<{
   sound: typeof SOUND_EFFECTS[0];
+  asset: SimAudioAssetRef | null;
+  generating: boolean;
+  generationError?: string;
   isPlaying: boolean;
+  onRegenerate: () => void;
   onPlay: () => void;
   onStop: () => void;
-}> = ({ sound, isPlaying, onPlay, onStop }) => {
+}> = ({ sound, asset, generating, generationError, isPlaying, onRegenerate, onPlay, onStop }) => {
   const platformBadge =
     sound.platform === 'pulsecheck'
       ? { label: 'PulseCheck', color: 'bg-[#8B5CF6]/15 text-purple-300 border-[#8B5CF6]/25' }
@@ -1460,31 +1515,59 @@ const SoundCard: React.FC<{
               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${platformBadge.color}`}>
                 {platformBadge.label}
               </span>
+              {asset?.downloadURL && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-700/30 bg-emerald-900/20 text-emerald-400">
+                  Generated
+                </span>
+              )}
             </div>
             <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{sound.description}</p>
-            <code className="text-[10px] text-zinc-600 font-mono mt-1 block">{sound.file}.mp3</code>
+            <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
+              {sound.durationSeconds}s · {sound.generationMode === 'speech' ? 'ElevenLabs voice' : 'OpenAI SFX'} · {sound.file}.mp3
+            </code>
           </div>
         </div>
 
-        <button
-          onClick={isPlaying ? onStop : onPlay}
-          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            isPlaying
-              ? 'bg-[#E0FE10]/15 border border-[#E0FE10]/25 text-[#E0FE10] hover:bg-[#E0FE10]/20'
-              : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white'
-          }`}
-        >
-          {isPlaying ? (
-            <>
-              <Square className="w-3 h-3" /> Stop
-            </>
-          ) : (
-            <>
-              <Play className="w-3 h-3" /> Preview
-            </>
-          )}
-        </button>
+        <div className="flex flex-shrink-0 flex-col gap-1.5">
+          <button
+            onClick={onRegenerate}
+            disabled={generating}
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              generating
+                ? 'cursor-wait border-purple-500/25 bg-purple-500/10 text-purple-300'
+                : 'border-purple-500/30 bg-purple-500/15 text-purple-300 hover:bg-purple-500/20'
+            }`}
+          >
+            {generating
+              ? <><Loader2 className="w-3 h-3 animate-spin" />Generating</>
+              : <><RotateCcw className="w-3 h-3" />Regenerate</>}
+          </button>
+          <button
+            onClick={isPlaying ? onStop : onPlay}
+            disabled={generating}
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 ${
+              isPlaying
+                ? 'bg-[#E0FE10]/15 border border-[#E0FE10]/25 text-[#E0FE10] hover:bg-[#E0FE10]/20'
+                : 'bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+            }`}
+          >
+            {isPlaying ? <><Square className="w-3 h-3" />Stop</> : <><Play className="w-3 h-3" />Preview</>}
+          </button>
+        </div>
       </div>
+
+      {generationError && (
+        <div className="mt-3 rounded-lg border border-red-700/40 bg-red-900/20 px-3 py-2 text-[11px] text-red-200">
+          {generationError}
+        </div>
+      )}
+
+      {asset?.downloadURL && (
+        <div className="mt-3 rounded-lg border border-emerald-700/30 bg-emerald-900/10 px-3 py-2 text-[10px] text-emerald-300/80">
+          <span className="mr-1.5 uppercase tracking-wider text-emerald-400/70">Saved</span>
+          {new Date(asset.updatedAt).toLocaleString()} · <code className="break-all font-mono">{asset.storagePath}</code>
+        </div>
+      )}
 
       {/* Waveform animation */}
       {isPlaying && (
@@ -1570,7 +1653,7 @@ const VPSoundCard: React.FC<{
           </div>
           <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{cue.description}</p>
           <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
-            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice line' : 'ElevenLabs SFX'} · {cue.cueKey}
+            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice line' : 'OpenAI SFX'} · {cue.cueKey}
           </code>
         </div>
 
@@ -1699,7 +1782,7 @@ const ProtocolSoundCard: React.FC<{
           </div>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">{cue.description}</p>
           <code className="mt-1 block text-[10px] font-mono text-zinc-600">
-            {cue.durationSeconds}s · ElevenLabs SFX · {cue.runtimeRole ?? 'signature'}{cue.loop ? ' · loop' : ''} · {cue.protocolId}
+            {cue.durationSeconds}s · OpenAI SFX · {cue.runtimeRole ?? 'signature'}{cue.loop ? ' · loop' : ''} · {cue.protocolId}
           </code>
         </div>
 
@@ -2034,6 +2117,11 @@ const AdminAiVoice: React.FC = () => {
   // Sound effects state
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [appSoundAssets, setAppSoundAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [appSoundGenerating, setAppSoundGenerating] = useState<Record<string, boolean>>({});
+  const [appSoundGenErrors, setAppSoundGenErrors] = useState<Record<string, string>>({});
+  const [appSoundLoading, setAppSoundLoading] = useState(false);
+  const [appSoundLoadError, setAppSoundLoadError] = useState<string | null>(null);
 
   // Pulse Ritual generation state — generated audio is uploaded to
   // Firebase Storage and tracked in Firestore at
@@ -2113,14 +2201,29 @@ const AdminAiVoice: React.FC = () => {
     [selectedPresetId]
   );
 
-  // Group sounds by category
-  const groupedSounds = useMemo(() => {
+  // Keep each app's sound inventory isolated in its own dashboard tab.
+  const communityAppSounds = useMemo(
+    () => SOUND_EFFECTS.filter((sound) => sound.platform === 'community' || sound.platform === 'both'),
+    []
+  );
+  const pulseCheckAppSounds = useMemo(
+    () => SOUND_EFFECTS.filter((sound) => sound.platform === 'pulsecheck' || sound.platform === 'both'),
+    []
+  );
+  const groupedCommunitySounds = useMemo(() => {
     const groups: Record<string, typeof SOUND_EFFECTS> = {};
     for (const cat of CATEGORY_ORDER) {
-      groups[cat] = SOUND_EFFECTS.filter((s) => s.category === cat);
+      groups[cat] = communityAppSounds.filter((sound) => sound.category === cat);
     }
     return groups;
-  }, []);
+  }, [communityAppSounds]);
+  const groupedPulseCheckAppSounds = useMemo(() => {
+    const groups: Record<string, typeof SOUND_EFFECTS> = {};
+    for (const cat of CATEGORY_ORDER) {
+      groups[cat] = pulseCheckAppSounds.filter((sound) => sound.category === cat);
+    }
+    return groups;
+  }, [pulseCheckAppSounds]);
 
   const groupedProtocolCues = useMemo(() => {
     return PROTOCOL_SOUND_CUES.reduce<Record<ProtocolCueDef['protocolClass'], ProtocolCueDef[]>>(
@@ -2167,6 +2270,27 @@ const AdminAiVoice: React.FC = () => {
 
   const toggleVPSection = (sectionKey: string) => {
     setVPSectionsOpen((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
+  const APP_SFX_COLLECTION = 'app-sfx-assets';
+
+  const loadAppSoundAssets = async () => {
+    setAppSoundLoading(true);
+    setAppSoundLoadError(null);
+    try {
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      await Promise.all(
+        SOUND_EFFECTS.map(async (sound) => {
+          const snap = await getDoc(doc(db, APP_SFX_COLLECTION, sound.id));
+          results[sound.id] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+        })
+      );
+      setAppSoundAssets(results);
+    } catch (e: any) {
+      setAppSoundLoadError(e?.message || 'Failed to load app sound effects');
+    } finally {
+      setAppSoundLoading(false);
+    }
   };
 
   const stopRegistrySimSound = () => {
@@ -2264,34 +2388,79 @@ const AdminAiVoice: React.FC = () => {
     return resolvePulseCheckFunctionUrl('/.netlify/functions/tts-mental-step');
   };
 
+  const OPENAI_SFX_BRIDGE_ENDPOINT = '/api/openai/v1/chat/completions';
+  const OPENAI_SFX_FEATURE_ID = 'pulsecheckSoundEffects';
+  const OPENAI_SFX_MODEL = 'gpt-audio-1.5';
+
   const generateSfxBlob = async (
     prompt: string,
     durationSeconds: number,
     options?: { loop?: boolean; promptInfluence?: number }
   ) => {
-    const res = await fetch('/api/mentaltraining/generate-sfx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        durationSeconds,
-        loop: options?.loop ?? false,
-        promptInfluence: options?.promptInfluence,
-      }),
-    });
-    const payload = await res.json();
-    if (!res.ok || !payload?.audio) {
-      throw new Error(payload?.error || 'Sound generation failed');
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Firebase auth session required for OpenAI sound generation. Sign in again, then retry.');
     }
 
-    const binary = window.atob(payload.audio as string);
+    const normalizedDuration = Math.max(0.25, Math.min(12, Number(durationSeconds) || 4));
+    const promptInfluence = Math.max(0, Math.min(1, Number(options?.promptInfluence) || 0.35));
+    const idToken = await currentUser.getIdToken();
+    const res = await fetch(OPENAI_SFX_BRIDGE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        'openai-organization': OPENAI_SFX_FEATURE_ID,
+      },
+      body: JSON.stringify({
+        model: OPENAI_SFX_MODEL,
+        modalities: ['text', 'audio'],
+        audio: { voice: 'alloy', format: 'mp3' },
+        max_completion_tokens: 2000,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a professional sound-design engine. Generate only the requested nonverbal sound effect. Never speak, whisper, sing, narrate, describe the result, or include intelligible words. Do not add unrelated music. Honor the requested duration and loop behavior as closely as possible.',
+          },
+          {
+            role: 'user',
+            content: [
+              `Create a ${normalizedDuration.toFixed(2)}-second MP3 sound effect.`,
+              options?.loop
+                ? 'Make the beginning and ending connect as a seamless loop.'
+                : 'Make it a self-contained one-shot and end cleanly.',
+              `Prompt fidelity: ${promptInfluence.toFixed(2)} out of 1.00.`,
+              `Sound-design brief: ${prompt.trim()}`,
+              'Return the sound itself, with no spoken description or human vocalization.',
+            ].join('\n'),
+          },
+        ],
+      }),
+    });
+
+    const responseText = await res.text();
+    let payload: any = null;
+    try {
+      payload = responseText ? JSON.parse(responseText) : null;
+    } catch {}
+    const audio = payload?.choices?.[0]?.message?.audio?.data;
+    if (!res.ok) {
+      const bridgeMessage = payload?.error?.message || payload?.message;
+      throw new Error(bridgeMessage || `OpenAI bridge request failed (${res.status} ${res.statusText})`);
+    }
+    if (typeof audio !== 'string' || !audio) {
+      throw new Error('OpenAI bridge response did not include generated audio data');
+    }
+
+    const binary = window.atob(audio);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
 
     return {
       blob: new Blob([bytes], { type: 'audio/mpeg' }),
-      providerId: 'elevenlabs' as const,
-      contentType: (payload.contentType ?? 'audio/mpeg') as string,
+      providerId: 'openai' as const,
+      contentType: 'audio/mpeg',
     };
   };
 
@@ -2317,6 +2486,10 @@ const AdminAiVoice: React.FC = () => {
         presetId: selectedPresetId || null,
         settings,
         punctuationPauses,
+        // Stored library clips must only ever be Nora's ElevenLabs voice:
+        // fail loudly here instead of silently baking in the OpenAI
+        // runtime-fallback voice.
+        disableFallback: true,
       }),
     });
 
@@ -2337,13 +2510,71 @@ const AdminAiVoice: React.FC = () => {
     };
   };
 
+  const regenerateAppSound = async (sound: typeof SOUND_EFFECTS[0]) => {
+    setAppSoundGenerating((prev) => ({ ...prev, [sound.id]: true }));
+    setAppSoundGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[sound.id];
+      return next;
+    });
+
+    try {
+      const generated = sound.generationMode === 'speech'
+        ? await generateSpeechBlob(sound.prompt)
+        : await generateSfxBlob(sound.prompt, sound.durationSeconds);
+
+      const path = `pulsecheck-sfx/app-library/${sound.platform}/${sound.id}/${sound.file}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, generated.blob, { contentType: generated.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      const now = Date.now();
+      const previous = appSoundAssets[sound.id];
+
+      const assetRecord: SimAudioAssetRef = {
+        id: sound.id,
+        cueKey: sound.id,
+        label: sound.label,
+        prompt: sound.prompt,
+        provider: generated.providerId,
+        format: 'mp3',
+        contentType: generated.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: previous?.createdAt ?? now,
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, APP_SFX_COLLECTION, sound.id), {
+        ...assetRecord,
+        family: sound.platform === 'pulsecheck' ? 'pulsecheck-app' : 'fit-with-pulse-app',
+        platform: sound.platform,
+        category: sound.category,
+        file: sound.file,
+        generationMode: sound.generationMode ?? 'sfx',
+        durationSeconds: sound.durationSeconds,
+      });
+
+      setAppSoundAssets((prev) => ({ ...prev, [sound.id]: assetRecord }));
+    } catch (err: any) {
+      console.error('[app sfx] generation failed', err);
+      setAppSoundGenErrors((prev) => ({
+        ...prev,
+        [sound.id]: err?.message || 'Sound generation failed',
+      }));
+    } finally {
+      setAppSoundGenerating((prev) => ({ ...prev, [sound.id]: false }));
+    }
+  };
+
   // ── VP generate: call SFX or Nora TTS → Firebase Storage → Firestore
   const generateVPSound = async (cue: VPCueDef) => {
     setVPGenerating((prev) => ({ ...prev, [cue.cueKey]: true }));
     setVPGenErrors((prev) => { const n = { ...prev }; delete n[cue.cueKey]; return n; });
     try {
       let blob: Blob;
-      let providerId: SimAudioAssetRef['provider'] = 'elevenlabs';
+      let providerId: SimAudioAssetRef['provider'] = 'openai';
       let contentType = 'audio/mpeg';
 
       if (cue.generationMode === 'speech') {
@@ -3109,6 +3340,7 @@ const AdminAiVoice: React.FC = () => {
 
   useEffect(() => {
     loadConfig();
+    loadAppSoundAssets();
     loadVPAssets();
     loadRitualAssets();
     loadRegistrySimAssets();
@@ -3254,7 +3486,7 @@ const AdminAiVoice: React.FC = () => {
   const playSoundEffect = (sound: typeof SOUND_EFFECTS[0]) => {
     stopSoundEffect();
     setPlayingSound(sound.id);
-    playAudioUrl(`/audio/sfx/${sound.file}.mp3`);
+    playAudioUrl(appSoundAssets[sound.id]?.downloadURL ?? `/audio/sfx/${sound.file}.mp3`);
   };
 
   // ── Pulse Ritual generation / preview / download handlers ────────
@@ -3578,9 +3810,16 @@ const AdminAiVoice: React.FC = () => {
             <AudioTabButton
               active={activeTab === 'appLibrary'}
               icon={<Music className="h-4 w-4" />}
-              label="App Library"
-              description="Pulse Community and PulseCheck app sound libraries with category-based preview."
+              label="Fit With Pulse App Sounds"
+              description="Fit With Pulse app sound effects with category-based preview."
               onClick={() => setActiveTab('appLibrary')}
+            />
+            <AudioTabButton
+              active={activeTab === 'pulseCheckAppSounds'}
+              icon={<Smartphone className="h-4 w-4" />}
+              label="PulseCheck App Sounds"
+              description="Core PulseCheck app sound effects for launch, selections, messaging, training, and success moments."
+              onClick={() => setActiveTab('pulseCheckAppSounds')}
             />
             <AudioTabButton
               active={activeTab === 'ritual'}
@@ -4261,28 +4500,56 @@ const AdminAiVoice: React.FC = () => {
 	          {/* ════════════════════════
 	              SECTION 2: SOUND EFFECTS
 	          ════════════════════════ */}
-          {activeTab === 'appLibrary' && (
+          {(activeTab === 'appLibrary' || activeTab === 'pulseCheckAppSounds') && (() => {
+            const isPulseCheckLibrary = activeTab === 'pulseCheckAppSounds';
+            const soundsByCategory = isPulseCheckLibrary ? groupedPulseCheckAppSounds : groupedCommunitySounds;
+            const librarySounds = isPulseCheckLibrary ? pulseCheckAppSounds : communityAppSounds;
+
+            return (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/15 border border-[#8B5CF6]/25 flex items-center justify-center">
-                <Music className="w-4 h-4 text-purple-400" />
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                isPulseCheckLibrary
+                  ? 'bg-[#8B5CF6]/15 border border-[#8B5CF6]/25'
+                  : 'bg-[#E0FE10]/10 border border-[#E0FE10]/20'
+              }`}>
+                {isPulseCheckLibrary
+                  ? <Smartphone className="w-4 h-4 text-purple-400" />
+                  : <Music className="w-4 h-4 text-[#E0FE10]" />}
               </div>
               <div>
-                <div className="font-semibold text-white">Sound Effects Library</div>
-                <div className="text-xs text-zinc-500">
-                  All {SOUND_EFFECTS.length} sounds across Pulse Community and PulseCheck apps. Click Preview to hear them.
+                <div className="font-semibold text-white">
+                  {isPulseCheckLibrary ? 'PulseCheck App Sounds' : 'Fit With Pulse App Sounds'}
                 </div>
+                <div className="text-xs text-zinc-500">
+                  All {librarySounds.length} {isPulseCheckLibrary ? 'PulseCheck iOS' : 'Fit With Pulse'} sounds. Click Preview to hear them.
+                </div>
+                {appSoundLoadError && (
+                  <div className="mt-1 text-[11px] text-red-300">{appSoundLoadError}</div>
+                )}
               </div>
-              {playingSound && (
-                <button onClick={stopSoundEffect} className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-700">
-                  <VolumeX className="w-3.5 h-3.5" />Stop All
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={loadAppSoundAssets}
+                  disabled={appSoundLoading}
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
+                >
+                  {appSoundLoading
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />}
+                  Refresh
                 </button>
-              )}
+                {playingSound && (
+                  <button onClick={stopSoundEffect} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs hover:bg-zinc-700">
+                    <VolumeX className="w-3.5 h-3.5" />Stop All
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-8">
               {CATEGORY_ORDER.map((cat) => {
-                const sounds = groupedSounds[cat];
+                const sounds = soundsByCategory[cat];
                 if (!sounds?.length) return null;
                 const isOpen = librarySectionsOpen[cat] ?? true;
                 return (
@@ -4311,7 +4578,11 @@ const AdminAiVoice: React.FC = () => {
                               <SoundCard
                                 key={sound.id}
                                 sound={sound}
+                                asset={appSoundAssets[sound.id] ?? null}
+                                generating={Boolean(appSoundGenerating[sound.id])}
+                                generationError={appSoundGenErrors[sound.id]}
                                 isPlaying={playingSound === sound.id}
+                                onRegenerate={() => regenerateAppSound(sound)}
                                 onPlay={() => playSoundEffect(sound)}
                                 onStop={stopSoundEffect}
                               />
@@ -4328,19 +4599,16 @@ const AdminAiVoice: React.FC = () => {
             {/* Legend */}
             <div className="mt-8 flex flex-wrap gap-3 text-xs text-zinc-500 border-t border-white/[0.05] pt-5">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#E0FE10]/60" />
-                Community App (iOS/Android)
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#8B5CF6]/60" />
-                PulseCheck iOS App
+                <span className={`w-2 h-2 rounded-full ${isPulseCheckLibrary ? 'bg-[#8B5CF6]/60' : 'bg-[#E0FE10]/60'}`} />
+                {isPulseCheckLibrary ? 'PulseCheck iOS App' : 'Fit With Pulse App (iOS/Android)'}
               </div>
               <div className="ml-auto text-zinc-600">
-                Preview plays from <code className="font-mono">/public/audio/</code> — iOS plays from bundle
+                Preview uses the latest generated Firebase asset, with <code className="font-mono">/public/audio/</code> as fallback
               </div>
             </div>
           </div>
-          )}
+            );
+          })()}
 
           {(activeTab === 'ritual' || activeTab === 'pulsecheckSfx') && (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
@@ -4658,7 +4926,7 @@ const AdminAiVoice: React.FC = () => {
                 Pulse Ritual iOS App
               </div>
               <div className="ml-auto text-zinc-600">
-                Generation calls <code className="font-mono">ElevenLabs SFX</code> · downloads save as
+                Generation calls <code className="font-mono">OpenAI Audio via bridge</code> · downloads save as
                 {' '}<code className="font-mono">&lt;file&gt;.mp3</code>
               </div>
             </div>

@@ -22,6 +22,7 @@ service cloud.firestore {
 
     function isAdminManagedPublicReadCollection(collectionName) {
       return collectionName in [
+        'app-sfx-assets',
         'app-config',
         'authorProfiles',
         'daily-reflections',

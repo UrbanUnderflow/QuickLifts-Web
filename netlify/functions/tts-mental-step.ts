@@ -19,6 +19,13 @@ type RequestBody = {
     speed?: number;
   } | null;
   punctuationPauses?: boolean | null;
+  /** When true, an ElevenLabs failure returns the error instead of falling
+   *  back to OpenAI. The ai-voice pre-generation dashboard sets this: stored
+   *  library clips must only ever be Nora's ElevenLabs voice, so admin
+   *  generation fails loudly rather than baking an off-brand clip into the
+   *  library. Runtime clients (iOS live-TTS misses) omit it and get the
+   *  fallback automatically. */
+  disableFallback?: boolean;
 };
 
 const corsHeaders = {
@@ -45,6 +52,21 @@ function addPunctuationPauses(text: string) {
     .replace(/([.!?])\s+/g, '$1\n')
     .replace(/([,;:])\s+/g, '$1  ')
     .trim();
+}
+
+// Closest OpenAI preset to Nora's warm coaching delivery. Used only on the
+// ElevenLabs fallback path; the incoming `voice` is an ElevenLabs voice ID
+// and means nothing to OpenAI.
+const OPENAI_FALLBACK_VOICE = 'nova';
+
+async function synthesizeWithOpenAI(text: string, voice: string, format: string) {
+  const speech = await openai.audio.speech.create({
+    model: 'gpt-4o-mini-tts',
+    voice,
+    input: text,
+    format,
+  } as any);
+  return Buffer.from(await (speech as any).arrayBuffer());
 }
 
 export const handler: Handler = async (event) => {
@@ -133,6 +155,32 @@ export const handler: Handler = async (event) => {
           }
         } catch {}
         console.error('[tts-mental-step] ElevenLabs error', response.status, detail);
+
+        // Runtime fallback: a live-TTS miss should still speak even when
+        // ElevenLabs is out of credits (e.g. quota_exceeded until the cycle
+        // renews). Pre-generation opts out via disableFallback so the stored
+        // library never picks up an OpenAI-voiced clip.
+        if (body.disableFallback !== true && process.env.OPEN_AI_SECRET_KEY) {
+          try {
+            const fallbackBuf = await synthesizeWithOpenAI(synthesisText, OPENAI_FALLBACK_VOICE, 'mp3');
+            console.warn('[tts-mental-step] served OpenAI fallback after ElevenLabs failure', response.status, detail);
+            return {
+              statusCode: 200,
+              headers: {
+                ...corsHeaders,
+                'Content-Type': 'audio/mpeg',
+                'Cache-Control': 'no-store',
+                'X-TTS-Provider': 'openai-fallback',
+                ETag: etag,
+              },
+              isBase64Encoded: true,
+              body: fallbackBuf.toString('base64'),
+            };
+          } catch (fallbackError) {
+            console.error('[tts-mental-step] OpenAI fallback also failed', fallbackError);
+          }
+        }
+
         return json(502, {
           error: `ElevenLabs TTS generation failed (upstream ${response.status}${detail ? `: ${detail}` : ''})`,
         });
@@ -156,14 +204,7 @@ export const handler: Handler = async (event) => {
       return json(400, { error: 'OPEN_AI_SECRET_KEY not configured' });
     }
 
-    const speech = await openai.audio.speech.create({
-      model: 'gpt-4o-mini-tts',
-      voice,
-      input: text,
-      format,
-    } as any);
-
-    const buf = Buffer.from(await (speech as any).arrayBuffer());
+    const buf = await synthesizeWithOpenAI(text, voice, format);
     const base64 = buf.toString('base64');
 
     return {

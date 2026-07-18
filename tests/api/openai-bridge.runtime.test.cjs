@@ -16,8 +16,13 @@ function compileOpenAIBridgeRuntime() {
   }
 
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ql-openai-bridge-runtime-'));
+  const tscPath = path.join(
+    repoRoot,
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
+  );
   const compileArgs = [
-    'tsc',
     '--module', 'commonjs',
     '--target', 'es2020',
     '--moduleResolution', 'node',
@@ -29,7 +34,7 @@ function compileOpenAIBridgeRuntime() {
     path.join(repoRoot, 'netlify/functions/openai-bridge.ts'),
   ];
 
-  const result = spawnSync('npx', compileArgs, {
+  const result = spawnSync(tscPath, compileArgs, {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -303,6 +308,64 @@ test('openai-bridge allows timeout-aware gpt-5-mini routine generation', async (
     const forwardedBody = JSON.parse(fetchCalls[0].options.body);
     assert.equal(forwardedBody.model, 'gpt-5-mini');
     assert.equal(forwardedBody.max_completion_tokens, 8000);
+  });
+});
+
+test('openai-bridge allows PulseCheck audio generation and preserves base64 audio output', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: 'server-openai-key',
+    OPEN_AI_SECRET_KEY: null,
+  }, async () => {
+    const fetchCalls = [];
+    const audioData = Buffer.from('mock-mp3-audio').toString('base64');
+    global.fetch = async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            choices: [{ message: { audio: { data: audioData } } }],
+          });
+        },
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+          },
+        },
+      };
+    };
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock('sound-admin-1'));
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        authorization: 'Bearer firebase-id-token',
+        'OpenAI-Organization': 'pulsecheckSoundEffects',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-audio-1.5',
+        modalities: ['text', 'audio'],
+        audio: { voice: 'alloy', format: 'mp3' },
+        messages: [{ role: 'user', content: 'Create a soft UI chime.' }],
+        max_completion_tokens: 5000,
+      }),
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0].url, 'https://api.openai.com/v1/chat/completions');
+
+    const forwardedBody = JSON.parse(fetchCalls[0].options.body);
+    assert.equal(forwardedBody.model, 'gpt-audio-1.5');
+    assert.deepEqual(forwardedBody.modalities, ['text', 'audio']);
+    assert.deepEqual(forwardedBody.audio, { voice: 'alloy', format: 'mp3' });
+    assert.equal(forwardedBody.max_completion_tokens, 2000);
+
+    const responseBody = JSON.parse(response.body);
+    assert.equal(responseBody.choices[0].message.audio.data, audioData);
   });
 });
 

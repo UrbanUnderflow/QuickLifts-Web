@@ -216,6 +216,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         presetId,
         settings: voiceSettings,
         punctuationPauses,
+        // This endpoint STORES the result as a named asset: never accept the
+        // OpenAI runtime fallback in place of the requested provider's voice.
+        disableFallback: true,
       }),
     });
     if (!resp.ok) {

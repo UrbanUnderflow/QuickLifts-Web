@@ -33,6 +33,10 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   macraMealNote: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   noraNutritionChat: { maxTokens: 700, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora coach Q&A
   pulsecheckSportIntelligence: { maxTokens: 8000, modelPattern: /gpt-4o|gpt-4/i },
+  // Admin sound-design generation. Audio output is returned as base64 inside
+  // the Chat Completions JSON response, so it can use the authenticated bridge
+  // without exposing the OpenAI key to the browser.
+  pulsecheckSoundEffects: { maxTokens: 2000, modelPattern: /^gpt-audio(?:-1\.5)?$/i },
   // FWP: AI judge gate on generated workouts — semantic pass over the rules-based
   // critic, grounded in the sport's trainingNuance from the SI layer.
   fwpWorkoutJudge: { maxTokens: 1500, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i },
