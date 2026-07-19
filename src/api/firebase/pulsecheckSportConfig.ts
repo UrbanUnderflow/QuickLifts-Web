@@ -8,6 +8,15 @@ export interface PulseCheckSportConfigurationEntry {
   positions: string[];
   sortOrder: number;
   schemaVersion?: number;
+  /** Scenario archetype for sport scenario packs (mental training adversity
+   *  content). Optional: when absent, resolution falls back to the code-owned
+   *  by-id defaults in sportScenarioArchetypes.ts, then to keyword matching.
+   *  See PulseCheck/docs/specs/sport-scenario-packs-spec.md §3. */
+  scenarioArchetype?: string;
+  /** Insight archetype for biometric readiness weighting (endurance |
+   *  strength | mental | general). Optional: same fallback chain via
+   *  sportsInsightArchetypes.ts. */
+  insightArchetype?: string;
   attributes?: PulseCheckSportAttributeDefinition[];
   metrics?: PulseCheckSportMetricDefinition[];
   prompting?: PulseCheckSportPromptingConfiguration;
@@ -2912,6 +2921,14 @@ const normalizeSportArray = (value: unknown): PulseCheckSportConfigurationEntry[
       metrics: normalizeMetrics(candidate.metrics),
       prompting: normalizePrompting(candidate.prompting),
       reportPolicy: normalizeReportPolicy(candidate.reportPolicy),
+      ...(() => {
+        const scenarioArchetype = normalizeString(candidate.scenarioArchetype);
+        return scenarioArchetype ? { scenarioArchetype } : {};
+      })(),
+      ...(() => {
+        const insightArchetype = normalizeString(candidate.insightArchetype);
+        return insightArchetype ? { insightArchetype } : {};
+      })(),
       ...(() => {
         const nuance = normalizeTrainingNuance(candidate.trainingNuance);
         return nuance ? { trainingNuance: nuance } : {};

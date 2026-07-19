@@ -10,7 +10,12 @@ export type ElevenLabsVoiceSettings = {
 
 export type AiVoiceConfig = {
   provider: AiVoiceProvider;
+  /** Legacy active-provider voice field retained for older clients. */
   voiceId: string;
+  /** Voice used whenever OpenAI is primary or serves as the TTS fallback. */
+  openAiVoiceId?: string;
+  /** Voice used whenever ElevenLabs is the primary narration provider. */
+  elevenLabsVoiceId?: string;
   updatedAt: number;
   presetId?: string | null;
   elevenLabsSettings?: ElevenLabsVoiceSettings | null;
@@ -27,6 +32,7 @@ export type VoiceChoice =
       presetId?: string | null;
       settings?: ElevenLabsVoiceSettings | null;
       punctuationPauses?: boolean | null;
+      fallbackVoiceId?: string | null;
     };
 
 export type ElevenLabsPreset = {
@@ -39,11 +45,18 @@ export type ElevenLabsPreset = {
 
 export const OPENAI_VOICES: VoiceChoice[] = [
   { provider: 'openai', id: 'alloy', label: 'Nora (Alloy)' },
+  { provider: 'openai', id: 'marin', label: 'Marin (Recommended)' },
+  { provider: 'openai', id: 'cedar', label: 'Cedar (Recommended)' },
+  { provider: 'openai', id: 'ash', label: 'Ash' },
+  { provider: 'openai', id: 'ballad', label: 'Ballad' },
+  { provider: 'openai', id: 'coral', label: 'Coral' },
   { provider: 'openai', id: 'echo', label: 'Echo' },
   { provider: 'openai', id: 'fable', label: 'Fable' },
   { provider: 'openai', id: 'onyx', label: 'Onyx' },
   { provider: 'openai', id: 'nova', label: 'Nova' },
+  { provider: 'openai', id: 'sage', label: 'Sage' },
   { provider: 'openai', id: 'shimmer', label: 'Shimmer' },
+  { provider: 'openai', id: 'verse', label: 'Verse' },
 ];
 
 export const ELEVENLABS_VOICES: VoiceChoice[] = [
@@ -156,15 +169,25 @@ export function normalizeAiVoiceConfig(raw?: Partial<AiVoiceConfig> | null): AiV
   const defaultOpenAiVoice = OPENAI_VOICES[0]?.id || 'alloy';
   const defaultElevenLabsVoice = ELEVENLABS_VOICES[0]?.id || '21m00Tcm4TlvDq8ikWAM';
   const preset = getElevenLabsPreset(raw?.presetId);
+  const legacyVoiceId = typeof raw?.voiceId === 'string' ? raw.voiceId.trim() : '';
+  const openAiVoiceId =
+    typeof raw?.openAiVoiceId === 'string' && raw.openAiVoiceId.trim()
+      ? raw.openAiVoiceId.trim()
+      : provider === 'openai' && legacyVoiceId
+        ? legacyVoiceId
+        : defaultOpenAiVoice;
+  const elevenLabsVoiceId =
+    typeof raw?.elevenLabsVoiceId === 'string' && raw.elevenLabsVoiceId.trim()
+      ? raw.elevenLabsVoiceId.trim()
+      : provider === 'elevenlabs' && legacyVoiceId
+        ? legacyVoiceId
+        : defaultElevenLabsVoice;
 
   return {
     provider,
-    voiceId:
-      typeof raw?.voiceId === 'string' && raw.voiceId.trim()
-        ? raw.voiceId.trim()
-        : provider === 'elevenlabs'
-          ? defaultElevenLabsVoice
-          : defaultOpenAiVoice,
+    voiceId: provider === 'elevenlabs' ? elevenLabsVoiceId : openAiVoiceId,
+    openAiVoiceId,
+    elevenLabsVoiceId,
     updatedAt: typeof raw?.updatedAt === 'number' ? raw.updatedAt : Date.now(),
     presetId: provider === 'elevenlabs' ? raw?.presetId || preset.id : null,
     elevenLabsSettings:

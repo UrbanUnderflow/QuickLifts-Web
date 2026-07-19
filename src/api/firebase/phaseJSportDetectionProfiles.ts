@@ -1,8 +1,13 @@
 // =============================================================================
 // Phase J Sport Detection Profiles
 //
-// Pure profile definitions for mapping sport configuration/load-model concepts
-// into the contextual detection primitives emitted by Phase J.
+// Profile definitions for mapping sport configuration/load-model concepts into
+// the contextual detection primitives emitted by Phase J. Load-input blends are
+// driven by the Sports Intelligence catalog (`pulsecheckSportConfig.ts`
+// reportPolicy.loadModel — code-owned, so the code defaults are the source of
+// truth); detection-specific bits (clarification questions, primitive weights,
+// snapshot proxies) stay code-owned here as overlays.
+// Spec: PulseCheck/docs/specs/sports-intelligence-source-of-truth-spec.md §5.
 // =============================================================================
 
 import type {
@@ -12,19 +17,12 @@ import type {
   PhaseJQuestionType,
   PhaseJSessionType,
 } from './phaseJSessionContracts';
+import type { PulseCheckSportConfigurationEntry } from './pulsecheckSportConfig';
+import { getDefaultPulseCheckSports } from './pulsecheckSportConfig';
 
-export type PhaseJSportDetectionProfileSportId =
-  | 'lift'
-  | 'basketball'
-  | 'football'
-  | 'soccer'
-  | 'track-field'
-  | 'volleyball'
-  | 'bowling'
-  | 'golf'
-  | 'generic-practice'
-  | 'generic-conditioning'
-  | 'generic-game';
+// Sport ids resolve against the catalog (plus Phase-J-only ids like 'lift' and
+// the generic-* fallbacks), so this is an open string, not a closed union.
+export type PhaseJSportDetectionProfileSportId = string;
 
 export type PhaseJPrimitiveProfileMatchMode = 'presence' | 'minimum' | 'maximum' | 'range';
 
@@ -117,12 +115,30 @@ export interface PhaseJSportDetectionLoadInputSeed {
   filter?: string;
 }
 
+export interface PhaseJSportDetectionCatalogLoadOverlay {
+  /** Catalog primitive keys that must be present for a usable load handoff. */
+  requiredKeys?: string[];
+  /** Per-sport snapshot proxy overrides, on top of SNAPSHOT_PROXY_BY_CATALOG_PRIMITIVE. */
+  primitiveKeyByCatalogKey?: Record<string, PhaseJPrimitiveProfileKey>;
+  /** Detection-only inputs appended after the catalog blend (e.g. sessionRpe). */
+  supplementalInputs?: PhaseJSportDetectionLoadInput[];
+}
+
 export type PhaseJSportDetectionProfileSeed = Omit<
   PhaseJSportDetectionProfile,
-  'clarificationQuestions' | 'confidenceGates'
+  'clarificationQuestions' | 'confidenceGates' | 'loadInputs'
 > & {
   clarificationQuestions?: PhaseJSportDetectionClarificationQuestion[];
   confidenceGates?: Partial<PhaseJSportDetectionConfidenceGates>;
+  /**
+   * Code-owned load inputs for sports whose detection blend intentionally
+   * diverges from the catalog loadModel (no snapshot proxy exists yet for the
+   * catalog primitives), or that have no catalog entry at all. Omit to derive
+   * the blend from the catalog entry's loadModel via the adapter.
+   */
+  loadInputs?: PhaseJSportDetectionLoadInput[];
+  /** Detection-specific overlay applied when loadInputs is derived from the catalog. */
+  catalogLoadOverlay?: PhaseJSportDetectionCatalogLoadOverlay;
 };
 
 export interface PhaseJSportDetectionProfileFromConfigInput {
@@ -132,7 +148,54 @@ export interface PhaseJSportDetectionProfileFromConfigInput {
   clarificationQuestions?: PhaseJSportDetectionClarificationQuestion[];
   confidenceGates?: Partial<PhaseJSportDetectionConfidenceGates>;
   candidateKindHints?: PhaseJCandidateKindHint[];
+  catalogLoadOverlay?: PhaseJSportDetectionCatalogLoadOverlay;
 }
+
+const SPORT_ID_ALIASES: Record<string, PhaseJSportDetectionProfileSportId> = {
+  track: 'track-field',
+  'track-and-field': 'track-field',
+  track_field: 'track-field',
+  trackfield: 'track-field',
+  generic: 'generic-practice',
+  practice: 'generic-practice',
+  conditioning: 'generic-conditioning',
+  game: 'generic-game',
+};
+
+const normalizeSportId = (sportId: string): string => {
+  const normalized = sportId.trim().toLowerCase();
+  return SPORT_ID_ALIASES[normalized] || normalized;
+};
+
+let catalogSportsById: Map<string, PulseCheckSportConfigurationEntry> | null = null;
+
+const catalogSportById = (sportId: string): PulseCheckSportConfigurationEntry | undefined => {
+  if (!catalogSportsById) {
+    catalogSportsById = new Map(getDefaultPulseCheckSports().map((sport) => [sport.id, sport]));
+  }
+  return catalogSportsById.get(sportId);
+};
+
+// How Phase J approximates catalog load-model primitives with the snapshot
+// primitives the phone/watch can actually compute. Catalog keys without an
+// entry keep their own key and are excluded at handoff time when unavailable.
+const SNAPSHOT_PROXY_BY_CATALOG_PRIMITIVE: Record<string, PhaseJPrimitiveProfileKey> = {
+  jumpCount: 'accelerationBurstCount',
+  lateralAccelCount: 'accelerationBurstCount',
+  sprintReps: 'accelerationBurstCount',
+  impactCollisionLoad: 'accelerationBurstCount',
+  snapCountProxy: 'accelerationBurstCount',
+  highSpeedRunDistance: 'highIntensityMinutes',
+  tempoThresholdTime: 'highIntensityMinutes',
+  sprintDistance: 'distanceMeters',
+  totalDistance: 'distanceMeters',
+  walkingDistance: 'distanceMeters',
+  blockRoundDuration: 'durationMin',
+  matchDuration: 'durationMin',
+  hrZoneTime: 'totalHrZoneMinutes',
+  cardioMinutes: 'activeHrZoneMinutes',
+  dailySteps: 'stepCount',
+};
 
 const DEFAULT_CONFIDENCE_GATES: PhaseJSportDetectionConfidenceGates = {
   strongContextualScore: 0.82,
@@ -221,45 +284,80 @@ const commonPracticeQuestions = (sportId: string): PhaseJSportDetectionClarifica
   ),
 ];
 
-const sharedTeamSportLoadInputs = [
-  loadInput('internalLoadHr', 1.0, 'TRIMP-style HR-zone integration over detected sessions.', 'internalLoadHr', { required: true }),
+// Detection-only inputs the catalog loadModel does not carry; appended to
+// catalog-derived blends via catalogLoadOverlay.supplementalInputs.
+const supplementalTeamSportLoadInputs: PhaseJSportDetectionLoadInput[] = [
   loadInput('activeEnergyKcal', 0.4, 'Active energy from the normalized primitive snapshot.', 'activeEnergyKcal'),
   loadInput('sessionRpe', 0.5, 'Athlete-reported session RPE when available after clarification.', 'sessionRpe'),
 ];
 
-const seededProfile = (seed: PhaseJSportDetectionProfileSeed): PhaseJSportDetectionProfile => ({
-  ...seed,
-  clarificationQuestions: seed.clarificationQuestions || commonPracticeQuestions(seed.sportId),
-  confidenceGates: {
-    ...DEFAULT_CONFIDENCE_GATES,
-    ...(seed.confidenceGates || {}),
-  },
-});
+const sharedTeamSportLoadInputs = [
+  loadInput('internalLoadHr', 1.0, 'TRIMP-style HR-zone integration over detected sessions.', 'internalLoadHr', { required: true }),
+  ...supplementalTeamSportLoadInputs,
+];
+
+const seededProfile = (seed: PhaseJSportDetectionProfileSeed): PhaseJSportDetectionProfile => {
+  const { catalogLoadOverlay: _catalogLoadOverlay, loadInputs, ...rest } = seed;
+  return {
+    ...rest,
+    loadInputs: loadInputs || [],
+    clarificationQuestions: seed.clarificationQuestions || commonPracticeQuestions(seed.sportId),
+    confidenceGates: {
+      ...DEFAULT_CONFIDENCE_GATES,
+      ...(seed.confidenceGates || {}),
+    },
+  };
+};
 
 const loadInputsFromSportConfig = (
   sportConfig: Pick<PhaseJSportDetectionSportConfig, 'reportPolicy'>,
-): PhaseJSportDetectionLoadInput[] =>
-  (sportConfig.reportPolicy?.loadModel?.primitives || []).map((primitive) =>
-    loadInput(primitive.key, primitive.weight, primitive.source, primitive.key, { filter: primitive.filter }),
-  );
+  overlay?: PhaseJSportDetectionCatalogLoadOverlay,
+): PhaseJSportDetectionLoadInput[] => {
+  const primitives = sportConfig.reportPolicy?.loadModel?.primitives || [];
+  const catalogKeys = new Set(primitives.map((primitive) => primitive.key));
+  return [
+    ...primitives.map((primitive) =>
+      loadInput(
+        primitive.key,
+        primitive.weight,
+        primitive.source,
+        overlay?.primitiveKeyByCatalogKey?.[primitive.key]
+          || SNAPSHOT_PROXY_BY_CATALOG_PRIMITIVE[primitive.key]
+          || primitive.key,
+        {
+          filter: primitive.filter,
+          ...(overlay?.requiredKeys?.includes(primitive.key) ? { required: true } : {}),
+        },
+      ),
+    ),
+    ...(overlay?.supplementalInputs || []).filter((input) => !catalogKeys.has(input.key)),
+  ];
+};
 
 export const mapPulseCheckSportConfigToPhaseJDetectionProfile = (
   input: PhaseJSportDetectionProfileFromConfigInput,
 ): PhaseJSportDetectionProfile => {
-  const sportId = normalizeSportId(input.sportConfig.id) as PhaseJSportDetectionProfileSportId;
-  return seededProfile({
-    sportId,
-    sportConfigId: input.sportConfig.id,
-    sportName: input.sportConfig.name,
-    sessionTypes: input.sessionTypes,
-    primitiveWeights: input.primitiveWeights || [],
-    clarificationQuestions: input.clarificationQuestions,
-    confidenceGates: input.confidenceGates,
-    loadInputs: loadInputsFromSportConfig(input.sportConfig),
-    candidateKindHints: input.candidateKindHints || [],
-  });
+  const sportId = normalizeSportId(input.sportConfig.id);
+  return {
+    ...seededProfile({
+      sportId,
+      sportConfigId: input.sportConfig.id,
+      sportName: input.sportConfig.name,
+      sessionTypes: input.sessionTypes,
+      primitiveWeights: input.primitiveWeights || [],
+      clarificationQuestions: input.clarificationQuestions,
+      confidenceGates: input.confidenceGates,
+      candidateKindHints: input.candidateKindHints || [],
+    }),
+    loadInputs: loadInputsFromSportConfig(input.sportConfig, input.catalogLoadOverlay),
+  };
 };
 
+// Seeds with explicit loadInputs intentionally diverge from their catalog
+// loadModel: those blends were adapted to what the phone/watch can detect
+// today (see SNAPSHOT_PROXY_BY_CATALOG_PRIMITIVE for the proxies that exist).
+// tests/unit/phase-j-sport-detection-catalog.test.ts pins each divergence so
+// catalog edits force a deliberate reconciliation here.
 const PHASE_J_SPORT_DETECTION_PROFILE_SEEDS: PhaseJSportDetectionProfileSeed[] = [
   {
     sportId: 'lift',
@@ -306,13 +404,12 @@ const PHASE_J_SPORT_DETECTION_PROFILE_SEEDS: PhaseJSportDetectionProfileSeed[] =
       primitiveWeight('restGapCount', 0.3, { min: 4 }),
     ],
     clarificationQuestions: commonPracticeQuestions('basketball'),
-    loadInputs: [
-      ...sharedTeamSportLoadInputs,
-      loadInput('jumpCount', 0.9, 'Vertical accelerometer spike count above basketball jump threshold.', 'accelerationBurstCount'),
-      loadInput('lateralAccelCount', 0.7, 'X/Y deflection count above defensive cut threshold.', 'accelerationBurstCount'),
-      loadInput('sprintReps', 0.7, 'Short high-speed efforts during open-court play.', 'accelerationBurstCount'),
-      loadInput('impactCollisionLoad', 0.4, 'Accelerometer impact-magnitude integration when exposed by device.', 'accelerationBurstCount'),
-    ],
+    // Load blend comes from the catalog loadModel (keys and weights are aligned);
+    // the overlay marks HR load required and appends the detection-only supplements.
+    catalogLoadOverlay: {
+      requiredKeys: ['internalLoadHr'],
+      supplementalInputs: supplementalTeamSportLoadInputs,
+    },
     candidateKindHints: [
       candidateHint('practice', ['repeat sprint pattern', 'jump/cut burst density', 'stop-start rest gaps'], ['conditioning', 'game'], 'directional'),
       candidateHint('game', ['competition schedule match', 'sustained high HR', 'repeat sprint and jump density'], ['practice'], 'usable'),
@@ -608,24 +705,27 @@ const PHASE_J_SPORT_DETECTION_PROFILE_SEEDS: PhaseJSportDetectionProfileSeed[] =
   },
 ];
 
+const profileFromSeed = (seed: PhaseJSportDetectionProfileSeed): PhaseJSportDetectionProfile => {
+  const catalogEntry = catalogSportById(seed.sportConfigId || seed.sportId);
+  if (catalogEntry && !seed.loadInputs) {
+    return mapPulseCheckSportConfigToPhaseJDetectionProfile({
+      sportConfig: catalogEntry,
+      sessionTypes: seed.sessionTypes,
+      primitiveWeights: seed.primitiveWeights,
+      clarificationQuestions: seed.clarificationQuestions,
+      confidenceGates: seed.confidenceGates,
+      candidateKindHints: seed.candidateKindHints,
+      catalogLoadOverlay: seed.catalogLoadOverlay,
+    });
+  }
+  return seededProfile({
+    ...seed,
+    sportConfigId: seed.sportConfigId || catalogEntry?.id,
+  });
+};
+
 export const PHASE_J_SPORT_DETECTION_PROFILES: PhaseJSportDetectionProfile[] =
-  PHASE_J_SPORT_DETECTION_PROFILE_SEEDS.map(seededProfile);
-
-const SPORT_ID_ALIASES: Record<string, PhaseJSportDetectionProfileSportId> = {
-  track: 'track-field',
-  'track-and-field': 'track-field',
-  track_field: 'track-field',
-  trackfield: 'track-field',
-  generic: 'generic-practice',
-  practice: 'generic-practice',
-  conditioning: 'generic-conditioning',
-  game: 'generic-game',
-};
-
-const normalizeSportId = (sportId: string): string => {
-  const normalized = sportId.trim().toLowerCase();
-  return SPORT_ID_ALIASES[normalized] || normalized;
-};
+  PHASE_J_SPORT_DETECTION_PROFILE_SEEDS.map(profileFromSeed);
 
 const cloneProfile = (profile: PhaseJSportDetectionProfile): PhaseJSportDetectionProfile => ({
   ...profile,
@@ -648,6 +748,35 @@ const cloneProfile = (profile: PhaseJSportDetectionProfile): PhaseJSportDetectio
 export const listPhaseJSportDetectionProfiles = (): PhaseJSportDetectionProfile[] =>
   PHASE_J_SPORT_DETECTION_PROFILES.map(cloneProfile);
 
+// Detection posture for catalog sports without a code-owned seed above: the
+// catalog loadModel drives the load blend, and detection scoring falls back to
+// the generic team-practice shape until a sport-specific seed is authored.
+const catalogFallbackProfile = (sportId: string): PhaseJSportDetectionProfile | undefined => {
+  const catalogEntry = catalogSportById(sportId);
+  if (!catalogEntry?.reportPolicy?.loadModel) return undefined;
+  return mapPulseCheckSportConfigToPhaseJDetectionProfile({
+    sportConfig: catalogEntry,
+    sessionTypes: ['practice', 'conditioning', 'game'],
+    primitiveWeights: [
+      primitiveWeight('durationMin', 0.8, { min: 25 }),
+      primitiveWeight('movementDensity', 0.8, { min: 0.25 }),
+      primitiveWeight('internalLoadHr', 0.6, { min: 12 }),
+      primitiveWeight('accelerationBurstCount', 0.4, { min: 6 }),
+    ],
+    candidateKindHints: [
+      candidateHint('practice', ['team schedule overlap', 'moderate to high movement density'], ['conditioning', 'game'], 'directional'),
+      candidateHint('game', ['competition schedule match', 'sustained load'], ['practice'], 'directional'),
+      candidateHint('conditioning', ['high HR with less sport-specific structure'], ['practice'], 'directional'),
+    ],
+    catalogLoadOverlay: { supplementalInputs: supplementalTeamSportLoadInputs },
+  });
+};
+
+const catalogFallbackProfileCloned = (sportId: string): PhaseJSportDetectionProfile | undefined => {
+  const profile = catalogFallbackProfile(sportId);
+  return profile ? cloneProfile(profile) : undefined;
+};
+
 export const getPhaseJSportDetectionProfile = (
   sportId: string,
 ): PhaseJSportDetectionProfile | undefined => {
@@ -655,7 +784,8 @@ export const getPhaseJSportDetectionProfile = (
   const profile = PHASE_J_SPORT_DETECTION_PROFILES.find(
     (candidate) => candidate.sportId === normalizedSportId || candidate.sportConfigId === normalizedSportId,
   );
-  return profile ? cloneProfile(profile) : undefined;
+  if (profile) return cloneProfile(profile);
+  return catalogFallbackProfileCloned(normalizedSportId);
 };
 
 export const getClarificationQuestionsForCandidateKind = (

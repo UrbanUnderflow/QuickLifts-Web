@@ -21,6 +21,7 @@ type SpeakRequest = {
   text: string;
   provider?: 'openai' | 'elevenlabs';
   voice?: string;
+  fallbackVoice?: string | null;
   format?: string;
   presetId?: string | null;
   settings?: {
@@ -124,6 +125,8 @@ async function fetchGlobalVoiceIfNeeded() {
     hasCachedVoice: Boolean(resolvedConfig),
     provider: (resolvedConfig as any)?.provider ?? null,
     voiceId: (resolvedConfig as any)?.voiceId ?? null,
+    openAiVoiceId: (resolvedConfig as any)?.openAiVoiceId ?? null,
+    elevenLabsVoiceId: (resolvedConfig as any)?.elevenLabsVoiceId ?? null,
   });
   return resolvedConfig;
 }
@@ -200,6 +203,7 @@ async function speakViaNetlifyTTS(req: SpeakRequest, opts: SpeakOptions) {
   console.log('[TTS] speakViaNetlifyTTS request', {
     provider: req.provider ?? null,
     voice: req.voice ?? null,
+    fallbackVoice: req.fallbackVoice ?? null,
     presetId: req.presetId ?? null,
     punctuationPauses: req.punctuationPauses ?? null,
     textLength: req.text.length,
@@ -306,16 +310,17 @@ async function resolveVoiceChoiceSource(
         adminVoice.provider === 'elevenlabs'
           ? {
               provider: 'elevenlabs',
-              id: adminVoice.voiceId,
-              label: adminVoice.voiceId,
+              id: adminVoice.elevenLabsVoiceId || adminVoice.voiceId,
+              label: adminVoice.elevenLabsVoiceId || adminVoice.voiceId,
               presetId: adminVoice.presetId || null,
               settings: adminVoice.elevenLabsSettings || null,
               punctuationPauses: adminVoice.punctuationPauses ?? true,
+              fallbackVoiceId: adminVoice.openAiVoiceId || OPENAI_VOICES[0]?.id || 'alloy',
             }
           : {
               provider: 'openai',
-              id: adminVoice.voiceId,
-              label: adminVoice.voiceId,
+              id: adminVoice.openAiVoiceId || adminVoice.voiceId,
+              label: adminVoice.openAiVoiceId || adminVoice.voiceId,
             },
       source: 'admin',
     };
@@ -339,6 +344,10 @@ export async function buildSpeakRequest(
     text: (text || '').trim(),
     provider: serverChoice.provider === 'elevenlabs' ? 'elevenlabs' : 'openai',
     voice: serverChoice.id || 'alloy',
+    fallbackVoice:
+      serverChoice.provider === 'elevenlabs'
+        ? serverChoice.fallbackVoiceId || null
+        : null,
     format: 'mp3',
     presetId: serverChoice.provider === 'elevenlabs' ? serverChoice.presetId || null : null,
     settings:

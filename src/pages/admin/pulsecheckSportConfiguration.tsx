@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import {
@@ -37,6 +37,12 @@ import {
   type PulseCheckSportsIntelligenceDimension,
   type PulseCheckSportTrainingNuance,
 } from '../../api/firebase/pulsecheckSportConfig';
+import {
+  buildSportCoverageReport,
+  type SportCoverageRow,
+} from '../../api/firebase/pulsecheckSportCoverage';
+import { SPORT_SCENARIO_ARCHETYPE_LABELS } from '../../api/firebase/mentaltraining/sportScenarioArchetypes';
+import { SPORTS_INSIGHT_ARCHETYPE_LABELS } from '../../api/firebase/sportsInsightArchetypes';
 
 type EditableAttribute = PulseCheckSportAttributeDefinition & {
   optionsInput: string;
@@ -271,6 +277,79 @@ const buildTrainingNuance = (sport: EditableSport): PulseCheckSportTrainingNuanc
     coachNotes,
     ...(divisionOverrides ? { divisionOverrides } : {}),
   };
+};
+
+// Coverage input from live editor state: mirrors what validateSports would
+// save so the badges react to unsaved edits, but stays lenient where
+// validateSports throws (blank names, empty labels).
+const buildCoverageEntry = (sport: EditableSport): PulseCheckSportConfigurationEntry => ({
+  id: sport.id,
+  name: sport.name,
+  emoji: sport.emoji,
+  positions: normalizePositionsInput(sport.positionsInput),
+  sortOrder: sport.sortOrder,
+  schemaVersion: sport.schemaVersion,
+  ...(sport.scenarioArchetype ? { scenarioArchetype: sport.scenarioArchetype } : {}),
+  ...(sport.insightArchetype ? { insightArchetype: sport.insightArchetype } : {}),
+  prompting: {
+    noraContext: sport.noraContextInput.trim(),
+    macraNutritionContext: sport.macraNutritionContextInput.trim(),
+    riskFlags: normalizeListInput(sport.riskFlagsInput),
+    restrictedAdvice: normalizeListInput(sport.restrictedAdviceInput),
+    recommendedLanguage: normalizeListInput(sport.recommendedLanguageInput),
+  },
+  reportPolicy: sport.reportPolicy,
+  ...(() => {
+    const nuance = buildTrainingNuance(sport);
+    return nuance ? { trainingNuance: nuance } : {};
+  })(),
+});
+
+// Review-only coverage badge for the scenario/insight archetype axes. Green =
+// resolved deliberately (explicit field or code-owned map), amber = keyword
+// matching only, gray = uncovered. Lock posture matches Policy/Load: the by-id
+// maps are code-owned, so this surfaces state without an edit affordance.
+const ArchetypeCoverageBadge = ({
+  axis,
+  archetype,
+  source,
+  labels,
+}: {
+  axis: 'Scenario' | 'Insight';
+  archetype: string | null;
+  source: SportCoverageRow['scenarioSource'];
+  labels: Record<string, string>;
+}) => {
+  const isDeliberate = (source === 'explicit' || source === 'code-owned-map') && Boolean(archetype);
+  const label = isDeliberate
+    ? `${axis}: ${archetype}`
+    : source === 'keywords'
+      ? `${axis} (keywords)`
+      : `No ${axis.toLowerCase()}`;
+  const title = isDeliberate
+    ? `${axis} archetype: ${labels[archetype as string] ?? archetype} (${
+        source === 'explicit' ? 'explicit on the catalog entry' : 'code-owned map'
+      }) — set through code/seeds, review-only here`
+    : source === 'keywords'
+      ? `${axis} archetype resolves to "${archetype}" by keyword matching only — add this sport to the code-owned map`
+      : axis === 'Scenario'
+        ? 'No scenario archetype — scenario packs fall back to generic content'
+        : 'No insight archetype — readiness weighting falls back to general';
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] ${
+        isDeliberate
+          ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-200'
+          : source === 'keywords'
+            ? 'border-amber-800/60 bg-amber-950/30 text-amber-200'
+            : 'border-zinc-800 bg-[#111417] text-zinc-500'
+      }`}
+      title={title}
+    >
+      <Lock className="h-3 w-3" />
+      {label}
+    </span>
+  );
 };
 
 const slugifySportId = (value: string) =>
@@ -1227,6 +1306,10 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 	          restrictedAdvice: normalizeListInput(sport.restrictedAdviceInput),
 	          recommendedLanguage: normalizeListInput(sport.recommendedLanguageInput),
 	        },
+	        // Review-only fields (set through code/seeds): carry through untouched
+	        // so a save from this page never strips explicit archetypes.
+	        ...(sport.scenarioArchetype ? { scenarioArchetype: sport.scenarioArchetype } : {}),
+	        ...(sport.insightArchetype ? { insightArchetype: sport.insightArchetype } : {}),
 	        reportPolicy: sport.reportPolicy,
 	        ...(() => {
 	          const nuance = buildTrainingNuance(sport);
@@ -1393,6 +1476,13 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
 
   const totalPositions = sports.reduce((sum, sport) => sum + normalizePositionsInput(sport.positionsInput).length, 0);
 
+  // Shared coverage definition (spec §3): badges render from the same report
+  // CI gates on instead of recomputing attachment checks inline.
+  const coverageBySportId = useMemo(() => {
+    const rows = buildSportCoverageReport(sports.map(buildCoverageEntry));
+    return new Map(rows.map((row) => [row.id, row]));
+  }, [sports]);
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -1529,9 +1619,10 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                       const feedbackForSport = sportSeedingFeedback?.sportId === sport.id ? sportSeedingFeedback : null;
                       const sportLabel = sport.name.trim() || `Sport ${index + 1}`;
                       const positionCount = normalizePositionsInput(sport.positionsInput).length;
-                      const hasReportPolicy = Boolean(sport.reportPolicy);
-                      const hasLoadModel = Boolean(sport.reportPolicy?.loadModel);
-                      const hasTrainingNuance = Boolean(sport.muscleEmphasesInput.trim() || sport.coachNotesInput.trim());
+                      const coverage = coverageBySportId.get(sport.id);
+                      const hasReportPolicy = Boolean(coverage?.hasReportPolicy);
+                      const hasLoadModel = Boolean(coverage?.hasLoadModel);
+                      const hasTrainingNuance = Boolean(coverage?.hasTrainingNuance);
 
                       return (
                         <div key={sport.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
@@ -1592,6 +1683,18 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                                     <Sparkles className="h-3 w-3" />
                                     {hasTrainingNuance ? 'Nuance' : 'No nuance'}
                                   </span>
+                                  <ArchetypeCoverageBadge
+                                    axis="Scenario"
+                                    archetype={coverage?.scenarioArchetype ?? null}
+                                    source={coverage?.scenarioSource ?? 'none'}
+                                    labels={SPORT_SCENARIO_ARCHETYPE_LABELS}
+                                  />
+                                  <ArchetypeCoverageBadge
+                                    axis="Insight"
+                                    archetype={coverage?.insightArchetype ?? null}
+                                    source={coverage?.insightSource ?? 'none'}
+                                    labels={SPORTS_INSIGHT_ARCHETYPE_LABELS}
+                                  />
                                 </div>
                               </div>
                             </div>

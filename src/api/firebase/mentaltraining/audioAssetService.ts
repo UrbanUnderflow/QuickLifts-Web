@@ -10,7 +10,7 @@ export interface SimAudioAssetRef {
   label: string;
   prompt: string;
   provider: 'elevenlabs' | 'openai';
-  format: 'mp3';
+  format: 'mp3' | 'wav';
   contentType: string;
   storagePath: string;
   gsUrl: string;

@@ -1,13 +1,20 @@
 import type { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 import crypto from 'crypto';
-import { normalizeElevenLabsSettings } from '../../src/lib/aiVoice';
+import {
+  OPENAI_VOICES,
+  normalizeAiVoiceConfig,
+  normalizeElevenLabsSettings,
+} from '../../src/lib/aiVoice';
+import { db } from './config/firebase';
 
 type RequestBody = {
   text: string;
   // optional “Nora” voice selector (provider dependent)
   provider?: 'openai' | 'elevenlabs';
   voice?: string;
+  /** OpenAI voice to use only if an ElevenLabs runtime request fails. */
+  fallbackVoice?: string | null;
   // 'mp3' | 'wav' etc (provider dependent) – default mp3
   format?: string;
   presetId?: string | null;
@@ -34,15 +41,51 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const openai = new OpenAI({
-  apiKey: process.env.OPEN_AI_SECRET_KEY,
-});
-
 function json(statusCode: number, body: unknown) {
   return {
     statusCode,
     headers: { 'Content-Type': 'application/json', ...corsHeaders },
     body: JSON.stringify(body),
+  };
+}
+
+function getHeader(headers: Record<string, string | undefined> | undefined, name: string) {
+  if (!headers) return undefined;
+  const match = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase());
+  return match ? headers[match] : undefined;
+}
+
+function resolveOpenAIApiKey() {
+  return process.env.OPEN_AI_SECRET_KEY?.trim() || process.env.OPENAI_API_KEY?.trim() || '';
+}
+
+function isLocalRequest(headers: Record<string, string | undefined> | undefined) {
+  const host = (getHeader(headers, 'host') || '').toLowerCase();
+  return host.includes('localhost') || host.includes('127.0.0.1') || host.startsWith('0.0.0.0');
+}
+
+async function relayLocalRequestToProduction(event: Parameters<Handler>[0]) {
+  const origin = (process.env.VOICE_PROXY_BASE || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+  const response = await fetch(`${origin}/.netlify/functions/tts-mental-step`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: event.body || '{}',
+  });
+  const contentType = response.headers.get('content-type') || 'application/octet-stream';
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const isAudio = contentType.startsWith('audio/');
+
+  return {
+    statusCode: response.status,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': contentType,
+      'Cache-Control': response.headers.get('cache-control') || 'no-store',
+      ...(response.headers.get('x-tts-provider') ? { 'X-TTS-Provider': response.headers.get('x-tts-provider')! } : {}),
+      ...(response.headers.get('x-tts-voice') ? { 'X-TTS-Voice': response.headers.get('x-tts-voice')! } : {}),
+    },
+    isBase64Encoded: isAudio,
+    body: isAudio ? buffer.toString('base64') : buffer.toString('utf8'),
   };
 }
 
@@ -54,12 +97,35 @@ function addPunctuationPauses(text: string) {
     .trim();
 }
 
-// Closest OpenAI preset to Nora's warm coaching delivery. Used only on the
-// ElevenLabs fallback path; the incoming `voice` is an ElevenLabs voice ID
-// and means nothing to OpenAI.
-const OPENAI_FALLBACK_VOICE = 'nova';
+const OPENAI_VOICE_IDS = new Set(
+  OPENAI_VOICES
+    .filter((voice) => voice.provider === 'openai')
+    .map((voice) => voice.id)
+);
+const DEFAULT_OPENAI_FALLBACK_VOICE = 'nova';
+
+async function resolveOpenAIFallbackVoice(requestedVoice?: string | null) {
+  const requested = typeof requestedVoice === 'string' ? requestedVoice.trim() : '';
+  if (OPENAI_VOICE_IDS.has(requested)) return requested;
+
+  try {
+    const snapshot = await db.collection('app-config').doc('ai-voice').get();
+    if (snapshot.exists) {
+      const config = normalizeAiVoiceConfig(snapshot.data());
+      const configured = config.openAiVoiceId?.trim() || '';
+      if (OPENAI_VOICE_IDS.has(configured)) return configured;
+    }
+  } catch (error) {
+    console.warn('[tts-mental-step] could not load configured OpenAI fallback voice', error);
+  }
+
+  return DEFAULT_OPENAI_FALLBACK_VOICE;
+}
 
 async function synthesizeWithOpenAI(text: string, voice: string, format: string) {
+  const apiKey = resolveOpenAIApiKey();
+  if (!apiKey) throw new Error('OpenAI TTS is not configured');
+  const openai = new OpenAI({ apiKey });
   const speech = await openai.audio.speech.create({
     model: 'gpt-4o-mini-tts',
     voice,
@@ -100,10 +166,21 @@ export const handler: Handler = async (event) => {
     ? addPunctuationPauses(text)
     : text;
 
+  const missingSelectedProviderKey = provider === 'elevenlabs'
+    ? !process.env.ELEVEN_LABS_API_KEY
+    : !resolveOpenAIApiKey();
+  if (missingSelectedProviderKey && isLocalRequest(event.headers)) {
+    try {
+      return await relayLocalRequestToProduction(event);
+    } catch (error) {
+      console.error('[tts-mental-step] local production relay failed', error);
+    }
+  }
+
   // cheap cache hint (clients can cache per text)
   const etag = crypto
     .createHash('sha256')
-    .update(`${provider}:${voice}:${format}:${body.presetId || ''}:${punctuationPauses}:${synthesisText}:${JSON.stringify(elevenLabsSettings)}`)
+    .update(`${provider}:${voice}:${body.fallbackVoice || ''}:${format}:${body.presetId || ''}:${punctuationPauses}:${synthesisText}:${JSON.stringify(elevenLabsSettings)}`)
     .digest('hex');
 
   try {
@@ -160,10 +237,11 @@ export const handler: Handler = async (event) => {
         // ElevenLabs is out of credits (e.g. quota_exceeded until the cycle
         // renews). Pre-generation opts out via disableFallback so the stored
         // library never picks up an OpenAI-voiced clip.
-        if (body.disableFallback !== true && process.env.OPEN_AI_SECRET_KEY) {
+        if (body.disableFallback !== true && resolveOpenAIApiKey()) {
           try {
-            const fallbackBuf = await synthesizeWithOpenAI(synthesisText, OPENAI_FALLBACK_VOICE, 'mp3');
-            console.warn('[tts-mental-step] served OpenAI fallback after ElevenLabs failure', response.status, detail);
+            const fallbackVoice = await resolveOpenAIFallbackVoice(body.fallbackVoice);
+            const fallbackBuf = await synthesizeWithOpenAI(synthesisText, fallbackVoice, 'mp3');
+            console.warn('[tts-mental-step] served OpenAI fallback after ElevenLabs failure', response.status, detail, { fallbackVoice });
             return {
               statusCode: 200,
               headers: {
@@ -171,6 +249,7 @@ export const handler: Handler = async (event) => {
                 'Content-Type': 'audio/mpeg',
                 'Cache-Control': 'no-store',
                 'X-TTS-Provider': 'openai-fallback',
+                'X-TTS-Voice': fallbackVoice,
                 ETag: etag,
               },
               isBase64Encoded: true,
@@ -200,7 +279,7 @@ export const handler: Handler = async (event) => {
       };
     }
 
-    if (!process.env.OPEN_AI_SECRET_KEY) {
+    if (!resolveOpenAIApiKey()) {
       return json(400, { error: 'OPEN_AI_SECRET_KEY not configured' });
     }
 

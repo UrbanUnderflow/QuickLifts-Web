@@ -1,5 +1,6 @@
 import { Handler } from '@netlify/functions';
 import { db, headers as corsHeaders } from './config/firebase';
+import { resolveInsightArchetype } from '../../src/api/firebase/sportsInsightArchetypes';
 
 // ---------------------------------------------------------------------------
 // sports-intelligence-bridge
@@ -34,33 +35,31 @@ type SportEntry = {
   name?: string;
   emoji?: string;
   positions?: string[];
+  insightArchetype?: string;
   trainingNuance?: Record<string, unknown> & {
     divisionOverrides?: Record<string, Record<string, unknown>>;
   };
   reportPolicy?: { languagePosture?: { mustAvoid?: string[]; recommendedLanguage?: string[] } };
 };
 
+/// Adapt loose Firestore entries to the shape the shared resolver expects.
+const asCatalog = (sports: SportEntry[]) =>
+  sports.map((entry) => ({
+    id: entry.id ?? '',
+    name: entry.name ?? '',
+    positions: entry.positions,
+    insightArchetype: entry.insightArchetype,
+  }));
+
 /// Lowercase, trim, and normalize curly apostrophes so "Men’s Physique"
 /// (config) matches "Men's Physique" (user doc).
 const normalize = (value: string): string =>
   value.toLowerCase().replace(/[’‘]/g, "'").trim();
 
-/// Same archetype families the iOS reasoning layer uses.
-const archetypeFor = (sport: string): string => {
-  const s = normalize(sport);
-  const has = (keywords: string[]) => keywords.some((k) => s.includes(k));
-  if (has(['physique', 'bodybuild', 'bikini', 'powerlift', 'weightlift', 'crossfit', 'olympic', 'strongman', 'throw'])) {
-    return 'strength';
-  }
-  if (has(['esport', 'chess', 'golf', 'dart', 'racing', 'archery', 'shooting'])) {
-    return 'mental';
-  }
-  if (has(['run', 'cycl', 'swim', 'triathlon', 'rowing', 'soccer', 'football', 'basketball',
-           'hockey', 'tennis', 'lacrosse', 'rugby', 'volleyball', 'wrestling', 'track', 'baseball', 'softball'])) {
-    return 'endurance';
-  }
-  return 'general';
-};
+// Archetype resolution is catalog-first via the shared resolveInsightArchetype
+// (imported above). This replaced a third private keyword taxonomy that had
+// already drifted from the iOS lists (wrestling/baseball differed). Keyword
+// matching now happens only inside the shared resolver's free-text fallback.
 
 /// Find the config entry for a sport string: exact name/id first, then
 /// division (positions) membership — "Men's Physique" resolves to the
@@ -154,7 +153,7 @@ const handler: Handler = async (event) => {
           defaulted: Boolean(fallback),
           sport: { id: null, name: hasSport ? sport.trim() : null, emoji: null },
           division: null,
-          archetype: hasSport ? archetypeFor(sport) : 'strength',
+          archetype: hasSport ? resolveInsightArchetype(sport, asCatalog(sports)) : 'strength',
           trainingNuance: fallback ? resolveNuance(fallback, null) : null,
           languagePosture: null,
         }),
@@ -176,7 +175,7 @@ const handler: Handler = async (event) => {
           emoji: match.entry.emoji || null,
         },
         division: resolvedDivision,
-        archetype: archetypeFor(sport),
+        archetype: resolveInsightArchetype(sport, asCatalog(sports)),
         trainingNuance: resolveNuance(match.entry, resolvedDivision),
         languagePosture: posture
           ? { mustAvoid: posture.mustAvoid || [], recommendedLanguage: posture.recommendedLanguage || [] }

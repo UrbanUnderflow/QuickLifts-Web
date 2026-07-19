@@ -33,10 +33,9 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   macraMealNote: { maxTokens: 1500, modelPattern: /gpt-4o|gpt-4/i },
   noraNutritionChat: { maxTokens: 700, modelPattern: /gpt-4o|gpt-4/i }, // Macra: Nora coach Q&A
   pulsecheckSportIntelligence: { maxTokens: 8000, modelPattern: /gpt-4o|gpt-4/i },
-  // Admin sound-design generation. Audio output is returned as base64 inside
-  // the Chat Completions JSON response, so it can use the authenticated bridge
-  // without exposing the OpenAI key to the browser.
-  pulsecheckSoundEffects: { maxTokens: 2000, modelPattern: /^gpt-audio(?:-1\.5)?$/i },
+  // OpenAI designs a structured nonverbal synthesis recipe; the dashboard
+  // renders the waveform locally so voice-audio models can never narrate it.
+  pulsecheckSoundEffects: { maxTokens: 4000, modelPattern: /^gpt-5-mini$/i },
   // FWP: AI judge gate on generated workouts — semantic pass over the rules-based
   // critic, grounded in the sport's trainingNuance from the SI layer.
   fwpWorkoutJudge: { maxTokens: 1500, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i },
@@ -81,7 +80,12 @@ const REMOTE_BRIDGE_FEATURE_ALIASES: Record<string, string> = {
   // Local dev may relay to a deployed bridge that has not received the newest
   // feature id yet. Use a known high-token policy there to avoid truncating
   // structured JSON before this local branch is deployed.
-  pulsecheckSportIntelligence: 'generateWorkout'
+  pulsecheckSportIntelligence: 'generateWorkout',
+  // The deployed bridge may predate the procedural SFX feature. This existing
+  // structured-JSON policy accepts gpt-5-mini with enough completion headroom
+  // for reasoning plus the recipe; after deployment the local policy above is
+  // used directly.
+  pulsecheckSoundEffects: 'noraRoutineGeneration',
 };
 
 const resolveRemoteBridgeOrigin = (): string => {

@@ -1094,6 +1094,74 @@ export const SEEDED_EXERCISES: MentalExercise[] = [
           ],
         },
         {
+          archetype: 'stage',
+          label: 'Stage & physique sports',
+          whatIfChips: [
+            'A worse callout than I expected',
+            'Coming in flat on show day',
+            'A long backstage wait',
+            'Someone shredded standing next to me',
+            'Cramping mid-pose',
+            'A placing that feels wrong',
+          ],
+          rounds: [
+            {
+              prompt: 'First callouts, and you are not standing where you expected to be. What is your next move?',
+              choices: [
+                {
+                  text: 'One slow breath, shoulders back, present my best look for the rest of prejudging',
+                  isTarget: true,
+                  feedback: 'Callouts can move. Judges keep looking, and composure on stage is part of the look.',
+                },
+                {
+                  text: 'Let my posing deflate while I do the math on placings',
+                  feedback: 'The math steals the round you are still in. Deflated posing confirms the callout instead of challenging it.',
+                },
+                {
+                  text: 'Overtighten everything to force a better look',
+                  feedback: 'Forcing it reads as strain, and strain photographs. Breathe, set, present what you built.',
+                },
+              ],
+            },
+            {
+              prompt: 'The comparisons feel off and the scorecard is out of your hands. What do you do?',
+              choices: [
+                {
+                  text: 'Exhale, let the scorecard go, own the next pose',
+                  isTarget: true,
+                  feedback: 'Judges score the package in front of them. The next pose is the only part still yours.',
+                },
+                {
+                  text: 'Argue with the placing in my head for the rest of the show',
+                  feedback: 'A silent argument backstage burns the focus finals still needs.',
+                },
+                {
+                  text: 'Decide the judges just do not like my look',
+                  feedback: 'One panel is one opinion on one day. Present like the verdict is still open, because it is.',
+                },
+              ],
+            },
+            {
+              prompt: 'Finals, end of a long show day. You are depleted and your pump is fading. What is your response?',
+              choices: [
+                {
+                  text: 'Slow my breathing and run my posing routine one pose at a time',
+                  isTarget: true,
+                  feedback: 'Depleted is normal at finals. One pose at a time is how a long prep finishes strong.',
+                },
+                {
+                  text: 'Rush the routine to get off stage',
+                  feedback: 'Rushing wastes the months that earned this stage. Your tempo is part of the presentation.',
+                },
+                {
+                  text: 'Focus on how drained I feel',
+                  feedback: 'Everyone up there is drained. Aim your attention at the pose, not the tank.',
+                },
+              ],
+            },
+          ],
+        },
+        {
           archetype: 'precision',
           label: 'Precision & target sports',
           whatIfChips: [

@@ -326,6 +326,240 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 const CATEGORY_ORDER = ['splash', 'pulsecheck', 'celebration', 'workout', 'notification', 'ui'];
 
+type SynthLayer = {
+  source: 'oscillator' | 'noise';
+  waveform?: OscillatorType;
+  startSeconds: number;
+  durationSeconds: number;
+  frequencyStartHz?: number;
+  frequencyEndHz?: number;
+  gain: number;
+  attackSeconds: number;
+  releaseSeconds: number;
+  filterType?: BiquadFilterType;
+  filterFrequencyHz?: number;
+  filterQ?: number;
+  pan?: number;
+};
+
+type SynthRecipe = {
+  masterGain: number;
+  layers: SynthLayer[];
+};
+
+const OPENAI_SYNTH_RENDERER = 'openai-procedural-synth-v1';
+
+const clampNumber = (value: unknown, min: number, max: number, fallback: number) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(min, Math.min(max, numeric)) : fallback;
+};
+
+const normalizeSynthRecipe = (value: any, totalDuration: number): SynthRecipe => {
+  const allowedWaveforms = new Set<OscillatorType>(['sine', 'square', 'sawtooth', 'triangle']);
+  const allowedFilters = new Set<BiquadFilterType>(['lowpass', 'highpass', 'bandpass', 'notch']);
+  const rawLayers = Array.isArray(value?.layers) ? value.layers.slice(0, 12) : [];
+  const layers = rawLayers.map((raw: any): SynthLayer => {
+    const startSeconds = clampNumber(raw?.startSeconds, 0, Math.max(0, totalDuration - 0.01), 0);
+    const maxLayerDuration = Math.max(0.01, totalDuration - startSeconds);
+    const durationSeconds = clampNumber(raw?.durationSeconds, 0.01, maxLayerDuration, maxLayerDuration);
+    const releaseSeconds = clampNumber(raw?.releaseSeconds, 0.005, durationSeconds, Math.min(0.15, durationSeconds));
+    return {
+      source: raw?.source === 'noise' ? 'noise' : 'oscillator',
+      waveform: allowedWaveforms.has(raw?.waveform) ? raw.waveform : 'sine',
+      startSeconds,
+      durationSeconds,
+      frequencyStartHz: clampNumber(raw?.frequencyStartHz, 20, 18000, 440),
+      frequencyEndHz: clampNumber(raw?.frequencyEndHz, 20, 18000, 440),
+      gain: clampNumber(raw?.gain, 0.001, 1, 0.25),
+      attackSeconds: clampNumber(raw?.attackSeconds, 0.001, durationSeconds, Math.min(0.01, durationSeconds)),
+      releaseSeconds,
+      filterType: allowedFilters.has(raw?.filterType) ? raw.filterType : 'lowpass',
+      filterFrequencyHz: clampNumber(raw?.filterFrequencyHz, 40, 20000, 12000),
+      filterQ: clampNumber(raw?.filterQ, 0.0001, 30, 0.7),
+      pan: clampNumber(raw?.pan, -1, 1, 0),
+    };
+  });
+
+  if (layers.length === 0) {
+    throw new Error('OpenAI returned an empty sound recipe');
+  }
+
+  return {
+    masterGain: clampNumber(value?.masterGain, 0.05, 0.9, 0.65),
+    layers,
+  };
+};
+
+const parseSynthRecipeCandidate = (value: unknown): Record<string, any> | null => {
+  if (typeof value === 'string') {
+    const cleaned = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    if (!cleaned) return null;
+    try {
+      return parseSynthRecipeCandidate(JSON.parse(cleaned));
+    } catch {
+      return null;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const candidate = parseSynthRecipeCandidate(item);
+      if (candidate) return candidate;
+    }
+    return null;
+  }
+
+  if (!value || typeof value !== 'object') return null;
+  const objectValue = value as Record<string, any>;
+  if (Array.isArray(objectValue.layers)) return objectValue;
+
+  for (const key of ['recipe', 'arguments', 'text', 'content', 'output_text', 'input']) {
+    const candidate = parseSynthRecipeCandidate(objectValue[key]);
+    if (candidate) return candidate;
+  }
+  return null;
+};
+
+const extractSynthRecipe = (payload: any): Record<string, any> | null => {
+  const choice = payload?.choices?.[0];
+  const message = choice?.message;
+  const candidates: unknown[] = [
+    message?.content,
+    message?.tool_calls?.map((toolCall: any) => toolCall?.function?.arguments),
+    choice?.text,
+    payload?.output_text,
+    payload?.output,
+    payload?.recipe,
+    payload,
+  ];
+
+  for (const candidateValue of candidates) {
+    const candidate = parseSynthRecipeCandidate(candidateValue);
+    if (candidate) return candidate;
+  }
+  return null;
+};
+
+const summarizeOpenAIResponseShape = (payload: any): string => {
+  const choice = payload?.choices?.[0];
+  const topLevelKeys = payload && typeof payload === 'object' ? Object.keys(payload).slice(0, 8) : [];
+  const messageKeys = choice?.message && typeof choice.message === 'object'
+    ? Object.keys(choice.message).slice(0, 8)
+    : [];
+  const finishReason = typeof choice?.finish_reason === 'string' ? choice.finish_reason : null;
+  return [
+    topLevelKeys.length ? `response keys: ${topLevelKeys.join(', ')}` : 'empty response',
+    messageKeys.length ? `message keys: ${messageKeys.join(', ')}` : null,
+    finishReason ? `finish reason: ${finishReason}` : null,
+  ].filter(Boolean).join('; ');
+};
+
+const encodeAudioBufferAsWav = (audioBuffer: AudioBuffer): Blob => {
+  const channels = Math.min(2, audioBuffer.numberOfChannels);
+  const frames = audioBuffer.length;
+  const bytesPerSample = 2;
+  const dataSize = frames * channels * bytesPerSample;
+  const arrayBuffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(arrayBuffer);
+  let offset = 0;
+  const writeAscii = (text: string) => {
+    for (let index = 0; index < text.length; index += 1) view.setUint8(offset++, text.charCodeAt(index));
+  };
+
+  writeAscii('RIFF');
+  view.setUint32(offset, 36 + dataSize, true); offset += 4;
+  writeAscii('WAVE');
+  writeAscii('fmt ');
+  view.setUint32(offset, 16, true); offset += 4;
+  view.setUint16(offset, 1, true); offset += 2;
+  view.setUint16(offset, channels, true); offset += 2;
+  view.setUint32(offset, audioBuffer.sampleRate, true); offset += 4;
+  view.setUint32(offset, audioBuffer.sampleRate * channels * bytesPerSample, true); offset += 4;
+  view.setUint16(offset, channels * bytesPerSample, true); offset += 2;
+  view.setUint16(offset, 16, true); offset += 2;
+  writeAscii('data');
+  view.setUint32(offset, dataSize, true); offset += 4;
+
+  const channelData = Array.from({ length: channels }, (_, channel) => audioBuffer.getChannelData(channel));
+  let peak = 0;
+  channelData.forEach((samples) => {
+    for (let index = 0; index < samples.length; index += 1) peak = Math.max(peak, Math.abs(samples[index]));
+  });
+  const normalization = peak > 0 ? Math.min(1, 0.95 / peak) : 1;
+
+  for (let frame = 0; frame < frames; frame += 1) {
+    for (let channel = 0; channel < channels; channel += 1) {
+      const sample = Math.max(-1, Math.min(1, channelData[channel][frame] * normalization));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([arrayBuffer], { type: 'audio/wav' });
+};
+
+const renderSynthRecipe = async (recipe: SynthRecipe, durationSeconds: number): Promise<Blob> => {
+  const OfflineContext = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+  if (!OfflineContext) throw new Error('This browser does not support offline audio rendering');
+
+  const sampleRate = 44100;
+  const context: OfflineAudioContext = new OfflineContext(2, Math.ceil(durationSeconds * sampleRate), sampleRate);
+  const master = context.createGain();
+  master.gain.value = recipe.masterGain;
+  const compressor = context.createDynamicsCompressor();
+  compressor.threshold.value = -10;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 8;
+  compressor.attack.value = 0.003;
+  compressor.release.value = 0.12;
+  master.connect(compressor);
+  compressor.connect(context.destination);
+
+  recipe.layers.forEach((layer) => {
+    const start = layer.startSeconds;
+    const end = Math.min(durationSeconds, start + layer.durationSeconds);
+    const gain = context.createGain();
+    const filter = context.createBiquadFilter();
+    filter.type = layer.filterType ?? 'lowpass';
+    filter.frequency.value = layer.filterFrequencyHz ?? 12000;
+    filter.Q.value = layer.filterQ ?? 0.7;
+    const pan = context.createStereoPanner();
+    pan.pan.value = layer.pan ?? 0;
+    filter.connect(pan);
+    pan.connect(gain);
+    gain.connect(master);
+
+    const attackEnd = Math.min(end, start + layer.attackSeconds);
+    const releaseStart = Math.max(attackEnd, end - layer.releaseSeconds);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.001, layer.gain), Math.max(start + 0.001, attackEnd));
+    gain.gain.setValueAtTime(Math.max(0.001, layer.gain), releaseStart);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    if (layer.source === 'noise') {
+      const frameCount = Math.max(1, Math.ceil(layer.durationSeconds * sampleRate));
+      const noiseBuffer = context.createBuffer(1, frameCount, sampleRate);
+      const samples = noiseBuffer.getChannelData(0);
+      for (let index = 0; index < samples.length; index += 1) samples[index] = Math.random() * 2 - 1;
+      const source = context.createBufferSource();
+      source.buffer = noiseBuffer;
+      source.connect(filter);
+      source.start(start);
+      source.stop(end);
+    } else {
+      const oscillator = context.createOscillator();
+      oscillator.type = layer.waveform ?? 'sine';
+      oscillator.frequency.setValueAtTime(Math.max(20, layer.frequencyStartHz ?? 440), start);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, layer.frequencyEndHz ?? 440), end);
+      oscillator.connect(filter);
+      oscillator.start(start);
+      oscillator.stop(end);
+    }
+  });
+
+  return encodeAudioBufferAsWav(await context.startRendering());
+};
+
 // ──────────────────────────────────────────────────────────
 // PULSE RITUAL — SOUND EFFECTS LIBRARY
 //
@@ -333,9 +567,9 @@ const CATEGORY_ORDER = ['splash', 'pulsecheck', 'celebration', 'workout', 'notif
 // No mechanical clicks. No game-y dings. Singing bowls, water,
 // breath, warm felt taps. Sounds that lower the heart rate.
 //
-// Generation: hand each `prompt` to the OpenAI audio model through
-// the authenticated OpenAI bridge, then download the
-// returned blob as `{file}.mp3` to drop into the Pulse Ritual iOS
+// Generation: the OpenAI bridge turns each `prompt` into a structured
+// synthesis recipe; the browser renders the nonverbal waveform, then downloads the
+// returned blob as `{file}.wav` to drop into the Pulse Ritual iOS
 // bundle under Resources/Sounds/.
 // ──────────────────────────────────────────────────────────
 
@@ -1475,13 +1709,42 @@ const RegistrySimAssetCard: React.FC<{
 const SoundCard: React.FC<{
   sound: typeof SOUND_EFFECTS[0];
   asset: SimAudioAssetRef | null;
+  prompt: string;
   generating: boolean;
   generationError?: string;
   isPlaying: boolean;
-  onRegenerate: () => void;
+  onPromptChange: (prompt: string) => void;
+  onResetPrompt: () => void;
+  onRegenerate: (prompt: string) => void;
   onPlay: () => void;
   onStop: () => void;
-}> = ({ sound, asset, generating, generationError, isPlaying, onRegenerate, onPlay, onStop }) => {
+}> = ({
+  sound,
+  asset,
+  prompt,
+  generating,
+  generationError,
+  isPlaying,
+  onPromptChange,
+  onResetPrompt,
+  onRegenerate,
+  onPlay,
+  onStop,
+}) => {
+  const savedRenderer = (asset as (SimAudioAssetRef & { renderer?: string }) | null)?.renderer;
+  const hasUsableGeneratedAsset = Boolean(
+    asset?.downloadURL && (
+      sound.generationMode === 'speech'
+        ? asset.provider === 'elevenlabs'
+        : asset.provider === 'openai' && savedRenderer === OPENAI_SYNTH_RENDERER
+    )
+  );
+  const hasRejectedOpenAITake = Boolean(
+    asset?.downloadURL
+      && asset.provider === 'openai'
+      && sound.generationMode !== 'speech'
+      && savedRenderer !== OPENAI_SYNTH_RENDERER
+  );
   const platformBadge =
     sound.platform === 'pulsecheck'
       ? { label: 'PulseCheck', color: 'bg-[#8B5CF6]/15 text-purple-300 border-[#8B5CF6]/25' }
@@ -1515,27 +1778,34 @@ const SoundCard: React.FC<{
               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${platformBadge.color}`}>
                 {platformBadge.label}
               </span>
-              {asset?.downloadURL && (
+              {hasUsableGeneratedAsset && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-emerald-700/30 bg-emerald-900/20 text-emerald-400">
                   Generated
+                </span>
+              )}
+              {hasRejectedOpenAITake && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-amber-700/30 bg-amber-900/20 text-amber-300">
+                  Replace narrated take
                 </span>
               )}
             </div>
             <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{sound.description}</p>
             <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
-              {sound.durationSeconds}s · {sound.generationMode === 'speech' ? 'ElevenLabs voice' : 'OpenAI SFX'} · {sound.file}.mp3
+              {sound.durationSeconds}s · {sound.generationMode === 'speech' ? 'ElevenLabs voice' : 'OpenAI Synth SFX'} · {sound.file}.mp3
             </code>
           </div>
         </div>
 
         <div className="flex flex-shrink-0 flex-col gap-1.5">
           <button
-            onClick={onRegenerate}
-            disabled={generating}
+            onClick={() => onRegenerate(prompt)}
+            disabled={generating || !prompt.trim()}
             className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
               generating
                 ? 'cursor-wait border-purple-500/25 bg-purple-500/10 text-purple-300'
-                : 'border-purple-500/30 bg-purple-500/15 text-purple-300 hover:bg-purple-500/20'
+                : !prompt.trim()
+                  ? 'cursor-not-allowed border-zinc-700 bg-zinc-800 text-zinc-500'
+                  : 'border-purple-500/30 bg-purple-500/15 text-purple-300 hover:bg-purple-500/20'
             }`}
           >
             {generating
@@ -1556,13 +1826,53 @@ const SoundCard: React.FC<{
         </div>
       </div>
 
+      <div className="mt-3 rounded-lg border border-white/[0.07] bg-black/20 p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label htmlFor={`app-sound-prompt-${sound.id}`} className="text-[10px] font-semibold uppercase tracking-[0.13em] text-zinc-500">
+            Generation prompt
+          </label>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-zinc-600">{prompt.length} characters</span>
+            {prompt !== sound.prompt && (
+              <button
+                type="button"
+                onClick={onResetPrompt}
+                disabled={generating}
+                className="text-[10px] font-medium text-purple-300 hover:text-purple-200 disabled:opacity-40"
+              >
+                Reset default
+              </button>
+            )}
+          </div>
+        </div>
+        <textarea
+          id={`app-sound-prompt-${sound.id}`}
+          value={prompt}
+          onChange={(event) => onPromptChange(event.target.value)}
+          disabled={generating}
+          rows={4}
+          spellCheck
+          placeholder="Describe the sound effect to generate…"
+          className="w-full resize-y rounded-lg border border-white/[0.08] bg-zinc-950/80 px-3 py-2 text-xs leading-relaxed text-zinc-200 outline-none transition-colors placeholder:text-zinc-700 focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/20 disabled:cursor-wait disabled:opacity-60"
+        />
+        <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">
+          Regenerate uses this exact prompt. A successful generation saves the edited prompt with the Firebase asset.
+        </p>
+      </div>
+
       {generationError && (
         <div className="mt-3 rounded-lg border border-red-700/40 bg-red-900/20 px-3 py-2 text-[11px] text-red-200">
           {generationError}
         </div>
       )}
 
-      {asset?.downloadURL && (
+      {hasRejectedOpenAITake && (
+        <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-900/15 px-3 py-2 text-[11px] text-amber-200">
+          The previous OpenAI voice-audio take was rejected because it narrated the sound-design prompt. Preview is using the bundled fallback until this card is regenerated with the nonverbal synth renderer.
+        </div>
+      )}
+
+      {hasUsableGeneratedAsset && asset && (
         <div className="mt-3 rounded-lg border border-emerald-700/30 bg-emerald-900/10 px-3 py-2 text-[10px] text-emerald-300/80">
           <span className="mr-1.5 uppercase tracking-wider text-emerald-400/70">Saved</span>
           {new Date(asset.updatedAt).toLocaleString()} · <code className="break-all font-mono">{asset.storagePath}</code>
@@ -1653,7 +1963,7 @@ const VPSoundCard: React.FC<{
           </div>
           <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{cue.description}</p>
           <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
-            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice line' : 'OpenAI SFX'} · {cue.cueKey}
+            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice line' : 'OpenAI Synth SFX'} · {cue.cueKey}
           </code>
         </div>
 
@@ -1782,7 +2092,7 @@ const ProtocolSoundCard: React.FC<{
           </div>
           <p className="mt-1 text-xs leading-relaxed text-zinc-500">{cue.description}</p>
           <code className="mt-1 block text-[10px] font-mono text-zinc-600">
-            {cue.durationSeconds}s · OpenAI SFX · {cue.runtimeRole ?? 'signature'}{cue.loop ? ' · loop' : ''} · {cue.protocolId}
+            {cue.durationSeconds}s · OpenAI Synth SFX · {cue.runtimeRole ?? 'signature'}{cue.loop ? ' · loop' : ''} · {cue.protocolId}
           </code>
         </div>
 
@@ -2099,10 +2409,11 @@ const AdminAiVoice: React.FC = () => {
   // Voice config state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  const [previewingProvider, setPreviewingProvider] = useState<AiVoiceConfig['provider'] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<AiVoiceConfig['provider']>('openai');
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('alloy');
+  const [provider, setProvider] = useState<AiVoiceConfig['provider']>('elevenlabs');
+  const [selectedOpenAIVoiceId, setSelectedOpenAIVoiceId] = useState<string>(OPENAI_VOICES[0]?.id || 'alloy');
+  const [selectedElevenLabsVoiceId, setSelectedElevenLabsVoiceId] = useState<string>(ELEVENLABS_VOICES[0]?.id || '21m00Tcm4TlvDq8ikWAM');
   const [selectedPresetId, setSelectedPresetId] = useState<string>(getElevenLabsPreset().id);
   const [elevenLabsSettings, setElevenLabsSettings] = useState<ElevenLabsVoiceSettings>(
     normalizeElevenLabsSettings(undefined, getElevenLabsPreset().id)
@@ -2118,6 +2429,7 @@ const AdminAiVoice: React.FC = () => {
   const [playingSound, setPlayingSound] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [appSoundAssets, setAppSoundAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [appSoundPrompts, setAppSoundPrompts] = useState<Record<string, string>>({});
   const [appSoundGenerating, setAppSoundGenerating] = useState<Record<string, boolean>>({});
   const [appSoundGenErrors, setAppSoundGenErrors] = useState<Record<string, string>>({});
   const [appSoundLoading, setAppSoundLoading] = useState(false);
@@ -2191,10 +2503,18 @@ const AdminAiVoice: React.FC = () => {
     Object.fromEntries(CATEGORY_ORDER.map((category, index) => [category, index < 2])) as Record<string, boolean>
   );
 
-  const voiceLabel = useMemo(() => {
-    const source = provider === 'elevenlabs' ? ELEVENLABS_VOICES : OPENAI_VOICES;
-    return source.find((v) => v.id === selectedVoiceId)?.label || selectedVoiceId;
-  }, [provider, selectedVoiceId]);
+  const selectedVoiceId = provider === 'elevenlabs' ? selectedElevenLabsVoiceId : selectedOpenAIVoiceId;
+  const openAIVoiceLabel = useMemo(
+    () => OPENAI_VOICES.find((voice) => voice.id === selectedOpenAIVoiceId)?.label || selectedOpenAIVoiceId,
+    [selectedOpenAIVoiceId]
+  );
+  const elevenLabsVoiceLabel = useMemo(
+    () => ELEVENLABS_VOICES.find((voice) => voice.id === selectedElevenLabsVoiceId)?.label || selectedElevenLabsVoiceId,
+    [selectedElevenLabsVoiceId]
+  );
+  const voiceLabel = provider === 'elevenlabs' ? elevenLabsVoiceLabel : openAIVoiceLabel;
+  const activePreviewProvider = previewingProvider ?? provider;
+  const activePreviewVoiceLabel = activePreviewProvider === 'elevenlabs' ? elevenLabsVoiceLabel : openAIVoiceLabel;
 
   const presetMeta = useMemo(
     () => ELEVENLABS_PRESETS.find((p) => p.id === selectedPresetId) || getElevenLabsPreset(),
@@ -2279,13 +2599,17 @@ const AdminAiVoice: React.FC = () => {
     setAppSoundLoadError(null);
     try {
       const results: Record<string, SimAudioAssetRef | null> = {};
+      const prompts: Record<string, string> = {};
       await Promise.all(
         SOUND_EFFECTS.map(async (sound) => {
           const snap = await getDoc(doc(db, APP_SFX_COLLECTION, sound.id));
-          results[sound.id] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+          const asset = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+          results[sound.id] = asset;
+          prompts[sound.id] = asset?.prompt?.trim() || sound.prompt;
         })
       );
       setAppSoundAssets(results);
+      setAppSoundPrompts(prompts);
     } catch (e: any) {
       setAppSoundLoadError(e?.message || 'Failed to load app sound effects');
     } finally {
@@ -2388,10 +2712,6 @@ const AdminAiVoice: React.FC = () => {
     return resolvePulseCheckFunctionUrl('/.netlify/functions/tts-mental-step');
   };
 
-  const OPENAI_SFX_BRIDGE_ENDPOINT = '/api/openai/v1/chat/completions';
-  const OPENAI_SFX_FEATURE_ID = 'pulsecheckSoundEffects';
-  const OPENAI_SFX_MODEL = 'gpt-audio-1.5';
-
   const generateSfxBlob = async (
     prompt: string,
     durationSeconds: number,
@@ -2403,71 +2723,71 @@ const AdminAiVoice: React.FC = () => {
     }
 
     const normalizedDuration = Math.max(0.25, Math.min(12, Number(durationSeconds) || 4));
-    const promptInfluence = Math.max(0, Math.min(1, Number(options?.promptInfluence) || 0.35));
     const idToken = await currentUser.getIdToken();
-    const res = await fetch(OPENAI_SFX_BRIDGE_ENDPOINT, {
+    const res = await fetch('/api/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${idToken}`,
-        'openai-organization': OPENAI_SFX_FEATURE_ID,
+        'openai-organization': 'pulsecheckSoundEffects',
       },
       body: JSON.stringify({
-        model: OPENAI_SFX_MODEL,
-        modalities: ['text', 'audio'],
-        audio: { voice: 'alloy', format: 'mp3' },
-        max_completion_tokens: 2000,
+        model: 'gpt-5-mini',
+        response_format: { type: 'json_object' },
+        reasoning_effort: 'low',
+        max_completion_tokens: 4000,
         messages: [
           {
             role: 'system',
-            content:
-              'You are a professional sound-design engine. Generate only the requested nonverbal sound effect. Never speak, whisper, sing, narrate, describe the result, or include intelligible words. Do not add unrelated music. Honor the requested duration and loop behavior as closely as possible.',
+            content: [
+              'You are a procedural sound designer. Return JSON only; never return prose.',
+              'Design a nonverbal sound as a synthesis recipe. You do not generate, describe, quote, or spell spoken words.',
+              'Schema: {"masterGain":number,"layers":[{"source":"oscillator"|"noise","waveform":"sine"|"triangle"|"square"|"sawtooth","startSeconds":number,"durationSeconds":number,"frequencyStartHz":number,"frequencyEndHz":number,"gain":number,"attackSeconds":number,"releaseSeconds":number,"filterType":"lowpass"|"highpass"|"bandpass"|"notch","filterFrequencyHz":number,"filterQ":number,"pan":number}]}.',
+              'Use 1-12 layers. Keep every layer inside the requested total duration. Frequencies must be 20-18000 Hz, gain 0.001-1, pan -1 to 1.',
+              'Create convincing tactile UI tones, impacts, sweeps, pulses, chimes, and noise textures from the available primitives. Avoid melodies unless the brief explicitly asks for a tonal sequence.',
+            ].join('\n'),
           },
           {
             role: 'user',
             content: [
-              `Create a ${normalizedDuration.toFixed(2)}-second MP3 sound effect.`,
-              options?.loop
-                ? 'Make the beginning and ending connect as a seamless loop.'
-                : 'Make it a self-contained one-shot and end cleanly.',
-              `Prompt fidelity: ${promptInfluence.toFixed(2)} out of 1.00.`,
-              `Sound-design brief: ${prompt.trim()}`,
-              'Return the sound itself, with no spoken description or human vocalization.',
+              `Total duration: ${normalizedDuration.toFixed(2)} seconds.`,
+              options?.loop ? 'The sound should loop cleanly.' : 'The sound should end cleanly.',
+              `Prompt fidelity: ${clampNumber(options?.promptInfluence, 0, 1, 0.5).toFixed(2)}.`,
+              `Design brief: ${prompt.trim()}`,
+              'Return the synthesis recipe JSON now.',
             ].join('\n'),
           },
         ],
       }),
     });
 
-    const responseText = await res.text();
-    let payload: any = null;
-    try {
-      payload = responseText ? JSON.parse(responseText) : null;
-    } catch {}
-    const audio = payload?.choices?.[0]?.message?.audio?.data;
+    const payload = await res.json().catch(() => null);
     if (!res.ok) {
       const bridgeMessage = payload?.error?.message || payload?.message;
       throw new Error(bridgeMessage || `OpenAI bridge request failed (${res.status} ${res.statusText})`);
     }
-    if (typeof audio !== 'string' || !audio) {
-      throw new Error('OpenAI bridge response did not include generated audio data');
+
+    const rawRecipe = extractSynthRecipe(payload);
+    if (!rawRecipe) {
+      throw new Error(`OpenAI bridge did not return a synthesis recipe (${summarizeOpenAIResponseShape(payload)})`);
     }
 
-    const binary = window.atob(audio);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const recipe = normalizeSynthRecipe(rawRecipe, normalizedDuration);
+    const blob = await renderSynthRecipe(recipe, normalizedDuration);
 
     return {
-      blob: new Blob([bytes], { type: 'audio/mpeg' }),
+      blob,
       providerId: 'openai' as const,
-      contentType: 'audio/mpeg',
+      contentType: 'audio/wav',
+      format: 'wav' as const,
+      renderer: OPENAI_SYNTH_RENDERER,
     };
   };
 
   const generateSpeechBlob = async (prompt: string) => {
     const elevenLabsVoiceId =
-      provider === 'elevenlabs' && ELEVENLABS_VOICES.some((voice) => voice.id === selectedVoiceId)
-        ? selectedVoiceId
+      ELEVENLABS_VOICES.some((voice) => voice.id === selectedElevenLabsVoiceId)
+        ? selectedElevenLabsVoiceId
         : ELEVENLABS_VOICES[0]?.id;
 
     if (!elevenLabsVoiceId) {
@@ -2507,10 +2827,17 @@ const AdminAiVoice: React.FC = () => {
       blob,
       providerId: 'elevenlabs' as const,
       contentType: blob.type || 'audio/mpeg',
+      format: 'mp3' as const,
     };
   };
 
-  const regenerateAppSound = async (sound: typeof SOUND_EFFECTS[0]) => {
+  const regenerateAppSound = async (sound: typeof SOUND_EFFECTS[0], overridePrompt?: string) => {
+    const effectivePrompt = (overridePrompt ?? appSoundPrompts[sound.id] ?? sound.prompt).trim();
+    if (!effectivePrompt) {
+      setAppSoundGenErrors((prev) => ({ ...prev, [sound.id]: 'Enter a generation prompt before regenerating.' }));
+      return;
+    }
+
     setAppSoundGenerating((prev) => ({ ...prev, [sound.id]: true }));
     setAppSoundGenErrors((prev) => {
       const next = { ...prev };
@@ -2520,10 +2847,11 @@ const AdminAiVoice: React.FC = () => {
 
     try {
       const generated = sound.generationMode === 'speech'
-        ? await generateSpeechBlob(sound.prompt)
-        : await generateSfxBlob(sound.prompt, sound.durationSeconds);
+        ? await generateSpeechBlob(effectivePrompt)
+        : await generateSfxBlob(effectivePrompt, sound.durationSeconds);
+      const renderer = 'renderer' in generated ? generated.renderer : undefined;
 
-      const path = `pulsecheck-sfx/app-library/${sound.platform}/${sound.id}/${sound.file}.mp3`;
+      const path = `pulsecheck-sfx/app-library/${sound.platform}/${sound.id}/${sound.file}.${generated.format}`;
       const sRef = storageRef(storage, path);
       const snapshot = await uploadBytes(sRef, generated.blob, { contentType: generated.contentType });
       const downloadURL = await getDownloadURL(snapshot.ref);
@@ -2531,13 +2859,13 @@ const AdminAiVoice: React.FC = () => {
       const now = Date.now();
       const previous = appSoundAssets[sound.id];
 
-      const assetRecord: SimAudioAssetRef = {
+      const assetRecord: SimAudioAssetRef & { renderer?: string } = {
         id: sound.id,
         cueKey: sound.id,
         label: sound.label,
-        prompt: sound.prompt,
+        prompt: effectivePrompt,
         provider: generated.providerId,
-        format: 'mp3',
+        format: generated.format,
         contentType: generated.contentType,
         storagePath: path,
         gsUrl,
@@ -2545,6 +2873,7 @@ const AdminAiVoice: React.FC = () => {
         createdAt: previous?.createdAt ?? now,
         updatedAt: now,
       };
+      if (renderer) assetRecord.renderer = renderer;
 
       await setDoc(doc(db, APP_SFX_COLLECTION, sound.id), {
         ...assetRecord,
@@ -2557,6 +2886,7 @@ const AdminAiVoice: React.FC = () => {
       });
 
       setAppSoundAssets((prev) => ({ ...prev, [sound.id]: assetRecord }));
+      setAppSoundPrompts((prev) => ({ ...prev, [sound.id]: effectivePrompt }));
     } catch (err: any) {
       console.error('[app sfx] generation failed', err);
       setAppSoundGenErrors((prev) => ({
@@ -2574,24 +2904,29 @@ const AdminAiVoice: React.FC = () => {
     setVPGenErrors((prev) => { const n = { ...prev }; delete n[cue.cueKey]; return n; });
     try {
       let blob: Blob;
-      let providerId: SimAudioAssetRef['provider'] = 'openai';
+      let providerId: SimAudioAssetRef['provider'] = 'elevenlabs';
       let contentType = 'audio/mpeg';
+      let format: SimAudioAssetRef['format'] = 'mp3';
+      let renderer: string | undefined;
 
       if (cue.generationMode === 'speech') {
         const speech = await generateSpeechBlob(cue.prompt);
         blob = speech.blob;
         providerId = speech.providerId;
         contentType = speech.contentType;
+        format = speech.format;
       } else {
         const sfx = await generateSfxBlob(cue.prompt, cue.durationSeconds);
         blob = sfx.blob;
         providerId = sfx.providerId;
         contentType = sfx.contentType;
+        format = sfx.format;
+        renderer = sfx.renderer;
       }
 
       // 3. Upload to Firebase Storage
       const assetId = buildGeneratedDocId(VP_ENGINE_KEY, cue.cueKey, cue.prompt);
-      const path = `sim-audio-assets/${vpSlugify(VP_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
+      const path = `sim-audio-assets/${vpSlugify(VP_ENGINE_KEY)}/${cue.cueKey}/${assetId}.${format}`;
       const sRef = storageRef(storage, path);
       const snapshot = await uploadBytes(sRef, blob, { contentType });
       const downloadURL = await getDownloadURL(snapshot.ref);
@@ -2605,7 +2940,7 @@ const AdminAiVoice: React.FC = () => {
         label: cue.label,
         prompt: cue.prompt,
         provider: providerId,
-        format: 'mp3',
+        format,
         contentType,
         storagePath: path,
         gsUrl,
@@ -2620,6 +2955,7 @@ const AdminAiVoice: React.FC = () => {
         archetype: cue.generationMode === 'speech' ? 'voice_channel' : 'audio_channel',
         stageTag: cue.stageTag,
         generationMode: cue.generationMode,
+        ...(renderer ? { renderer } : {}),
       });
 
       setVPAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
@@ -2686,7 +3022,7 @@ const AdminAiVoice: React.FC = () => {
         promptInfluence: cue.promptInfluence,
       });
       const assetId = buildGeneratedDocId(PROTOCOL_ENGINE_KEY, cue.cueKey, cue.prompt);
-      const path = `sim-audio-assets/${vpSlugify(PROTOCOL_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
+      const path = `sim-audio-assets/${vpSlugify(PROTOCOL_ENGINE_KEY)}/${cue.cueKey}/${assetId}.${sfx.format}`;
       const sRef = storageRef(storage, path);
       const snapshot = await uploadBytes(sRef, sfx.blob, { contentType: sfx.contentType });
       const downloadURL = await getDownloadURL(snapshot.ref);
@@ -2698,7 +3034,7 @@ const AdminAiVoice: React.FC = () => {
         label: cue.label,
         prompt: cue.prompt,
         provider: sfx.providerId,
-        format: 'mp3',
+        format: sfx.format,
         contentType: sfx.contentType,
         storagePath: path,
         gsUrl,
@@ -2716,6 +3052,7 @@ const AdminAiVoice: React.FC = () => {
         responseFamily: cue.responseFamily,
         runtimeRole: cue.runtimeRole ?? 'signature',
         loop: Boolean(cue.loop),
+        renderer: sfx.renderer,
       });
       setProtocolAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
     } catch (e: any) {
@@ -3061,7 +3398,8 @@ const AdminAiVoice: React.FC = () => {
         const data = normalizeAiVoiceConfig(snap.data() as Partial<AiVoiceConfig>);
         persistVoiceConfig(data);
         setProvider(data.provider);
-        setSelectedVoiceId(data.voiceId);
+        setSelectedOpenAIVoiceId(data.openAiVoiceId || (data.provider === 'openai' ? data.voiceId : OPENAI_VOICES[0]?.id) || 'alloy');
+        setSelectedElevenLabsVoiceId(data.elevenLabsVoiceId || (data.provider === 'elevenlabs' ? data.voiceId : ELEVENLABS_VOICES[0]?.id) || '21m00Tcm4TlvDq8ikWAM');
         setSelectedPresetId(data.presetId || getElevenLabsPreset().id);
         setElevenLabsSettings(normalizeElevenLabsSettings(data.elevenLabsSettings || undefined, data.presetId || undefined));
         setPunctuationPauses(data.punctuationPauses !== false);
@@ -3362,37 +3700,42 @@ const AdminAiVoice: React.FC = () => {
   }, []);
 
   // ── Voice preview
-  const handlePreview = async () => {
+  const handleProviderPreview = async (previewProvider: AiVoiceConfig['provider']) => {
     setError(null);
     stopNarration();
-    setPlaying(true);
+    setDynamicLinePlayingId(null);
+    setPreviewingProvider(previewProvider);
     try {
       const choice: VoiceChoice =
-        provider === 'elevenlabs'
+        previewProvider === 'elevenlabs'
           ? {
               provider: 'elevenlabs',
-              id: selectedVoiceId,
-              label: voiceLabel,
+              id: selectedElevenLabsVoiceId,
+              label: elevenLabsVoiceLabel,
               presetId: selectedPresetId,
               settings: shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings,
               punctuationPauses,
+              fallbackVoiceId: selectedOpenAIVoiceId,
             }
-          : { provider: 'openai', id: selectedVoiceId, label: voiceLabel };
-      await speakStep(sampleText, { onEnd: () => setPlaying(false), onError: () => setPlaying(false), fallbackToBrowser: false }, choice);
+          : { provider: 'openai', id: selectedOpenAIVoiceId, label: openAIVoiceLabel };
+      const clearMatchingPreview = () => {
+        setPreviewingProvider((current) => current === previewProvider ? null : current);
+      };
+      await speakStep(sampleText, { onEnd: clearMatchingPreview, onError: clearMatchingPreview, fallbackToBrowser: false }, choice);
     } catch {
       setError('Preview failed. Check provider API key and voice settings.');
-      setPlaying(false);
+      setPreviewingProvider((current) => current === previewProvider ? null : current);
     }
   };
 
-  const handleStop = () => { stopNarration(); setPlaying(false); };
+  const handleStop = () => { stopNarration(); setPreviewingProvider(null); };
 
   // Dynamic Nora line preview — same voice config as the main preview, but the
   // text is built with the entered name and synthesized on the fly.
   const handlePlayDynamicLine = async (line: NoraDynamicLine) => {
     setError(null);
     stopNarration();
-    setPlaying(false);
+    setPreviewingProvider(null);
     setDynamicLinePlayingId(line.id);
     try {
       const choice: VoiceChoice =
@@ -3404,6 +3747,7 @@ const AdminAiVoice: React.FC = () => {
               presetId: selectedPresetId,
               settings: shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings,
               punctuationPauses,
+              fallbackVoiceId: selectedOpenAIVoiceId,
             }
           : { provider: 'openai', id: selectedVoiceId, label: voiceLabel };
       await speakStep(
@@ -3427,6 +3771,8 @@ const AdminAiVoice: React.FC = () => {
       const payload: AiVoiceConfig = {
         provider,
         voiceId: selectedVoiceId,
+        openAiVoiceId: selectedOpenAIVoiceId,
+        elevenLabsVoiceId: selectedElevenLabsVoiceId,
         presetId: provider === 'elevenlabs' ? selectedPresetId : null,
         elevenLabsSettings:
           provider === 'elevenlabs' && !shouldUseElevenLabsVoiceDefaults(selectedPresetId)
@@ -3486,7 +3832,14 @@ const AdminAiVoice: React.FC = () => {
   const playSoundEffect = (sound: typeof SOUND_EFFECTS[0]) => {
     stopSoundEffect();
     setPlayingSound(sound.id);
-    playAudioUrl(appSoundAssets[sound.id]?.downloadURL ?? `/audio/sfx/${sound.file}.mp3`);
+    const generatedAsset = appSoundAssets[sound.id] as (SimAudioAssetRef & { renderer?: string }) | null | undefined;
+    const generatedAssetIsUsable = sound.generationMode === 'speech'
+      ? generatedAsset?.provider === 'elevenlabs'
+      : generatedAsset?.provider === 'openai' && generatedAsset?.renderer === OPENAI_SYNTH_RENDERER;
+    const previewUrl = generatedAssetIsUsable && generatedAsset?.downloadURL
+      ? generatedAsset.downloadURL
+      : `/audio/sfx/${sound.file}.mp3`;
+    playAudioUrl(previewUrl);
   };
 
   // ── Pulse Ritual generation / preview / download handlers ────────
@@ -3565,7 +3918,7 @@ const AdminAiVoice: React.FC = () => {
 
       // Upload to Firebase Storage at a stable path so previews on
       // future visits keep working.
-      const path = `${sfxStorageFolderFor(sound)}/${sound.id}/${sound.file}.mp3`;
+      const path = `${sfxStorageFolderFor(sound)}/${sound.id}/${sound.file}.${sfx.format}`;
       const sRef = storageRef(storage, path);
       const snapshot = await uploadBytes(sRef, sfx.blob, { contentType: sfx.contentType });
       const downloadURL = await getDownloadURL(snapshot.ref);
@@ -3579,7 +3932,7 @@ const AdminAiVoice: React.FC = () => {
         label: sound.label,
         prompt: sound.prompt,
         provider: sfx.providerId,
-        format: 'mp3',
+        format: sfx.format,
         contentType: sfx.contentType,
         storagePath: path,
         gsUrl,
@@ -3608,6 +3961,7 @@ const AdminAiVoice: React.FC = () => {
         durationSeconds: sound.durationSeconds,
         effectivePrompt,
         refinementHistory,
+        renderer: sfx.renderer,
       });
 
       setRitualAssets((prev) => ({
@@ -3711,7 +4065,7 @@ const AdminAiVoice: React.FC = () => {
       const a = document.createElement('a');
       const url = URL.createObjectURL(blob);
       a.href = url;
-      a.download = `${sound.file}.mp3`;
+      a.download = `${sound.file}.${asset.format}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -4120,85 +4474,122 @@ const AdminAiVoice: React.FC = () => {
                         <div className="flex items-center gap-2 mb-3">
                           <button
                             type="button"
-                            onClick={() => { setProvider('openai'); setSelectedVoiceId((c) => OPENAI_VOICES.some((v) => v.id === c) ? c : OPENAI_VOICES[0].id); }}
+                            onClick={() => setProvider('openai')}
                             className={`flex-1 rounded-xl border px-4 py-3 text-left transition-colors ${provider === 'openai' ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-white' : 'border-zinc-700 bg-zinc-800 text-zinc-300'}`}
                           >
                             <div className="text-sm font-semibold">OpenAI</div>
-                            <div className="text-xs text-zinc-400 mt-1">Fast baseline previews and default fallback.</div>
+                            <div className="text-xs text-zinc-400 mt-1">Use OpenAI as the primary narration provider.</div>
                           </button>
                           <button
                             type="button"
-                            onClick={() => { setProvider('elevenlabs'); setSelectedVoiceId((c) => ELEVENLABS_VOICES.some((v) => v.id === c) ? c : ELEVENLABS_VOICES[0].id); }}
+                            onClick={() => setProvider('elevenlabs')}
                             className={`flex-1 rounded-xl border px-4 py-3 text-left transition-colors ${provider === 'elevenlabs' ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-white' : 'border-zinc-700 bg-zinc-800 text-zinc-300'}`}
                           >
                             <div className="text-sm font-semibold flex items-center gap-2"><Sparkles className="w-4 h-4" />ElevenLabs</div>
-                            <div className="text-xs text-zinc-400 mt-1">Voice identity plus inflection control.</div>
+                            <div className="text-xs text-zinc-400 mt-1">Primary voice with OpenAI runtime fallback.</div>
                           </button>
                         </div>
 
-                        {provider === 'openai' ? (
-                          <>
-                            <label className="block text-sm text-zinc-400 mb-2">Default OpenAI Voice</label>
-                            <select value={selectedVoiceId} onChange={(e) => setSelectedVoiceId(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-white/10" disabled={loading}>
-                              {OPENAI_VOICES.filter((v) => v.provider === 'openai').map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                            </select>
-                          </>
-                        ) : (
-                          <>
-                            <label className="block text-sm text-zinc-400 mb-2">ElevenLabs Voice</label>
-                            <select value={selectedVoiceId} onChange={(e) => setSelectedVoiceId(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-white/10" disabled={loading}>
+                        <div className="space-y-3">
+                          <div className="rounded-xl border border-zinc-700 bg-zinc-950/40 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <label className="text-sm text-zinc-300">ElevenLabs Voice</label>
+                              <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${provider === 'elevenlabs' ? 'border-[#E0FE10]/25 bg-[#E0FE10]/10 text-[#E0FE10]' : 'border-zinc-700 bg-zinc-800 text-zinc-500'}`}>
+                                {provider === 'elevenlabs' ? 'Primary' : 'Available'}
+                              </span>
+                            </div>
+                            <select value={selectedElevenLabsVoiceId} onChange={(e) => setSelectedElevenLabsVoiceId(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/10" disabled={loading}>
                               {ELEVENLABS_VOICES.filter((v) => v.provider === 'elevenlabs').map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                             </select>
-
-                            <div className="mt-5 flex items-center gap-2 text-sm text-zinc-300"><SlidersHorizontal className="w-4 h-4 text-zinc-400" />Expression Presets</div>
-                            <div className="grid grid-cols-1 gap-2 mt-3">
-                              {ELEVENLABS_PRESETS.map((preset) => {
-                                const active = selectedPresetId === preset.id;
-                                return (
-                                  <button key={preset.id} type="button" onClick={() => applyPreset(preset.id)} className={`rounded-xl border px-4 py-3 text-left transition-colors ${active ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10' : 'border-zinc-700 bg-zinc-800 hover:bg-zinc-700/60'}`}>
-                                    <div className="text-sm font-semibold text-white">{preset.label}</div>
-                                    <div className="text-xs text-zinc-400 mt-1">{preset.description}</div>
-                                  </button>
-                                );
-                              })}
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => previewingProvider === 'elevenlabs' ? handleStop() : void handleProviderPreview('elevenlabs')}
+                                className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={loading}
+                                aria-label={`${previewingProvider === 'elevenlabs' ? 'Stop previewing' : 'Preview'} ${elevenLabsVoiceLabel}`}
+                              >
+                                {previewingProvider === 'elevenlabs' ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                                {previewingProvider === 'elevenlabs' ? 'Stop' : 'Preview'}
+                              </button>
                             </div>
+                          </div>
 
-                            <div className="mt-5 space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-                              {shouldUseElevenLabsVoiceDefaults(selectedPresetId) && (
-                                <div className="rounded-lg border border-[#E0FE10]/20 bg-[#E0FE10]/8 px-3 py-2 text-xs text-zinc-300">
-                                  Default sends no custom ElevenLabs overrides.
-                                </div>
-                              )}
-                              {(['stability', 'similarityBoost', 'style'] as const).map((key) => (
-                                <div key={key}>
-                                  <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
-                                    <span>{key === 'similarityBoost' ? 'Similarity Boost' : key.charAt(0).toUpperCase() + key.slice(1)}</span>
-                                    <span>{elevenLabsSettings[key].toFixed(2)}</span>
-                                  </div>
-                                  <input type="range" min="0" max="1" step="0.01" value={elevenLabsSettings[key]} onChange={(e) => updateElevenLabsSetting(key, Number(e.target.value))} className="w-full" disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)} />
-                                </div>
-                              ))}
-                              <div>
-                                <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
-                                  <span>Speed</span>
-                                  <span>{elevenLabsSettings.speed.toFixed(2)}</span>
-                                </div>
-                                <input type="range" min="0.7" max="1.2" step="0.01" value={elevenLabsSettings.speed} onChange={(e) => { setSelectedPresetId('custom'); setElevenLabsSettings((prev) => ({ ...prev, speed: Number(e.target.value) })); }} className="w-full" disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)} />
+                          <div className="rounded-xl border border-zinc-700 bg-zinc-950/40 p-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <label className="text-sm text-zinc-300">OpenAI Voice</label>
+                              <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${provider === 'elevenlabs' ? 'border-purple-500/25 bg-purple-500/10 text-purple-300' : 'border-[#E0FE10]/25 bg-[#E0FE10]/10 text-[#E0FE10]'}`}>
+                                {provider === 'elevenlabs' ? 'Runtime fallback' : 'Primary'}
+                              </span>
+                            </div>
+                            <select value={selectedOpenAIVoiceId} onChange={(e) => setSelectedOpenAIVoiceId(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/10" disabled={loading}>
+                              {OPENAI_VOICES.filter((v) => v.provider === 'openai').map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                            </select>
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => previewingProvider === 'openai' ? handleStop() : void handleProviderPreview('openai')}
+                                className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={loading}
+                                aria-label={`${previewingProvider === 'openai' ? 'Stop previewing' : 'Preview'} ${openAIVoiceLabel}`}
+                              >
+                                {previewingProvider === 'openai' ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                                {previewingProvider === 'openai' ? 'Stop' : 'Preview'}
+                              </button>
+                            </div>
+                            <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                              Used automatically when ElevenLabs runtime narration is unavailable.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 flex items-center gap-2 text-sm text-zinc-300"><SlidersHorizontal className="w-4 h-4 text-zinc-400" />ElevenLabs Expression Presets</div>
+                        <div className="grid grid-cols-1 gap-2 mt-3">
+                          {ELEVENLABS_PRESETS.map((preset) => {
+                            const active = selectedPresetId === preset.id;
+                            return (
+                              <button key={preset.id} type="button" onClick={() => applyPreset(preset.id)} className={`rounded-xl border px-4 py-3 text-left transition-colors ${active ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10' : 'border-zinc-700 bg-zinc-800 hover:bg-zinc-700/60'}`}>
+                                <div className="text-sm font-semibold text-white">{preset.label}</div>
+                                <div className="text-xs text-zinc-400 mt-1">{preset.description}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="mt-5 space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+                          {shouldUseElevenLabsVoiceDefaults(selectedPresetId) && (
+                            <div className="rounded-lg border border-[#E0FE10]/20 bg-[#E0FE10]/8 px-3 py-2 text-xs text-zinc-300">
+                              Default sends no custom ElevenLabs overrides.
+                            </div>
+                          )}
+                          {(['stability', 'similarityBoost', 'style'] as const).map((key) => (
+                            <div key={key}>
+                              <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
+                                <span>{key === 'similarityBoost' ? 'Similarity Boost' : key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                                <span>{elevenLabsSettings[key].toFixed(2)}</span>
                               </div>
-                              <label className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2">
-                                <span className="text-sm text-zinc-300">Speaker Boost</span>
-                                <input type="checkbox" checked={elevenLabsSettings.useSpeakerBoost} onChange={(e) => { setSelectedPresetId('custom'); setElevenLabsSettings((prev) => ({ ...prev, useSpeakerBoost: e.target.checked })); }} className="h-4 w-4" disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)} />
-                              </label>
-                              <label className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2">
-                                <div>
-                                  <div className="text-sm text-zinc-300">Respect Punctuation</div>
-                                  <div className="text-xs text-zinc-500">Adds short SSML pauses after commas and sentence endings.</div>
-                                </div>
-                                <input type="checkbox" checked={punctuationPauses} onChange={(e) => setPunctuationPauses(e.target.checked)} className="h-4 w-4" />
-                              </label>
+                              <input type="range" min="0" max="1" step="0.01" value={elevenLabsSettings[key]} onChange={(e) => updateElevenLabsSetting(key, Number(e.target.value))} className="w-full" disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)} />
                             </div>
-                          </>
-                        )}
+                          ))}
+                          <div>
+                            <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
+                              <span>Speed</span>
+                              <span>{elevenLabsSettings.speed.toFixed(2)}</span>
+                            </div>
+                            <input type="range" min="0.7" max="1.2" step="0.01" value={elevenLabsSettings.speed} onChange={(e) => { setSelectedPresetId('custom'); setElevenLabsSettings((prev) => ({ ...prev, speed: Number(e.target.value) })); }} className="w-full" disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)} />
+                          </div>
+                          <label className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2">
+                            <span className="text-sm text-zinc-300">Speaker Boost</span>
+                            <input type="checkbox" checked={elevenLabsSettings.useSpeakerBoost} onChange={(e) => { setSelectedPresetId('custom'); setElevenLabsSettings((prev) => ({ ...prev, useSpeakerBoost: e.target.checked })); }} className="h-4 w-4" disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)} />
+                          </label>
+                          <label className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2">
+                            <div>
+                              <div className="text-sm text-zinc-300">Respect Punctuation</div>
+                              <div className="text-xs text-zinc-500">Adds short pauses after commas and sentence endings.</div>
+                            </div>
+                            <input type="checkbox" checked={punctuationPauses} onChange={(e) => setPunctuationPauses(e.target.checked)} className="h-4 w-4" />
+                          </label>
+                        </div>
                       </div>
 
                       {/* Right — preview */}
@@ -4212,28 +4603,18 @@ const AdminAiVoice: React.FC = () => {
                         </div>
                         <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
                           <div className="text-white font-medium mb-2">Active Preview</div>
-                          <div>Provider: <span className="text-zinc-200">{provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'}</span></div>
-                          <div>Voice: <span className="text-zinc-200">{voiceLabel}</span></div>
-                          {provider === 'elevenlabs' && <div>Preset: <span className="text-zinc-200">{selectedPresetId === 'custom' ? 'Custom' : presetMeta.label}</span></div>}
+                          <div>Provider: <span className="text-zinc-200">{activePreviewProvider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'}</span></div>
+                          <div>Voice: <span className="text-zinc-200">{activePreviewVoiceLabel}</span></div>
+                          {activePreviewProvider === 'elevenlabs' && <div>Preset: <span className="text-zinc-200">{selectedPresetId === 'custom' ? 'Custom' : presetMeta.label}</span></div>}
+                          {activePreviewProvider === 'elevenlabs' && <div>Fallback: <span className="text-zinc-200">OpenAI · {openAIVoiceLabel}</span></div>}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between mt-6 gap-3">
-                      <div className="flex gap-2">
-                        {!playing ? (
-                          <button onClick={handlePreview} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-zinc-700 transition-colors" disabled={loading}>
-                            <Play className="w-4 h-4" />Preview
-                          </button>
-                        ) : (
-                          <button onClick={handleStop} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white hover:bg-zinc-700 transition-colors">
-                            <Square className="w-4 h-4" />Stop
-                          </button>
-                        )}
-                      </div>
+                    <div className="flex items-center justify-end mt-6 gap-3">
                       <button onClick={handleSave} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#E0FE10] text-black font-semibold hover:bg-[#c8e40e] transition-colors disabled:opacity-60" disabled={loading || saving}>
                         <Save className="w-4 h-4" />
-                        {saving ? 'Saving…' : 'Save Default Voice'}
+                        {saving ? 'Saving…' : 'Save Voice Configuration'}
                       </button>
                     </div>
 
@@ -4579,10 +4960,13 @@ const AdminAiVoice: React.FC = () => {
                                 key={sound.id}
                                 sound={sound}
                                 asset={appSoundAssets[sound.id] ?? null}
+                                prompt={appSoundPrompts[sound.id] ?? appSoundAssets[sound.id]?.prompt ?? sound.prompt}
                                 generating={Boolean(appSoundGenerating[sound.id])}
                                 generationError={appSoundGenErrors[sound.id]}
                                 isPlaying={playingSound === sound.id}
-                                onRegenerate={() => regenerateAppSound(sound)}
+                                onPromptChange={(prompt) => setAppSoundPrompts((prev) => ({ ...prev, [sound.id]: prompt }))}
+                                onResetPrompt={() => setAppSoundPrompts((prev) => ({ ...prev, [sound.id]: sound.prompt }))}
+                                onRegenerate={(prompt) => regenerateAppSound(sound, prompt)}
                                 onPlay={() => playSoundEffect(sound)}
                                 onStop={stopSoundEffect}
                               />
@@ -4622,7 +5006,7 @@ const AdminAiVoice: React.FC = () => {
                 </div>
                 <div className="text-xs text-zinc-500">
                   {activeTab === 'ritual' ? (
-                    <>Soft, intentional, peaceful — {RITUAL_SOUNDS.length} sounds. Generated audio is persisted to Firebase Storage and survives reloads — download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.mp3</code>.</>
+                    <>Soft, intentional, peaceful — {RITUAL_SOUNDS.length} sounds. Generated audio is persisted to Firebase Storage and survives reloads — download into the iOS bundle as <code className="font-mono">Resources/Sounds/&lt;file&gt;.wav</code>.</>
                   ) : (
                     <>Dark, premium, athletic — {PULSECHECK_SOUNDS.length} sounds for path and ceremony moments. Delivered over the air via <code className="font-mono">pulsecheck-sfx-assets</code>: the app hydrates + caches on launch, so regens reach devices without a rebuild.</>
                   )}
@@ -4746,7 +5130,7 @@ const AdminAiVoice: React.FC = () => {
                                     {sound.pairedHapticNote}
                                   </p>
                                   <code className="text-[10px] text-zinc-600 font-mono mt-2 block">
-                                    {sound.file}.mp3
+                                    {sound.file}.{asset?.format ?? 'wav'}
                                   </code>
                                 </div>
                               </div>
@@ -4926,8 +5310,8 @@ const AdminAiVoice: React.FC = () => {
                 Pulse Ritual iOS App
               </div>
               <div className="ml-auto text-zinc-600">
-                Generation calls <code className="font-mono">OpenAI Audio via bridge</code> · downloads save as
-                {' '}<code className="font-mono">&lt;file&gt;.mp3</code>
+                Generation calls <code className="font-mono">OpenAI bridge + nonverbal synth</code> · downloads save as
+                {' '}<code className="font-mono">&lt;file&gt;.wav</code>
               </div>
             </div>
           </div>

@@ -170,6 +170,7 @@ export type SportScenarioArchetype =
   | 'net_racket'
   | 'race'
   | 'judged'
+  | 'stage'
   | 'precision'
   | 'combat'
   | 'attempt'

@@ -214,6 +214,54 @@ test('openai-bridge relays local dev calls to the deployed bridge when no local 
   });
 });
 
+test('openai-bridge relays local PulseCheck SFX calls through the deployed structured-JSON policy', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: null,
+    OPEN_AI_SECRET_KEY: null,
+    OPENAI_BRIDGE_FALLBACK_ORIGIN: 'https://fitwithpulse.ai',
+  }, async () => {
+    const fetchCalls = [];
+    global.fetch = async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ choices: [{ message: { content: '{"layers":[]}' } }] });
+        },
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+          },
+        },
+      };
+    };
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock());
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        host: 'localhost:8888',
+        authorization: 'Bearer firebase-id-token',
+        'openai-organization': 'pulsecheckSoundEffects',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        response_format: { type: 'json_object' },
+        max_completion_tokens: 4000,
+        messages: [{ role: 'user', content: 'Design a UI sound recipe.' }],
+      }),
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0].options.headers['openai-organization'], 'noraRoutineGeneration');
+    assert.equal(fetchCalls[0].options.headers['x-pulsecheck-original-openai-organization'], 'pulsecheckSoundEffects');
+  });
+});
+
 test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature policy', async () => {
   await withPatchedEnvironment({
     OPENAI_API_KEY: '',
@@ -311,13 +359,16 @@ test('openai-bridge allows timeout-aware gpt-5-mini routine generation', async (
   });
 });
 
-test('openai-bridge allows PulseCheck audio generation and preserves base64 audio output', async () => {
+test('openai-bridge allows PulseCheck procedural sound-recipe generation', async () => {
   await withPatchedEnvironment({
     OPENAI_API_KEY: 'server-openai-key',
     OPEN_AI_SECRET_KEY: null,
   }, async () => {
     const fetchCalls = [];
-    const audioData = Buffer.from('mock-mp3-audio').toString('base64');
+    const recipe = JSON.stringify({
+      masterGain: 0.6,
+      layers: [{ source: 'oscillator', waveform: 'sine', frequencyStartHz: 500, frequencyEndHz: 300 }],
+    });
     global.fetch = async (url, options) => {
       fetchCalls.push({ url, options });
       return {
@@ -325,7 +376,7 @@ test('openai-bridge allows PulseCheck audio generation and preserves base64 audi
         status: 200,
         async text() {
           return JSON.stringify({
-            choices: [{ message: { audio: { data: audioData } } }],
+            choices: [{ message: { content: recipe } }],
           });
         },
         headers: {
@@ -346,10 +397,9 @@ test('openai-bridge allows PulseCheck audio generation and preserves base64 audi
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-audio-1.5',
-        modalities: ['text', 'audio'],
-        audio: { voice: 'alloy', format: 'mp3' },
-        messages: [{ role: 'user', content: 'Create a soft UI chime.' }],
+        model: 'gpt-5-mini',
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'user', content: 'Design a soft UI chime synthesis recipe.' }],
         max_completion_tokens: 5000,
       }),
     });
@@ -359,13 +409,14 @@ test('openai-bridge allows PulseCheck audio generation and preserves base64 audi
     assert.equal(fetchCalls[0].url, 'https://api.openai.com/v1/chat/completions');
 
     const forwardedBody = JSON.parse(fetchCalls[0].options.body);
-    assert.equal(forwardedBody.model, 'gpt-audio-1.5');
-    assert.deepEqual(forwardedBody.modalities, ['text', 'audio']);
-    assert.deepEqual(forwardedBody.audio, { voice: 'alloy', format: 'mp3' });
-    assert.equal(forwardedBody.max_completion_tokens, 2000);
+    assert.equal(forwardedBody.model, 'gpt-5-mini');
+    assert.deepEqual(forwardedBody.response_format, { type: 'json_object' });
+    assert.equal(forwardedBody.modalities, undefined);
+    assert.equal(forwardedBody.audio, undefined);
+    assert.equal(forwardedBody.max_completion_tokens, 4000);
 
     const responseBody = JSON.parse(response.body);
-    assert.equal(responseBody.choices[0].message.audio.data, audioData);
+    assert.equal(responseBody.choices[0].message.content, recipe);
   });
 });
 

@@ -51,6 +51,10 @@ test('scenarioArchetypeForSport — maps representative sports', async () => {
     ['speed skating', 'race'],
     ['gymnastics', 'judged'],
     ['figure skating', 'judged'],
+    ["Men's physique", 'stage'],
+    ['bodybuilding', 'stage'],
+    ['bikini', 'stage'],
+    ['Figure', 'stage'],
     ['golf', 'precision'],
     ['archery', 'precision'],
     ['wrestling', 'combat'],
@@ -79,13 +83,53 @@ test('scenarioArchetypeForSport — substring traps stay resolved', async () => 
   assert.equal(archetypes.scenarioArchetypeForSport('throwing'), 'attempt');
   // "figure skat" (judged) must beat race's "speed skat" bucket.
   assert.equal(archetypes.scenarioArchetypeForSport('figure skater'), 'judged');
+  // "figure skating" must hit judged before stage's bare "figure" division key.
+  assert.equal(archetypes.scenarioArchetypeForSport('figure skating'), 'judged');
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Catalog-first resolution (Sports Intelligence lookup table)
+// ──────────────────────────────────────────────────────────────────────────────
+
+const TEST_CATALOG = [
+  {
+    id: 'bodybuilding-physique',
+    name: 'Bodybuilding / Physique',
+    // Curly apostrophe on purpose: mirrors the seeded catalog data.
+    positions: ['Men’s Physique', 'Classic Physique', 'Bodybuilding', 'Bikini', 'Figure', 'Wellness', 'Fitness'],
+  },
+  { id: 'crossfit', name: 'CrossFit', positions: ['Individual'] },
+  { id: 'track-field', name: 'Track & Field', positions: ['Sprinter', 'Thrower'] },
+  { id: 'cheerleading', name: 'Cheerleading', positions: ['Base', 'Flyer'] },
+  { id: 'crossfit-override', name: 'CrossFit Masters', positions: ['Individual'], scenarioArchetype: 'attempt' },
+];
+
+test('resolveScenarioArchetype — catalog beats keywords, positions match divisions', async () => {
+  const { archetypes } = await loadModules();
+  const resolve = (sport: string | null) => archetypes.resolveScenarioArchetype(sport, TEST_CATALOG);
+
+  // Division stored as the athlete's sport (straight apostrophe) matches the
+  // catalog entry's position (curly apostrophe) and lands on stage.
+  assert.equal(resolve("Men's physique"), 'stage');
+  // Catalog name match.
+  assert.equal(resolve('Bodybuilding / Physique'), 'stage');
+  // Code-owned by-id default: CrossFit is raced in timed heats.
+  assert.equal(resolve('CrossFit'), 'race');
+  // Explicit entry field wins over the by-id map and keywords.
+  assert.equal(resolve('CrossFit Masters'), 'attempt');
+  // Admin-added sport with no explicit field and no map entry: keywords on
+  // the entry name ("cheer" → judged).
+  assert.equal(resolve('Cheerleading'), 'judged');
+  // Not in the catalog at all: keyword fallback on the raw string.
+  assert.equal(resolve('muay thai'), 'combat');
+  assert.equal(resolve(null), 'general');
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Seeded packs on the adversity module
 // ──────────────────────────────────────────────────────────────────────────────
 
-test('adversity module — carries pick phase and seven packs', async () => {
+test('adversity module — carries pick phase and eight packs', async () => {
   const { library } = await loadModules();
   const exercise = (library as any).SEEDED_EXERCISES.find((e: any) => e.id === ADVERSITY_ID);
   assert.ok(exercise, 'seeded adversity module exists');
@@ -99,7 +143,7 @@ test('adversity module — carries pick phase and seven packs', async () => {
   const archetypesPresent = packs.map((p: any) => p.archetype).sort();
   assert.deepEqual(
     archetypesPresent,
-    ['attempt', 'combat', 'invasion', 'judged', 'net_racket', 'precision', 'race'],
+    ['attempt', 'combat', 'invasion', 'judged', 'net_racket', 'precision', 'race', 'stage'],
   );
 
   for (const pack of packs) {

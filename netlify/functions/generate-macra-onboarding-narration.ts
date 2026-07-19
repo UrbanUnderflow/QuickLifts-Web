@@ -137,8 +137,8 @@ function voiceResolution(configData: Record<string, any> | undefined) {
     ? normalizeAiVoiceConfig(configData as Partial<AiVoiceConfig>)
     : null;
   const shouldUseConfiguredElevenLabsVoice = voiceConfig?.provider === 'elevenlabs';
-  const voiceId = shouldUseConfiguredElevenLabsVoice && voiceConfig?.voiceId
-    ? voiceConfig.voiceId
+  const voiceId = shouldUseConfiguredElevenLabsVoice && (voiceConfig?.elevenLabsVoiceId || voiceConfig?.voiceId)
+    ? (voiceConfig.elevenLabsVoiceId || voiceConfig.voiceId)
     : DEFAULT_ELEVENLABS_VOICE_ID;
   const presetId = shouldUseConfiguredElevenLabsVoice
     ? voiceConfig?.presetId || DEFAULT_ELEVENLABS_PRESET_ID

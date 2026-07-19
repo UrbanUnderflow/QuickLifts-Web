@@ -82,6 +82,8 @@ async function fetchAdminVoiceConfig(): Promise<AiVoiceConfig | null> {
     const raw: Record<string, unknown> = {
       provider: fields.provider?.stringValue,
       voiceId: fields.voiceId?.stringValue,
+      openAiVoiceId: fields.openAiVoiceId?.stringValue,
+      elevenLabsVoiceId: fields.elevenLabsVoiceId?.stringValue,
       presetId: fields.presetId?.stringValue,
       punctuationPauses: fields.punctuationPauses?.booleanValue,
       updatedAt: fields.updatedAt?.integerValue
@@ -123,7 +125,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const adminConfig = await fetchAdminVoiceConfig();
 
   const provider = body.provider ?? adminConfig?.provider ?? 'elevenlabs';
-  const voiceId = body.voice ?? adminConfig?.voiceId ?? '21m00Tcm4TlvDq8ikWAM';
+  const voiceId = body.voice
+    ?? (provider === 'elevenlabs' ? adminConfig?.elevenLabsVoiceId : adminConfig?.openAiVoiceId)
+    ?? adminConfig?.voiceId
+    ?? (provider === 'elevenlabs' ? '21m00Tcm4TlvDq8ikWAM' : 'alloy');
   const presetId = body.presetId ?? adminConfig?.presetId ?? 'expressive';
   const punctuationPauses =
     typeof body.punctuationPauses === 'boolean'
