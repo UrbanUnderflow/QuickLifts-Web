@@ -59,7 +59,7 @@ const ReviewArticleLayout: React.FC<ReviewArticleLayoutProps> = ({
   children,
   pageOgImage,
   pageOgUrl,
-  downloadHref = '/PulseDeck12_9.pdf',
+  downloadHref = '/PIL_Investor_Deck_2026.pdf',
   downloadLabel = 'Download PDF',
   headerActions,
   theme = 'light',

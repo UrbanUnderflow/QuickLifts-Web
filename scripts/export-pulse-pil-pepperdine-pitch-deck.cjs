@@ -11,9 +11,14 @@ const { jsPDF } = require('jspdf');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const EXPORT_DIR = path.join(ROOT_DIR, 'exports', 'pulse-pil-pepperdine-pitch');
 const SLIDES_DIR = path.join(EXPORT_DIR, 'slides');
-const OUTPUT_PDF = path.join(EXPORT_DIR, 'Pulse_Intelligence_Labs_Deck.pdf');
-const PUBLIC_PDF = path.join(ROOT_DIR, 'public', 'Pulse_Intelligence_Labs_Deck.pdf');
-const INVESTOR_DOCS_PDF = path.join(ROOT_DIR, 'public', 'investor-docs', 'Pulse_Intelligence_Labs_Deck.pdf');
+const OUTPUT_PDF = path.join(EXPORT_DIR, 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
+const PUBLIC_PDF = path.join(ROOT_DIR, 'public', 'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf');
+const INVESTOR_DOCS_PDF = path.join(
+  ROOT_DIR,
+  'public',
+  'investor-docs',
+  'Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf',
+);
 const TOTAL_SLIDES = 22;
 const VIEWPORT = { width: 2730, height: 1536 };
 const DEVICE_SCALE_FACTOR = 1;

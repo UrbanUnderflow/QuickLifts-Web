@@ -16,7 +16,16 @@ Every athlete-facing Nora response must pass these checks before it ships:
 11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
 12. Mental-performance boundary: Nora may connect physical state to focus, composure, confidence, decision-making, and habits. Nora must not prescribe physical programming changes such as adding sets, cutting reps, lowering weight, shortening minutes, or changing the athlete's workout.
 13. Spell out the coaching moment: do not write in code. If the copy uses shorthand like "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
+14. Direct affirmative writing: state the intended truth, mechanism, or action directly. Negation-led corrective contrast is a serious error. Never write "not X, but Y", "X is not Y; it is Z", "X does not do Y; it does Z", or a defensive qualifier such as "it does not replace Y".
+15. Smart middle schooler voice: every line should sound natural when spoken to a smart 13-year-old. Keep the idea intelligent and make the language concrete. Name thoughts, feelings, choices, people, and moments the athlete can picture. Reject abstract performance-copy phrases such as "strengthen your state", "shift your state", "regulate your system", "access your focus", "recognize your pattern", and "create it on purpose".
 `;
+
+const negationLedCorrectiveContrastPatterns = [
+  /\bnot\b[^.!?]{0,120}\bbut\b/i,
+  /\b(?:isn't|aren't|wasn't|weren't|doesn't|don't|can't|won't)\b[^.!?]{0,120}(?:[,;:]\s*|\.\s+)(?:it|this|that|they|we|you)\b/i,
+  /(?:^|[;:.]\s+)(?:it|this|that|they|we|you)\s+(?:is|are|does|do|can|will)\s+not\b/i,
+  /\b(?:is|are|does|do|can|will)\s+not\b[^.!?]{0,120}(?:[,;:]\s*|\.\s+)(?:it|this|that|they|we|you)\b/i,
+];
 
 const tradeMarkers = [
   'so i can',
@@ -137,6 +146,17 @@ const technicalJargonPatterns = [
   'change today\'s workout',
   'steady but not peak state',
   'conditions are not perfect',
+  'strengthen your state',
+  'strengthen the state',
+  'shift your state',
+  'shift the state',
+  'regulate your system',
+  'regulate the system',
+  'access your focus',
+  'access focus',
+  'recognize your pattern',
+  'create it on purpose',
+  'optimize your mindset',
 ];
 
 const bannedAthleteFacingTokens = new Set([
@@ -198,11 +218,11 @@ const repetitionStopwords = new Set([
 ]);
 
 const replacements: Array<[string, string]> = [
-  ['How you feeling?', "How are you feeling right now?"],
-  ['How are you feeling?', "How are you feeling right now?"],
-  ['how you feeling?', "how are you feeling right now?"],
-  ['how are you feeling?', "how are you feeling right now?"],
-  ['how are things landing today?', "how are you feeling right now?"],
+  ['How you feeling?', "How are you feeling right now so I can set the pace for today's session?"],
+  ['How are you feeling?', "How are you feeling right now so I can set the pace for today's session?"],
+  ['how you feeling?', "how are you feeling right now so I can set the pace for today's session?"],
+  ['how are you feeling?', "how are you feeling right now so I can set the pace for today's session?"],
+  ['how are things landing today?', "how are you feeling right now so I can set the pace for today's session?"],
   ["Recovery's workable", "No recovery red flags for today's session"],
   ["recovery's workable", "no recovery red flags for today's session"],
   ['recovery is workable', "no recovery red flags for today's session"],
@@ -362,6 +382,13 @@ export const validateNoraVoiceRubric = (
     if (lowered.includes(pattern)) {
       violations.push(issue('plainAthleteLanguage', `contains technical or vague athlete-facing phrase '${pattern}'`));
     }
+  }
+
+  if (negationLedCorrectiveContrastPatterns.some((pattern) => pattern.test(trimmed))) {
+    violations.push(issue(
+      'noNegationLedContrast',
+      'defines the message through a negation-led correction instead of stating the intended truth directly',
+    ));
   }
 
   const tokens = new Set(lowered.split(/[^a-z0-9]+/i).filter(Boolean));

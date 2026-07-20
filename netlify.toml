@@ -83,13 +83,13 @@
 # Investor deck short link → static PDF asset
 [[redirects]]
   from = "/pulsedeck"
-  to = "/pulsedeck.pdf"
+  to = "/PIL_Investor_Deck_2026.pdf"
   status = 200
   force = true
 
 [[redirects]]
   from = "/pulsedeck/"
-  to = "/pulsedeck.pdf"
+  to = "/PIL_Investor_Deck_2026.pdf"
   status = 200
   force = true
 

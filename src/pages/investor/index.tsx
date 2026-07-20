@@ -273,18 +273,10 @@ const FINANCING_DOCUMENTS: InvestorDocumentLink[] = [
 const INVESTOR_SITE_DOCUMENTS: InvestorDocumentLink[] = [
   {
     id: 'pulse-deck-current',
-    title: 'Pulse Intelligence Labs Deck',
-    description: 'Investor pitch deck PDF',
-    href: '/Pulse_Intelligence_Labs_Deck.pdf',
-    fileType: 'PDF',
-    download: true,
-  },
-  {
-    id: 'pil-investor-deck-2026',
     title: 'PIL Investor Deck 2026',
-    description: 'Editable investor deck presentation',
-    href: '/PIL_Investor_Deck_2026.pptx',
-    fileType: 'PPTX',
+    description: 'Current investor pitch deck PDF',
+    href: '/PIL_Investor_Deck_2026.pdf',
+    fileType: 'PDF',
     download: true,
   },
   {
@@ -3294,8 +3286,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           {/* CTAs */}
           <div className="flex flex-wrap justify-center gap-4">
             <a
-              href="/PulseDeck12_9.pdf"
-              download="PulseDeck12_9.pdf"
+              href="/PIL_Investor_Deck_2026.pdf"
+              download="PIL_Investor_Deck_2026.pdf"
               className="group inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-semibold rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 hover:-translate-y-0.5"
             >
               <Download className="mr-2 h-5 w-5 group-hover:animate-bounce" />

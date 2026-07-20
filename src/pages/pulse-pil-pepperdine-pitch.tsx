@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const TOTAL_SLIDES = 22;
-const PDF_DOWNLOAD_PATH = '/Pulse_Intelligence_Labs_Deck.pdf';
+const PDF_DOWNLOAD_PATH = '/Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf';
 
 const SLIDE_META = [
   { label: 'Title', eyebrow: 'Slide 1' },
@@ -4386,7 +4386,7 @@ const PulsePILPepperdinePitchPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <a
                 href={PDF_DOWNLOAD_PATH}
-                download="Pulse_Intelligence_Labs_Deck.pdf"
+                download="Pulse_Intelligence_Labs_Pepperdine_MFC_2026.pdf"
                 className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-4 py-2 text-xl font-semibold text-[#E0FE10] transition hover:bg-[#E0FE10]/15"
               >
                 <Download className="h-4 w-4" />

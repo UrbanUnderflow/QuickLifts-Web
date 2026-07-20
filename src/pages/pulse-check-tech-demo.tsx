@@ -7,8 +7,8 @@ const DEMO_TITLE = 'PulseCheck Tech Demo | Pulse Intelligence Labs';
 const DEMO_DESCRIPTION = 'A focused PulseCheck tech demo page for investors and reviewers.';
 const VIDEO_SRC = 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/webassets%2Fpulse-check-tech-demo.mp4?alt=media&token=de71c561-351d-459d-9d06-dc534b80d000';
 const VIDEO_DURATION_SECONDS = 1111;
-const PITCH_DECK_HREF = '/investor-docs/Pulse_Intelligence_Labs_Deck.pdf';
-const PITCH_DECK_FILENAME = 'Pulse_Intelligence_Labs_Deck.pdf';
+const PITCH_DECK_HREF = '/PIL_Investor_Deck_2026.pdf';
+const PITCH_DECK_FILENAME = 'PIL_Investor_Deck_2026.pdf';
 
 const resolveDemoHost = (host: string | undefined | string[]) => {
   const normalizedHost = Array.isArray(host) ? host[0] ?? '' : host ?? '';

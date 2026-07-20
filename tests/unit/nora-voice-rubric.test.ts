@@ -31,6 +31,29 @@ test('Nora voice rubric rejects physical programming prescriptions in sports int
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
 });
 
+test('Nora voice rubric rejects negation-led corrective contrast', () => {
+  const examples = [
+    'Mental rehearsal strengthens physical preparation; it does not replace it.',
+    'Confidence is not a guarantee; it is trust in your preparation.',
+    'Focus is not ignoring distractions, but returning to what matters.',
+  ];
+
+  for (const text of examples) {
+    const issues = validateNoraVoiceRubric(text);
+    assert.ok(
+      issues.some((issue) => issue.field === 'noraVoiceRubric.noNegationLedContrast'),
+      `expected negation-led contrast violation for: ${text}`,
+    );
+  }
+});
+
+test('Nora voice rubric rejects abstract copy that does not sound spoken to a smart 13-year-old', () => {
+  const text = 'Reflection helps you see which environments strengthen your state. Once you recognize your pattern, you can begin creating it on purpose.';
+  const issues = validateNoraVoiceRubric(text);
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
+});
+
 test('Nora voice rubric rejects report-style sleep read copy', () => {
   const issues = validateNoraVoiceRubric(
     'For physique prep, this sleep read is about confidence, routine, and decision fatigue. Use one reset cue when the day starts to feel noisy.',
