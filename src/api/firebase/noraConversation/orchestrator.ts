@@ -216,6 +216,34 @@ export interface RecordAthleteReplyDeps extends OpenConversationDeps {
   classifyReply?: (replyText: string, conversation: NoraConversation) => Promise<string>;
 }
 
+const juniorMorningCheckinAction = (
+  trigger: string,
+  replyText: string,
+  branchId?: string,
+): { stateBucket: string; text: string } | null => {
+  if (trigger !== 'morning-checkin-tone' || !branchId?.endsWith('-drained')) return null;
+  const normalized = replyText.trim().toLowerCase();
+  const actions: Record<string, { stateBucket: string; text: string }> = {
+    'my body': {
+      stateBucket: 'self-report-body',
+      text: 'Your body signal matters. Pause before training and check what support you need today.',
+    },
+    'my mind': {
+      stateBucket: 'self-report-mind',
+      text: 'Your mind sounds loaded. Take a short reset and make the next step smaller.',
+    },
+    'school stuff': {
+      stateBucket: 'self-report-school',
+      text: 'School can use up real energy. Take a short reset and choose one manageable next step.',
+    },
+    'something else': {
+      stateBucket: 'self-report-other',
+      text: 'That drained feeling still counts, even if you cannot name the reason yet. Start with a short reset.',
+    },
+  };
+  return actions[normalized] || null;
+};
+
 /**
  * Athlete reply turn is appended. Then:
  *   - If conversation was 'opened', orchestrator generates the PROBE
@@ -272,29 +300,32 @@ export const recordAthleteReply = async (
   } else if (convo.state === 'awaiting-reply') {
     // Classify reply → state bucket → call translateForAthlete for action delivery.
     const classifier = deps.classifyReply || ((text: string) => defaultClassifyReply(text, convo, deps.anthropicClient));
-    const stateBucket = input.preClassifiedStateBucket || (await classifier(input.text, convo));
+    const authoredJuniorAction = juniorMorningCheckinAction(convo.trigger, input.text, convo.branchId);
+    const stateBucket = authoredJuniorAction?.stateBucket || input.preClassifiedStateBucket || (await classifier(input.text, convo));
     const translateFn = deps.translate || translateForAthlete;
     let translation: TranslationResult | null = null;
-    try {
-      translation = await translateFn(
-        {
-          athleteUserId: convo.athleteUserId,
-          signal: { trigger: convo.trigger, replyText: input.text, stateBucket },
-          domain: convo.actionDomain,
-          state: stateBucket,
-          additionalContext: { thread: serializeThread(convo.turns) },
-          persistLog: true,
-        },
-        { firestore: db, anthropicClient: deps.anthropicClient },
-      );
-    } catch (err) {
-      // Fallback handled below — translateForAthlete already has fallback,
-      // but if the function itself throws, we synthesize a safe default.
-      translation = null;
+    if (!authoredJuniorAction) {
+      try {
+        translation = await translateFn(
+          {
+            athleteUserId: convo.athleteUserId,
+            signal: { trigger: convo.trigger, replyText: input.text, stateBucket },
+            domain: convo.actionDomain,
+            state: stateBucket,
+            additionalContext: { thread: serializeThread(convo.turns) },
+            persistLog: true,
+          },
+          { firestore: db, anthropicClient: deps.anthropicClient },
+        );
+      } catch (_err) {
+        // Fallback handled below — translateForAthlete already has fallback,
+        // but if the function itself throws, we synthesize a safe default.
+        translation = null;
+      }
     }
 
     const actionText = enforceConversationTurnText(
-      translation?.phrasing ||
+      authoredJuniorAction?.text || translation?.phrasing ||
         "Got it. I'll keep that in mind for today's training.",
       'nora-action',
       updatedTurns,
@@ -457,6 +488,7 @@ export const __internal = {
   buildTriggerFireId,
   defaultClassifyReply,
   keywordFallback,
+  juniorMorningCheckinAction,
 };
 
 export const noraConversationOrchestrator = {

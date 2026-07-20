@@ -67,6 +67,25 @@ test('keywordFallback — autonomic domain detects sympathetic-dominant from str
   assert.equal(result, 'sympathetic-dominant');
 });
 
+test('junior morning check-in body reply never implies restored readiness', async () => {
+  const { orchestrator } = await loadModules();
+  const result = orchestrator.__internal.juniorMorningCheckinAction(
+    'morning-checkin-tone',
+    'My body',
+    'morning-checkin-tone-drained',
+  );
+  assert.equal(result?.stateBucket, 'self-report-body');
+  assert.match(result?.text || '', /body signal matters/i);
+  assert.doesNotMatch(result?.text || '', /ready|restored|push/i);
+});
+
+test('junior morning check-in authored actions only match bounded junior replies', async () => {
+  const { orchestrator } = await loadModules();
+  assert.equal(orchestrator.__internal.juniorMorningCheckinAction('morning-checkin-tone', 'I feel tense', 'morning-checkin-tone-drained'), null);
+  assert.equal(orchestrator.__internal.juniorMorningCheckinAction('other-trigger', 'My body', 'morning-checkin-tone-drained'), null);
+  assert.equal(orchestrator.__internal.juniorMorningCheckinAction('morning-checkin-tone', 'Something else', 'morning-checkin-tone-solid'), null);
+});
+
 test('keywordFallback — circadian domain detects jetlag-significant', async () => {
   const { orchestrator } = await loadModules();
   const result = orchestrator.__internal.keywordFallback('jet lag is brutal still', 'circadian');
