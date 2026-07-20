@@ -2421,7 +2421,7 @@ const PulseCheckPage: NextPage = () => {
                                 <ul className="text-sm text-zinc-300 space-y-2">
                                     <li>• Escalation triggers with objective context snapshots</li>
                                     <li>• Restricted visibility on HIPAA-sensitive cases</li>
-                                    <li>• Secure handoff to AuntEdna for immediate follow-up</li>
+                                    <li>• Secure handoff to a clinical expert for immediate follow-up</li>
                                 </ul>
                             </div>
                         </div>
@@ -2726,7 +2726,7 @@ const PulseCheckPage: NextPage = () => {
                                             </p>
                                         </div>
 
-                                        {/* Aunt Edna */}
+                                        {/* Clinical escalation pathway */}
                                         <div className="text-center">
                                             <div className="relative mb-6 mx-auto w-24 h-24">
                                                 <div className="absolute inset-0 bg-purple-500/20 rounded-full blur-xl"></div>
@@ -2734,9 +2734,9 @@ const PulseCheckPage: NextPage = () => {
                                                     <FaShieldAlt className="h-10 w-10 text-white" />
                                                 </div>
                                             </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">Clinical Safety (AuntEdna)</h3>
+                                            <h3 className="text-xl font-bold text-white mb-2">Clinical Escalation Pathway</h3>
                                             <p className="text-sm text-zinc-400">
-                                                Ensures HIPAA-compliant routing of critical medical or mental health issues.
+                                                Securely routes critical medical or mental health concerns to a clinical expert.
                                             </p>
                                         </div>
                                     </div>

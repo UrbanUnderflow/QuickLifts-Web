@@ -604,7 +604,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           <div className="pc2-section-text pc2-reveal">
             <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>🛡 Clinical Safety Net</span>
             <h2 className="pc2-h2 pc2-h2--light">When it matters most,<br /><em>the system escalates.</em></h2>
-            <p className="pc2-section-sub pc2-section-sub--light">When Nora detects clinical-level distress, PulseCheck automatically packages the full context — biometrics, chat sentiment, trend data — and initiates a secure, HIPAA-compliant handoff to AuntEdna, your clinical mental health platform.</p>
+            <p className="pc2-section-sub pc2-section-sub--light">When Nora detects clinical-level distress, PulseCheck securely packages the relevant context — biometrics, chat sentiment, and trend data — and starts an escalation pathway that routes the case to a clinical expert.</p>
             <ul className="pc2-checklist pc2-checklist--dark">
               {['Critical alerts bypass Do Not Disturb on clinician devices', 'Full context snapshot: sleep, HRV, chat sentiment', 'Restricted visibility — HIPAA-sensitive case handling', 'Secure handoff to clinical staff for immediate follow-up'].map(t => (
                 <li key={t}><span className="pc2-check" style={{ color: '#A05EF8' }}>✓</span><span style={{ color: '#a1a1aa' }}>{t}</span></li>
@@ -615,8 +615,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
             <div className="pc2-mockup pc2-mockup--clinical">
               <div className="pc2-mockup-bar pc2-mockup-bar--dark">
                 <div className="pc2-mockup-dots"><span /><span /><span /></div>
-                <span className="pc2-mockup-title pc2-mockup-title--dark pc2-auntedna-title">
-                  Clinical handoff <strong>Powered by AuntEdna</strong>
+                <span className="pc2-mockup-title pc2-mockup-title--dark pc2-clinical-pathway-title">
+                  Clinical escalation <strong>Expert pathway activated</strong>
                 </span>
               </div>
               <div className="pc2-clinical-alert">
@@ -1826,18 +1826,18 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           .pc2-footer{padding:48px 24px 32px;}
           .pc2-footer-inner{grid-template-columns:1fr;gap:32px;}
         }
-        .pc2-auntedna-title {
+        .pc2-clinical-pathway-title {
           font-size: 12px !important;
           font-weight: 500;
           color: rgba(180,140,255,0.9) !important;
           letter-spacing: 0.03em;
-          animation: pcAuntEdnaGlow 3s ease-in-out infinite;
+          animation: pcClinicalPathwayGlow 3s ease-in-out infinite;
         }
-        .pc2-auntedna-title strong {
+        .pc2-clinical-pathway-title strong {
           font-weight: 700;
           color: #C084FC;
         }
-        @keyframes pcAuntEdnaGlow {
+        @keyframes pcClinicalPathwayGlow {
           0%,100% {
             text-shadow:
               0 0 6px rgba(192,132,252,0.4),
