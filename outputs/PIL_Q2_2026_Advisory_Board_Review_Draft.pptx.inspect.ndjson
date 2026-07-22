@@ -1,0 +1,499 @@
+{"kind":"deck","id":"pr/7o6dr6","name":"Deck"}
+{"kind":"layout","layoutId":"a44f73aa-0879-4e71-83ff-252e4a5a3704","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"f7a78861-27be-439c-8619-f4cbf243ff81","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/l0cbr9","slide":1,"title":"Q2 2026 / ADVISORY BOARD","textShapes":9}
+{"kind":"shape","id":"sh/a1krutov","slide":1,"bbox":[0,0,1280,16]}
+{"kind":"shape","id":"sh/x4vq58nm","slide":1,"bbox":[72,70,306,38]}
+{"kind":"shape","id":"sh/w3m9w361","slide":1,"bbox":[88,85,9,9]}
+{"kind":"textbox","id":"sh/net8zyp4","slide":1,"text":"Q2 2026 / ADVISORY BOARD","textPreview":"Q2 2026 / ADVISORY BOARD","textChars":24,"textLines":1,"bbox":[108,79,258,21]}
+{"kind":"textbox","id":"sh/mdkrqtoz","slide":1,"text":"Q2 2026\nAdvisory Board Review","textPreview":"Q2 2026 | Advisory Board Review","textChars":29,"textLines":2,"bbox":[72,151,630,185]}
+{"kind":"textbox","id":"sh/90bq18na","slide":1,"text":"Momentum, relationships, and the path to institutional proof","textPreview":"Momentum, relationships, and the path to institutional proof","textChars":60,"textLines":1,"bbox":[72,365,575,66]}
+{"kind":"textbox","id":"sh/oz29s36p","slide":1,"text":"JULY 2026","textPreview":"JULY 2026","textChars":9,"textLines":1,"bbox":[72,586,200,24]}
+{"kind":"textbox","id":"sh/7udsbi5o","slide":1,"text":"PULSE INTELLIGENCE LABS","textPreview":"PULSE INTELLIGENCE LABS","textChars":23,"textLines":1,"bbox":[72,622,300,25]}
+{"kind":"shape","id":"sh/694r2do3","slide":1,"bbox":[742,64,466,584]}
+{"kind":"shape","id":"sh/29o72xsv","slide":1,"bbox":[795,519,360,94]}
+{"kind":"textbox","id":"sh/3uxov29g","slide":1,"text":"PULSECHECK","textPreview":"PULSECHECK","textChars":10,"textLines":1,"bbox":[818,539,310,28]}
+{"kind":"textbox","id":"sh/g7650nap","slide":1,"text":"Always-on sport psychology","textPreview":"Always-on sport psychology","textChars":26,"textLines":1,"bbox":[818,574,310,20]}
+{"kind":"shape","id":"sh/18f6tsra","slide":1,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/e5onydsz","slide":1,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/f6xori9k","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"image","id":"im/3e1svapk","slide":1,"name":"","geometry":"roundRect","alt":"PulseCheck daily check-in","bbox":[777,101,178,376]}
+{"kind":"image","id":"im/idsr258z","slide":1,"name":"","geometry":"roundRect","alt":"PulseCheck critical signal","bbox":[995,184,178,376]}
+{"kind":"notes","id":"nt/l0cbr9","slide":1,"text":"Open with the quarter's core shift: PulseCheck now has an ecosystem forming around it.\nFrame this meeting as a working session focused on converting momentum into institutional proof."}
+{"kind":"slide","id":"sl/cl19ol","slide":2,"title":"QUARTER THESIS","textShapes":19}
+{"kind":"shape","id":"sh/47ip87ql","slide":2,"bbox":[72,50,220,38]}
+{"kind":"shape","id":"sh/3698f290","slide":2,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/25076x8f","slide":2,"text":"QUARTER THESIS","textPreview":"QUARTER THESIS","textChars":14,"textLines":1,"bbox":[108,59,172,21]}
+{"kind":"textbox","id":"sh/hkrqdsru","slide":2,"text":"Q2 built a network around PulseCheck.","textPreview":"Q2 built a network around PulseCheck.","textChars":37,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/gjip47qp","slide":2,"text":"The product conversation expanded into capital, clinical research, elite sport, and pilot access.","textPreview":"The product conversation expanded into capital, clinical research, elite sport, and pilot access.","textChars":97,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/fi98b294","slide":2,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/uh072x8j","slide":2,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/tgrq9sry","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/sfyp0nqd","slide":2,"bbox":[72,267,260,190]}
+{"kind":"shape","id":"sh/q9ovixob","slide":2,"bbox":[72,267,8,190]}
+{"kind":"textbox","id":"sh/bahwr2pw","slide":2,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[100,292,210,70]}
+{"kind":"textbox","id":"sh/cvqdk76h","slide":2,"text":"UNIVERSITIES","textPreview":"UNIVERSITIES","textChars":12,"textLines":1,"bbox":[100,369,210,28]}
+{"kind":"textbox","id":"sh/dwzetc72","slide":2,"text":"Named relationships in pilot or conversation stages","textPreview":"Named relationships in pilot or conversation stages","textChars":51,"textLines":1,"bbox":[100,405,210,36]}
+{"kind":"shape","id":"sh/25ovexoz","slide":2,"bbox":[356,267,260,190]}
+{"kind":"shape","id":"sh/36xwn2pk","slide":2,"bbox":[356,267,8,190]}
+{"kind":"textbox","id":"sh/o76dg765","slide":2,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[384,292,210,70]}
+{"kind":"textbox","id":"sh/p8feps7q","slide":2,"text":"PERFORMANCE SETTINGS","textPreview":"PERFORMANCE SETTINGS","textChars":20,"textLines":1,"bbox":[384,369,210,28]}
+{"kind":"textbox","id":"sh/e14vado3","slide":2,"text":"Clinic and cycling environments","textPreview":"Clinic and cycling environments","textChars":31,"textLines":1,"bbox":[384,405,210,36]}
+{"kind":"shape","id":"sh/f2dcjipo","slide":2,"bbox":[640,267,260,190]}
+{"kind":"shape","id":"sh/j6tsre5g","slide":2,"bbox":[640,267,8,190]}
+{"kind":"textbox","id":"sh/i5kbi94v","slide":2,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[668,292,210,70]}
+{"kind":"textbox","id":"sh/58batonm","slide":2,"text":"COUNCIL LEADERS","textPreview":"COUNCIL LEADERS","textChars":15,"textLines":1,"bbox":[668,369,210,28]}
+{"kind":"textbox","id":"sh/472tkjm1","slide":2,"text":"Athletes, clinicians, coaches, and operators","textPreview":"Athletes, clinicians, coaches, and operators","textChars":44,"textLines":1,"bbox":[668,405,210,36]}
+{"kind":"shape","id":"sh/ratsvy5c","slide":2,"bbox":[924,267,284,190]}
+{"kind":"shape","id":"sh/69kbmt4r","slide":2,"bbox":[924,267,8,190]}
+{"kind":"textbox","id":"sh/tcvax8ni","slide":2,"text":"$1.4M","textPreview":"$1.4M","textChars":5,"textLines":1,"bbox":[952,292,234,70]}
+{"kind":"textbox","id":"sh/sbmto3mx","slide":2,"text":"PHASE II TARGET","textPreview":"PHASE II TARGET","textChars":15,"textLines":1,"bbox":[952,369,234,28]}
+{"kind":"textbox","id":"sh/ne9sju58","slide":2,"text":"NSF proposal initiative in motion","textPreview":"NSF proposal initiative in motion","textChars":33,"textLines":1,"bbox":[952,405,234,36]}
+{"kind":"shape","id":"sh/md0rap4n","slide":2,"bbox":[72,486,1136,130]}
+{"kind":"textbox","id":"sh/cjepkv2l","slide":2,"text":"THE SIGNAL","textPreview":"THE SIGNAL","textChars":10,"textLines":1,"bbox":[100,509,180,23]}
+{"kind":"textbox","id":"sh/dk7qd036","slide":2,"text":"The opportunity is moving from a strong demo reaction to a coordinated path for validation, deployment, and scale.","textPreview":"The opportunity is moving from a strong demo reaction to a coordinated path for validation, deployment, and scale.","textChars":114,"textLines":1,"bbox":[100,544,1048,52]}
+{"kind":"notes","id":"nt/cl19ol","slide":2,"text":"These are momentum indicators, not closed revenue claims.\nThe $1.4M figure is the internal Phase II target and should not be described as awarded."}
+{"kind":"slide","id":"sl/fboq4u","slide":3,"title":"PRODUCT FOCUS","textShapes":15}
+{"kind":"shape","id":"sh/ja1czq5w","slide":3,"bbox":[72,50,220,38]}
+{"kind":"shape","id":"sh/kbat8v61","slide":3,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/5cju10nm","slide":3,"text":"PRODUCT FOCUS","textPreview":"PRODUCT FOCUS","textChars":13,"textLines":1,"bbox":[108,59,172,21]}
+{"kind":"textbox","id":"sh/6dcbalo7","slide":3,"text":"The market made the priority clear.","textPreview":"The market made the priority clear.","textChars":35,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/7ylc3q5s","slide":3,"text":"Repeated demos pointed to one urgent use case: help athletic departments see risk earlier and connect athletes to the right support.","textPreview":"Repeated demos pointed to one urgent use case: help athletic departments see risk earlier and connect athletes to the right support.","textChars":132,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/szutcvmd","slide":3,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/t03u50ny","slide":3,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/u1cbe54j","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/f2lc7a54","slide":3,"bbox":[72,270,346,268]}
+{"kind":"shape","id":"sh/nihk3qho","slide":3,"bbox":[94,292,36,6]}
+{"kind":"textbox","id":"sh/mh83al03","slide":3,"text":"01 / LISTEN","textPreview":"01 / LISTEN","textChars":11,"textLines":1,"bbox":[94,310,302,18]}
+{"kind":"textbox","id":"sh/9kz250zu","slide":3,"text":"Athlete check-ins","textPreview":"Athlete check-ins","textChars":17,"textLines":1,"bbox":[94,336,302,48]}
+{"kind":"textbox","id":"sh/8jqlcvi9","slide":3,"text":"A private daily rhythm that captures how athletes are doing before concerns become crises.","textPreview":"A private daily rhythm that captures how athletes are doing before concerns become crises.","textChars":90,"textLines":1,"bbox":[94,388,302,128]}
+{"kind":"shape","id":"sh/zexkz6hc","slide":3,"bbox":[467,270,346,268]}
+{"kind":"shape","id":"sh/ydo36l07","slide":3,"bbox":[489,292,36,6]}
+{"kind":"textbox","id":"sh/lgf21gzi","slide":3,"text":"02 / UNDERSTAND","textPreview":"02 / UNDERSTAND","textChars":15,"textLines":1,"bbox":[489,310,302,18]}
+{"kind":"textbox","id":"sh/0f6l8bix","slide":3,"text":"Sports intelligence","textPreview":"Sports intelligence","textChars":19,"textLines":1,"bbox":[489,336,302,48]}
+{"kind":"textbox","id":"sh/ja14bahw","slide":3,"text":"Wearable context and longitudinal patterns help the system distinguish a hard day from a concerning trend.","textPreview":"Wearable context and longitudinal patterns help the system distinguish a hard day from a concerning trend.","textChars":106,"textLines":1,"bbox":[489,388,302,128]}
+{"kind":"shape","id":"sh/i9s3i50b","slide":3,"bbox":[862,270,346,268]}
+{"kind":"shape","id":"sh/u5cna9kj","slide":3,"bbox":[884,292,36,6]}
+{"kind":"textbox","id":"sh/f6loje14","slide":3,"text":"03 / CONNECT","textPreview":"03 / CONNECT","textChars":12,"textLines":1,"bbox":[884,310,302,18]}
+{"kind":"textbox","id":"sh/g7u5cj2p","slide":3,"text":"Human escalation","textPreview":"Human escalation","textChars":16,"textLines":1,"bbox":[884,336,302,48]}
+{"kind":"textbox","id":"sh/h8n6loju","slide":3,"text":"Clear pathways bring clinicians, coaches, and support staff into the loop with athlete consent and defined roles.","textPreview":"Clear pathways bring clinicians, coaches, and support staff into the loop with athlete consent and defined roles.","textChars":113,"textLines":1,"bbox":[884,388,302,128]}
+{"kind":"textbox","id":"sh/29w7etkf","slide":3,"text":"FitClub remains the self-service engagement engine. PulseCheck is the institutional beachhead.","textPreview":"FitClub remains the self-service engagement engine. PulseCheck is the institutional beachhead.","textChars":94,"textLines":1,"bbox":[72,579,1136,42]}
+{"kind":"notes","id":"nt/fboq4u","slide":3,"text":"Use the three-step sequence: listen, understand, connect.\nEmphasize that the human escalation pathway is central to trust and institutional adoption."}
+{"kind":"slide","id":"sl/0chjh3","slide":4,"title":"PRODUCT BUILD","textShapes":14}
+{"kind":"shape","id":"sh/03u90f61","slide":4,"bbox":[72,50,220,38]}
+{"kind":"shape","id":"sh/z2l8ra5g","slide":4,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/e1cry5ov","slide":4,"text":"PRODUCT BUILD","textPreview":"PRODUCT BUILD","textChars":13,"textLines":1,"bbox":[108,59,172,21]}
+{"kind":"textbox","id":"sh/9snaxkni","slide":4,"text":"Ready for real-world learning.","textPreview":"Ready for real-world learning.","textChars":30,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/ore94f6d","slide":4,"text":"Q2 work reduced deployment friction and improved the path from athlete signal to staff action.","textPreview":"Q2 work reduced deployment friction and improved the path from athlete signal to staff action.","textChars":94,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/nqlsva5s","slide":4,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/mpcr25o7","slide":4,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/xwna14nu","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"textbox","id":"sh/2xorap0z","slide":4,"text":"DAILY CHECK-IN","textPreview":"DAILY CHECK-IN","textChars":14,"textLines":1,"bbox":[92,618,190,20]}
+{"kind":"textbox","id":"sh/ozq9czi5","slide":4,"text":"CRITICAL SIGNAL","textPreview":"CRITICAL SIGNAL","textChars":15,"textLines":1,"bbox":[346,618,190,20]}
+{"kind":"textbox","id":"sh/q18re90v","slide":4,"text":"WELFARE FOLLOW-UP","textPreview":"WELFARE FOLLOW-UP","textChars":17,"textLines":1,"bbox":[600,618,190,20]}
+{"kind":"shape","id":"sh/b2h8nuhg","slide":4,"bbox":[848,248,360,112]}
+{"kind":"shape","id":"sh/c3q9gzi1","slide":4,"bbox":[870,270,36,6]}
+{"kind":"textbox","id":"sh/d4zqp4zm","slide":4,"text":"Android parity","textPreview":"Android parity","textChars":14,"textLines":1,"bbox":[870,291,316,28]}
+{"kind":"textbox","id":"sh/6547250r","slide":4,"text":"Native Android experience aligned with iOS.","textPreview":"Native Android experience aligned with iOS.","textChars":43,"textLines":1,"bbox":[870,324,316,26]}
+{"kind":"shape","id":"sh/r6d8bahc","slide":4,"bbox":[848,378,360,112]}
+{"kind":"shape","id":"sh/vatoj6x4","slide":4,"bbox":[870,400,36,6]}
+{"kind":"textbox","id":"sh/a9kna1gj","slide":4,"text":"Device coverage","textPreview":"Device coverage","textChars":15,"textLines":1,"bbox":[870,421,316,28]}
+{"kind":"textbox","id":"sh/hcb6lgfa","slide":4,"text":"Polar, Fitbit, Oura, Whoop, and Apple Health pathways.","textPreview":"Polar, Fitbit, Oura, Whoop, and Apple Health pathways.","textChars":54,"textLines":1,"bbox":[870,454,316,26]}
+{"kind":"shape","id":"sh/wb25cbyp","slide":4,"bbox":[848,508,360,112]}
+{"kind":"shape","id":"sh/n694f6xs","slide":4,"bbox":[870,530,36,6]}
+{"kind":"textbox","id":"sh/m50n61gn","slide":4,"text":"Staff-ready tools","textPreview":"Staff-ready tools","textChars":17,"textLines":1,"bbox":[870,551,316,28]}
+{"kind":"textbox","id":"sh/98b6hwfy","slide":4,"text":"Coach-friendly reporting, onboarding, and clearer escalation workflows.","textPreview":"Coach-friendly reporting, onboarding, and clearer escalation workflows.","textChars":71,"textLines":1,"bbox":[870,584,316,26]}
+{"kind":"image","id":"im/5c3utczy","slide":4,"name":"","geometry":"roundRect","alt":"Daily check-in","bbox":[92,248,190,400]}
+{"kind":"image","id":"im/k7ulkrmt","slide":4,"name":"","geometry":"roundRect","alt":"Critical signal","bbox":[346,248,190,400]}
+{"kind":"image","id":"im/i5c3i143","slide":4,"name":"","geometry":"roundRect","alt":"Welfare follow-up","bbox":[600,248,190,400]}
+{"kind":"notes","id":"nt/0chjh3","slide":4,"text":"Show the product as a deployment-ready learning system, not a finished endpoint.\nThe objective of pilots is to improve fit, measure engagement, and validate operational workflows."}
+{"kind":"slide","id":"sl/9dbbz0","slide":5,"title":"MOMENTUM MAP","textShapes":22}
+{"kind":"shape","id":"sh/fy5ori5o","slide":5,"bbox":[72,50,220,38]}
+{"kind":"shape","id":"sh/gze50n69","slide":5,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/1kn6tsnu","slide":5,"text":"MOMENTUM MAP","textPreview":"MOMENTUM MAP","textChars":12,"textLines":1,"bbox":[108,59,172,21]}
+{"kind":"textbox","id":"sh/2lw72xof","slide":5,"text":"One product. Four reinforcing lanes.","textPreview":"One product. Four reinforcing lanes.","textChars":36,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/3m5ov250","slide":5,"text":"Each lane increases the odds that pilots become evidence, partnerships, and durable distribution.","textPreview":"Each lane increases the odds that pilots become evidence, partnerships, and durable distribution.","textChars":97,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/onep4765","slide":5,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/po76xcnq","slide":5,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/ipcnqtov","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/jqlojypg","slide":5,"bbox":[92,278,226,252]}
+{"kind":"textbox","id":"sh/na1grqlc","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[114,300,48,34]}
+{"kind":"textbox","id":"sh/29szylkr","slide":5,"text":"CAPITAL + NARRATIVE","textPreview":"CAPITAL + NARRATIVE","textChars":19,"textLines":1,"bbox":[114,346,182,22]}
+{"kind":"textbox","id":"sh/pcjyt03i","slide":5,"text":"Bryan Smiley","textPreview":"Bryan Smiley","textChars":12,"textLines":1,"bbox":[114,383,182,58]}
+{"kind":"textbox","id":"sh/obah0v2x","slide":5,"text":"Investor perspective and next-generation sports storytelling","textPreview":"Investor perspective and next-generation sports storytelling","textChars":60,"textLines":1,"bbox":[114,452,182,58]}
+{"kind":"shape","id":"sh/fmhgnql0","slide":5,"bbox":[114,510,182,5]}
+{"kind":"shape","id":"sh/el8zulkf","slide":5,"bbox":[382,278,226,252]}
+{"kind":"textbox","id":"sh/18jyp036","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[404,300,48,34]}
+{"kind":"textbox","id":"sh/07ahwv2l","slide":5,"text":"CLINICAL + RESEARCH","textPreview":"CLINICAL + RESEARCH","textChars":19,"textLines":1,"bbox":[404,346,182,22]}
+{"kind":"textbox","id":"sh/rihgj6l4","slide":5,"text":"Dr. Jeremy Burnham","textPreview":"Dr. Jeremy Burnham","textChars":18,"textLines":1,"bbox":[404,383,182,58]}
+{"kind":"textbox","id":"sh/qh8fq1kj","slide":5,"text":"Sports medicine rigor, trial design, and clinical credibility","textPreview":"Sports medicine rigor, trial design, and clinical credibility","textChars":61,"textLines":1,"bbox":[404,452,182,58]}
+{"kind":"shape","id":"sh/udoz21ob","slide":5,"bbox":[404,510,182,5]}
+{"kind":"shape","id":"sh/vex0b65w","slide":5,"bbox":[672,278,226,252]}
+{"kind":"textbox","id":"sh/gf6h4b6h","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[694,300,48,34]}
+{"kind":"textbox","id":"sh/hgzidgn2","slide":5,"text":"EXPERT COUNCIL","textPreview":"EXPERT COUNCIL","textChars":14,"textLines":1,"bbox":[694,346,182,22]}
+{"kind":"textbox","id":"sh/ih8z6lon","slide":5,"text":"Athletic Mind Council","textPreview":"Athletic Mind Council","textChars":21,"textLines":1,"bbox":[694,383,182,58]}
+{"kind":"textbox","id":"sh/3ih0fq58","slide":5,"text":"Product pressure-testing, research, access, and public conversation","textPreview":"Product pressure-testing, research, access, and public conversation","textChars":67,"textLines":1,"bbox":[694,452,182,58]}
+{"kind":"shape","id":"sh/4jqh8v6d","slide":5,"bbox":[694,510,182,5]}
+{"kind":"shape","id":"sh/5kzihgny","slide":5,"bbox":[962,278,226,252]}
+{"kind":"textbox","id":"sh/q58zaloj","slide":5,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[984,300,48,34]}
+{"kind":"textbox","id":"sh/r6h0jq54","slide":5,"text":"PILOT NETWORK","textPreview":"PILOT NETWORK","textChars":13,"textLines":1,"bbox":[984,346,182,22]}
+{"kind":"textbox","id":"sh/10329k76","slide":5,"text":"7 environments","textPreview":"7 environments","textChars":14,"textLines":1,"bbox":[984,383,182,58]}
+{"kind":"textbox","id":"sh/0zal0fql","slide":5,"text":"Five universities plus two performance settings","textPreview":"Five universities plus two performance settings","textChars":47,"textLines":1,"bbox":[984,452,182,58]}
+{"kind":"shape","id":"sh/fe1k7upg","slide":5,"bbox":[984,510,182,5]}
+{"kind":"shape","id":"sh/eds3yp8v","slide":5,"bbox":[280,573,720,54]}
+{"kind":"textbox","id":"sh/p432d47i","slide":5,"text":"CONVERSATIONS → PILOTS → EVIDENCE → SCALE","textPreview":"CONVERSATIONS → PILOTS → EVIDENCE → SCALE","textChars":41,"textLines":1,"bbox":[300,590,680,24]}
+{"kind":"notes","id":"nt/9dbbz0","slide":5,"text":"The lanes are deliberately connected. Council expertise improves pilots; pilots create evidence; evidence strengthens grants and distribution."}
+{"kind":"slide","id":"sl/c2aj6h","slide":6,"title":"STRATEGIC CONVERSATION","textShapes":13}
+{"kind":"shape","id":"sh/6583al4v","slide":6,"bbox":[72,50,292,38]}
+{"kind":"shape","id":"sh/t8zml03m","slide":6,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/s7qlcvm1","slide":6,"text":"STRATEGIC CONVERSATION","textPreview":"STRATEGIC CONVERSATION","textChars":22,"textLines":1,"bbox":[108,59,244,21]}
+{"kind":"textbox","id":"sh/fu14nals","slide":6,"text":"Bryan Smiley brings a distribution lens.","textPreview":"Bryan Smiley brings a distribution lens.","textChars":40,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/e983e547","slide":6,"text":"A relationship at the intersection of investment, sports storytelling, creator platforms, and next-generation audiences.","textPreview":"A relationship at the intersection of investment, sports storytelling, creator platforms, and next-generation audiences.","textChars":120,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/1wjmpk3y","slide":6,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/gvalgfmd","slide":6,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/3y14ralo","slide":6,"text":"Sources: Hard Carry Media; Unanimous Media; Netflix Tudum; TheWrap","textPreview":"Sources: Hard Carry Media; Unanimous Media; Netflix Tudum; TheWrap","textChars":66,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/2xs3ip43","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/p87u5ova","slide":6,"bbox":[93,530,468,50]}
+{"kind":"textbox","id":"sh/25wvatwj","slide":6,"text":"BRYAN SMILEY  /  CEO, HARD CARRY MEDIA","textPreview":"BRYAN SMILEY  /  CEO, HARD CARRY MEDIA","textChars":38,"textLines":1,"bbox":[112,546,430,21]}
+{"kind":"shape","id":"sh/365c3yd4","slide":6,"bbox":[622,250,586,118]}
+{"kind":"shape","id":"sh/cbydg3e1","slide":6,"bbox":[644,272,36,6]}
+{"kind":"textbox","id":"sh/dw7u98v6","slide":6,"text":"Current platform","textPreview":"Current platform","textChars":16,"textLines":1,"bbox":[644,293,542,28]}
+{"kind":"textbox","id":"sh/q9gvetwv","slide":6,"text":"CEO of Hard Carry Media, a digital-first company building sports, entertainment, and lifestyle IP for Gen Z audiences.","textPreview":"CEO of Hard Carry Media, a digital-first company building sports, entertainment, and lifestyle IP for Gen Z audiences.","textChars":118,"textLines":1,"bbox":[644,326,542,32]}
+{"kind":"shape","id":"sh/bapc7ydg","slide":6,"bbox":[622,386,586,118]}
+{"kind":"shape","id":"sh/0zidknex","slide":6,"bbox":[644,408,36,6]}
+{"kind":"textbox","id":"sh/l0rud8vi","slide":6,"text":"Relevant track record","textPreview":"Relevant track record","textChars":21,"textLines":1,"bbox":[644,429,542,28]}
+{"kind":"textbox","id":"sh/9wnux8nm","slide":6,"text":"Former President & Chief Content Officer at Hartbeat; previously led production and talent relationships at Sony Pictures.","textPreview":"Former President & Chief Content Officer at Hartbeat; previously led production and talent relationships at Sony Pictures.","textChars":122,"textLines":1,"bbox":[644,462,542,32]}
+{"kind":"shape","id":"sh/8vedo361","slide":6,"bbox":[622,522,586,118]}
+{"kind":"shape","id":"sh/7u5cvy5g","slide":6,"bbox":[644,544,36,6]}
+{"kind":"textbox","id":"sh/mtcvmdov","slide":6,"text":"Why this matters now","textPreview":"Why this matters now","textChars":20,"textLines":1,"bbox":[644,565,542,28]}
+{"kind":"textbox","id":"sh/hknu1sny","slide":6,"text":"Hard Carry and Stephen Curry's Unanimous Media launched a sports-content joint venture—useful context for athlete-led storytelling and distribution.","textPreview":"Hard Carry and Stephen Curry's Unanimous Media launched a sports-content joint venture—useful context for athlete-led storytelling and di...","textChars":148,"textLines":1,"bbox":[644,598,542,32]}
+{"kind":"image","id":"im/vidwvmlc","slide":6,"name":"","geometry":"roundRect","alt":"Bryan Smiley with Kevin Hart","bbox":[72,250,510,350]}
+{"kind":"notes","id":"nt/c2aj6h","slide":6,"text":"Describe this as a strategic conversation, not a formal partnership.\nCurrent title verified as CEO of Hard Carry Media. He is not Head of Production at Unanimous Media.\nPhoto source: Netflix Tudum, Art Streiber."}
+{"kind":"slide","id":"sl/aq9k1t","slide":7,"title":"CLINICAL CONVERSATION","textShapes":15}
+{"kind":"shape","id":"sh/betwb6hw","slide":7,"bbox":[72,50,282,38]}
+{"kind":"shape","id":"sh/cf2x4byh","slide":7,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/x0vedgz2","slide":7,"text":"CLINICAL CONVERSATION","textPreview":"CLINICAL CONVERSATION","textChars":21,"textLines":1,"bbox":[108,59,234,21]}
+{"kind":"textbox","id":"sh/y14f6lgn","slide":7,"text":"Dr. Jeremy Burnham adds research rigor.","textPreview":"Dr. Jeremy Burnham adds research rigor.","textChars":39,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/z2dwf6hs","slide":7,"text":"His background connects sports medicine operations, athlete experience, federally funded trials, and real-world clinical deployment.","textPreview":"His background connects sports medicine operations, athlete experience, federally funded trials, and real-world clinical deployment.","textChars":132,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/k3mx8byd","slide":7,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/l4vyhgzy","slide":7,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/m54falgj","slide":7,"text":"Source: Ochsner Health physician profile","textPreview":"Source: Ochsner Health physician profile","textChars":40,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/76dg3qh4","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/mxwve14z","slide":7,"bbox":[95,559,364,55]}
+{"kind":"textbox","id":"sh/9k7epw3q","slide":7,"text":"JEREMY BURNHAM, MD","textPreview":"JEREMY BURNHAM, MD","textChars":18,"textLines":1,"bbox":[115,574,324,25]}
+{"kind":"shape","id":"sh/8zydgrm5","slide":7,"bbox":[522,248,332,178]}
+{"kind":"shape","id":"sh/zu5wjmlo","slide":7,"bbox":[544,270,36,6]}
+{"kind":"textbox","id":"sh/ytwvah43","slide":7,"text":"Clinical leadership","textPreview":"Clinical leadership","textChars":19,"textLines":1,"bbox":[544,296,288,48]}
+{"kind":"textbox","id":"sh/lwnelw3u","slide":7,"text":"System Vice Chair, Musculoskeletal Service Line; Regional Department Head of Orthopedic Surgery; Medical Director of Sports Medicine at Ochsner.","textPreview":"System Vice Chair, Musculoskeletal Service Line; Regional Department Head of Orthopedic Surgery; Medical Director of Sports Medicine at O...","textChars":144,"textLines":1,"bbox":[544,350,288,54]}
+{"kind":"shape","id":"sh/kvedcrm9","slide":7,"bbox":[876,248,332,178]}
+{"kind":"shape","id":"sh/jq9wvqls","slide":7,"bbox":[898,270,36,6]}
+{"kind":"textbox","id":"sh/ip0vmlk7","slide":7,"text":"Research credibility","textPreview":"Research credibility","textChars":20,"textLines":1,"bbox":[898,296,288,48]}
+{"kind":"textbox","id":"sh/ex47a9sr","slide":7,"text":"Site principal investigator on federally funded multicenter trials with more than 60 peer-reviewed publications.","textPreview":"Site principal investigator on federally funded multicenter trials with more than 60 peer-reviewed publications.","textChars":112,"textLines":1,"bbox":[898,350,288,54]}
+{"kind":"shape","id":"sh/fyd83e9c","slide":7,"bbox":[522,448,332,178]}
+{"kind":"shape","id":"sh/0zmpcjqx","slide":7,"bbox":[544,470,36,6]}
+{"kind":"textbox","id":"sh/10vq5ori","slide":7,"text":"Athlete perspective","textPreview":"Athlete perspective","textChars":19,"textLines":1,"bbox":[544,496,288,48]}
+{"kind":"textbox","id":"sh/2l47yt83","slide":7,"text":"Former LSU varsity football player with experience supporting athletes across high school, collegiate, and professional settings.","textPreview":"Former LSU varsity football player with experience supporting athletes across high school, collegiate, and professional settings.","textChars":129,"textLines":1,"bbox":[544,550,288,54]}
+{"kind":"shape","id":"sh/nmx87e98","slide":7,"bbox":[876,448,332,178]}
+{"kind":"shape","id":"sh/on6p0jqt","slide":7,"bbox":[898,470,36,6]}
+{"kind":"textbox","id":"sh/pofq9ore","slide":7,"text":"Potential contribution","textPreview":"Potential contribution","textChars":22,"textLines":1,"bbox":[898,496,288,48]}
+{"kind":"textbox","id":"sh/ipk72psj","slide":7,"text":"Pilot protocol, clinical escalation design, outcome measures, and pathways toward research-grade validation.","textPreview":"Pilot protocol, clinical escalation design, outcome measures, and pathways toward research-grade validation.","textChars":108,"textLines":1,"bbox":[898,550,288,54]}
+{"kind":"image","id":"im/kn698vix","slide":7,"name":"","geometry":"roundRect","alt":"Dr. Jeremy Burnham","bbox":[72,248,410,390]}
+{"kind":"notes","id":"nt/aq9k1t","slide":7,"text":"Use Ochsner's current titles. Avoid calling him LSU's head doctor.\nOchsner operates the Ochsner Andrews Sports Medicine Institute; his fellowship training was at UPMC."}
+{"kind":"slide","id":"sl/b86rsv","slide":8,"title":"RESEARCH INITIATIVE","textShapes":21}
+{"kind":"shape","id":"sh/nmtwfmd0","slide":8,"bbox":[72,50,262,38]}
+{"kind":"shape","id":"sh/on2xorul","slide":8,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/pobehwv6","slide":8,"text":"RESEARCH INITIATIVE","textPreview":"RESEARCH INITIATIVE","textChars":19,"textLines":1,"bbox":[108,59,214,21]}
+{"kind":"textbox","id":"sh/a9kfq1cb","slide":8,"text":"NSF Phase II: a $1.4M target in motion.","textPreview":"NSF Phase II: a $1.4M target in motion.","textChars":39,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/batgjmdw","slide":8,"text":"The opportunity is to turn early product and pilot learning into a rigorous research-and-commercialization program.","textPreview":"The opportunity is to turn early product and pilot learning into a rigorous research-and-commercialization program.","textChars":115,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/cbmxsruh","slide":8,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/xcvylwv2","slide":8,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/yd4fu1cn","slide":8,"text":"Internal opportunity target; award status pending","textPreview":"Internal opportunity target; award status pending","textChars":49,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/jedgn6d8","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/7ux0v6hk","slide":8,"bbox":[72,260,390,330]}
+{"kind":"textbox","id":"sh/mtojm1gf","slide":8,"text":"$1.4M","textPreview":"$1.4M","textChars":5,"textLines":1,"bbox":[105,300,324,94]}
+{"kind":"textbox","id":"sh/9wfixgzq","slide":8,"text":"PHASE II TARGET","textPreview":"PHASE II TARGET","textChars":15,"textLines":1,"bbox":[105,402,324,28]}
+{"kind":"textbox","id":"sh/8v61oby5","slide":8,"text":"Proposal initiative\nAward status pending","textPreview":"Proposal initiative | Award status pending","textChars":40,"textLines":2,"bbox":[105,457,324,62]}
+{"kind":"shape","id":"sh/z6d0rmho","slide":8,"bbox":[502,260,706,330]}
+{"kind":"textbox","id":"sh/y54jih03","slide":8,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[532,282,42,25]}
+{"kind":"textbox","id":"sh/l8vitwzu","slide":8,"text":"Research design","textPreview":"Research design","textChars":15,"textLines":1,"bbox":[590,282,180,27]}
+{"kind":"textbox","id":"sh/k7m1kri9","slide":8,"text":"Define hypotheses, endpoints, comparison groups, and study governance.","textPreview":"Define hypotheses, endpoints, comparison groups, and study governance.","textChars":70,"textLines":1,"bbox":[780,282,390,45]}
+{"kind":"shape","id":"sh/j2hk3qhs","slide":8,"bbox":[532,338,638,1]}
+{"kind":"textbox","id":"sh/i18julg7","slide":8,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[532,355,42,25]}
+{"kind":"textbox","id":"sh/exs3mp0f","slide":8,"text":"Pilot evidence","textPreview":"Pilot evidence","textChars":14,"textLines":1,"bbox":[590,355,180,27]}
+{"kind":"textbox","id":"sh/fi14vu10","slide":8,"text":"Generate adoption, engagement, escalation, and outcome signals across settings.","textPreview":"Generate adoption, engagement, escalation, and outcome signals across settings.","textChars":79,"textLines":1,"bbox":[780,355,390,45]}
+{"kind":"shape","id":"sh/gjulozil","slide":8,"bbox":[532,411,638,1]}
+{"kind":"textbox","id":"sh/1k3mx4j6","slide":8,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[532,428,42,25]}
+{"kind":"textbox","id":"sh/2lc3qp0r","slide":8,"text":"Commercialization","textPreview":"Commercialization","textChars":17,"textLines":1,"bbox":[590,428,180,27]}
+{"kind":"textbox","id":"sh/nml4zu1c","slide":8,"text":"Connect evidence to buyer value, implementation requirements, and repeatable pricing.","textPreview":"Connect evidence to buyer value, implementation requirements, and repeatable pricing.","textChars":85,"textLines":1,"bbox":[780,428,390,45]}
+{"kind":"shape","id":"sh/onulszix","slide":8,"bbox":[532,484,638,1]}
+{"kind":"textbox","id":"sh/po3m14j2","slide":8,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[532,501,42,25]}
+{"kind":"textbox","id":"sh/ip83e5kn","slide":8,"text":"Partnership readiness","textPreview":"Partnership readiness","textChars":21,"textLines":1,"bbox":[590,501,180,27]}
+{"kind":"textbox","id":"sh/jqhkna1s","slide":8,"text":"Clarify clinical, university, and council roles before submission and launch.","textPreview":"Clarify clinical, university, and council roles before submission and launch.","textChars":77,"textLines":1,"bbox":[780,501,390,45]}
+{"kind":"notes","id":"nt/b86rsv","slide":8,"text":"Say 'proposal target' or 'initiative in motion.' Do not say the grant has been awarded.\nBefore a final external version, reconcile the $1.4M target with the active solicitation and budget rules."}
+{"kind":"slide","id":"sl/bcnmqk","slide":9,"title":"THE ATHLETIC MIND COUNCIL","textShapes":15}
+{"kind":"shape","id":"sh/kbyp8f2h","slide":9,"bbox":[72,50,322,38]}
+{"kind":"shape","id":"sh/jap8fa1w","slide":9,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/i9g765kb","slide":9,"text":"THE ATHLETIC MIND COUNCIL","textPreview":"THE ATHLETIC MIND COUNCIL","textChars":25,"textLines":1,"bbox":[108,59,274,21]}
+{"kind":"textbox","id":"sh/tgrqlkjy","slide":9,"text":"The council is a force multiplier.","textPreview":"The council is a force multiplier.","textChars":34,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/sfipcfid","slide":9,"text":"A deliberately cross-functional group built to pressure-test the product, strengthen research, and open credible pathways into sport.","textPreview":"A deliberately cross-functional group built to pressure-test the product, strengthen research, and open credible pathways into sport.","textChars":133,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/7e98ju1s","slide":9,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/6dg7ap07","slide":9,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/h4rqp4ju","slide":9,"text":"Source: fitwithpulse.ai/TheAthleticMindCouncil","textPreview":"Source: fitwithpulse.ai/TheAthleticMindCouncil","textChars":46,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/g3i9gzi9","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/f2t8z29w","slide":9,"bbox":[674,250,534,66]}
+{"kind":"shape","id":"sh/g329s7a1","slide":9,"bbox":[692,267,8,32]}
+{"kind":"textbox","id":"sh/14bq1crm","slide":9,"text":"ELITE SPORT","textPreview":"ELITE SPORT","textChars":11,"textLines":1,"bbox":[718,262,160,20]}
+{"kind":"textbox","id":"sh/254ruhs7","slide":9,"text":"Olympians, champions, and professional athletes","textPreview":"Olympians, champions, and professional athletes","textChars":47,"textLines":1,"bbox":[718,284,462,22]}
+{"kind":"shape","id":"sh/36d83m9s","slide":9,"bbox":[674,332,534,66]}
+{"kind":"shape","id":"sh/o7m9w7ad","slide":9,"bbox":[692,349,8,32]}
+{"kind":"textbox","id":"sh/p8vq5cry","slide":9,"text":"MENTAL HEALTH","textPreview":"MENTAL HEALTH","textChars":13,"textLines":1,"bbox":[718,344,160,20]}
+{"kind":"textbox","id":"sh/i907ids3","slide":9,"text":"Licensed clinicians and athlete-care practitioners","textPreview":"Licensed clinicians and athlete-care practitioners","textChars":50,"textLines":1,"bbox":[718,366,462,22]}
+{"kind":"shape","id":"sh/ja98ri9o","slide":9,"bbox":[674,414,534,66]}
+{"kind":"shape","id":"sh/n25w3ul4","slide":9,"bbox":[692,431,8,32]}
+{"kind":"textbox","id":"sh/m1wvap4j","slide":9,"text":"INSTITUTIONS","textPreview":"INSTITUTIONS","textChars":12,"textLines":1,"bbox":[718,426,160,20]}
+{"kind":"textbox","id":"sh/94ne5k3a","slide":9,"text":"National governing bodies and college coaches","textPreview":"National governing bodies and college coaches","textChars":45,"textLines":1,"bbox":[718,448,462,22]}
+{"kind":"shape","id":"sh/83excfmp","slide":9,"bbox":[674,496,534,66]}
+{"kind":"shape","id":"sh/zelwzals","slide":9,"bbox":[692,513,8,32]}
+{"kind":"textbox","id":"sh/edcv654n","slide":9,"text":"OPERATIONS","textPreview":"OPERATIONS","textChars":10,"textLines":1,"bbox":[718,508,160,20]}
+{"kind":"textbox","id":"sh/1g3e1k3y","slide":9,"text":"Technology, marketing, youth sport, and fundraising","textPreview":"Technology, marketing, youth sport, and fundraising","textChars":51,"textLines":1,"bbox":[718,530,462,22]}
+{"kind":"textbox","id":"sh/0fud8fmd","slide":9,"text":"Council value: better questions, better pilots, faster trust.","textPreview":"Council value: better questions, better pilots, faster trust.","textChars":61,"textLines":1,"bbox":[674,600,534,32]}
+{"kind":"image","id":"im/1k36t8zu","slide":9,"name":"","geometry":"roundRect","alt":"Athletic Mind Council","bbox":[72,250,560,330]}
+{"kind":"notes","id":"nt/bcnmqk","slide":9,"text":"The quality of this group is the message. The council spans people who understand athlete experience, institutional systems, and commercialization."}
+{"kind":"slide","id":"sl/zxhs5x","slide":10,"title":"COUNCIL LEADERSHIP","textShapes":16}
+{"kind":"shape","id":"sh/076h0z25","slide":10,"bbox":[72,50,252,38]}
+{"kind":"shape","id":"sh/z6xgrulk","slide":10,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/e5ozypkz","slide":10,"text":"COUNCIL LEADERSHIP","textPreview":"COUNCIL LEADERSHIP","textChars":18,"textLines":1,"bbox":[108,59,204,21]}
+{"kind":"textbox","id":"sh/d4fypk3e","slide":10,"text":"Arionne Allen is the connective tissue.","textPreview":"Arionne Allen is the connective tissue.","textChars":39,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/c3mhwf2t","slide":10,"text":"Council Chair and Founding Executive Director, bringing the relationships and operating discipline to turn expertise into action.","textPreview":"Council Chair and Founding Executive Director, bringing the relationships and operating discipline to turn expertise into action.","textChars":129,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/r2dgnul8","slide":10,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/q14zupkn","slide":10,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/p0vylk3i","slide":10,"text":"Source: fitwithpulse.ai/TheAthleticMindCouncil","textPreview":"Source: fitwithpulse.ai/TheAthleticMindCouncil","textChars":46,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/4zmhsf2x","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/nmd8zqlc","slide":10,"bbox":[98,548,378,65]}
+{"kind":"textbox","id":"sh/8nm9svmx","slide":10,"text":"ARIONNE ALLEN","textPreview":"ARIONNE ALLEN","textChars":13,"textLines":1,"bbox":[120,562,334,25]}
+{"kind":"textbox","id":"sh/9ovq1032","slide":10,"text":"COUNCIL CHAIR / FOUNDING EXECUTIVE DIRECTOR","textPreview":"COUNCIL CHAIR / FOUNDING EXECUTIVE DIRECTOR","textChars":43,"textLines":1,"bbox":[120,590,334,15]}
+{"kind":"shape","id":"sh/ehkrml4f","slide":10,"bbox":[542,242,314,176]}
+{"kind":"shape","id":"sh/zit8vql0","slide":10,"bbox":[564,264,36,6]}
+{"kind":"textbox","id":"sh/0jm9ovml","slide":10,"text":"Cross-sector operator","textPreview":"Cross-sector operator","textChars":21,"textLines":1,"bbox":[564,290,270,48]}
+{"kind":"textbox","id":"sh/lkvqx036","slide":10,"text":"15+ years across sports, technology, partnerships, and organizational strategy.","textPreview":"15+ years across sports, technology, partnerships, and organizational strategy.","textChars":79,"textLines":1,"bbox":[564,344,270,52]}
+{"kind":"shape","id":"sh/qtkri14j","slide":10,"bbox":[878,242,330,176]}
+{"kind":"shape","id":"sh/ret8r6l4","slide":10,"bbox":[900,264,36,6]}
+{"kind":"textbox","id":"sh/fypoj21w","slide":10,"text":"Institutional network","textPreview":"Institutional network","textChars":21,"textLines":1,"bbox":[900,290,286,48]}
+{"kind":"textbox","id":"sh/uxgnqxkb","slide":10,"text":"Experience connected to NASCAR, USATF, USA Gymnastics, higher education, and technology leadership.","textPreview":"Experience connected to NASCAR, USATF, USA Gymnastics, higher education, and technology leadership.","textChars":99,"textLines":1,"bbox":[900,344,286,52]}
+{"kind":"shape","id":"sh/hkr6lcj2","slide":10,"bbox":[542,440,314,176]}
+{"kind":"shape","id":"sh/gzy5s72h","slide":10,"bbox":[564,462,36,6]}
+{"kind":"textbox","id":"sh/3m9onm1s","slide":10,"text":"Athlete lens","textPreview":"Athlete lens","textChars":12,"textLines":1,"bbox":[564,488,270,48]}
+{"kind":"textbox","id":"sh/2l0nuhk7","slide":10,"text":"Former Division I athlete who understands performance culture and the realities behind the data.","textPreview":"Former Division I athlete who understands performance culture and the realities behind the data.","textChars":96,"textLines":1,"bbox":[564,542,270,52]}
+{"kind":"shape","id":"sh/por6pwjy","slide":10,"bbox":[878,440,330,176]}
+{"kind":"shape","id":"sh/4nipwr2d","slide":10,"bbox":[900,462,36,6]}
+{"kind":"textbox","id":"sh/jq5obilo","slide":10,"text":"Council mandate","textPreview":"Council mandate","textChars":15,"textLines":1,"bbox":[900,488,286,48]}
+{"kind":"textbox","id":"sh/ipwnidk3","slide":10,"text":"Convene experts, design pilots, pressure-test PulseCheck, and translate insight into partnership action.","textPreview":"Convene experts, design pilots, pressure-test PulseCheck, and translate insight into partnership action.","textChars":104,"textLines":1,"bbox":[900,542,286,52]}
+{"kind":"image","id":"im/pgrmlsre","slide":10,"name":"","geometry":"roundRect","alt":"Arionne Allen","bbox":[72,242,430,398]}
+{"kind":"notes","id":"nt/zxhs5x","slide":10,"text":"Arionne's role is to make the council operational—turning a strong roster into an active source of pilot, research, and market value."}
+{"kind":"slide","id":"sl/noehzg","slide":11,"title":"COUNCIL DEPTH","textShapes":18}
+{"kind":"shape","id":"sh/h47e14j6","slide":11,"bbox":[72,50,220,38]}
+{"kind":"shape","id":"sh/u1wvq9kv","slide":11,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/v25wze1g","slide":11,"text":"COUNCIL DEPTH","textPreview":"COUNCIL DEPTH","textChars":13,"textLines":1,"bbox":[108,59,172,21]}
+{"kind":"textbox","id":"sh/4ryxwj2x","slide":11,"text":"Elite sport experience meets athlete care.","textPreview":"Elite sport experience meets athlete care.","textChars":42,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/5s7e5oji","slide":11,"text":"This group understands the performance environment from the inside—and how systems must respond when an athlete needs support.","textPreview":"This group understands the performance environment from the inside—and how systems must respond when an athlete needs support.","textChars":126,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/ipgvu9kr","slide":11,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/3qpw3e1c","slide":11,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/kvedkf2t","slide":11,"text":"Sources: USC Athletics; Team USA; Auburn Athletics; Olympedia; NFL records","textPreview":"Sources: USC Athletics; Team USA; Auburn Athletics; Olympedia; NFL records","textChars":74,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/lwnetk3y","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/p0ru1wzy","slide":11,"bbox":[72,249,356,156]}
+{"kind":"textbox","id":"sh/3y9czmhs","slide":11,"text":"Natasha Hastings","textPreview":"Natasha Hastings","textChars":16,"textLines":1,"bbox":[192,268,218,32]}
+{"kind":"textbox","id":"sh/2x0bqh07","slide":11,"text":"2× Olympic gold medalist; LPCA on South Carolina's Mental Health & Performance Team.","textPreview":"2× Olympic gold medalist; LPCA on South Carolina's Mental Health & Performance Team.","textChars":84,"textLines":1,"bbox":[192,306,218,84]}
+{"kind":"shape","id":"sh/d4ru5wzu","slide":11,"bbox":[90,395,320,4]}
+{"kind":"shape","id":"sh/c3idwri9","slide":11,"bbox":[462,249,356,156]}
+{"kind":"textbox","id":"sh/q10vuh0j","slide":11,"text":"Kellie Wells Brinkley","textPreview":"Kellie Wells Brinkley","textChars":21,"textLines":1,"bbox":[582,268,218,32]}
+{"kind":"textbox","id":"sh/1sbu9gz6","slide":11,"text":"2012 Olympic bronze medalist in the 100m hurdles; athlete advocate and speaker.","textPreview":"2012 Olympic bronze medalist in the 100m hurdles; athlete advocate and speaker.","textChars":79,"textLines":1,"bbox":[582,306,218,84]}
+{"kind":"shape","id":"sh/0r2d0byl","slide":11,"bbox":[480,395,320,4]}
+{"kind":"shape","id":"sh/kbaxcf6h","slide":11,"bbox":[852,249,356,156]}
+{"kind":"textbox","id":"sh/y9sfa5or","slide":11,"text":"Keshia Kirtz","textPreview":"Keshia Kirtz","textChars":12,"textLines":1,"bbox":[972,268,218,32]}
+{"kind":"textbox","id":"sh/za1w3apc","slide":11,"text":"Olympic gold medalist; LMSW therapist and coach; professional at EY.","textPreview":"Olympic gold medalist; LMSW therapist and coach; professional at EY.","textChars":68,"textLines":1,"bbox":[972,306,218,84]}
+{"kind":"shape","id":"sh/8zaxgz6t","slide":11,"bbox":[870,395,320,4]}
+{"kind":"shape","id":"sh/t03e9k7e","slide":11,"bbox":[72,432,356,156]}
+{"kind":"textbox","id":"sh/7y1w7up8","slide":11,"text":"Ken Harnden","textPreview":"Ken Harnden","textChars":11,"textLines":1,"bbox":[192,451,218,32]}
+{"kind":"textbox","id":"sh/o3qd4v6p","slide":11,"text":"Auburn head coach; 2× Olympian; has coached 24 Olympians and 31 NCAA champions.","textPreview":"Auburn head coach; 2× Olympian; has coached 24 Olympians and 31 NCAA champions.","textChars":79,"textLines":1,"bbox":[192,489,218,84]}
+{"kind":"shape","id":"sh/p4zex07u","slide":11,"bbox":[90,578,320,4]}
+{"kind":"shape","id":"sh/rap8z2do","slide":11,"bbox":[462,432,356,156]}
+{"kind":"textbox","id":"sh/dw7q1svu","slide":11,"text":"Aretha Thurmond","textPreview":"Aretha Thurmond","textChars":15,"textLines":1,"bbox":[582,451,218,32]}
+{"kind":"textbox","id":"sh/cby9snu9","slide":11,"text":"4× Olympian; international teams leader at USA Track & Field.","textPreview":"4× Olympian; international teams leader at USA Track & Field.","textChars":61,"textLines":1,"bbox":[582,489,218,84]}
+{"kind":"shape","id":"sh/36p8vids","slide":11,"bbox":[480,578,320,4]}
+{"kind":"shape","id":"sh/25grmdc7","slide":11,"bbox":[852,432,356,156]}
+{"kind":"textbox","id":"sh/47y9onud","slide":11,"text":"Garin Veris","textPreview":"Garin Veris","textChars":11,"textLines":1,"bbox":[972,451,218,32]}
+{"kind":"textbox","id":"sh/f258ridg","slide":11,"text":"Former Patriots defensive end; Super Bowl XX starter; Patriots All-1980s Team.","textPreview":"Former Patriots defensive end; Super Bowl XX starter; Patriots All-1980s Team.","textChars":78,"textLines":1,"bbox":[972,489,218,84]}
+{"kind":"shape","id":"sh/u1w7idcv","slide":11,"bbox":[870,578,320,4]}
+{"kind":"image","id":"im/j2hsbq58","slide":11,"name":"","geometry":"ellipse","alt":"Natasha Hastings","bbox":[90,267,84,84]}
+{"kind":"image","id":"im/wfqt0b6h","slide":11,"name":"","geometry":"ellipse","alt":"Kellie Wells Brinkley","bbox":[480,267,84,84]}
+{"kind":"image","id":"im/qd472x47","slide":11,"name":"","geometry":"ellipse","alt":"Keshia Kirtz","bbox":[870,267,84,84]}
+{"kind":"image","id":"im/lkfqhc3u","slide":11,"name":"","geometry":"ellipse","alt":"Ken Harnden","bbox":[90,450,84,84]}
+{"kind":"image","id":"im/5cz6twjy","slide":11,"name":"","geometry":"ellipse","alt":"Aretha Thurmond","bbox":[480,450,84,84]}
+{"kind":"image","id":"im/alo7uh0b","slide":11,"name":"","geometry":"ellipse","alt":"Garin Veris","bbox":[870,450,84,84]}
+{"kind":"notes","id":"nt/noehzg","slide":11,"text":"Corrections reflected: Natasha is a two-time Olympic gold medalist; Kellie Wells Brinkley won Olympic bronze; Garin Veris started in Super Bowl XX, which New England did not win.\nKen Harnden was elevated to Auburn head coach on July 6, 2026."}
+{"kind":"slide","id":"sl/0d01f5","slide":12,"title":"COUNCIL OPERATORS","textShapes":18}
+{"kind":"shape","id":"sh/sbilwjul","slide":12,"bbox":[72,50,242,38]}
+{"kind":"shape","id":"sh/7a94ned0","slide":12,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/6903u9cf","slide":12,"text":"COUNCIL OPERATORS","textPreview":"COUNCIL OPERATORS","textChars":17,"textLines":1,"bbox":[108,59,194,21]}
+{"kind":"textbox","id":"sh/5or2l4va","slide":12,"text":"The council brings reach and implementation.","textPreview":"The council brings reach and implementation.","textChars":44,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/knylszup","slide":12,"text":"These members bring communication, community, youth sport, technology, and fundraising perspectives that shape adoption.","textPreview":"These members bring communication, community, youth sport, technology, and fundraising perspectives that shape adoption.","textChars":120,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/jmpkjud4","slide":12,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/ilg3qpcj","slide":12,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/xk72hkvy","slide":12,"text":"Sources: USA Gymnastics; USA Swimming reporting; council-provided backgrounds","textPreview":"Sources: USA Gymnastics; USA Swimming reporting; council-provided backgrounds","textChars":77,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/wjylozud","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/y5o3alcz","slide":12,"bbox":[72,265,548,145]}
+{"kind":"textbox","id":"sh/0rqlcvu5","slide":12,"text":"Jill Geer","textPreview":"Jill Geer","textChars":9,"textLines":1,"bbox":[192,284,410,32]}
+{"kind":"textbox","id":"sh/lszml0vq","slide":12,"text":"Chief Communications & Marketing Officer, USA Gymnastics; nearly two decades in the Olympic movement.","textPreview":"Chief Communications & Marketing Officer, USA Gymnastics; nearly two decades in the Olympic movement.","textChars":101,"textLines":1,"bbox":[192,322,410,73]}
+{"kind":"shape","id":"sh/q1o36lc3","slide":12,"bbox":[90,400,512,4]}
+{"kind":"shape","id":"sh/b2x4fqdo","slide":12,"bbox":[660,265,548,145]}
+{"kind":"shape","id":"sh/c36l8vu9","slide":12,"bbox":[678,283,84,84]}
+{"kind":"textbox","id":"sh/d4fmh0vu","slide":12,"text":"AC","textPreview":"AC","textChars":2,"textLines":1,"bbox":[678,304,84,42]}
+{"kind":"textbox","id":"sh/2x4321cr","slide":12,"text":"Amber Camp","textPreview":"Amber Camp","textChars":10,"textLines":1,"bbox":[780,284,410,32]}
+{"kind":"textbox","id":"sh/3yd4b6dc","slide":12,"text":"Youth basketball coach with school and sports fundraising experience at Snap! Raise.","textPreview":"Youth basketball coach with school and sports fundraising experience at Snap! Raise.","textChars":84,"textLines":1,"bbox":[780,322,410,73]}
+{"kind":"shape","id":"sh/r2t0j2t4","slide":12,"bbox":[678,400,512,4]}
+{"kind":"shape","id":"sh/61kjahsj","slide":12,"bbox":[72,442,548,145]}
+{"kind":"shape","id":"sh/t4bilcba","slide":12,"bbox":[90,460,84,84]}
+{"kind":"textbox","id":"sh/s321c7ap","slide":12,"text":"TM","textPreview":"TM","textChars":2,"textLines":1,"bbox":[90,481,84,42]}
+{"kind":"textbox","id":"sh/f6t0nmtg","slide":12,"text":"Talia Mark","textPreview":"Talia Mark","textChars":10,"textLines":1,"bbox":[192,461,410,32]}
+{"kind":"textbox","id":"sh/e5kjehsv","slide":12,"text":"Sports marketing executive; former USA Swimming multicultural marketing director and NASCAR diversity affairs manager.","textPreview":"Sports marketing executive; former USA Swimming multicultural marketing director and NASCAR diversity affairs manager.","textChars":118,"textLines":1,"bbox":[192,499,410,73]}
+{"kind":"shape","id":"sh/18v2pwbm","slide":12,"bbox":[90,577,512,4]}
+{"kind":"shape","id":"sh/g721gra1","slide":12,"bbox":[660,442,548,145]}
+{"kind":"shape","id":"sh/va90bitw","slide":12,"bbox":[678,460,84,84]}
+{"kind":"textbox","id":"sh/u90z2xsr","slide":12,"text":"TH","textPreview":"TH","textChars":2,"textLines":1,"bbox":[678,481,84,42]}
+{"kind":"textbox","id":"sh/03upwzmd","slide":12,"text":"Tram Holloway","textPreview":"Tram Holloway","textChars":13,"textLines":1,"bbox":[780,461,410,32]}
+{"kind":"textbox","id":"sh/14n6p4ni","slide":12,"text":"Technology leader connected to HyperCharge Wellness and performance-clinic implementation.","textPreview":"Technology leader connected to HyperCharge Wellness and performance-clinic implementation.","textChars":90,"textLines":1,"bbox":[780,499,410,73]}
+{"kind":"shape","id":"sh/e1c7up47","slide":12,"bbox":[678,577,512,4]}
+{"kind":"shape","id":"sh/z2lonu5s","slide":12,"bbox":[72,614,1136,32]}
+{"kind":"textbox","id":"sh/cfupsfm1","slide":12,"text":"ADOPTION REQUIRES MORE THAN PRODUCT: STORY, TRUST, WORKFLOW, AND ACCESS.","textPreview":"ADOPTION REQUIRES MORE THAN PRODUCT: STORY, TRUST, WORKFLOW, AND ACCESS.","textChars":72,"textLines":1,"bbox":[100,622,1080,18]}
+{"kind":"image","id":"im/k3y1g7q9","slide":12,"name":"","geometry":"ellipse","alt":"Jill Geer","bbox":[90,283,84,84]}
+{"kind":"notes","id":"nt/0d01f5","slide":12,"text":"Talia Mark's verified background is in multicultural sports marketing; do not introduce her as an Olympic swimmer.\nAmber Camp and Tram Holloway details are based on council-provided background and should be reconfirmed before a public version."}
+{"kind":"slide","id":"sl/yq2fm6","slide":13,"title":"UNIVERSITY PIPELINE","textShapes":27}
+{"kind":"shape","id":"sh/50jyhsjy","slide":13,"bbox":[72,50,262,38]}
+{"kind":"shape","id":"sh/idsfmd0n","slide":13,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/3e1gfi1s","slide":13,"text":"UNIVERSITY PIPELINE","textPreview":"UNIVERSITY PIPELINE","textChars":19,"textLines":1,"bbox":[108,59,214,21]}
+{"kind":"textbox","id":"sh/s3uxsnip","slide":13,"text":"Five university relationships, two stages of motion.","textPreview":"Five university relationships, two stages of motion.","textChars":52,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/d43ylsja","slide":13,"text":"The near-term goal is to move each relationship to a defined cohort, owner, protocol, and launch date.","textPreview":"The near-term goal is to move each relationship to a defined cohort, owner, protocol, and launch date.","textChars":102,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/q1sfqd0j","slide":13,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/r2lgji14","slide":13,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/87qxg3i5","slide":13,"text":"Stages: Q2 review page + leadership updates","textPreview":"Stages: Q2 review page + leadership updates","textChars":43,"textLines":1,"bbox":[610,691,530,17]}
+{"kind":"textbox","id":"sh/t8ze98jq","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/hkf2lczy","slide":13,"bbox":[72,248,1136,61]}
+{"kind":"textbox","id":"sh/gj61c7id","slide":13,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[94,265,34,25]}
+{"kind":"textbox","id":"sh/vixkj2hs","slide":13,"text":"Clark Atlanta","textPreview":"Clark Atlanta","textChars":13,"textLines":1,"bbox":[150,261,260,31]}
+{"kind":"shape","id":"sh/uhojax07","slide":13,"bbox":[435,260,210,36]}
+{"kind":"textbox","id":"sh/5oz2pwzu","slide":13,"text":"PILOT ONBOARDING","textPreview":"PILOT ONBOARDING","textChars":16,"textLines":1,"bbox":[450,270,180,17]}
+{"kind":"textbox","id":"sh/4nq1grip","slide":13,"text":"Move from setup to cohort launch","textPreview":"Move from setup to cohort launch","textChars":32,"textLines":1,"bbox":[682,265,492,27]}
+{"kind":"shape","id":"sh/3mhknmh4","slide":13,"bbox":[72,323,1136,61]}
+{"kind":"textbox","id":"sh/ilojeh0j","slide":13,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[94,340,34,25]}
+{"kind":"textbox","id":"sh/dcz2twz6","slide":13,"text":"UMES","textPreview":"UMES","textChars":4,"textLines":1,"bbox":[150,336,260,31]}
+{"kind":"shape","id":"sh/sbqlkril","slide":13,"bbox":[435,335,210,36]}
+{"kind":"textbox","id":"sh/w7idczat","slide":13,"text":"PILOT SCOPING","textPreview":"PILOT SCOPING","textChars":13,"textLines":1,"bbox":[450,345,180,17]}
+{"kind":"textbox","id":"sh/x8re54be","slide":13,"text":"Confirm population, staff owner, and protocol","textPreview":"Confirm population, staff owner, and protocol","textChars":45,"textLines":1,"bbox":[682,340,492,27]}
+{"kind":"shape","id":"sh/a50vaps3","slide":13,"bbox":[72,398,1136,61]}
+{"kind":"textbox","id":"sh/b69c3uto","slide":13,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[94,415,34,25]}
+{"kind":"textbox","id":"sh/kv2dgja5","slide":13,"text":"Worcester State","textPreview":"Worcester State","textChars":15,"textLines":1,"bbox":[150,411,260,31]}
+{"kind":"shape","id":"sh/lwbe94bq","slide":13,"bbox":[435,410,210,36]}
+{"kind":"textbox","id":"sh/yt0ve9sz","slide":13,"text":"PILOT SCOPING","textPreview":"PILOT SCOPING","textChars":13,"textLines":1,"bbox":[450,420,180,17]}
+{"kind":"textbox","id":"sh/ju9w7etk","slide":13,"text":"Align scope, timeline, and success measures","textPreview":"Align scope, timeline, and success measures","textChars":43,"textLines":1,"bbox":[682,415,492,27]}
+{"kind":"shape","id":"sh/0zyd4fu1","slide":13,"bbox":[72,473,1136,61]}
+{"kind":"textbox","id":"sh/107uxkb6","slide":13,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[94,490,34,25]}
+{"kind":"textbox","id":"sh/3uxg3ido","slide":13,"text":"DePaul","textPreview":"DePaul","textChars":6,"textLines":1,"bbox":[150,486,260,31]}
+{"kind":"shape","id":"sh/it4fadcj","slide":13,"bbox":[435,485,210,36]}
+{"kind":"textbox","id":"sh/5wfy5svu","slide":13,"text":"UNIVERSITY CONVERSATION","textPreview":"UNIVERSITY CONVERSATION","textChars":23,"textLines":1,"bbox":[450,495,180,17]}
+{"kind":"textbox","id":"sh/4v6hcnu9","slide":13,"text":"Identify first use case and internal champion","textPreview":"Identify first use case and internal champion","textChars":45,"textLines":1,"bbox":[682,490,492,27]}
+{"kind":"shape","id":"sh/vqdgzids","slide":13,"bbox":[72,548,1136,61]}
+{"kind":"textbox","id":"sh/up4f6dc7","slide":13,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[94,565,34,25]}
+{"kind":"textbox","id":"sh/hsvy18vy","slide":13,"text":"University of Iowa","textPreview":"University of Iowa","textChars":18,"textLines":1,"bbox":[150,561,260,31]}
+{"kind":"shape","id":"sh/grmx83ud","slide":13,"bbox":[435,560,210,36]}
+{"kind":"textbox","id":"sh/72tgvydw","slide":13,"text":"UNIVERSITY CONVERSATION","textPreview":"UNIVERSITY CONVERSATION","textChars":23,"textLines":1,"bbox":[450,570,180,17]}
+{"kind":"textbox","id":"sh/61kf2twb","slide":13,"text":"Map stakeholders and pilot path","textPreview":"Map stakeholders and pilot path","textChars":31,"textLines":1,"bbox":[682,565,492,27]}
+{"kind":"textbox","id":"sh/m9oj61sv","slide":13,"text":"Conversion rule: every conversation needs a next owner, next artifact, and next date.","textPreview":"Conversion rule: every conversation needs a next owner, next artifact, and next date.","textChars":85,"textLines":1,"bbox":[72,631,1136,28]}
+{"kind":"notes","id":"nt/yq2fm6","slide":13,"text":"Do not imply all five are signed pilots. Clark Atlanta is in onboarding; UMES and Worcester are in scoping; DePaul and Iowa are active university conversations."}
+{"kind":"slide","id":"sl/j35hhz","slide":14,"title":"ADDITIONAL PILOT SETTINGS","textShapes":16}
+{"kind":"shape","id":"sh/e94fup8r","slide":14,"bbox":[72,50,322,38]}
+{"kind":"shape","id":"sh/1cve54r2","slide":14,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/0bmxwzqh","slide":14,"text":"ADDITIONAL PILOT SETTINGS","textPreview":"ADDITIONAL PILOT SETTINGS","textChars":25,"textLines":1,"bbox":[108,59,274,21]}
+{"kind":"textbox","id":"sh/r6twzu90","slide":14,"text":"Two environments expand what we can learn.","textPreview":"Two environments expand what we can learn.","textChars":42,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/q5kvqpsf","slide":14,"text":"Performance clinics and endurance communities can generate faster cycles, different engagement patterns, and evidence beyond campus athletics.","textPreview":"Performance clinics and endurance communities can generate faster cycles, different engagement patterns, and evidence beyond campus athle...","textChars":142,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/d8be1kr6","slide":14,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/c72xsfql","slide":14,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/32twva94","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/21kvm5sj","slide":14,"bbox":[72,262,538,335]}
+{"kind":"textbox","id":"sh/krehc7yh","slide":14,"text":"HYPERCHARGE","textPreview":"HYPERCHARGE","textChars":11,"textLines":1,"bbox":[104,296,470,36]}
+{"kind":"textbox","id":"sh/lsny5cz2","slide":14,"text":"Performance, recovery, and longevity clinic","textPreview":"Performance, recovery, and longevity clinic","textChars":43,"textLines":1,"bbox":[104,345,470,27]}
+{"kind":"textbox","id":"sh/ypczahgr","slide":14,"text":"PILOT ONBOARDING","textPreview":"PILOT ONBOARDING","textChars":16,"textLines":1,"bbox":[104,397,190,20]}
+{"kind":"textbox","id":"sh/jq5g32hc","slide":14,"text":"What it can test","textPreview":"What it can test","textChars":16,"textLines":1,"bbox":[104,447,190,24]}
+{"kind":"textbox","id":"sh/wnuh87yl","slide":14,"text":"• Clinic integration and staff workflow\n• Adult performance and recovery patterns\n• Technology partnership model","textPreview":"• Clinic integration and staff workflow | • Adult performance and recovery patterns | • Technology partnership model","textChars":112,"textLines":3,"bbox":[104,484,448,88]}
+{"kind":"shape","id":"sh/xo3y1cz6","slide":14,"bbox":[670,262,538,335]}
+{"kind":"textbox","id":"sh/alcz6xgf","slide":14,"text":"4D CYCLING","textPreview":"4D CYCLING","textChars":10,"textLines":1,"bbox":[702,296,470,36]}
+{"kind":"textbox","id":"sh/bmlgz2h0","slide":14,"text":"Endurance training and community environment","textPreview":"Endurance training and community environment","textChars":44,"textLines":1,"bbox":[702,345,470,27]}
+{"kind":"textbox","id":"sh/gjyhkryp","slide":14,"text":"PILOT ONBOARDING","textPreview":"PILOT ONBOARDING","textChars":16,"textLines":1,"bbox":[702,397,190,20]}
+{"kind":"textbox","id":"sh/hk7idwza","slide":14,"text":"What it can test","textPreview":"What it can test","textChars":16,"textLines":1,"bbox":[702,447,190,24]}
+{"kind":"textbox","id":"sh/54jqhsn2","slide":14,"text":"• Repeated training-load context\n• Community engagement and adherence\n• Faster feedback outside the academic calendar","textPreview":"• Repeated training-load context | • Community engagement and adherence | • Faster feedback outside the academic calendar","textChars":117,"textLines":3,"bbox":[702,484,448,88]}
+{"kind":"textbox","id":"sh/43ap87mx","slide":14,"text":"Together, these settings broaden the evidence base and shorten the learning loop.","textPreview":"Together, these settings broaden the evidence base and shorten the learning loop.","textChars":81,"textLines":1,"bbox":[72,628,1136,26]}
+{"kind":"notes","id":"nt/j35hhz","slide":14,"text":"HyperCharge and 4D Cycling were listed as pilot onboarding opportunities in the Q2 review.\nUse them to complement university learning, not replace it."}
+{"kind":"slide","id":"sl/3mxs4w","slide":15,"title":"Q3 CONVERSION PLAN","textShapes":18}
+{"kind":"shape","id":"sh/up4j61cn","slide":15,"bbox":[72,50,252,38]}
+{"kind":"shape","id":"sh/hsv21wby","slide":15,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/grm18rud","slide":15,"text":"Q3 CONVERSION PLAN","textPreview":"Q3 CONVERSION PLAN","textChars":18,"textLines":1,"bbox":[108,59,204,21]}
+{"kind":"textbox","id":"sh/7md0vmtw","slide":15,"text":"Turn momentum into visible proof.","textPreview":"Turn momentum into visible proof.","textChars":33,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/61kj2hcb","slide":15,"text":"A focused operating cadence connects conversations, pilots, research, and commercialization.","textPreview":"A focused operating cadence connects conversations, pilots, research, and commercialization.","textChars":92,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/tov2xwb2","slide":15,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/8nm14ruh","slide":15,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/jyt0r2t0","slide":15,"text":"15","textPreview":"15","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/yxkjyhcf","slide":15,"bbox":[72,268,256,295]}
+{"kind":"textbox","id":"sh/sj2x4zyd","slide":15,"text":"NOW → AUG","textPreview":"NOW → AUG","textChars":9,"textLines":1,"bbox":[94,292,212,22]}
+{"kind":"textbox","id":"sh/d4bed4zy","slide":15,"text":"Lock","textPreview":"Lock","textChars":4,"textLines":1,"bbox":[94,338,212,50]}
+{"kind":"textbox","id":"sh/qhkf2pg7","slide":15,"text":"Confirm cohorts, institutional owners, protocols, data permissions, and launch dates.","textPreview":"Confirm cohorts, institutional owners, protocols, data permissions, and launch dates.","textChars":85,"textLines":1,"bbox":[94,410,212,116]}
+{"kind":"shape","id":"sh/ritwbuhs","slide":15,"bbox":[94,536,212,6]}
+{"kind":"shape","id":"sh/4f2d0fyh","slide":15,"bbox":[356,268,256,295]}
+{"kind":"textbox","id":"sh/5gbe9kzm","slide":15,"text":"AUG → SEP","textPreview":"AUG → SEP","textChars":9,"textLines":1,"bbox":[378,292,212,22]}
+{"kind":"textbox","id":"sh/id0vy5gb","slide":15,"text":"Launch","textPreview":"Launch","textChars":6,"textLines":1,"bbox":[378,338,212,50]}
+{"kind":"textbox","id":"sh/3e9w7ahw","slide":15,"text":"Deploy pilots, establish baselines, monitor engagement, and resolve workflow friction.","textPreview":"Deploy pilots, establish baselines, monitor engagement, and resolve workflow friction.","textChars":86,"textLines":1,"bbox":[378,410,212,116]}
+{"kind":"shape","id":"sh/obmxcjyl","slide":15,"bbox":[378,536,212,6]}
+{"kind":"shape","id":"sh/pcve5oz6","slide":15,"bbox":[640,268,256,295]}
+{"kind":"textbox","id":"sh/xsrep4ra","slide":15,"text":"SEP → OCT","textPreview":"SEP → OCT","textChars":9,"textLines":1,"bbox":[662,292,212,22]}
+{"kind":"textbox","id":"sh/wrixwjqp","slide":15,"text":"Read","textPreview":"Read","textChars":4,"textLines":1,"bbox":[662,338,212,50]}
+{"kind":"textbox","id":"sh/bq9wne94","slide":15,"text":"Produce interim learning briefs, case-study evidence, and buyer-ready implementation lessons.","textPreview":"Produce interim learning briefs, case-study evidence, and buyer-ready implementation lessons.","textChars":93,"textLines":1,"bbox":[662,410,212,116]}
+{"kind":"shape","id":"sh/ap0vu98j","slide":15,"bbox":[662,536,212,6]}
+{"kind":"shape","id":"sh/94rel4ry","slide":15,"bbox":[924,268,256,295]}
+{"kind":"textbox","id":"sh/o3idszqt","slide":15,"text":"Q4 GATE","textPreview":"Q4 GATE","textChars":7,"textLines":1,"bbox":[946,292,212,22]}
+{"kind":"textbox","id":"sh/n29wju98","slide":15,"text":"Convert","textPreview":"Convert","textChars":7,"textLines":1,"bbox":[946,338,212,50]}
+{"kind":"textbox","id":"sh/m10vqp8n","slide":15,"text":"Advance paid extensions, sponsorship, research partnerships, and repeatable deployments.","textPreview":"Advance paid extensions, sponsorship, research partnerships, and repeatable deployments.","textChars":88,"textLines":1,"bbox":[946,410,212,116]}
+{"kind":"shape","id":"sh/107ehkr2","slide":15,"bbox":[946,536,212,6]}
+{"kind":"shape","id":"sh/0zydofqh","slide":15,"bbox":[72,596,1136,55]}
+{"kind":"textbox","id":"sh/qtc321k3","slide":15,"text":"Q3 SUCCESS = LAUNCHED COHORTS + MEASURABLE LEARNING + CLEAR CONVERSION PATHS","textPreview":"Q3 SUCCESS = LAUNCHED COHORTS + MEASURABLE LEARNING + CLEAR CONVERSION PATHS","textChars":76,"textLines":1,"bbox":[95,614,1090,22]}
+{"kind":"notes","id":"nt/3mxs4w","slide":15,"text":"The operating goal is visible proof, not activity volume.\nKeep every initiative tied to a concrete owner, artifact, date, and decision gate."}
+{"kind":"slide","id":"sl/39ntlo","slide":16,"title":"ADVISORY BOARD DISCUSSION","textShapes":19}
+{"kind":"shape","id":"sh/ri9svmp4","slide":16,"bbox":[72,50,322,38]}
+{"kind":"shape","id":"sh/sji9orqp","slide":16,"bbox":[88,65,9,9]}
+{"kind":"textbox","id":"sh/dkraxw7a","slide":16,"text":"ADVISORY BOARD DISCUSSION","textPreview":"ADVISORY BOARD DISCUSSION","textChars":25,"textLines":1,"bbox":[108,59,274,21]}
+{"kind":"textbox","id":"sh/el0bq18v","slide":16,"text":"Where can this board accelerate the next 90 days?","textPreview":"Where can this board accelerate the next 90 days?","textChars":49,"textLines":1,"bbox":[72,112,1136,70]}
+{"kind":"textbox","id":"sh/fm9szmpg","slide":16,"text":"We need targeted help that converts strong interest into rigorous, well-supported deployments.","textPreview":"We need targeted help that converts strong interest into rigorous, well-supported deployments.","textChars":94,"textLines":1,"bbox":[72,184,1120,48]}
+{"kind":"shape","id":"sh/0n2tsrq1","slide":16,"bbox":[72,682,1136,1]}
+{"kind":"textbox","id":"sh/1oba1w7m","slide":16,"text":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textPreview":"PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW","textChars":57,"textLines":1,"bbox":[72,691,520,17]}
+{"kind":"textbox","id":"sh/upgrex8r","slide":16,"text":"16","textPreview":"16","textChars":2,"textLines":1,"bbox":[1155,691,53,17]}
+{"kind":"shape","id":"sh/vqpsn2pc","slide":16,"bbox":[72,274,260,225]}
+{"kind":"shape","id":"sh/be5on2t0","slide":16,"bbox":[94,296,36,6]}
+{"kind":"textbox","id":"sh/qdw7uxcf","slide":16,"text":"ASK 01","textPreview":"ASK 01","textChars":6,"textLines":1,"bbox":[94,314,216,18]}
+{"kind":"textbox","id":"sh/d0n6pcb6","slide":16,"text":"Pilot champions","textPreview":"Pilot champions","textChars":15,"textLines":1,"bbox":[94,340,216,48]}
+{"kind":"textbox","id":"sh/cfepw7ul","slide":16,"text":"Warm introductions to athletic departments with a clear internal owner and appetite to launch this fall.","textPreview":"Warm introductions to athletic departments with a clear internal owner and appetite to launch this fall.","textChars":104,"textLines":1,"bbox":[94,392,216,85]}
+{"kind":"shape","id":"sh/3aloj2t4","slide":16,"bbox":[356,274,260,225]}
+{"kind":"shape","id":"sh/29c7qxcj","slide":16,"bbox":[378,296,36,6]}
+{"kind":"textbox","id":"sh/pcn6lsbu","slide":16,"text":"ASK 02","textPreview":"ASK 02","textChars":6,"textLines":1,"bbox":[378,314,216,18]}
+{"kind":"textbox","id":"sh/obepsnu9","slide":16,"text":"Clinical rigor","textPreview":"Clinical rigor","textChars":14,"textLines":1,"bbox":[378,340,216,48]}
+{"kind":"textbox","id":"sh/f6lofits","slide":16,"text":"Review escalation, consent, safety, and outcome protocols before broader deployment.","textPreview":"Review escalation, consent, safety, and outcome protocols before broader deployment.","textChars":84,"textLines":1,"bbox":[378,392,216,85]}
+{"kind":"shape","id":"sh/u5cnmdc7","slide":16,"bbox":[640,274,260,225]}
+{"kind":"shape","id":"sh/ihs7ydwz","slide":16,"bbox":[662,296,36,6]}
+{"kind":"textbox","id":"sh/j218rixk","slide":16,"text":"ASK 03","textPreview":"ASK 03","textChars":6,"textLines":1,"bbox":[662,314,216,18]}
+{"kind":"textbox","id":"sh/k3ap0ne5","slide":16,"text":"Grant readiness","textPreview":"Grant readiness","textChars":15,"textLines":1,"bbox":[662,340,216,48]}
+{"kind":"textbox","id":"sh/543qtsfq","slide":16,"text":"Stress-test the Phase II narrative, research plan, partners, and commercialization logic.","textPreview":"Stress-test the Phase II narrative, research plan, partners, and commercialization logic.","textChars":89,"textLines":1,"bbox":[662,392,216,85]}
+{"kind":"shape","id":"sh/65c72dwb","slide":16,"bbox":[924,274,284,225]}
+{"kind":"shape","id":"sh/76l8vixw","slide":16,"bbox":[946,296,36,6]}
+{"kind":"textbox","id":"sh/s7up4neh","slide":16,"text":"ASK 04","textPreview":"ASK 04","textChars":6,"textLines":1,"bbox":[946,314,240,18]}
+{"kind":"textbox","id":"sh/t83qxsfm","slide":16,"text":"Sponsor access","textPreview":"Sponsor access","textChars":14,"textLines":1,"bbox":[946,340,240,48]}
+{"kind":"textbox","id":"sh/e9c76xw7","slide":16,"text":"Open conversations with brands that want credible athlete-wellbeing impact and institutional reach.","textPreview":"Open conversations with brands that want credible athlete-wellbeing impact and institutional reach.","textChars":99,"textLines":1,"bbox":[946,392,240,85]}
+{"kind":"shape","id":"sh/fal8z2xs","slide":16,"bbox":[72,536,1136,104]}
+{"kind":"textbox","id":"sh/p47a5wzu","slide":16,"text":"Q2 built the network.","textPreview":"Q2 built the network.","textChars":21,"textLines":1,"bbox":[102,555,1076,34]}
+{"kind":"textbox","id":"sh/o3ytwryp","slide":16,"text":"Q3 turns it into proof.","textPreview":"Q3 turns it into proof.","textChars":23,"textLines":1,"bbox":[102,593,1076,32]}
+{"kind":"notes","id":"nt/39ntlo","slide":16,"text":"End by assigning names to asks and confirming follow-up dates.\nThe desired outcome is a short list of specific introductions, reviews, and decisions—not general support."}

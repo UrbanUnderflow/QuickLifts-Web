@@ -33,7 +33,8 @@ import type { ConversationBranch, TranslationDomain } from '../../src/api/fireba
  *     timezone?: string,
  *     openerText?: string,        // optional iOS context-selected opener
  *     probeText?: string,         // optional iOS context-selected probe
- *     probeVariant?: string }
+ *     probeVariant?: string,
+ *     replaceExisting?: boolean } // same-day athlete correction
  */
 
 const RESPONSE_HEADERS = {
@@ -114,6 +115,69 @@ const primeMorningCheckinProbe = async (
     .doc(conversation.id)
     .set(stripUndefinedDeep(updatedConversation) as Record<string, unknown>, { merge: false });
   return updatedConversation;
+};
+
+const buildRevisedMorningConversation = (
+  conversation: any,
+  branch: ConversationBranch,
+  actionDomain: TranslationDomain,
+  evidenceSummary: string,
+  now = Date.now(),
+): any => {
+  const {
+    actionState: _actionState,
+    closedAt: _closedAt,
+    revokedByUserId: _revokedByUserId,
+    revokedReason: _revokedReason,
+    ...retained
+  } = conversation || {};
+  return {
+    ...retained,
+    branchId: branch.id,
+    actionDomain,
+    state: 'awaiting-reply',
+    turns: [
+      {
+        turnId: `${conversation.id}_t0`,
+        index: 0,
+        role: 'nora-opener',
+        text: branch.opener.text,
+        voiceReviewStatus: branch.opener.voiceReviewStatus,
+        createdAt: now,
+      },
+      {
+        turnId: `${conversation.id}_t1`,
+        index: 1,
+        role: 'nora-probe',
+        text: branch.probe.text,
+        voiceReviewStatus: branch.probe.voiceReviewStatus,
+        createdAt: now + 1,
+      },
+    ],
+    triggerEvidence: { summary: evidenceSummary },
+    updatedAt: now + 1,
+  };
+};
+
+const reviseMorningConversation = async (
+  db: admin.firestore.Firestore,
+  conversation: any,
+  branch: ConversationBranch,
+  actionDomain: TranslationDomain,
+  evidenceSummary: string,
+): Promise<any> => {
+  if (!conversation?.id || conversation.state === 'closed-revoked') return conversation;
+  const revised = buildRevisedMorningConversation(
+    conversation,
+    branch,
+    actionDomain,
+    evidenceSummary,
+  );
+  await db.collection('pulsecheck-nora-conversations').doc(conversation.id).set(
+    stripUndefinedDeep(revised) as Record<string, unknown>,
+    { merge: false },
+  );
+  return revised;
 };
 
 // Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS. Keep these
@@ -216,7 +280,15 @@ export const handler: Handler = async (event) => {
     return { statusCode: 401, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'unauthenticated' }) };
   }
 
-  let body: { level?: string; levelLabel?: string; timezone?: string; openerText?: unknown; probeText?: unknown; probeVariant?: unknown };
+  let body: {
+    level?: string;
+    levelLabel?: string;
+    timezone?: string;
+    openerText?: unknown;
+    probeText?: unknown;
+    probeVariant?: unknown;
+    replaceExisting?: boolean;
+  };
   try {
     body = typeof event.body === 'string' ? JSON.parse(event.body) : (event.body as any) || {};
   } catch {
@@ -258,27 +330,33 @@ export const handler: Handler = async (event) => {
   const openerText = sanitizeOpenerText(body.openerText) || OPENER_TEXT[level];
   const probeText = sanitizeProbeText(body.probeText) || PROBE_TEXT[level];
   const probeVariant = sanitizeProbeVariant(body.probeVariant) || 'baseline';
+  const replaceExisting = body.replaceExisting === true;
 
   // Persist check-in.  This is the first source of truth for "athlete
   // started their day with tone X" — read by curriculum, coach reports,
   // and the framing layer.
   try {
-    await db.collection('pulsecheck-morning-checkins').doc(checkinDocId).set(
-      {
-        id: checkinDocId,
-        athleteUserId: auth.uid,
-        teamId,
-        dayKey,
-        level,
-        levelLabel: body.levelLabel || level,
-        openerText,
-        probeText,
-        probeVariant,
-        timezone,
-        createdAt: now,
-      },
-      { merge: true },
-    );
+    const checkInRef = db.collection('pulsecheck-morning-checkins').doc(checkinDocId);
+    const previous = replaceExisting ? (await checkInRef.get()).data() : undefined;
+    const checkInWrite: Record<string, unknown> = {
+      id: checkinDocId,
+      athleteUserId: auth.uid,
+      teamId,
+      dayKey,
+      level,
+      levelLabel: body.levelLabel || level,
+      openerText,
+      probeText,
+      probeVariant,
+      timezone,
+      createdAt: previous?.createdAt || now,
+      updatedAt: now,
+    };
+    if (replaceExisting) {
+      checkInWrite.revisionCount = admin.firestore.FieldValue.increment(1);
+      checkInWrite.signalValidation = admin.firestore.FieldValue.delete();
+    }
+    await checkInRef.set(checkInWrite, { merge: true });
   } catch (err: any) {
     return {
       statusCode: 500,
@@ -292,6 +370,7 @@ export const handler: Handler = async (event) => {
   // continuous narrative whether they stay on the home screen or
   // navigate into the chat thread.
   const branch = synthesizeBranch(level, openerText, probeText);
+  const evidenceSummary = `Morning check-in tone: ${level}. Probe variant: ${probeVariant}.`;
   let conversation;
   try {
     conversation = await openConversationFromTrigger(
@@ -302,13 +381,21 @@ export const handler: Handler = async (event) => {
         branch,
         actionDomain: ACTION_DOMAIN[level],
         evidence: {
-          summary: `Morning check-in tone: ${level}. Probe variant: ${probeVariant}.`,
+          summary: evidenceSummary,
         },
         dayKey,
       },
       { firestore: db },
     );
-    conversation = await primeMorningCheckinProbe(db, conversation, branch);
+    conversation = replaceExisting
+      ? await reviseMorningConversation(
+          db,
+          conversation,
+          branch,
+          ACTION_DOMAIN[level],
+          evidenceSummary,
+        )
+      : await primeMorningCheckinProbe(db, conversation, branch);
   } catch (err: any) {
     return {
       statusCode: 500,
@@ -326,11 +413,16 @@ export const handler: Handler = async (event) => {
     headers: RESPONSE_HEADERS,
     body: JSON.stringify({
       ok: true,
-      conversationId: conversation.id,
+      conversationId: conversation.state === 'closed-revoked' ? null : conversation.id,
       checkinDocId,
       noraResponse: openerText,
       noraProbe: probeText,
       probeVariant,
     }),
   };
+};
+
+export const __internal = {
+  buildRevisedMorningConversation,
+  synthesizeBranch,
 };

@@ -1,0 +1,21 @@
+{"kind":"deck","id":"pr/abc65w","name":"Deck"}
+{"kind":"layout","layoutId":"86895e61-4d72-41cb-afe6-a267a3c7fb85","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"b7028ddd-09ec-49ec-b2ff-31f095d04b2f","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/5cb0i2","slide":1,"title":"●  CAPITALIZATION","textShapes":13}
+{"kind":"textbox","id":"sh/xori1krm","slide":1,"name":"capitalization-eyebrow","text":"●  CAPITALIZATION","textPreview":"●  CAPITALIZATION","textChars":17,"textLines":1,"bbox":[64,46,214,38]}
+{"kind":"textbox","id":"sh/a10z6p8b","slide":1,"name":"pre-financing-label","text":"PRE-FINANCING","textPreview":"PRE-FINANCING","textChars":13,"textLines":1,"bbox":[1040,54,176,22]}
+{"kind":"textbox","id":"sh/b290za9g","slide":1,"name":"cap-table-title","text":"Founder-led, with room to build the team.","textPreview":"Founder-led, with room to build the team.","textChars":41,"textLines":1,"bbox":[64,105,1152,62]}
+{"kind":"textbox","id":"sh/kr2hczqd","slide":1,"name":"cap-table-subtitle","text":"10.0M fully diluted shares • 90% founder-owned • 950K options remain available","textPreview":"10.0M fully diluted shares • 90% founder-owned • 950K options remain available","textChars":78,"textLines":1,"bbox":[64,174,1152,32]}
+{"kind":"textbox","id":"sh/ip0zap87","slide":1,"name":"founder-percent","text":"90%","textPreview":"90%","textChars":3,"textLines":1,"bbox":[126,315,224,68]}
+{"kind":"textbox","id":"sh/jqt03u9s","slide":1,"name":"founder-owned-label","text":"FOUNDER OWNED","textPreview":"FOUNDER OWNED","textChars":13,"textLines":1,"bbox":[126,383,224,28]}
+{"kind":"textbox","id":"sh/sv21gzq9","slide":1,"name":"pool-availability-callout","text":"950K  options remain available","textPreview":"950K  options remain available","textChars":30,"textLines":1,"bbox":[76,532,328,38]}
+{"kind":"textbox","id":"sh/twbi94ru","slide":1,"name":"ownership-table-title","text":"Fully diluted ownership","textPreview":"Fully diluted ownership","textChars":23,"textLines":1,"bbox":[478,220,742,28]}
+{"kind":"shape","id":"sh/8jmhgvet","slide":1,"name":"convertible-note-band","bbox":[64,584,1152,80]}
+{"kind":"textbox","id":"sh/7id0nqd8","slide":1,"name":"note-principal","text":"$25K","textPreview":"$25K","textChars":4,"textLines":1,"bbox":[88,601,106,42]}
+{"kind":"textbox","id":"sh/6h4zelwn","slide":1,"name":"note-label","text":"UNCONVERTED NOTE","textPreview":"UNCONVERTED NOTE","textChars":16,"textLines":1,"bbox":[207,598,250,20]}
+{"kind":"textbox","id":"sh/hovitkva","slide":1,"name":"note-holder","text":"Launch (Founder University)","textPreview":"Launch (Founder University)","textChars":27,"textLines":1,"bbox":[207,620,370,27]}
+{"kind":"textbox","id":"sh/gnmhkfe5","slide":1,"name":"note-treatment","text":"Excluded from current ownership until conversion.\nTerms governed by the executed note.","textPreview":"Excluded from current ownership until conversion. | Terms governed by the executed note.","textChars":86,"textLines":2,"bbox":[665,603,510,48]}
+{"kind":"textbox","id":"sh/vmd0radk","slide":1,"name":"cap-table-disclaimer","text":"Informational only • Governing documents control • Granted advisor options are unvested and unexercised","textPreview":"Informational only • Governing documents control • Granted advisor options are unvested and unexercised","textChars":103,"textLines":1,"bbox":[64,684,1152,18]}
+{"kind":"chart","id":"ch/l43mhsre","slide":1,"name":"","chartType":"doughnut","bbox":[58,222,360,318]}
+{"kind":"table","id":"tb/e54f2pcj","slide":1,"name":"","rows":6,"cols":4,"preview":"STAKEHOLDER / RESERVE | SECURITY / STATUS | SHARES | FD %","bbox":[478,255,742,300]}
+{"kind":"notes","id":"nt/5cb0i2","slide":1,"text":""}

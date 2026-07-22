@@ -5,6 +5,8 @@ import { __internal } from '../../netlify/functions/record-evening-checkin';
 test('evening check-in only accepts authored reflection choices', () => {
   assert.equal(__internal.sanitizeReflection('My energy'), 'My energy');
   assert.equal(__internal.sanitizeReflection('I handled something well'), 'I handled something well');
+  assert.equal(__internal.sanitizeReflection('Training or a competition'), 'Training or a competition');
+  assert.equal(__internal.sanitizeReflection('Practice or a match'), 'Practice or a match');
   assert.equal(__internal.sanitizeReflection('Here is an unbounded disclosure'), undefined);
   assert.equal(__internal.sanitizeReflection(null), undefined);
 });

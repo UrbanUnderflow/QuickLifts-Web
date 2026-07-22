@@ -54,6 +54,19 @@ test('Nora voice rubric rejects abstract copy that does not sound spoken to a sm
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
 });
 
+test('Nora voice rubric rejects unexplained body-state riddles', () => {
+  const text = 'When your breathing is rushed, your signals can feel scattered. Coherence gives your attention a clearer place to stand. You are about to practice creating that state.';
+  const issues = validateNoraVoiceRubric(text);
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
+});
+
+test('Nora voice rubric rejects unexplained mental-rehearsal pathways', () => {
+  const issues = validateNoraVoiceRubric('Mental rehearsal is another way to prepare the pathway.');
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
+});
+
 test('Nora voice rubric rejects report-style sleep read copy', () => {
   const issues = validateNoraVoiceRubric(
     'For physique prep, this sleep read is about confidence, routine, and decision fatigue. Use one reset cue when the day starts to feel noisy.',

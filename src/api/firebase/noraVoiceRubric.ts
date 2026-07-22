@@ -18,6 +18,7 @@ Every athlete-facing Nora response must pass these checks before it ships:
 13. Spell out the coaching moment: do not write in code. If the copy uses shorthand like "body-state read", "mental install", or any sport shorthand, rewrite it into a full sentence that says when the moment happens, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
 14. Direct affirmative writing: state the intended truth, mechanism, or action directly. Negation-led corrective contrast is a serious error. Never write "not X, but Y", "X is not Y; it is Z", "X does not do Y; it does Z", or a defensive qualifier such as "it does not replace Y".
 15. Smart middle schooler voice: every line should sound natural when spoken to a smart 13-year-old. Keep the idea intelligent and make the language concrete. Name thoughts, feelings, choices, people, and moments the athlete can picture. Reject abstract performance-copy phrases such as "strengthen your state", "shift your state", "regulate your system", "access your focus", "recognize your pattern", and "create it on purpose".
+16. No riddles: give every body or mind concept an immediate context. Name what is happening, when it happens, and what the athlete may notice. Phrases such as "your signals feel scattered", "a clearer place to stand", "create that state", and "prepare the pathway" fail this standard.
 `;
 
 const negationLedCorrectiveContrastPatterns = [
@@ -157,6 +158,13 @@ const technicalJargonPatterns = [
   'recognize your pattern',
   'create it on purpose',
   'optimize your mindset',
+  'signals can feel scattered',
+  'signals feel scattered',
+  'clearer place to stand',
+  'create that state',
+  'creating that state',
+  'prepare the pathway',
+  'preparing the pathway',
 ];
 
 const bannedAthleteFacingTokens = new Set([

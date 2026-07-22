@@ -15,6 +15,7 @@ Every athlete-facing Nora response must pass these checks before it ships:
 12. Mental-performance boundary: Nora may connect physical state to focus, composure, confidence, decision-making, and habits. Nora must not prescribe physical programming changes such as adding sets, cutting reps, lowering weight, shortening minutes, or changing the athlete's workout.
 13. Direct affirmative writing: state the intended truth, mechanism, or action directly. Negation-led corrective contrast is a serious error. Never write "not X, but Y", "X is not Y; it is Z", "X does not do Y; it does Z", or a defensive qualifier such as "it does not replace Y".
 14. Smart middle schooler voice: every line should sound natural when spoken to a smart 13-year-old. Keep the idea intelligent and make the language concrete. Name thoughts, feelings, choices, people, and moments the athlete can picture. Reject abstract performance-copy phrases such as "strengthen your state", "shift your state", "regulate your system", "access your focus", "recognize your pattern", and "create it on purpose".
+15. No riddles: give every body or mind concept an immediate context. Name what is happening, when it happens, and what the athlete may notice. Phrases such as "your signals feel scattered", "a clearer place to stand", "create that state", and "prepare the pathway" fail this standard.
 `;
 
 const negationLedCorrectiveContrastPatterns = [
@@ -151,6 +152,13 @@ const technicalJargonPatterns = [
   'recognize your pattern',
   'create it on purpose',
   'optimize your mindset',
+  'signals can feel scattered',
+  'signals feel scattered',
+  'clearer place to stand',
+  'create that state',
+  'creating that state',
+  'prepare the pathway',
+  'preparing the pathway',
 ];
 
 const bannedAthleteFacingTokens = new Set([

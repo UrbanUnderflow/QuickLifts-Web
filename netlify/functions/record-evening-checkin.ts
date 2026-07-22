@@ -21,6 +21,12 @@ const VALID_REFLECTIONS = new Set([
   'Friends or family',
   'Nothing big',
   'I handled something well',
+  'Training or a competition',
+  'Training or a race',
+  'Training or a meet',
+  'Practice or a match',
+  'Practice or a meet',
+  'Practice or a tournament',
 ]);
 
 const DEFAULT_OPENERS: Record<CheckinLevel, string> = {
@@ -126,6 +132,7 @@ export const handler: Handler = async (event) => {
   const checkinDocId = `${auth.uid}_${dayKey}`;
   const docRef = db.collection('pulsecheck-morning-checkins').doc(checkinDocId);
   const reflection = sanitizeReflection(body.reflection);
+  const replaceExisting = body.replaceExisting === true;
   const openerText = sanitizeText(body.openerText, DEFAULT_OPENERS[level], 420);
   const probeText = sanitizeText(body.probeText, DEFAULT_PROBES[level], 320);
   const actionText = sanitizeText(body.actionText, DEFAULT_ACTION, 320);
@@ -144,6 +151,10 @@ export const handler: Handler = async (event) => {
       createdAt: existingEvening.createdAt || now,
       updatedAt: now,
     };
+    if (replaceExisting) {
+      delete eveningCheckIn.reflection;
+      eveningCheckIn.revisionCount = Number(existingEvening.revisionCount || 0) + 1;
+    }
     if (reflection) eveningCheckIn.reflection = reflection;
 
     await docRef.set(

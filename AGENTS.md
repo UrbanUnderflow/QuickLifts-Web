@@ -21,3 +21,8 @@ Avoid abstract performance-copy phrases such as "strengthen your state",
 "shift your state", "regulate your system", "access your focus", "recognize
 your pattern", and "create it on purpose." Never sound clinical, academic,
 corporate, mystical without meaning, or childish.
+
+Give every body or mind concept an immediate context. Name what is happening,
+when it happens, and what the athlete may notice. Phrases such as "your signals
+feel scattered", "a clearer place to stand", "create that state", and "prepare
+the pathway" read like riddles and are prohibited.

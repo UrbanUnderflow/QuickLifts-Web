@@ -163,6 +163,7 @@ service cloud.firestore {
         'document-notes',
         'junior-curriculum',
         'junior-progress',
+        'mental-training-education-progress',
         'programming-access',
         'pulsecheck-invite-activities',
         'pulsecheck-invite-links',
@@ -721,6 +722,14 @@ service cloud.firestore {
     // read for support; deletes are admin-only (progress is never
     // athlete-destructible).
     match /junior-progress/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdminUser());
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isAdminUser();
+    }
+
+    // Per-athlete first-use education progress. Athletes can only read and
+    // update their own teaching-moment history; admins can read for support.
+    match /mental-training-education-progress/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdminUser());
       allow create, update: if isSignedIn() && request.auth.uid == userId;
       allow delete: if isAdminUser();
