@@ -13,7 +13,20 @@ import {
   signInWithRedirect,
   signOut,
 } from 'firebase/auth';
-import { collection, doc, getDoc, getDocs, onSnapshot, query as firestoreQuery, serverTimestamp, setDoc, where } from 'firebase/firestore';
+import {
+  FieldPath,
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query as firestoreQuery,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   Activity,
@@ -75,12 +88,24 @@ type InviteStatus = {
 };
 type InviteHistoryEntry = {
   email: string;
+  displayName: string;
+  photoURL: string;
   access: ShareAccess;
   status: 'sent' | 'accepted';
   sentAt?: unknown;
   acceptedAt?: unknown;
   listNames: string[];
-  shareIds: string[];
+  listAccess: Array<{
+    listId: string;
+    listName: string;
+    accent: string;
+    access: ShareAccess;
+    status: 'sent' | 'accepted';
+    shareId: string;
+    inviteUrl: string;
+    sentAt?: unknown;
+    acceptedAt?: unknown;
+  }>;
   inviteUrl: string;
 };
 type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
@@ -326,6 +351,7 @@ type ContactEmailSender = (typeof CONTACT_EMAIL_SENDERS)[number];
 const DEFAULT_CONTACT_EMAIL_SENDER: ContactEmailSender = 'tre@fitwithpulse.ai';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
 const SOFT_DELETE_RESTORE_DAYS = 30;
+const PIPELISTS_INITIAL_LOAD_TIMEOUT_MS = 6000;
 
 const accentClasses = [
   'bg-emerald-500',
@@ -2130,19 +2156,6 @@ const formatCount = (count: number, singular: string) => {
   return `${count} ${plural}`;
 };
 
-const timestampToDate = pipeTimestampToDate;
-
-const formatInviteTimestamp = (value: unknown) => {
-  const date = timestampToDate(value);
-  if (!date) return '';
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date);
-};
-
 const escapeCsv = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
 
 const parseMoney = (value: string) => {
@@ -2257,6 +2270,22 @@ const readFirestoreError = (error: unknown, fallbackMessage: string) => {
 
   return error instanceof Error ? error.message : fallbackMessage;
 };
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string) =>
+  new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 
 const readApiJson = async (response: Response, fallbackMessage: string) => {
   const raw = await response.text();
@@ -2507,6 +2536,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
 
 const PipelinePage: NextPage = () => {
   const [lists, setLists] = useState<PipeList[]>(initialLists);
+  const personalListsRef = useRef<PipeList[]>(initialLists);
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
   const [query, setQuery] = useState('');
@@ -2587,12 +2617,15 @@ const PipelinePage: NextPage = () => {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [dataReady, setDataReady] = useState(false);
+  const [personalStateReady, setPersonalStateReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [magicEmail, setMagicEmail] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      const invitedEmail = params.get('inviteEmail')?.trim().toLowerCase() || '';
+      if (invitedEmail) return invitedEmail;
       if (params.get('share') || params.get('leadShare')) return '';
     }
     return TREMAINE_OWNER_EMAIL;
@@ -2622,19 +2655,24 @@ const PipelinePage: NextPage = () => {
   const [shareMessage, setShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [shareAccess, setShareAccess] = useState<ShareAccess>('read');
   const [shareEditorEmails, setShareEditorEmails] = useState('');
+  const [selectedCollaboratorAccountEmails, setSelectedCollaboratorAccountEmails] = useState<string[]>([]);
   const [shareSelectedListIds, setShareSelectedListIds] = useState<string[]>([]);
   const [collaboratorSearch, setCollaboratorSearch] = useState('');
   const [profileSearchMessage, setProfileSearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [searchableProfiles, setSearchableProfiles] = useState<SearchablePipeListProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [loadingOwnerShares, setLoadingOwnerShares] = useState(false);
   const [resendingInviteEmails, setResendingInviteEmails] = useState<string[]>([]);
+  const [removingAccessEmails, setRemovingAccessEmails] = useState<string[]>([]);
   const [isSharePanelOpen, setIsSharePanelOpen] = useState(false);
+  const [isInviteFormOpen, setIsInviteFormOpen] = useState(false);
   const [profile, setProfile] = useState<PipeListProfile | null>(null);
   const [profileName, setProfileName] = useState('');
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profileMessage, setProfileMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const normalizedUserEmail = user?.email?.toLowerCase() || '';
+  const hasInviteAccountMismatch = Boolean(inviteEmail && normalizedUserEmail && inviteEmail !== normalizedUserEmail);
   const isLeadSharedView = Boolean(leadShareId);
   const isSharedView = Boolean(shareId || leadShareId);
   const isOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
@@ -2712,33 +2750,41 @@ const PipelinePage: NextPage = () => {
 
       if (!currentUser) {
         setDataReady(false);
+        setPersonalStateReady(false);
+        personalListsRef.current = [];
         setAccessibleShareDocs([]);
         return;
       }
 
       const email = currentUser.email?.toLowerCase() || '';
+      const currentUserIsOwner = email === TREMAINE_OWNER_EMAIL;
+      setDataReady(false);
+      setPersonalStateReady(false);
 
       try {
-        await setDoc(
-          doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, currentUser.uid),
-          {
-            email: currentUser.email || '',
-            displayName: currentUser.displayName || '',
-            lastSeenAt: serverTimestamp(),
-          },
-          { merge: true },
-        );
-
-        await setDoc(
-          doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, currentUser.uid),
-          stripUndefined({
-            email: currentUser.email || '',
-            displayName: currentUser.displayName || '',
-            photoURL: currentUser.photoURL || '',
-            updatedAt: serverTimestamp(),
-          }),
-          { merge: true },
-        );
+        void Promise.all([
+          setDoc(
+            doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, currentUser.uid),
+            {
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              lastSeenAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+          setDoc(
+            doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, currentUser.uid),
+            stripUndefined({
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              photoURL: currentUser.photoURL || '',
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true },
+          ),
+        ]).catch((error) => {
+          console.warn('[PipeLists] Unable to refresh the signed-in account profile:', error);
+        });
 
         const stateRef = doc(
           simpBudgetDb,
@@ -2747,15 +2793,19 @@ const PipelinePage: NextPage = () => {
           PIPELISTS_SUBCOLLECTION,
           PIPELISTS_STATE_DOCUMENT_ID,
         );
-        const snapshot = await getDoc(stateRef);
-        let privateLists: PipeList[] = isOwner ? initialLists : [];
+        const snapshot = await withTimeout(
+          getDoc(stateRef),
+          PIPELISTS_INITIAL_LOAD_TIMEOUT_MS,
+          'PipeLists took too long to connect. Your workspace will refresh automatically.',
+        );
+        let privateLists: PipeList[] = currentUserIsOwner ? initialLists : [];
 
         if (snapshot.exists()) {
           const data = snapshot.data() as { lists?: Partial<PipeList>[] };
-          if (Array.isArray(data.lists) && data.lists.length > 0) {
+          if (Array.isArray(data.lists)) {
             privateLists = purgeExpiredDeletedItems(data.lists.map(normalizeList));
           }
-        } else if (isOwner && typeof window !== 'undefined') {
+        } else if (currentUserIsOwner && typeof window !== 'undefined') {
           const stored = window.localStorage.getItem(STORAGE_KEY);
           if (stored) {
             try {
@@ -2769,63 +2819,34 @@ const PipelinePage: NextPage = () => {
           }
         }
 
-        if (isOwner) {
+        if (currentUserIsOwner) {
           privateLists = mergeRecommendedPitchCompetitions(privateLists);
         }
+        let nextLists = privateLists;
 
-        let nextShares: PipeListShare[] = [];
-
-        if (!isOwner) {
-          const sharesById = new Map<string, PipeListShare>();
-          const sharesRef = collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION);
-          const [viewerSnapshot, editorSnapshot] = await Promise.all([
-            getDocs(
-              firestoreQuery(
-                sharesRef,
-                where('viewerEmails', 'array-contains', email),
-                where('publicRead', '==', true),
-              ),
-            ),
-            getDocs(
-              firestoreQuery(
-                sharesRef,
-                where('editorEmails', 'array-contains', email),
-                where('access', '==', 'edit'),
-              ),
-            ),
-          ]);
-
-          [...viewerSnapshot.docs, ...editorSnapshot.docs].forEach((shareSnapshot, index) => {
-            const normalizedShare = normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index);
-            if (normalizedShare?.publicRead) sharesById.set(normalizedShare.id, normalizedShare);
-          });
-
-          nextShares = Array.from(sharesById.values());
-        }
-
-        let nextLists = [
-          ...privateLists,
-          ...nextShares
-            .filter((share) => !privateLists.some((privateList) => privateList.id === share.list.id))
-            .map((share) => share.list),
-        ];
-
-        if (nextLists.length === 0) {
+        if (nextLists.length === 0 && currentUserIsOwner) {
           nextLists = [{ ...createList('vc', 'My PipeList', 0), items: [] }];
         }
 
-        setAccessibleShareDocs(nextShares);
+        personalListsRef.current = nextLists;
+        setAccessibleShareDocs([]);
         setLists(nextLists);
         setActiveListId(nextLists[0]?.id || initialLists[0].id);
         setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
         setSelectedLogItemId('');
         setLogDraft(defaultLogDraft(nextLists[0]?.templateKey || initialLists[0].templateKey));
         setSelectedDetailItemId('');
+        setPersonalStateReady(true);
         setDataReady(true);
         setAppMessage(null);
       } catch (error) {
         console.error('Unable to initialize PipeLists:', error);
-        setDataReady(false);
+        const fallbackLists = currentUserIsOwner ? initialLists : [];
+        personalListsRef.current = fallbackLists;
+        setAccessibleShareDocs([]);
+        setLists(fallbackLists);
+        setActiveListId(initialLists[0].id);
+        setDataReady(true);
         setAppMessage({
           type: 'error',
           text: readFirestoreError(error, 'Unable to initialize PipeLists.'),
@@ -2837,7 +2858,92 @@ const PipelinePage: NextPage = () => {
   }, [leadShareId, shareId]);
 
   useEffect(() => {
-    if (isSharedView || shareId || leadShareId || !isOwner || !user || !dataReady) return undefined;
+    if (isSharedView || isOwner || !user || !dataReady || !normalizedUserEmail) return undefined;
+
+    const sharesRef = collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION);
+    let viewerShares = new Map<string, PipeListShare>();
+    let editorShares = new Map<string, PipeListShare>();
+    let viewerReady = false;
+    let editorReady = false;
+
+    const applyAccessibleShares = () => {
+      if (!viewerReady || !editorReady) return;
+
+      const sharesById = new Map<string, PipeListShare>([
+        ...Array.from(viewerShares.entries()),
+        ...Array.from(editorShares.entries()),
+      ]);
+      const nextShares = Array.from(sharesById.values()).filter((share) => share.publicRead);
+      const nextLists = [
+        ...personalListsRef.current,
+        ...nextShares
+          .filter((share) => !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
+          .map((share) => share.list),
+      ];
+
+      setAccessibleShareDocs(nextShares);
+      setLists(nextLists);
+      setActiveListId((currentId) =>
+        nextLists.some((list) => list.id === currentId)
+          ? currentId
+          : nextLists[0]?.id || initialLists[0].id,
+      );
+    };
+
+    const unsubscribeViewerShares = onSnapshot(
+      firestoreQuery(sharesRef, where('viewerEmails', 'array-contains', normalizedUserEmail)),
+      (snapshot) => {
+        viewerShares = new Map(
+          snapshot.docs
+            .map((shareSnapshot, index) =>
+              normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index),
+            )
+            .filter((share): share is PipeListShare => Boolean(share))
+            .map((share) => [share.id, share]),
+        );
+        viewerReady = true;
+        applyAccessibleShares();
+      },
+      (error) => {
+        console.error('Unable to watch read-only PipeLists access:', error);
+        setAppMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to refresh shared PipeLists access.'),
+        });
+      },
+    );
+
+    const unsubscribeEditorShares = onSnapshot(
+      firestoreQuery(sharesRef, where('editorEmails', 'array-contains', normalizedUserEmail)),
+      (snapshot) => {
+        editorShares = new Map(
+          snapshot.docs
+            .map((shareSnapshot, index) =>
+              normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index),
+            )
+            .filter((share): share is PipeListShare => Boolean(share))
+            .map((share) => [share.id, share]),
+        );
+        editorReady = true;
+        applyAccessibleShares();
+      },
+      (error) => {
+        console.error('Unable to watch editable PipeLists access:', error);
+        setAppMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to refresh shared PipeLists access.'),
+        });
+      },
+    );
+
+    return () => {
+      unsubscribeViewerShares();
+      unsubscribeEditorShares();
+    };
+  }, [dataReady, isOwner, isSharedView, normalizedUserEmail, user]);
+
+  useEffect(() => {
+    if (isSharedView || shareId || leadShareId || !user || !dataReady) return undefined;
 
     const stateRef = doc(
       simpBudgetDb,
@@ -2850,14 +2956,22 @@ const PipelinePage: NextPage = () => {
     return onSnapshot(
       stateRef,
       (snapshot) => {
+        setPersonalStateReady(true);
         if (!snapshot.exists()) return;
         const data = snapshot.data() as { lists?: Partial<PipeList>[] };
-        if (!Array.isArray(data.lists) || data.lists.length === 0) return;
+        if (!Array.isArray(data.lists)) return;
 
-        const nextLists = mergeRecommendedPitchCompetitions(
-          purgeExpiredDeletedItems(data.lists.map(normalizeList)),
-        );
+        const nextPersonalLists = isOwner
+          ? mergeRecommendedPitchCompetitions(purgeExpiredDeletedItems(data.lists.map(normalizeList)))
+          : purgeExpiredDeletedItems(data.lists.map(normalizeList));
+        const nextLists = [
+          ...nextPersonalLists,
+          ...accessibleShareDocs
+            .filter((share) => !nextPersonalLists.some((personalList) => personalList.id === share.list.id))
+            .map((share) => share.list),
+        ];
 
+        personalListsRef.current = nextPersonalLists;
         setLists((currentLists) => {
           if (JSON.stringify(currentLists) === JSON.stringify(nextLists)) return currentLists;
           return nextLists;
@@ -2870,7 +2984,7 @@ const PipelinePage: NextPage = () => {
         console.warn('[PipeLists] Live email status sync failed:', error);
       },
     );
-  }, [dataReady, isOwner, isSharedView, leadShareId, shareId, user]);
+  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, leadShareId, shareId, user]);
 
   useEffect(() => {
     if (!shareId) return;
@@ -3055,7 +3169,15 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const markInviteAccepted = async () => {
-      const acceptedEmail = (inviteEmail || user.email || '').trim().toLowerCase();
+      if (hasInviteAccountMismatch) {
+        setAuthMessage({
+          type: 'error',
+          text: `This invite was sent to ${inviteEmail}. Sign in with that email to open the shared PipeLists.`,
+        });
+        return;
+      }
+
+      const acceptedEmail = normalizedUserEmail;
       if (!acceptedEmail) return;
 
       try {
@@ -3109,11 +3231,11 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [inviteEmail, inviteId, user]);
+  }, [hasInviteAccountMismatch, inviteEmail, inviteId, normalizedUserEmail, user]);
 
   useEffect(() => {
     if (isSharedView) return;
-    if (!user || !dataReady) return;
+    if (!user || !dataReady || !personalStateReady) return;
 
     let cancelled = false;
 
@@ -3122,9 +3244,7 @@ const PipelinePage: NextPage = () => {
 
       try {
         const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)));
-        if (isOwner && JSON.stringify(listsToPersist) !== JSON.stringify(lists)) {
-          setLists(listsToPersist);
-        }
+        personalListsRef.current = listsToPersist;
         const stateRef = doc(
           simpBudgetDb,
           SIMPBUDGET_USERS_COLLECTION,
@@ -3165,7 +3285,7 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [dataReady, isOwner, isSharedView, lists, sharedListIds, user]);
+  }, [dataReady, isOwner, isSharedView, lists, personalStateReady, sharedListIds, user]);
 
   useEffect(() => {
     if (!shareId || !shareDoc || !dataReady || !canEditShared) return;
@@ -3373,34 +3493,31 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     if (isSharedView || !user || !isOwner || !isSharePanelOpen) return;
 
-    let cancelled = false;
+    setLoadingOwnerShares(true);
+    const ownerSharesQuery = firestoreQuery(
+      collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION),
+      where('ownerUid', '==', user.uid),
+    );
 
-    const loadOwnerInviteHistory = async () => {
-      try {
-        const shareSnapshots = await getDocs(
-          firestoreQuery(collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION), where('ownerUid', '==', user.uid)),
-        );
+    return onSnapshot(
+      ownerSharesQuery,
+      (shareSnapshots) => {
         const shares = shareSnapshots.docs
           .map((shareSnapshot, index) => normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index))
           .filter((share): share is PipeListShare => Boolean(share));
 
-        if (!cancelled) setOwnerShareDocs(shares);
-      } catch (error) {
+        setOwnerShareDocs(shares);
+        setLoadingOwnerShares(false);
+      },
+      (error) => {
         console.error('Unable to load PipeLists invite history:', error);
-        if (!cancelled) {
-          setShareMessage({
-            type: 'error',
-            text: readFirestoreError(error, 'Unable to load invite history.'),
-          });
-        }
-      }
-    };
-
-    loadOwnerInviteHistory();
-
-    return () => {
-      cancelled = true;
-    };
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load invite history.'),
+        });
+        setLoadingOwnerShares(false);
+      },
+    );
   }, [isOwner, isSharePanelOpen, isSharedView, user]);
 
   const allItemRows = useMemo(
@@ -6178,7 +6295,9 @@ Research rules:
 
   const handleMoveItem = (itemId: string, targetListId: string) => {
     if (!canModify || !targetListId || targetListId === activeList.id) return;
-    if (!isOwner && (!editableListIds.has(activeList.id) || !editableListIds.has(targetListId))) {
+    const cannotEditSource = sharedListIds.has(activeList.id) && !editableListIds.has(activeList.id);
+    const cannotEditTarget = sharedListIds.has(targetListId) && !editableListIds.has(targetListId);
+    if (cannotEditSource || cannotEditTarget) {
       setMoveTargetListId('');
       setLeadMoveMessage({ type: 'error', text: 'You need edit access on both PipeLists to move this lead.' });
       return;
@@ -6421,53 +6540,91 @@ Research rules:
     );
 
   const selectedShareLists = lists.filter((list) => shareSelectedListIds.includes(list.id));
-  const selectedShareListIds = selectedShareLists.length > 0 ? selectedShareLists.map((list) => list.id) : [activeList.id];
   const inviteHistory = useMemo(() => {
-    const selectedIds = new Set(selectedShareListIds);
     const shareDocsById = new Map<string, PipeListShare>();
     ownerShareDocs.forEach((share) => shareDocsById.set(share.id, share));
-    if (shareDoc) shareDocsById.set(shareDoc.id, shareDoc);
+    if (shareDoc && !shareDocsById.has(shareDoc.id)) shareDocsById.set(shareDoc.id, shareDoc);
 
     const grouped = new Map<string, InviteHistoryEntry>();
+    const profilesByEmail = new Map(
+      searchableProfiles.map((account) => [account.email.trim().toLowerCase(), account]),
+    );
 
     Array.from(shareDocsById.values())
-      .filter((share) => selectedIds.has(share.list.id))
       .forEach((share) => {
+        const accessByEmail = new Map<string, ShareAccess>();
+        share.viewerEmails.forEach((email) => accessByEmail.set(email.trim().toLowerCase(), 'read'));
+        share.editorEmails.forEach((email) => accessByEmail.set(email.trim().toLowerCase(), 'edit'));
         Object.values(share.inviteStatuses).forEach((invite) => {
-          const existing = grouped.get(invite.email);
-          const nextAccess: ShareAccess = invite.access === 'edit' || existing?.access === 'edit' ? 'edit' : 'read';
-          const nextStatus = invite.status === 'accepted' || existing?.status === 'accepted' ? 'accepted' : 'sent';
+          const email = invite.email.trim().toLowerCase();
+          if (email && invite.status === 'sent' && !accessByEmail.has(email)) {
+            accessByEmail.set(email, invite.access);
+          }
+        });
+
+        accessByEmail.forEach((access, email) => {
+          if (!email) return;
+
+          const invite = share.inviteStatuses[email];
+          const existing = grouped.get(email);
+          const account = profilesByEmail.get(email);
+          const status = invite?.status || 'accepted';
+          const nextAccess: ShareAccess = access === 'edit' || existing?.access === 'edit' ? 'edit' : 'read';
           const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
           const inviteUrl =
-            existing?.inviteUrl ||
             `${origin}/PipeLists?invite=${encodeURIComponent(share.id)}${
-              invite.inviteId ? `&inviteBatch=${encodeURIComponent(invite.inviteId)}` : ''
-            }&inviteEmail=${encodeURIComponent(invite.email)}`;
-          grouped.set(invite.email, {
-            email: invite.email,
+              invite?.inviteId ? `&inviteBatch=${encodeURIComponent(invite.inviteId)}` : ''
+            }&inviteEmail=${encodeURIComponent(email)}`;
+          const listAccess = [
+            ...(existing?.listAccess || []).filter((entry) => entry.listId !== share.list.id),
+            {
+              listId: share.list.id,
+              listName: share.list.name,
+              accent: share.list.accent,
+              access,
+              status,
+              shareId: share.id,
+              inviteUrl,
+              sentAt: invite?.sentAt,
+              acceptedAt: invite?.acceptedAt,
+            },
+          ].sort((left, right) => left.listName.localeCompare(right.listName));
+          const allAccepted = listAccess.every((entry) => entry.status === 'accepted');
+
+          grouped.set(email, {
+            email,
+            displayName: account?.displayName || existing?.displayName || '',
+            photoURL: account?.photoURL || existing?.photoURL || '',
             access: nextAccess,
-            status: nextStatus,
-            sentAt: existing?.sentAt || invite.sentAt,
-            acceptedAt: existing?.acceptedAt || invite.acceptedAt,
-            listNames: Array.from(new Set([...(existing?.listNames || []), share.list.name])),
-            shareIds: Array.from(new Set([...(existing?.shareIds || []), share.id])),
-            inviteUrl,
+            status: allAccepted ? 'accepted' : 'sent',
+            sentAt: existing?.sentAt || invite?.sentAt,
+            acceptedAt: existing?.acceptedAt || invite?.acceptedAt,
+            listNames: listAccess.map((entry) => entry.listName),
+            listAccess,
+            inviteUrl: existing?.inviteUrl || inviteUrl,
           });
         });
       });
 
     return Array.from(grouped.values()).sort((left, right) => {
       if (left.status !== right.status) return left.status === 'sent' ? -1 : 1;
-      return left.email.localeCompare(right.email);
+      return (left.displayName || left.email).localeCompare(right.displayName || right.email);
     });
-  }, [activeList.id, ownerShareDocs, selectedShareListIds, shareDoc]);
-  const moveTargetLists = lists.filter((list) => list.id !== activeList.id && (isOwner || editableListIds.has(list.id)));
-  const collaboratorAccountEmails = normalizeEmailList(shareEditorEmails);
+  }, [ownerShareDocs, searchableProfiles, shareDoc]);
+  const moveTargetLists = lists.filter(
+    (list) => list.id !== activeList.id && (!sharedListIds.has(list.id) || editableListIds.has(list.id)),
+  );
+  const collaboratorAccountEmails = Array.from(
+    new Set([...selectedCollaboratorAccountEmails, ...normalizeEmailList(shareEditorEmails)]),
+  );
   const filteredCollaboratorProfiles = useMemo(() => {
     const search = collaboratorSearch.trim().toLowerCase();
-    if (!search) return searchableProfiles.slice(0, 6);
+    const availableProfiles = searchableProfiles.filter(
+      (account) => !selectedCollaboratorAccountEmails.includes(account.email.trim().toLowerCase()),
+    );
+    if (!search) return availableProfiles.slice(0, 6);
 
-    return searchableProfiles
+    return availableProfiles
       .filter((account) =>
         [account.displayName, account.email]
           .join(' ')
@@ -6475,12 +6632,15 @@ Research rules:
           .includes(search),
       )
       .slice(0, 6);
-  }, [collaboratorSearch, searchableProfiles]);
+  }, [collaboratorSearch, searchableProfiles, selectedCollaboratorAccountEmails]);
 
   const openSharePanel = () => {
     setShareSelectedListIds([activeList.id]);
     setCollaboratorSearch('');
+    setShareEditorEmails('');
+    setSelectedCollaboratorAccountEmails([]);
     setProfileSearchMessage(null);
+    setIsInviteFormOpen(false);
     setIsSharePanelOpen(true);
   };
 
@@ -6498,8 +6658,12 @@ Research rules:
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return;
 
-    setShareEditorEmails((currentValue) => Array.from(new Set([...normalizeEmailList(currentValue), cleanEmail])).join(', '));
+    setSelectedCollaboratorAccountEmails((currentEmails) => Array.from(new Set([...currentEmails, cleanEmail])));
     setCollaboratorSearch('');
+  };
+
+  const removeSelectedCollaboratorAccount = (email: string) => {
+    setSelectedCollaboratorAccountEmails((currentEmails) => currentEmails.filter((currentEmail) => currentEmail !== email));
   };
 
   const copyInviteUrl = async (inviteUrl: string) => {
@@ -6551,6 +6715,76 @@ Research rules:
 
     try {
       const inviteBatchId = makeId();
+      await Promise.all(
+        invite.listAccess.map((entry) => {
+          const existingShare =
+            ownerShareDocs.find((share) => share.id === entry.shareId) ||
+            (shareDoc?.id === entry.shareId ? shareDoc : null);
+          const viewerEmails =
+            entry.access === 'read'
+              ? Array.from(new Set([...(existingShare?.viewerEmails || []), invite.email]))
+              : (existingShare?.viewerEmails || []).filter((email) => email !== invite.email);
+          const editorEmails =
+            entry.access === 'edit'
+              ? Array.from(new Set([...(existingShare?.editorEmails || []), invite.email]))
+              : (existingShare?.editorEmails || []).filter((email) => email !== invite.email);
+
+          return setDoc(
+            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, entry.shareId),
+            stripUndefined({
+              access: editorEmails.length > 0 ? 'edit' : 'read',
+              viewerEmails,
+              editorEmails,
+              inviteStatuses: {
+                [invite.email]: {
+                  email: invite.email,
+                  access: entry.access,
+                  status: 'sent',
+                  inviteId: inviteBatchId,
+                  sentAt: serverTimestamp(),
+                },
+              },
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true },
+          );
+        }),
+      );
+
+      setOwnerShareDocs((currentShares) =>
+        currentShares.map((share) => {
+          const entry = invite.listAccess.find((listEntry) => listEntry.shareId === share.id);
+          if (!entry) return share;
+
+          const viewerEmails =
+            entry.access === 'read'
+              ? Array.from(new Set([...share.viewerEmails, invite.email]))
+              : share.viewerEmails.filter((email) => email !== invite.email);
+          const editorEmails =
+            entry.access === 'edit'
+              ? Array.from(new Set([...share.editorEmails, invite.email]))
+              : share.editorEmails.filter((email) => email !== invite.email);
+
+          return {
+            ...share,
+            access: editorEmails.length > 0 ? 'edit' : 'read',
+            viewerEmails,
+            editorEmails,
+            inviteStatuses: {
+              ...share.inviteStatuses,
+              [invite.email]: {
+                ...(share.inviteStatuses[invite.email] || invite),
+                email: invite.email,
+                access: entry.access,
+                status: 'sent',
+                inviteId: inviteBatchId,
+                sentAt: new Date().toISOString(),
+              },
+            },
+          };
+        }),
+      );
+
       await sendCollaboratorInviteEmail({
         email: invite.email,
         inviteUrl: invite.inviteUrl,
@@ -6559,45 +6793,6 @@ Research rules:
         inviteBatchId,
       });
 
-      await Promise.all(
-        invite.shareIds.map((shareId) =>
-          setDoc(
-            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId),
-            stripUndefined({
-              inviteStatuses: {
-                [invite.email]: {
-                  email: invite.email,
-                  access: invite.access,
-                  status: invite.status,
-                  sentAt: serverTimestamp(),
-                },
-              },
-              updatedAt: serverTimestamp(),
-            }),
-            { merge: true },
-          ),
-        ),
-      );
-
-      setOwnerShareDocs((currentShares) =>
-        currentShares.map((share) =>
-          invite.shareIds.includes(share.id)
-            ? {
-                ...share,
-                inviteStatuses: {
-                  ...share.inviteStatuses,
-                  [invite.email]: {
-                    ...(share.inviteStatuses[invite.email] || invite),
-                    email: invite.email,
-                    access: invite.access,
-                    status: invite.status,
-                    sentAt: new Date().toISOString(),
-                  },
-                },
-              }
-            : share,
-        ),
-      );
       setShareMessage({ type: 'success', text: `Invite resent to ${invite.email}.` });
     } catch (error) {
       console.error('Unable to resend PipeLists invite:', error);
@@ -6607,6 +6802,76 @@ Research rules:
       });
     } finally {
       setResendingInviteEmails((currentEmails) => currentEmails.filter((email) => email !== invite.email));
+    }
+  };
+
+  const removeCollaboratorAccess = async (invite: InviteHistoryEntry) => {
+    if (!user || !isOwner) return;
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`Remove ${invite.email} from ${formatCount(invite.listAccess.length, 'PipeList')}?`)
+    ) {
+      return;
+    }
+
+    setShareMessage(null);
+    setRemovingAccessEmails((currentEmails) => Array.from(new Set([...currentEmails, invite.email])));
+
+    try {
+      await Promise.all(
+        invite.listAccess.map((entry) => {
+          const existingShare =
+            ownerShareDocs.find((share) => share.id === entry.shareId) ||
+            (shareDoc?.id === entry.shareId ? shareDoc : null);
+          const viewerEmails = (existingShare?.viewerEmails || []).filter((email) => email !== invite.email);
+          const editorEmails = (existingShare?.editorEmails || []).filter((email) => email !== invite.email);
+
+          return updateDoc(
+            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, entry.shareId),
+            'access',
+            editorEmails.length > 0 ? 'edit' : 'read',
+            'viewerEmails',
+            viewerEmails,
+            'editorEmails',
+            editorEmails,
+            new FieldPath('inviteStatuses', invite.email),
+            deleteField(),
+            'updatedAt',
+            serverTimestamp(),
+          );
+        }),
+      );
+
+      setOwnerShareDocs((currentShares) =>
+        currentShares.map((share) => {
+          if (!invite.listAccess.some((entry) => entry.shareId === share.id)) return share;
+
+          const nextInviteStatuses = { ...share.inviteStatuses };
+          delete nextInviteStatuses[invite.email];
+          const viewerEmails = share.viewerEmails.filter((email) => email !== invite.email);
+          const editorEmails = share.editorEmails.filter((email) => email !== invite.email);
+
+          return {
+            ...share,
+            access: editorEmails.length > 0 ? 'edit' : 'read',
+            viewerEmails,
+            editorEmails,
+            inviteStatuses: nextInviteStatuses,
+          };
+        }),
+      );
+      setShareMessage({
+        type: 'success',
+        text: `Removed ${invite.email} from ${formatCount(invite.listAccess.length, 'PipeList')}.`,
+      });
+    } catch (error) {
+      console.error('Unable to remove PipeLists collaborator access:', error);
+      setShareMessage({
+        type: 'error',
+        text: readFirestoreError(error, `Unable to remove access for ${invite.email}.`),
+      });
+    } finally {
+      setRemovingAccessEmails((currentEmails) => currentEmails.filter((email) => email !== invite.email));
     }
   };
 
@@ -6665,35 +6930,54 @@ Research rules:
     try {
       const targetLists = selectedShareLists.length > 0 ? selectedShareLists : [activeList];
       const accountEmails = collaboratorAccountEmails;
-      const editorEmails = shareAccess === 'edit' ? accountEmails : [];
-      const viewerEmails = shareAccess === 'read' ? accountEmails : [];
       if (accountEmails.length === 0) {
         setShareMessage({ type: 'error', text: 'Add at least one collaborator email first.' });
         return;
       }
 
       const inviteBatchId = makeId();
+      const existingAccountEmails = new Set(
+        searchableProfiles.map((account) => account.email.trim().toLowerCase()),
+      );
       const payloads = targetLists.map((list) => {
         const id = shareDocumentIdForList(user.uid, list.id);
         const existingShare = ownerShareDocs.find((share) => share.id === id) || (shareDoc?.id === id ? shareDoc : null);
+        const existingViewerEmails = existingShare?.viewerEmails || [];
+        const existingEditorEmails = existingShare?.editorEmails || [];
+        const invitedEmailSet = new Set(accountEmails);
+        const viewerEmails =
+          shareAccess === 'read'
+            ? Array.from(new Set([...existingViewerEmails, ...accountEmails])).filter(
+                (email) => !existingEditorEmails.includes(email) || invitedEmailSet.has(email),
+              )
+            : existingViewerEmails.filter((email) => !invitedEmailSet.has(email));
+        const editorEmails =
+          shareAccess === 'edit'
+            ? Array.from(new Set([...existingEditorEmails, ...accountEmails]))
+            : existingEditorEmails.filter((email) => !invitedEmailSet.has(email));
         return {
           id,
           ownerUid: user.uid,
           ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
           list,
-          access: shareAccess,
+          access: editorEmails.length > 0 ? 'edit' : 'read',
           publicRead: true,
           viewerEmails,
           editorEmails,
           inviteStatuses: accountEmails.reduce<Record<string, InviteStatus>>(
             (statuses, email) => {
+              const hasExistingAccount =
+                existingAccountEmails.has(email) || statuses[email]?.status === 'accepted';
               statuses[email] = {
                 ...(statuses[email] || {}),
                 email,
                 access: shareAccess,
-                status: 'sent',
+                status: hasExistingAccount ? 'accepted' : 'sent',
                 inviteId: inviteBatchId,
                 sentAt: serverTimestamp(),
+                acceptedAt: hasExistingAccount
+                  ? statuses[email]?.acceptedAt || serverTimestamp()
+                  : undefined,
               };
               return statuses;
             },
@@ -6721,8 +7005,15 @@ Research rules:
 
       const activePayload = payloads.find((payload) => payload.list.id === activeList.id) || payloads[0];
       setShareDoc(activePayload);
+      setOwnerShareDocs((currentShares) => {
+        const sharesById = new Map(currentShares.map((share) => [share.id, share]));
+        payloads.forEach((payload) => sharesById.set(payload.id, payload));
+        return Array.from(sharesById.values());
+      });
+
+      let failedInviteEmails: string[] = [];
       if (typeof window !== 'undefined') {
-        await Promise.all(
+        const emailResults = await Promise.allSettled(
           accountEmails.map(async (email) => {
             const invitePath = `/PipeLists?invite=${encodeURIComponent(activePayload.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(email)}`;
             const inviteUrl = `${window.location.origin}${invitePath}`;
@@ -6735,18 +7026,22 @@ Research rules:
             });
           }),
         );
+        failedInviteEmails = emailResults.flatMap((result, index) =>
+          result.status === 'rejected' ? [accountEmails[index]] : [],
+        );
       }
-      setOwnerShareDocs((currentShares) => {
-        const sharesById = new Map(currentShares.map((share) => [share.id, share]));
-        payloads.forEach((payload) => sharesById.set(payload.id, payload));
-        return Array.from(sharesById.values());
-      });
+
+      if (failedInviteEmails.length > 0) {
+        setShareMessage({
+          type: 'error',
+          text: `Access was saved, but the invite email could not be sent to ${failedInviteEmails.join(', ')}. You can resend it from the pending invite.`,
+        });
+        return;
+      }
+
       setShareMessage({
         type: 'success',
-        text:
-          shareAccess === 'edit'
-            ? `Editor invite emailed to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`
-            : `Read-only invite emailed to ${formatCount(accountEmails.length, 'person')} for ${formatCount(targetLists.length, 'PipeList')}.`,
+        text: `Access saved for ${formatCount(accountEmails.length, 'person')} across ${formatCount(targetLists.length, 'PipeList')}. Dashboard link emailed.`,
       });
     } catch (error) {
       console.error('Unable to create PipeLists share link:', error);
@@ -6864,7 +7159,13 @@ Research rules:
     setAuthMessage(null);
 
     try {
-      const path = shareId ? `/PipeLists?share=${encodeURIComponent(shareId)}` : '/PipeLists';
+      const path = shareId
+        ? `/PipeLists?share=${encodeURIComponent(shareId)}`
+        : inviteId || inviteEmail
+        ? `/PipeLists?${inviteId ? `invite=${encodeURIComponent(inviteId)}&` : ''}${
+            inviteEmail ? `inviteEmail=${encodeURIComponent(inviteEmail)}` : ''
+          }`
+        : '/PipeLists';
       const actionCodeSettings = {
         url: typeof window !== 'undefined' ? window.location.origin + path : `https://fitwithpulse.ai${path}`,
         handleCodeInApp: true,
@@ -6888,6 +7189,7 @@ Research rules:
     await signOut(simpBudgetAuth);
     setUser(null);
     setDataReady(isSharedView);
+    setMagicEmail(inviteEmail || TREMAINE_OWNER_EMAIL);
     setAuthMessage(null);
   };
 
@@ -7310,6 +7612,44 @@ Research rules:
     );
   }
 
+  if (!isSharedView && user && hasInviteAccountMismatch) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-invite-account',
+            pageTitle: 'PipeLists Invite - Pulse',
+            metaDescription: 'Sign in with the account invited to PipeLists.',
+            ogTitle: 'PipeLists Invite - Pulse',
+            ogDescription: 'Sign in with the account invited to PipeLists.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
+          <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+              <Mail className="h-4 w-4" />
+            </div>
+            <h1 className="text-xl font-bold text-stone-950">Use the invited account</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              This invite was sent to <span className="font-semibold text-stone-700">{inviteEmail}</span>. You are
+              signed in as <span className="font-semibold text-stone-700">{normalizedUserEmail}</span>.
+            </p>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-5 inline-flex h-10 items-center justify-center rounded-full bg-stone-900 px-5 text-sm font-semibold text-white transition hover:bg-stone-700"
+            >
+              Sign in as {inviteEmail}
+            </button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
   if (!isSharedView && !dataReady) {
     return (
       <>
@@ -7329,44 +7669,117 @@ Research rules:
           <div className="text-center">
             <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
             <p className="text-base font-semibold text-stone-950">Loading PipeLists</p>
-            <p className="mt-1 text-sm text-stone-500">Fetching your RevOps workspace from Firebase.</p>
           </div>
         </main>
       </>
     );
   }
 
-  if (!isSharedView && dataReady && user && !isOwner && lists.length === 0) {
+  if (!isSharedView && dataReady && user && lists.length === 0) {
     return (
       <>
         <PageHead
           metaData={{
-            pageId: 'pipe-lists-no-access',
-            pageTitle: 'PipeLists Access - Pulse',
-            metaDescription: 'PipeLists account access.',
-            ogTitle: 'PipeLists Access - Pulse',
-            ogDescription: 'PipeLists account access.',
+            pageId: 'pipe-lists-empty',
+            pageTitle: 'PipeLists - Pulse',
+            metaDescription: 'Your PipeLists dashboard.',
+            ogTitle: 'PipeLists - Pulse',
+            ogDescription: 'Your PipeLists dashboard.',
             lastUpdated: new Date().toISOString(),
           }}
           pageOgUrl="https://fitwithpulse.ai/PipeLists"
           pageOgImage="/pil-og.png"
         />
-        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
-          <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 text-center shadow-sm">
-            <div className="mx-auto mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
-              <Users className="h-4 w-4" />
+        <main className="min-h-screen bg-[#FAFAF7] text-stone-900">
+          <nav className="sticky top-0 z-40 border-b border-stone-200/70 bg-[#FAFAF7]/90 backdrop-blur-md">
+            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+              <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="Pulse home">
+                <img src="/pulse-logo.svg" alt="Pulse" className="h-8 shrink-0" />
+                <span className="hidden text-sm font-medium text-stone-500 sm:inline">PipeLists</span>
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-500 shadow-sm md:flex">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span>Ready</span>
+                  <span className="text-stone-300">·</span>
+                  <span>{user.email}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <p className="text-base font-semibold text-stone-950">No PipeLists shared yet</p>
-            <p className="mt-2 text-sm leading-6 text-stone-500">
-              You are signed in as {user.email || 'this account'}, but no PipeLists have been shared with this email.
-            </p>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="mt-4 inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-            >
-              Sign out
-            </button>
+          </nav>
+
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:px-8">
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between px-1">
+                  <h1 className="text-base font-semibold text-stone-900">PipeLists</h1>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
+                    0 lists
+                  </span>
+                </div>
+                <div className="mt-3 rounded-md border border-dashed border-stone-200 px-3 py-8 text-center">
+                  <p className="text-sm text-stone-400">No lists yet</p>
+                </div>
+              </div>
+            </aside>
+
+            <section className="min-w-0">
+              <MessageBanner message={appMessage} />
+              <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-stone-200 bg-white px-6 py-12 text-center shadow-sm">
+                <div className="w-full max-w-md">
+                  <div className="mx-auto mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-stone-100 text-stone-600">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-xl font-bold text-stone-950">No lists yet</h2>
+                  <p className="mt-2 text-sm leading-6 text-stone-500">
+                    Your dashboard is ready. Create your first list whenever you are ready.
+                  </p>
+                  <form onSubmit={handleCreateList} className="mt-6 space-y-3 text-left">
+                    <label className="block" htmlFor="empty-new-list-template">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Template</span>
+                      <select
+                        id="empty-new-list-template"
+                        value={newListTemplateKey}
+                        onChange={(event) => setNewListTemplateKey(event.target.value as TemplateKey)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+                      >
+                        {(Object.keys(templateCatalog) as TemplateKey[]).map((key) => (
+                          <option key={key} value={key}>
+                            {templateCatalog[key].label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block" htmlFor="empty-new-list-name">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List name</span>
+                      <input
+                        id="empty-new-list-name"
+                        value={newListName}
+                        onChange={(event) => setNewListName(event.target.value)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        placeholder={templateCatalog[newListTemplateKey].defaultName}
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                    >
+                      <ListPlus className="h-4 w-4" />
+                      Create first list
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </section>
           </div>
         </main>
       </>
@@ -8425,7 +8838,7 @@ Research rules:
             aria-modal="true"
             aria-labelledby="pipe-share-title"
             onClick={(event) => event.stopPropagation()}
-            className="my-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+            className="my-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
           >
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-100 px-5 py-5">
               <div>
@@ -8433,10 +8846,10 @@ Research rules:
                   <Users className="h-4 w-4" />
                 </div>
                 <h3 id="pipe-share-title" className="text-xl font-bold text-stone-950">
-                  Invite collaborators
+                  Collaborator access
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Choose the PipeLists this person should see, then send one dashboard invite link.
+                  See everyone with access and the PipeLists available to each person.
                 </p>
               </div>
               <button
@@ -8449,212 +8862,279 @@ Research rules:
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="text-xs font-semibold uppercase text-stone-400">Apply to PipeLists</span>
-                      <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
-                        {formatCount(selectedShareLists.length || 1, 'list')}
-                      </span>
-                    </div>
-                    <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
-                      {lists.map((list) => (
-                        <label
-                          key={list.id}
-                          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={shareSelectedListIds.includes(list.id)}
-                            onChange={() => toggleShareListSelection(list.id)}
-                            className="h-4 w-4 rounded border-stone-300 accent-stone-900"
-                          />
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
-                          <span className="truncate">{list.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <label className="block" htmlFor="pipe-share-access">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
-                    <select
-                      id="pipe-share-access"
-                      value={shareAccess}
-                      onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
-                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-                    >
-                      <option value="read">Read only</option>
-                      <option value="edit">Read and edit</option>
-                    </select>
-                  </label>
-
-                  <div className="rounded-lg border border-stone-200 bg-white p-3">
-                    <label className="block" htmlFor="pipe-account-search">
-                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Find account</span>
-                      <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3">
-                        <Search className="h-4 w-4 shrink-0 text-stone-400" />
-                        <input
-                          id="pipe-account-search"
-                          value={collaboratorSearch}
-                          onChange={(event) => setCollaboratorSearch(event.target.value)}
-                          className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
-                          placeholder="Search name or email"
-                        />
-                      </div>
-                    </label>
-
-                    <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
-                      {loadingProfiles ? (
-                        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">Loading accounts...</p>
-                      ) : filteredCollaboratorProfiles.length > 0 ? (
-                        filteredCollaboratorProfiles.map((account) => (
-                          <button
-                            key={account.uid}
-                            type="button"
-                            onClick={() => addCollaboratorEmail(account.email)}
-                            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate font-semibold text-stone-900">
-                                {account.displayName || account.email}
-                              </span>
-                              <span className="block truncate text-xs text-stone-500">{account.email}</span>
-                            </span>
-                            <Plus className="h-4 w-4 shrink-0 text-stone-500" />
-                          </button>
-                        ))
-                      ) : collaboratorSearch.trim() ? (
-                        <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">No matching PipeLists account found.</p>
-                      ) : null}
-                    </div>
-
-                    <MessageBanner message={profileSearchMessage} />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <label className="block" htmlFor="pipe-share-editors">
-                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                      {shareAccess === 'edit' ? 'Account edit access' : 'Account read access'}
-                    </span>
-                    <textarea
-                      id="pipe-share-editors"
-                      value={shareEditorEmails}
-                      onChange={(event) => setShareEditorEmails(event.target.value)}
-                      className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                      placeholder="name@example.com, teammate@example.com"
-                    />
-                    <span className="mt-1.5 block text-xs leading-5 text-stone-400">
-                      Search accounts above or paste emails. Signed-in collaborators will see these lists on their dashboard.
-                    </span>
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={createOrUpdateShareLink}
-                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
-                  >
-                    <Mail className="h-4 w-4" />
-                    Save & Send Invite
-                  </button>
-
-                  <MessageBanner message={shareMessage} />
-
-                  <div className="rounded-lg border border-stone-200 bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="text-xs font-semibold uppercase text-stone-400">Invites</span>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="rounded-lg border border-stone-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase text-stone-400">People and pending invites</span>
                       <span className="rounded-full bg-stone-50 px-2 py-1 text-xs font-medium text-stone-500">
                         {formatCount(inviteHistory.length, 'person')}
                       </span>
                     </div>
+                    <p className="mt-1 text-xs text-stone-500">All current access and invitations are shown here.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsInviteFormOpen((current) => !current)}
+                    className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    {isInviteFormOpen ? <ChevronDown className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {isInviteFormOpen ? 'Hide invite form' : 'Invite people'}
+                  </button>
+                </div>
 
-                    {inviteHistory.length > 0 ? (
-                      <div className="max-h-56 space-y-2 overflow-y-auto">
-                        {inviteHistory.map((invite) => (
-                          <div
-                            key={invite.email}
-                            className="space-y-2 rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-3"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-stone-900">{invite.email}</p>
-                                <p
-                                  className="mt-1 text-xs leading-5 text-stone-500"
-                                  style={{
-                                    display: '-webkit-box',
-                                    WebkitLineClamp: 2,
-                                    WebkitBoxOrient: 'vertical',
-                                    overflow: 'hidden',
-                                  }}
-                                >
-                                  {invite.listNames.join(', ')}
-                                </p>
-                              </div>
-                              <span
-                                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${
-                                  invite.status === 'accepted'
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : 'bg-amber-50 text-amber-700'
-                                }`}
-                              >
-                                {invite.status === 'accepted' ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                                {invite.status === 'accepted' ? 'Accepted' : 'Pending'}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                              <span className="rounded-full bg-white px-2 py-1 font-medium capitalize text-stone-600">
-                                {invite.access === 'edit' ? 'Read and edit' : 'Read only'}
-                              </span>
-                              {invite.status === 'accepted' && invite.acceptedAt ? (
-                                <span>Accepted {formatInviteTimestamp(invite.acceptedAt)}</span>
-                              ) : invite.sentAt ? (
-                                <span>Sent {formatInviteTimestamp(invite.sentAt)}</span>
-                              ) : (
-                                <span>Invite sent</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-white px-2 py-1.5">
-                              <input
-                                value={invite.inviteUrl}
-                                readOnly
-                                aria-label={`Invite link for ${invite.email}`}
-                                className="min-w-0 flex-1 truncate bg-transparent text-xs text-stone-500 outline-none"
-                                onFocus={(event) => event.currentTarget.select()}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => copyInviteUrl(invite.inviteUrl)}
-                                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                                Copy
-                              </button>
-                              {invite.status === 'sent' && (
-                                <button
-                                  type="button"
-                                  onClick={() => resendInviteEmail(invite)}
-                                  disabled={resendingInviteEmails.includes(invite.email)}
-                                  className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  <Mail className="h-3.5 w-3.5" />
-                                  {resendingInviteEmails.includes(invite.email) ? 'Sending...' : 'Resend'}
-                                </button>
-                              )}
-                            </div>
+                {loadingOwnerShares ? (
+                  <p className="px-4 py-8 text-center text-sm text-stone-500">Loading collaborator access...</p>
+                ) : inviteHistory.length > 0 ? (
+                  <div className="divide-y divide-stone-100">
+                    {inviteHistory.map((invite) => (
+                      <div key={invite.email} className="grid gap-4 px-4 py-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)_auto]">
+                        <div className="flex min-w-0 items-start gap-3">
+                          {invite.photoURL ? (
+                            <img
+                              src={invite.photoURL}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded-full border border-stone-200 object-cover"
+                            />
+                          ) : (
+                            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 text-sm font-bold uppercase text-stone-600">
+                              {(invite.displayName || invite.email).charAt(0)}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-stone-900">
+                              {invite.displayName || invite.email}
+                            </p>
+                            {invite.displayName && <p className="truncate text-xs text-stone-500">{invite.email}</p>}
                           </div>
+                        </div>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {invite.listAccess.map((entry) => (
+                            <div
+                              key={entry.listId}
+                              className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className={`h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
+                                <span className="truncate text-sm font-medium text-stone-700">{entry.listName}</span>
+                              </span>
+                              <span className="flex shrink-0 items-center gap-1.5">
+                                <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-stone-600">
+                                  {entry.access === 'edit' ? 'Can edit' : 'Read only'}
+                                </span>
+                                {entry.status === 'sent' ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                                    <Clock className="h-3 w-3" />
+                                    Pending
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                                    <CheckCircle2 className="h-3 w-3" />
+                                    Active
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap items-start justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => copyInviteUrl(invite.inviteUrl)}
+                            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy link
+                          </button>
+                          {invite.status === 'sent' && (
+                            <button
+                              type="button"
+                              onClick={() => resendInviteEmail(invite)}
+                              disabled={resendingInviteEmails.includes(invite.email)}
+                              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                              {resendingInviteEmails.includes(invite.email) ? 'Sending...' : 'Resend'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeCollaboratorAccess(invite)}
+                            disabled={removingAccessEmails.includes(invite.email)}
+                            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-red-200 px-3 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {removingAccessEmails.includes(invite.email) ? 'Removing...' : 'Remove access'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="px-4 py-8 text-center text-sm text-stone-500">
+                    Invite someone to give them access to a PipeList.
+                  </p>
+                )}
+              </div>
+
+              <MessageBanner message={shareMessage} />
+
+              {isInviteFormOpen && (
+                <div className="grid gap-4 rounded-lg border border-stone-200 bg-[#FAFAF7] p-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
+                  <div className="space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold uppercase text-stone-400">Give access to PipeLists</span>
+                        <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
+                          {formatCount(selectedShareLists.length || 1, 'list')}
+                        </span>
+                      </div>
+                      <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+                        {lists.map((list) => (
+                          <label
+                            key={list.id}
+                            className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={shareSelectedListIds.includes(list.id)}
+                              onChange={() => toggleShareListSelection(list.id)}
+                              className="h-4 w-4 rounded border-stone-300 accent-stone-900"
+                            />
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
+                            <span className="truncate">{list.name}</span>
+                          </label>
                         ))}
                       </div>
-                    ) : (
-                      <p className="rounded-md bg-stone-50 px-3 py-4 text-center text-sm text-stone-500">
-                        No invites for the selected PipeLists yet.
-                      </p>
-                    )}
+                    </div>
+
+                    <label className="block" htmlFor="pipe-share-access">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
+                      <select
+                        id="pipe-share-access"
+                        value={shareAccess}
+                        onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
+                      >
+                        <option value="read">Read only</option>
+                        <option value="edit">Read and edit</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-stone-200 bg-white p-3">
+                      <label className="block" htmlFor="pipe-account-search">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Find account</span>
+                        <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3">
+                          <Search className="h-4 w-4 shrink-0 text-stone-400" />
+                          <input
+                            id="pipe-account-search"
+                            value={collaboratorSearch}
+                            onChange={(event) => setCollaboratorSearch(event.target.value)}
+                            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
+                            placeholder="Search name or email"
+                          />
+                        </div>
+                      </label>
+
+                      <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                        {loadingProfiles ? (
+                          <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">Loading accounts...</p>
+                        ) : filteredCollaboratorProfiles.length > 0 ? (
+                          filteredCollaboratorProfiles.map((account) => (
+                            <button
+                              key={account.uid}
+                              type="button"
+                              onClick={() => addCollaboratorEmail(account.email)}
+                              className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate font-semibold text-stone-900">
+                                  {account.displayName || account.email}
+                                </span>
+                                <span className="block truncate text-xs text-stone-500">{account.email}</span>
+                              </span>
+                              <Plus className="h-4 w-4 shrink-0 text-stone-500" />
+                            </button>
+                          ))
+                        ) : collaboratorSearch.trim() ? (
+                          <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">No matching PipeLists account found.</p>
+                        ) : null}
+                      </div>
+
+                      {selectedCollaboratorAccountEmails.length > 0 && (
+                        <div className="mt-3 border-t border-stone-100 pt-3">
+                          <span className="mb-2 block text-xs font-semibold uppercase text-stone-400">
+                            Selected accounts
+                          </span>
+                          <div className="space-y-2">
+                            {selectedCollaboratorAccountEmails.map((email) => {
+                              const account = searchableProfiles.find(
+                                (profileAccount) => profileAccount.email.trim().toLowerCase() === email,
+                              );
+                              return (
+                                <div
+                                  key={email}
+                                  className="flex items-center justify-between gap-3 rounded-md bg-emerald-50 px-3 py-2"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold text-emerald-900">
+                                      {account?.displayName || email}
+                                    </span>
+                                    {account?.displayName && (
+                                      <span className="block truncate text-xs text-emerald-700">{email}</span>
+                                    )}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSelectedCollaboratorAccount(email)}
+                                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-100 hover:text-emerald-950"
+                                    title={`Remove ${account?.displayName || email}`}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-stone-500">
+                            These accounts receive access as soon as you save.
+                          </p>
+                        </div>
+                      )}
+
+                      <MessageBanner message={profileSearchMessage} />
+                    </div>
+
+                    <label className="block" htmlFor="pipe-share-editors">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Invite someone new by email</span>
+                      <textarea
+                        id="pipe-share-editors"
+                        value={shareEditorEmails}
+                        onChange={(event) => setShareEditorEmails(event.target.value)}
+                        className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400"
+                        placeholder="name@example.com"
+                      />
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                        Use this only when someone does not have a PipeLists account yet.
+                      </span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={createOrUpdateShareLink}
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                    >
+                      <Mail className="h-4 w-4" />
+                      Save Access & Send Link
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </section>
         </div>

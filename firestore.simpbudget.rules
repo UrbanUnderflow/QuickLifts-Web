@@ -45,9 +45,29 @@ service cloud.firestore {
           && request.auth.token.email in resource.data.editorEmails;
       }
 
+      function isAcceptingOwnInvite() {
+        return isSignedIn()
+          && request.auth.token.email != null
+          && (
+            request.auth.token.email in resource.data.viewerEmails
+            || request.auth.token.email in resource.data.editorEmails
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'inviteStatuses',
+            'updatedAt'
+          ])
+          && request.resource.data.inviteStatuses
+            .diff(resource.data.inviteStatuses)
+            .affectedKeys()
+            .hasOnly([request.auth.token.email])
+          && request.resource.data.inviteStatuses[request.auth.token.email].email == request.auth.token.email
+          && request.resource.data.inviteStatuses[request.auth.token.email].status == 'accepted';
+      }
+
       allow read: if isSharePathOwner() || resource.data.publicRead == true || isShareOwner() || isInvitedEditor();
       allow create: if isCreateOwner();
       allow update: if isShareOwner()
+        || isAcceptingOwnInvite()
         || (
           isInvitedEditor()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
