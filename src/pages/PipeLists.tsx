@@ -323,6 +323,15 @@ type GeneratedLead = ItemDraft & {
   sourceVerified?: boolean;
   sourceVerificationReason?: string;
 };
+type ManualLeadDraft = {
+  title: string;
+  organization: string;
+  email: string;
+  phone: string;
+  sourceUrl: string;
+  stage: string;
+  notes: string;
+};
 
 type SourceVerificationResult = {
   url: string;
@@ -1125,6 +1134,16 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   lossReason: '',
   expansionPath: '',
   attachments: [],
+});
+
+const defaultManualLeadDraft = (stage = generalStages[0].id): ManualLeadDraft => ({
+  title: '',
+  organization: '',
+  email: '',
+  phone: '',
+  sourceUrl: '',
+  stage,
+  notes: '',
 });
 
 const defaultLogDraft = (templateKey: TemplateKey = 'partner'): ActivityLogDraft => ({
@@ -2265,7 +2284,7 @@ const readFirestoreError = (error: unknown, fallbackMessage: string) => {
       : '';
 
   if (code === 'permission-denied') {
-    return 'PipeLists signed you in, but the SimpBudget Firebase project is rejecting Firestore access. Deploy the SimpBudget rules that allow signed-in users to read/write their own simpbudget-users/{uid} tree.';
+    return 'We could not load your PipeLists. Refresh the page or sign in again.';
   }
 
   return error instanceof Error ? error.message : fallbackMessage;
@@ -2550,6 +2569,10 @@ const PipelinePage: NextPage = () => {
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [isLeadUrlModalOpen, setIsLeadUrlModalOpen] = useState(false);
   const [leadUrl, setLeadUrl] = useState('');
+  const [isManualLeadEntry, setIsManualLeadEntry] = useState(false);
+  const [manualLeadDraft, setManualLeadDraft] = useState<ManualLeadDraft>(() =>
+    defaultManualLeadDraft(initialLists[0].stages[0].id),
+  );
   const [isAnalyzingLead, setIsAnalyzingLead] = useState(false);
   const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isLeadGenModalOpen, setIsLeadGenModalOpen] = useState(false);
@@ -4072,11 +4095,42 @@ const PipelinePage: NextPage = () => {
   const openLeadUrlModal = () => {
     if (!canModify) return;
     setLeadUrl('');
+    setIsManualLeadEntry(false);
+    setManualLeadDraft(defaultManualLeadDraft(activeList.stages[0]?.id));
     setLeadExtractMessage(null);
     setIsLeadUrlModalOpen(true);
     setSelectedDetailItemId('');
     setDetailModalMode('details');
     setViewMode('pipeline');
+  };
+
+  const closeLeadUrlModal = () => {
+    setIsLeadUrlModalOpen(false);
+    setIsManualLeadEntry(false);
+    setLeadUrl('');
+    setManualLeadDraft(defaultManualLeadDraft(activeList.stages[0]?.id));
+    setLeadExtractMessage(null);
+  };
+
+  const openManualLeadEntry = () => {
+    const cleanInput = leadUrl.trim();
+    const normalizedEmail = isValidContactEmail(cleanInput) ? cleanInput.toLowerCase() : '';
+    const normalizedUrl = normalizeLeadInputUrl(cleanInput)?.toString() || '';
+    const title =
+      normalizedEmail
+        ? contactNameFromEmail(normalizedEmail)
+        : normalizedUrl
+          ? ''
+          : cleanInput;
+
+    setManualLeadDraft({
+      ...defaultManualLeadDraft(activeList.stages[0]?.id),
+      title,
+      email: normalizedEmail,
+      sourceUrl: normalizedUrl,
+    });
+    setLeadExtractMessage(null);
+    setIsManualLeadEntry(true);
   };
 
   const parseRecipientEmails = (value: string) =>
@@ -5725,6 +5779,90 @@ Research rules:
         text: readFirestoreError(error, 'Unable to create this lead share link.'),
       });
     }
+  };
+
+  const handleManualLeadSave = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const email = manualLeadDraft.email.trim().toLowerCase();
+    if (email && !isValidContactEmail(email)) {
+      setLeadExtractMessage({ type: 'error', text: 'Enter a valid email address.' });
+      return;
+    }
+
+    const sourceUrl = manualLeadDraft.sourceUrl.trim();
+    const normalizedSourceUrl = sourceUrl ? normalizeLeadInputUrl(sourceUrl)?.toString() || '' : '';
+    if (sourceUrl && !normalizedSourceUrl) {
+      setLeadExtractMessage({ type: 'error', text: 'Enter a valid source URL, including the website address.' });
+      return;
+    }
+
+    const inferredContactName = email ? contactNameFromEmail(email) : '';
+    const title = manualLeadDraft.title.trim() || inferredContactName;
+    const organization = manualLeadDraft.organization.trim();
+    if (!title && !organization) {
+      setLeadExtractMessage({
+        type: 'error',
+        text: isContactListActive ? 'Add a contact name, email, or organization.' : 'Add a lead name or organization.',
+      });
+      return;
+    }
+
+    if (
+      email
+      && activeList.items.some((item) => !isItemDeleted(item) && normalizeContactEmails(item.contactEmails).includes(email))
+    ) {
+      setLeadExtractMessage({ type: 'error', text: 'A contact with this email is already in this PipeList.' });
+      return;
+    }
+
+    const stage = normalizeStageId(
+      manualLeadDraft.stage || activeList.stages[0]?.id || 'sourced',
+      activeList.stages,
+    );
+    const nextItemBase = createItem(
+      {
+        ...defaultDraft(stage),
+        title: title || organization,
+        organization,
+        contactEmails: email ? [email] : [],
+        contactPhone: manualLeadDraft.phone.trim(),
+        sourceUrl: normalizedSourceUrl,
+        stage,
+        notes: cleanDealNotes(manualLeadDraft.notes),
+      },
+      makeId(),
+    );
+    const nextItem: PipelineItem = {
+      ...nextItemBase,
+      weeklyLogs: [
+        createSystemLog(
+          nextItemBase,
+          'item-created',
+          `Added ${nextItemBase.title} to ${activeList.name}.`,
+        ),
+      ],
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: [nextItem, ...list.items],
+            }
+          : list,
+      ),
+    );
+    setStageFilter('all');
+    setSelectedLogItemId(nextItem.id);
+    setViewMode('pipeline');
+    setToastMessage({
+      type: 'success',
+      text: `${isContactListActive ? 'Contact' : 'Lead'} added to ${activeList.name}.`,
+    });
+    closeLeadUrlModal();
   };
 
   const handleExtractLead = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -9509,29 +9647,41 @@ Research rules:
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
           onClick={(event) => {
-            if (isBackdropClick(event)) setIsLeadUrlModalOpen(false);
+            if (isBackdropClick(event)) closeLeadUrlModal();
           }}
         >
           <form
-            onSubmit={handleExtractLead}
+            onSubmit={isManualLeadEntry ? handleManualLeadSave : handleExtractLead}
             onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+            className={`max-h-[calc(100vh-3rem)] w-full overflow-y-auto rounded-lg border border-stone-200 bg-white p-5 shadow-2xl ${
+              isManualLeadEntry ? 'max-w-2xl' : 'max-w-lg'
+            }`}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
-                  <Sparkles className="h-4 w-4" />
+                  {isManualLeadEntry ? <Plus className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                 </div>
-                <h3 className="text-xl font-bold text-stone-950">{isContactListActive ? 'Add contact' : 'Add new lead'}</h3>
+                <h3 className="text-xl font-bold text-stone-950">
+                  {isManualLeadEntry
+                    ? isContactListActive
+                      ? 'Add contact manually'
+                      : 'Add lead manually'
+                    : isContactListActive
+                      ? 'Add contact'
+                      : 'Add new lead'}
+                </h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  {isContactListActive
-                    ? 'Enter an email, URL, person, or organization. PipeLists will create the contact for review.'
-                    : 'Paste a URL or type a person, organization, fund, school, program, or partner name. PipeLists will pull what it can and create the item for review.'}
+                  {isManualLeadEntry
+                    ? `Enter the details you already have. Nothing will be analyzed automatically.`
+                    : isContactListActive
+                      ? 'Enter an email, URL, person, or organization. PipeLists will create the contact for review.'
+                      : 'Paste a URL or type a person, organization, fund, school, program, or partner name. PipeLists will pull what it can and create the item for review.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsLeadUrlModalOpen(false)}
+                onClick={closeLeadUrlModal}
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
                 title="Close"
               >
@@ -9539,18 +9689,108 @@ Research rules:
               </button>
             </div>
 
-            <label className="block" htmlFor="pipe-lead-url">
-              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Email, URL, or Name' : 'Lead URL or Name'}</span>
-              <input
-                id="pipe-lead-url"
-                type="text"
-                value={leadUrl}
-                onChange={(event) => setLeadUrl(event.target.value)}
-                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                placeholder={isContactListActive ? 'jane.doe@example.com or Jane Doe' : 'https://example.com or Wisdom Ventures'}
-                autoFocus
-              />
-            </label>
+            {isManualLeadEntry ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block" htmlFor="pipe-manual-title">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    {isContactListActive ? 'Contact name' : 'Lead name'}
+                  </span>
+                  <input
+                    id="pipe-manual-title"
+                    type="text"
+                    value={manualLeadDraft.title}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, title: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={isContactListActive ? 'Jane Doe' : 'Wisdom Ventures'}
+                    autoFocus
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-organization">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    {isContactListActive ? 'Role / Organization' : 'Organization'}
+                  </span>
+                  <input
+                    id="pipe-manual-organization"
+                    type="text"
+                    value={manualLeadDraft.organization}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, organization: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Organization or role"
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-email">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email</span>
+                  <input
+                    id="pipe-manual-email"
+                    type="email"
+                    value={manualLeadDraft.email}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, email: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="jane.doe@example.com"
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-phone">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Phone</span>
+                  <input
+                    id="pipe-manual-phone"
+                    type="tel"
+                    value={manualLeadDraft.phone}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, phone: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Public or business phone"
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-stage">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
+                  <select
+                    id="pipe-manual-stage"
+                    value={manualLeadDraft.stage}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, stage: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    {activeList.stages.map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block" htmlFor="pipe-manual-source-url">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Source URL</span>
+                  <input
+                    id="pipe-manual-source-url"
+                    type="url"
+                    value={manualLeadDraft.sourceUrl}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, sourceUrl: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="https://example.com"
+                  />
+                </label>
+                <label className="block sm:col-span-2" htmlFor="pipe-manual-notes">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
+                  <textarea
+                    id="pipe-manual-notes"
+                    value={manualLeadDraft.notes}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, notes: event.target.value }))}
+                    className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Relationship context, next steps, or anything important"
+                  />
+                </label>
+              </div>
+            ) : (
+              <label className="block" htmlFor="pipe-lead-url">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Email, URL, or Name' : 'Lead URL or Name'}</span>
+                <input
+                  id="pipe-lead-url"
+                  type="text"
+                  value={leadUrl}
+                  onChange={(event) => setLeadUrl(event.target.value)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={isContactListActive ? 'jane.doe@example.com or Jane Doe' : 'https://example.com or Wisdom Ventures'}
+                  autoFocus
+                />
+              </label>
+            )}
 
             <div className="mt-4">
               <MessageBanner message={leadExtractMessage} />
@@ -9559,17 +9799,27 @@ Research rules:
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setIsLeadUrlModalOpen(false)}
+                onClick={isManualLeadEntry ? () => setIsManualLeadEntry(false) : closeLeadUrlModal}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
               >
-                Cancel
+                {isManualLeadEntry ? 'Back' : 'Cancel'}
               </button>
+              {!isManualLeadEntry && (
+                <button
+                  type="button"
+                  onClick={openManualLeadEntry}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add manually
+                </button>
+              )}
               <button
                 type="submit"
                 className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
               >
-                <Sparkles className="h-4 w-4" />
-                Analyze lead
+                {isManualLeadEntry ? <Plus className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                {isManualLeadEntry ? (isContactListActive ? 'Save contact' : 'Save lead') : 'Analyze lead'}
               </button>
             </div>
           </form>

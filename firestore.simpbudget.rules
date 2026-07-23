@@ -39,9 +39,18 @@ service cloud.firestore {
         return isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
       }
 
+      function isInvitedViewer() {
+        return isSignedIn()
+          && request.auth.token.email != null
+          && (
+            request.auth.token.email in resource.data.viewerEmails
+            || request.auth.token.email in resource.data.editorEmails
+          );
+      }
+
       function isInvitedEditor() {
         return isSignedIn()
-          && resource.data.access == 'edit'
+          && request.auth.token.email != null
           && request.auth.token.email in resource.data.editorEmails;
       }
 
@@ -64,7 +73,10 @@ service cloud.firestore {
           && request.resource.data.inviteStatuses[request.auth.token.email].status == 'accepted';
       }
 
-      allow read: if isSharePathOwner() || resource.data.publicRead == true || isShareOwner() || isInvitedEditor();
+      allow read: if isSharePathOwner()
+        || resource.data.publicRead == true
+        || isShareOwner()
+        || isInvitedViewer();
       allow create: if isCreateOwner();
       allow update: if isShareOwner()
         || isAcceptingOwnInvite()
