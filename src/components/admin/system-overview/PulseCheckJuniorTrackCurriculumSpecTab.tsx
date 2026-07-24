@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpenCheck, Database, Flag, GraduationCap, MessageCircleHeart, Route, ShieldCheck, Sunrise } from 'lucide-react';
+import { Activity, BookOpenCheck, Database, GraduationCap, MessageCircleHeart, Moon, PartyPopper, RefreshCcw, Route, ShieldCheck, Sunrise } from 'lucide-react';
 import {
   BulletList,
   CardGrid,
@@ -17,8 +17,8 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
       <DocHeader
         eyebrow="PulseCheck Youth Pathways"
         title="Junior Track Guided Curriculum"
-        version="v1.0 - Phases 1 + 2 implemented 2026-07-12"
-        summary="The Junior Track home is a Duolingo-style guided curriculum: one daily Today Card, three skill pillars with visible unit progress, a streak, Nora-guided lessons through existing exercise engines, unit checkpoints with a continue-or-switch prompt, and a morning check-in that writes the same mental-state signal as the pro track. Source spec: PulseCheck repo, docs/specs/junior-track-guided-curriculum-spec.md."
+        version="v1.2 - Daily state loop + ceremony | July 2026"
+        summary="The Junior Track home is a guided daily curriculum with three mental-training lessons, visible pillar progress, bounded Nora guidance, morning and evening check-ins, same-day answer changes, Energy Recalibration, first-encounter teaching moments, and a persistent three-of-three completion ceremony."
         highlights={[
           {
             title: 'Home screen IS the curriculum',
@@ -29,8 +29,8 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
             body: 'Lessons open real Nora conversations through the Phase D orchestrator with scripted openers and probes. Replies flow through the guardrailed nora-athlete-reply path. Direct chat stays closed on youth tracks.',
           },
           {
-            title: 'One signal pipe across tracks',
-            body: 'The junior morning check-in writes the identical pulsecheck-morning-checkins doc the pro check-in writes, so the curriculum engine, coach reports, and framing layer read junior mental state with zero new plumbing.',
+            title: 'One daily signal record',
+            body: 'Morning and evening check-ins share the same athlete-local daily record. Junior biometrics stay silent while authored feeling, training, and pattern evidence remain available to the broader system.',
           },
         ]}
       />
@@ -67,7 +67,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
             [
               <code key="jp">junior-progress/{'{userId}'}</code>,
               'Per-athlete position',
-              'activePillarId, completedLessonIds, lastCompletedDate, todayPillarIds. Per-pillar position is derived from completedLessonIds so the doc cannot drift. Daily goal: one module under EVERY pillar closes the day (todayPillarIds tracks per-day pillar credit; the Today Card cycles pillars with a "2 of 3 today" indicator). Streak stays activity-based.',
+              'activePillarId, completedLessonIds, lastCompletedDate, todayPillarIds, and lastDayCompletionCeremonySeenDate. Per-pillar position is derived from completedLessonIds so the doc cannot drift. One module under every pillar closes the day.',
             ],
             [
               <code key="st">mental-training-streaks/{'{uid}'}</code>,
@@ -81,8 +81,13 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
             ],
             [
               <code key="mc">pulsecheck-morning-checkins/{'{uid}'}_{'{date}'}</code>,
-              'Morning check-in (shared)',
-              'Same doc and endpoint as pro. Junior card sends junior-voiced opener/probe overrides because server defaults reference the pro two-step slate.',
+              'Daily check-in record (shared)',
+              'Stores the morning answer and reason, revision metadata, nested evening check-in, optional Energy Recalibration outcome, and signal-validation summary.',
+            ],
+            [
+              <code key="align">athlete-state-signal-alignments/{'{uid}'}</code>,
+              'Silent pattern memory',
+              'Stores per-day self-report/device alignment evidence and aggregate pattern counts. It never grades the junior or replaces the authored feeling.',
             ],
           ]}
         />
@@ -105,7 +110,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
           <InfoCard
             title="Check-in on every track"
             accent="green"
-            body="JuniorCheckInCard shows the same five readiness levels as pro, posts record-morning-checkin with junior-voiced overrides, renders Nora's response inline with an optional guardrailed reply, and restores same-day state from Firestore. No Nora inbox deep-link (juniors have no inbox)."
+            body="JuniorCheckInCard asks how the athlete woke up feeling, captures a bounded reason, writes the shared daily record, and restores same-day state from Firestore. It does not assume the athlete is already at practice or in competition."
           />
           <InfoCard
             title="No devices/biometrics card"
@@ -119,16 +124,72 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
         </CardGrid>
       </SectionBlock>
 
+      <SectionBlock icon={Moon} title="Evening Check-In">
+        <CardGrid columns="xl:grid-cols-2">
+          <InfoCard
+            title="Look Back On The Day"
+            accent="blue"
+            body="The evening card asks how the day went using bounded junior-friendly choices. It is a retrospective signal, not a second morning-readiness score."
+          />
+          <InfoCard
+            title="Training Fits Either Moment"
+            accent="green"
+            body="The athlete may complete assigned mental training after the morning or evening check-in. Check-in timing does not imply that training must happen at a game, practice, or any specific location."
+          />
+        </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={RefreshCcw} title="Same-Day Undo And Revision">
+        <BulletList
+          items={[
+            'A counterclockwise change control returns the current morning or evening answer to its bounded choices.',
+            'The replacement updates the same athlete-local daily record and increments revision metadata instead of creating a duplicate check-in.',
+            'Dependent summaries and signal-alignment evidence use the latest authored answer while preserving enough metadata to audit the change.',
+            'The ability to change an answer ends when the athlete-local day resets.',
+          ]}
+        />
+      </SectionBlock>
+
+      <SectionBlock icon={Activity} title="Energy Recalibration">
+        <DataTable
+          columns={['Stage', 'Junior Behavior']}
+          rows={[
+            ['Notice the source', 'Ask whether the drained feeling is connected to body, mind, school, or something else.'],
+            ['Route silently', 'Available recovery evidence may change the questions, but no raw biometric score or good/bad vital judgment is shown.'],
+            ['Check symptoms when needed', 'Use bounded questions for unusual weakness, dizziness, breathing difficulty, chest discomfort, near-fainting, illness, or needing help.'],
+            ['Escalate support', 'Concerning symptoms move toward a trusted adult and away from performance coaching.'],
+            ['Practice recalibration', 'Use a steady visual point, three easy breaths, and one internal awareness frame.'],
+            ['Close honestly', 'Record the practiced response without asking whether a few breaths instantly removed fatigue.'],
+          ]}
+        />
+      </SectionBlock>
+
+      <SectionBlock icon={PartyPopper} title="Three-Of-Three Completion Ceremony">
+        <CardGrid columns="xl:grid-cols-2">
+          <InfoCard
+            title="Completion And Ceremony Are Separate"
+            accent="purple"
+            body="Completing all three daily pillars sets the day-complete state. The ceremony has its own acknowledgement date so a completed athlete who leaves early still receives the moment later."
+          />
+          <InfoCard
+            title="Home Screen Retry"
+            accent="green"
+            body="When Home appears, it checks for three completed pillars and an unseen ceremony. The full-screen animation, sound, and haptics trigger until the athlete acknowledges the once-per-day moment."
+          />
+        </CardGrid>
+      </SectionBlock>
+
       <SectionBlock icon={GraduationCap} title="iOS Surfaces (PulseCheck repo)">
         <DataTable
           columns={['Surface', 'File', 'Notes']}
           rows={[
-            ['Junior Home v2', <code key="h">Views/Junior/JuniorHomeView.swift</code>, 'Streak chip, check-in card, Today Card, pillar cards with progress dots, pillar detail sheet with per-pillar CTA, skill picker.'],
+            ['Junior Home v2', <code key="h">Views/Junior/JuniorHomeView.swift</code>, 'Morning and evening check-ins, three daily pillar cards, Energy Recalibration launch, progress, and completion-ceremony queue.'],
             ['Lesson Player', <code key="p">Views/Junior/JuniorLessonPlayerView.swift</code>, 'Three-beat container; checkpoint review path; excludes chat-handoff exercises via exerciseRequiresNoraChatHandoff.'],
             ['Lesson Complete', <code key="c">Views/Junior/JuniorLessonCompleteView.swift</code>, 'Streak moment, unit dots, takeaway card, checkpoint continue-or-switch buttons.'],
-            ['Check-in card', <code key="ci">Views/Junior/JuniorCheckInCard.swift</code>, 'Shared signal pipe with junior voice.'],
+            ['Check-in card', <code key="ci">Views/Junior/JuniorCheckInCard.swift</code>, 'Morning/evening modes, bounded choices, same-day change control, and shared daily signal record.'],
+            ['Energy Recalibration', <code key="er">Views/Junior/JuniorEnergyResetView.swift</code>, 'Awareness, silent recovery routing, symptom follow-up, support branch, and internal recalibration.'],
             ['Services', <code key="s">Services/JuniorCurriculumService.swift, JuniorNoraLessonService.swift</code>, 'Curriculum + progress state hub; conversation open/reply bridge.'],
-            ['Screen demos', <code key="d">Views/Admin/ScreenDemoView.swift</code>, 'juniorHome, juniorLessonPlayer, juniorCheckpoint, juniorLessonComplete rows (PIL convention).'],
+            ['Screen demos', <code key="d">Views/Admin/ScreenDemoView.swift</code>, 'Junior screens, simulations, and every exercise teaching-moment family for deterministic visual QA.'],
           ]}
         />
       </SectionBlock>
@@ -173,6 +234,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
           items={[
             'Why: 11 of 26 modules played as passive read-and-tap-Next step lists; 5 junior lessons ran on the 3 passive visualization modules. The interaction config on the module doc replaces that renderer on iOS (InteractiveModuleContent.swift) and Android (JuniorInteractivePlayer).',
             'Every input is a bounded chip, extending the junior no-free-text rule across the pro track for these modules. Modules with an interaction config never route to the Nora chat handoff: the drill is the training.',
+            'Anchor Word continuity: once the athlete chooses a word, that selection is the source of truth for the remaining exercise. The next screen uses the chosen word and does not ask the athlete to choose a word or state again.',
             'Rollout: click "Sync Module Copy" on /curriculum-outline (writes interaction to both sim-modules and mental-exercises), then regenerate narrations on /admin/ai-voice (interaction prompts and feedback lines are pre-generated; retired per-step clips drop out of coverage automatically).',
             'Known gap: the web /mental-training player still renders these modules as prompt steps.',
           ]}
@@ -184,7 +246,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
           items={[
             'Crisis detection is NOT wired into the Nora reply pipeline (recordTier3Escalation has no callers). Junior replies, including checkpoint reflections about feelings, now enter that pipeline. Decide alongside consent work whether a crisis-detection pass gates broad rollout.',
             'Age gating / parental consent does not exist; team-level provisioning (commercialConfig.youthTrack) currently stands in for it. Parked deliberately, tracked in the source spec open questions.',
-            'Below-neutral junior check-ins get the same inline treatment as everything else today; pro escalates below-neutral into a focused chat. Candidate follow-up: coach notification for junior drained/off patterns.',
+            'Junior drained/off patterns can launch bounded Energy Recalibration and symptom follow-up. Any future coach notification must preserve minimum-necessary disclosure and the athlete-data framing doctrine.',
             'Android parity (2026-07-13): full junior surface shipped in android/ (PulseCheckJuniorClient + JuniorTrackScreens; REST pattern, remote-only curriculum, bounded choices, three-pillar daily goal). Gap: the four sim engine games are not ported — the five sim-mapped lessons show an honest "not on Android yet" state; porting the engines is the next Android milestone.',
           ]}
         />

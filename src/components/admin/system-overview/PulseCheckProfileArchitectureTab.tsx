@@ -12,7 +12,7 @@ const SURFACE_ROWS = [
 
 const IA_ROWS = [
   ['1. Top Identity', 'Preferred name, team context, sport, season phase, primary goal, and primary challenge'],
-  ['2. Mental Performance Profile', 'Subtle trend wrapper, pillars, skills, modifiers, and trends'],
+  ['2. Athlete Coherence', 'Consistency, Follow-through, Feeling Good, Overall Coherence, observed-window context, and trends'],
   ['3. Program Pathway', 'Current emphasis, Nora explanation, next milestone, and Trial Milestones'],
   ['4. Profile History / Snapshots', 'Baseline, Midpoint, Endpoint, Retention, and current comparison views'],
   ['5. Nora Rhythm', 'Check-in timing, notification settings, and reflection cadence'],
@@ -22,11 +22,18 @@ const IA_ROWS = [
 ];
 
 const PROFILE_LAYER_ROWS = [
-  ['Top layer', 'Quiet overall trend wrapper', 'Direction and recent change only; do not treat it as the dominant score.'],
-  ['Second layer', 'Three official pillars', 'Focus, Composure, and Decision are the first real scores an athlete sees.'],
-  ['Third layer', 'Named trainable skills', 'Readable skill-level strengths and growth areas under each pillar.'],
-  ['Fourth layer', 'Cross-cutting modifiers', 'Readiness, Consistency, Fatigability, and Pressure Sensitivity.'],
-  ['Trend layer', 'Longitudinal movement', 'Support at least 7-day, 30-day, and program-level trajectories.'],
+  ['Primary layer', 'Overall Coherence', 'A quiet summary of available controllable metrics. It is not a grade of talent or mental health.'],
+  ['Second layer', 'Consistency, Follow-through, Feeling Good', 'Show the behaviors and authored feeling that the athlete can understand and influence.'],
+  ['Evidence layer', 'Module, skill, and simulation evidence', 'Focus, Composure, Decision, and other exercise-specific measures stay attached to the training that produced them.'],
+  ['Context layer', 'Observed days, eligible assignments, and missing evidence', 'Explain the denominator. Missing check-ins or device data never become invented zero scores.'],
+  ['Trend layer', 'Longitudinal movement', 'Default to a rolling 14-day view and preserve longer program-level trajectories for milestones.'],
+];
+
+const COHERENCE_ROWS = [
+  ['Consistency', 'Days with a check-in or mental-training activity divided by observed days.', 'Rewards showing up.'],
+  ['Follow-through', 'Completed eligible assignments divided by eligible assignments, with at most three assignments counted per day.', 'Rewards completion of the work actually offered.'],
+  ['Feeling Good', 'Days reported as Solid or Locked In divided by days with authored feeling evidence.', 'Tracks how often the athlete reports feeling good without treating hard days as failure.'],
+  ['Overall Coherence', 'Average of available primary metrics after at least three observed days and at least two available components.', 'Summarizes whether the daily system is working together more often than it is not.'],
 ];
 
 const PATHWAY_ROWS = [
@@ -59,7 +66,8 @@ const PROFILE_GROUP_ROWS = [
   ['athleteChallenge', 'Primary mental-performance challenge / bottleneck pattern'],
   ['athleteGoal', 'Primary performance goal / desired outcome'],
   ['membership', 'Active org, team, pilot, cohorts, and role'],
-  ['mentalPerformanceProfile', 'Pillar scores, skill scores, modifiers, trends, and narrative'],
+  ['athleteCoherence', 'Consistency, Follow-through, Feeling Good, Overall Coherence, evidence counts, and trend narrative'],
+  ['mentalPerformanceProfile', 'Module-level pillar and skill evidence, modifiers, trends, and narrative'],
   ['programPathway', 'Current emphasis, Nora explanation, next milestone, and Trial Milestones'],
   ['profileHistory', 'Milestone snapshots and default comparison views'],
   ['noraRhythm', 'Check-in time, notifications, and reflection cadence'],
@@ -72,7 +80,7 @@ const UPDATE_BEHAVIOR_ROWS = [
   ['Durable source of truth', 'preferredName, sport, role, team, consent status', 'Changes only through explicit user, staff, or admin action.'],
   ['Derived but persisted', 'profileNarrative, trendSummary, currentEmphasis, supportRouteSummary', 'Recomputed after scoring windows or milestone events, not continuously.'],
   ['Milestone snapshots', 'profileHistory snapshots', 'Immutable once created; they can only be marked superseded.'],
-  ['Display-only computed', 'Overall trend arrow, strongest skill, largest growth area, modifier chips', 'Computed at render time and never persisted as source of truth.'],
+  ['Display-only computed', 'Coherence percentages, observed-window labels, module-level strongest evidence, and trend chips', 'Computed from canonical evidence at render time and never persisted as a competing source of truth.'],
 ];
 
 const ROLE_ROWS = [
@@ -84,11 +92,11 @@ const ROLE_ROWS = [
 ];
 
 const FIRST_SCROLL_QUESTIONS = [
-  'What am I best at right now?',
-  'What is my biggest current growth area?',
-  'How have I changed over the last month or current program?',
-  'How do I tend to break under pressure: distraction, fatigue, evaluative threat, or ambiguity?',
-  'Am I becoming more consistent, or just occasionally great?',
+  'How consistently am I showing up?',
+  'How often am I completing the work assigned to me?',
+  'How many recent days have I reported feeling good?',
+  'Is my daily system becoming coherent more often than it is not?',
+  'What does the denominator include, and where is evidence still missing?',
   'What is Nora training next, and why?',
 ];
 
@@ -104,7 +112,9 @@ const OPERATIONAL_LOCK_ITEMS = [
   'Snapshot creation must be idempotent in practice: one canonical snapshot per athlete, milestone, and pilot enrollment, with retries or corrections superseding rather than duplicating.',
   'The Nora explanation generator must remain template-bound: validator-enforced structure, max two sentences, and performance-language-only output.',
   'Research export must use canonical snapshots by default, with superseded snapshots available only in the audit dataset.',
-  'The first profile scroll must stay focused on the six core profile questions before lower-priority settings, membership, or account controls.',
+  'The first profile scroll must stay focused on the six coherence and pathway questions before lower-priority settings, membership, or account controls.',
+  'A 14-day follow-through denominator may never exceed three eligible assignments per day. The maximum full-window denominator is 42.',
+  'Missing check-ins, assignments, or device evidence must stay unavailable or unobserved; it must not become a zero.',
 ];
 
 const ProfileArchitectureOverviewDoc: React.FC = () => {
@@ -113,16 +123,16 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
       <DocHeader
         eyebrow="PulseCheck Product Surface"
         title="Profile Architecture & Data Model"
-        version="Profile IA v1.3 + Data Model v1.2 | March 2025"
-        summary="System overview artifact for the PulseCheck athlete and staff profile. This page defines Profile as the stable identity and development surface, the locked information architecture, the milestone snapshot model, and the field-level rules that keep Profile useful for athletes, staff, and research workflows."
+        version="Profile IA v1.4 + Coherence Metrics v1.0 | July 2026"
+        summary="System overview artifact for the PulseCheck athlete and staff profile. Profile is the stable identity and development surface. Its primary athlete progress language is coherence: showing up, following through, and honestly reporting how the day felt, with module-level performance evidence available beneath that layer."
         highlights={[
           {
             title: 'Profile Is Not Another Dashboard',
             body: 'Today owns daily action, Nora owns coaching dialogue, and Profile owns durable identity, context, progress, settings, and access.',
           },
           {
-            title: 'First Scroll Must Answer Six Questions',
-            body: 'The profile layout is only valid if the athlete can understand strengths, growth area, change over time, pressure pattern, consistency, and Nora direction within the first scroll.',
+            title: 'Primary Metrics Are Controllable',
+            body: 'Consistency, Follow-through, Feeling Good, and Overall Coherence lead the athlete surface. They describe a practice system the athlete can consciously influence.',
           },
           {
             title: 'Snapshots And Explanations Are Locked',
@@ -172,13 +182,14 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
         </CardGrid>
       </SectionBlock>
 
-      <SectionBlock icon={Brain} title="Mental Performance Profile And First-Scroll Questions">
+      <SectionBlock icon={Brain} title="Athlete Coherence And First-Scroll Questions">
         <DataTable columns={['Profile Layer', 'Meaning', 'Display Rule']} rows={PROFILE_LAYER_ROWS} />
+        <DataTable columns={['Primary Metric', 'Computation', 'Athlete Meaning']} rows={COHERENCE_ROWS} />
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Top-Line Score Treatment"
             accent="blue"
-            body="The overall wrapper behaves like a quiet trend signal. The first real numbers the athlete sees should be the three pillar scores, not a giant composite that averages away meaning."
+            body="Overall Coherence is a quiet summary, followed immediately by its three understandable components and evidence counts. It must never imply that a low-energy day makes the athlete mentally weak."
           />
           <InfoCard
             title="Initial Scroll Focus"
@@ -188,9 +199,9 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
         </CardGrid>
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
-            title="Primary Mental Challenge"
+            title="Module-Level Evidence"
             accent="amber"
-            body="The bottleneck pattern Nora is trying to reduce. This is the thing that tends to break down when the athlete is under pressure, distracted, fatigued, or otherwise off balance."
+            body="Focus, Composure, Decision, and other skill measures remain useful inside the modules, simulations, coach analysis, and research evidence that produced them. They are no longer the primary profile grade."
           />
           <InfoCard
             title="Primary Performance Goal"
@@ -222,7 +233,7 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
           <InfoCard
             title="What Snapshots Store"
             accent="blue"
-            body="Snapshots store pillar scores, skill score summaries, modifier summaries, trend summary at capture, profile narrative at capture, and state context at capture, including milestone `assessmentContextFlag` when available."
+            body="Snapshots store coherence summaries and evidence counts, module-level pillar and skill summaries when available, modifier summaries, trend narrative at capture, and state context at capture, including milestone `assessmentContextFlag` when available."
           />
           <InfoCard
             title="What Snapshots Do Not Store"

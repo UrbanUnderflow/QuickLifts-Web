@@ -128,14 +128,22 @@ const EXAMPLE_ROWS = [
   ['audit.missingDomains', '`["biometrics"]`', 'No body-composition source reported today.'],
 ];
 
+const READER_COMPATIBILITY_ROWS = [
+  ['Canonical domain shape', '`domains.recovery`, `domains.activity`, and `freshness.perDomain`', 'Preferred read path for newly assembled snapshots.'],
+  ['Production flat-domain shape', 'Top-level `recovery`, `activity`, `biometrics`, and `freshness.recovery` fields', 'Supported migration shape used by existing cloud writers and Fitbit-derived snapshots.'],
+  ['Mixed revision', 'Nested `data` payload plus selected flat domain fields', 'Merge into one normalized in-memory view, preserving the freshest valid field.'],
+  ['Recent-day lookup', 'Athlete-local day 0, then prior overnight/recent days', 'Recovery may belong to the previous sleep cycle; do not require same-calendar-day data.'],
+  ['Freshness decision', 'Domain freshness plus observed timestamp and usable metric presence', 'A populated Fitbit recovery domain must not be rejected because only one freshness representation is present.'],
+];
+
 const PulseCheckAthleteHealthContextSnapshotSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
         eyebrow="PulseCheck Health Context"
         title="AthleteHealthContextSnapshot Spec"
-        version="Version 0.1 | March 17, 2026"
-        summary="Canonical contract for the normalized athlete health-context artifact that PulseCheck, Nora, dashboards, and future automation should consume. This spec exists to prevent schema drift by locking the merged context model before native HealthKit or Oura ingestion work begins."
+        version="Version 0.2 | July 2026"
+        summary="Canonical contract for the normalized athlete health-context artifact that PulseCheck, Nora, dashboards, and automation consume. It includes a compatibility reader contract so current Fitbit and other production snapshots remain usable while writers converge on the canonical nested shape."
         highlights={[
           {
             title: 'Contract First',
@@ -148,6 +156,10 @@ const PulseCheckAthleteHealthContextSnapshotSpecTab: React.FC = () => {
           {
             title: 'Runtime-Safe Context',
             body: 'Freshness, provenance, permissions, and merge rules are part of the contract so consumers can behave safely and consistently.',
+          },
+          {
+            title: 'Migration Shapes Stay Readable',
+            body: 'Consumers normalize canonical nested fields, production flat fields, and mixed revisions before deciding whether a recovery domain is unavailable.',
           },
         ]}
       />
@@ -205,6 +217,15 @@ const PulseCheckAthleteHealthContextSnapshotSpecTab: React.FC = () => {
         <StepRail steps={LIFECYCLE_STEPS} />
       </SectionBlock>
 
+      <SectionBlock icon={ArrowRightLeft} title="Consumer Reader Compatibility">
+        <DataTable columns={['Supported Shape', 'Example', 'Reader Rule']} rows={READER_COMPATIBILITY_ROWS} />
+        <InfoCard
+          title="Recovery Availability Invariant"
+          accent="red"
+          body="A connected Fitbit or other wearable with recent HRV, resting heart rate, sleep, respiratory, or recovery evidence must not produce “Recovery signals unavailable” solely because its cloud writer used flat domain fields or `freshness.recovery` instead of `freshness.perDomain.recovery`."
+        />
+      </SectionBlock>
+
       <SectionBlock icon={AlertTriangle} title="Implementation Build Order">
         <DataTable columns={['Step', 'Scope', 'Guardrail']} rows={BUILD_ORDER_ROWS} />
         <CardGrid columns="md:grid-cols-2">
@@ -230,7 +251,7 @@ const PulseCheckAthleteHealthContextSnapshotSpecTab: React.FC = () => {
           <InfoCard
             title="Nora"
             accent="blue"
-            body={<BulletList items={['Read from the snapshot only.', 'Branch on freshness and provenance before making claims.', 'Never treat `historical_only`, `stale`, or `empty` as direct same-day certainty.']} />}
+            body={<BulletList items={['Read from the snapshot only.', 'Normalize supported snapshot revisions before branching.', 'Branch on freshness and provenance before making claims.', 'Never treat `historical_only`, `stale`, or `empty` as direct same-day certainty.']} />}
           />
           <InfoCard
             title="Coach Views"

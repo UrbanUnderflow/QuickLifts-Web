@@ -28,7 +28,7 @@ import {
   SPORTS_INTELLIGENCE_DOCS_BYTES,
 } from './sportsIntelligencePlainTextBundle';
 
-// Compact toolbar button for copying the full Sports Intelligence spec bundle
+// Compact toolbar button for copying the core Sports Intelligence inference bundle
 // to the clipboard. Lives at the top of the Sports Intelligence Layer tab so a
 // reviewer can grab everything (this spec + Aggregation + Inference Contract +
 // Report Outlines + Contextual Detection + Nora Context Capture + Session Detection + Sport Load Model)
@@ -54,9 +54,9 @@ const CopyAllSportsIntelligenceDocsButton: React.FC = () => {
   return (
     <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-0.5">
-        <p className="text-sm font-semibold text-white">Copy all Sports Intelligence specs</p>
+        <p className="text-sm font-semibold text-white">Copy core Sports Intelligence inference specs</p>
         <p className="text-xs text-zinc-500">
-          Bundles this page plus Aggregation + Inference Contract, Report Outlines, Contextual Detection Engine, Nora Context Capture, Session Detection + Matching, and Sport Load Model into one markdown document — for hand-off to a reviewer agent.
+          Bundles the interpretation, reporting, detection, context, session, and load-model documents into one markdown handoff. Athlete-facing scenario personalization remains a separate runtime contract.
         </p>
       </div>
       <button
@@ -243,8 +243,8 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Sports Intelligence"
         title="Sports Intelligence Layer: Architecture & Product Boundaries"
-        version="Version 0.3 | May 6, 2026"
-        summary="The Sports Intelligence Layer is the device-agnostic, sport-aware interpretation system that translates raw biometrics, simulation evidence, daily check-ins, training, nutrition, and schedule context into mental-performance intelligence. It asks what the athlete’s physical state is teaching us about their performance environment, while preserving the coach’s authority over physical programming."
+        version="Version 0.4 | July 2026"
+        summary="The Sports Intelligence Layer is the device-agnostic, sport-aware system that translates biometrics, simulation evidence, check-ins, training, nutrition, schedule context, and canonical sport identity into mental-performance intelligence and sport-native athlete experiences. It preserves the coach’s authority over physical programming."
         highlights={[
           {
             title: 'Device-Agnostic Surface',
@@ -257,6 +257,10 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           {
             title: 'Coach Context Without Overreach',
             body: 'Coach reports distinguish individual under-recovery from team-wide under-recovery, show supporting data and trends, and spell out the exact coaching moment in plain English so coaches can make their own physical training decisions.',
+          },
+          {
+            title: 'Scenarios Speak The Athlete’s Sport',
+            body: 'Catalog identity, scenario packs, event vocabulary, and visible personalization badges keep module situations aligned with the athlete’s actual sport, event, position, or division.',
           },
         ]}
       />
@@ -315,8 +319,8 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
 
       <RuntimeAlignmentPanel
         role="Interpretation layer between raw signals and consumer surfaces. Owns sport-aware aggregation, athlete-specific baselines, output formatting, and policy enforcement."
-        sourceOfTruth="This page is the product and architecture boundary baseline for what Sports Intelligence is, the layers it sits between, and how new sports / devices / output surfaces extend it. The companion Aggregation + Inference Contract is the source of truth for formulas, windows, fallback behavior, thresholds, and payload schemas."
-        masterReference="Sport configuration is owned by `company-config/pulsecheck-sports` (admin: `/admin/pulsecheckSportConfiguration`). Biometric input is owned by the Athlete Context Snapshot Spec. Cognitive evidence is owned by the Physiology-Cognition Correlation Engine. Decisioning rules are owned by the Sports Intelligence Aggregation + Inference Contract."
+        sourceOfTruth="This page is the product and architecture boundary baseline for what Sports Intelligence is, the layers it sits between, and how new sports, devices, scenarios, and output surfaces extend it. Aggregation + Inference owns formulas and payloads; Sport Scenario Personalization owns athlete-facing scenario resolution and event language."
+        masterReference="Sport configuration is stored at `company-config/pulsecheck-sports`. Cross-platform archetype coverage is code-owned by `sportScenarioArchetypes.ts` and `sportsInsightArchetypes.ts`, with a tested Swift mirror. Biometric input is owned by the Athlete Context Snapshot Spec. Cognitive evidence is owned by the Physiology-Cognition Correlation Engine."
         relatedDocs={[
           'Athlete Context Snapshot Spec',
           'Health Context Source Record Spec',
@@ -326,6 +330,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           'Device & Wearable Integrations',
           'Oura Integration Strategy',
           'Sports Intelligence Aggregation + Inference Contract',
+          'Sport Scenario Personalization',
           'Report Outlines + Coach Mock Reports',
           'Contextual Detection Engine',
           'Macra',
@@ -393,10 +398,13 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
               items={[
                 'Stored at Firestore `company-config/pulsecheck-sports` as an array of `PulseCheckSportConfigurationEntry`.',
                 'Each sport: id, display name, emoji, positions[], attributes[], metrics[], prompting{}, reportPolicy{} (and reportPolicy.loadModel once wired).',
+                'Sports Intelligence resolves two independent axes: `scenarioArchetype` for athlete situations and `insightArchetype` for biometric interpretation. One axis must never be inferred from the other.',
+                'Resolution is catalog-first and can use sport id, display name, position, event, or division. Men’s Physique and other divisions must resolve deliberately rather than through generic “game” language.',
                 '`attributes[]` capture sport-specific athlete dimensions (competitive level, season phase, training load pattern, body composition goal, etc.). `includeInNoraContext` and `includeInMacraContext` flags control which products inject which attribute.',
                 '`metrics[]` define sport-native KPIs in their actual units (Minutes/Game, Pitch Count, Total Distance, Vertical Jump). Coach reports surface these directly.',
                 '`prompting.noraContext` and `prompting.macraNutritionContext` are injected verbatim into Nora and Macra prompts. `riskFlags`, `restrictedAdvice`, `recommendedLanguage` enforce sport-native posture.',
                 'Edit split: sport list, attributes, metrics, and prompting are edited via the Sports Intelligence Layer admin page (`/admin/pulsecheckSportConfiguration`) — adding a new sport is an admin operation, not an engineering deploy. `reportPolicy` and `reportPolicy.loadModel` are review-only on that page and edited in code so coach-facing intelligence can never be misconfigured through the UI.',
+                'CI requires deliberate scenario and insight coverage for every active catalog sport, rejects orphan ids, and fails when the TypeScript source and Swift runtime mirror drift.',
               ]}
             />
           }
@@ -506,6 +514,8 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
               items={[
                 'Device-agnostic biometric surface contract is explicit: adapters only, no vendor leakage into Sports Intelligence reads.',
                 'Sport configuration registry, athlete sport profile shape, and cross-product mirror fields are documented and the admin surface is live.',
+                'Scenario archetype, biometric insight archetype, event vocabulary, badge rules, fallback behavior, and completion telemetry are documented in Sport Scenario Personalization.',
+                'Catalog coverage tests prove every active sport has deliberate scenario and insight mappings and that the Swift mirror matches the TypeScript source.',
                 'Output surfaces (Weekly, Game-Day, Alerts, Macra context, Nora context, escalation) are defined with audience, cadence, and contents.',
                 'Companion Aggregation + Inference Contract exists with baseline windows, source precedence, missing-data behavior, confidence propagation, output payloads, and automation gates.',
                 'Sports Intelligence Reasoning Layer v0.3 is installed: fact ledger, candidates, scoring, guardrails, executable Nora rubric, validated payloads, and admin QA traces.',

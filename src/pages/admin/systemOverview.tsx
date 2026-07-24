@@ -78,9 +78,12 @@ import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components
 import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/admin/system-overview/PulseCheckPhysiologyCognitionCorrelationEngineTab";
 import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineContractLockTab";
 import PulseCheckSportsIntelligenceLayerSpecTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceLayerSpecTab";
+import PulseCheckSportScenarioPersonalizationTab from "../../components/admin/system-overview/PulseCheckSportScenarioPersonalizationTab";
 import PulseCheckAdaptiveFramingLayerSpecTab from "../../components/admin/system-overview/PulseCheckAdaptiveFramingLayerSpecTab";
 import PulseCheckCurriculumLayerSpecTab from "../../components/admin/system-overview/PulseCheckCurriculumLayerSpecTab";
 import PulseCheckJuniorTrackCurriculumSpecTab from "../../components/admin/system-overview/PulseCheckJuniorTrackCurriculumSpecTab";
+import PulseCheckAthleteDailyStateLoopTab from "../../components/admin/system-overview/PulseCheckAthleteDailyStateLoopTab";
+import PulseCheckExerciseTeachingMomentsTab from "../../components/admin/system-overview/PulseCheckExerciseTeachingMomentsTab";
 import PulseCheckAthleteDataFramingDoctrineTab from "../../components/admin/system-overview/PulseCheckAthleteDataFramingDoctrineTab";
 import PulseCheckNoraConversationOrchestratorSpecTab from "../../components/admin/system-overview/PulseCheckNoraConversationOrchestratorSpecTab";
 import PulseCheckNoraGuardSpecTab from "../../components/admin/system-overview/PulseCheckNoraGuardSpecTab";
@@ -1910,6 +1913,12 @@ const SystemOverviewPage: React.FC = () => {
       case "pulsecheck-junior-track-curriculum-spec":
         return <PulseCheckJuniorTrackCurriculumSpecTab />;
 
+      case "pulsecheck-athlete-daily-state-loop":
+        return <PulseCheckAthleteDailyStateLoopTab />;
+
+      case "pulsecheck-exercise-teaching-moments":
+        return <PulseCheckExerciseTeachingMomentsTab />;
+
       case "pulsecheck-nora-moderated-checkin-spec":
         return <PulseCheckModeratedCheckInSpecTab />;
 
@@ -1969,6 +1978,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-sports-intelligence-layer-spec":
         return <PulseCheckSportsIntelligenceLayerSpecTab />;
+
+      case "pulsecheck-sport-scenario-personalization":
+        return <PulseCheckSportScenarioPersonalizationTab />;
 
       case "pulsecheck-adaptive-framing-layer-spec":
         return <PulseCheckAdaptiveFramingLayerSpecTab />;

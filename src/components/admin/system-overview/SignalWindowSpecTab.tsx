@@ -48,10 +48,10 @@ const ACCENT = '#facc15'; // yellow — decision window
 const GAME_PHASES = [
     {
         phase: '1',
-        name: 'Display',
+        name: 'Observe',
         color: '#facc15',
         duration: '0.5–3 sec',
-        description: 'Information-rich display with correct signal embedded among neutral or decoy information. Duration is limited.',
+        description: 'A sport-themed field shows target and decoy zones. A bright false flash may appear first; the valid cue is the completed target ring.',
         tiers: [
             'Beginner: Simple display, 2–3 second window',
             'Intermediate: Complex display with decoys, 1–2 second window',
@@ -60,10 +60,10 @@ const GAME_PHASES = [
     },
     {
         phase: '2',
-        name: 'Commit',
+        name: 'Commit Or Wait',
         color: '#f97316',
         duration: 'First response',
-        description: 'Athlete commits to their read by selecting the correct response. First commitment is final. System captures accuracy and latency.',
+        description: 'The athlete must wait through a decoy cue and tap only after the valid ring completes. Early decoy taps, correct reads, and timeouts are distinct outcomes.',
         tiers: [
             'One response accepted per trial — first commitment final',
             'Decoy susceptibility logged: plausible-wrong vs. random miss',
@@ -72,10 +72,10 @@ const GAME_PHASES = [
     },
     {
         phase: '3',
-        name: 'Feedback',
+        name: 'Resolve',
         color: '#22c55e',
         duration: 'Brief',
-        description: 'After each trial: correct/incorrect, decision latency, comparison to rolling average. Brief, then next trial.',
+        description: 'Resolve the round as early commit, correct read, or timeout. Rotate target and decoy positions before the next cue sequence.',
         tiers: [
             'Session: 15–25 trials, 3–5 minutes',
             'Training Mode: feedback shown after each trial',
@@ -149,9 +149,18 @@ const DIFFICULTY_TIERS = [
 const VARIANTS = [
     { name: 'Static display', description: 'Fixed information field. Default Tier 1–2.', status: 'Registered' },
     { name: 'Dynamic display', description: 'Moving or time-evolving signals. Intermediate variant.', status: 'Registered' },
-    { name: 'Sport-context signal read', description: 'Sport-specific displays (formation reads, ball-flight signals). Applied variant.', status: 'Registered' },
+    { name: 'Sport-context cue read', description: 'Active iOS runtime with catalog-resolved sport theme, rotating target/decoy zones, false flashes, valid-ring cues, and tap timing.', status: 'Active iOS' },
     { name: 'Field-Read Trial Signal Window', description: 'Standardized 10–15 min at fixed Tier 3. Trial-layer assessment.', status: 'Registered' },
     { name: '3D Spatial Read (Vision Pro)', description: 'Active football package runtime for Signal Window / Spatial Read in the Vision Pro immersive transfer layer.', status: 'Football Package v1' },
+];
+
+const MOBILE_RUNTIME_ROWS = [
+    ['Sport theme', 'Resolve the athlete sport through the canonical Sports Intelligence catalog and render sport-relevant zone labels and visual context.'],
+    ['Target rotation', 'Choose a live target zone each round and require the decoy to occupy a different zone.'],
+    ['False cue', 'Present a bright decoy flash that looks actionable but does not complete the valid ring. Tapping here records an early commit.'],
+    ['Valid cue', 'Complete the ring around the live target. Reaction timing starts from this valid cue, not from the first visual change.'],
+    ['Response states', 'Record early commit, correct read, or timeout as separate outcomes with round-level target, decoy, and timing context.'],
+    ['Progression', 'Adjust cue timing and response window without changing the meaning of the valid cue.'],
 ];
 
 const MEASUREMENT_RULES = [
@@ -200,7 +209,7 @@ const SignalWindowSpecTab: React.FC = () => {
                     <div>
                         <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: ACCENT }}>PULSE CHECK · SIM SPECIFICATION</p>
                         <h2 className="text-xl font-semibold">Signal Window</h2>
-                        <p className="text-xs text-zinc-500">Signal Discrimination Training Simulation · Spec v2.0 · March 2025</p>
+                        <p className="text-xs text-zinc-500">Signal Discrimination Training Simulation · Spec v2.1 · July 2026</p>
                     </div>
                 </div>
             </div>
@@ -212,7 +221,34 @@ const SignalWindowSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Signal Window trains the athlete&apos;s ability to <span className="text-white font-semibold">read the right signal and make the correct decision within a shrinking time window</span>. In every sport, critical decisions happen in compressed moments. Signal Window simulates that compression, presents information-rich displays, gives the athlete a limited window to identify the correct read, and measures both accuracy and speed.
+                        Signal Window trains the athlete&apos;s ability to <span className="text-white font-semibold">wait through a convincing false cue, recognize the valid cue, and commit within a shrinking response window</span>. The active mobile runtime uses a sport-aware field with rotating target and decoy zones so the trained behavior is visible and playable rather than described through abstract answer cards.
+                    </p>
+                </div>
+            </section>
+
+            <section className="space-y-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-cyan-400" /> Active iOS Cue Runtime
+                </h3>
+                <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-[#090f1c]">
+                    <table className="min-w-full text-sm">
+                        <thead className="bg-black/20 text-xs uppercase tracking-wide text-zinc-500">
+                            <tr><th className="px-4 py-3 text-left">Mechanic</th><th className="px-4 py-3 text-left">Runtime Contract</th></tr>
+                        </thead>
+                        <tbody>
+                            {MOBILE_RUNTIME_ROWS.map(([mechanic, contract]) => (
+                                <tr key={mechanic} className="border-t border-zinc-800 align-top">
+                                    <td className="px-4 py-3 font-semibold text-white">{mechanic}</td>
+                                    <td className="px-4 py-3 text-zinc-300">{contract}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+                    <p className="text-xs font-semibold text-red-200">Blocked legacy presentation</p>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-300">
+                        Do not present abstract cards labeled “Primary Target,” “Plausible Wrong,” or “Late Bail” and ask the athlete to choose the obviously correct label. The simulation must make the athlete perceive and time the response.
                     </p>
                 </div>
             </section>
@@ -441,7 +477,7 @@ const SignalWindowSpecTab: React.FC = () => {
                     </div>
                     <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2">
                         <p className="text-[10px] text-green-200">
-                            Current immersive build status: 3D Spatial Read is the live Signal Window surface inside the Vision Pro football package. The other immersive family variants across the system overview remain planned until they get their own runtime package.
+                            Current build status: the sport-context cue read is active on iOS, and 3D Spatial Read remains the Vision Pro football runtime. Static and richer dynamic displays remain registered variants that must preserve the same false-cue, valid-cue, and first-commitment semantics.
                         </p>
                     </div>
                 </div>

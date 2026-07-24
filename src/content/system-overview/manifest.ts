@@ -12,7 +12,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, PulseCheck elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-07-12',
+  lastUpdated: '2026-07-24',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -60,8 +60,10 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'athlete-journey', label: 'Athlete Journey', description: 'Recommended entry, progression, and system flow for athlete adoption.' },
     { id: 'coach-journey', label: 'Coach Journey', description: 'Recommended entry, setup, and daily operating flow for coaches using PulseCheck.' },
     { id: 'pulsecheck-youth-pathways', label: 'Youth Pathways', description: 'Junior, Rookie, and Home Team operating model for guided youth mental readiness without open-ended Nora chat.' },
-    { id: 'pulsecheck-junior-track-curriculum-spec', label: 'Junior Track Guided Curriculum', description: 'Implemented Duolingo-style junior curriculum: pillars/units/lessons/checkpoints, junior-progress model, Nora lesson conversations (junior triggers), morning check-in on the shared signal pipe, seeding via /curriculum-outline, and open safety items.', parentSectionId: 'pulsecheck-youth-pathways' },
+    { id: 'pulsecheck-junior-track-curriculum-spec', label: 'Junior Track Guided Curriculum', description: 'Implemented guided junior curriculum with three daily lessons, morning and evening check-ins, same-day revision, Energy Recalibration, checkpoints, completion ceremony, and junior-safe language and biometric framing.', parentSectionId: 'pulsecheck-youth-pathways' },
+    { id: 'pulsecheck-exercise-teaching-moments', label: 'Exercise Teaching Moments', description: 'First-encounter narrated learning journeys for breathing, visualization, attention, body awareness, resets, decisions, reframing, reflection, affirmations, process focus, and posture.', parentSectionId: 'pulsecheck-youth-pathways' },
     { id: 'pulsecheck-runtime-architecture', label: 'Runtime Stack', description: 'Parent artifact for the PulseCheck runtime operating model, state logic, assignment rules, escalation bridges, and QA posture.' },
+    { id: 'pulsecheck-athlete-daily-state-loop', label: 'Athlete Daily State Loop', description: 'Morning and evening self-report, same-day revisions, assigned training, Energy Recalibration, silent biometric alignment, coherence metrics, and safety-aware follow-up.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-state-signal-layer', label: 'State Signal Layer', description: 'Operational state inference, confidence bands, freshness rules, and routing outputs for Nora.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-checkin-signal-layer-integration-spec', label: 'Check-In Integration Spec', description: 'AI-native contract between readiness check-in, enriched state snapshots, bounded assignment candidate sets, Nora chat context, and daily task materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-daily-task-training-plan-alignment-spec', label: 'Daily Task + Training Plan Alignment', description: 'Runtime surface-coherence contract for DailyTask, TrainingPlan, PlanStep, date-bound execution truth, and athlete-facing consistency across Home, Training Room, and Nora chat.', parentSectionId: 'pulsecheck-runtime-architecture' },
@@ -90,6 +92,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-oura-integration-strategy', label: 'Oura Integration Strategy', description: 'Direct Oura OAuth/API lane, HealthKit-derived fallback lane, source-record mapping, merge precedence, and rollout recommendation for PulseCheck.', parentSectionId: 'pulsecheck-device-integration-strategy' },
     { id: 'pulsecheck-oura-cognitive-correlation-spec', label: 'Oura Cognitive Correlation Spec', description: 'First source-specific child spec for feeding Oura physiology into the broader Physiology-Cognition Correlation Engine.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-sports-intelligence-layer-spec', label: 'Sports Intelligence Layer', description: 'Architecture and product-boundary spec for the device-agnostic, sport-aware interpretation layer that turns biometrics, sims, check-ins, training, nutrition, and schedule context into coach-facing reports and athlete-facing context.' },
+    { id: 'pulsecheck-sport-scenario-personalization', label: 'Sport Scenario Personalization', description: 'Catalog-first sport and division resolution, scenario and biometric archetype axes, event vocabulary, athlete-facing badges, sport-native scenario packs, telemetry, and CI coverage gates.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
     { id: 'pulsecheck-sports-intelligence-aggregation-inference-contract', label: 'Aggregation + Inference Contract', description: 'Decisioning contract for Sports Intelligence baseline windows, missing-data behavior, source precedence, confidence propagation, alert thresholds, output schemas, and copy policy.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
     { id: 'pulsecheck-sports-intelligence-mock-report-baselines', label: 'Report Outlines + Coach Mocks', description: 'Collapsed report outlines and coach-facing mock report demos for every configured sport, defining weekly/game-day report lenses, adherence coverage, sport-native KPIs, watch signals, coach actions, core-dimension mapping, language posture, and avoid rules.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
     { id: 'pulsecheck-contextual-sports-detection-engine', label: 'Contextual Detection Engine', description: 'Human-in-the-loop Sports Intelligence detection spec: timestamped device evidence starts the read, daily rollups stay evidence-only, and athlete profile, coach context, Nora clarification, confirmations, and learned patterns turn ambiguous activity into trustworthy sport-session meaning.', parentSectionId: 'pulsecheck-sports-intelligence-layer-spec' },
@@ -144,6 +147,14 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Expanded the PulseCheck Sports Intelligence source of truth with separate scenario and biometric-insight archetype axes, catalog-first sport/position/event/division resolution, reviewed TypeScript-to-Swift mappings, CI coverage gates, sport-native event vocabulary, visible personalization badges, scenario-pack telemetry, and general fallback rules.',
+      'Added the Athlete Daily State Loop: morning and evening check-ins share one athlete-local daily record, both answers can be revised before the day resets, drained athletes can enter Energy Recalibration, and silent device alignment builds pattern memory without overruling self-report.',
+      'Replaced Focus, Composure, and Decision as the primary athlete profile scores with Consistency, Follow-through, Feeling Good, and Overall Coherence. The default window is 14 days, eligible assignments are capped at three per day, and missing evidence never becomes zero.',
+      'Added narrated Exercise Teaching Moments for eleven mental-training families. First-seen state is versioned, the Discover → See It → Try It journey advances automatically, narration is preloaded, captions stay concise, and every family is available through Screen Demo for visual QA.',
+      'Added a persistent junior three-of-three completion ceremony. Completion and ceremony acknowledgement are separate states so an unseen ceremony triggers when the athlete next lands on Home.',
+      'Rebuilt the Signal Window documentation around the active sport-aware iOS cue game: rotating target/decoy zones, false bright flashes, completed-ring valid cues, early-commit/correct/timeout outcomes, and reaction timing measured from the valid cue.',
+      'Adopted the borderless native-glass surface system: continuous iOS-style card shapes, background-aware material, restrained reflection, localized accents, and accessibility fallbacks replace decorative colored perimeter borders.',
+      'Added health-context reader compatibility for canonical nested snapshots, production flat-domain Fitbit snapshots, and mixed revisions so valid recent recovery evidence is not rejected because of field-shape drift.',
       'Started the PulseCheck iOS unified Sports Intel screen: the Polar-only device detail surface ("Polar 360") is being generalized into one device-agnostic, aggregated read for any connected performance device (Polar, Fitbit Air via Google Health, Oura, Apple Watch). It renders from the canonical health-context snapshot the server assembler already merges per DOMAIN_PRECEDENCE, shows per-metric "via <device>" source tags with freshness, keeps the Polar live-HR overlay as the signature-device exception, and reuses the Sports Intelligence Reasoning Layer for the sport-aware Nora read. Spec: PulseCheck/docs/specs/sports-intel-generalization-spec.md; PolarDataDumpView entry points retire only after parity checks.',
       'Closed out the PulseCheck Android tail (M7.5 + polish): RevenueCat subscription with a paywall + access gate (entitlement "plus"; dev bypasses when unconfigured), FCM push (token sync + notification display + channel), SpeechRecognizer voice input in the Nora chat, and Today-chat resume of the latest saved conversation. The remaining items are now resolved to a definitive status in the parity audit — server-orchestrator-owned (action cards, training load, proactive insights, readiness→check-in), iOS-only (3D sim / Vision Pro / admin), or config/polish (AppsFlyer, local reminders, Nora TTS, coach booking).',
       'Built PulseCheck Android M6 + M3.5 for an end-to-end coach + athlete experience: coach connection by referral code (coachAthletes) and real-time coach↔athlete messaging (coach-athlete-conversations/-messages) from Profile; plus team/pilot athlete onboarding — a pulsecheck://invite/{token} deep link previews + redeems via the shared server transaction, then runs name→consent→research→baseline writing athleteOnboarding.* to pulsecheck-team-memberships, with a membership-driven gate in SignedInRoot that preempts the regular Nora onboarding.',
@@ -576,6 +587,48 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       ],
     },
     {
+      id: 'svc-pulsecheck-daily-state-loop',
+      name: 'PulseCheck Daily State and Signal Alignment',
+      purpose:
+        'Persists morning and evening check-ins with same-day revision, silently compares authored sleep/energy reports with personal-baseline recovery evidence, and stores longitudinal alignment records without overriding athlete self-report.',
+      owner: 'PulseCheck Platform + Safety + Sports Intelligence',
+      status: 'beta',
+      environments: ['Development', 'Production Netlify'],
+      keyDependencies: [
+        'pulsecheck-morning-checkins',
+        'athlete-state-signal-alignments',
+        'health-context-snapshots',
+        'Firebase Auth',
+      ],
+      sourceRefs: [
+        { label: 'Morning Check-In', path: 'netlify/functions/record-morning-checkin.ts' },
+        { label: 'Evening Check-In', path: 'netlify/functions/record-evening-checkin.ts' },
+        { label: 'Signal Alignment', path: 'netlify/functions/record-checkin-signal-alignment.ts' },
+        { label: 'Alignment Client', path: 'src/api/firebase/mentaltraining/checkInSignalAlignment.ts' },
+      ],
+    },
+    {
+      id: 'svc-pulsecheck-sport-catalog-coverage',
+      name: 'PulseCheck Sport Catalog Coverage Contract',
+      purpose:
+        'Maintains deliberate scenario and biometric-insight archetype coverage for every active sport, position, event, and division, with TypeScript-to-Swift parity and no-orphan CI gates.',
+      owner: 'Sports Intelligence + PulseCheck iOS',
+      status: 'active',
+      environments: ['Repository CI', 'PulseCheck iOS runtime'],
+      keyDependencies: [
+        'company-config/pulsecheck-sports',
+        'sportScenarioArchetypes',
+        'sportsInsightArchetypes',
+        'Swift catalog mirror',
+      ],
+      sourceRefs: [
+        { label: 'Scenario Archetypes', path: 'src/api/firebase/mentaltraining/sportScenarioArchetypes.ts' },
+        { label: 'Insight Archetypes', path: 'src/api/firebase/sportsInsightArchetypes.ts' },
+        { label: 'Coverage Report', path: 'src/api/firebase/pulsecheckSportCoverage.ts' },
+        { label: 'Coverage Tests', path: 'tests/unit/sport-catalog-coverage.test.ts' },
+      ],
+    },
+    {
       id: 'svc-pulsecheck-avatar-generation',
       name: 'PulseCheck Avatar Generation Pipeline',
       purpose:
@@ -683,6 +736,110 @@ export const systemOverviewManifest: SystemOverviewManifest = {
         { label: 'User Service', path: 'src/api/firebase/user/service.ts' },
         { label: 'Sign-In Modal', path: 'src/components/SignInModal.tsx' },
         { label: 'Write Contract Verifier', path: 'scripts/verify-user-write-contract.js' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-daily-checkins',
+      name: 'pulsecheck-morning-checkins/{uid}_{athleteLocalDay}',
+      purpose:
+        'Canonical same-day athlete check-in record containing the morning answer and reason, revision metadata, nested evening reflection, optional Energy Recalibration outcome, and signal-validation summary.',
+      writtenBy: 'record-morning-checkin, record-evening-checkin, Energy Recalibration closeout, and signal-alignment service',
+      readBy: 'PulseCheck Today/Junior Home, AthleteCoherenceService, curriculum planning, Nora context, and pattern analysis',
+      criticalFields: [
+        'userId',
+        'dayKey',
+        'level',
+        'reason',
+        'revisionCount',
+        'eveningCheckIn.level',
+        'eveningCheckIn.reason',
+        'eveningCheckIn.revisionCount',
+        'energyReset',
+        'signalValidation.sleep',
+        'updatedAt',
+      ],
+      sourceRefs: [
+        { label: 'Morning Check-In Endpoint', path: 'netlify/functions/record-morning-checkin.ts' },
+        { label: 'Evening Check-In Endpoint', path: 'netlify/functions/record-evening-checkin.ts' },
+        { label: 'Daily State Loop', path: 'src/components/admin/system-overview/PulseCheckAthleteDailyStateLoopTab.tsx' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-signal-alignments',
+      name: 'athlete-state-signal-alignments/{uid}/records/{day}_morning_sleep',
+      purpose:
+        'Longitudinal pattern memory comparing authored sleep/energy reports with recent personal-baseline recovery evidence while preserving self-report as the athlete truth.',
+      writtenBy: 'record-checkin-signal-alignment',
+      readBy: 'Sports Intelligence pattern reasoning, approved profile projections, QA, and future longitudinal guidance',
+      criticalFields: [
+        'classification',
+        'selfReportDirection',
+        'snapshotDate',
+        'snapshotRevision',
+        'signalsUsed',
+        'baselineWindow',
+        'freshness',
+        'observedAt',
+      ],
+      sourceRefs: [
+        { label: 'Signal Alignment Endpoint', path: 'netlify/functions/record-checkin-signal-alignment.ts' },
+        { label: 'Signal Alignment Client', path: 'src/api/firebase/mentaltraining/checkInSignalAlignment.ts' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-education-progress',
+      name: 'mental-training-education-progress/{userId}',
+      purpose:
+        'Versioned first-seen progress for exercise teaching families so narrated introductions appear before the first matching exercise and remain consistent across devices.',
+      writtenBy: 'PulseCheck iOS ExerciseTeachingMomentProgressStore',
+      readBy: 'Exercise launch gate and teaching-moment demo/QA tools',
+      criticalFields: ['familyId', 'contentVersion', 'seenAt', 'completionMode', 'updatedAt'],
+      sourceRefs: [
+        { label: 'Teaching Moment Spec', path: '../PulseCheck/docs/specs/exercise-teaching-moments-spec.md' },
+        { label: 'Progress Store', path: '../PulseCheck/PulseCheck/Services/ExerciseTeachingMomentProgressStore.swift' },
+        { label: 'Overview Artifact', path: 'src/components/admin/system-overview/PulseCheckExerciseTeachingMomentsTab.tsx' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-junior-progress',
+      name: 'junior-progress/{uid}',
+      purpose:
+        'Junior curriculum position, completed lessons, per-day pillar credit, streak-supporting date state, and separate three-of-three ceremony acknowledgement.',
+      writtenBy: 'PulseCheck iOS and Android junior curriculum services',
+      readBy: 'Junior Home, lesson player, pillar detail, completion ceremony, and curriculum reporting',
+      criticalFields: [
+        'activePillarId',
+        'completedLessonIds',
+        'lastCompletedDate',
+        'todayPillarIds',
+        'lastDayCompletionCeremonySeenDate',
+      ],
+      sourceRefs: [
+        { label: 'Junior Curriculum Service', path: '../PulseCheck/PulseCheck/Services/JuniorCurriculumService.swift' },
+        { label: 'Junior Home', path: '../PulseCheck/PulseCheck/Views/Junior/JuniorHomeView.swift' },
+      ],
+    },
+    {
+      id: 'coll-pulsecheck-exercise-completions',
+      name: 'mental-exercise-completions',
+      purpose:
+        'Canonical mental-training completion evidence used by exercise history, assignment closure, streaks, junior progress, module-level metrics, and Athlete Coherence follow-through.',
+      writtenBy: 'PulseCheck exercise and simulation players plus Android mental-training players',
+      readBy: 'AthleteCoherenceService, progress history, assignment services, coach/reporting projections, and research exports',
+      criticalFields: [
+        'userId',
+        'exerciseId',
+        'completedAt',
+        'assignmentId',
+        'duration',
+        'scenarioArchetype',
+        'scenarioSportSource',
+        'whatIfPicks',
+        'scenarioRoundId',
+      ],
+      sourceRefs: [
+        { label: 'Mental Training Service', path: '../PulseCheck/PulseCheck/Services/MentalTrainingService.swift' },
+        { label: 'Athlete Coherence Service', path: '../PulseCheck/PulseCheck/Services/AthleteCoherenceService.swift' },
       ],
     },
     {
@@ -1337,6 +1494,30 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     {
       term: 'Daily Curriculum Layer',
       definition: 'PulseCheck proactive practice engine that balances protocol and simulation practice exposures across composure, focus, and decisioning pillars.',
+    },
+    {
+      term: 'Athlete Coherence',
+      definition: 'Athlete-facing progress model built from Consistency, Follow-through, Feeling Good, and an Overall Coherence summary of the available controllable metrics.',
+    },
+    {
+      term: 'Scenario Archetype',
+      definition: 'Sports Intelligence category that selects sport-native situations, what-if choices, response options, and event framing for an exercise.',
+    },
+    {
+      term: 'Biometric Insight Archetype',
+      definition: 'Independent Sports Intelligence category that selects how recovery, load, physiology, and sport demands are interpreted.',
+    },
+    {
+      term: 'Exercise Teaching Moment',
+      definition: 'Versioned first-encounter Discover, See It, and Try It journey that teaches why a mental-training family matters before exercise playback.',
+    },
+    {
+      term: 'Energy Recalibration',
+      definition: 'Bounded athlete-awareness flow for a drained report that gathers context, checks symptoms when needed, and practices an internal reset without promising instant energy change.',
+    },
+    {
+      term: 'Signal Alignment Record',
+      definition: 'Silent longitudinal evidence describing whether authored feeling and available personal-baseline device context aligned, differed, were mixed, or were insufficient on a given day.',
     },
     {
       term: 'Consent v6',

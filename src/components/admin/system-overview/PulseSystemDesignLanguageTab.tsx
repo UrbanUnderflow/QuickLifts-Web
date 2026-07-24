@@ -15,6 +15,7 @@ const VOICE_ROWS = [
   ['Warm but grounded', 'Sound calm, confident, and helpful without becoming fluffy or performative.'],
   ['Guiding, not narrating architecture', 'Explain the user moment, not the system design behind it.'],
   ['Respectful of attention', 'Say only what the user needs in this moment, then get out of the way.'],
+  ['Smart middle-school clarity', 'Default athlete copy should be concrete enough for a thoughtful 13-year-old without talking down to them.'],
 ];
 
 const COPY_DO_ROWS = [
@@ -31,6 +32,8 @@ const COPY_DONT_ROWS = [
   ['Do not over-qualify early', 'Avoid introducing research, edge cases, or future states before the user understands the present one.'],
   ['Do not sound like an operations doc', 'If the copy reads like an admin handbook, it is not ready for a customer-facing screen.'],
   ['Do not stack overlapping concepts', 'If onboarding, consent, baseline, readiness, and pathway all appear at once, simplify.'],
+  ['Do not use ambiguous metaphors as explanation', 'Phrases such as “prepare the pathway,” “clear the signal,” or “strengthen your state” must be replaced with the actual body, attention, or behavior change.'],
+  ['Do not use negation-led definitions', 'Avoid “it is not X, it is Y.” State the intended truth directly and explain the cause and effect.'],
 ];
 
 const DESIGN_ROWS = [
@@ -45,18 +48,28 @@ const DESIGN_ROWS = [
 
 const VISUAL_POSTURE_ROWS = [
   ['Dark luxury fitness', 'Premium, modern, energetic, and intentional. The product should feel elevated, not generic.'],
-  ['Chromatic glass depth', 'Layered glass surfaces, subtle transparency, and color-tinted light give the UI atmosphere and hierarchy.'],
-  ['Glow as hierarchy', 'Glow is used to guide attention toward key actions and focal objects, not to decorate every surface.'],
+  ['Native continuous glass', 'Layered translucent surfaces, continuous iOS-style corners, restrained reflection, and background-aware material create depth.'],
+  ['Depth instead of outlines', 'Hierarchy comes from material, spacing, tonal contrast, icon color, short accent marks, shadow, and motion—not a colored perimeter around every card.'],
   ['Color carries meaning', 'Accent color should communicate category, status, or emphasis, never random decoration.'],
   ['Motion with purpose', 'Animation should orient, confirm, or reward, not distract.'],
 ];
 
 const VISUAL_PATTERN_ROWS = [
-  ['Glass surface', 'Blurred dark surface with a light top reflection and subtle inner highlight.', 'Primary cards, modals, command surfaces, and premium containers.'],
-  ['Chromatic border wash', 'Gradient or tinted edge that gives depth and identity to a surface.', 'High-emphasis cards, feature callouts, hero surfaces, and selected states.'],
-  ['Subtle radial glow', 'Low-opacity light source behind a focal element.', 'Icons, hero objects, key metrics, and active controls away from body text.'],
-  ['Pill badges', 'Compact fill + stroke badge treatment for state, mode, or category.', 'Status, labels, mode chips, and compact metadata.'],
+  ['Glass surface', 'Background-aware translucent material with a restrained top reflection, tonal depth, and a native continuous shape.', 'Primary cards, modals, command surfaces, and premium containers.'],
+  ['Short accent mark', 'A small line, icon field, or localized color cue identifies a category without tracing the whole container.', 'Training categories, selected states, and status emphasis.'],
+  ['Broad backdrop light', 'A large, soft environmental light field that moves behind material and creates reflection.', 'Page-level atmosphere and scroll-responsive depth; never a collection of decorative orbs.'],
+  ['Material badge', 'Compact tinted fill with icon and text; no decorative perimeter stroke when fill and contrast already establish the shape.', 'Status, labels, mode chips, and compact metadata.'],
   ['Shimmer/loading surface', 'Reserved motion pattern for loading, not for permanent decoration.', 'Async states, placeholders, and transitions into content.'],
+];
+
+const SURFACE_SYSTEM_ROWS = [
+  ['Card shape', 'Continuous rounded rectangle, approximately 26pt on primary cards and 18pt on compact surfaces unless a platform component owns the radius.'],
+  ['Filled surface', 'No decorative perimeter stroke. Use translucent fill, material, reflection, tonal separation, and shadow.'],
+  ['Selected state', 'Use fill, icon, checkmark, accent mark, elevation, or content change before adding an outline.'],
+  ['iOS 26+', 'Use native Liquid Glass where available and where readability remains strong.'],
+  ['Fallback', 'Use ultra-thin material, controlled opacity, subtle reflection, and platform-appropriate shadow.'],
+  ['Reduce Transparency', 'Increase opaque tonal separation and remove effects that reduce text clarity.'],
+  ['Reduce Motion', 'Keep hierarchy and state legible without moving reflection or entrance motion.'],
 ];
 
 const COLOR_RULE_ROWS = [
@@ -100,6 +113,9 @@ const REVIEW_CHECKLIST = [
   'Is the CTA written in the same tone as the rest of the screen?',
   'Did we remove any concept that has not been earned yet?',
   'Does the screen sound like Pulse speaking to a person, not Pulse documenting itself?',
+  'Does every explanation say exactly what changes instead of relying on an ambiguous metaphor?',
+  'Do filled cards avoid decorative colored perimeter borders?',
+  'Does glass remain readable with Reduce Transparency and Reduce Motion enabled?',
 ];
 
 const REWRITE_EXAMPLES = [
@@ -129,8 +145,8 @@ const PulseSystemDesignLanguageTab: React.FC = () => {
       <DocHeader
         eyebrow="Cross-Product Experience Standard"
         title="System Design & Language"
-        version="Voice and UX Language v1.0 | March 2026"
-        summary="Source-of-truth artifact for how Pulse products should sound, guide, and orient people across onboarding, daily use, and high-stakes moments. This document exists to keep our apps human-centered and to stop internal product language from leaking into user-facing experiences."
+        version="Voice, Native Glass, and UX Language v1.1 | July 2026"
+        summary="Source-of-truth artifact for how Pulse products sound, guide, and orient people across onboarding, daily use, and high-stakes moments. It also defines the borderless native-glass surface system used to replace generic colored-outline card design."
         highlights={[
           {
             title: 'Start With The User Moment',
@@ -143,6 +159,10 @@ const PulseSystemDesignLanguageTab: React.FC = () => {
           {
             title: 'Human-Centered UI Is A Product Standard',
             body: 'Copy, visual hierarchy, motion, and CTA language should work together to reduce confusion and increase trust.',
+          },
+          {
+            title: 'Depth Without Decorative Borders',
+            body: 'Filled surfaces use material, reflection, spacing, tonal contrast, and native continuous shapes instead of colored perimeter outlines.',
           },
         ]}
       />
@@ -190,7 +210,7 @@ const PulseSystemDesignLanguageTab: React.FC = () => {
         <InfoCard
           title="Shared Cross-Platform Direction"
           accent="blue"
-          body="Pulse should feel like dark luxury fitness: premium, high-contrast, layered, and energetic. The iOS design-system guidance and the Chromatic Glass web study both point to the same standard: dark-first surfaces, chromatic depth, restrained glow, meaningful accent color, and motion that feels intentional."
+          body="Pulse should feel premium, high-contrast, layered, and intentional. Dark-first surfaces use native continuous shapes, background-aware glass, restrained environmental light, meaningful accent color, and motion that explains change."
         />
         <DataTable columns={['Visual Principle', 'Meaning']} rows={VISUAL_POSTURE_ROWS} />
       </SectionBlock>
@@ -199,16 +219,17 @@ const PulseSystemDesignLanguageTab: React.FC = () => {
         <DataTable columns={['Pattern', 'Definition', 'Use']} rows={VISUAL_PATTERN_ROWS} />
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
-            title="Chromatic Glass Standard"
+            title="Native Glass Standard"
             accent="purple"
-            body="Use dark glass surfaces with subtle blur, a light top reflection, and a quiet inner highlight. High-emphasis surfaces can add a chromatic wash or gradient edge, but the effect should stay premium and readable."
+            body="Use background-aware material with subtle blur, tonal depth, a restrained top reflection, and continuous iOS-style corners. Filled cards should not receive a decorative chromatic outline."
           />
           <InfoCard
             title="Cards With Character"
             accent="green"
-            body="Cards should not feel flat or disposable. Use tonal depth, gradient edge treatment, and measured shadow/glow to create hierarchy and a sense of quality."
+            body="Cards should not feel flat or interchangeable. Use material depth, spacing, localized accents, icon treatment, measured shadow, and content hierarchy to give each surface a clear job."
           />
         </CardGrid>
+        <DataTable columns={['Surface Rule', 'Contract']} rows={SURFACE_SYSTEM_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={Palette} title="Color And Contrast Rules">

@@ -26,3 +26,8 @@ Give every body or mind concept an immediate context. Name what is happening,
 when it happens, and what the athlete may notice. Phrases such as "your signals
 feel scattered", "a clearer place to stand", "create that state", and "prepare
 the pathway" read like riddles and are prohibited.
+
+## Plain Punctuation
+
+Do not use em dashes in Pulse copy. Use a period, comma, or colon so each idea
+reads clearly and sounds natural when spoken.
