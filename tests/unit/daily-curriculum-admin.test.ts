@@ -228,6 +228,156 @@ test('admin daily curriculum generator can assign legacy category-only productio
   assert.equal(simAssignment?.simSpecId, 'sim-focus');
 });
 
+test('admin daily curriculum generator rejects stale cross-type fields and covers each available pillar', async () => {
+  const protocols = Object.fromEntries(
+    Object.values(TaxonomyPillar).map((pillar) => [
+      `protocol-${pillar}`,
+      {
+        id: `protocol-${pillar}`,
+        label: `${pillar} protocol`,
+        publishStatus: 'published',
+        isActive: true,
+        cognitivePillar: pillar,
+        progressionLevel: 'foundational',
+        durationSeconds: 120,
+      },
+    ]),
+  );
+  const sims = Object.fromEntries(
+    Object.values(TaxonomyPillar).map((pillar) => [
+      `sim-${pillar}`,
+      {
+        id: `sim-${pillar}`,
+        name: `${pillar} simulation`,
+        isActive: true,
+        taxonomy: { primaryPillar: pillar },
+        progressionLevel: 'foundational',
+      },
+    ]),
+  );
+  const { db, collections } = createFakeFirestore({
+    'pulsecheck-protocols': protocols,
+    'sim-modules': sims,
+    'pulsecheck-daily-assignments': {
+      'stale-sim': {
+        id: 'stale-sim',
+        athleteId: 'athlete-stale',
+        teamId: 'team-1',
+        teamMembershipId: 'membership-1',
+        sourceDate: '2026-07-24',
+        assignedBy: 'curriculum-engine',
+        actionType: 'simulation',
+        protocolId: 'protocol-composure',
+        protocolLabel: '4-7-8 Relaxation Breathing',
+        simSpecId: 'sim-focus',
+        simName: 'Focus simulation',
+      },
+    },
+  });
+
+  const result = await generateDailyAssignmentAdmin(db as any, {
+    athleteUserId: 'athlete-stale',
+    teamId: 'team-1',
+    teamMembershipId: 'membership-1',
+    sourceDate: '2026-07-24',
+    timezone: 'America/New_York',
+  });
+
+  assert.ok(result);
+  assert.deepEqual(
+    new Set(result.protocolSelections?.map((selection) => selection.cognitivePillar)),
+    new Set(Object.values(TaxonomyPillar)),
+  );
+  assert.deepEqual(
+    new Set(result.simSelections?.map((selection) => selection.cognitivePillar)),
+    new Set(Object.values(TaxonomyPillar)),
+  );
+
+  const generated = [...collections.get('pulsecheck-daily-assignments')!.values()]
+    .filter((assignment) => assignment.id !== 'stale-sim');
+  assert.equal(generated.filter((assignment) => assignment.actionType === 'protocol').length, 3);
+  assert.equal(generated.filter((assignment) => assignment.actionType === 'simulation').length, 3);
+  assert.ok(generated
+    .filter((assignment) => assignment.actionType === 'simulation')
+    .every((assignment) => !assignment.protocolId && !assignment.protocolLabel));
+});
+
+test('admin daily curriculum generator repairs duplicate existing skills with missing discipline coverage', async () => {
+  const protocols = Object.fromEntries(
+    Object.values(TaxonomyPillar).map((pillar) => [
+      `protocol-${pillar}`,
+      {
+        id: `protocol-${pillar}`,
+        label: `${pillar} protocol`,
+        publishStatus: 'published',
+        isActive: true,
+        cognitivePillar: pillar,
+        progressionLevel: 'foundational',
+        durationSeconds: 120,
+      },
+    ]),
+  );
+  const sims = Object.fromEntries(
+    Object.values(TaxonomyPillar).map((pillar) => [
+      `sim-${pillar}`,
+      {
+        id: `sim-${pillar}`,
+        name: `${pillar} simulation`,
+        isActive: true,
+        taxonomy: { primaryPillar: pillar },
+        progressionLevel: 'foundational',
+      },
+    ]),
+  );
+  const duplicateProtocol = {
+    athleteId: 'athlete-duplicate',
+    teamId: 'team-1',
+    teamMembershipId: 'membership-1',
+    sourceDate: '2026-07-24',
+    assignedBy: 'curriculum-engine',
+    actionType: 'protocol',
+    protocolId: 'protocol-composure',
+    protocolLabel: 'composure protocol',
+    cognitivePillar: TaxonomyPillar.Composure,
+  };
+  const { db } = createFakeFirestore({
+    'pulsecheck-protocols': protocols,
+    'sim-modules': sims,
+    'pulsecheck-daily-assignments': {
+      'duplicate-protocol-1': {
+        ...duplicateProtocol,
+        id: 'duplicate-protocol-1',
+        curriculumSlotIndex: 1,
+      },
+      'duplicate-protocol-2': {
+        ...duplicateProtocol,
+        id: 'duplicate-protocol-2',
+        curriculumSlotIndex: 2,
+      },
+    },
+  });
+
+  const result = await generateDailyAssignmentAdmin(db as any, {
+    athleteUserId: 'athlete-duplicate',
+    teamId: 'team-1',
+    teamMembershipId: 'membership-1',
+    sourceDate: '2026-07-24',
+    timezone: 'America/New_York',
+  });
+
+  assert.ok(result);
+  assert.equal(result.dailyAssignmentIdsProtocol?.length, 3);
+  assert.equal(result.dailyAssignmentIdsSim?.length, 3);
+  assert.deepEqual(
+    new Set(result.protocolSelections?.map((selection) => selection.cognitivePillar)),
+    new Set(Object.values(TaxonomyPillar)),
+  );
+  assert.deepEqual(
+    new Set(result.simSelections?.map((selection) => selection.cognitivePillar)),
+    new Set(Object.values(TaxonomyPillar)),
+  );
+});
+
 test('admin curriculum assessment writes monthly rollup doc', async () => {
   const eventAt = Date.UTC(2026, 3, 15, 12, 0, 0) / 1000;
   const { db, collections } = createFakeFirestore({

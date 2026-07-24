@@ -15,6 +15,23 @@ test('Nora voice rubric flags the screenshot recovery copy failures', () => {
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
 });
 
+test('Nora voice rubric rejects motivational fog with no plain meaning', () => {
+  const vague = 'You woke up with strong recovery and a clear starting point. Stay simple early, then let the pace climb.';
+  const issues = validateNoraVoiceRubric(vague);
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
+
+  const repaired = enforceNoraVoiceRubric(vague, {
+    fallback: defaultNoraVoiceRubricFallback(vague),
+  });
+
+  assert.equal(
+    repaired,
+    "Your recovery looks strong today. Start with today's Nora check-in, then do the three skills in your plan.",
+  );
+  assert.deepEqual(validateNoraVoiceRubric(repaired), []);
+});
+
 test('Nora voice rubric rejects technical sports-intel filler', () => {
   const issues = validateNoraVoiceRubric(
     'This is a normal-start read, not a push signal. Keep the first block at baseline and skip optional accessories.',
@@ -104,22 +121,26 @@ test('Nora voice rubric rejects polished but vague sports-intel reads', () => {
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
 });
 
-test('Nora voice rubric rewrites generic feeling questions into a specific trade', () => {
+test('Nora voice rubric rewrites generic feeling questions without forcing a session pivot', () => {
   const repaired = enforceNoraVoiceRubric('How you feeling?', {
     fallback: defaultNoraVoiceRubricFallback('How you feeling?'),
   });
 
   assert.equal(
     repaired,
-    "How are you feeling right now so I can set the pace for today's session?",
+    'What feels most important to talk through right now?',
   );
   assert.deepEqual(validateNoraVoiceRubric(repaired), []);
 });
 
-test('Nora voice rubric accepts session-specific check-in questions', () => {
-  const text = 'How are you feeling right now so I can set the pace for lateral reset intervals?';
+test('Nora voice rubric accepts athlete-led follow-up questions', () => {
+  const text = 'What part of that pressure feels most important to talk through?';
 
   assert.deepEqual(validateNoraVoiceRubric(text), []);
+});
+
+test('Nora voice rubric accepts a brief conversational close', () => {
+  assert.deepEqual(validateNoraVoiceRubric("You're welcome."), []);
 });
 
 test('Nora voice rubric flags repetitive headspace reads across adjacent turns', () => {

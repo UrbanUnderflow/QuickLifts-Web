@@ -35,6 +35,40 @@ export type VoiceChoice =
       fallbackVoiceId?: string | null;
     };
 
+export type NoraVoiceOption = {
+  id: 'marin' | 'coral' | 'cedar' | 'onyx';
+  title: string;
+  gender: 'woman' | 'man';
+  description: string;
+};
+
+export const NORA_VOICE_OPTIONS: NoraVoiceOption[] = [
+  {
+    id: 'marin',
+    title: 'Warm',
+    gender: 'woman',
+    description: 'Calm, clear, and encouraging',
+  },
+  {
+    id: 'coral',
+    title: 'Bright',
+    gender: 'woman',
+    description: 'Upbeat, focused, and confident',
+  },
+  {
+    id: 'cedar',
+    title: 'Grounded',
+    gender: 'man',
+    description: 'Relaxed, thoughtful, and direct',
+  },
+  {
+    id: 'onyx',
+    title: 'Steady',
+    gender: 'man',
+    description: 'Strong, measured, and reassuring',
+  },
+];
+
 export type ElevenLabsPreset = {
   id: string;
   label: string;

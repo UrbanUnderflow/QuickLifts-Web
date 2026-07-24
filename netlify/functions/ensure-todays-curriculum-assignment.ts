@@ -58,6 +58,75 @@ const formatYmdInTz = (nowUtc: Date, timeZone: string): string => {
   return `${y}-${m}-${day}`;
 };
 
+const hasText = (value: unknown): boolean =>
+  typeof value === 'string' && value.trim().length > 0;
+
+const isCoherentAssignment = (
+  data: admin.firestore.DocumentData,
+  expectedKind: 'protocol' | 'simulation',
+): boolean => {
+  if (expectedKind === 'protocol') {
+    return hasText(data.protocolId)
+      && hasText(data.protocolLabel)
+      && !hasText(data.simSpecId)
+      && !hasText(data.simName);
+  }
+  return hasText(data.simSpecId)
+    && hasText(data.simName)
+    && !hasText(data.protocolId)
+    && !hasText(data.protocolLabel);
+};
+
+const assignmentAssetId = (
+  data: admin.firestore.DocumentData,
+  kind: 'protocol' | 'simulation',
+): string | undefined => {
+  const value = kind === 'protocol' ? data.protocolId : data.simSpecId;
+  return hasText(value) ? String(value).trim() : undefined;
+};
+
+const assignmentPillar = (
+  data: admin.firestore.DocumentData,
+): 'composure' | 'focus' | 'decision' | undefined => {
+  const intent = data.curriculumIntent && typeof data.curriculumIntent === 'object'
+    ? data.curriculumIntent as Record<string, unknown>
+    : undefined;
+  const raw = data.cognitivePillar
+    || intent?.cognitivePillar
+    || intent?.drivingPillar;
+  const normalized = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (normalized === 'composure' || normalized === 'focus' || normalized === 'decision') {
+    return normalized;
+  }
+  return undefined;
+};
+
+const hasCompleteSkillCoverage = (
+  docs: admin.firestore.QueryDocumentSnapshot[],
+  kind: 'protocol' | 'simulation',
+): boolean => {
+  const actionTypes = kind === 'protocol'
+    ? new Set(['protocol'])
+    : new Set(['simulation', 'sim']);
+  const assets = new Set<string>();
+  const pillars = new Set<string>();
+
+  for (const doc of docs) {
+    const data = doc.data();
+    const actionType = String(data.actionType || '').toLowerCase();
+    if (!actionTypes.has(actionType) || !isCoherentAssignment(data, kind)) continue;
+    const assetId = assignmentAssetId(data, kind);
+    const pillar = assignmentPillar(data);
+    if (assetId) assets.add(assetId);
+    if (pillar) pillars.add(pillar);
+  }
+
+  return assets.size >= 3
+    && pillars.has('composure')
+    && pillars.has('focus')
+    && pillars.has('decision');
+};
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: RESPONSE_HEADERS, body: '' };
@@ -126,15 +195,10 @@ export const handler: Handler = async (event) => {
     .get()
     .catch(() => null);
   const existingDocs = existing?.docs ?? [];
-  const existingProtocolCount = existingDocs.filter((doc) => {
-    const actionType = String(doc.data().actionType || '').toLowerCase();
-    return actionType === 'protocol';
-  }).length;
-  const existingSimulationCount = existingDocs.filter((doc) => {
-    const actionType = String(doc.data().actionType || '').toLowerCase();
-    return actionType === 'simulation' || actionType === 'sim';
-  }).length;
-  if (existingProtocolCount >= 3 && existingSimulationCount >= 3) {
+  if (
+    hasCompleteSkillCoverage(existingDocs, 'protocol')
+    && hasCompleteSkillCoverage(existingDocs, 'simulation')
+  ) {
     return {
       statusCode: 200,
       headers: RESPONSE_HEADERS,

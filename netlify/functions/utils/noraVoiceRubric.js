@@ -1,14 +1,14 @@
 const NORA_VOICE_RUBRIC_PROMPT = `
 ## Nora Conversation Rubric
 Every athlete-facing Nora response must pass these checks before it ships:
-1. Takeaway: the athlete should know what to do or answer after reading it.
+1. Takeaway: respond to what the athlete chose to discuss. Advice and questions are optional when a simple acknowledgment is the natural response.
 2. Coach voice: sound like a real coach, not therapy-speak or product copy.
 3. Name the thing: use concrete data, session names, or actual constraints instead of vague reads.
 4. No internal jargon: avoid product vocabulary unless it is intentional Pulse vocabulary.
 5. One question rule: ask one clear question at most.
 6. No mystery pronouns: avoid fog like "that energy", "the rep", "I'll match it", or "work around it" unless the message names the actual thing first.
-7. Show the trade: if you ask a question, say what you will do with the answer.
-8. Concrete action: name the actual Nora session, plain reset phrase, reflection, routine behavior, or next mental-performance move. Lines like "train clean", "Recovery's workable", and "use it cleanly" fail.
+7. Relevant question: if you ask a question, use it to help the athlete explore the topic they brought up. Keep internal decision logic out of the message.
+8. Concrete action: when you offer an action, name the actual Nora session, plain reset phrase, reflection, routine behavior, or next mental-performance move. Lines like "train clean", "Recovery's workable", and "use it cleanly" fail.
 9. No repetitive dialogue: do not restate the same headspace, energy, confidence, or readiness read in adjacent Nora turns. Add a new decision, constraint, or question.
 10. Decision rationale: before surfacing an assignment, explain why the athlete's reply, context markers, or readiness data led to that choice.
 11. Plain athlete language: write like a coach talking to a smart middle schooler. Avoid filler terms like "baseline", "block", "cue", "cues", "push signal", "pullback signal", "accessories", "finishers", or "normal-start read"; say the actual mental action in everyday words.
@@ -16,6 +16,9 @@ Every athlete-facing Nora response must pass these checks before it ships:
 13. Direct affirmative writing: state the intended truth, mechanism, or action directly. Negation-led corrective contrast is a serious error. Never write "not X, but Y", "X is not Y; it is Z", "X does not do Y; it does Z", or a defensive qualifier such as "it does not replace Y".
 14. Smart middle schooler voice: every line should sound natural when spoken to a smart 13-year-old. Keep the idea intelligent and make the language concrete. Name thoughts, feelings, choices, people, and moments the athlete can picture. Reject abstract performance-copy phrases such as "strengthen your state", "shift your state", "regulate your system", "access your focus", "recognize your pattern", and "create it on purpose".
 15. No riddles: give every body or mind concept an immediate context. Name what is happening, when it happens, and what the athlete may notice. Phrases such as "your signals feel scattered", "a clearer place to stand", "create that state", and "prepare the pathway" fail this standard.
+16. Athlete-led chat: stay with the topic the athlete chose. Keep curriculum and assignments in the background until the athlete asks about training, practice, their assignment, curriculum, a session, a sim, a protocol, or an exercise.
+17. Respect conversational closure: when the athlete thanks Nora, acknowledges the answer, or closes the exchange, reply briefly and warmly. Do not add a question, advice, assignment, curriculum, training task, or new topic.
+18. Plain meaning test: a smart middle schooler should be able to say exactly what Nora means and what to do next. Reject motivational fog that sounds confident but gives no usable instruction, including phrases like "clear starting point", "stay simple early", "let the pace climb", "build from here", or "keep the day clean".
 `;
 
 const negationLedCorrectiveContrastPatterns = [
@@ -23,29 +26,6 @@ const negationLedCorrectiveContrastPatterns = [
   /\b(?:isn't|aren't|wasn't|weren't|doesn't|don't|can't|won't)\b[^.!?]{0,120}(?:[,;:]\s*|\.\s+)(?:it|this|that|they|we|you)\b/i,
   /(?:^|[;:.]\s+)(?:it|this|that|they|we|you)\s+(?:is|are|does|do|can|will)\s+not\b/i,
   /\b(?:is|are|does|do|can|will)\s+not\b[^.!?]{0,120}(?:[,;:]\s*|\.\s+)(?:it|this|that|they|we|you)\b/i,
-];
-
-const tradeMarkers = [
-  'so i can',
-  'so we can',
-  "i'll use",
-  'i will use',
-  'i can use',
-  "we'll use",
-  'we will use',
-  "so i'll",
-  'so i will',
-  'to set',
-  'to choose',
-  'to pick',
-  'to adjust',
-  'to pace',
-  'to lower',
-  'to raise',
-  'to match',
-  'to decide',
-  'before i pick',
-  'before i set',
 ];
 
 const mysteryPronounPatterns = [
@@ -107,6 +87,12 @@ const vagueActionPatterns = [
   'practice mental consistency',
   'first demanding task',
   'day starts to feel noisy',
+  'clear starting point',
+  'stay simple early',
+  'let the pace climb',
+  'pace climb',
+  'build from here',
+  'keep the day clean',
 ];
 
 const technicalJargonPatterns = [
@@ -220,11 +206,18 @@ const repetitionStopwords = new Set([
 ]);
 
 const replacements = [
-  ['How you feeling?', "How are you feeling right now so I can set the pace for today's session?"],
-  ['How are you feeling?', "How are you feeling right now so I can set the pace for today's session?"],
-  ['how you feeling?', "how are you feeling right now so I can set the pace for today's session?"],
-  ['how are you feeling?', "how are you feeling right now so I can set the pace for today's session?"],
-  ['how are things landing today?', "how are you feeling right now so I can set the pace for today's session?"],
+  ['How you feeling?', 'What feels most important to talk through right now?'],
+  ['How are you feeling?', 'What feels most important to talk through right now?'],
+  ['how you feeling?', 'what feels most important to talk through right now?'],
+  ['how are you feeling?', 'what feels most important to talk through right now?'],
+  ['how are things landing today?', 'what feels most important to talk through right now?'],
+  [
+    'You woke up with strong recovery and a clear starting point. Stay simple early, then let the pace climb.',
+    "Your recovery looks strong today. Start with today's Nora check-in, then do the three skills in your plan.",
+  ],
+  ['clear starting point', "clear plan for today's Nora check-in"],
+  ['Stay simple early, then let the pace climb.', "Start with today's Nora check-in, then do the three skills in your plan."],
+  ['stay simple early, then let the pace climb.', "start with today's Nora check-in, then do the three skills in your plan."],
   ["Recovery's workable", "No recovery red flags for today's session"],
   ["recovery's workable", "no recovery red flags for today's session"],
   ['recovery is workable', "no recovery red flags for today's session"],
@@ -331,13 +324,6 @@ function validateNoraVoiceRubric(text, optionsOrPrevious = {}) {
     violations.push({ rule: 'one-question', detail: `message asks ${questionCount} questions` });
   }
 
-  if (questionCount > 0 && !tradeMarkers.some((marker) => lowered.includes(marker))) {
-    violations.push({
-      rule: 'show-the-trade',
-      detail: 'question does not say what Nora will do with the answer',
-    });
-  }
-
   for (const pattern of mysteryPronounPatterns) {
     if (lowered.includes(pattern)) {
       violations.push({ rule: 'no-mystery-pronouns', detail: `contains vague reference '${pattern}'` });
@@ -407,11 +393,6 @@ function repairObviousNoraVoiceFailures(text) {
     repaired = repaired.split(target).join(replacement);
   }
 
-  const lowered = repaired.toLowerCase();
-  if (repaired.includes('?') && !tradeMarkers.some((marker) => lowered.includes(marker))) {
-    repaired += " Your answer gives me context for today's session.";
-  }
-
   return repaired;
 }
 
@@ -421,12 +402,12 @@ function defaultNoraVoiceRubricFallback(text) {
     return "Today's session is here because your check-in points to focused reset work right now. Let's start today's session.";
   }
   if (lowered.includes('headspace') || lowered.includes('energy') || lowered.includes('confidence') || lowered.includes('confident')) {
-    return "I heard the prep signal. Tell me the one part of today's session that needs the most attention.";
+    return 'I hear you. What part of that would you like to explore further?';
   }
   if (String(text || '').includes('?')) {
-    return "How are you feeling right now?";
+    return 'What part would you like to explore further?';
   }
-  return "I need to make this concrete: tell me how you feel right now.";
+  return 'I hear you.';
 }
 
 function enforceNoraVoiceRubric(text, options = {}) {

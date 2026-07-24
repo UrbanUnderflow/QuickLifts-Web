@@ -907,7 +907,7 @@ function buildSnapshotContextSection(snapshot, conversationSignalEvent) {
     ? `\n- Latest Chat Correction: ${conversationSignalEvent.inferredDelta?.summary || 'A meaningful chat-derived state update was recorded just now.'}`
     : '';
 
-  return `\n\n## Current State Snapshot:\n- Overall Readiness: ${snapshot.overallReadiness || 'unknown'}\n- Confidence: ${snapshot.confidence || 'medium'}\n- Routing Posture: ${snapshot.recommendedRouting || 'sim_only'}\n- Protocol Class Hint: ${snapshot.recommendedProtocolClass || 'none'}\n- Support Flag: ${snapshot.supportFlag ? 'true' : 'false'}\n- Snapshot Summary: ${summary}${noteLines}${correctionLine}\nRules:\n- Treat this as the latest runtime state estimate.\n- If a just-recorded chat correction makes the athlete meaningfully more constrained than the earlier assignment posture, do not push them into the heavier version of the task as if nothing changed.\n- Keep recommendations bounded and explain when the state seems to have shifted.`;
+  return `\n\n## Current State Snapshot:\n- Overall Readiness: ${snapshot.overallReadiness || 'unknown'}\n- Confidence: ${snapshot.confidence || 'medium'}\n- Routing Posture: ${snapshot.recommendedRouting || 'sim_only'}\n- Protocol Class Hint: ${snapshot.recommendedProtocolClass || 'none'}\n- Support Flag: ${snapshot.supportFlag ? 'true' : 'false'}\n- Snapshot Summary: ${summary}${noteLines}${correctionLine}\nRules:\n- Treat this as the latest runtime state estimate and keep it in the background until it is relevant to the athlete's chosen topic.\n- If a just-recorded chat correction makes the athlete meaningfully more constrained than the earlier assignment posture, do not push them into the heavier version of the task as if nothing changed.\n- Keep recommendations bounded and explain when the state seems to have shifted.`;
 }
 
 async function getActiveMentalAssignments(db, userId) {
@@ -1239,6 +1239,98 @@ async function recoverSnapshotFromSavedConversation({
   };
 }
 
+function isConversationAcknowledgment(message) {
+  const normalized = String(message || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9' ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return new Set([
+    'thanks',
+    'thanks nora',
+    'thank you',
+    'thank you nora',
+    'got it',
+    'okay',
+    'ok',
+    'sounds good',
+    'that helps',
+    'that helped',
+    'appreciate it',
+    'i appreciate it',
+  ]).has(normalized);
+}
+
+function classifyResponseContext(userMessage, lastNoraResponseLength) {
+  const lowercased = String(userMessage || '').toLowerCase();
+  const wordCount = String(userMessage || '').split(/\s+/).filter((word) => word.length > 0).length;
+
+  if (isConversationAcknowledgment(userMessage)) {
+    return {
+      context: 'acknowledgment',
+      wordRange: { min: 2, max: 12 },
+      maxTokens: 40,
+    };
+  }
+
+  if (lastNoraResponseLength && lastNoraResponseLength > 100) {
+    return {
+      context: 'turnTaking',
+      wordRange: { min: 40, max: 80 },
+      maxTokens: 220,
+    };
+  }
+
+  const teachingIndicators = [
+    'how do i', 'how can i', 'how should i',
+    'what should', 'what can i do',
+    'why do i', 'why does', 'why is',
+    'explain', 'help me understand',
+    'what\'s the best way', 'any tips',
+    'advice on', 'advice for',
+    'what would you recommend', 'what do you suggest',
+  ];
+  if (teachingIndicators.some((indicator) => lowercased.includes(indicator))) {
+    return {
+      context: 'teaching',
+      wordRange: { min: 100, max: 200 },
+      maxTokens: 450,
+    };
+  }
+
+  if (wordCount < 15) {
+    return {
+      context: 'quickExchange',
+      wordRange: { min: 30, max: 50 },
+      maxTokens: 150,
+    };
+  }
+
+  const emotionalIndicators = [
+    'i feel', 'i\'m feeling', 'feeling like',
+    'struggling', 'overwhelmed', 'stressed',
+    'disappointed', 'frustrated', 'anxious',
+    'worried', 'scared', 'nervous',
+    'not my best', 'hard time', 'difficult',
+  ];
+  const isEmotionalShare = emotionalIndicators.some((indicator) => lowercased.includes(indicator));
+
+  if (wordCount > 80 || isEmotionalShare) {
+    return {
+      context: 'listening',
+      wordRange: { min: 30, max: 60 },
+      maxTokens: 180,
+    };
+  }
+
+  return {
+    context: 'standard',
+    wordRange: { min: 60, max: 100 },
+    maxTokens: 280,
+  };
+}
+
 exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
@@ -1502,84 +1594,6 @@ exports.handler = async (event, context) => {
     // Response Context Detection (for natural conversation flow)
     // =========================================================================
     
-    function classifyResponseContext(userMessage, lastNoraResponseLength) {
-      const lowercased = userMessage.toLowerCase();
-      const wordCount = userMessage.split(/\s+/).filter(w => w.length > 0).length;
-      
-      // 1. TURN-TAKING: If Nora just gave a long response (100+ words), keep this one shorter
-      if (lastNoraResponseLength && lastNoraResponseLength > 100) {
-        return {
-          context: 'turnTaking',
-          wordRange: { min: 40, max: 80 },
-          maxTokens: 220
-        };
-      }
-      
-      // 2. TEACHING: User asking "how", "what should I", "why", "explain", etc.
-      const teachingIndicators = [
-        'how do i', 'how can i', 'how should i',
-        'what should', 'what can i do',
-        'why do i', 'why does', 'why is',
-        'explain', 'help me understand',
-        'what\'s the best way', 'any tips',
-        'advice on', 'advice for',
-        'what would you recommend', 'what do you suggest'
-      ];
-      if (teachingIndicators.some(indicator => lowercased.includes(indicator))) {
-        return {
-          context: 'teaching',
-          wordRange: { min: 100, max: 200 },
-          maxTokens: 450
-        };
-      }
-      
-      // 3. QUICK EXCHANGE: User sent a very short message (<15 words)
-      if (wordCount < 15) {
-        const shortQuestionIndicators = ['?', 'what', 'how', 'why', 'when', 'where', 'who'];
-        const isQuestion = shortQuestionIndicators.some(ind => lowercased.includes(ind));
-        
-        // Short questions might need teaching, not quick exchange
-        if (isQuestion && teachingIndicators.some(indicator => lowercased.includes(indicator))) {
-          return {
-            context: 'teaching',
-            wordRange: { min: 100, max: 200 },
-            maxTokens: 450
-          };
-        }
-        
-        return {
-          context: 'quickExchange',
-          wordRange: { min: 30, max: 50 },
-          maxTokens: 150
-        };
-      }
-      
-      // 4. LISTENING: User sharing deeply (long message OR emotional content)
-      const emotionalIndicators = [
-        'i feel', 'i\'m feeling', 'feeling like',
-        'struggling', 'overwhelmed', 'stressed',
-        'disappointed', 'frustrated', 'anxious',
-        'worried', 'scared', 'nervous',
-        'not my best', 'hard time', 'difficult'
-      ];
-      const isEmotionalShare = emotionalIndicators.some(ind => lowercased.includes(ind));
-      
-      if (wordCount > 80 || isEmotionalShare) {
-        return {
-          context: 'listening',
-          wordRange: { min: 30, max: 60 },
-          maxTokens: 180
-        };
-      }
-      
-      // 5. STANDARD: Default balanced conversation
-      return {
-        context: 'standard',
-        wordRange: { min: 60, max: 100 },
-        maxTokens: 280
-      };
-    }
-    
     // Detect response context
     const responseContext = classifyResponseContext(message, lastNoraResponseLength);
     console.log(`[pulsecheck-chat] Response context: ${responseContext.context}, word range: ${responseContext.wordRange.min}-${responseContext.wordRange.max}`);
@@ -1595,6 +1609,8 @@ Tone ▸ Warm, intellectually sharp, quietly confident.
 Conversation Style ▸ 
 - Respond naturally like a real person in conversation
 - Match the user's energy: short messages get short responses, deep questions get thorough answers
+- Follow the athlete's lead. Help them explore the topic they chose instead of steering to a topic of your own
+- Treat thanks, acknowledgments, and conversational closure as complete turns. Reply warmly without adding a question, task, or new topic
 - When they share deeply or emotionally, validate briefly and give them space to continue
 - When they ask questions or need explanation, provide thorough guidance
 - After you give a long response, keep the next one shorter (take turns in conversation)
@@ -1602,6 +1618,7 @@ Conversation Style ▸
 Approach ▸ Active-listening → concise reflection → actionable insight when appropriate.
 Style ▸ Use the athlete's first name. No clichés or filler. Be genuine and present.
 Don'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.
+Curriculum ▸ Keep active assignments and curriculum as background context. Discuss or recommend them when the athlete asks about training, practice, their assignment, curriculum, a session, a sim, a protocol, or an exercise. In ordinary chat, stay with the athlete's chosen topic.
 ${NORA_VOICE_RUBRIC_PROMPT}`;
 
     // Build user context section
@@ -1613,7 +1630,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // Add health context if provided (iOS sends this from HealthKit)
     let healthContextSection = '';
     if (healthContext) {
-      healthContextSection = `\n\n## Health & Fitness Context:\n${healthContext}\n\nUse this health data to provide personalized insights and recommendations. Reference specific patterns, trends, and achievements when relevant to the conversation. Be encouraging about positive trends and supportive about areas for improvement.`;
+      healthContextSection = `\n\n## Health & Fitness Context:\n${healthContext}\n\nUse this health data only when it is relevant to the topic the athlete chose. Reference specific patterns, trends, and achievements when relevant to the conversation. Be encouraging about positive trends and supportive about areas for improvement.`;
     }
 
     let assignmentContextSection = '';
@@ -1628,7 +1645,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         assignmentContextSection += `\n- Source Date: ${todaysNoraAssignment.sourceDate}`;
       }
 
-      assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- When naming today's active task, use this saved task or a plain-language paraphrase of the same saved task.\n- Before recommending or surfacing this task, explain why the athlete's message, assignment rationale, and available context markers make this the right next step.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
+      assignmentContextSection += `\nRules:\n- Keep this assignment in the background until the athlete asks about training, practice, today's task, their assignment, curriculum, a session, a sim, a protocol, or an exercise.\n- Treat this assignment as the source of truth when the athlete asks about today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- When naming today's active task, use this saved task or a plain-language paraphrase of the same saved task.\n- Before recommending or surfacing this task, explain why the athlete's message, assignment rationale, and available context markers make this the right next step.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
       if (conversationSignalEvent && !['started', 'completed', 'deferred', 'overridden', 'superseded'].includes(todaysNoraAssignment.status || '')) {
         assignmentContextSection += assignmentRefreshApplied
           ? `\n- A newer chat-derived signal refreshed both the state snapshot and the current mutable assignment. Speak to the updated task, not the stale one.`
@@ -1649,11 +1666,14 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // Add context-specific instructions
     let contextInstructions = '';
     switch (responseContext.context) {
+      case 'acknowledgment':
+        contextInstructions = `\n\n## Response Mode: ACKNOWLEDGMENT\nThe athlete is thanking you, acknowledging what you said, or closing the exchange.\n\nYOUR RESPONSE MUST:\n- Be warm and natural (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Let the exchange end comfortably\n- Use no question\n- Add no advice, assignment, curriculum, training task, or new topic`;
+        break;
       case 'teaching':
         contextInstructions = `\n\n## Response Mode: TEACHING\nThe user is asking for help, explanation, or guidance.\n\nYOUR RESPONSE SHOULD:\n- Be thorough and educational (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Explain the concept or strategy clearly\n- Give a specific, actionable example they can use\n- End with a check-in question to ensure understanding\n\nThis is a coaching moment - take the time to teach properly.`;
         break;
       case 'listening':
-        contextInstructions = `\n\n## Response Mode: LISTENING\nThe user is sharing something meaningful or emotional.\n\nYOUR RESPONSE MUST:\n- Be brief and validating (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Show you heard the specific details they shared\n- Validate the weight of what they're carrying\n- Reframe any self-criticism positively\n- End with one specific question that shows what you will do with the answer, e.g. "What part is heaviest right now so I can lower today's pace?"\n\nDO NOT:\n- Ask "what action can you take?" or offer solutions yet\n- Pivot to achievements/PRs unless they asked\n- Match their message length - they need space to continue sharing`;
+        contextInstructions = `\n\n## Response Mode: LISTENING\nThe user is sharing something meaningful or emotional.\n\nYOUR RESPONSE MUST:\n- Be brief and validating (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Show you heard the specific details they shared\n- Validate the weight of what they're carrying\n- Reframe any self-criticism positively\n- Ask one specific human question only when it helps them explore the topic they brought up\n- Keep internal decision logic out of the message\n\nDO NOT:\n- Ask "what action can you take?" or offer solutions yet\n- Pivot to achievements/PRs unless they asked\n- Match their message length - they need space to continue sharing`;
         break;
       case 'quickExchange':
         contextInstructions = `\n\n## Response Mode: QUICK EXCHANGE\nThe user sent a short message. Match their energy.\n\nYOUR RESPONSE SHOULD:\n- Be snappy and conversational (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Match their brevity\n- Keep the dialogue flowing naturally`;
@@ -1674,7 +1694,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // Coach knowledge vault — team logistics the athlete's coach shared via "Train Nora".
     const vaultContextSection = await getCoachVaultContext(db, userDataForPrefs);
 
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${vaultContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nInstead, acknowledge their answer and advance the topic.`;
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${vaultContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nFollow the athlete's lead and stay with the topic they chose. Keep active assignments and curriculum in the background unless the athlete asks about them.\nTreat thanks, acknowledgments, and conversational closure as complete turns. Reply briefly and warmly without adding a question or new topic.\nInstead, acknowledge their answer and advance the topic when they are continuing the conversation.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {
@@ -1689,10 +1709,11 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     const onboarding = userDataForPrefs?.mentalTrainingPreferences?.assignmentRemindersOnboarding || {};
     const onboardingState = onboarding?.state || 'none';
 
-    let assistantMessage = null;
-    let handledOnboarding = false;
+    const handledAcknowledgment = responseContext.context === 'acknowledgment';
+    let assistantMessage = handledAcknowledgment ? "You're welcome." : null;
+    let handledOnboarding = handledAcknowledgment;
 
-    if (onboardingState === 'asked') {
+    if (!handledAcknowledgment && onboardingState === 'asked') {
       const yn = parseYesNo(message);
       if (yn === 'no') {
         await db.collection('users').doc(userId).set({
@@ -1724,7 +1745,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           `- Or say “you decide” and I’ll default to noon local time.`;
         handledOnboarding = true;
       }
-    } else if (onboardingState === 'awaiting_time') {
+    } else if (!handledAcknowledgment && onboardingState === 'awaiting_time') {
       const tz =
         assignmentPrefs?.timezone ||
         userDataForPrefs?.dailyReflectionPreferences?.timezone ||
@@ -1908,7 +1929,11 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     }
 
     assistantMessage = enforceNoraVoiceRubric(assistantMessage, {
-      source: handledOnboarding ? 'pulsecheck-chat-onboarding' : 'pulsecheck-chat-openai',
+      source: handledAcknowledgment
+        ? 'pulsecheck-chat-acknowledgment'
+        : handledOnboarding
+          ? 'pulsecheck-chat-onboarding'
+          : 'pulsecheck-chat-openai',
       fallback: defaultNoraVoiceRubricFallback(assistantMessage),
       previousAssistantMessages: recentMessages
         .filter((msg) => !msg?.isFromUser && String(msg?.content || '').trim())
@@ -2983,6 +3008,8 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 }
 
 exports.runtimeHelpers = {
+  classifyResponseContext,
+  isConversationAcknowledgment,
   getTodaysNoraAssignment,
   getCurrentStateSnapshot,
   deriveConversationSignalAnalysis,

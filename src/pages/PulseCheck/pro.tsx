@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { GetStaticProps } from 'next';
 import {
@@ -251,11 +251,11 @@ const PATHWAYS: Pathway[] = [
 
 const pageMeta = {
   pageId: 'pulsecheck-pro',
-  pageTitle: 'PulseCheck Pro: Your Mind Gets a Game Plan, Too',
+  pageTitle: 'PulseCheck Pro: Mental Skills Training for Adult Athletes',
   metaDescription:
-    'See how PulseCheck Pro helps adult athletes check in, get a clear mental game plan, train under pressure, and unlock what comes next.',
-  ogTitle: 'PulseCheck Pro: Your Mind Gets a Game Plan, Too',
-  ogDescription: 'Check in. Train the skill. Test it under pressure. Unlock what comes next.',
+    'See how PulseCheck Pro turns readiness into focused mental skills training, pressure testing, adaptive blocks, and long-term advancement.',
+  ogTitle: 'PulseCheck Pro: Mental Skills Training for Adult Athletes',
+  ogDescription: 'Assess. Prescribe. Train. Pressure-test. Advance.',
   ogImage: '/pulsecheck-pro-og.png',
   twitterCard: 'summary_large_image',
   lastUpdated: '2026-07-23T00:00:00.000Z',
@@ -434,10 +434,11 @@ function SignalSection() {
 
   return (
     <section className="pcp-section pcp-signal-section" id="signal">
+      <div className="pcp-type-art pcp-type-art--right" aria-hidden="true">STATE</div>
       <div className="pcp-shell pcp-signal-grid">
         <Reveal className="pcp-section-copy">
           <span className="pcp-kicker"><Activity size={14} /> Start with today</span>
-          <h2>Your day becomes a training decision.</h2>
+          <h2>Today’s state becomes <span>a training decision.</span></h2>
           <p>
             PulseCheck reads the athlete’s check-in beside recent practice, performance goals, and
             personal patterns. The result is a useful next rep for the day in front of them.
@@ -521,10 +522,11 @@ function SlateSection() {
 
   return (
     <section className="pcp-section pcp-slate-section" id="prescription">
+      <div className="pcp-type-art pcp-type-art--left" aria-hidden="true">TRAIN</div>
       <div className="pcp-shell">
         <Reveal className="pcp-centered-heading">
           <span className="pcp-kicker"><Layers3 size={14} /> The daily prescription</span>
-          <h2>Learn the move. Then prove it under pressure.</h2>
+          <h2>Learn the response. <span>Prove it under pressure.</span></h2>
           <p>
             Each slate pairs guided protocols with scored simulations. Athletes understand the skill,
             rehearse it, and test it while the system learns what should come next.
@@ -616,11 +618,12 @@ function AdaptiveBlockSection() {
 
   return (
     <section className="pcp-section pcp-block-section" id="adaptation">
+      <div className="pcp-type-art pcp-type-art--right" aria-hidden="true">ADAPT</div>
       <div className="pcp-block-halo" aria-hidden="true" />
       <div className="pcp-shell">
         <Reveal className="pcp-block-heading">
           <span className="pcp-kicker"><RotateCcw size={14} /> A system that keeps learning</span>
-          <h2>Two weeks of work create a better next decision.</h2>
+          <h2>Two weeks of work. <span>A better next decision.</span></h2>
           <p>
             The block gives the athlete enough repetition to build a skill and enough variation to
             reveal whether it holds. Follow-through, choices, and scores shape the next move.
@@ -705,10 +708,11 @@ function PathwaySection() {
 
   return (
     <section className="pcp-section pcp-pathway-section" id="pathway">
+      <div className="pcp-type-art pcp-type-art--left" aria-hidden="true">ADVANCE</div>
       <div className="pcp-shell">
         <Reveal className="pcp-centered-heading">
           <span className="pcp-kicker"><Trophy size={14} /> The long game</span>
-          <h2>Every level reveals the next performance edge.</h2>
+          <h2>Every level reveals <span>the next performance edge.</span></h2>
           <p>
             The athlete can see where the work is going. Each pathway adds a deeper demand while
             preserving the skills already earned.
@@ -771,62 +775,82 @@ function PathwaySection() {
 type DeepDiveKey = 'today' | 'training' | 'growth';
 
 function ExperienceRail() {
+  const reduceMotion = useReducedMotion();
+  const [activeIndex, setActiveIndex] = useState(0);
   const steps = [
     {
       icon: Activity,
       number: '01',
-      title: 'Check in',
-      body: 'Tell PulseCheck how your mind and body are showing up today.',
+      title: 'Assess',
+      body: 'Read readiness, pressure, focus, and the demands of the day.',
       color: '#46E7F2',
     },
     {
       icon: Target,
       number: '02',
-      title: 'Get the game plan',
-      body: 'See one clear mental focus built for today’s demand.',
+      title: 'Prescribe',
+      body: 'Turn today’s signals into one clear performance priority.',
       color: '#7DF2B8',
     },
     {
-      icon: Play,
+      icon: Brain,
       number: '03',
-      title: 'Train + test',
-      body: 'Practice the skill, then use it in a pressure simulation.',
+      title: 'Train',
+      body: 'Learn the skill and rehearse the response with intent.',
       color: '#A68BFF',
     },
     {
-      icon: Trophy,
+      icon: Gauge,
       number: '04',
-      title: 'Level up',
-      body: 'Your work shapes the next challenge and opens the next level.',
+      title: 'Pressure-test',
+      body: 'Use the skill while time, noise, and consequences increase.',
+      color: '#FF8AA5',
+    },
+    {
+      icon: TrendingUp,
+      number: '05',
+      title: 'Advance',
+      body: 'Let earned evidence shape the next block and performance level.',
       color: '#FFB84D',
     },
   ];
+  const activeStep = steps[activeIndex];
+
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setActiveIndex((current) => (current + 1) % steps.length);
+    }, 4200);
+
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, reduceMotion, steps.length]);
 
   return (
-    <section className="pcp-experience-rail" id="experience">
+    <section
+      className="pcp-experience-rail"
+      id="experience"
+      style={{ '--active-step-color': activeStep.color } as React.CSSProperties}
+    >
+      <div className="pcp-type-art pcp-type-art--light" aria-hidden="true">INTENT</div>
       <div className="pcp-shell">
         <Reveal className="pcp-experience-heading">
-          <span>THE WHOLE EXPERIENCE</span>
-          <h2>Four beats. One clear path forward.</h2>
-          <p>An athlete can understand the day in seconds and feel the progress every time they return.</p>
+          <span>THE PERFORMANCE SYSTEM</span>
+          <h2>A signal becomes <span>a performance decision.</span></h2>
+          <p>Five connected stages turn today’s state into deliberate work and measurable advancement.</p>
         </Reveal>
         <div className="pcp-experience-steps">
-          <motion.div
-            className="pcp-experience-line"
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true, amount: 0.6 }}
-            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <span />
-          </motion.div>
           {steps.map((step, index) => {
             const Icon = step.icon;
+            const isActive = index === activeIndex;
             return (
               <Reveal key={step.title} delay={index * 0.1}>
-                <article
-                  className="pcp-experience-step"
+                <button
+                  type="button"
+                  className={`pcp-experience-step ${isActive ? 'is-active' : ''}`}
                   style={{ '--step-color': step.color } as React.CSSProperties}
+                  onClick={() => setActiveIndex(index)}
+                  aria-pressed={isActive}
                 >
                   <div className="pcp-experience-step-top">
                     <span><Icon size={19} /></span>
@@ -834,7 +858,15 @@ function ExperienceRail() {
                   </div>
                   <h3>{step.title}</h3>
                   <p>{step.body}</p>
-                </article>
+                  {isActive && (
+                    <motion.i
+                      className="pcp-experience-progress"
+                      initial={reduceMotion ? false : { scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ duration: reduceMotion ? 0 : 4.2, ease: 'linear' }}
+                    />
+                  )}
+                </button>
               </Reveal>
             );
           })}
@@ -847,34 +879,35 @@ function ExperienceRail() {
 function AthleteDaySection() {
   const moments = [
     {
-      label: 'BEFORE PRACTICE',
-      title: 'How are you showing up?',
-      detail: 'A fast check-in reads energy, focus, and pressure.',
+      label: 'ASSESS THE STATE',
+      title: 'Read what is true today',
+      detail: 'A focused check-in captures energy, attention, confidence, and pressure.',
       color: '#46E7F2',
     },
     {
-      label: 'TODAY’S FOCUS',
-      title: 'Recover your attention',
-      detail: 'A short protocol gives the athlete a cue they can use now.',
+      label: 'SET THE PRIORITY',
+      title: 'Train the clearest opportunity',
+      detail: 'The athlete receives one mental-performance focus matched to today’s demand.',
       color: '#A68BFF',
     },
     {
-      label: 'AFTER THE REP',
-      title: 'The next challenge updates',
-      detail: 'Practice and simulation results shape what comes next.',
+      label: 'EARN THE NEXT MOVE',
+      title: 'Let the evidence advance the plan',
+      detail: 'Practice, pressure-test results, and follow-through shape the next challenge.',
       color: '#FFB84D',
     },
   ];
 
   return (
     <section className="pcp-athlete-story" id="athlete-day">
+      <div className="pcp-type-art pcp-type-art--right" aria-hidden="true">PERFORM</div>
       <div className="pcp-shell">
         <Reveal className="pcp-athlete-story-heading">
-          <span>ONE DAY WITH PULSECHECK</span>
-          <h2>Meet the athlete where the moment is.</h2>
+          <span>ONE PERFORMANCE DAY</span>
+          <h2>The work begins <span>before the next rep.</span></h2>
           <p>
-            A hard rep. A noisy mind. A chance to reset. PulseCheck turns that moment into something
-            the athlete can understand, practice, and carry back into performance.
+            PulseCheck gives the athlete a disciplined way to read the moment, train the right
+            response, and return to performance with a clear purpose.
           </p>
         </Reveal>
 
@@ -895,9 +928,9 @@ function AthleteDaySection() {
           />
           <div className="pcp-athlete-scene-shade" />
           <div className="pcp-athlete-scene-copy">
-            <span>THE NEXT REP</span>
-            <blockquote>“I know what I’m training. I know why it matters today.”</blockquote>
-            <p>From a feeling the athlete can name to a skill the athlete can use.</p>
+            <span>TRAIN WITH PURPOSE</span>
+            <blockquote>“I know the skill. I know the demand. I know what comes next.”</blockquote>
+            <p>From present-state awareness to deliberate mental skills training.</p>
           </div>
           <div className="pcp-athlete-moments">
             {moments.map((moment, index) => (
@@ -1102,15 +1135,15 @@ const PulseCheckProPage: React.FC = () => {
           <BrandMark />
           <nav aria-label="Page navigation">
             <a href="#experience">The experience</a>
-            <a href="#athlete-day">A day with Pro</a>
-            <a href="#value">What changes</a>
-            <a href="#explore">Explore the system</a>
+            <a href="#signal">Today’s plan</a>
+            <a href="#prescription">Skills training</a>
+            <a href="#pathway">The pathway</a>
           </nav>
           <a
             href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pro"
             className="pcp-nav-cta"
           >
-            Bring Pro to your athletes <ArrowRight size={15} />
+            Request a Demo <ArrowRight size={15} />
           </a>
         </div>
       </header>
@@ -1134,23 +1167,23 @@ const PulseCheckProPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55 }}
             >
-              <span /> Adaptive mental-performance training · Ages 18+
+              <span /> Adaptive mental skills training · Adult athletes 18+
             </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.78, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
             >
-              Your mind gets
-              <span>a game plan, too.</span>
+              Train the mind
+              <span>with the same intent.</span>
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.72, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
             >
-              Check in. Get one clear focus. Practice the skill. Test it under pressure. Then unlock
-              what comes next.
+              PulseCheck turns today’s readiness and performance demands into a focused plan.
+              Learn the skill. Rehearse it. Test it under pressure. Build what comes next.
             </motion.p>
             <motion.div
               className="pcp-hero-actions"
@@ -1159,7 +1192,7 @@ const PulseCheckProPage: React.FC = () => {
               transition={{ duration: 0.7, delay: 0.28 }}
             >
               <a href="#experience" className="pcp-primary-button">
-                See the full experience <ArrowDown size={17} />
+                Walk through the experience <ArrowDown size={17} />
               </a>
               <span className="pcp-hero-note"><span><Check size={12} /></span>Built for adult and elite athletes</span>
             </motion.div>
@@ -1208,11 +1241,27 @@ const PulseCheckProPage: React.FC = () => {
         </motion.div>
       </div>
 
+      <section className="pcp-statement pcp-pro-manifesto">
+        <div className="pcp-shell">
+          <Reveal>
+            <small>MENTAL SKILLS TRAINING FOR THE REAL DEMAND</small>
+            <p>
+              Read the state.
+              <span>Train the response.</span>
+              <em>Prove it under pressure.</em>
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
       <AthleteDaySection />
-      <ValueAtGlance />
-      <DeepDiveSection />
+      <SignalSection />
+      <SlateSection />
+      <AdaptiveBlockSection />
+      <PathwaySection />
 
       <section className="pcp-trust-section">
+        <div className="pcp-type-art pcp-type-art--left" aria-hidden="true">SUPPORT</div>
         <div className="pcp-shell pcp-trust-grid">
           <Reveal className="pcp-team-photo">
             <motion.img
@@ -1233,7 +1282,7 @@ const PulseCheckProPage: React.FC = () => {
 
           <Reveal className="pcp-section-copy" delay={0.12}>
             <span className="pcp-kicker"><MessageCircle size={14} /> The coach connection</span>
-            <h2>The athlete finds the words. The coach gains a clearer way to support the work.</h2>
+            <h2>The athlete finds the words. <span>The coach sees how to support the work.</span></h2>
             <p>
               Private reflection gives athletes room to be honest. Coaches see useful patterns,
               shared language, and the moments where support can help.
@@ -1812,8 +1861,85 @@ const PulseCheckProPage: React.FC = () => {
           line-height: 1.03;
         }
         .pcp-statement p span { display: block; color: white; }
+        .pcp-pro-manifesto {
+          position: relative;
+          padding: 175px 0;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 76% 40%, rgba(166, 139, 255, 0.12), transparent 28rem),
+            radial-gradient(circle at 18% 72%, rgba(70, 231, 242, 0.08), transparent 24rem),
+            #05070c;
+        }
+        .pcp-pro-manifesto::after {
+          content: "PERFORMANCE";
+          position: absolute;
+          right: -0.05em;
+          bottom: -0.09em;
+          color: rgba(255, 255, 255, 0.028);
+          font-size: clamp(8rem, 20vw, 21rem);
+          font-weight: 950;
+          line-height: 0.7;
+          letter-spacing: -0.1em;
+          white-space: nowrap;
+          pointer-events: none;
+        }
+        .pcp-pro-manifesto .pcp-shell { position: relative; z-index: 1; }
+        .pcp-pro-manifesto p {
+          max-width: 1120px;
+          font-size: clamp(3.5rem, 7.4vw, 7.8rem);
+          line-height: 0.88;
+          letter-spacing: -0.078em;
+        }
+        .pcp-pro-manifesto p span { margin-left: clamp(0px, 8vw, 120px); }
+        .pcp-pro-manifesto p em {
+          display: block;
+          width: fit-content;
+          margin-left: clamp(0px, 16vw, 240px);
+          padding-right: 0.04em;
+          color: transparent;
+          background: linear-gradient(95deg, #68eae8, #a68bff 68%, #ff8aa5);
+          background-clip: text;
+          -webkit-background-clip: text;
+          font-style: normal;
+        }
 
-        .pcp-section { position: relative; padding: 130px 0; }
+        .pcp-section {
+          position: relative;
+          padding: 145px 0;
+          overflow: hidden;
+          isolation: isolate;
+        }
+
+        .pcp-section > .pcp-shell,
+        .pcp-experience-rail > .pcp-shell,
+        .pcp-athlete-story > .pcp-shell,
+        .pcp-trust-section > .pcp-shell {
+          position: relative;
+          z-index: 2;
+        }
+
+        .pcp-type-art {
+          position: absolute;
+          z-index: 0;
+          top: 92px;
+          max-width: 120%;
+          overflow: hidden;
+          color: rgba(255, 255, 255, 0.032);
+          font-size: clamp(9rem, 22vw, 23rem);
+          font-weight: 950;
+          line-height: 0.68;
+          letter-spacing: -0.1em;
+          white-space: nowrap;
+          pointer-events: none;
+          user-select: none;
+        }
+        .pcp-type-art--left { left: -0.08em; }
+        .pcp-type-art--right { right: -0.04em; text-align: right; }
+        .pcp-type-art--light {
+          top: 70px;
+          right: -0.04em;
+          color: rgba(10, 18, 26, 0.055);
+        }
 
         .pcp-signal-section {
           border-block: 1px solid rgba(255, 255, 255, 0.06);
@@ -1833,9 +1959,23 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-outcomes-heading h2,
         .pcp-final-content h2 {
           margin: 18px 0;
-          font-size: clamp(2.7rem, 4.7vw, 4.8rem);
-          line-height: 0.97;
-          letter-spacing: -0.058em;
+          font-size: clamp(3.05rem, 5.35vw, 5.75rem);
+          line-height: 0.91;
+          letter-spacing: -0.072em;
+          text-wrap: balance;
+        }
+
+        .pcp-section-copy h2 > span,
+        .pcp-centered-heading h2 > span,
+        .pcp-block-heading h2 > span,
+        .pcp-athlete-story-heading h2 > span {
+          display: block;
+          width: fit-content;
+          padding-right: 0.04em;
+          color: transparent;
+          background: linear-gradient(100deg, #f8fafc 8%, #71e9e6 52%, #a68bff 96%);
+          background-clip: text;
+          -webkit-background-clip: text;
         }
 
         .pcp-section-copy > p,
@@ -2368,7 +2508,12 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-pathway-gain strong { display: block; margin-top: 6px; color: white; font-size: 10px; line-height: 1.45; }
         .pcp-pathway-gain > div:last-child strong { color: var(--path-color); }
 
-        .pcp-trust-section { padding: 150px 0; }
+        .pcp-trust-section {
+          position: relative;
+          padding: 150px 0;
+          overflow: hidden;
+          isolation: isolate;
+        }
         .pcp-trust-grid {
           display: grid;
           grid-template-columns: minmax(500px, 1fr) minmax(0, 0.85fr);
@@ -2642,14 +2787,16 @@ const PulseCheckProPage: React.FC = () => {
         }
 
         .pcp-experience-rail {
+          --active-step-color: var(--pcp-cyan);
           position: relative;
           z-index: 2;
           padding: 116px 0 125px;
           color: #10151d;
           background:
-            radial-gradient(circle at 9% 9%, rgba(70, 231, 242, 0.22), transparent 22rem),
-            radial-gradient(circle at 90% 85%, rgba(166, 139, 255, 0.16), transparent 24rem),
+            radial-gradient(circle at 9% 9%, color-mix(in srgb, var(--active-step-color) 23%, transparent), transparent 22rem),
+            radial-gradient(circle at 90% 85%, color-mix(in srgb, var(--active-step-color) 15%, transparent), transparent 24rem),
             #f1f0eb;
+          transition: background-color 0.7s ease;
         }
 
         .pcp-experience-heading {
@@ -2678,6 +2825,15 @@ const PulseCheckProPage: React.FC = () => {
           letter-spacing: -0.065em;
           text-wrap: balance;
         }
+        .pcp-experience-heading h2 > span {
+          display: block;
+          width: fit-content;
+          padding-right: 0.04em;
+          color: transparent;
+          background: linear-gradient(100deg, #10151d 4%, #156f77 52%, #5746a8 100%);
+          background-clip: text;
+          -webkit-background-clip: text;
+        }
         .pcp-experience-heading p {
           max-width: 560px;
           margin: 20px 0 0;
@@ -2689,44 +2845,37 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-experience-steps {
           position: relative;
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 14px;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 11px;
           margin-top: 68px;
         }
 
-        .pcp-experience-line {
-          position: absolute;
-          z-index: 0;
-          top: -24px;
-          left: 6%;
-          right: 6%;
-          height: 2px;
-          transform-origin: left;
-          background: linear-gradient(90deg, #46e7f2, #7df2b8, #a68bff, #ffb84d);
-        }
-        .pcp-experience-line span {
-          position: absolute;
-          top: -4px;
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: white;
-          box-shadow: 0 0 0 5px rgba(70, 231, 242, 0.25), 0 0 20px #46e7f2;
-          animation: pcp-travel 4.8s ease-in-out infinite;
-        }
+        .pcp-experience-steps > div { height: 100%; }
 
         .pcp-experience-step {
           --step-color: var(--pcp-cyan);
           position: relative;
           z-index: 1;
+          width: 100%;
+          height: 100%;
           min-height: 285px;
+          display: block;
           padding: 23px;
           overflow: hidden;
           border: 1px solid rgba(9, 17, 27, 0.09);
           border-radius: 24px;
+          color: #10151d;
           background: rgba(255, 255, 255, 0.76);
+          text-align: left;
+          font: inherit;
+          cursor: pointer;
           box-shadow: 0 20px 54px rgba(22, 31, 45, 0.08);
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
+          transition:
+            transform 0.38s cubic-bezier(.22, 1, .36, 1),
+            color 0.38s ease,
+            border-color 0.38s ease,
+            background-color 0.38s ease,
+            box-shadow 0.38s ease;
         }
         .pcp-experience-step::after {
           content: "";
@@ -2744,6 +2893,20 @@ const PulseCheckProPage: React.FC = () => {
           transform: translateY(-8px);
           box-shadow: 0 28px 68px rgba(22, 31, 45, 0.14);
         }
+        .pcp-experience-step:focus-visible {
+          outline: 3px solid #10151d;
+          outline-offset: 4px;
+        }
+        .pcp-experience-step.is-active {
+          transform: translateY(-12px);
+          border-color: color-mix(in srgb, var(--step-color) 65%, transparent);
+          color: white;
+          background: #0b0f16;
+          box-shadow:
+            0 32px 70px rgba(15, 20, 26, 0.28),
+            0 0 0 1px color-mix(in srgb, var(--step-color) 45%, transparent);
+        }
+        .pcp-experience-step.is-active:hover { transform: translateY(-14px); }
         .pcp-experience-step-top {
           display: flex;
           align-items: flex-start;
@@ -2774,6 +2937,18 @@ const PulseCheckProPage: React.FC = () => {
           color: #616a74;
           font-size: 12px;
           line-height: 1.65;
+          transition: color 0.38s ease;
+        }
+        .pcp-experience-step.is-active p { color: rgba(255, 255, 255, 0.65); }
+        .pcp-experience-progress {
+          position: absolute;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          height: 4px;
+          background: var(--step-color);
+          box-shadow: 0 0 18px color-mix(in srgb, var(--step-color) 70%, transparent);
+          transform-origin: left;
         }
 
         .pcp-motion-marquee {
@@ -2803,7 +2978,10 @@ const PulseCheckProPage: React.FC = () => {
         }
 
         .pcp-athlete-story {
+          position: relative;
           padding: 140px 0;
+          overflow: hidden;
+          isolation: isolate;
           background:
             radial-gradient(circle at 12% 20%, rgba(166, 139, 255, 0.09), transparent 25rem),
             #070a10;
@@ -3229,6 +3407,17 @@ const PulseCheckProPage: React.FC = () => {
 
         @media (max-width: 640px) {
           .pcp-shell { width: min(100% - 28px, 1200px); }
+          .pcp-type-art {
+            top: 62px;
+            font-size: clamp(7rem, 34vw, 10rem);
+          }
+          .pcp-pro-manifesto { padding: 112px 0; }
+          .pcp-pro-manifesto p {
+            font-size: clamp(3.1rem, 14.5vw, 4.5rem);
+            line-height: 0.92;
+          }
+          .pcp-pro-manifesto p span,
+          .pcp-pro-manifesto p em { margin-left: 0; }
           .pcp-nav-inner { min-height: 66px; }
           .pcp-nav-cta { width: 40px; height: 40px; justify-content: center; padding: 0; font-size: 0; }
           .pcp-brand > span { align-items: center; }

@@ -1,8 +1,31 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { normalizeAiVoiceConfig } from '../../src/lib/aiVoice';
+import { NORA_VOICE_OPTIONS, normalizeAiVoiceConfig } from '../../src/lib/aiVoice';
 import { buildSpeakRequest } from '../../src/utils/tts';
+
+test('Nora onboarding offers two women and two men using supported OpenAI voices', async () => {
+  assert.equal(NORA_VOICE_OPTIONS.length, 4);
+  assert.equal(
+    NORA_VOICE_OPTIONS.filter((option) => option.gender === 'woman').length,
+    2,
+  );
+  assert.equal(
+    NORA_VOICE_OPTIONS.filter((option) => option.gender === 'man').length,
+    2,
+  );
+
+  for (const option of NORA_VOICE_OPTIONS) {
+    const request = await buildSpeakRequest('Welcome to PulseCheck.', {
+      provider: 'openai',
+      id: option.id,
+      label: option.title,
+    });
+
+    assert.equal(request.provider, 'openai');
+    assert.equal(request.voice, option.id);
+  }
+});
 
 test('legacy ElevenLabs config keeps its voice and receives a separate OpenAI fallback', () => {
   const normalized = normalizeAiVoiceConfig({

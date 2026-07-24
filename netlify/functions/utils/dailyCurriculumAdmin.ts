@@ -209,6 +209,25 @@ const stringValue = (value: unknown): string | undefined => {
 const assignmentRecordKind = (record: ExistingCurriculumAssignmentRecord): 'protocol' | 'sim' | undefined =>
   normalizeAssignmentKind(record.data.actionType);
 
+const isStructurallyValidAssignmentRecord = (
+  record: ExistingCurriculumAssignmentRecord,
+): boolean => {
+  const kind = assignmentRecordKind(record);
+  if (kind === 'protocol') {
+    return Boolean(stringValue(record.data.protocolId))
+      && Boolean(stringValue(record.data.protocolLabel))
+      && !stringValue(record.data.simSpecId)
+      && !stringValue(record.data.simName);
+  }
+  if (kind === 'sim') {
+    return Boolean(stringValue(record.data.simSpecId))
+      && Boolean(stringValue(record.data.simName))
+      && !stringValue(record.data.protocolId)
+      && !stringValue(record.data.protocolLabel);
+  }
+  return false;
+};
+
 const assignmentRecordAssetId = (record: ExistingCurriculumAssignmentRecord): string | undefined =>
   eventAssetId(record.data);
 
@@ -238,6 +257,24 @@ const sortExistingCurriculumAssignments = (
     return assignmentRecordCreatedAt(a) - assignmentRecordCreatedAt(b);
   });
 
+const prepareExistingCurriculumAssignments = (
+  records: ExistingCurriculumAssignmentRecord[],
+): ExistingCurriculumAssignmentRecord[] => {
+  const seenAssetIds = new Set<string>();
+  const seenPillars = new Set<TaxonomyPillar>();
+
+  return sortExistingCurriculumAssignments(records).filter((record) => {
+    const assetId = assignmentRecordAssetId(record);
+    const pillar = eventPillar(record.data);
+    if (!assetId || !pillar || seenAssetIds.has(assetId) || seenPillars.has(pillar)) {
+      return false;
+    }
+    seenAssetIds.add(assetId);
+    seenPillars.add(pillar);
+    return true;
+  });
+};
+
 const fetchTodaysCurriculumAssignmentsAdmin = async (
   db: FirebaseAdmin.firestore.Firestore,
   athleteUserId: string,
@@ -264,6 +301,7 @@ const pickAssetSeries = ({
   count,
   pool,
   drivingPillar,
+  coveredPillars,
   completions,
   overrides,
   recentlyAssigned,
@@ -273,6 +311,7 @@ const pickAssetSeries = ({
   count: number;
   pool: Array<PulseCheckProtocolDefinition | MentalExercise>;
   drivingPillar: TaxonomyPillar;
+  coveredPillars: Set<TaxonomyPillar>;
   completions: CompletionsSnapshot;
   overrides: CurriculumOverride[];
   recentlyAssigned: Set<string>;
@@ -281,11 +320,18 @@ const pickAssetSeries = ({
 }): AssetCandidate[] => {
   const picks: AssetCandidate[] = [];
   const blocked = new Set(recentlyAssigned);
+  const uncoveredPillars = Object.values(TaxonomyPillar)
+    .filter((pillar) => !coveredPillars.has(pillar));
+  const pillarOrder = [
+    ...(uncoveredPillars.includes(drivingPillar) ? [drivingPillar] : []),
+    ...uncoveredPillars.filter((pillar) => pillar !== drivingPillar),
+    ...Object.values(TaxonomyPillar).filter((pillar) => !uncoveredPillars.includes(pillar)),
+  ];
 
   for (let slot = 0; slot < count; slot += 1) {
     const pick = pickAsset({
       pool,
-      drivingPillar,
+      drivingPillar: pillarOrder[slot % pillarOrder.length],
       completions,
       overrides,
       recentlyAssigned: blocked,
@@ -455,11 +501,15 @@ export const generateDailyAssignmentAdmin = async (
     protocols,
   );
 
-  const existingProtocols = sortExistingCurriculumAssignments(
-    existingAssignments.filter((record) => assignmentRecordKind(record) === 'protocol'),
+  const existingProtocols = prepareExistingCurriculumAssignments(
+    existingAssignments.filter(
+      (record) => assignmentRecordKind(record) === 'protocol' && isStructurallyValidAssignmentRecord(record),
+    ),
   );
-  const existingSims = sortExistingCurriculumAssignments(
-    existingAssignments.filter((record) => assignmentRecordKind(record) === 'sim'),
+  const existingSims = prepareExistingCurriculumAssignments(
+    existingAssignments.filter(
+      (record) => assignmentRecordKind(record) === 'sim' && isStructurallyValidAssignmentRecord(record),
+    ),
   );
   const existingProtocolAssetIds = existingProtocols.map(assignmentRecordAssetId).filter(Boolean) as string[];
   const existingSimAssetIds = existingSims.map(assignmentRecordAssetId).filter(Boolean) as string[];
@@ -467,6 +517,7 @@ export const generateDailyAssignmentAdmin = async (
     count: Math.max(0, CURRICULUM_SLOT_TARGET_PER_KIND - existingProtocols.length),
     pool: protocols,
     drivingPillar: protocolDrivingPillar,
+    coveredPillars: new Set(existingProtocols.map((record) => eventPillar(record.data)).filter(Boolean) as TaxonomyPillar[]),
     completions,
     overrides,
     recentlyAssigned: new Set([...recentlyAssigned, ...existingProtocolAssetIds]),
@@ -477,6 +528,7 @@ export const generateDailyAssignmentAdmin = async (
     count: Math.max(0, CURRICULUM_SLOT_TARGET_PER_KIND - existingSims.length),
     pool: sims,
     drivingPillar: simDrivingPillar,
+    coveredPillars: new Set(existingSims.map((record) => eventPillar(record.data)).filter(Boolean) as TaxonomyPillar[]),
     completions,
     overrides,
     recentlyAssigned: new Set([...recentlyAssigned, ...existingSimAssetIds]),

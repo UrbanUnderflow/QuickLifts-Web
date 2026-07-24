@@ -156,7 +156,8 @@
     "promo:create-samples": "node scripts/create-promo-codes.js sample",
     "promo:create-custom": "node scripts/create-promo-codes.js custom",
     "heartbeat:tracker": "node scripts/hourlyObjectiveTracker.js",
-    "pulsecheckathletedemo:audio": "node scripts/generate-pulsecheckathletedemo-audio.js"
+    "pulsecheckathletedemo:audio": "node scripts/generate-pulsecheckathletedemo-audio.js",
+    "media:pulsecheck-appstore": "node scripts/generate-pulsecheck-app-store-media.cjs"
   },
   "browserslist": {
     "production": [

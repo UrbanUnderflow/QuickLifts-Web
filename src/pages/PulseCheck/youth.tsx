@@ -40,7 +40,7 @@ const CHECK_INS: CheckInOption[] = [
     label: 'Drained',
     color: '#FF8A65',
     glow: 'rgba(255,138,101,.22)',
-    response: 'You said you feel drained today. Thanks for telling me. Your mental training is here whenever it fits today.',
+    response: 'You said you feel drained today. Thanks for telling me. Your mental skills training is here whenever it fits today.',
     probe: 'What is making today feel heavy: your body, your mind, or school?',
     choices: ['My body', 'My mind', 'School stuff', 'Something else'],
   },
@@ -50,7 +50,7 @@ const CHECK_INS: CheckInOption[] = [
     label: 'Off',
     color: '#FFB84D',
     glow: 'rgba(255,184,77,.20)',
-    response: 'You said you feel off today. Thanks for telling me. Your mental training is here whenever it fits today.',
+    response: 'You said you feel off today. Thanks for telling me. Your mental skills training is here whenever it fits today.',
     probe: 'What feels off today: sleep, stress, or something at school?',
     choices: ['Sleep', 'Stress', 'School stuff', 'Something else'],
   },
@@ -60,7 +60,7 @@ const CHECK_INS: CheckInOption[] = [
     label: 'Okay',
     color: '#B8C1D9',
     glow: 'rgba(184,193,217,.18)',
-    response: 'You said you feel okay today. Thanks for telling me. Your mental training is here whenever it fits today.',
+    response: 'You said you feel okay today. Thanks for telling me. Your mental skills training is here whenever it fits today.',
     probe: 'Is anything making today harder: sleep, stress, or focus?',
     choices: ['Sleep', 'Stress', 'Focus', 'Something else'],
   },
@@ -70,7 +70,7 @@ const CHECK_INS: CheckInOption[] = [
     label: 'Solid',
     color: '#14E7D0',
     glow: 'rgba(20,231,208,.22)',
-    response: 'You said you feel good today. Thanks for telling me. Your mental training is here whenever it fits today.',
+    response: 'You said you feel good today. Thanks for telling me. Your mental skills training is here whenever it fits today.',
     probe: 'What is helping you feel good today: sleep, mood, or excitement for a game?',
     choices: ['Good sleep', 'Good mood', 'Excited for a game', 'Something else'],
   },
@@ -80,30 +80,9 @@ const CHECK_INS: CheckInOption[] = [
     label: 'Locked In',
     color: '#E0FE10',
     glow: 'rgba(224,254,16,.20)',
-    response: 'You said you feel locked in today. Thanks for telling me. Your mental training is here whenever it fits today.',
+    response: 'You said you feel locked in today. Thanks for telling me. Your mental skills training is here whenever it fits today.',
     probe: 'What has you locked in: good sleep, confidence, or a big game coming up?',
     choices: ['Good sleep', 'Confidence', 'A big game coming', 'Something else'],
-  },
-];
-
-const OUTCOMES = [
-  {
-    icon: RotateCcw,
-    title: 'Recover faster',
-    body: 'Athletes see what went wrong, choose what to do differently, and focus on the next play.',
-    color: '#E0FE10',
-  },
-  {
-    icon: Target,
-    title: 'Hold focus',
-    body: 'Athletes pick one thing to focus on, like the ball or their next job. When they get distracted, they focus on that thing again.',
-    color: '#9A7BFF',
-  },
-  {
-    icon: Wind,
-    title: 'Control energy',
-    body: 'They use breathing and movement to calm down when they feel overwhelmed or get energized when they feel flat.',
-    color: '#14E7D0',
   },
 ];
 
@@ -112,6 +91,80 @@ const BOX_BREATHING_PHASES = [
   { id: 'hold', label: 'Hold', guide: 'Stay still', color: '#E0FE10' },
   { id: 'exhale', label: 'Breathe out', guide: 'Empty your lungs', color: '#9A7BFF' },
   { id: 'holdEmpty', label: 'Hold empty', guide: 'Stay empty', color: '#FFB84D' },
+] as const;
+
+const PHONE_WALKTHROUGH_STEPS = [
+  { id: 'home', label: 'Home' },
+  { id: 'skill', label: 'Skill' },
+  { id: 'start', label: 'Start' },
+  { id: 'practice', label: 'Practice' },
+] as const;
+
+const TRAINING_SKILL_CATEGORIES = [
+  {
+    id: 'breathing',
+    label: 'Breathing',
+    description: 'Use the breath to slow the body down, steady energy, and reset under pressure.',
+    examples: ['Box breathing', 'Long exhale reset', 'Steady breath before a game', 'Breathing between plays'],
+    color: '#14E7D0',
+    icon: Wind,
+  },
+  {
+    id: 'visualization',
+    label: 'Visualization',
+    description: 'Picture the action, pressure, and response before the real moment begins.',
+    examples: ['Perfect rep rehearsal', 'Pressure preview', 'Comeback visualization', 'Competition walkthrough'],
+    color: '#9A7BFF',
+    icon: Eye,
+  },
+  {
+    id: 'focus',
+    label: 'Focus',
+    description: 'Choose what matters now and return attention to it when distractions show up.',
+    examples: ['Find the focus point', 'Next-job cue', 'Noise filter', 'Reset between plays'],
+    color: '#22D3EE',
+    icon: Target,
+  },
+  {
+    id: 'confidence',
+    label: 'Confidence',
+    description: 'Build useful self-talk from preparation, effort, and evidence the athlete can trust.',
+    examples: ['Evidence bank', 'Confident cue words', 'Pregame self-talk', 'Strength recall'],
+    color: '#E0FE10',
+    icon: Sparkles,
+  },
+  {
+    id: 'recovery',
+    label: 'Mistake recovery',
+    description: 'Learn what happened, choose the next useful action, and return to the game.',
+    examples: ['Shake it off', 'Next-play reset', 'Five-second recovery', 'Halftime reset'],
+    color: '#FFB84D',
+    icon: RotateCcw,
+  },
+  {
+    id: 'pressure',
+    label: 'Pressure',
+    description: 'Practice clear decisions and steady actions while the moment feels difficult.',
+    examples: ['Pressure routine', 'Late-game composure', 'Free-throw reset', 'Starting-line focus'],
+    color: '#FF6B8A',
+    icon: Zap,
+  },
+  {
+    id: 'emotions',
+    label: 'Emotional control',
+    description: 'Name the feeling, understand what it is doing, and choose how to respond.',
+    examples: ['Name the feeling', 'Anger reset', 'Nerves check', 'Ask for support'],
+    color: '#FB7185',
+    icon: Heart,
+  },
+  {
+    id: 'routines',
+    label: 'Preparation',
+    description: 'Build repeatable routines for practice, competition, recovery, and sleep.',
+    examples: ['Pregame routine', 'Practice arrival', 'Competition checklist', 'Post-game reset'],
+    color: '#A3E635',
+    icon: Activity,
+  },
 ] as const;
 
 const TEACHING_SCENES = [
@@ -419,7 +472,7 @@ function CheckInExperience() {
               <Check size={14} /><span>A follow-up that matches the answer</span>
             </div>
             <div>
-              <Check size={14} /><span>Tap-only follow-up choices</span>
+              <Check size={14} /><span>Clear follow-up choices</span>
             </div>
           </aside>
         </Reveal>
@@ -467,7 +520,7 @@ function TeachableMomentExperience() {
           <span className="pcy-kicker"><Brain size={14} /> Teachable moment</span>
           <h2>They learn the skill and why it works.</h2>
           <p>
-            Every new training tool includes a short lesson. Athletes see what the skill changes,
+            Every new mental skill includes a short lesson. Athletes see what the skill changes,
             learn what their brain is practicing, and try the skill for themselves.
           </p>
         </Reveal>
@@ -516,7 +569,7 @@ function TeachableMomentExperience() {
 
           <article className="pcy-teaching-demo" aria-label="Interactive visualization teaching demo">
             <div className="pcy-teaching-demo-header">
-              <span><Sparkles size={13} /> NEW TRAINING TOOL</span>
+              <span><Sparkles size={13} /> NEW MENTAL SKILL</span>
               <small>VISUALIZATION</small>
             </div>
 
@@ -682,8 +735,37 @@ function TeachableMomentExperience() {
 }
 
 function YouthExperienceRail() {
+  const reduceMotion = useReducedMotion();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeStep = WALKTHROUGH_STEPS[activeIndex];
+
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setActiveIndex((current) => (current + 1) % WALKTHROUGH_STEPS.length);
+    }, 3800);
+
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, reduceMotion]);
+
   return (
-    <section className="pcy-experience-rail" id="experience">
+    <motion.section
+      className="pcy-experience-rail"
+      id="experience"
+      initial={false}
+      animate={{ backgroundColor: activeStep.color }}
+      transition={{ duration: reduceMotion ? 0 : 0.72, ease: [0.22, 1, 0.36, 1] }}
+      style={{ '--active-experience-color': activeStep.color } as React.CSSProperties}
+    >
+      <motion.div
+        key={activeStep.id}
+        className="pcy-experience-color-wash"
+        aria-hidden="true"
+        initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      />
       <div className="pcy-shell">
         <Reveal className="pcy-experience-heading">
           <span>THE WHOLE EXPERIENCE</span>
@@ -691,176 +773,39 @@ function YouthExperienceRail() {
           <p>Five clear moments move the athlete from “something feels wrong” to “I know what to do next.”</p>
         </Reveal>
         <div className="pcy-experience-steps">
-          <motion.div
-            className="pcy-experience-line"
-            initial={{ scaleX: 0 }}
-            whileInView={{ scaleX: 1 }}
-            viewport={{ once: true, amount: 0.55 }}
-            transition={{ duration: 1.25, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <span />
-          </motion.div>
           {WALKTHROUGH_STEPS.map((step, index) => {
             const Icon = step.icon;
+            const isActive = index === activeIndex;
             return (
               <Reveal key={step.id} delay={index * 0.08}>
-                <article
-                  className="pcy-experience-step"
+                <button
+                  type="button"
+                  className={`pcy-experience-step ${isActive ? 'is-active' : ''}`}
                   style={{ '--walk-color': step.color } as React.CSSProperties}
+                  onClick={() => setActiveIndex(index)}
+                  aria-pressed={isActive}
+                  aria-label={`${step.number} ${step.label}: ${step.takeaway}`}
                 >
                   <div><Icon size={18} /><small>{step.number}</small></div>
                   <h3>{step.label}</h3>
                   <p>{step.takeaway}</p>
-                </article>
-              </Reveal>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function YouthWalkthrough() {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const active = WALKTHROUGH_STEPS[activeIndex];
-  const ActiveIcon = active.icon;
-
-  const chooseStep = (index: number) => setActiveIndex(index);
-  const move = (direction: number) => {
-    setActiveIndex((current) => (current + direction + WALKTHROUGH_STEPS.length) % WALKTHROUGH_STEPS.length);
-  };
-
-  return (
-    <section className="pcy-walkthrough" id="walkthrough">
-      <div className="pcy-shell">
-        <Reveal className="pcy-walkthrough-heading">
-          <span>WALK THROUGH A REAL MOMENT</span>
-          <h2>A mistake just happened. What happens next?</h2>
-          <p>
-            Follow one young athlete from frustration to the next play. Tap each step to see how
-            PulseCheck teaches the mind through education and practice.
-          </p>
-        </Reveal>
-
-        <Reveal className="pcy-walkthrough-stage" delay={0.1}>
-          <motion.img
-            src="/pulsecheck-youth/next-play.webp"
-            alt="Teen soccer athlete regaining focus before returning to the game"
-            initial={{ scale: 1.06 }}
-            whileInView={{ scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}
-          />
-          <div className="pcy-walkthrough-shade" />
-
-          <div className="pcy-walkthrough-nav" role="tablist" aria-label="Youth experience steps">
-            {WALKTHROUGH_STEPS.map((step, index) => {
-              const Icon = step.icon;
-              const isActive = index === activeIndex;
-              const isReached = index <= activeIndex;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  className={`${isActive ? 'active' : ''} ${isReached ? 'reached' : ''}`}
-                  style={{ '--walk-color': step.color } as React.CSSProperties}
-                  onClick={() => chooseStep(index)}
-                >
-                  <span><Icon size={15} /></span>
-                  <small>{step.number}</small>
-                  <strong>{step.label}</strong>
-                </button>
-              );
-            })}
-          </div>
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={active.id}
-              className="pcy-walkthrough-card"
-              style={{ '--walk-color': active.color } as React.CSSProperties}
-              initial={{ opacity: 0, x: 28, y: 10 }}
-              animate={{ opacity: 1, x: 0, y: 0 }}
-              exit={{ opacity: 0, x: -22 }}
-              transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="pcy-walkthrough-card-head">
-                <span><ActiveIcon size={18} /></span>
-                <div><small>{active.number} · {active.label.toUpperCase()}</small><strong>{active.title}</strong></div>
-              </div>
-              <p>{active.body}</p>
-              <div className="pcy-walkthrough-response">
-                <small>{active.prompt}</small>
-                <strong>{active.response}</strong>
-              </div>
-              <div className="pcy-walkthrough-takeaway">
-                <Check size={14} /><span>{active.takeaway}</span>
-              </div>
-              <div className="pcy-walkthrough-controls">
-                <button type="button" onClick={() => move(-1)} aria-label="Previous walkthrough step">
-                  <ArrowRight size={16} />
-                </button>
-                <div>
-                  {WALKTHROUGH_STEPS.map((step, index) => (
-                    <button
-                      key={step.id}
-                      type="button"
-                      className={index === activeIndex ? 'active' : ''}
-                      onClick={() => chooseStep(index)}
-                      aria-label={`Go to ${step.label}`}
+                  {isActive && (
+                    <motion.span
+                      key={`${step.id}-${activeIndex}`}
+                      className="pcy-experience-card-progress"
+                      aria-hidden="true"
+                      initial={reduceMotion ? false : { scaleX: 0 }}
+                      animate={{ scaleX: 1 }}
+                      transition={{ duration: reduceMotion ? 0 : 3.8, ease: 'linear' }}
                     />
-                  ))}
-                </div>
-                <button type="button" onClick={() => move(1)} aria-label="Next walkthrough step">
-                  <ArrowRight size={16} />
+                  )}
                 </button>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-
-          <div className="pcy-walkthrough-moment">
-            <span>THE MOMENT</span>
-            <strong>“I made the mistake. The game kept moving.”</strong>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-function YouthValueAtGlance() {
-  return (
-    <section className="pcy-value-section" id="value">
-      <div className="pcy-shell">
-        <Reveal className="pcy-value-heading">
-          <small>WHAT THE ATHLETE BUILDS</small>
-          <h2>Three skills. A stronger response to every moment.</h2>
-        </Reveal>
-        <div className="pcy-value-grid">
-          {OUTCOMES.map((outcome, index) => {
-            const Icon = outcome.icon;
-            const labels = ['MINDSET', 'FOCUS', 'CONTROL'];
-            return (
-              <Reveal key={outcome.title} delay={index * 0.1}>
-                <article
-                  className="pcy-value-card"
-                  style={{ '--value-color': outcome.color } as React.CSSProperties}
-                >
-                  <div><Icon size={22} /></div>
-                  <small>{labels[index]}</small>
-                  <h3>{outcome.title}</h3>
-                  <p>{outcome.body}</p>
-                  <span><Check size={13} /> Practiced in real athletic moments</span>
-                </article>
               </Reveal>
             );
           })}
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 }
 
@@ -915,12 +860,51 @@ function HomeTeamSection() {
   );
 }
 
-function BoxBreathingPhoneDemo() {
-  const [isRunning, setIsRunning] = useState(true);
+function MentalSkillsPhoneWalkthrough() {
+  const reduceMotion = useReducedMotion();
+  const [walkthroughIndex, setWalkthroughIndex] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(4);
   const [completedCycles, setCompletedCycles] = useState(0);
+  const [launchCount, setLaunchCount] = useState(3);
   const currentPhase = BOX_BREATHING_PHASES[phaseIndex];
+
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+
+    const durations = [3600, 3400, 2200, 14200];
+    const timer = window.setTimeout(() => {
+      setWalkthroughIndex((currentIndex) => (
+        (currentIndex + 1) % PHONE_WALKTHROUGH_STEPS.length
+      ));
+    }, durations[walkthroughIndex]);
+
+    return () => window.clearTimeout(timer);
+  }, [reduceMotion, walkthroughIndex]);
+
+  useEffect(() => {
+    if (walkthroughIndex === 3) {
+      setPhaseIndex(0);
+      setSecondsLeft(4);
+      setCompletedCycles(0);
+      setIsRunning(true);
+      return;
+    }
+
+    setIsRunning(false);
+  }, [walkthroughIndex]);
+
+  useEffect(() => {
+    if (walkthroughIndex !== 2) return undefined;
+
+    setLaunchCount(3);
+    const timer = window.setInterval(() => {
+      setLaunchCount((currentCount) => Math.max(1, currentCount - 1));
+    }, 650);
+
+    return () => window.clearInterval(timer);
+  }, [walkthroughIndex]);
 
   useEffect(() => {
     if (!isRunning) return undefined;
@@ -949,6 +933,7 @@ function BoxBreathingPhoneDemo() {
     setPhaseIndex(0);
     setSecondsLeft(4);
     setCompletedCycles(0);
+    setWalkthroughIndex(0);
   };
 
   const tracerPositions = [
@@ -963,7 +948,7 @@ function BoxBreathingPhoneDemo() {
   return (
     <motion.aside
       className="pcy-breathe-phone"
-      aria-label="Interactive Box Breathing demo"
+      aria-label="Interactive mental skills training app walkthrough"
       initial={{ opacity: 0, x: 32, y: 18 }}
       animate={{ opacity: 1, x: 0, y: 0 }}
       transition={{ duration: 0.75, delay: 0.48, ease: [0.22, 1, 0.36, 1] }}
@@ -975,98 +960,513 @@ function BoxBreathingPhoneDemo() {
           <span>● ◒ ▰</span>
         </div>
 
-        <div className="pcy-breathe-app-header">
-          <div>
-            <small>MENTAL TRAINING</small>
-            <strong>Box Breathing</strong>
-          </div>
-          <span>4 × 4</span>
-        </div>
-
-        <div
-          className="pcy-breathe-screen"
-          style={{ '--phase-color': currentPhase.color } as React.CSSProperties}
-        >
-          <div className="pcy-breathe-title" aria-live="polite">
-            <small>{isRunning ? `STEP ${phaseIndex + 1} OF 4` : 'READY WHEN YOU ARE'}</small>
-            <AnimatePresence mode="wait">
-              <motion.h3
-                key={isRunning ? currentPhase.id : 'ready'}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22 }}
-              >
-                {isRunning ? currentPhase.label : 'Take one calm minute'}
-              </motion.h3>
-            </AnimatePresence>
-            <p>{isRunning ? currentPhase.guide : 'Four seconds for each part.'}</p>
-          </div>
-
-          <div className="pcy-breathe-box-wrap">
-            <span className={`pcy-box-label pcy-box-label--top ${phaseIndex === 0 && isRunning ? 'is-active' : ''}`}>BREATHE IN</span>
-            <span className={`pcy-box-label pcy-box-label--right ${phaseIndex === 1 && isRunning ? 'is-active' : ''}`}>HOLD</span>
-            <span className={`pcy-box-label pcy-box-label--bottom ${phaseIndex === 2 && isRunning ? 'is-active' : ''}`}>BREATHE OUT</span>
-            <span className={`pcy-box-label pcy-box-label--left ${phaseIndex === 3 && isRunning ? 'is-active' : ''}`}>HOLD EMPTY</span>
-
-            <div className="pcy-breathe-box">
-              <motion.i
-                className="pcy-breathe-tracer"
-                initial={{ left: '-7px', top: '-7px' }}
-                animate={isRunning ? tracerPositions[phaseIndex] : { left: '-7px', top: '-7px' }}
-                transition={{ duration: isRunning ? 4 : 0.35, ease: 'linear' }}
-              />
-              <motion.div
-                className="pcy-breathe-orb"
-                initial={{ scale: 0.72 }}
-                animate={{ scale: isRunning ? breathingScale : 0.72 }}
-                transition={{ duration: isRunning ? 4 : 0.45, ease: 'easeInOut' }}
-              >
-                <Wind size={22} />
-                <strong>{isRunning ? secondsLeft : 4}</strong>
-                <small>SECONDS</small>
-              </motion.div>
-            </div>
-          </div>
-
-          <div className="pcy-breathe-progress" aria-label={`Box breathing step ${phaseIndex + 1} of 4`}>
-            {BOX_BREATHING_PHASES.map((phase, index) => (
-              <span
-                key={phase.id}
-                className={index === phaseIndex && isRunning ? 'is-active' : ''}
-                style={{ '--step-color': phase.color } as React.CSSProperties}
-              >
-                <i />
-                {index + 1}
-              </span>
-            ))}
-          </div>
-
-          <div className="pcy-breathe-controls">
-            <button type="button" className="pcy-breathe-reset" onClick={resetDemo} aria-label="Reset Box Breathing demo">
-              <RotateCcw size={17} />
-            </button>
+        <div className="pcy-phone-tour-progress" aria-label="App walkthrough progress">
+          {PHONE_WALKTHROUGH_STEPS.map((step, index) => (
             <button
+              key={step.id}
               type="button"
-              className="pcy-breathe-play"
-              onClick={() => setIsRunning((current) => !current)}
+              className={index === walkthroughIndex ? 'is-active' : ''}
+              onClick={() => setWalkthroughIndex(index)}
+              aria-label={`Show ${step.label} screen`}
             >
-              {isRunning ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
-              {isRunning ? 'Pause' : 'Start breathing'}
+              <i />
+              <span>{step.label}</span>
             </button>
-          </div>
-
-          <div className="pcy-breathe-cycle-count">
-            <Sparkles size={13} />
-            {completedCycles === 0
-              ? 'Follow the light around the box'
-              : `${completedCycles} ${completedCycles === 1 ? 'cycle' : 'cycles'} complete`}
-          </div>
+          ))}
         </div>
+
+        <AnimatePresence mode="wait">
+          {walkthroughIndex === 0 && (
+            <motion.div
+              key="phone-home"
+              className="pcy-app-home-screen"
+              initial={{ opacity: 0, x: 28 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="pcy-app-home-heading">
+                <div>
+                  <small>MENTAL SKILLS TRAINING</small>
+                  <h3>Today&apos;s Training</h3>
+                </div>
+                <span>AJ</span>
+              </div>
+
+              <div className="pcy-app-checkin-mini">
+                <div><Activity size={15} /></div>
+                <span><small>MORNING CHECK-IN</small><strong>Feeling solid today</strong></span>
+                <Check size={14} />
+              </div>
+
+              <div className="pcy-app-training-heading">
+                <div>
+                  <small>TRAIN ALL 3</small>
+                  <strong>Three skills. One stronger game.</strong>
+                </div>
+                <span>0 of 3</span>
+              </div>
+
+              <div className="pcy-app-skill-stack">
+                <button
+                  type="button"
+                  className="pcy-app-skill-card pcy-app-skill-card--control is-selecting"
+                  onClick={() => setWalkthroughIndex(1)}
+                >
+                  <span><Wind size={19} /></span>
+                  <div>
+                    <small>CONTROL</small>
+                    <strong>Box Breathing</strong>
+                    <p>Calm your body before the next moment.</p>
+                  </div>
+                  <Play size={16} fill="currentColor" />
+                  <motion.i
+                    aria-hidden="true"
+                    animate={reduceMotion ? undefined : { scale: [0.7, 1.45], opacity: [0.8, 0] }}
+                    transition={{ duration: 1.25, repeat: Infinity, ease: 'easeOut' }}
+                  />
+                </button>
+
+                <button type="button" className="pcy-app-skill-card pcy-app-skill-card--focus">
+                  <span><Target size={19} /></span>
+                  <div>
+                    <small>FOCUS</small>
+                    <strong>Find Your Focus Point</strong>
+                    <p>Choose what gets your attention now.</p>
+                  </div>
+                  <Play size={16} fill="currentColor" />
+                </button>
+
+                <button type="button" className="pcy-app-skill-card pcy-app-skill-card--mindset">
+                  <span><RotateCcw size={19} /></span>
+                  <div>
+                    <small>MINDSET</small>
+                    <strong>Shake It Off</strong>
+                    <p>Recover from a mistake and move on.</p>
+                  </div>
+                  <Play size={16} fill="currentColor" />
+                </button>
+              </div>
+
+              <div className="pcy-app-bottom-nav" aria-hidden="true">
+                <span className="is-active"><Activity size={14} /> Home</span>
+                <span><Target size={14} /> Path</span>
+                <span><MessageCircle size={14} /> Nora</span>
+              </div>
+            </motion.div>
+          )}
+
+          {walkthroughIndex === 1 && (
+            <motion.div
+              key="phone-skill"
+              className="pcy-app-skill-detail"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <button type="button" className="pcy-app-back" onClick={() => setWalkthroughIndex(0)}>
+                <ArrowRight size={14} /> Today&apos;s Training
+              </button>
+
+              <div className="pcy-app-skill-detail-hero">
+                <motion.div
+                  animate={reduceMotion ? undefined : { scale: [1, 1.07, 1] }}
+                  transition={{ duration: 2.2, repeat: Infinity }}
+                >
+                  <Wind size={30} />
+                </motion.div>
+                <small>CONTROL · 1 MIN</small>
+                <h3>Box Breathing</h3>
+                <p>Follow four timed steps to slow your breathing and help your body settle.</p>
+              </div>
+
+              <div className="pcy-app-skill-learn">
+                <small>WHAT YOU WILL DO</small>
+                <div>
+                  {BOX_BREATHING_PHASES.map((phase, index) => (
+                    <span key={phase.id}>
+                      <i style={{ background: phase.color }}>{index + 1}</i>
+                      {phase.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pcy-app-why-box">
+                <Brain size={17} />
+                <div>
+                  <small>WHY IT WORKS</small>
+                  <p>Slow, even breathing tells your body it can lower the alarm and think clearly.</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="pcy-app-start-skill"
+                onClick={() => setWalkthroughIndex(2)}
+              >
+                <Play size={17} fill="currentColor" /> Start this skill
+                <motion.i
+                  aria-hidden="true"
+                  animate={reduceMotion ? undefined : { x: [0, 5, 0] }}
+                  transition={{ duration: 1.1, repeat: Infinity }}
+                />
+              </button>
+            </motion.div>
+          )}
+
+          {walkthroughIndex === 2 && (
+            <motion.div
+              key="phone-launch"
+              className="pcy-app-skill-launch"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.04 }}
+              transition={{ duration: 0.34 }}
+            >
+              <small>BOX BREATHING</small>
+              <div className="pcy-app-launch-ring">
+                <motion.i
+                  animate={reduceMotion ? undefined : { rotate: 360 }}
+                  transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
+                />
+                <AnimatePresence mode="wait">
+                  <motion.strong
+                    key={launchCount}
+                    initial={{ opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.25 }}
+                  >
+                    {launchCount}
+                  </motion.strong>
+                </AnimatePresence>
+              </div>
+              <h3>Get ready to breathe</h3>
+              <p>Breathe in. Hold. Breathe out. Hold empty.</p>
+              <span><Wind size={15} /> The guide will lead every step.</span>
+            </motion.div>
+          )}
+
+          {walkthroughIndex === 3 && (
+            <motion.div
+              key="phone-practice"
+              initial={{ opacity: 0, scale: 1.03 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.42 }}
+            >
+              <div className="pcy-breathe-app-header">
+                <div>
+                  <small>MENTAL SKILLS TRAINING</small>
+                  <strong>Box Breathing</strong>
+                </div>
+                <span>4 × 4</span>
+              </div>
+
+              <div
+                className="pcy-breathe-screen"
+                style={{ '--phase-color': currentPhase.color } as React.CSSProperties}
+              >
+                <div className="pcy-breathe-title" aria-live="polite">
+                  <small>{isRunning ? `STEP ${phaseIndex + 1} OF 4` : 'READY WHEN YOU ARE'}</small>
+                  <AnimatePresence mode="wait">
+                    <motion.h3
+                      key={isRunning ? currentPhase.id : 'ready'}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.22 }}
+                    >
+                      {isRunning ? currentPhase.label : 'Take one calm minute'}
+                    </motion.h3>
+                  </AnimatePresence>
+                  <p>{isRunning ? currentPhase.guide : 'Four seconds for each part.'}</p>
+                </div>
+
+                <div className="pcy-breathe-box-wrap">
+                  <span className={`pcy-box-label pcy-box-label--top ${phaseIndex === 0 && isRunning ? 'is-active' : ''}`}>BREATHE IN</span>
+                  <span className={`pcy-box-label pcy-box-label--right ${phaseIndex === 1 && isRunning ? 'is-active' : ''}`}>HOLD</span>
+                  <span className={`pcy-box-label pcy-box-label--bottom ${phaseIndex === 2 && isRunning ? 'is-active' : ''}`}>BREATHE OUT</span>
+                  <span className={`pcy-box-label pcy-box-label--left ${phaseIndex === 3 && isRunning ? 'is-active' : ''}`}>HOLD EMPTY</span>
+
+                  <div className="pcy-breathe-box">
+                    <motion.i
+                      className="pcy-breathe-tracer"
+                      initial={{ left: '-7px', top: '-7px' }}
+                      animate={isRunning ? tracerPositions[phaseIndex] : { left: '-7px', top: '-7px' }}
+                      transition={{ duration: isRunning ? 4 : 0.35, ease: 'linear' }}
+                    />
+                    <motion.div
+                      className="pcy-breathe-orb"
+                      initial={{ scale: 0.72 }}
+                      animate={{ scale: isRunning ? breathingScale : 0.72 }}
+                      transition={{ duration: isRunning ? 4 : 0.45, ease: 'easeInOut' }}
+                    >
+                      <Wind size={22} />
+                      <strong>{isRunning ? secondsLeft : 4}</strong>
+                      <small>SECONDS</small>
+                    </motion.div>
+                  </div>
+                </div>
+
+                <div className="pcy-breathe-progress" aria-label={`Box breathing step ${phaseIndex + 1} of 4`}>
+                  {BOX_BREATHING_PHASES.map((phase, index) => (
+                    <span
+                      key={phase.id}
+                      className={index === phaseIndex && isRunning ? 'is-active' : ''}
+                      style={{ '--step-color': phase.color } as React.CSSProperties}
+                    >
+                      <i />
+                      {index + 1}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="pcy-breathe-controls">
+                  <button type="button" className="pcy-breathe-reset" onClick={resetDemo} aria-label="Replay app walkthrough">
+                    <RotateCcw size={17} />
+                  </button>
+                  <button
+                    type="button"
+                    className="pcy-breathe-play"
+                    onClick={() => setIsRunning((current) => !current)}
+                  >
+                    {isRunning ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+                    {isRunning ? 'Pause' : 'Start breathing'}
+                  </button>
+                </div>
+
+                <div className="pcy-breathe-cycle-count">
+                  <Sparkles size={13} />
+                  {completedCycles === 0
+                    ? 'Follow the light around the box'
+                    : `${completedCycles} ${completedCycles === 1 ? 'cycle' : 'cycles'} complete`}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="pcy-phone-home-indicator" aria-hidden="true" />
       </div>
     </motion.aside>
+  );
+}
+
+function SkillMotionVisual({
+  categoryId,
+  color,
+  Icon,
+}: {
+  categoryId: string;
+  color: string;
+  Icon: React.ElementType;
+}) {
+  const reduceMotion = useReducedMotion();
+  const coreAnimation = reduceMotion
+    ? undefined
+    : categoryId === 'breathing'
+      ? { scale: [0.78, 1.12, 0.78] }
+      : categoryId === 'visualization'
+        ? { scale: [0.94, 1.08, 0.94], rotate: [-5, 5, -5] }
+        : categoryId === 'focus'
+          ? { scale: [0.82, 1.04, 0.82] }
+          : categoryId === 'confidence'
+            ? { y: [8, -10, 8], scale: [0.95, 1.07, 0.95] }
+            : categoryId === 'recovery'
+              ? { rotate: [0, -360] }
+              : categoryId === 'pressure'
+                ? { scale: [1.14, 0.84, 1.14] }
+                : categoryId === 'emotions'
+                  ? { y: [-8, 8, -8], rotate: [-4, 4, -4] }
+                  : { rotate: [0, 90, 0], scale: [0.92, 1.05, 0.92] };
+
+  return (
+    <div
+      className={`pcy-skill-motion-visual pcy-skill-motion-visual--${categoryId}`}
+      style={{ '--skill-color': color } as React.CSSProperties}
+      aria-hidden="true"
+    >
+      <motion.span
+        className="pcy-skill-motion-ring pcy-skill-motion-ring--outer"
+        animate={reduceMotion ? undefined : { scale: [0.88, 1.08, 0.88], opacity: [0.2, 0.65, 0.2] }}
+        transition={{ duration: 3.1, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.span
+        className="pcy-skill-motion-ring pcy-skill-motion-ring--inner"
+        animate={reduceMotion ? undefined : { scale: [1.08, 0.9, 1.08], opacity: [0.55, 0.18, 0.55] }}
+        transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.i
+        className="pcy-skill-motion-scan"
+        animate={reduceMotion ? undefined : { rotate: 360 }}
+        transition={{ duration: 5.2, repeat: Infinity, ease: 'linear' }}
+      />
+      <motion.div
+        className="pcy-skill-motion-core"
+        animate={coreAnimation}
+        transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <Icon size={42} strokeWidth={1.7} />
+      </motion.div>
+      <div className="pcy-skill-motion-points">
+        <motion.span
+          animate={reduceMotion ? undefined : { x: [0, 38, 0], opacity: [0.35, 1, 0.35] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.span
+          animate={reduceMotion ? undefined : { y: [0, -34, 0], opacity: [0.3, 1, 0.3] }}
+          transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', delay: 0.25 }}
+        />
+        <motion.span
+          animate={reduceMotion ? undefined : { x: [0, -32, 0], y: [0, 22, 0], opacity: [0.25, 1, 0.25] }}
+          transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut', delay: 0.45 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SkillsLibrarySection() {
+  const reduceMotion = useReducedMotion();
+  const [activeCategoryId, setActiveCategoryId] = useState('breathing');
+  const [activeExampleIndex, setActiveExampleIndex] = useState(0);
+  const activeCategory = TRAINING_SKILL_CATEGORIES.find(
+    (category) => category.id === activeCategoryId,
+  ) ?? TRAINING_SKILL_CATEGORIES[0];
+  const ActiveIcon = activeCategory.icon;
+  const activeExample = activeCategory.examples[activeExampleIndex] ?? activeCategory.examples[0];
+
+  useEffect(() => {
+    setActiveExampleIndex(0);
+  }, [activeCategoryId]);
+
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setActiveExampleIndex((current) => (current + 1) % activeCategory.examples.length);
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [activeCategory.examples.length, activeExampleIndex, reduceMotion]);
+
+  const moveExample = (direction: number) => {
+    setActiveExampleIndex((current) => (
+      (current + direction + activeCategory.examples.length) % activeCategory.examples.length
+    ));
+  };
+
+  return (
+    <section className="pcy-section pcy-skills-library-section" id="skill-library">
+      <div className="pcy-skills-art-word" aria-hidden="true">SKILLS</div>
+      <div className="pcy-shell">
+        <Reveal className="pcy-skills-library-heading">
+          <span className="pcy-kicker"><Sparkles size={14} /> Mental skills training library</span>
+          <h2><strong>200+</strong> skills to learn, practice, and use.</h2>
+          <p>
+            Athletes build more than one breathing tool or one focus routine. They learn different
+            skills for different moments, then practice choosing the one that fits.
+          </p>
+        </Reveal>
+
+        <div className="pcy-skills-library-layout">
+          <Reveal className="pcy-skills-category-grid" delay={0.08}>
+            {TRAINING_SKILL_CATEGORIES.map((category) => {
+              const CategoryIcon = category.icon;
+              const isActive = category.id === activeCategory.id;
+
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  className={isActive ? 'is-active' : ''}
+                  style={{ '--skill-color': category.color } as React.CSSProperties}
+                  onClick={() => setActiveCategoryId(category.id)}
+                  aria-pressed={isActive}
+                >
+                  <span><CategoryIcon size={18} /></span>
+                  <strong>{category.label}</strong>
+                  <ArrowRight size={15} />
+                </button>
+              );
+            })}
+          </Reveal>
+
+          <Reveal className="pcy-skills-category-detail" delay={0.16}>
+            <div style={{ '--skill-color': activeCategory.color } as React.CSSProperties}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeCategory.id}
+                  className="pcy-skills-detail-copy"
+                  initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+                  transition={{ duration: 0.22 }}
+                >
+                  <span className="pcy-skills-detail-icon"><ActiveIcon size={29} /></span>
+                  <small>{activeCategory.label.toUpperCase()} SKILLS TRAINING</small>
+                  <h3>{activeCategory.description}</h3>
+                  <p>Each skill includes a clear lesson, guided practice, and a way to use it in sport.</p>
+                </motion.div>
+              </AnimatePresence>
+              <div className="pcy-skills-motion-stage">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeCategory.id}
+                    className="pcy-skills-motion-visual-wrap"
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, scale: 1.06 }}
+                    transition={{ duration: 0.28 }}
+                  >
+                    <SkillMotionVisual
+                      categoryId={activeCategory.id}
+                      color={activeCategory.color}
+                      Icon={ActiveIcon}
+                    />
+                  </motion.div>
+                </AnimatePresence>
+                <div className="pcy-skills-motion-caption">
+                  <small>SKILL {String(activeExampleIndex + 1).padStart(2, '0')} OF {String(activeCategory.examples.length).padStart(2, '0')}</small>
+                  <AnimatePresence mode="wait">
+                    <motion.strong
+                      key={activeExample}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.24 }}
+                    >
+                      {activeExample}
+                    </motion.strong>
+                  </AnimatePresence>
+                  <div>
+                    <button type="button" onClick={() => moveExample(-1)} aria-label="Previous skill">
+                      <ArrowRight size={14} />
+                    </button>
+                    <span aria-label={`Skill ${activeExampleIndex + 1} of ${activeCategory.examples.length}`}>
+                      {activeCategory.examples.map((example, index) => (
+                        <button
+                          key={example}
+                          type="button"
+                          className={index === activeExampleIndex ? 'is-active' : ''}
+                          onClick={() => setActiveExampleIndex(index)}
+                          aria-label={`Show ${example}`}
+                        />
+                      ))}
+                    </span>
+                    <button type="button" onClick={() => moveExample(1)} aria-label="Next skill">
+                      <ArrowRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1090,15 +1490,14 @@ const PulseCheckYouthPage: React.FC = () => {
           <BrandMark />
           <nav aria-label="Page navigation">
             <a href="#experience">The experience</a>
-            <a href="#walkthrough">Walk through a moment</a>
-            <a href="#value">What they build</a>
+            <a href="#skill-library">200+ skills</a>
             <a href="#checkin-demo">Try the app</a>
           </nav>
           <a
             href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Youth"
             className="pcy-nav-cta"
           >
-            Bring it to your athletes <ArrowRight size={15} />
+            Request a Demo <ArrowRight size={15} />
           </a>
         </div>
       </header>
@@ -1122,7 +1521,7 @@ const PulseCheckYouthPage: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55 }}
             >
-              <span /> Guided mental-performance training · Ages 7–17
+              <span /> Guided mental skills training · Ages 7–17
             </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 24 }}
@@ -1156,7 +1555,7 @@ const PulseCheckYouthPage: React.FC = () => {
             </motion.div>
           </div>
 
-          <BoxBreathingPhoneDemo />
+          <MentalSkillsPhoneWalkthrough />
         </div>
 
         <div className="pcy-human-hero-caption">
@@ -1179,8 +1578,7 @@ const PulseCheckYouthPage: React.FC = () => {
         </motion.div>
       </div>
 
-      <YouthWalkthrough />
-      <YouthValueAtGlance />
+      <SkillsLibrarySection />
       <CheckInExperience />
       <TeachableMomentExperience />
 
@@ -1198,7 +1596,7 @@ const PulseCheckYouthPage: React.FC = () => {
             <span className="pcy-kicker">The next generation trains differently</span>
             <h2>Give every athlete a mental game they know how to use.</h2>
             <p>
-              Bring guided mental-performance learning, daily practice, and a journey that keeps
+              Bring guided mental skills training, daily practice, and a journey that keeps
               growing to your athletes.
             </p>
             <a
@@ -1449,6 +1847,8 @@ const PulseCheckYouthPage: React.FC = () => {
 
         .pcy-hero h1 > span {
           display: block;
+          padding-bottom: 0.12em;
+          margin-bottom: -0.12em;
           color: transparent;
           background: linear-gradient(100deg, #ffffff 0%, #adffe8 43%, #9a7bff 100%);
           -webkit-background-clip: text;
@@ -3074,6 +3474,7 @@ const PulseCheckYouthPage: React.FC = () => {
 
         .pcy-phone-shell {
           position: relative;
+          height: 686px;
           min-height: 686px;
           overflow: hidden;
           border: 7px solid #1b1e25;
@@ -3148,6 +3549,499 @@ const PulseCheckYouthPage: React.FC = () => {
           letter-spacing: 0.16em;
         }
 
+        .pcy-phone-tour-progress {
+          height: 35px;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 5px;
+          padding: 1px 20px 8px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .pcy-phone-tour-progress button {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 4px;
+          padding: 0;
+          border: 0;
+          color: rgba(255, 255, 255, 0.28);
+          background: transparent;
+          font: inherit;
+          font-size: 6px;
+          font-weight: 900;
+          letter-spacing: 0.07em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+
+        .pcy-phone-tour-progress button i {
+          height: 2px;
+          border-radius: 99px;
+          background: rgba(255, 255, 255, 0.11);
+          transition: background 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .pcy-phone-tour-progress button.is-active {
+          color: var(--pcy-teal);
+        }
+
+        .pcy-phone-tour-progress button.is-active i {
+          background: var(--pcy-teal);
+          box-shadow: 0 0 9px rgba(20, 231, 208, 0.72);
+        }
+
+        .pcy-app-home-screen,
+        .pcy-app-skill-detail,
+        .pcy-app-skill-launch {
+          position: relative;
+          height: calc(100% - 83px);
+        }
+
+        .pcy-app-home-screen {
+          padding: 17px 20px 57px;
+          background:
+            radial-gradient(circle at 18% 8%, rgba(20, 231, 208, 0.08), transparent 35%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent);
+        }
+
+        .pcy-app-home-heading {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+        }
+
+        .pcy-app-home-heading small,
+        .pcy-app-skill-detail-hero > small,
+        .pcy-app-skill-learn > small,
+        .pcy-app-why-box small,
+        .pcy-app-skill-launch > small {
+          color: var(--pcy-teal);
+          font-size: 6px;
+          font-weight: 950;
+          letter-spacing: 0.16em;
+        }
+
+        .pcy-app-home-heading h3 {
+          margin: 4px 0 0;
+          font-size: 24px;
+          letter-spacing: -0.045em;
+        }
+
+        .pcy-app-home-heading > span {
+          width: 30px;
+          height: 30px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(20, 231, 208, 0.28);
+          border-radius: 50%;
+          color: var(--pcy-teal);
+          background: rgba(20, 231, 208, 0.08);
+          font-size: 8px;
+          font-weight: 950;
+        }
+
+        .pcy-app-checkin-mini {
+          min-height: 52px;
+          display: grid;
+          grid-template-columns: 31px 1fr auto;
+          align-items: center;
+          gap: 10px;
+          margin: 15px 0 17px;
+          padding: 9px 11px;
+          border: 1px solid rgba(20, 231, 208, 0.16);
+          border-radius: 14px;
+          background: rgba(20, 231, 208, 0.055);
+        }
+
+        .pcy-app-checkin-mini > div {
+          width: 31px;
+          height: 31px;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: var(--pcy-teal);
+          background: rgba(20, 231, 208, 0.12);
+        }
+
+        .pcy-app-checkin-mini > span {
+          display: grid;
+          gap: 2px;
+        }
+
+        .pcy-app-checkin-mini small {
+          color: rgba(255, 255, 255, 0.38);
+          font-size: 5px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+        }
+
+        .pcy-app-checkin-mini strong {
+          font-size: 9px;
+        }
+
+        .pcy-app-checkin-mini > svg {
+          color: var(--pcy-teal);
+        }
+
+        .pcy-app-training-heading {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          margin-bottom: 9px;
+        }
+
+        .pcy-app-training-heading > div {
+          display: grid;
+          gap: 3px;
+        }
+
+        .pcy-app-training-heading small {
+          color: rgba(255, 255, 255, 0.4);
+          font-size: 6px;
+          font-weight: 950;
+          letter-spacing: 0.14em;
+        }
+
+        .pcy-app-training-heading strong {
+          font-size: 11px;
+        }
+
+        .pcy-app-training-heading > span {
+          color: rgba(255, 255, 255, 0.42);
+          font-size: 8px;
+          font-weight: 900;
+        }
+
+        .pcy-app-skill-stack {
+          display: grid;
+          gap: 8px;
+        }
+
+        .pcy-app-skill-card {
+          --card-color: var(--pcy-teal);
+          position: relative;
+          min-height: 81px;
+          display: grid;
+          grid-template-columns: 38px 1fr 20px;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 11px;
+          overflow: hidden;
+          border: 1px solid color-mix(in srgb, var(--card-color) 17%, rgba(255, 255, 255, 0.08));
+          border-radius: 16px;
+          color: white;
+          background:
+            linear-gradient(105deg, color-mix(in srgb, var(--card-color) 8%, #11141b), #11131a 66%);
+          text-align: left;
+          font: inherit;
+          cursor: pointer;
+        }
+
+        .pcy-app-skill-card--control { --card-color: #14e7d0; }
+        .pcy-app-skill-card--focus { --card-color: #22d3ee; }
+        .pcy-app-skill-card--mindset { --card-color: #e0fe10; }
+
+        .pcy-app-skill-card > span {
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          color: var(--card-color);
+          background: color-mix(in srgb, var(--card-color) 12%, transparent);
+        }
+
+        .pcy-app-skill-card > div {
+          display: grid;
+          gap: 2px;
+        }
+
+        .pcy-app-skill-card small {
+          color: var(--card-color);
+          font-size: 5px;
+          font-weight: 950;
+          letter-spacing: 0.15em;
+        }
+
+        .pcy-app-skill-card strong {
+          font-size: 11px;
+        }
+
+        .pcy-app-skill-card p {
+          margin: 0;
+          color: rgba(255, 255, 255, 0.44);
+          font-size: 7px;
+          line-height: 1.35;
+        }
+
+        .pcy-app-skill-card > svg {
+          color: var(--card-color);
+        }
+
+        .pcy-app-skill-card > i {
+          position: absolute;
+          right: 13px;
+          width: 22px;
+          height: 22px;
+          border: 1px solid var(--card-color);
+          border-radius: 50%;
+          pointer-events: none;
+        }
+
+        .pcy-app-skill-card.is-selecting {
+          box-shadow: 0 0 26px color-mix(in srgb, var(--card-color) 13%, transparent);
+        }
+
+        .pcy-app-bottom-nav {
+          position: absolute;
+          left: 20px;
+          right: 20px;
+          bottom: 12px;
+          min-height: 36px;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          align-items: center;
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .pcy-app-bottom-nav span {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          color: rgba(255, 255, 255, 0.3);
+          font-size: 6px;
+          font-weight: 850;
+        }
+
+        .pcy-app-bottom-nav span.is-active {
+          color: var(--pcy-teal);
+        }
+
+        .pcy-app-skill-detail {
+          padding: 15px 22px 22px;
+          background:
+            radial-gradient(circle at 50% 28%, rgba(20, 231, 208, 0.12), transparent 32%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+        }
+
+        .pcy-app-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0;
+          border: 0;
+          color: rgba(255, 255, 255, 0.48);
+          background: none;
+          font: inherit;
+          font-size: 7px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .pcy-app-back svg {
+          transform: rotate(180deg);
+        }
+
+        .pcy-app-skill-detail-hero {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 18px 0 15px;
+          text-align: center;
+        }
+
+        .pcy-app-skill-detail-hero > div {
+          width: 63px;
+          height: 63px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 11px;
+          border: 1px solid rgba(20, 231, 208, 0.33);
+          border-radius: 20px;
+          color: var(--pcy-teal);
+          background:
+            radial-gradient(circle, rgba(20, 231, 208, 0.16), rgba(20, 231, 208, 0.045));
+          box-shadow: 0 0 34px rgba(20, 231, 208, 0.13);
+        }
+
+        .pcy-app-skill-detail-hero h3 {
+          margin: 5px 0 5px;
+          font-size: 27px;
+          letter-spacing: -0.045em;
+        }
+
+        .pcy-app-skill-detail-hero p {
+          max-width: 260px;
+          margin: 0;
+          color: rgba(255, 255, 255, 0.55);
+          font-size: 9px;
+          line-height: 1.5;
+        }
+
+        .pcy-app-skill-learn {
+          padding: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 15px;
+          background: rgba(255, 255, 255, 0.035);
+        }
+
+        .pcy-app-skill-learn > div {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 5px;
+          margin-top: 9px;
+        }
+
+        .pcy-app-skill-learn span {
+          display: grid;
+          justify-items: center;
+          gap: 5px;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 6px;
+          font-weight: 800;
+          text-align: center;
+        }
+
+        .pcy-app-skill-learn span i {
+          width: 22px;
+          height: 22px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #07100f;
+          font-style: normal;
+          font-size: 7px;
+          font-weight: 950;
+        }
+
+        .pcy-app-why-box {
+          display: grid;
+          grid-template-columns: 31px 1fr;
+          gap: 10px;
+          margin-top: 10px;
+          padding: 11px 12px;
+          border-left: 2px solid var(--pcy-purple);
+          border-radius: 0 13px 13px 0;
+          background: rgba(154, 123, 255, 0.075);
+        }
+
+        .pcy-app-why-box > svg {
+          color: var(--pcy-purple);
+        }
+
+        .pcy-app-why-box small {
+          color: var(--pcy-purple);
+        }
+
+        .pcy-app-why-box p {
+          margin: 3px 0 0;
+          color: rgba(255, 255, 255, 0.58);
+          font-size: 7px;
+          line-height: 1.45;
+        }
+
+        .pcy-app-start-skill {
+          position: relative;
+          width: 100%;
+          height: 46px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 13px;
+          overflow: hidden;
+          border: 0;
+          border-radius: 14px;
+          color: #07100f;
+          background: var(--pcy-teal);
+          font: inherit;
+          font-size: 10px;
+          font-weight: 950;
+          cursor: pointer;
+          box-shadow: 0 14px 28px rgba(20, 231, 208, 0.16);
+        }
+
+        .pcy-app-start-skill > i {
+          position: absolute;
+          right: 18px;
+          width: 6px;
+          height: 6px;
+          border: 2px solid currentColor;
+          border-left: 0;
+          border-bottom: 0;
+          transform: rotate(45deg);
+        }
+
+        .pcy-app-skill-launch {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          text-align: center;
+          background:
+            radial-gradient(circle at 50% 47%, rgba(20, 231, 208, 0.14), transparent 34%),
+            linear-gradient(160deg, #0d1419, #090a10 66%);
+        }
+
+        .pcy-app-launch-ring {
+          position: relative;
+          width: 158px;
+          height: 158px;
+          display: grid;
+          place-items: center;
+          margin: 22px 0;
+          border-radius: 50%;
+          background: rgba(20, 231, 208, 0.04);
+          box-shadow: inset 0 0 34px rgba(20, 231, 208, 0.08);
+        }
+
+        .pcy-app-launch-ring i {
+          position: absolute;
+          inset: 0;
+          border: 2px solid transparent;
+          border-top-color: var(--pcy-teal);
+          border-right-color: rgba(20, 231, 208, 0.2);
+          border-radius: 50%;
+          box-shadow: 0 0 28px rgba(20, 231, 208, 0.14);
+        }
+
+        .pcy-app-launch-ring strong {
+          font-size: 63px;
+          letter-spacing: -0.08em;
+        }
+
+        .pcy-app-skill-launch h3 {
+          margin: 0;
+          font-size: 25px;
+          letter-spacing: -0.04em;
+        }
+
+        .pcy-app-skill-launch p {
+          margin: 8px 0 18px;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 9px;
+        }
+
+        .pcy-app-skill-launch > span {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 8px 11px;
+          border: 1px solid rgba(20, 231, 208, 0.13);
+          border-radius: 999px;
+          color: rgba(255, 255, 255, 0.52);
+          background: rgba(20, 231, 208, 0.05);
+          font-size: 7px;
+          font-weight: 800;
+        }
+
+        .pcy-app-skill-launch > span svg {
+          color: var(--pcy-teal);
+        }
+
         .pcy-breathe-app-header {
           min-height: 64px;
           display: flex;
@@ -3186,11 +4080,11 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-breathe-screen {
-          padding: 22px 27px 32px;
+          padding: 12px 27px 16px;
         }
 
         .pcy-breathe-title {
-          min-height: 94px;
+          min-height: 76px;
           text-align: center;
         }
 
@@ -3217,14 +4111,14 @@ const PulseCheckYouthPage: React.FC = () => {
 
         .pcy-breathe-box-wrap {
           position: relative;
-          width: 218px;
-          height: 218px;
-          margin: 16px auto 26px;
+          width: 196px;
+          height: 196px;
+          margin: 8px auto 15px;
         }
 
         .pcy-breathe-box {
           position: absolute;
-          inset: 15px;
+          inset: 13px;
           display: grid;
           place-items: center;
           border: 1px solid rgba(255, 255, 255, 0.17);
@@ -3464,11 +4358,28 @@ const PulseCheckYouthPage: React.FC = () => {
           position: relative;
           z-index: 2;
           padding: 115px 0 125px;
+          overflow: hidden;
           color: #101319;
+          background-color: var(--active-experience-color);
+          background-image:
+            linear-gradient(125deg, rgba(255, 255, 255, 0.46), transparent 48%),
+            linear-gradient(315deg, rgba(255, 255, 255, 0.18), transparent 52%);
+        }
+
+        .pcy-experience-color-wash {
+          position: absolute;
+          inset: -25%;
+          pointer-events: none;
           background:
-            radial-gradient(circle at 8% 10%, rgba(20, 231, 208, 0.22), transparent 23rem),
-            radial-gradient(circle at 92% 82%, rgba(154, 123, 255, 0.17), transparent 24rem),
-            #f0f0e9;
+            radial-gradient(circle at 14% 24%, rgba(255, 255, 255, 0.58), transparent 26rem),
+            radial-gradient(circle at 86% 78%, rgba(255, 255, 255, 0.22), transparent 30rem),
+            radial-gradient(circle at 50% 115%, color-mix(in srgb, var(--active-experience-color) 65%, white), transparent 31rem);
+          filter: blur(2px);
+        }
+
+        .pcy-experience-rail .pcy-shell {
+          position: relative;
+          z-index: 1;
         }
 
         .pcy-experience-heading {
@@ -3483,15 +4394,14 @@ const PulseCheckYouthPage: React.FC = () => {
           grid-row: 1 / 3;
           align-self: start;
           padding-top: 12px;
-          color: #087c70;
+          color: rgba(8, 18, 22, 0.72);
           font-size: 9px;
           font-weight: 950;
           letter-spacing: 0.17em;
         }
 
         .pcy-experience-heading h2,
-        .pcy-walkthrough-heading h2,
-        .pcy-value-heading h2 {
+        .pcy-walkthrough-heading h2 {
           margin: 0;
           font-size: clamp(3rem, 5.25vw, 5.55rem);
           line-height: 0.95;
@@ -3502,7 +4412,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-experience-heading p {
           max-width: 620px;
           margin: 20px 0 0;
-          color: #5c635f;
+          color: rgba(12, 20, 24, 0.7);
           font-size: 15px;
           line-height: 1.65;
         }
@@ -3515,45 +4425,58 @@ const PulseCheckYouthPage: React.FC = () => {
           margin-top: 68px;
         }
 
-        .pcy-experience-line {
-          position: absolute;
-          z-index: 0;
-          top: -24px;
-          left: 5%;
-          right: 5%;
-          height: 2px;
-          transform-origin: left;
-          background: linear-gradient(90deg, #14e7d0, #e0fe10, #9a7bff, #ffb84d, #ff6b8a);
-        }
-
-        .pcy-experience-line span {
-          position: absolute;
-          top: -4px;
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: white;
-          box-shadow: 0 0 0 5px rgba(20, 231, 208, 0.24), 0 0 20px #14e7d0;
-          animation: pcy-walk-travel 5.2s ease-in-out infinite;
+        .pcy-experience-steps > div {
+          height: 100%;
         }
 
         .pcy-experience-step {
           --walk-color: var(--pcy-teal);
           position: relative;
           z-index: 1;
+          width: 100%;
+          height: 100%;
           min-height: 250px;
+          display: block;
           padding: 20px;
           overflow: hidden;
           border: 1px solid rgba(10, 16, 23, 0.09);
           border-radius: 22px;
+          color: #101319;
           background: rgba(255, 255, 255, 0.76);
+          text-align: left;
+          font: inherit;
+          cursor: pointer;
           box-shadow: 0 18px 48px rgba(20, 29, 38, 0.08);
-          transition: transform 0.28s ease, box-shadow 0.28s ease;
+          transition:
+            transform 0.38s cubic-bezier(.22, 1, .36, 1),
+            border-color 0.38s ease,
+            color 0.38s ease,
+            background-color 0.38s ease,
+            box-shadow 0.38s ease;
         }
 
         .pcy-experience-step:hover {
           transform: translateY(-7px);
           box-shadow: 0 26px 60px rgba(20, 29, 38, 0.14);
+        }
+
+        .pcy-experience-step:focus-visible {
+          outline: 3px solid #11141a;
+          outline-offset: 4px;
+        }
+
+        .pcy-experience-step.is-active {
+          transform: translateY(-12px);
+          border-color: rgba(255, 255, 255, 0.2);
+          color: white;
+          background: #11141a;
+          box-shadow:
+            0 32px 70px rgba(15, 20, 26, 0.3),
+            0 0 0 1px color-mix(in srgb, var(--walk-color) 65%, transparent);
+        }
+
+        .pcy-experience-step.is-active:hover {
+          transform: translateY(-14px);
         }
 
         .pcy-experience-step > div {
@@ -3588,6 +4511,22 @@ const PulseCheckYouthPage: React.FC = () => {
           color: #646b68;
           font-size: 11px;
           line-height: 1.62;
+          transition: color 0.38s ease;
+        }
+
+        .pcy-experience-step.is-active p {
+          color: rgba(255, 255, 255, 0.68);
+        }
+
+        .pcy-experience-card-progress {
+          position: absolute;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          height: 5px;
+          background: var(--walk-color);
+          box-shadow: 0 0 18px color-mix(in srgb, var(--walk-color) 72%, transparent);
+          transform-origin: left;
         }
 
         .pcy-motion-marquee {
@@ -3618,6 +4557,376 @@ const PulseCheckYouthPage: React.FC = () => {
           background: #0b0e10;
         }
 
+        .pcy-skills-library-section {
+          position: relative;
+          scroll-margin-top: 78px;
+          padding: 138px 0 150px;
+          overflow: hidden;
+          color: #111319;
+          background:
+            radial-gradient(circle at 7% 12%, rgba(154, 123, 255, 0.18), transparent 27rem),
+            radial-gradient(circle at 91% 90%, rgba(20, 231, 208, 0.16), transparent 25rem),
+            #f3f2eb;
+        }
+
+        .pcy-skills-art-word {
+          position: absolute;
+          top: 44px;
+          right: -0.08em;
+          color: rgba(15, 18, 24, 0.035);
+          font-size: clamp(9rem, 24vw, 24rem);
+          font-weight: 950;
+          line-height: 0.8;
+          letter-spacing: -0.09em;
+          pointer-events: none;
+          user-select: none;
+        }
+
+        .pcy-skills-library-heading {
+          position: relative;
+          z-index: 1;
+          max-width: 900px;
+        }
+
+        .pcy-skills-library-heading .pcy-kicker {
+          color: #6f4fd6;
+        }
+
+        .pcy-skills-library-heading h2 {
+          max-width: 870px;
+          margin: 23px 0 0;
+          font-size: clamp(3.4rem, 6.2vw, 6.65rem);
+          line-height: 0.91;
+          letter-spacing: -0.073em;
+          text-wrap: balance;
+        }
+
+        .pcy-skills-library-heading h2 strong {
+          display: inline-block;
+          color: transparent;
+          background: linear-gradient(100deg, #15aa9b, #7456e6 76%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          font-weight: inherit;
+        }
+
+        .pcy-skills-library-heading > p {
+          max-width: 650px;
+          margin: 25px 0 0;
+          color: #5e6463;
+          font-size: 16px;
+          line-height: 1.7;
+        }
+
+        .pcy-skills-library-layout {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: minmax(300px, 0.76fr) minmax(430px, 1.24fr);
+          align-items: stretch;
+          gap: 24px;
+          margin-top: 68px;
+        }
+
+        .pcy-skills-category-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px;
+        }
+
+        .pcy-skills-category-grid button {
+          --skill-color: var(--pcy-teal);
+          min-height: 92px;
+          display: grid;
+          grid-template-columns: 40px 1fr auto;
+          align-items: center;
+          gap: 11px;
+          padding: 15px;
+          border: 1px solid rgba(15, 20, 28, 0.09);
+          border-radius: 18px;
+          color: #171b21;
+          background: rgba(255, 255, 255, 0.72);
+          text-align: left;
+          font: inherit;
+          cursor: pointer;
+          box-shadow: 0 14px 32px rgba(24, 31, 42, 0.05);
+          transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .pcy-skills-category-grid button:hover,
+        .pcy-skills-category-grid button.is-active {
+          transform: translateY(-4px);
+          border-color: color-mix(in srgb, var(--skill-color) 58%, transparent);
+          box-shadow: 0 20px 42px color-mix(in srgb, var(--skill-color) 13%, rgba(24, 31, 42, 0.08));
+        }
+
+        .pcy-skills-category-grid button > span {
+          width: 40px;
+          height: 40px;
+          display: grid;
+          place-items: center;
+          border-radius: 13px;
+          color: color-mix(in srgb, var(--skill-color) 75%, #0e151c);
+          background: color-mix(in srgb, var(--skill-color) 13%, white);
+        }
+
+        .pcy-skills-category-grid button > strong {
+          font-size: 12px;
+          line-height: 1.25;
+        }
+
+        .pcy-skills-category-grid button > svg {
+          color: color-mix(in srgb, var(--skill-color) 80%, #101319);
+          opacity: 0.42;
+          transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .pcy-skills-category-grid button.is-active > svg {
+          opacity: 1;
+          transform: translateX(3px);
+        }
+
+        .pcy-skills-category-detail {
+          min-height: 470px;
+        }
+
+        .pcy-skills-category-detail > div {
+          --skill-color: var(--pcy-teal);
+          position: relative;
+          height: 100%;
+          display: grid;
+          grid-template-columns: minmax(220px, 0.86fr) minmax(260px, 1.14fr);
+          gap: clamp(24px, 4vw, 52px);
+          align-items: center;
+          padding: clamp(30px, 4vw, 52px);
+          overflow: hidden;
+          border: 1px solid color-mix(in srgb, var(--skill-color) 28%, rgba(15, 20, 28, 0.08));
+          border-radius: 30px;
+          background:
+            radial-gradient(circle at 87% 14%, color-mix(in srgb, var(--skill-color) 18%, transparent), transparent 18rem),
+            linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 42%),
+            #11131a;
+          box-shadow: 0 30px 75px rgba(17, 23, 31, 0.18);
+        }
+
+        .pcy-skills-detail-copy {
+          position: relative;
+          z-index: 2;
+        }
+
+        .pcy-skills-detail-icon {
+          width: 60px;
+          height: 60px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 28px;
+          border: 1px solid color-mix(in srgb, var(--skill-color) 40%, transparent);
+          border-radius: 19px;
+          color: var(--skill-color);
+          background: color-mix(in srgb, var(--skill-color) 10%, transparent);
+          box-shadow: 0 0 34px color-mix(in srgb, var(--skill-color) 14%, transparent);
+        }
+
+        .pcy-skills-category-detail small {
+          color: var(--skill-color);
+          font-size: 8px;
+          font-weight: 950;
+          letter-spacing: 0.16em;
+        }
+
+        .pcy-skills-category-detail h3 {
+          max-width: 430px;
+          margin: 12px 0 0;
+          color: white;
+          font-size: clamp(1.8rem, 2.5vw, 2.75rem);
+          line-height: 1.02;
+          letter-spacing: -0.05em;
+        }
+
+        .pcy-skills-detail-copy > p {
+          margin: 23px 0 0;
+          color: rgba(255, 255, 255, 0.48);
+          font-size: 11px;
+          line-height: 1.55;
+        }
+
+        .pcy-skills-motion-stage {
+          min-height: 370px;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          overflow: hidden;
+          border: 1px solid color-mix(in srgb, var(--skill-color) 32%, rgba(255, 255, 255, 0.09));
+          border-radius: 24px;
+          background:
+            linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px),
+            radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--skill-color) 13%, transparent), transparent 14rem),
+            rgba(4, 6, 10, 0.7);
+          background-size: 32px 32px, 32px 32px, auto, auto;
+          box-shadow: inset 0 0 70px rgba(0, 0, 0, 0.32);
+        }
+
+        .pcy-skills-motion-visual-wrap {
+          position: absolute;
+          inset: 0;
+        }
+
+        .pcy-skill-motion-visual {
+          --skill-color: var(--pcy-teal);
+          position: absolute;
+          top: 22px;
+          right: 18px;
+          left: 18px;
+          height: 245px;
+          display: grid;
+          place-items: center;
+        }
+
+        .pcy-skill-motion-ring {
+          position: absolute;
+          border: 1px solid color-mix(in srgb, var(--skill-color) 50%, transparent);
+          border-radius: 50%;
+          box-shadow: 0 0 40px color-mix(in srgb, var(--skill-color) 9%, transparent);
+        }
+
+        .pcy-skill-motion-ring--outer {
+          width: 190px;
+          height: 190px;
+        }
+
+        .pcy-skill-motion-ring--inner {
+          width: 132px;
+          height: 132px;
+          border-style: dashed;
+          opacity: 0.52;
+        }
+
+        .pcy-skill-motion-scan {
+          position: absolute;
+          width: 212px;
+          height: 212px;
+          border-radius: 50%;
+          background: conic-gradient(
+            from 0deg,
+            transparent 0 76%,
+            color-mix(in srgb, var(--skill-color) 60%, transparent) 87%,
+            transparent 96%
+          );
+          mask-image: radial-gradient(circle, transparent 0 47%, black 49% 51%, transparent 53%);
+        }
+
+        .pcy-skill-motion-core {
+          width: 92px;
+          height: 92px;
+          position: relative;
+          z-index: 2;
+          display: grid;
+          place-items: center;
+          border: 1px solid color-mix(in srgb, var(--skill-color) 54%, transparent);
+          border-radius: 28px;
+          color: #071013;
+          background: var(--skill-color);
+          box-shadow:
+            0 0 0 12px color-mix(in srgb, var(--skill-color) 8%, transparent),
+            0 0 65px color-mix(in srgb, var(--skill-color) 32%, transparent);
+        }
+
+        .pcy-skill-motion-visual--focus .pcy-skill-motion-core,
+        .pcy-skill-motion-visual--pressure .pcy-skill-motion-core {
+          border-radius: 50%;
+        }
+
+        .pcy-skill-motion-visual--recovery .pcy-skill-motion-ring,
+        .pcy-skill-motion-visual--routines .pcy-skill-motion-ring {
+          border-radius: 32px;
+        }
+
+        .pcy-skill-motion-points span {
+          width: 9px;
+          height: 9px;
+          position: absolute;
+          border-radius: 50%;
+          background: var(--skill-color);
+          box-shadow: 0 0 18px var(--skill-color);
+        }
+
+        .pcy-skill-motion-points span:nth-child(1) { top: 41px; left: 58px; }
+        .pcy-skill-motion-points span:nth-child(2) { top: 76px; right: 52px; }
+        .pcy-skill-motion-points span:nth-child(3) { right: 75px; bottom: 38px; }
+
+        .pcy-skills-motion-caption {
+          position: relative;
+          z-index: 4;
+          padding: 20px;
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          background: rgba(6, 8, 12, 0.78);
+          backdrop-filter: blur(14px);
+        }
+
+        .pcy-skills-motion-caption > small {
+          display: block;
+          margin-bottom: 7px;
+        }
+
+        .pcy-skills-motion-caption > strong {
+          min-height: 27px;
+          display: block;
+          color: white;
+          font-size: 17px;
+          line-height: 1.2;
+          letter-spacing: -0.025em;
+        }
+
+        .pcy-skills-motion-caption > div {
+          display: grid;
+          grid-template-columns: 30px 1fr 30px;
+          align-items: center;
+          gap: 12px;
+          margin-top: 16px;
+        }
+
+        .pcy-skills-motion-caption > div > button {
+          width: 30px;
+          height: 30px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 1px solid rgba(255, 255, 255, 0.11);
+          border-radius: 50%;
+          color: white;
+          background: rgba(255, 255, 255, 0.04);
+          cursor: pointer;
+        }
+
+        .pcy-skills-motion-caption > div > button:first-child svg {
+          transform: rotate(180deg);
+        }
+
+        .pcy-skills-motion-caption > div > span {
+          display: flex;
+          justify-content: center;
+          gap: 6px;
+        }
+
+        .pcy-skills-motion-caption > div > span button {
+          width: 7px;
+          height: 7px;
+          padding: 0;
+          border: 0;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.22);
+          cursor: pointer;
+          transition: width 0.25s ease, background 0.25s ease;
+        }
+
+        .pcy-skills-motion-caption > div > span button.is-active {
+          width: 24px;
+          background: var(--skill-color);
+          box-shadow: 0 0 12px color-mix(in srgb, var(--skill-color) 55%, transparent);
+        }
+
         .pcy-walkthrough {
           padding: 140px 0;
           background:
@@ -3630,8 +4939,7 @@ const PulseCheckYouthPage: React.FC = () => {
           margin-bottom: 58px;
         }
 
-        .pcy-walkthrough-heading > span,
-        .pcy-value-heading > small {
+        .pcy-walkthrough-heading > span {
           display: block;
           margin-bottom: 18px;
           color: var(--pcy-teal);
@@ -3900,93 +5208,6 @@ const PulseCheckYouthPage: React.FC = () => {
           line-height: 1;
           letter-spacing: -0.05em;
         }
-
-        .pcy-value-section {
-          padding: 120px 0 130px;
-          background: linear-gradient(180deg, #0d0f15, #08090d);
-        }
-
-        .pcy-value-heading {
-          max-width: 900px;
-          display: grid;
-          grid-template-columns: 0.3fr 1fr;
-          align-items: start;
-          gap: 44px;
-        }
-
-        .pcy-value-heading > small { margin-top: 13px; }
-
-        .pcy-value-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 15px;
-          margin-top: 62px;
-        }
-
-        .pcy-value-card {
-          --value-color: var(--pcy-teal);
-          min-height: 360px;
-          position: relative;
-          overflow: hidden;
-          padding: 27px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 25px;
-          background:
-            radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--value-color) 18%, transparent), transparent 16rem),
-            rgba(255, 255, 255, 0.025);
-          transition: transform 0.3s ease, border-color 0.3s ease;
-        }
-
-        .pcy-value-card:hover {
-          transform: translateY(-7px);
-          border-color: color-mix(in srgb, var(--value-color) 40%, rgba(255, 255, 255, 0.1));
-        }
-
-        .pcy-value-card > div {
-          width: 50px;
-          height: 50px;
-          display: grid;
-          place-items: center;
-          margin-bottom: 68px;
-          border-radius: 16px;
-          color: #071013;
-          background: var(--value-color);
-        }
-
-        .pcy-value-card > small {
-          color: var(--value-color);
-          font-size: 8px;
-          font-weight: 950;
-          letter-spacing: 0.14em;
-        }
-
-        .pcy-value-card h3 {
-          margin: 10px 0 12px;
-          font-size: 25px;
-          line-height: 1.05;
-          letter-spacing: -0.04em;
-        }
-
-        .pcy-value-card p {
-          margin: 0;
-          color: #9196a1;
-          font-size: 12px;
-          line-height: 1.62;
-        }
-
-        .pcy-value-card > span {
-          position: absolute;
-          left: 27px;
-          bottom: 25px;
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          color: #7a818d;
-          font-size: 8px;
-          font-weight: 800;
-        }
-
-        .pcy-value-card > span svg { color: var(--value-color); }
 
         .pcy-checkin-demo-section {
           padding: 140px 0;
@@ -5062,6 +6283,10 @@ const PulseCheckYouthPage: React.FC = () => {
             font-size: clamp(3.85rem, 7vw, 5.9rem);
           }
 
+          .pcy-skills-library-layout {
+            grid-template-columns: minmax(290px, 0.82fr) minmax(390px, 1.18fr);
+          }
+
           .pcy-experience-step {
             min-height: 240px;
             padding: 18px;
@@ -5119,6 +6344,37 @@ const PulseCheckYouthPage: React.FC = () => {
 
           .pcy-hero-visual {
             min-height: 650px;
+          }
+
+          .pcy-skills-library-section {
+            padding: 110px 0 120px;
+          }
+
+          .pcy-skills-library-layout {
+            grid-template-columns: 1fr;
+          }
+
+          .pcy-skills-category-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+
+          .pcy-skills-category-grid button {
+            min-height: 104px;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+          }
+
+          .pcy-skills-category-grid button > span {
+            grid-column: 1;
+          }
+
+          .pcy-skills-category-grid button > strong {
+            grid-column: 1 / 3;
+          }
+
+          .pcy-skills-category-grid button > svg {
+            grid-column: 2;
+            grid-row: 1;
           }
 
           .pcy-float-card--gain {
@@ -5254,8 +6510,7 @@ const PulseCheckYouthPage: React.FC = () => {
             right: 24px;
           }
 
-          .pcy-experience-heading,
-          .pcy-value-heading {
+          .pcy-experience-heading {
             grid-template-columns: 1fr;
             gap: 12px;
           }
@@ -5267,10 +6522,6 @@ const PulseCheckYouthPage: React.FC = () => {
 
           .pcy-experience-steps {
             grid-template-columns: repeat(2, 1fr);
-          }
-
-          .pcy-experience-line {
-            display: none;
           }
 
           .pcy-walkthrough-stage {
@@ -5298,10 +6549,6 @@ const PulseCheckYouthPage: React.FC = () => {
           .pcy-walkthrough-moment {
             top: 118px;
             bottom: auto;
-          }
-
-          .pcy-value-grid {
-            grid-template-columns: 1fr;
           }
 
           .pcy-support-photo {
@@ -5557,6 +6804,7 @@ const PulseCheckYouthPage: React.FC = () => {
           }
 
           .pcy-phone-shell {
+            height: 654px;
             min-height: 654px;
             border-radius: 48px;
           }
@@ -5570,14 +6818,12 @@ const PulseCheckYouthPage: React.FC = () => {
           }
 
           .pcy-experience-rail,
-          .pcy-walkthrough,
-          .pcy-value-section {
+          .pcy-walkthrough {
             padding: 88px 0;
           }
 
           .pcy-experience-heading h2,
-          .pcy-walkthrough-heading h2,
-          .pcy-value-heading h2 {
+          .pcy-walkthrough-heading h2 {
             font-size: clamp(2.6rem, 12.7vw, 3.9rem);
           }
 
@@ -5595,6 +6841,41 @@ const PulseCheckYouthPage: React.FC = () => {
 
           .pcy-motion-marquee > div {
             min-height: 58px;
+          }
+
+          .pcy-skills-library-section {
+            padding: 86px 0 94px;
+          }
+
+          .pcy-skills-library-heading h2 {
+            font-size: clamp(3.15rem, 15vw, 4.5rem);
+          }
+
+          .pcy-skills-library-heading > p {
+            font-size: 14px;
+          }
+
+          .pcy-skills-library-layout {
+            margin-top: 45px;
+          }
+
+          .pcy-skills-category-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .pcy-skills-category-detail {
+            min-height: 0;
+          }
+
+          .pcy-skills-category-detail > div {
+            grid-template-columns: 1fr;
+            gap: 30px;
+            padding: 28px 22px;
+            border-radius: 24px;
+          }
+
+          .pcy-skills-motion-stage {
+            min-height: 390px;
           }
 
           .pcy-walkthrough-stage {
@@ -5641,10 +6922,6 @@ const PulseCheckYouthPage: React.FC = () => {
             bottom: 14px;
             width: auto;
             padding: 19px;
-          }
-
-          .pcy-value-card {
-            min-height: 330px;
           }
 
           .pcy-support-photo {

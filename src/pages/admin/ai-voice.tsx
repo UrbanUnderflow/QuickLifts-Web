@@ -4130,7 +4130,7 @@ const AdminAiVoice: React.FC = () => {
               active={activeTab === 'voice'}
               icon={<Mic2 className="h-4 w-4" />}
               label="Nora Voice"
-              description="Global narration voice, provider selection, presets, and preview."
+              description="Provider diagnostics and previews. Athletes choose their runtime voice during onboarding."
               onClick={() => setActiveTab('voice')}
             />
             <AudioTabButton
@@ -4143,8 +4143,8 @@ const AdminAiVoice: React.FC = () => {
             <AudioTabButton
               active={activeTab === 'moduleNarrations'}
               icon={<Mic2 className="h-4 w-4" />}
-              label="Module Narrations"
-              description="Pre-generated Nora spoken clips for every sim and protocol — stored audio first, live TTS only as fallback."
+              label="Legacy Narrations"
+              description="Archive of older generated clips. Current narration uses each athlete's selected OpenAI voice."
               onClick={() => setActiveTab('moduleNarrations')}
             />
             <AudioTabButton
@@ -4320,10 +4320,10 @@ const AdminAiVoice: React.FC = () => {
               <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl mb-6 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div>
-                    <div className="font-semibold text-white">Module Spoken Narrations</div>
+                    <div className="font-semibold text-white">Legacy Module Narrations</div>
                     <div className="text-xs text-zinc-500">
-                      Every line Nora speaks in the sim and protocol players, pre-generated with the configured voice.
-                      iOS plays these stored clips and only falls back to live TTS on a miss.
+                      Older generated clips retained for audit. Current PulseCheck narration is generated live in
+                      each athlete's selected OpenAI voice.
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -4349,12 +4349,9 @@ const AdminAiVoice: React.FC = () => {
                 </div>
 
                 <div className="mb-4 rounded-xl border border-sky-700/40 bg-sky-950/30 px-4 py-3 text-xs leading-relaxed text-sky-200">
-                  Clips are matched to playback by an exact hash of the spoken text. If a module's copy or config changes,
-                  its clips show as stale/missing here — regenerate them. Static in-sim rule readouts and Reset game
-                  phase cues are pre-generated; only cues containing live state (round counters, scores, "Rep X of Y"
-                  practice lines, sim summaries) remain live TTS by design. Sims running a custom build artifact whose
-                  name or athlete description differs from the seed fall back to live TTS for their intro. Changing the
-                  Nora voice on the Voice tab does not retroactively update stored clips; regenerate after a voice change.
+                  This library is not part of current athlete playback. New releases send every narration line through
+                  the OpenAI bridge with the athlete's onboarding voice selection and prefetch upcoming lines in that
+                  same voice to reduce start delay.
                 </div>
 
                 {moduleNarrationLoadError && (
@@ -4444,7 +4441,7 @@ const AdminAiVoice: React.FC = () => {
                 </div>
                 <div>
                   <div className="font-semibold text-white">Nora Voice Configuration</div>
-                  <div className="text-xs text-zinc-500">Global AI narration voice for mental training steps</div>
+                  <div className="text-xs text-zinc-500">Provider diagnostics and admin previews; athletes choose their voice in onboarding</div>
                 </div>
               </div>
               {voiceExpanded ? <ChevronUp className="w-4 h-4 text-zinc-500" /> : <ChevronDown className="w-4 h-4 text-zinc-500" />}

@@ -105,6 +105,29 @@ function createConversationRecoveryDb({ conversations = [] }) {
   return { db, writes };
 }
 
+test('classifies acknowledgments as conversational closure before turn-taking', () => {
+  const { classifyResponseContext, isConversationAcknowledgment } = loadRuntimeHelpers();
+
+  for (const message of ['Thank you', 'Thanks, Nora!', 'Got it.', 'That helps']) {
+    assert.equal(isConversationAcknowledgment(message), true);
+    assert.deepEqual(classifyResponseContext(message, 140), {
+      context: 'acknowledgment',
+      wordRange: { min: 2, max: 12 },
+      maxTokens: 40,
+    });
+  }
+});
+
+test('keeps substantive short messages in normal conversation', () => {
+  const { classifyResponseContext, isConversationAcknowledgment } = loadRuntimeHelpers();
+
+  assert.equal(isConversationAcknowledgment('Okay, I want to discuss confidence'), false);
+  assert.equal(
+    classifyResponseContext('Okay, I want to discuss confidence').context,
+    'quickExchange'
+  );
+});
+
 function createEscalationFlowDb({
   conversations = [],
   escalationConditions = [],

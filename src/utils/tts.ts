@@ -1,5 +1,6 @@
 import {
   AiVoiceConfig,
+  NORA_VOICE_OPTIONS,
   OPENAI_VOICES,
   VoiceChoice,
   normalizeAiVoiceConfig,
@@ -147,6 +148,9 @@ export function getBrowserVoices(): VoiceChoice[] {
 
 let currentAudio: HTMLAudioElement | null = null;
 let currentObjectUrl: string | null = null;
+let cachedAthleteVoice: VoiceChoice | null = null;
+let cachedAthleteVoiceUserId: string | null = null;
+let athleteVoiceFetchInFlight: Promise<VoiceChoice | null> | null = null;
 
 function cleanupAudio() {
   if (currentAudio) {
@@ -286,48 +290,96 @@ function speakViaBrowserTTS(text: string, opts: SpeakOptions, voiceName?: string
  */
 export function clearVoiceCache() {
   cacheVoiceConfigLocally(null);
+  cachedAthleteVoice = null;
+  cachedAthleteVoiceUserId = null;
+  athleteVoiceFetchInFlight = null;
   lastFetchAttempt = 0;
   console.log('[TTS] Voice cache cleared');
 }
 
+async function fetchAthleteVoiceIfNeeded(): Promise<VoiceChoice | null> {
+  if (typeof window === 'undefined') return null;
+
+  const { auth, db } = await import('../api/firebase/config');
+  const userId = auth.currentUser?.uid;
+  if (!userId) return null;
+  if (cachedAthleteVoiceUserId === userId && cachedAthleteVoice) {
+    return cachedAthleteVoice;
+  }
+  if (athleteVoiceFetchInFlight) return athleteVoiceFetchInFlight;
+
+  athleteVoiceFetchInFlight = (async () => {
+    const storageKey = `pulsecheck-nora-voice:${userId}`;
+    try {
+      const locallySaved = window.localStorage.getItem(storageKey);
+      const localOption = NORA_VOICE_OPTIONS.find((option) => option.id === locallySaved);
+      if (localOption) {
+        cachedAthleteVoiceUserId = userId;
+        cachedAthleteVoice = {
+          provider: 'openai',
+          id: localOption.id,
+          label: localOption.title,
+        };
+      }
+    } catch {}
+
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const snapshot = await getDoc(doc(db, 'users', userId));
+      const data = snapshot.data() as
+        | { noraVoiceId?: string; noraVoice?: { voiceId?: string } }
+        | undefined;
+      const voiceId = data?.noraVoiceId || data?.noraVoice?.voiceId || '';
+      const option = NORA_VOICE_OPTIONS.find((candidate) => candidate.id === voiceId);
+      if (option) {
+        const choice: VoiceChoice = {
+          provider: 'openai',
+          id: option.id,
+          label: option.title,
+        };
+        cachedAthleteVoiceUserId = userId;
+        cachedAthleteVoice = choice;
+        try {
+          window.localStorage.setItem(storageKey, option.id);
+        } catch {}
+        return choice;
+      }
+    } catch (error) {
+      console.warn('[TTS] Could not refresh the athlete voice preference', error);
+    }
+
+    return cachedAthleteVoiceUserId === userId ? cachedAthleteVoice : null;
+  })();
+
+  try {
+    return await athleteVoiceFetchInFlight;
+  } finally {
+    athleteVoiceFetchInFlight = null;
+  }
+}
+
 async function resolveVoiceChoiceSource(
   voiceChoice: VoiceChoice | null = null
-): Promise<{ choice: VoiceChoice; source: 'explicit' | 'admin' | 'default' }> {
+): Promise<{ choice: VoiceChoice; source: 'explicit' | 'athlete' | 'default' }> {
   if (voiceChoice?.provider) {
     console.log('[TTS] resolveVoiceChoiceSource explicit choice', voiceChoice);
     return { choice: voiceChoice, source: 'explicit' };
   }
 
-  const adminVoice = await fetchGlobalVoiceIfNeeded();
-  if (adminVoice) {
-    console.log('[TTS] resolveVoiceChoiceSource admin voice', {
-      provider: adminVoice.provider,
-      voiceId: adminVoice.voiceId,
-      presetId: adminVoice.presetId ?? null,
-    });
-    return {
-      choice:
-        adminVoice.provider === 'elevenlabs'
-          ? {
-              provider: 'elevenlabs',
-              id: adminVoice.elevenLabsVoiceId || adminVoice.voiceId,
-              label: adminVoice.elevenLabsVoiceId || adminVoice.voiceId,
-              presetId: adminVoice.presetId || null,
-              settings: adminVoice.elevenLabsSettings || null,
-              punctuationPauses: adminVoice.punctuationPauses ?? true,
-              fallbackVoiceId: adminVoice.openAiVoiceId || OPENAI_VOICES[0]?.id || 'alloy',
-            }
-          : {
-              provider: 'openai',
-              id: adminVoice.openAiVoiceId || adminVoice.voiceId,
-              label: adminVoice.openAiVoiceId || adminVoice.voiceId,
-            },
-      source: 'admin',
-    };
+  const athleteVoice = await fetchAthleteVoiceIfNeeded();
+  if (athleteVoice) {
+    console.log('[TTS] resolveVoiceChoiceSource athlete voice', athleteVoice);
+    return { choice: athleteVoice, source: 'athlete' };
   }
 
-  console.log('[TTS] resolveVoiceChoiceSource default voice', OPENAI_VOICES[0]);
-  return { choice: OPENAI_VOICES[0], source: 'default' };
+  const defaultOption = NORA_VOICE_OPTIONS[0];
+  const defaultChoice: VoiceChoice = {
+    provider: 'openai',
+    id: defaultOption?.id || 'marin',
+    label: defaultOption?.title || 'Warm',
+  };
+  console.log('[TTS] resolveVoiceChoiceSource default voice', defaultChoice);
+  return { choice: defaultChoice, source: 'default' };
 }
 
 export async function getResolvedVoiceChoice(voiceChoice: VoiceChoice | null = null) {
@@ -386,10 +438,10 @@ export async function speakStep(
   }
 
   const { choice: chosen, source } = await resolveVoiceChoiceSource(voiceChoice);
-  if (source === 'admin') {
-    console.log('[TTS] Using admin-configured voice:', chosen);
+  if (source === 'athlete') {
+    console.log('[TTS] Using athlete-selected voice:', chosen);
   } else if (source === 'default') {
-    console.log('[TTS] No admin voice configured, using default');
+    console.log('[TTS] No athlete voice saved, using the default Nora voice');
   }
 
   // If they explicitly chose a browser voice, use it directly.

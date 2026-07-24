@@ -4,6 +4,7 @@
 //
 //   public/fwp-media/full/*.png       -> 1284x2778
 //   public/fitclub-media/full/*.png   -> 1284x2778
+//   public/pulsecheck-media/full/*.png -> 1284x2778
 //
 // Portrait shots (aspect within 10% of target) are cover-cropped from the top
 // (no distortion, trims a sliver of edge). Off-aspect shots are letterboxed on
@@ -22,6 +23,7 @@ const ASPECT_TOLERANCE = 0.1; // 10%
 const DIRS = [
   path.join(__dirname, '..', 'public', 'fwp-media', 'full'),
   path.join(__dirname, '..', 'public', 'fitclub-media', 'full'),
+  path.join(__dirname, '..', 'public', 'pulsecheck-media', 'full'),
 ];
 
 async function normalize(file) {

@@ -137,7 +137,7 @@ export default function PulseCheckYouthPathwaysTab() {
         <InfoCard
           title="Provisioning source of truth"
           accent="blue"
-          body="Team Commercial Config now carries commercialConfig.youthTrack. Web, iOS, and Android treat missing or invalid values as Junior. Operators must explicitly choose Pro for governed school, institution, or AuntEDNA-supported deployments that can carry the direct-chat and escalation posture."
+          body="Team Commercial Config carries commercialConfig.youthTrack. Mobile resolves every athlete team rather than selecting one membership: any eligible Pro team activates the Pro experience, even when another team is Junior or Rookie. Paused and archived teams are excluded. Missing or invalid values still fall back to Junior. Track selection controls the athlete experience; commercialModel and teamPlanStatus separately control who pays and whether the paywall is bypassed."
         />
       </SectionBlock>
     </div>
