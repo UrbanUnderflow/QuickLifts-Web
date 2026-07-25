@@ -53,6 +53,8 @@ const getDefaultCommercialConfig = () => ({
   teamPlanStatus: 'inactive',
   referralKickbackEnabled: false,
   referralRevenueSharePct: 0,
+  parentAssessmentReferralKickbackEnabled: false,
+  parentAssessmentReferralRevenueSharePct: 0,
   revenueRecipientRole: 'team-admin',
   revenueRecipientUserId: '',
   billingOwnerUserId: '',
@@ -74,6 +76,12 @@ const normalizeCommercialConfig = (value) => {
     referralKickbackEnabled: normalizeBoolean(candidate.referralKickbackEnabled ?? defaults.referralKickbackEnabled),
     referralRevenueSharePct: normalizeRevenueSharePct(
       candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct
+    ),
+    parentAssessmentReferralKickbackEnabled: normalizeBoolean(
+      candidate.parentAssessmentReferralKickbackEnabled ?? defaults.parentAssessmentReferralKickbackEnabled
+    ),
+    parentAssessmentReferralRevenueSharePct: normalizeRevenueSharePct(
+      candidate.parentAssessmentReferralRevenueSharePct ?? defaults.parentAssessmentReferralRevenueSharePct
     ),
     revenueRecipientRole:
       revenueRecipientRole === 'coach'

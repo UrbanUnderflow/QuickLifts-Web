@@ -121,6 +121,9 @@ const normalizeInviteCommercialSnapshot = (
   const referralRevenueSharePct = Number.isFinite(Number(candidate.referralRevenueSharePct))
     ? Math.max(0, Math.min(100, Number(candidate.referralRevenueSharePct)))
     : defaults.referralRevenueSharePct;
+  const parentAssessmentReferralRevenueSharePct = Number.isFinite(Number(candidate.parentAssessmentReferralRevenueSharePct))
+    ? Math.max(0, Math.min(100, Number(candidate.parentAssessmentReferralRevenueSharePct)))
+    : defaults.parentAssessmentReferralRevenueSharePct;
   const snapshot: PulseCheckTeamCommercialSnapshot = {
     commercialModel,
     teamPlanStatus,
@@ -131,6 +134,11 @@ const normalizeInviteCommercialSnapshot = (
         ? candidate.referralKickbackEnabled
         : defaults.referralKickbackEnabled,
     referralRevenueSharePct,
+    parentAssessmentReferralKickbackEnabled:
+      typeof candidate.parentAssessmentReferralKickbackEnabled === 'boolean'
+        ? candidate.parentAssessmentReferralKickbackEnabled
+        : defaults.parentAssessmentReferralKickbackEnabled,
+    parentAssessmentReferralRevenueSharePct,
     revenueRecipientRole:
       String(candidate.revenueRecipientRole || defaults.revenueRecipientRole).trim() === 'coach'
         ? 'coach'

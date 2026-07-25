@@ -46,6 +46,7 @@ const AccountMergeModal: React.FC<{
   const [canonicalUid, setCanonicalUid] = useState(suggestedCanonical?.id || '');
   const [preview, setPreview] = useState<MergePreview | null>(null);
   const [confirmation, setConfirmation] = useState('');
+  const [keepAccountConfirmed, setKeepAccountConfirmed] = useState(false);
   const [busy, setBusy] = useState<'preview' | 'merge' | 'rollback' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [merged, setMerged] = useState(false);
@@ -96,6 +97,7 @@ const AccountMergeModal: React.FC<{
     setError(null);
     setPreview(null);
     setConfirmation('');
+    setKeepAccountConfirmed(false);
     try {
       const result = await callMerge({
         action: 'preview',
@@ -189,6 +191,7 @@ const AccountMergeModal: React.FC<{
                   setCanonicalUid(event.target.value);
                   setPreview(null);
                   setConfirmation('');
+                  setKeepAccountConfirmed(false);
                 }}
                 className="mt-2 w-full rounded-lg border border-white/10 bg-[#22262d] px-3 py-2 text-sm text-white"
               >
@@ -244,6 +247,19 @@ const AccountMergeModal: React.FC<{
                 </div>
               </div>
 
+              <label className="flex cursor-pointer gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <input
+                  type="checkbox"
+                  checked={keepAccountConfirmed}
+                  onChange={(event) => setKeepAccountConfirmed(event.target.checked)}
+                  className="mt-1 h-4 w-4 accent-emerald-500"
+                />
+                <span className="text-sm leading-6 text-emerald-100">
+                  Keep <strong>{preview.canonical.email || preview.canonical.uid}</strong>. This is the account
+                  that will own the combined profile, team, athletes, and earnings records.
+                </span>
+              </label>
+
               <details className="rounded-xl border border-white/10 bg-black/20">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-white">
                   View affected records
@@ -273,7 +289,11 @@ const AccountMergeModal: React.FC<{
               <button
                 type="button"
                 onClick={() => void mergeData()}
-                disabled={confirmation !== expectedConfirmation || busy !== null}
+                disabled={
+                  !keepAccountConfirmed
+                  || confirmation !== expectedConfirmation
+                  || busy !== null
+                }
                 className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
               >
                 {busy === 'merge' ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitMerge className="h-4 w-4" />}

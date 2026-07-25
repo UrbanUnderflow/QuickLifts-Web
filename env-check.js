@@ -64,6 +64,7 @@ console.log('NEXT_PUBLIC_DEV_FIREBASE_MESSAGING_SENDER_ID:', process.env.NEXT_PU
 console.log('NEXT_PUBLIC_DEV_FIREBASE_APP_ID:', process.env.NEXT_PUBLIC_DEV_FIREBASE_APP_ID ? '✓ Set' : '✗ Not set');
 
 console.log('\nSTRIPE VARIABLES:');
+console.log('STRIPE_TEST_SECRET_KEY:', process.env.STRIPE_TEST_SECRET_KEY ? '✓ Set' : '✗ Not set');
 console.log('STRIPE_SECRET_KEY:', process.env.STRIPE_SECRET_KEY ? '✓ Set' : '✗ Not set');
 console.log('STRIPE_WEBHOOK_SECRET:', process.env.STRIPE_WEBHOOK_SECRET ? '✓ Set' : '✗ Not set');
 console.log('STRIPE_WEBHOOK_SECRET_COACH:', process.env.STRIPE_WEBHOOK_SECRET_COACH ? '✓ Set' : '✗ Not set');
@@ -77,6 +78,14 @@ console.log('STRIPE_PRICE_COACH_MONTHLY:', process.env.STRIPE_PRICE_COACH_MONTHL
 console.log('STRIPE_PRICE_COACH_ANNUAL:', process.env.STRIPE_PRICE_COACH_ANNUAL ? '✓ Set' : '✗ Not set');
 console.log('STRIPE_PRODUCT_ATHLETE:', process.env.STRIPE_PRODUCT_ATHLETE ? '✓ Set' : '✗ Not set');
 console.log('STRIPE_PRODUCT_COACH:', process.env.STRIPE_PRODUCT_COACH ? '✓ Set' : '✗ Not set');
+
+console.log('\nPULSECHECK ASSESSMENT STRIPE VARIABLES:');
+console.log('STRIPE_PARENT_READINESS_ASSESSMENT_PRODUCT_ID:', process.env.STRIPE_PARENT_READINESS_ASSESSMENT_PRODUCT_ID ? '✓ Set' : '✗ Not set');
+console.log('STRIPE_COACH_READINESS_ASSESSMENT_PRODUCT_ID:', process.env.STRIPE_COACH_READINESS_ASSESSMENT_PRODUCT_ID ? '✓ Set' : '✗ Not set');
+console.log('STRIPE_ATHLETIC_TRAINER_READINESS_ASSESSMENT_PRODUCT_ID:', process.env.STRIPE_ATHLETIC_TRAINER_READINESS_ASSESSMENT_PRODUCT_ID ? '✓ Set' : '✗ Not set');
+console.log('STRIPE_PARENT_READINESS_ASSESSMENT_PAYMENT_LINK:', process.env.STRIPE_PARENT_READINESS_ASSESSMENT_PAYMENT_LINK ? '✓ Set' : '✗ Not set');
+console.log('STRIPE_COACH_READINESS_ASSESSMENT_PAYMENT_LINK:', process.env.STRIPE_COACH_READINESS_ASSESSMENT_PAYMENT_LINK ? '✓ Set' : '✗ Not set');
+console.log('STRIPE_ATHLETIC_TRAINER_READINESS_ASSESSMENT_PAYMENT_LINK:', process.env.STRIPE_ATHLETIC_TRAINER_READINESS_ASSESSMENT_PAYMENT_LINK ? '✓ Set' : '✗ Not set');
 
 console.log('\nSITE CONFIGURATION:');
 console.log('SITE_URL:', process.env.SITE_URL ? '✓ Set' : '✗ Not set');

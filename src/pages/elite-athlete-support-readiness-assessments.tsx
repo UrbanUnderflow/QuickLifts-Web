@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { NextPage } from 'next';
+import { useRouter } from 'next/router';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -119,6 +120,17 @@ type ComputedResult = {
   weakestDomains: DomainKey[];
 };
 
+type AssessmentProductInfo = {
+  id: StakeholderId;
+  productName?: string;
+  productId?: string;
+  priceId?: string;
+  amountCents?: number;
+  currency?: string;
+  priceLabel: string;
+  available?: boolean;
+};
+
 const COLORS = {
   lime: '#4F6F59',
   sky: '#456978',
@@ -234,7 +246,7 @@ const assessments: StakeholderAssessment[] = [
     icon: Home,
     accent: COLORS.lime,
     secondary: COLORS.sky,
-    price: '$10',
+    price: '$49.99',
     trainingPrice: '$199',
     description:
       'Find out how ready you are to support your child through the pressure, setbacks, and big emotions that come with competing, without turning home into another place they have to perform.',
@@ -466,7 +478,7 @@ const assessments: StakeholderAssessment[] = [
     icon: Target,
     accent: COLORS.sky,
     secondary: COLORS.lime,
-    price: '$10',
+    price: '$49.99',
     trainingPrice: '$399',
     description:
       "Measures how ready you are to deliberately coach the mental game, build mental skills into how you train, and partner with the athlete's mental-performance development, not just run the X's and O's.",
@@ -719,7 +731,7 @@ const assessments: StakeholderAssessment[] = [
     icon: Stethoscope,
     accent: COLORS.purple,
     secondary: COLORS.emerald,
-    price: '$10',
+    price: '$49.99',
     trainingPrice: '$399',
     description:
       'Measures how ready you are to extend your clinical expertise into performance neuroscience and the mental-performance side, supporting an elite athlete who is going through mental-performance training.',
@@ -963,7 +975,21 @@ const getBand = (score: number, bands: ScoreBand[] = scoreBands): ScoreBand => {
 
 const classNames = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(' ');
 
+const normalizeString = (value: unknown): string => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === 'string' ? raw.trim() : '';
+};
+
 const answerLabel = (index: number) => String.fromCharCode(65 + index);
+
+const normalizeAssessmentId = (value: unknown): StakeholderId | null => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const normalized = String(raw || '').trim();
+  if (normalized === 'parent' || normalized === 'coach' || normalized === 'athleticTrainer') {
+    return normalized;
+  }
+  return null;
+};
 
 const domainCopyFor = (assessment: StakeholderAssessment, key: DomainKey) => ({
   label: assessment.domainCopy?.[key]?.label ?? domainConfig[key].label,
@@ -1079,11 +1105,14 @@ const GridBackdrop = () => (
 const AssessmentCard: React.FC<{
   assessment: StakeholderAssessment;
   active: boolean;
+  product?: AssessmentProductInfo;
+  purchasing: boolean;
   onSelect: () => void;
   onStart: () => void;
-}> = ({ assessment, active, onSelect, onStart }) => {
+}> = ({ assessment, active, product, purchasing, onSelect, onStart }) => {
   const Icon = assessment.icon;
   const featuredDomains = assessment.domains.slice(0, 5);
+  const priceLabel = product?.priceLabel || assessment.price;
 
   return (
     <motion.article
@@ -1112,7 +1141,7 @@ const AssessmentCard: React.FC<{
               <Icon className="h-6 w-6" style={{ color: assessment.accent }} />
             </div>
             <div className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-right">
-              <div className="text-sm font-semibold text-stone-900">{assessment.price}</div>
+              <div className="text-sm font-semibold text-stone-900">{priceLabel}</div>
               <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Assessment</div>
             </div>
           </div>
@@ -1126,10 +1155,15 @@ const AssessmentCard: React.FC<{
           <button
             type="button"
             onClick={onStart}
-            className="mt-7 inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition hover:opacity-90"
+            disabled={purchasing}
+            className="mt-7 inline-flex min-h-[46px] items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             style={{ backgroundColor: assessment.accent, color: '#FAFAF8' }}
           >
-            <span>Start {assessment.shortTitle}</span>
+            <span>
+              {purchasing
+                ? 'Opening Stripe...'
+                : `Purchase ${assessment.shortTitle}`}
+            </span>
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>
@@ -1185,9 +1219,11 @@ const AssessmentCard: React.FC<{
 
 const HubView: React.FC<{
   selected: StakeholderAssessment;
+  products: Record<StakeholderId, AssessmentProductInfo | undefined>;
+  purchasingId: StakeholderId | null;
   onSelect: (id: StakeholderId) => void;
   onStart: (id: StakeholderId) => void;
-}> = ({ selected, onSelect, onStart }) => {
+}> = ({ selected, products, purchasingId, onSelect, onStart }) => {
   return (
     <section className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-16 pt-24 sm:px-8">
       <motion.header
@@ -1247,6 +1283,8 @@ const HubView: React.FC<{
               key={assessment.id}
               assessment={assessment}
               active={selected.id === assessment.id}
+              product={products[assessment.id]}
+              purchasing={purchasingId === assessment.id}
               onSelect={() => onSelect(assessment.id)}
               onStart={() => onStart(assessment.id)}
             />
@@ -1660,7 +1698,7 @@ const ResultsView: React.FC<{
 
             <div className="mt-4 inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: `${assessment.secondary}33`, backgroundColor: `${assessment.secondary}0d`, color: '#57534e' }}>
               <CheckCircle2 className="h-3.5 w-3.5" style={{ color: assessment.secondary }} />
-              <span>The $10 you paid for this assessment is credited toward any training below.</span>
+              <span>Your assessment purchase is credited toward any training below.</span>
             </div>
 
             <div className="mt-5 rounded-lg border border-stone-200 bg-white/80 p-4">
@@ -1824,18 +1862,107 @@ const AssessmentExperience: React.FC<{
 };
 
 const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
+  const router = useRouter();
   const [selectedId, setSelectedId] = useState<StakeholderId>('parent');
   const [activeId, setActiveId] = useState<StakeholderId | null>(null);
+  const [products, setProducts] = useState<Record<StakeholderId, AssessmentProductInfo | undefined>>({
+    parent: undefined,
+    coach: undefined,
+    athleticTrainer: undefined,
+  });
+  const [purchasingId, setPurchasingId] = useState<StakeholderId | null>(null);
+  const [purchaseError, setPurchaseError] = useState('');
 
   const selectedAssessment = assessments.find((assessment) => assessment.id === selectedId) || assessments[0];
   const activeAssessment = activeId
     ? assessments.find((assessment) => assessment.id === activeId) || selectedAssessment
     : null;
 
-  const startAssessment = (id: StakeholderId) => {
+  const referralMetadata = useMemo(() => ({
+    referralType: normalizeString(router.query.referralType),
+    coachId: normalizeString(router.query.coachId),
+    coachEmail: normalizeString(router.query.coachEmail),
+    teamId: normalizeString(router.query.teamId),
+    organizationId: normalizeString(router.query.organizationId),
+  }), [
+    router.query.coachEmail,
+    router.query.coachId,
+    router.query.organizationId,
+    router.query.referralType,
+    router.query.teamId,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProducts = async () => {
+      try {
+        const response = await fetch('/api/pulsecheck/assessment-checkout');
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.success || !Array.isArray(payload.products)) {
+          throw new Error(payload?.message || 'Assessment prices could not be loaded.');
+        }
+
+        const nextProducts = payload.products.reduce(
+          (acc: Record<StakeholderId, AssessmentProductInfo | undefined>, product: AssessmentProductInfo) => ({
+            ...acc,
+            [product.id]: product,
+          }),
+          {
+            parent: undefined,
+            coach: undefined,
+            athleticTrainer: undefined,
+          }
+        );
+
+        if (!cancelled) setProducts(nextProducts);
+      } catch (error) {
+        console.error('[AssessmentPage] failed to load Stripe assessment products', error);
+      }
+    };
+
+    void loadProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const startAssessment = useCallback(async (id: StakeholderId) => {
     setSelectedId(id);
-    setActiveId(id);
-  };
+    setPurchaseError('');
+    setPurchasingId(id);
+
+    try {
+      const response = await fetch('/api/pulsecheck/assessment-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assessmentId: id,
+          ...referralMetadata,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success || !payload.url) {
+        throw new Error(payload?.message || 'Checkout could not be opened.');
+      }
+      window.location.href = payload.url;
+    } catch (error) {
+      setPurchaseError(error instanceof Error ? error.message : 'Checkout could not be opened.');
+      setPurchasingId(null);
+    }
+  }, [referralMetadata]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const queryAssessment = normalizeAssessmentId(router.query.assessment);
+    if (!queryAssessment) return;
+
+    setSelectedId(queryAssessment);
+    if (router.query.start === '1' && router.query.paid === 'success') {
+      setActiveId(queryAssessment);
+    }
+  }, [router.isReady, router.query.assessment, router.query.paid, router.query.start]);
 
   return (
     <>
@@ -1909,7 +2036,18 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
             </motion.div>
           ) : (
             <motion.div key="hub" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition}>
-              <HubView selected={selectedAssessment} onSelect={setSelectedId} onStart={startAssessment} />
+              {purchaseError && (
+                <div className="fixed bottom-5 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 rounded-lg border border-[#A85353]/25 bg-white px-4 py-3 text-sm font-medium text-[#A85353] shadow-[0_18px_55px_rgba(68,64,60,0.14)]">
+                  {purchaseError}
+                </div>
+              )}
+              <HubView
+                selected={selectedAssessment}
+                products={products}
+                purchasingId={purchasingId}
+                onSelect={setSelectedId}
+                onStart={startAssessment}
+              />
             </motion.div>
           )}
         </AnimatePresence>

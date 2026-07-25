@@ -108,6 +108,8 @@ export interface PulseCheckTeamCommercialConfig {
   experienceAudience: PulseCheckExperienceAudience;
   referralKickbackEnabled: boolean;
   referralRevenueSharePct: number;
+  parentAssessmentReferralKickbackEnabled: boolean;
+  parentAssessmentReferralRevenueSharePct: number;
   revenueRecipientRole: PulseCheckRevenueRecipientRole;
   revenueRecipientUserId?: string;
   billingOwnerUserId?: string;
@@ -130,6 +132,8 @@ export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommer
   experienceAudience: 'athletes',
   referralKickbackEnabled: false,
   referralRevenueSharePct: 0,
+  parentAssessmentReferralKickbackEnabled: false,
+  parentAssessmentReferralRevenueSharePct: 0,
   revenueRecipientRole: 'team-admin',
   revenueRecipientUserId: '',
   billingOwnerUserId: '',

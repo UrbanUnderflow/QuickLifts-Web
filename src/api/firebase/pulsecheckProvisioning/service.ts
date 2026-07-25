@@ -249,6 +249,13 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
     referralRevenueSharePct: normalizeReferralRevenueSharePct(
       candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct
     ),
+    parentAssessmentReferralKickbackEnabled:
+      typeof candidate.parentAssessmentReferralKickbackEnabled === 'boolean'
+        ? candidate.parentAssessmentReferralKickbackEnabled
+        : defaults.parentAssessmentReferralKickbackEnabled,
+    parentAssessmentReferralRevenueSharePct: normalizeReferralRevenueSharePct(
+      candidate.parentAssessmentReferralRevenueSharePct ?? defaults.parentAssessmentReferralRevenueSharePct
+    ),
     revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
     revenueRecipientUserId: normalizeString(typeof candidate.revenueRecipientUserId === 'string' ? candidate.revenueRecipientUserId : defaults.revenueRecipientUserId),
     billingOwnerUserId: normalizeString(typeof candidate.billingOwnerUserId === 'string' ? candidate.billingOwnerUserId : defaults.billingOwnerUserId),

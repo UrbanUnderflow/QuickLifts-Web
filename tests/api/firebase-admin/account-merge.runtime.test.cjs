@@ -5,6 +5,8 @@ const {
   canonicalizeData,
   mergeDataCanonicalWins,
   KEYED_DOCUMENT_COLLECTIONS,
+  REFERENCE_FIELDS_BY_COLLECTION,
+  SCALAR_USER_FIELDS,
   USER_REFERENCE_COLLECTIONS,
 } = require('../../../netlify/functions/lib/account-merge');
 
@@ -51,26 +53,65 @@ test('canonicalizeData rewrites nested commercial revenue recipients', () => {
   const result = canonicalizeData({
     commercialConfig: {
       revenueRecipientUserId: 'source',
+      billingOwnerUserId: 'source',
       referralRevenueSharePct: 20,
     },
+    coachUserId: 'source',
+    revenueRecipientUserId: 'source',
+    billingOwnerUserId: 'source',
   }, 'source', 'canonical');
 
   assert.deepEqual(result.commercialConfig, {
     revenueRecipientUserId: 'canonical',
+    billingOwnerUserId: 'canonical',
     referralRevenueSharePct: 20,
   });
+  assert.equal(result.coachUserId, 'canonical');
+  assert.equal(result.revenueRecipientUserId, 'canonical');
+  assert.equal(result.billingOwnerUserId, 'canonical');
 });
 
 test('merge registry includes the critical identity-owned records', () => {
-  for (const collection of ['users', 'subscriptions', 'athlete-mental-progress']) {
+  for (const collection of [
+    'users',
+    'subscriptions',
+    'athlete-mental-progress',
+    'pulsecheck-user-revenue-summaries',
+  ]) {
     assert.ok(KEYED_DOCUMENT_COLLECTIONS.includes(collection));
   }
   for (const collection of [
     'pulsecheck-team-memberships',
     'pulsecheck-organization-memberships',
+    'pulsecheck-revenue-events',
+    'pulsecheck-team-revenue-summaries',
+    'pulsecheck-coach-service-orders',
+    'pulsecheck-assessment-purchases',
+    'transactions',
     'coach-athlete-conversations',
     'fitWithPulse-workoutSessions',
   ]) {
     assert.ok(USER_REFERENCE_COLLECTIONS.includes(collection));
   }
+  for (const field of [
+    'coachUserId',
+    'revenueRecipientUserId',
+    'billingOwnerUserId',
+    'commercialConfig.revenueRecipientUserId',
+    'commercialConfig.billingOwnerUserId',
+  ]) {
+    assert.ok(SCALAR_USER_FIELDS.includes(field));
+  }
+  assert.deepEqual(
+    new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-revenue-events']),
+    new Set(['subscriberUserId', 'revenueRecipientUserId', 'billingOwnerUserId']),
+  );
+  assert.deepEqual(
+    new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-coach-service-orders']),
+    new Set(['coachUserId', 'athleteUserId']),
+  );
+  assert.deepEqual(
+    new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-assessment-purchases']),
+    new Set(['coachUserId', 'revenueRecipientUserId']),
+  );
 });

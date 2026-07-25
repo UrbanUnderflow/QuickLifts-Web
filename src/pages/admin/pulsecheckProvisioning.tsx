@@ -1651,7 +1651,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       commercialConfig: {
         ...current.commercialConfig,
         [field]:
-          field === 'referralRevenueSharePct'
+          field === 'referralRevenueSharePct' || field === 'parentAssessmentReferralRevenueSharePct'
             ? Math.max(0, Math.min(100, Number(value) || 0))
             : value,
       },
@@ -1669,7 +1669,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       [teamId]: {
         ...(current[teamId] || getDefaultPulseCheckTeamCommercialConfig()),
         [field]:
-          field === 'referralRevenueSharePct'
+          field === 'referralRevenueSharePct' || field === 'parentAssessmentReferralRevenueSharePct'
             ? Math.max(0, Math.min(100, Number(value) || 0))
             : value,
       },
@@ -1985,7 +1985,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
     try {
       let nextDraft = draft;
-      if (draft.referralKickbackEnabled && !draft.revenueRecipientUserId) {
+      if (
+        (draft.referralKickbackEnabled || draft.parentAssessmentReferralKickbackEnabled) &&
+        !draft.revenueRecipientUserId
+      ) {
         const organizationStaff = orgStaffById[team.organizationId] || [];
         const legacyCoach = team.legacyCoachId
           ? organizationStaff.find((staff) => staff.userId === team.legacyCoachId)
@@ -4151,6 +4154,48 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </div>
                                             </label>
 
+                                            <div className="pcp-commercial-grid">
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Parent Assessment Referral Share %</span>
+                                                <input
+                                                  className="pcp-finp"
+                                                  type="number"
+                                                  min={0}
+                                                  max={100}
+                                                  value={teamCommercialDraft.parentAssessmentReferralRevenueSharePct || 0}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'parentAssessmentReferralRevenueSharePct',
+                                                      event.target.value
+                                                    )
+                                                  }
+                                                />
+                                              </label>
+                                            </div>
+
+                                            <label className="pcp-checkbox-row">
+                                              <input
+                                                type="checkbox"
+                                                checked={teamCommercialDraft.parentAssessmentReferralKickbackEnabled || false}
+                                                onChange={(event) =>
+                                                  handleExistingTeamCommercialFieldChange(
+                                                    team.id,
+                                                    'parentAssessmentReferralKickbackEnabled',
+                                                    event.target.checked
+                                                  )
+                                                }
+                                              />
+                                              <div>
+                                                <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                                                  Enable referral kickback for parent assessment purchases
+                                                </div>
+                                                <div className="pcp-checkbox-copy">
+                                                  Parent assessment referral links keep coach and team attribution so a configured purchase share can route back to this team.
+                                                </div>
+                                              </div>
+                                            </label>
+
                                             <div className="pcp-commercial-footer">
                                               <div className="pcp-card-copy">
                                                 {teamPlanBypass
@@ -5248,6 +5293,42 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             </option>
                           ))}
                         </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Parent Assessment Referral Share %</span>
+                        <input
+                          className="pcp-finp"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={teamForm.commercialConfig.parentAssessmentReferralRevenueSharePct}
+                          onChange={(event) =>
+                            handleTeamCommercialFieldChange(
+                              'parentAssessmentReferralRevenueSharePct',
+                              event.target.value
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="pcp-checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={teamForm.commercialConfig.parentAssessmentReferralKickbackEnabled}
+                          onChange={(event) =>
+                            handleTeamCommercialFieldChange(
+                              'parentAssessmentReferralKickbackEnabled',
+                              event.target.checked
+                            )
+                          }
+                        />
+                        <div>
+                          <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                            Enable parent assessment referral kickback
+                          </div>
+                          <div className="pcp-checkbox-copy">
+                            Parent assessment purchases can carry coach and team attribution for a separate configured kickback.
+                          </div>
+                        </div>
                       </label>
                     </div>
                   </div>

@@ -9,6 +9,7 @@ Add these variables to your `.env.local` file:
 ### Stripe Configuration
 ```bash
 # Stripe API Keys
+STRIPE_TEST_SECRET_KEY=sk_test_...          # Stripe test secret key for local checkout
 STRIPE_SECRET_KEY=sk_test_...               # Stripe secret key for API calls
 STRIPE_WEBHOOK_SECRET=whsec_...             # Webhook secret for general Stripe webhooks
 STRIPE_WEBHOOK_SECRET_COACH=whsec_...       # Webhook secret specifically for coach subscriptions
@@ -22,6 +23,14 @@ STRIPE_PRICE_COACH_MONTHLY=price_...        # Monthly coach subscription ($24.99
 STRIPE_PRICE_COACH_ANNUAL=price_...         # Annual coach subscription ($249/year)
 STRIPE_PRODUCT_ATHLETE=prod_...             # Athlete product ID
 STRIPE_PRODUCT_COACH=prod_...               # Coach product ID
+
+# PulseCheck readiness assessment product IDs / Payment Links
+STRIPE_PARENT_READINESS_ASSESSMENT_PRODUCT_ID=prod_...
+STRIPE_COACH_READINESS_ASSESSMENT_PRODUCT_ID=prod_...
+STRIPE_ATHLETIC_TRAINER_READINESS_ASSESSMENT_PRODUCT_ID=prod_...
+STRIPE_PARENT_READINESS_ASSESSMENT_PAYMENT_LINK=https://buy.stripe.com/...
+STRIPE_COACH_READINESS_ASSESSMENT_PAYMENT_LINK=https://buy.stripe.com/...
+STRIPE_ATHLETIC_TRAINER_READINESS_ASSESSMENT_PAYMENT_LINK=https://buy.stripe.com/...
 ```
 
 ### Site Configuration
@@ -71,4 +80,3 @@ FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...} # Firebase service accou
 ### Revenue Sharing
 - **Coach Partnership**: 40% to coach, 60% to Pulse
 - **Coach Referral**: 20% to referring coach, 80% to Pulse
-

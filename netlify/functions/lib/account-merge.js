@@ -11,6 +11,7 @@ const KEYED_DOCUMENT_COLLECTIONS = [
   'macro-profile',
   'macraInsights',
   'macraSuggestedMealPlans',
+  'pulsecheck-user-revenue-summaries',
 ];
 
 const USER_REFERENCE_COLLECTIONS = [
@@ -47,6 +48,10 @@ const USER_REFERENCE_COLLECTIONS = [
   'payments',
   'payoutRecords',
   'transactions',
+  'pulsecheck-revenue-events',
+  'pulsecheck-team-revenue-summaries',
+  'pulsecheck-coach-service-orders',
+  'pulsecheck-assessment-purchases',
   'promoCodeUsage',
   'pulse-point-awards',
   'remoteLoginTokens',
@@ -78,7 +83,12 @@ const SCALAR_USER_FIELDS = [
   'appUserId',
   'legacyCoachId',
   'ownerUserId',
+  'coachUserId',
+  'subscriberUserId',
+  'revenueRecipientUserId',
+  'billingOwnerUserId',
   'commercialConfig.revenueRecipientUserId',
+  'commercialConfig.billingOwnerUserId',
 ];
 
 const ARRAY_USER_FIELDS = [
@@ -92,7 +102,7 @@ const ARRAY_USER_FIELDS = [
 
 const REFERENCE_FIELDS_BY_COLLECTION = {
   'usernames': ['userId'],
-  'pulsecheck-team-memberships': ['userId'],
+  'pulsecheck-team-memberships': ['userId', 'legacyCoachId'],
   'pulsecheck-organization-memberships': ['userId'],
   'pulsecheck-pilot-enrollments': ['userId', 'athleteId'],
   'pulsecheck-daily-assignments': ['userId', 'athleteId'],
@@ -103,15 +113,40 @@ const REFERENCE_FIELDS_BY_COLLECTION = {
   'pulsecheck-coach-context-flags': ['userId', 'coachId', 'athleteId'],
   'athlete-state-signal-alignments': ['userId', 'athleteId'],
   'athlete-coach-connections': ['userId', 'athleteId', 'coachId'],
-  'coach-athlete-conversations': ['athleteId', 'coachId', 'participantIds'],
+  'coach-athlete-conversations': ['athleteId', 'coachId', 'coachUserId', 'participantIds'],
   'conversations': ['userId', 'ownerId', 'participantIds', 'participants'],
   'messages': ['userId', 'senderId', 'recipientId'],
   'notifications': ['userId', 'recipientId'],
   'alerts': ['userId', 'athleteId', 'coachId'],
   'escalation-records': ['userId', 'athleteId', 'coachId', 'assignedTo'],
-  'payments': ['userId', 'firebaseUid'],
+  'payments': ['userId', 'firebaseUid', 'coachId', 'coachUserId', 'revenueRecipientUserId'],
   'payoutRecords': ['userId', 'coachId'],
-  'transactions': ['userId', 'firebaseUid'],
+  'transactions': [
+    'userId',
+    'firebaseUid',
+    'coachId',
+    'coachUserId',
+    'revenueRecipientUserId',
+    'billingOwnerUserId',
+    'userIds',
+  ],
+  'pulsecheck-revenue-events': [
+    'subscriberUserId',
+    'revenueRecipientUserId',
+    'billingOwnerUserId',
+  ],
+  'pulsecheck-team-revenue-summaries': [
+    'revenueRecipientUserId',
+    'billingOwnerUserId',
+  ],
+  'pulsecheck-coach-service-orders': [
+    'coachUserId',
+    'athleteUserId',
+  ],
+  'pulsecheck-assessment-purchases': [
+    'coachUserId',
+    'revenueRecipientUserId',
+  ],
   'remoteLoginTokens': ['userId', 'uid'],
   'coaches': ['userId', 'uid'],
   'clubMembers': ['userId'],
@@ -125,9 +160,10 @@ const REFERENCE_FIELDS_BY_COLLECTION = {
     'ownerUserId',
     'createdBy',
     'commercialConfig.revenueRecipientUserId',
+    'commercialConfig.billingOwnerUserId',
     'coachIds',
   ],
-  'pulsecheck-organizations': ['ownerUserId', 'createdBy', 'memberIds'],
+  'pulsecheck-organizations': ['ownerUserId', 'createdBy', 'legacyCoachId', 'memberIds'],
 };
 
 const timestamp = (admin) => admin.firestore.FieldValue.serverTimestamp();
@@ -742,6 +778,7 @@ const rollbackMerge = async ({ db, admin, mergeId, actor }) => {
 module.exports = {
   ARRAY_USER_FIELDS,
   KEYED_DOCUMENT_COLLECTIONS,
+  REFERENCE_FIELDS_BY_COLLECTION,
   SCALAR_USER_FIELDS,
   USER_REFERENCE_COLLECTIONS,
   buildMergePreview,

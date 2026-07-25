@@ -5,6 +5,7 @@ const {
   upsertPulseCheckRevenueEvent,
   recalculatePulseCheckRevenueSummaries,
   readPulseCheckAttributionFromMetadata,
+  normalizeCommercialConfig,
 } = require('./utils/pulsecheck-revenue');
 const {
   isMacraWebOfferContext,
@@ -825,6 +826,127 @@ async function handleCoachingCheckout(session) {
   }
 }
 
+function decodeAssessmentClientReferenceId(value) {
+  const rawValue = normalizeCoachServiceString(value);
+  if (!rawValue.startsWith('pc_assessment_')) return null;
+
+  try {
+    const encoded = rawValue.slice('pc_assessment_'.length);
+    const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    console.warn('[Webhook] Could not decode assessment client reference id:', error?.message || error);
+    return null;
+  }
+}
+
+function assessmentCheckoutMetadata(session) {
+  const decoded = decodeAssessmentClientReferenceId(session?.client_reference_id);
+  return {
+    ...(decoded || {}),
+    ...(session?.metadata || {}),
+  };
+}
+
+function isAssessmentCheckoutSession(session) {
+  const metadata = assessmentCheckoutMetadata(session);
+  return normalizeCoachServiceString(metadata?.payment_type) === 'pulsecheck_assessment';
+}
+
+async function handleAssessmentCheckout(session, lineItems = []) {
+  const metadata = assessmentCheckoutMetadata(session);
+  const assessmentId = normalizeCoachServiceString(metadata.assessmentId);
+  const teamId = normalizeCoachServiceString(metadata.teamId);
+  const organizationId = normalizeCoachServiceString(metadata.organizationId);
+  const coachId = normalizeCoachServiceString(metadata.coachId);
+  const coachEmail = normalizeCoachServiceString(metadata.coachEmail);
+  const referralType = normalizeCoachServiceString(metadata.referralType);
+  const lineItem = lineItems?.data?.[0] || lineItems?.[0] || null;
+  const amountCents = Math.max(0, Number(session.amount_total || lineItem?.amount_total || 0));
+  const currency = normalizeCoachServiceString(session.currency || lineItem?.currency || 'usd') || 'usd';
+  const priceId = normalizeCoachServiceString(metadata.stripePriceId || lineItem?.price?.id);
+  const productId = normalizeCoachServiceString(metadata.stripeProductId || lineItem?.price?.product);
+
+  let commercialConfig = normalizeCommercialConfig({});
+  if (teamId) {
+    try {
+      const teamSnap = await db.collection('pulsecheck-teams').doc(teamId).get();
+      if (teamSnap.exists) {
+        commercialConfig = normalizeCommercialConfig(teamSnap.data()?.commercialConfig);
+      }
+    } catch (error) {
+      console.warn('[Webhook] Could not load team commercial config for assessment purchase:', error?.message || error);
+    }
+  }
+
+  const isParentAssessmentReferral =
+    assessmentId === 'parent' && referralType === 'parent-assessment';
+  const kickbackEnabled =
+    isParentAssessmentReferral && commercialConfig.parentAssessmentReferralKickbackEnabled;
+  const sharePct = kickbackEnabled
+    ? Number(commercialConfig.parentAssessmentReferralRevenueSharePct) || 0
+    : 0;
+  const revenueRecipientUserId = kickbackEnabled
+    ? normalizeCoachServiceString(commercialConfig.revenueRecipientUserId) || coachId || null
+    : null;
+  const coachShareCents = revenueRecipientUserId
+    ? Math.round(amountCents * (sharePct / 100))
+    : 0;
+
+  const purchaseRecord = {
+    stripeSessionId: session.id,
+    stripePaymentIntentId:
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id || null,
+    stripeCustomerId:
+      typeof session.customer === 'string'
+        ? session.customer
+        : session.customer?.id || null,
+    stripePriceId: priceId || null,
+    stripeProductId: productId || null,
+    assessmentId,
+    assessmentProductName: normalizeCoachServiceString(metadata.assessmentProductName) || null,
+    referralType: referralType || null,
+    organizationId: organizationId || null,
+    teamId: teamId || null,
+    coachUserId: coachId || null,
+    coachEmail: coachEmail || null,
+    revenueRecipientUserId,
+    parentAssessmentReferralKickbackEnabled: kickbackEnabled,
+    parentAssessmentReferralRevenueSharePct: sharePct,
+    amountCents,
+    coachShareCents,
+    platformNetCents: Math.max(0, amountCents - coachShareCents),
+    currency,
+    status: 'paid',
+    paidAt: admin.firestore.Timestamp.fromMillis((Number(session.created) || Math.floor(Date.now() / 1000)) * 1000),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await db.collection('pulsecheck-assessment-purchases').doc(session.id).set(purchaseRecord, { merge: true });
+  await db.collection('transactions').doc(`pulsecheck-assessment-${session.id}`).set(
+    {
+      ...purchaseRecord,
+      type: 'pulsecheck_assessment_purchase',
+      status: 'completed',
+    },
+    { merge: true }
+  );
+
+  if (teamId) {
+    await recalculatePulseCheckRevenueSummaries({
+      db,
+      admin,
+      teamIds: [teamId],
+      userIds: revenueRecipientUserId ? [revenueRecipientUserId] : [],
+    });
+  }
+
+  console.log(`[Webhook] Assessment checkout complete: ${assessmentId} session=${session.id}`);
+}
+
 async function handleCheckoutSessionCompleted(session) {
   console.log('Processing checkout.session.completed event');
 
@@ -854,6 +976,11 @@ async function handleCheckoutSessionCompleted(session) {
         session,
         stage: 'checkout_completed',
       });
+    }
+
+    if (isAssessmentCheckoutSession(session)) {
+      await handleAssessmentCheckout(session, lineItems);
+      return;
     }
 
     // Extract metadata

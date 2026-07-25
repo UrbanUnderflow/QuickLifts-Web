@@ -7,6 +7,7 @@ const TEAMS_COLLECTION = 'pulsecheck-teams';
 const USERS_COLLECTION = 'users';
 const SUBSCRIPTIONS_COLLECTION = 'subscriptions';
 const COACH_SERVICE_ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
+const ASSESSMENT_PURCHASES_COLLECTION = 'pulsecheck-assessment-purchases';
 
 const jsonHeaders = {
   ...headers,
@@ -94,7 +95,11 @@ const verifyCoach = async (event) => {
 
 const teamAllowsCoachEarnings = ({ team, membership, userId }) => {
   const config = normalizeCommercialConfig(team?.commercialConfig);
-  if (!config.referralKickbackEnabled || config.referralRevenueSharePct <= 0) {
+  const hasAthleteReferralEarnings = config.referralKickbackEnabled && config.referralRevenueSharePct > 0;
+  const hasParentAssessmentEarnings =
+    config.parentAssessmentReferralKickbackEnabled && config.parentAssessmentReferralRevenueSharePct > 0;
+
+  if (!hasAthleteReferralEarnings && !hasParentAssessmentEarnings) {
     return null;
   }
 
@@ -513,12 +518,18 @@ const isoTimestamp = (value) => {
 };
 
 const loadCoachServiceEarnings = async (coachUserId) => {
-  const snapshot = await db
-    .collection(COACH_SERVICE_ORDERS_COLLECTION)
-    .where('coachUserId', '==', coachUserId)
-    .get();
+  const [snapshot, assessmentSnapshot] = await Promise.all([
+    db
+      .collection(COACH_SERVICE_ORDERS_COLLECTION)
+      .where('coachUserId', '==', coachUserId)
+      .get(),
+    db
+      .collection(ASSESSMENT_PURCHASES_COLLECTION)
+      .where('revenueRecipientUserId', '==', coachUserId)
+      .get(),
+  ]);
 
-  const transactions = snapshot.docs
+  const serviceTransactions = snapshot.docs
     .map((entry) => {
       const order = entry.data() || {};
       const status = normalizeStatus(order.status);
@@ -551,7 +562,37 @@ const loadCoachServiceEarnings = async (coachUserId) => {
         bookedAt: isoTimestamp(order.bookedAt),
       };
     })
-    .filter(Boolean)
+    .filter(Boolean);
+
+  const assessmentTransactions = assessmentSnapshot.docs
+    .map((entry) => {
+      const purchase = entry.data() || {};
+      const status = normalizeStatus(purchase.status);
+      if (status !== 'paid' && status !== 'completed') return null;
+      const amountCents = Math.max(0, Number(purchase.amountCents) || 0);
+      const coachNetCents = Math.max(0, Number(purchase.coachShareCents) || 0);
+      return {
+        id: entry.id,
+        orderId: entry.id,
+        paymentIntentId: normalizeString(purchase.stripePaymentIntentId) || null,
+        conversationId: null,
+        athleteUserId: null,
+        athleteName: 'Parent assessment buyer',
+        serviceId: normalizeString(purchase.assessmentId) || 'parent',
+        serviceTitle: normalizeString(purchase.assessmentProductName) || 'Parent Readiness Assessment',
+        status,
+        amountCents,
+        platformFeeCents: Math.max(0, amountCents - coachNetCents),
+        coachNetCents,
+        currency: normalizeStatus(purchase.currency) || 'usd',
+        paidAt: isoTimestamp(purchase.paidAt),
+        scheduledAt: null,
+        bookedAt: null,
+      };
+    })
+    .filter(Boolean);
+
+  const transactions = [...serviceTransactions, ...assessmentTransactions]
     .sort((left, right) =>
       String(right.paidAt || right.bookedAt || '').localeCompare(
         String(left.paidAt || left.bookedAt || '')
@@ -610,6 +651,9 @@ const loadCoachEarnings = async (coachUserId) => {
 
   const athleteScopes = new Map();
   for (const { team, commercialConfig } of eligibleTeams) {
+    if (!commercialConfig.referralKickbackEnabled || commercialConfig.referralRevenueSharePct <= 0) {
+      continue;
+    }
     const membersSnapshot = await db
       .collection(TEAM_MEMBERSHIPS_COLLECTION)
       .where('teamId', '==', team.id)
