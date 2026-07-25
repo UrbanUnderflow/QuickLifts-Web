@@ -4,7 +4,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, Users, LogIn, Search, Sparkles, Clipboard } from 'lucide-react';
+import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, Users, LogIn, Search, Sparkles, Clipboard, LayoutDashboard } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
@@ -56,6 +56,18 @@ type RegistrationOriginKey = 'fit_with_pulse' | 'macra' | 'pulse_check' | 'pulse
 type OriginTabType = 'originFitWithPulse' | 'originMacra' | 'originPulseCheck' | 'originPulseRitual' | 'originAthleticCouncil' | 'originUnknown';
 type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'betaApplications' | OriginTabType;
 type JoinDateSortDirection = 'asc' | 'desc';
+type RemoteLoginTarget = 'fitWithPulse' | 'pulseCheckCoach';
+
+const remoteLoginTargets: Record<RemoteLoginTarget, { destination: string; label: string }> = {
+  fitWithPulse: {
+    destination: '/',
+    label: 'Fit With Pulse account',
+  },
+  pulseCheckCoach: {
+    destination: '/coach/dashboard',
+    label: 'PulseCheck Coach Dashboard',
+  },
+};
 
 const originTabConfigs: Array<{
   tab: OriginTabType;
@@ -222,7 +234,10 @@ const UsersManagement: React.FC = () => {
   const [processingBetaGrant, setProcessingBetaGrant] = useState<string | null>(null);
 
   // State for remote login functionality
-  const [processingRemoteLogin, setProcessingRemoteLogin] = useState<string | null>(null);
+  const [processingRemoteLogin, setProcessingRemoteLogin] = useState<{
+    userId: string;
+    target: RemoteLoginTarget;
+  } | null>(null);
 
   // *** START: State for Username Migration ***
   const [showUsernameMigrationModal, setShowUsernameMigrationModal] = useState(false);
@@ -2679,7 +2694,9 @@ const UsersManagement: React.FC = () => {
   };
 
   // Remote login function
-  const handleRemoteLogin = async (user: User) => {
+  const handleRemoteLogin = async (user: User, target: RemoteLoginTarget) => {
+    const remoteLoginTarget = remoteLoginTargets[target];
+
     if (!user.email) {
       setToastMessage({ 
         type: 'error', 
@@ -2688,12 +2705,12 @@ const UsersManagement: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Remote login as ${user.username || user.email}?\n\nThis will open a new tab logged in as this user for debugging purposes.`)) {
+    if (!window.confirm(`Log in to the ${remoteLoginTarget.label} as ${user.username || user.email}?\n\nThis will open a new tab logged in as this user for debugging purposes.`)) {
       return;
     }
 
     try {
-      setProcessingRemoteLogin(user.id);
+      setProcessingRemoteLogin({ userId: user.id, target });
       
       const currentUser = auth.currentUser;
       if (!currentUser) {
@@ -2740,12 +2757,12 @@ const UsersManagement: React.FC = () => {
       const { customToken, user: targetUser } = await loginResponse.json();
 
       // Sign in with the custom token in a new tab
-      const loginUrl = `${window.location.origin}/remote-login?token=${customToken}&userId=${targetUser.id}&email=${encodeURIComponent(targetUser.email)}`;
+      const loginUrl = `${window.location.origin}/remote-login?token=${customToken}&userId=${targetUser.id}&email=${encodeURIComponent(targetUser.email)}&next=${encodeURIComponent(remoteLoginTarget.destination)}`;
       window.open(loginUrl, '_blank', 'noopener,noreferrer');
 
       setToastMessage({ 
         type: 'success', 
-        text: `Remote login initiated for ${user.username || user.email}. Check the new tab.` 
+        text: `${remoteLoginTarget.label} login initiated for ${user.username || user.email}. Check the new tab.`
       });
 
     } catch (error) {
@@ -4014,20 +4031,37 @@ const UsersManagement: React.FC = () => {
                                   )}
                                 </button>
                                 <button
-                                  onClick={() => handleRemoteLogin(user)}
-                                disabled={processingRemoteLogin === user.id || !user.email}
-                                className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 border border-purple-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={`Remote login as ${user.username || user.email}`}
-                              >
-                                {processingRemoteLogin === user.id ? (
-                                  <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                  </svg>
-                                ) : (
-                                  <LogIn className="h-3 w-3" />
-                                )}
-                              </button>
+                                  onClick={() => handleRemoteLogin(user, 'fitWithPulse')}
+                                  disabled={processingRemoteLogin?.userId === user.id || !user.email}
+                                  className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 border border-purple-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label={`Log in to Fit With Pulse as ${user.username || user.email}`}
+                                  title={`Log in to Fit With Pulse as ${user.username || user.email}`}
+                                >
+                                  {processingRemoteLogin?.userId === user.id && processingRemoteLogin.target === 'fitWithPulse' ? (
+                                    <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                  ) : (
+                                    <LogIn className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleRemoteLogin(user, 'pulseCheckCoach')}
+                                  disabled={processingRemoteLogin?.userId === user.id || !user.email}
+                                  className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-cyan-900/30 text-cyan-300 hover:bg-cyan-900/50 border border-cyan-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label={`Log in to PulseCheck Coach Dashboard as ${user.username || user.email}`}
+                                  title={`Log in to PulseCheck Coach Dashboard as ${user.username || user.email}`}
+                                >
+                                  {processingRemoteLogin?.userId === user.id && processingRemoteLogin.target === 'pulseCheckCoach' ? (
+                                    <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                  ) : (
+                                    <LayoutDashboard className="h-3 w-3" />
+                                  )}
+                                </button>
                               <button
                                 onClick={() => handleDeleteUser(user)}
                                 disabled={processingDelete === user.id || isBatchDeleting}

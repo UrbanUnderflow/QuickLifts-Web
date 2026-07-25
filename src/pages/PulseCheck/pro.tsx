@@ -12,13 +12,16 @@ import {
   Gauge,
   Layers3,
   MessageCircle,
+  Pause,
   Play,
   RotateCcw,
   Sparkles,
   Target,
   TrendingUp,
   Trophy,
+  Volume2,
   Waves,
+  X,
   Zap,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -39,6 +42,19 @@ type ReadinessSignal = {
 };
 
 type SlateMode = 'protocols' | 'simulations';
+
+const PRO_HERO_WALKTHROUGH_STEPS = [
+  { id: 'plan', label: 'Home' },
+  { id: 'skill', label: 'Skill' },
+  { id: 'mood', label: 'Check in' },
+  { id: 'simulation', label: 'Game' },
+] as const;
+
+const SIGNAL_WINDOW_ZONES = [
+  { label: 'LEFT', symbol: '↖' },
+  { label: 'MIDDLE', symbol: '↑' },
+  { label: 'RIGHT', symbol: '↗' },
+] as const;
 
 type Pathway = {
   name: string;
@@ -73,7 +89,7 @@ const READINESS_SIGNALS: ReadinessSignal[] = [
     glow: 'rgba(70, 231, 242, 0.22)',
     headline: 'Turn steady energy into sharp attention.',
     message:
-      'Your baseline is holding. Today tightens the cue you use to find focus and asks you to recover it when the environment gets loud.',
+      'Your recent work is holding. Today trains focus when the moment gets loud.',
     focus: 'Focus recovery',
     protocol: 'Signal lock',
     simulation: 'Noise under pressure',
@@ -85,11 +101,11 @@ const READINESS_SIGNALS: ReadinessSignal[] = [
     score: 91,
     color: '#A68BFF',
     glow: 'rgba(166, 139, 255, 0.24)',
-    headline: 'Use today’s capacity for a harder rep.',
+    headline: 'Use today’s energy for a harder challenge.',
     message:
-      'Your energy, recent work, and check-in point toward a challenge day. Today tests execution when time and pressure close in.',
+      'Your energy, recent work, and check-in point toward a challenge day. Today trains smart decisions when time and pressure close in.',
     focus: 'Pressure performance',
-    protocol: 'Competition cue stack',
+    protocol: 'Competition focus stack',
     simulation: 'Final possession',
     duration: '14 min',
   },
@@ -103,15 +119,15 @@ const SLATES: Record<
     {
       number: '01',
       title: 'Signal lock',
-      type: 'Focus protocol',
+      type: 'Focus skills training',
       time: '3 min',
-      detail: 'Choose one useful cue and bring your attention back to it.',
+      detail: 'Choose one clear focus point and bring your attention back to it.',
       color: '#46E7F2',
     },
     {
       number: '02',
       title: 'Pressure breath',
-      type: 'Control protocol',
+      type: 'Control skills training',
       time: '2 min',
       detail: 'Slow the rush without losing competitive energy.',
       color: '#FFB84D',
@@ -119,7 +135,7 @@ const SLATES: Record<
     {
       number: '03',
       title: 'Evidence stack',
-      type: 'Confidence protocol',
+      type: 'Confidence skills training',
       time: '3 min',
       detail: 'Build confidence from proof you have already earned.',
       color: '#A68BFF',
@@ -131,7 +147,7 @@ const SLATES: Record<
       title: 'Noise under pressure',
       type: 'Focus simulation',
       time: '60 sec',
-      detail: 'Track the right signal while distractions fight for attention.',
+      detail: 'Find the right target while distractions fight for attention.',
       color: '#46E7F2',
     },
     {
@@ -158,14 +174,14 @@ const BLOCK_MOMENTS = [
     day: '01',
     label: 'Set the focus',
     title: 'The block starts with one clear target.',
-    body: 'Your baseline, goals, recent work, and current challenge shape the first two weeks.',
+    body: 'Your starting point, goals, recent work, and current challenge shape the first two weeks.',
     metric: 'Focus recovery',
     value: 'Primary target',
     color: '#46E7F2',
   },
   {
     day: '05',
-    label: 'Build the rep',
+    label: 'Build the challenge',
     title: 'Practice returns with more pressure.',
     body: 'The same mental skill shows up in new situations, so the athlete learns how to use it beyond one exercise.',
     metric: '4 of 6',
@@ -174,9 +190,9 @@ const BLOCK_MOMENTS = [
   },
   {
     day: '10',
-    label: 'Read the pattern',
+    label: 'Find the pattern',
     title: 'Results reveal what is holding.',
-    body: 'Check-ins, completion, and simulation choices show where the skill is becoming reliable and where another rep can help.',
+    body: 'Check-ins, completion, and simulation choices show where the skill is becoming reliable and where more practice can help.',
     metric: '82%',
     value: 'Block adherence',
     color: '#FFB84D',
@@ -349,7 +365,7 @@ function HeroConsole() {
           <div>
             <small>TODAY’S SIGNAL</small>
             <strong>Steady capacity</strong>
-            <p>Your baseline is holding. Today tightens focus recovery under noise.</p>
+            <p>Your recent work is holding. Today trains focus when the moment gets loud.</p>
           </div>
         </div>
 
@@ -428,6 +444,404 @@ function HeroConsole() {
   );
 }
 
+function SignalWindowMark() {
+  return (
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M32 51V31M32 31C32 22 24 16 15 12M32 31C32 22 40 16 49 12" />
+      <path d="M15 12l4 10M15 12l10 1M49 12l-4 10M49 12l-10 1" />
+    </svg>
+  );
+}
+
+function ProSignalWindowWalkthrough() {
+  const reduceMotion = useReducedMotion();
+  const [walkthroughIndex, setWalkthroughIndex] = useState(0);
+  const [selectedMood, setSelectedMood] = useState<number | null>(null);
+  const [roundIndex, setRoundIndex] = useState(0);
+  const [cuePhase, setCuePhase] = useState<'decoy' | 'live' | 'feedback'>('decoy');
+  const [selectedZone, setSelectedZone] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState({ title: '', detail: '' });
+
+  const targetIndex = [1, 2, 0][roundIndex % 3];
+  const decoyIndex = (targetIndex + 1 + (roundIndex % 2)) % 3;
+  useEffect(() => {
+    if (reduceMotion) return undefined;
+
+    const durations = [4100, 5200, 3200, 12400];
+    const timer = window.setTimeout(() => {
+      setWalkthroughIndex((currentIndex) => (
+        (currentIndex + 1) % PRO_HERO_WALKTHROUGH_STEPS.length
+      ));
+    }, durations[walkthroughIndex]);
+
+    return () => window.clearTimeout(timer);
+  }, [reduceMotion, walkthroughIndex]);
+
+  useEffect(() => {
+    if (walkthroughIndex !== 2) {
+      setSelectedMood(null);
+      return undefined;
+    }
+    if (reduceMotion) return undefined;
+
+    const timer = window.setTimeout(() => setSelectedMood(4), 1450);
+    return () => window.clearTimeout(timer);
+  }, [reduceMotion, walkthroughIndex]);
+
+  useEffect(() => {
+    if (walkthroughIndex !== 3) {
+      setCuePhase('decoy');
+      setSelectedZone(null);
+      return undefined;
+    }
+
+    setCuePhase('decoy');
+    setSelectedZone(null);
+    setFeedback({ title: '', detail: '' });
+
+    const liveTimer = window.setTimeout(() => setCuePhase('live'), 700);
+    const feedbackTimer = window.setTimeout(() => {
+      setSelectedZone(targetIndex);
+      setCuePhase('feedback');
+      setFeedback({
+        title: 'Complete Signal Read',
+        detail: `You waited for the ring and found ${SIGNAL_WINDOW_ZONES[targetIndex].label}.`,
+      });
+    }, 3300);
+    const nextRoundTimer = window.setTimeout(() => {
+      setRoundIndex((currentRound) => (currentRound + 1) % 10);
+    }, 4200);
+
+    return () => {
+      window.clearTimeout(liveTimer);
+      window.clearTimeout(feedbackTimer);
+      window.clearTimeout(nextRoundTimer);
+    };
+  }, [walkthroughIndex, roundIndex, targetIndex]);
+
+  const chooseMood = (value: number) => {
+    setSelectedMood(value);
+    window.setTimeout(() => setWalkthroughIndex(3), 380);
+  };
+
+  const chooseZone = (index: number) => {
+    setSelectedZone(index);
+
+    if (cuePhase === 'decoy') {
+      setCuePhase('feedback');
+      setFeedback({
+        title: 'That Was The Flash',
+        detail: 'The flash was early. Wait for the blue ring.',
+      });
+      return;
+    }
+
+    if (cuePhase !== 'live') return;
+
+    setCuePhase('feedback');
+    setFeedback(
+      index === targetIndex
+        ? {
+            title: 'Right Lane',
+            detail: `You waited for the blue ring and found ${SIGNAL_WINDOW_ZONES[targetIndex].label}.`,
+          }
+        : {
+          title: 'Wrong Zone',
+          detail: `The blue ring was on ${SIGNAL_WINDOW_ZONES[targetIndex].label}.`,
+        }
+    );
+  };
+
+  const resetDemo = () => {
+    setWalkthroughIndex(0);
+    setSelectedMood(null);
+    setRoundIndex(0);
+    setCuePhase('decoy');
+    setSelectedZone(null);
+    setFeedback({ title: '', detail: '' });
+  };
+
+  return (
+    <motion.aside
+      className="pcp-pro-phone"
+      aria-label="Interactive PulseCheck Pro Signal Window walkthrough"
+      initial={{ opacity: 0, x: 34, y: 18 }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ duration: 0.75, delay: 0.48, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="pcp-pro-phone-shell">
+        <div className="pcp-pro-phone-island" aria-hidden="true" />
+        <div className="pcp-pro-phone-status" aria-hidden="true">
+          <strong>9:53</strong>
+          <span>••••　⌁　▰</span>
+        </div>
+
+        <div className="pcp-pro-phone-viewport">
+          <AnimatePresence mode="wait">
+            {walkthroughIndex === 0 && (
+              <motion.div
+                key="pro-home"
+                className="pcp-pro-plan-screen"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28 }}
+              >
+                <div className="pcp-pro-plan-heading">
+                  <div>
+                    <small>THURSDAY · COMPETITION WEEK</small>
+                    <h3>Mental Training</h3>
+                    <p>Today, adapt, train, and recover results.</p>
+                  </div>
+                  <span>AJ</span>
+                </div>
+
+                <div className="pcp-pro-readiness-mini">
+                  <div>
+                    <strong>76</strong>
+                    <small>READY</small>
+                  </div>
+                  <span>
+                    <small>TODAY&apos;S SIGNAL</small>
+                    <strong>Steady</strong>
+                    <p>Your attention is ready for pressure work.</p>
+                  </span>
+                </div>
+
+                <div className="pcp-pro-plan-label">
+                  <span>
+                    <strong>Train all 3 skills today</strong>
+                    <small>One focused skill in each discipline.</small>
+                  </span>
+                  <em>0 of 3</em>
+                </div>
+
+                <div className="pcp-pro-rep-stack">
+                  <button type="button" className="pcp-pro-rep pcp-pro-rep--mindset">
+                    <span><Trophy size={17} /></span>
+                    <div><strong>Champion Mindset</strong><p>Evidence Stack</p><small>SKILL</small></div>
+                    <Play size={14} fill="currentColor" />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="pcp-pro-rep pcp-pro-rep--signal is-selecting"
+                    onClick={() => setWalkthroughIndex(1)}
+                    aria-label="Open Signal Window"
+                  >
+                    <span><Target size={17} /></span>
+                    <div><strong>Mental Performance</strong><p>Signal Window</p><small>SKILL · 9 MIN</small></div>
+                    <Play size={14} fill="currentColor" />
+                    <motion.i
+                      aria-hidden="true"
+                      animate={reduceMotion ? undefined : { scale: [0.72, 1.55], opacity: [0.8, 0] }}
+                      transition={{ duration: 1.25, repeat: Infinity, ease: 'easeOut' }}
+                    />
+                  </button>
+
+                  <button type="button" className="pcp-pro-rep pcp-pro-rep--control">
+                    <span><Waves size={17} /></span>
+                    <div><strong>Emotional Regulation</strong><p>Pressure Breath</p><small>SKILL</small></div>
+                    <Play size={14} fill="currentColor" />
+                  </button>
+                </div>
+
+                <div className="pcp-pro-tab-bar" aria-hidden="true">
+                  <span className="is-active"><Activity size={13} /> Today</span>
+                  <span><BarChart3 size={13} /> Training</span>
+                  <span><MessageCircle size={13} /> Nora</span>
+                  <span><Gauge size={13} /> Program</span>
+                </div>
+              </motion.div>
+            )}
+
+            {walkthroughIndex === 1 && (
+              <motion.div
+                key="pro-skill"
+                className="pcp-pro-skill-screen"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28 }}
+              >
+                <button type="button" className="pcp-pro-close" onClick={() => setWalkthroughIndex(0)} aria-label="Close Signal Window">
+                  <X size={20} />
+                </button>
+
+                <div className="pcp-pro-skill-hero">
+                  <motion.div
+                    animate={reduceMotion ? undefined : { y: [0, -4, 0] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    <SignalWindowMark />
+                  </motion.div>
+                  <small>Signal Window</small>
+                  <h3>Signal Window</h3>
+                  <p>Train when to wait and when to move.</p>
+                </div>
+
+                <div className="pcp-pro-skill-meta">
+                  <span><small>DURATION</small><strong>9 min</strong></span>
+                  <span><small>METRIC</small><strong>Window Timing</strong></span>
+                  <span><small>STRUCTURE</small><strong>9 min session</strong></span>
+                </div>
+
+                <div className="pcp-pro-skill-benefits">
+                  <span><i><Check size={12} /></i>Composure under pressure</span>
+                  <span><i><Check size={12} /></i>Cleaner decisions</span>
+                </div>
+
+                <button type="button" className="pcp-pro-start-sim" onClick={() => setWalkthroughIndex(2)}>
+                  Begin Exercise
+                </button>
+              </motion.div>
+            )}
+
+            {walkthroughIndex === 2 && (
+              <motion.div
+                key="pro-mood"
+                className="pcp-pro-mood-screen"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28 }}
+              >
+                <button type="button" className="pcp-pro-close" onClick={() => setWalkthroughIndex(1)} aria-label="Back to Signal Window">
+                  <X size={20} />
+                </button>
+                <div className="pcp-pro-mood-copy">
+                  <h3>Before we begin...</h3>
+                  <p>How are you feeling right now?</p>
+                </div>
+                <div className="pcp-pro-mood-options">
+                  {[
+                    [1, '😰', 'Tense'],
+                    [2, '😔', 'Off'],
+                    [3, '😐', 'Neutral'],
+                    [4, '😊', 'Good'],
+                    [5, '🔥', 'Great'],
+                  ].map(([value, emoji, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={selectedMood === value ? 'is-selected' : ''}
+                      onClick={() => chooseMood(Number(value))}
+                      aria-label={`Feeling ${label}`}
+                    >
+                      <strong>{emoji}</strong>
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {walkthroughIndex === 3 && (
+              <motion.div
+                key="pro-simulation"
+                className="pcp-pro-simulation-screen"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28 }}
+              >
+                <div className="pcp-pro-player-actions">
+                  <button type="button" onClick={resetDemo} aria-label="Replay Pro app walkthrough"><X size={18} /></button>
+                  <span />
+                  <button type="button" aria-label="Sound on"><Volume2 size={15} /></button>
+                  <button type="button" aria-label="Pause Signal Window"><Pause size={15} fill="currentColor" /></button>
+                </div>
+
+                <div className="pcp-pro-sim-header">
+                  <span>Round {roundIndex + 1} of 10</span>
+                  <strong>{cuePhase === 'decoy' ? 'Wait For Ring' : cuePhase === 'live' ? 'Ring Open' : 'Feedback'}</strong>
+                </div>
+                <div className="pcp-pro-round-progress"><i style={{ width: `${(roundIndex + 1) * 10}%` }} /></div>
+                <div className="pcp-pro-sport-context"><span>🏀</span> Basketball <i>/</i> Open lane</div>
+
+                <div className="pcp-pro-sim-copy">
+                  <h3>{cuePhase === 'feedback' ? feedback.title : 'The open lane keeps changing. Wait for the blue ring, then tap that lane.'}</h3>
+                  <p>
+                    {cuePhase === 'feedback'
+                      ? feedback.detail
+                      : 'A bright flash may show first. That is not the answer.'}
+                  </p>
+                </div>
+
+                <div className="pcp-pro-signal-rule">
+                  <span>✦ FLASH: WAIT</span>
+                  <span>◉ RING: TAP</span>
+                </div>
+
+                <div className="pcp-pro-window-zones">
+                  {SIGNAL_WINDOW_ZONES.map((zone, index) => {
+                    const isDecoy = cuePhase === 'decoy' && index === decoyIndex;
+                    const isTarget = cuePhase === 'live' && index === targetIndex;
+                    const isCorrect = cuePhase === 'feedback' && index === targetIndex;
+                    const isWrong = cuePhase === 'feedback' && selectedZone === index && index !== targetIndex;
+
+                    return (
+                      <button
+                        key={zone.label}
+                        type="button"
+                        className={[
+                          isDecoy ? 'is-decoy' : '',
+                          isTarget ? 'is-target' : '',
+                          isCorrect ? 'is-correct' : '',
+                          isWrong ? 'is-wrong' : '',
+                        ].filter(Boolean).join(' ')}
+                        onClick={() => chooseZone(index)}
+                        aria-label={`${zone.label} play lane`}
+                      >
+                        <motion.i
+                          animate={reduceMotion || (!isDecoy && !isTarget)
+                            ? undefined
+                            : { scale: [0.94, 1.12, 0.94] }}
+                          transition={{ duration: isTarget ? 0.72 : 0.42, repeat: Infinity }}
+                        >
+                          {isTarget && <b />}
+                          <span>{zone.symbol}</span>
+                        </motion.i>
+                        <strong>{zone.label}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="pcp-pro-window-status">
+                  {cuePhase === 'live' ? (
+                    <>
+                      <div><i /></div>
+                      <strong>RING OPEN</strong>
+                    </>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="pcp-pro-phone-steps" aria-label="Pro app walkthrough progress">
+          {PRO_HERO_WALKTHROUGH_STEPS.map((step, index) => (
+            <button
+              key={step.id}
+              type="button"
+              className={index === walkthroughIndex ? 'is-active' : ''}
+              onClick={() => setWalkthroughIndex(index)}
+              aria-label={`Show ${step.label} screen`}
+            >
+              <i />
+            </button>
+          ))}
+        </div>
+        <div className="pcp-pro-phone-home-indicator" aria-hidden="true" />
+      </div>
+    </motion.aside>
+  );
+}
+
 function SignalSection() {
   const [selectedId, setSelectedId] = useState<ReadinessSignal['id']>('steady');
   const selected = READINESS_SIGNALS.find((signal) => signal.id === selectedId) ?? READINESS_SIGNALS[1];
@@ -438,15 +852,15 @@ function SignalSection() {
       <div className="pcp-shell pcp-signal-grid">
         <Reveal className="pcp-section-copy">
           <span className="pcp-kicker"><Activity size={14} /> Start with today</span>
-          <h2>Today’s state becomes <span>a training decision.</span></h2>
+          <h2>Today’s check-in becomes <span>a training decision.</span></h2>
           <p>
-            PulseCheck reads the athlete’s check-in beside recent practice, performance goals, and
-            personal patterns. The result is a useful next rep for the day in front of them.
+            PulseCheck compares the athlete’s check-in with recent practice, performance goals, and
+            personal patterns. The result is a useful training plan for the day in front of them.
           </p>
           <div className="pcp-copy-points">
-            <div><span>01</span><p><strong>Read the moment</strong>Energy, confidence, focus, and pressure become useful context.</p></div>
+            <div><span>01</span><p><strong>Check the moment</strong>Energy, confidence, focus, and pressure become useful context.</p></div>
             <div><span>02</span><p><strong>Choose the right demand</strong>The work can restore, sharpen, or stretch the athlete.</p></div>
-            <div><span>03</span><p><strong>Explain the reason</strong>Nora tells the athlete why today’s rep belongs here.</p></div>
+            <div><span>03</span><p><strong>Explain the reason</strong>Nora tells the athlete why today’s training belongs here.</p></div>
           </div>
         </Reveal>
 
@@ -457,8 +871,8 @@ function SignalSection() {
           />
           <div className="pcp-signal-lab-head">
             <div>
-              <small>READINESS LAB</small>
-              <h3>Change today’s signal</h3>
+              <small>TODAY’S PLAN</small>
+              <h3>Change the check-in</h3>
             </div>
             <span><Gauge size={15} /> Athlete-relative</span>
           </div>
@@ -499,12 +913,12 @@ function SignalSection() {
             >
               <div className="pcp-nora-line">
                 <SignalOrb color={selected.color} compact />
-                <div><small>NORA’S READ</small><strong>{selected.headline}</strong></div>
+                <div><small>NORA’S PLAN</small><strong>{selected.headline}</strong></div>
               </div>
               <p>{selected.message}</p>
               <div className="pcp-result-grid">
                 <div><small>BLOCK FOCUS</small><strong>{selected.focus}</strong></div>
-                <div><small>PROTOCOL</small><strong>{selected.protocol}</strong></div>
+                <div><small>SKILLS TRAINING</small><strong>{selected.protocol}</strong></div>
                 <div><small>SIMULATION</small><strong>{selected.simulation}</strong></div>
                 <div><small>TOTAL WORK</small><strong>{selected.duration}</strong></div>
               </div>
@@ -591,7 +1005,7 @@ function SlateSection() {
                     <h4>{rep.title}</h4>
                     <p>{rep.detail}</p>
                     <button type="button" aria-label={`Preview ${rep.title}`}>
-                      Preview the rep <Play size={13} fill="currentColor" />
+                      Preview the skill <Play size={13} fill="currentColor" />
                     </button>
                   </motion.article>
                 ))}
@@ -782,14 +1196,14 @@ function ExperienceRail() {
       icon: Activity,
       number: '01',
       title: 'Assess',
-      body: 'Read readiness, pressure, focus, and the demands of the day.',
+      body: 'Check readiness, pressure, focus, and the demands of the day.',
       color: '#46E7F2',
     },
     {
       icon: Target,
       number: '02',
       title: 'Prescribe',
-      body: 'Turn today’s signals into one clear performance priority.',
+      body: 'Turn today’s check-in into one clear performance priority.',
       color: '#7DF2B8',
     },
     {
@@ -836,8 +1250,8 @@ function ExperienceRail() {
       <div className="pcp-shell">
         <Reveal className="pcp-experience-heading">
           <span>THE PERFORMANCE SYSTEM</span>
-          <h2>A signal becomes <span>a performance decision.</span></h2>
-          <p>Five connected stages turn today’s state into deliberate work and measurable advancement.</p>
+          <h2>A check-in becomes <span>a performance decision.</span></h2>
+          <p>Five connected stages turn today’s readiness into deliberate work and measurable advancement.</p>
         </Reveal>
         <div className="pcp-experience-steps">
           {steps.map((step, index) => {
@@ -904,9 +1318,9 @@ function AthleteDaySection() {
       <div className="pcp-shell">
         <Reveal className="pcp-athlete-story-heading">
           <span>ONE PERFORMANCE DAY</span>
-          <h2>The work begins <span>before the next rep.</span></h2>
+          <h2>The work begins <span>before the next moment.</span></h2>
           <p>
-            PulseCheck gives the athlete a disciplined way to read the moment, train the right
+            PulseCheck gives the athlete a disciplined way to understand the moment, train the right
             response, and return to performance with a clear purpose.
           </p>
         </Reveal>
@@ -930,7 +1344,7 @@ function AthleteDaySection() {
           <div className="pcp-athlete-scene-copy">
             <span>TRAIN WITH PURPOSE</span>
             <blockquote>“I know the skill. I know the demand. I know what comes next.”</blockquote>
-            <p>From present-state awareness to deliberate mental skills training.</p>
+            <p>From a clear check-in to deliberate mental skills training.</p>
           </div>
           <div className="pcp-athlete-moments">
             {moments.map((moment, index) => (
@@ -1198,27 +1612,7 @@ const PulseCheckProPage: React.FC = () => {
             </motion.div>
           </div>
 
-          <motion.aside
-            className="pcp-hero-gameplan"
-            initial={{ opacity: 0, x: 34, y: 18 }}
-            animate={{ opacity: 1, x: 0, y: 0 }}
-            transition={{ duration: 0.75, delay: 0.48, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="pcp-hero-gameplan-head">
-              <span><Activity size={15} /> TODAY’S GAME PLAN</span>
-              <small>11 MIN</small>
-            </div>
-            <div className="pcp-hero-gameplan-focus">
-              <small>MENTAL FOCUS</small>
-              <strong>Recover attention under pressure</strong>
-            </div>
-            <div className="pcp-hero-gameplan-steps">
-              <div><span><Waves size={15} /></span><p><small>LEARN</small><strong>Signal lock</strong></p><em>3 min</em></div>
-              <div><span><Play size={14} /></span><p><small>TEST</small><strong>Noise under pressure</strong></p><em>60 sec</em></div>
-              <div><span><TrendingUp size={15} /></span><p><small>BUILD</small><strong>Focus pathway</strong></p><em>Level 3</em></div>
-            </div>
-            <div className="pcp-hero-gameplan-footer"><span><Sparkles size={13} /> Built from today’s check-in</span><ArrowRight size={15} /></div>
-          </motion.aside>
+          <ProSignalWindowWalkthrough />
         </div>
 
         <div className="pcp-human-hero-caption">
@@ -1246,7 +1640,7 @@ const PulseCheckProPage: React.FC = () => {
           <Reveal>
             <small>MENTAL SKILLS TRAINING FOR THE REAL DEMAND</small>
             <p>
-              Read the state.
+              Check what is true.
               <span>Train the response.</span>
               <em>Prove it under pressure.</em>
             </p>
@@ -1276,7 +1670,7 @@ const PulseCheckProPage: React.FC = () => {
             <div className="pcp-team-quote">
               <MessageCircle size={18} />
               <span>ONE SHARED LANGUAGE</span>
-              <strong>“Here’s what I need for the next rep.”</strong>
+              <strong>“Here’s what I need for the next moment.”</strong>
             </div>
           </Reveal>
 
@@ -1302,7 +1696,7 @@ const PulseCheckProPage: React.FC = () => {
           <Reveal className="pcp-final-content">
             <SignalOrb color="#A68BFF" />
             <span className="pcp-kicker">Mental performance that keeps moving</span>
-            <h2>Give every athlete a next rep worth doing.</h2>
+            <h2>Give every athlete a next skill worth training.</h2>
             <p>
               Bring adaptive protocols, scored simulations, focused training blocks, and a pathway
               that grows with performance to your athletes.
@@ -2765,6 +3159,1403 @@ const PulseCheckProPage: React.FC = () => {
         }
         .pcp-hero-gameplan-footer svg { color: var(--pcp-cyan); }
 
+        .pcp-pro-phone {
+          width: min(100%, 390px);
+          align-self: center;
+          justify-self: end;
+          filter: drop-shadow(0 38px 76px rgba(0, 0, 0, 0.62));
+        }
+
+        .pcp-pro-phone-shell {
+          position: relative;
+          height: 710px;
+          min-height: 710px;
+          overflow: hidden;
+          border: 7px solid #1a1e26;
+          border-radius: 55px;
+          color: white;
+          background:
+            radial-gradient(circle at 68% 31%, rgba(70, 231, 242, 0.09), transparent 32%),
+            radial-gradient(circle at 25% 77%, rgba(166, 139, 255, 0.08), transparent 30%),
+            linear-gradient(160deg, #10141d 0%, #07090e 55%, #0d1018 100%);
+          box-shadow:
+            inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+            inset 0 0 0 3px rgba(0, 0, 0, 0.38),
+            0 0 90px rgba(70, 231, 242, 0.08);
+        }
+
+        .pcp-pro-phone-shell::before,
+        .pcp-pro-phone-shell::after {
+          content: "";
+          position: absolute;
+          z-index: 8;
+          left: -10px;
+          width: 3px;
+          border-radius: 3px 0 0 3px;
+          background: #303640;
+        }
+
+        .pcp-pro-phone-shell::before { top: 126px; height: 62px; }
+        .pcp-pro-phone-shell::after { top: 201px; height: 88px; }
+
+        .pcp-pro-phone-island {
+          position: absolute;
+          z-index: 9;
+          top: 11px;
+          left: 50%;
+          width: 106px;
+          height: 29px;
+          border-radius: 999px;
+          background: #020304;
+          transform: translateX(-50%);
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+        }
+
+        .pcp-pro-phone-island::after {
+          content: "";
+          position: absolute;
+          top: 9px;
+          right: 12px;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #0d1825;
+          box-shadow: inset 0 0 3px rgba(82, 135, 206, 0.55);
+        }
+
+        .pcp-pro-phone-status {
+          height: 49px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 27px;
+          color: rgba(255, 255, 255, 0.9);
+          font-size: 9px;
+          letter-spacing: 0.03em;
+        }
+
+        .pcp-pro-phone-status span {
+          font-size: 7px;
+          letter-spacing: 0.16em;
+        }
+
+        .pcp-pro-phone-progress {
+          height: 36px;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 5px;
+          padding: 1px 21px 8px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+        }
+
+        .pcp-pro-phone-progress button {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 4px;
+          padding: 0;
+          border: 0;
+          color: rgba(255, 255, 255, 0.27);
+          background: transparent;
+          font: inherit;
+          font-size: 6px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+
+        .pcp-pro-phone-progress button i {
+          height: 2px;
+          border-radius: 99px;
+          background: rgba(255, 255, 255, 0.11);
+          transition: background 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .pcp-pro-phone-progress button.is-active { color: var(--pcp-cyan); }
+        .pcp-pro-phone-progress button.is-active i {
+          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-violet));
+          box-shadow: 0 0 10px rgba(70, 231, 242, 0.72);
+        }
+
+        .pcp-pro-phone-viewport {
+          position: relative;
+          height: calc(100% - 85px);
+          overflow: hidden;
+        }
+
+        .pcp-pro-plan-screen,
+        .pcp-pro-skill-screen,
+        .pcp-pro-launch-screen,
+        .pcp-pro-simulation-screen {
+          position: relative;
+          height: 100%;
+        }
+
+        .pcp-pro-plan-screen {
+          padding: 17px 20px 55px;
+          background:
+            radial-gradient(circle at 13% 8%, rgba(70, 231, 242, 0.075), transparent 32%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent);
+        }
+
+        .pcp-pro-plan-heading {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .pcp-pro-plan-heading small,
+        .pcp-pro-readiness-mini small,
+        .pcp-pro-plan-label small,
+        .pcp-pro-rep small,
+        .pcp-pro-skill-hero > small,
+        .pcp-pro-skill-steps > small,
+        .pcp-pro-skill-why small,
+        .pcp-pro-launch-screen > small,
+        .pcp-pro-sim-header small,
+        .pcp-pro-sim-score small,
+        .pcp-pro-sim-instruction small {
+          color: var(--pcp-cyan);
+          font-size: 6px;
+          font-weight: 950;
+          letter-spacing: 0.16em;
+        }
+
+        .pcp-pro-plan-heading h3 {
+          margin: 5px 0 0;
+          font-size: 25px;
+          letter-spacing: -0.05em;
+        }
+
+        .pcp-pro-plan-heading > span {
+          width: 31px;
+          height: 31px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(70, 231, 242, 0.28);
+          border-radius: 50%;
+          color: var(--pcp-cyan);
+          background: rgba(70, 231, 242, 0.08);
+          font-size: 8px;
+          font-weight: 950;
+        }
+
+        .pcp-pro-readiness-mini {
+          min-height: 87px;
+          display: grid;
+          grid-template-columns: 62px 1fr auto;
+          align-items: center;
+          gap: 12px;
+          margin: 15px 0 18px;
+          padding: 12px;
+          border: 1px solid rgba(70, 231, 242, 0.15);
+          border-radius: 17px;
+          background: rgba(70, 231, 242, 0.05);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.03);
+        }
+
+        .pcp-pro-readiness-mini > div {
+          width: 58px;
+          height: 58px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          border: 4px solid rgba(70, 231, 242, 0.12);
+          border-top-color: var(--pcp-cyan);
+          border-right-color: var(--pcp-cyan);
+          border-radius: 50%;
+        }
+
+        .pcp-pro-readiness-mini > div strong {
+          font-size: 18px;
+          line-height: 1;
+        }
+
+        .pcp-pro-readiness-mini > div small {
+          margin-top: 3px;
+          font-size: 5px;
+        }
+
+        .pcp-pro-readiness-mini > span { display: grid; gap: 3px; }
+        .pcp-pro-readiness-mini > span strong { font-size: 10px; }
+        .pcp-pro-readiness-mini p {
+          margin: 1px 0 0;
+          color: rgba(255, 255, 255, 0.45);
+          font-size: 7px;
+          line-height: 1.4;
+        }
+
+        .pcp-pro-readiness-mini > i {
+          align-self: start;
+          padding: 5px 7px;
+          border: 1px solid rgba(70, 231, 242, 0.17);
+          border-radius: 99px;
+          color: var(--pcp-cyan);
+          background: rgba(70, 231, 242, 0.07);
+          font-size: 5px;
+          font-weight: 950;
+          font-style: normal;
+          letter-spacing: 0.11em;
+        }
+
+        .pcp-pro-plan-label {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 9px;
+        }
+
+        .pcp-pro-plan-label > span { display: grid; gap: 3px; }
+        .pcp-pro-plan-label > span small { color: rgba(255, 255, 255, 0.4); }
+        .pcp-pro-plan-label strong { font-size: 10px; }
+        .pcp-pro-plan-label em {
+          color: rgba(255, 255, 255, 0.4);
+          font-size: 8px;
+          font-style: normal;
+          font-weight: 850;
+        }
+
+        .pcp-pro-rep-stack { display: grid; gap: 8px; }
+
+        .pcp-pro-rep {
+          --rep-accent: var(--pcp-cyan);
+          position: relative;
+          min-height: 84px;
+          display: grid;
+          grid-template-columns: 39px 1fr 19px;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 11px;
+          overflow: hidden;
+          border: 1px solid color-mix(in srgb, var(--rep-accent) 20%, rgba(255, 255, 255, 0.07));
+          border-radius: 16px;
+          color: white;
+          background:
+            linear-gradient(106deg, color-mix(in srgb, var(--rep-accent) 8%, #10141b), #101219 68%);
+          text-align: left;
+          font: inherit;
+          cursor: pointer;
+        }
+
+        .pcp-pro-rep--signal { --rep-accent: #46e7f2; }
+        .pcp-pro-rep--control { --rep-accent: #ffb84d; }
+        .pcp-pro-rep--confidence { --rep-accent: #a68bff; }
+        .pcp-pro-rep > span {
+          width: 39px;
+          height: 39px;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          color: var(--rep-accent);
+          background: color-mix(in srgb, var(--rep-accent) 12%, transparent);
+        }
+        .pcp-pro-rep > div { display: grid; gap: 2px; }
+        .pcp-pro-rep small { color: var(--rep-accent); font-size: 5px; }
+        .pcp-pro-rep strong { font-size: 11px; }
+        .pcp-pro-rep p {
+          margin: 0;
+          color: rgba(255, 255, 255, 0.43);
+          font-size: 7px;
+          line-height: 1.35;
+        }
+        .pcp-pro-rep > svg { color: var(--rep-accent); }
+        .pcp-pro-rep > i {
+          position: absolute;
+          right: 12px;
+          width: 23px;
+          height: 23px;
+          border: 1px solid var(--rep-accent);
+          border-radius: 50%;
+          pointer-events: none;
+        }
+        .pcp-pro-rep.is-selecting {
+          box-shadow: 0 0 30px color-mix(in srgb, var(--rep-accent) 13%, transparent);
+        }
+
+        .pcp-pro-tab-bar {
+          position: absolute;
+          left: 20px;
+          right: 20px;
+          bottom: 11px;
+          min-height: 38px;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          align-items: center;
+          border-top: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .pcp-pro-tab-bar span {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+          color: rgba(255, 255, 255, 0.27);
+          font-size: 5px;
+          font-weight: 850;
+        }
+        .pcp-pro-tab-bar span.is-active { color: var(--pcp-cyan); }
+
+        .pcp-pro-skill-screen {
+          padding: 15px 22px 22px;
+          background:
+            radial-gradient(circle at 50% 26%, rgba(70, 231, 242, 0.12), transparent 32%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+        }
+
+        .pcp-pro-phone-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0;
+          border: 0;
+          color: rgba(255, 255, 255, 0.48);
+          background: transparent;
+          font: inherit;
+          font-size: 7px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+        .pcp-pro-phone-back svg { transform: rotate(180deg); }
+
+        .pcp-pro-skill-hero {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 18px 0 15px;
+          text-align: center;
+        }
+
+        .pcp-pro-skill-hero > div {
+          position: relative;
+          width: 70px;
+          height: 70px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 12px;
+          border: 1px solid rgba(70, 231, 242, 0.34);
+          border-radius: 50%;
+          color: var(--pcp-cyan);
+          background: radial-gradient(circle, rgba(70, 231, 242, 0.17), rgba(70, 231, 242, 0.035));
+          box-shadow: 0 0 38px rgba(70, 231, 242, 0.15);
+        }
+
+        .pcp-pro-skill-hero > div i {
+          position: absolute;
+          inset: -7px;
+          border: 1px dashed rgba(70, 231, 242, 0.25);
+          border-radius: 50%;
+        }
+
+        .pcp-pro-skill-hero h3 {
+          margin: 5px 0 5px;
+          font-size: 29px;
+          letter-spacing: -0.05em;
+        }
+
+        .pcp-pro-skill-hero p {
+          max-width: 285px;
+          margin: 0;
+          color: rgba(255, 255, 255, 0.55);
+          font-size: 9px;
+          line-height: 1.5;
+        }
+
+        .pcp-pro-skill-steps {
+          padding: 13px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.035);
+        }
+
+        .pcp-pro-skill-steps > div {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 7px;
+          margin-top: 10px;
+        }
+
+        .pcp-pro-skill-steps span {
+          display: grid;
+          justify-items: center;
+          gap: 6px;
+          color: rgba(255, 255, 255, 0.48);
+          font-size: 6px;
+          font-weight: 800;
+          text-align: center;
+        }
+
+        .pcp-pro-skill-steps span i {
+          width: 28px;
+          height: 28px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(70, 231, 242, 0.25);
+          border-radius: 50%;
+          color: var(--pcp-cyan);
+          background: rgba(70, 231, 242, 0.07);
+          font-size: 6px;
+          font-style: normal;
+          font-weight: 950;
+        }
+
+        .pcp-pro-skill-why {
+          display: grid;
+          grid-template-columns: 31px 1fr;
+          gap: 10px;
+          margin-top: 11px;
+          padding: 12px;
+          border-left: 2px solid var(--pcp-violet);
+          border-radius: 0 13px 13px 0;
+          background: rgba(166, 139, 255, 0.075);
+        }
+        .pcp-pro-skill-why > svg { color: var(--pcp-violet); }
+        .pcp-pro-skill-why small { color: var(--pcp-violet); }
+        .pcp-pro-skill-why p {
+          margin: 3px 0 0;
+          color: rgba(255, 255, 255, 0.58);
+          font-size: 7px;
+          line-height: 1.45;
+        }
+
+        .pcp-pro-start-sim {
+          position: relative;
+          width: 100%;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 14px;
+          overflow: hidden;
+          border: 0;
+          border-radius: 14px;
+          color: #051014;
+          background: linear-gradient(105deg, #8ff7ff, var(--pcp-cyan));
+          box-shadow: 0 14px 30px rgba(70, 231, 242, 0.17);
+          font: inherit;
+          font-size: 10px;
+          font-weight: 950;
+          cursor: pointer;
+        }
+
+        .pcp-pro-start-sim > i {
+          position: absolute;
+          right: 19px;
+          width: 7px;
+          height: 7px;
+          border: 2px solid currentColor;
+          border-left: 0;
+          border-bottom: 0;
+          transform: rotate(45deg);
+        }
+
+        .pcp-pro-launch-screen {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 22px;
+          text-align: center;
+          background:
+            radial-gradient(circle at 50% 48%, rgba(70, 231, 242, 0.15), transparent 34%),
+            linear-gradient(160deg, #0c131b, #080a10 68%);
+        }
+
+        .pcp-pro-launch-radar {
+          position: relative;
+          width: 172px;
+          height: 172px;
+          display: grid;
+          place-items: center;
+          margin: 24px 0;
+          border: 1px solid rgba(70, 231, 242, 0.12);
+          border-radius: 50%;
+          background:
+            repeating-radial-gradient(circle, transparent 0 31px, rgba(70, 231, 242, 0.09) 32px 33px),
+            rgba(70, 231, 242, 0.025);
+        }
+
+        .pcp-pro-launch-radar i {
+          position: absolute;
+          inset: 0;
+          border: 2px solid transparent;
+          border-top-color: var(--pcp-cyan);
+          border-right-color: rgba(70, 231, 242, 0.18);
+          border-radius: 50%;
+          box-shadow: 0 0 30px rgba(70, 231, 242, 0.13);
+        }
+
+        .pcp-pro-launch-radar > span {
+          position: absolute;
+          width: 8px;
+          height: 8px;
+          top: 40px;
+          right: 33px;
+          border-radius: 50%;
+          background: var(--pcp-violet);
+          box-shadow: 0 0 14px var(--pcp-violet);
+        }
+
+        .pcp-pro-launch-radar strong {
+          font-size: 66px;
+          letter-spacing: -0.08em;
+        }
+
+        .pcp-pro-launch-screen h3 {
+          margin: 0;
+          font-size: 27px;
+          letter-spacing: -0.045em;
+        }
+        .pcp-pro-launch-screen p {
+          max-width: 255px;
+          margin: 8px 0 18px;
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 9px;
+          line-height: 1.45;
+        }
+        .pcp-pro-launch-screen > span {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 8px 12px;
+          border: 1px solid rgba(70, 231, 242, 0.14);
+          border-radius: 999px;
+          color: rgba(255, 255, 255, 0.54);
+          background: rgba(70, 231, 242, 0.055);
+          font-size: 7px;
+          font-weight: 800;
+        }
+        .pcp-pro-launch-screen > span svg { color: var(--pcp-cyan); }
+
+        .pcp-pro-simulation-screen {
+          padding: 13px 20px 22px;
+          background:
+            radial-gradient(circle at 50% 50%, rgba(70, 231, 242, 0.08), transparent 36%),
+            linear-gradient(160deg, #0b1119, #08090f 70%);
+        }
+
+        .pcp-pro-sim-header {
+          min-height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        }
+        .pcp-pro-sim-header > div { display: grid; gap: 3px; }
+        .pcp-pro-sim-header strong { font-size: 16px; }
+        .pcp-pro-sim-header > span {
+          color: rgba(255, 255, 255, 0.42);
+          font-size: 6px;
+          font-weight: 900;
+          letter-spacing: 0.11em;
+        }
+
+        .pcp-pro-sim-score {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 6px;
+          padding: 10px 0 8px;
+        }
+        .pcp-pro-sim-score > span {
+          display: grid;
+          justify-items: center;
+          gap: 3px;
+          padding: 7px;
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.025);
+        }
+        .pcp-pro-sim-score small { color: rgba(255, 255, 255, 0.35); font-size: 5px; }
+        .pcp-pro-sim-score strong { font-size: 11px; }
+
+        .pcp-pro-sim-instruction {
+          min-height: 48px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 4px;
+          text-align: center;
+        }
+        .pcp-pro-sim-instruction strong { font-size: 15px; }
+
+        .pcp-pro-signal-field {
+          position: relative;
+          height: 288px;
+          display: grid;
+          place-items: center;
+          overflow: hidden;
+          border: 1px solid rgba(70, 231, 242, 0.12);
+          border-radius: 26px;
+          background:
+            linear-gradient(rgba(70, 231, 242, 0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(70, 231, 242, 0.04) 1px, transparent 1px),
+            radial-gradient(circle, rgba(70, 231, 242, 0.07), transparent 53%),
+            #090d14;
+          background-size: 31px 31px, 31px 31px, auto, auto;
+          transition: border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .pcp-pro-signal-field.is-open {
+          border-color: rgba(70, 231, 242, 0.42);
+          box-shadow:
+            inset 0 0 60px rgba(70, 231, 242, 0.08),
+            0 0 34px rgba(70, 231, 242, 0.1);
+        }
+
+        .pcp-pro-field-orbit {
+          position: absolute;
+          border: 1px solid rgba(255, 255, 255, 0.075);
+          border-radius: 50%;
+          pointer-events: none;
+        }
+        .pcp-pro-field-orbit--outer { width: 228px; height: 228px; border-style: dashed; }
+        .pcp-pro-field-orbit--inner { width: 156px; height: 156px; }
+
+        .pcp-pro-decoy {
+          position: absolute;
+          z-index: 2;
+          width: 18px;
+          height: 18px;
+          border: 2px solid currentColor;
+          border-radius: 5px;
+          color: var(--pcp-violet);
+          box-shadow: 0 0 16px currentColor;
+        }
+        .pcp-pro-decoy--one { top: 52px; left: 62px; }
+        .pcp-pro-decoy--two {
+          right: 60px;
+          bottom: 54px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          color: var(--pcp-amber);
+        }
+        .pcp-pro-decoy--three {
+          left: 72px;
+          bottom: 62px;
+          width: 16px;
+          height: 16px;
+          border-radius: 50% 50% 3px 50%;
+          color: #ff6b8a;
+        }
+
+        .pcp-pro-live-signal {
+          position: relative;
+          z-index: 4;
+          width: 118px;
+          height: 118px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          border: 1px solid rgba(70, 231, 242, 0.34);
+          border-radius: 50%;
+          color: var(--pcp-cyan);
+          background:
+            radial-gradient(circle at 37% 28%, rgba(255, 255, 255, 0.12), transparent 33%),
+            rgba(70, 231, 242, 0.08);
+          box-shadow:
+            0 0 42px rgba(70, 231, 242, 0.15),
+            inset 0 0 38px rgba(70, 231, 242, 0.08);
+          font: inherit;
+          cursor: pointer;
+          transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .pcp-pro-live-signal:hover { transform: scale(1.035); }
+        .pcp-pro-live-signal > i {
+          position: absolute;
+          inset: -13px;
+          border: 2px solid transparent;
+          border-top-color: var(--pcp-cyan);
+          border-radius: 50%;
+          transition: border-color 0.2s ease, inset 0.2s ease;
+        }
+        .pcp-pro-signal-field.is-open .pcp-pro-live-signal {
+          color: #041014;
+          background: var(--pcp-cyan);
+          box-shadow:
+            0 0 28px rgba(70, 231, 242, 0.72),
+            0 0 72px rgba(70, 231, 242, 0.34);
+        }
+        .pcp-pro-signal-field.is-open .pcp-pro-live-signal > i {
+          inset: -22px;
+          border-color: var(--pcp-cyan);
+          box-shadow: 0 0 28px rgba(70, 231, 242, 0.46);
+        }
+        .pcp-pro-live-signal span {
+          font-size: 7px;
+          font-weight: 950;
+          letter-spacing: 0.14em;
+        }
+
+        .pcp-pro-sim-readout {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 10px 2px;
+          color: rgba(255, 255, 255, 0.4);
+          font-size: 6px;
+          font-weight: 850;
+          letter-spacing: 0.08em;
+        }
+        .pcp-pro-sim-readout span:first-child {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          color: var(--pcp-cyan);
+        }
+        .pcp-pro-sim-readout i {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--pcp-cyan);
+          box-shadow: 0 0 8px var(--pcp-cyan);
+        }
+
+        .pcp-pro-sim-footer {
+          display: grid;
+          grid-template-columns: 34px 1fr auto;
+          align-items: center;
+          gap: 10px;
+        }
+        .pcp-pro-sim-footer button {
+          width: 34px;
+          height: 34px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 1px solid rgba(255, 255, 255, 0.09);
+          border-radius: 10px;
+          color: rgba(255, 255, 255, 0.55);
+          background: rgba(255, 255, 255, 0.04);
+          cursor: pointer;
+        }
+        .pcp-pro-sim-footer > div {
+          height: 4px;
+          overflow: hidden;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.08);
+        }
+        .pcp-pro-sim-footer > div i {
+          height: 100%;
+          display: block;
+          border-radius: inherit;
+          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-violet));
+          box-shadow: 0 0 12px rgba(70, 231, 242, 0.35);
+          transition: width 0.25s ease;
+        }
+        .pcp-pro-sim-footer > span {
+          color: rgba(255, 255, 255, 0.5);
+          font-size: 6px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+        }
+
+        .pcp-pro-phone-home-indicator {
+          position: absolute;
+          z-index: 9;
+          left: 50%;
+          bottom: 8px;
+          width: 118px;
+          height: 4px;
+          border-radius: 99px;
+          background: rgba(255, 255, 255, 0.8);
+          transform: translateX(-50%);
+        }
+
+        /* The hero phone mirrors the current adaptive iOS Pro surface. */
+        .pcp-pro-phone {
+          width: min(100%, 390px);
+          filter: drop-shadow(0 42px 76px rgba(0, 0, 0, 0.48));
+        }
+
+        .pcp-pro-phone-shell {
+          height: 710px;
+          min-height: 710px;
+          border-color: #202227;
+          color: #0b0d10;
+          background:
+            radial-gradient(circle at 17% 25%, rgba(255, 169, 22, 0.10), transparent 31%),
+            radial-gradient(circle at 84% 13%, rgba(113, 187, 218, 0.11), transparent 30%),
+            linear-gradient(148deg, #f6f7f6 0%, #eef1f1 55%, #f9f4ea 100%);
+          box-shadow:
+            inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+            inset 0 0 0 3px rgba(0, 0, 0, 0.12),
+            0 0 82px rgba(89, 168, 204, 0.09);
+          font-family: ui-rounded, "SF Pro Rounded", "SF Pro Display", system-ui, sans-serif;
+        }
+
+        .pcp-pro-phone-status {
+          position: relative;
+          z-index: 10;
+          height: 49px;
+          color: #0a0b0d;
+          font-size: 10px;
+        }
+
+        .pcp-pro-phone-status span { color: #30343a; }
+
+        .pcp-pro-phone-viewport {
+          height: calc(100% - 49px);
+          overflow: hidden;
+        }
+
+        .pcp-pro-plan-screen,
+        .pcp-pro-skill-screen,
+        .pcp-pro-mood-screen,
+        .pcp-pro-simulation-screen {
+          position: relative;
+          height: 100%;
+          color: #101214;
+          background: transparent;
+        }
+
+        .pcp-pro-plan-screen {
+          padding: 18px 20px 62px;
+          background:
+            radial-gradient(circle at 15% 6%, rgba(34, 211, 238, 0.11), transparent 28%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
+        }
+
+        .pcp-pro-plan-heading small,
+        .pcp-pro-readiness-mini small,
+        .pcp-pro-plan-label small,
+        .pcp-pro-rep small {
+          color: #7e8386;
+          font-size: 6px;
+          font-weight: 850;
+          letter-spacing: 0.13em;
+        }
+
+        .pcp-pro-plan-heading h3 {
+          margin: 4px 0 1px;
+          color: #0b0d10;
+          font-size: 25px;
+          letter-spacing: -0.045em;
+        }
+
+        .pcp-pro-plan-heading p {
+          margin: 0;
+          color: #777c80;
+          font-size: 8px;
+          font-weight: 550;
+        }
+
+        .pcp-pro-plan-heading > span {
+          border-color: rgba(25, 188, 207, 0.3);
+          color: #159cae;
+          background: rgba(34, 211, 238, 0.12);
+        }
+
+        .pcp-pro-readiness-mini {
+          min-height: 80px;
+          grid-template-columns: 58px 1fr;
+          margin: 15px 0 17px;
+          border: 0;
+          color: #101214;
+          background: rgba(16, 18, 20, 0.055);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.72);
+        }
+
+        .pcp-pro-readiness-mini > div {
+          width: 54px;
+          height: 54px;
+          border-color: rgba(34, 211, 238, 0.18);
+          border-top-color: #22d3ee;
+          border-right-color: #22d3ee;
+        }
+
+        .pcp-pro-readiness-mini > div strong { color: #0b0d10; }
+        .pcp-pro-readiness-mini > span strong { color: #101214; font-size: 11px; }
+        .pcp-pro-readiness-mini p {
+          color: #73787b;
+          font-size: 7px;
+        }
+
+        .pcp-pro-plan-label {
+          align-items: center;
+          margin-bottom: 9px;
+        }
+        .pcp-pro-plan-label > span { display: grid; gap: 3px; }
+        .pcp-pro-plan-label strong { color: #151719; font-size: 12px; }
+        .pcp-pro-plan-label em { color: #7b8083; }
+
+        .pcp-pro-rep-stack { gap: 7px; }
+
+        .pcp-pro-rep {
+          min-height: 78px;
+          border: 0;
+          color: #111315;
+          background: rgba(16, 18, 20, 0.055);
+          box-shadow: inset 0 1px rgba(255, 255, 255, 0.75);
+        }
+
+        .pcp-pro-rep--mindset { --rep-accent: #b2c800; }
+        .pcp-pro-rep--signal { --rep-accent: #22bcd4; }
+        .pcp-pro-rep--control { --rep-accent: #ef657d; }
+        .pcp-pro-rep > span {
+          color: var(--rep-accent);
+          background: color-mix(in srgb, var(--rep-accent) 13%, transparent);
+        }
+        .pcp-pro-rep > div { gap: 3px; }
+        .pcp-pro-rep strong { color: #151719; font-size: 11px; }
+        .pcp-pro-rep p { color: #6d7377; font-size: 8px; }
+        .pcp-pro-rep small { color: var(--rep-accent); }
+        .pcp-pro-rep > svg { color: #8d9295; }
+        .pcp-pro-rep.is-selecting {
+          border: 1px solid rgba(34, 188, 212, 0.33);
+          background: rgba(34, 211, 238, 0.075);
+          box-shadow: 0 12px 28px rgba(34, 188, 212, 0.1);
+        }
+
+        .pcp-pro-tab-bar {
+          border-top-color: rgba(14, 17, 20, 0.08);
+        }
+        .pcp-pro-tab-bar span { color: rgba(18, 21, 24, 0.35); }
+        .pcp-pro-tab-bar span.is-active { color: #16a9bd; }
+
+        .pcp-pro-close {
+          width: 31px;
+          height: 31px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 0;
+          border-radius: 50%;
+          color: white;
+          background: rgba(84, 88, 88, 0.55);
+          cursor: pointer;
+        }
+
+        .pcp-pro-skill-screen {
+          padding: 15px 22px 88px;
+          background:
+            radial-gradient(circle at 20% 17%, rgba(255, 169, 22, 0.10), transparent 34%),
+            radial-gradient(circle at 82% 9%, rgba(91, 163, 195, 0.10), transparent 31%);
+        }
+
+        .pcp-pro-skill-hero {
+          padding: 23px 0 19px;
+        }
+
+        .pcp-pro-skill-hero > div {
+          width: 91px;
+          height: 91px;
+          margin-bottom: 18px;
+          border: 0;
+          border-radius: 27px;
+          color: white;
+          background: linear-gradient(135deg, #ff9f08, #ffc04e);
+          box-shadow: 0 18px 34px rgba(255, 159, 8, 0.22);
+        }
+
+        .pcp-pro-skill-hero > div svg {
+          width: 50px;
+          height: 50px;
+          fill: none;
+          stroke: currentColor;
+          stroke-width: 5.5;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+
+        .pcp-pro-skill-hero > small {
+          color: #838582;
+          font-size: 12px;
+          font-weight: 650;
+          letter-spacing: 0;
+        }
+
+        .pcp-pro-skill-hero h3 {
+          margin: 7px 0 8px;
+          color: #090b0d;
+          font-size: 31px;
+          letter-spacing: -0.05em;
+        }
+
+        .pcp-pro-skill-hero p {
+          max-width: 310px;
+          color: #707472;
+          font-size: 13px;
+          line-height: 1.45;
+        }
+
+        .pcp-pro-skill-meta {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .pcp-pro-skill-meta > span {
+          min-height: 76px;
+          display: grid;
+          align-content: center;
+          gap: 8px;
+          padding: 12px;
+          border-radius: 20px;
+          background: rgba(16, 18, 20, 0.055);
+        }
+
+        .pcp-pro-skill-meta small {
+          color: #858989;
+          font-size: 8px;
+          font-weight: 750;
+          letter-spacing: 0.05em;
+        }
+
+        .pcp-pro-skill-meta strong {
+          color: #131518;
+          font-size: 12px;
+          line-height: 1.2;
+        }
+
+        .pcp-pro-skill-benefits {
+          display: grid;
+          gap: 10px;
+          margin-top: 15px;
+          padding: 17px;
+          border-radius: 21px;
+          background: rgba(16, 18, 20, 0.055);
+        }
+
+        .pcp-pro-skill-benefits span {
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          color: #151719;
+          font-size: 13px;
+          font-weight: 650;
+        }
+
+        .pcp-pro-skill-benefits i {
+          width: 21px;
+          height: 21px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: white;
+          background: #ffa20a;
+        }
+
+        .pcp-pro-start-sim {
+          position: absolute;
+          left: 22px;
+          right: 22px;
+          bottom: 22px;
+          width: auto;
+          height: 55px;
+          margin: 0;
+          border-radius: 17px;
+          color: #090b0d;
+          background: linear-gradient(100deg, #ff9e05, #ffbd42);
+          box-shadow: 0 16px 32px rgba(255, 159, 8, 0.24);
+          font-size: 14px;
+        }
+
+        .pcp-pro-mood-screen {
+          display: flex;
+          flex-direction: column;
+          padding: 15px 22px 70px;
+          background:
+            radial-gradient(circle at 15% 20%, rgba(255, 169, 22, 0.09), transparent 34%),
+            radial-gradient(circle at 85% 72%, rgba(91, 163, 195, 0.10), transparent 31%);
+        }
+
+        .pcp-pro-mood-copy {
+          display: grid;
+          gap: 9px;
+          margin: auto 0 24px;
+          text-align: center;
+        }
+
+        .pcp-pro-mood-copy h3 {
+          margin: 0;
+          color: #101214;
+          font-size: 31px;
+          letter-spacing: -0.045em;
+        }
+        .pcp-pro-mood-copy p { margin: 0; color: #676c70; font-size: 14px; }
+
+        .pcp-pro-mood-options {
+          display: grid;
+          grid-template-columns: repeat(5, 1fr);
+          gap: 7px;
+          margin-bottom: auto;
+        }
+
+        .pcp-pro-mood-options button {
+          min-width: 0;
+          min-height: 91px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 8px;
+          padding: 6px 2px;
+          border: 1px solid transparent;
+          border-radius: 17px;
+          color: #6c7073;
+          background: rgba(15, 18, 20, 0.065);
+          font: inherit;
+          cursor: pointer;
+          transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+        .pcp-pro-mood-options button strong { font-size: 22px; }
+        .pcp-pro-mood-options button span { font-size: 8px; font-weight: 650; }
+        .pcp-pro-mood-options button.is-selected {
+          border-color: rgba(255, 159, 8, 0.55);
+          background: rgba(255, 159, 8, 0.16);
+          transform: translateY(-4px);
+        }
+
+        .pcp-pro-simulation-screen {
+          padding: 10px 18px 50px;
+          background:
+            radial-gradient(circle at 84% 16%, rgba(53, 158, 218, 0.10), transparent 33%),
+            radial-gradient(circle at 14% 82%, rgba(255, 160, 8, 0.08), transparent 28%);
+        }
+
+        .pcp-pro-player-actions {
+          display: grid;
+          grid-template-columns: 31px 1fr 31px 31px;
+          gap: 7px;
+          align-items: center;
+          margin-bottom: 14px;
+        }
+
+        .pcp-pro-player-actions button {
+          width: 31px;
+          height: 31px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 0;
+          border-radius: 50%;
+          color: #707577;
+          background: rgba(16, 18, 20, 0.065);
+          cursor: pointer;
+        }
+        .pcp-pro-player-actions button:first-child {
+          color: white;
+          background: rgba(84, 88, 88, 0.55);
+        }
+
+        .pcp-pro-sim-header {
+          min-height: auto;
+          border: 0;
+          color: #74797c;
+          font-size: 9px;
+          font-weight: 700;
+        }
+        .pcp-pro-sim-header strong { color: #74797c; font-size: 9px; }
+
+        .pcp-pro-round-progress {
+          height: 4px;
+          margin: 8px 0 13px;
+          overflow: hidden;
+          border-radius: 99px;
+          background: rgba(15, 18, 20, 0.09);
+        }
+        .pcp-pro-round-progress i {
+          height: 100%;
+          display: block;
+          border-radius: inherit;
+          background: #2e9ed5;
+          transition: width 0.3s ease;
+        }
+
+        .pcp-pro-sport-context {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          color: #2b9acd;
+          font-size: 9px;
+          font-weight: 750;
+        }
+        .pcp-pro-sport-context i { color: #b1b4b4; font-style: normal; }
+
+        .pcp-pro-sim-copy {
+          min-height: 118px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 7px;
+          padding: 10px 2px;
+          text-align: center;
+        }
+        .pcp-pro-sim-copy h3 {
+          max-width: 330px;
+          margin: 0;
+          color: #111315;
+          font-size: 18px;
+          line-height: 1.17;
+          letter-spacing: -0.025em;
+        }
+        .pcp-pro-sim-copy p {
+          max-width: 330px;
+          margin: 0;
+          color: #717679;
+          font-size: 10px;
+          line-height: 1.4;
+        }
+
+        .pcp-pro-signal-rule {
+          width: max-content;
+          max-width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 13px;
+          margin: 0 auto 18px;
+          padding: 9px 12px;
+          border-radius: 99px;
+          background: rgba(15, 18, 20, 0.055);
+          font-size: 7px;
+          font-weight: 900;
+          letter-spacing: 0.07em;
+        }
+        .pcp-pro-signal-rule span:first-child { color: #f39708; }
+        .pcp-pro-signal-rule span:last-child { color: #288fc8; }
+
+        .pcp-pro-window-zones {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .pcp-pro-window-zones button {
+          min-width: 0;
+          min-height: 149px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 10px;
+          padding: 12px 5px;
+          border: 0;
+          border-radius: 18px;
+          color: #222629;
+          background: rgba(15, 18, 20, 0.05);
+          font: inherit;
+          cursor: pointer;
+        }
+
+        .pcp-pro-window-zones button > i {
+          position: relative;
+          width: 73px;
+          height: 73px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          background: rgba(15, 18, 20, 0.065);
+          font-style: normal;
+          transition: background 0.2s ease, box-shadow 0.2s ease;
+        }
+        .pcp-pro-window-zones button > i > span { font-size: 23px; font-weight: 800; }
+        .pcp-pro-window-zones button > strong { font-size: 8px; letter-spacing: 0.07em; }
+
+        .pcp-pro-window-zones button.is-decoy > i {
+          background: rgba(255, 158, 5, 0.64);
+          box-shadow: 0 0 24px rgba(255, 158, 5, 0.26);
+        }
+
+        .pcp-pro-window-zones button.is-target > i {
+          background: rgba(46, 158, 213, 0.70);
+          box-shadow: 0 0 22px rgba(46, 158, 213, 0.24);
+        }
+
+        .pcp-pro-window-zones button.is-target > i b,
+        .pcp-pro-window-zones button.is-correct > i b {
+          position: absolute;
+          inset: -7px;
+          border: 4px solid #2e9ed5;
+          border-radius: 50%;
+          box-shadow: 0 0 17px rgba(46, 158, 213, 0.28);
+        }
+
+        .pcp-pro-window-zones button.is-correct > i { background: rgba(63, 186, 111, 0.52); }
+        .pcp-pro-window-zones button.is-wrong > i { background: rgba(230, 77, 82, 0.46); }
+
+        .pcp-pro-window-status {
+          min-height: 42px;
+          display: grid;
+          place-items: center;
+          align-content: center;
+          gap: 6px;
+          margin-top: 13px;
+        }
+        .pcp-pro-window-status > div {
+          width: 100%;
+          height: 4px;
+          overflow: hidden;
+          border-radius: 99px;
+          background: rgba(15, 18, 20, 0.08);
+        }
+        .pcp-pro-window-status > div i {
+          width: 76%;
+          height: 100%;
+          display: block;
+          border-radius: inherit;
+          background: #2e9ed5;
+          animation: pcp-window-close 1.75s linear infinite;
+          transform-origin: left;
+        }
+        .pcp-pro-window-status strong {
+          color: #2e9ed5;
+          font-size: 7px;
+          font-weight: 900;
+          letter-spacing: 0.14em;
+        }
+
+        @keyframes pcp-window-close {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0.05); }
+        }
+
+        .pcp-pro-phone-steps {
+          position: absolute;
+          z-index: 12;
+          right: 25px;
+          bottom: 15px;
+          display: flex;
+          gap: 5px;
+        }
+        .pcp-pro-phone-steps button {
+          width: 7px;
+          height: 7px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+        }
+        .pcp-pro-phone-steps i {
+          width: 4px;
+          height: 4px;
+          display: block;
+          border-radius: 50%;
+          background: rgba(12, 15, 18, 0.18);
+          transition: width 0.2s ease, background 0.2s ease;
+        }
+        .pcp-pro-phone-steps button.is-active i {
+          width: 11px;
+          border-radius: 99px;
+          background: #ff9f08;
+        }
+
+        .pcp-pro-phone-home-indicator {
+          bottom: 7px;
+          width: 116px;
+          height: 4px;
+          background: rgba(11, 13, 16, 0.72);
+        }
+
         .pcp-human-hero-caption {
           position: absolute;
           right: 38px;
@@ -3348,6 +5139,7 @@ const PulseCheckProPage: React.FC = () => {
           .pcp-trust-grid { gap: 45px; }
           .pcp-human-hero-grid { grid-template-columns: minmax(0, 1fr) 350px; gap: 35px; }
           .pcp-human-hero h1 { font-size: clamp(4rem, 7vw, 6rem); }
+          .pcp-pro-phone { width: min(100%, 350px); }
           .pcp-experience-step { min-height: 270px; padding: 20px; }
           .pcp-athlete-moments { width: 42%; }
         }
@@ -3379,6 +5171,11 @@ const PulseCheckProPage: React.FC = () => {
               linear-gradient(0deg, rgba(3, 5, 9, 0.88), transparent 50%);
           }
           .pcp-hero-gameplan { align-self: auto; justify-self: start; margin: 0; }
+          .pcp-pro-phone {
+            width: min(100%, 390px);
+            align-self: auto;
+            justify-self: start;
+          }
           .pcp-human-hero-caption { right: 24px; }
           .pcp-experience-heading,
           .pcp-value-heading { grid-template-columns: 1fr; gap: 12px; }
@@ -3480,6 +5277,8 @@ const PulseCheckProPage: React.FC = () => {
           .pcp-human-hero .pcp-hero-copy > p { font-size: 1rem; line-height: 1.58; }
           .pcp-human-hero .pcp-hero-actions { margin-top: 24px; }
           .pcp-hero-gameplan { width: 100%; margin-bottom: 0; }
+          .pcp-pro-phone { width: 100%; }
+          .pcp-pro-phone-shell { height: 690px; min-height: 690px; }
           .pcp-human-hero-caption { display: none; }
           .pcp-experience-rail,
           .pcp-athlete-story,
