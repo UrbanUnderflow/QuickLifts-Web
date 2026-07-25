@@ -232,6 +232,23 @@ function createFirestoreAdminMock({ collections = {}, queryErrors = {} } = {}) {
       return { __op: 'increment', value };
     },
   };
+  const Timestamp = {
+    now() {
+      return {
+        seconds: Math.floor(Date.now() / 1000),
+        nanoseconds: 0,
+        toDate() {
+          return new Date(this.seconds * 1000);
+        },
+      };
+    },
+    fromDate(date) {
+      return {
+        seconds: Math.floor(date.getTime() / 1000),
+        nanoseconds: 0,
+      };
+    },
+  };
 
   function pathKey(pathParts) {
     return pathParts.join('/');
@@ -510,6 +527,22 @@ function createFirestoreAdminMock({ collections = {}, queryErrors = {} } = {}) {
         },
       };
     },
+    async runTransaction(operation) {
+      return operation({
+        get(ref) {
+          return ref.get();
+        },
+        set(ref, data, options) {
+          return ref.set(data, options);
+        },
+        update(ref, data) {
+          return ref.update(data);
+        },
+        delete(ref) {
+          return ref.delete();
+        },
+      });
+    },
   };
 
   function firestore() {
@@ -517,6 +550,7 @@ function createFirestoreAdminMock({ collections = {}, queryErrors = {} } = {}) {
   }
 
   firestore.FieldValue = FieldValue;
+  firestore.Timestamp = Timestamp;
 
   return {
     admin: {

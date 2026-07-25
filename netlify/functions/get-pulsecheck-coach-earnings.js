@@ -6,6 +6,7 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const USERS_COLLECTION = 'users';
 const SUBSCRIPTIONS_COLLECTION = 'subscriptions';
+const COACH_SERVICE_ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
 
 const jsonHeaders = {
   ...headers,
@@ -404,8 +405,12 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
     const revenueCatCustomerIds = [
       subscriptionRecord.rcAppUserId,
       ...(Array.isArray(subscriptionRecord.rcAliases) ? subscriptionRecord.rcAliases : []),
+      ...(Array.isArray(subscriptionRecord.revenueCatAppUserIds) ? subscriptionRecord.revenueCatAppUserIds : []),
+      ...(Array.isArray(subscriptionRecord.accountAliases) ? subscriptionRecord.accountAliases : []),
       user.revenuecat?.appUserId,
       ...(Array.isArray(user.revenuecat?.aliases) ? user.revenuecat.aliases : []),
+      ...(Array.isArray(user.revenueCatAppUserIds) ? user.revenueCatAppUserIds : []),
+      ...(Array.isArray(user.accountAliases) ? user.accountAliases : []),
       athleteUserId,
       user.username,
       user.email,
@@ -502,6 +507,88 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
   };
 };
 
+const isoTimestamp = (value) => {
+  const millis = timestampMillis(value);
+  return millis ? new Date(millis).toISOString() : null;
+};
+
+const loadCoachServiceEarnings = async (coachUserId) => {
+  const snapshot = await db
+    .collection(COACH_SERVICE_ORDERS_COLLECTION)
+    .where('coachUserId', '==', coachUserId)
+    .get();
+
+  const transactions = snapshot.docs
+    .map((entry) => {
+      const order = entry.data() || {};
+      const status = normalizeStatus(order.status);
+      const isEarned = status === 'paid' || status === 'booked';
+      if (!isEarned) return null;
+      const amountCents = Math.max(0, Number(order.amountCents) || 0);
+      const platformFeeCents = Math.max(0, Number(order.platformFeeCents) || 0);
+      const coachNetCents = Math.max(
+        0,
+        Number.isFinite(Number(order.coachNetCents))
+          ? Number(order.coachNetCents)
+          : amountCents - platformFeeCents
+      );
+      return {
+        id: entry.id,
+        orderId: entry.id,
+        paymentIntentId: normalizeString(order.paymentIntentId) || null,
+        conversationId: normalizeString(order.conversationId) || null,
+        athleteUserId: normalizeString(order.athleteUserId) || null,
+        athleteName: normalizeString(order.athleteName) || 'Athlete',
+        serviceId: normalizeString(order.serviceId),
+        serviceTitle: normalizeString(order.serviceTitle) || 'Coach service',
+        status,
+        amountCents,
+        platformFeeCents,
+        coachNetCents,
+        currency: normalizeStatus(order.currency) || 'usd',
+        paidAt: isoTimestamp(order.paidAt),
+        scheduledAt: isoTimestamp(order.scheduledAt),
+        bookedAt: isoTimestamp(order.bookedAt),
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) =>
+      String(right.paidAt || right.bookedAt || '').localeCompare(
+        String(left.paidAt || left.bookedAt || '')
+      )
+    );
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonthTransactions = transactions.filter((transaction) =>
+    String(transaction.paidAt || '').startsWith(currentMonthKey)
+  );
+
+  return {
+    transactionCount: transactions.length,
+    currentMonthGrossCents: currentMonthTransactions.reduce(
+      (sum, transaction) => sum + transaction.amountCents,
+      0
+    ),
+    currentMonthNetCents: currentMonthTransactions.reduce(
+      (sum, transaction) => sum + transaction.coachNetCents,
+      0
+    ),
+    lifetimeGrossCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.amountCents,
+      0
+    ),
+    lifetimePlatformFeeCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.platformFeeCents,
+      0
+    ),
+    lifetimeNetCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.coachNetCents,
+      0
+    ),
+    transactions,
+  };
+};
+
 const loadCoachEarnings = async (coachUserId) => {
   const staffSnapshot = await db
     .collection(TEAM_MEMBERSHIPS_COLLECTION)
@@ -541,9 +628,10 @@ const loadCoachEarnings = async (coachUserId) => {
     });
   }
 
-  const members = await Promise.all(
-    [...athleteScopes.values()].map((scope) => loadMemberEarnings(scope))
-  );
+  const [members, serviceEarnings] = await Promise.all([
+    Promise.all([...athleteScopes.values()].map((scope) => loadMemberEarnings(scope))),
+    loadCoachServiceEarnings(coachUserId),
+  ]);
   members.sort(
     (left, right) =>
       Number(right.isActive) - Number(left.isActive)
@@ -578,6 +666,7 @@ const loadCoachEarnings = async (coachUserId) => {
     currentMonthShareCents,
     lifetimeShareCents: members.reduce((sum, member) => sum + member.lifetimeShareCents, 0),
     members,
+    serviceEarnings,
   };
 };
 
@@ -620,6 +709,7 @@ module.exports = {
   handler,
   calculateShareCents,
   invoiceRows,
+  loadCoachServiceEarnings,
   loadCoachEarnings,
   teamAllowsCoachEarnings,
 };

@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getDefaultPulseCheckIntakeForm } from '../../src/api/firebase/pulsecheckProvisioning/types';
+import {
+  getDefaultPulseCheckIntakeForm,
+  getDefaultPulseCheckTeamCommercialConfig,
+} from '../../src/api/firebase/pulsecheckProvisioning/types';
+
+test('team commercial config defaults to the athlete experience', () => {
+  const config = getDefaultPulseCheckTeamCommercialConfig();
+
+  assert.equal(config.experienceAudience, 'athletes');
+  assert.equal(config.youthTrack, 'junior');
+});
 
 test('athlete intake starter splits life and training load questions', () => {
   const form = getDefaultPulseCheckIntakeForm('athlete');

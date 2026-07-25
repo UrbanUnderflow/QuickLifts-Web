@@ -74,6 +74,7 @@ import type {
   PulseCheckStudyPosture,
   PulseCheckTeam,
   PulseCheckTeamCommercialConfig,
+  PulseCheckExperienceAudience,
   PulseCheckTeamMembershipRole,
   PulseCheckTeamCommercialModel,
   PulseCheckTeamEscalationRoute,
@@ -199,6 +200,23 @@ const YOUTH_TRACK_OPTIONS: Array<{ value: PulseCheckYouthTrack; label: string; d
   { value: 'junior', label: 'Junior', description: 'Default guided pathway with open Nora chat removed.' },
   { value: 'rookie', label: 'Rookie', description: 'Youth-first guided pathway with parent/Home Team support.' },
   { value: 'pro', label: 'Pro', description: 'Institutional / governed experience with direct Nora chat enabled.' },
+];
+
+const EXPERIENCE_AUDIENCE_OPTIONS: Array<{
+  value: PulseCheckExperienceAudience;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'athletes',
+    label: 'Athletes',
+    description: 'Sport-only onboarding. Members select their sport and season.',
+  },
+  {
+    value: 'all-performers',
+    label: 'All high-pressure performers',
+    description: 'Members choose Sport, Work, School, or Life.',
+  },
 ];
 
 // The revenue recipient is now a specific person; keep the legacy role field in
@@ -3966,11 +3984,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           <div className="pcp-commercial-footer" style={{ alignItems: 'flex-start' }}>
                                             <div>
                                               <div className="pcp-card-copy">
-                                                Control whether this team uses athlete-paid access or a bypassed team plan, where referral revenue routes, and which PulseCheck athlete experience is enabled.
+                                                Control access, audience, referral revenue, and the PulseCheck experience this team receives.
                                               </div>
                                             </div>
                                             <div className="pcp-commercial-badge">
-                                              {`${(teamCommercialDraft.youthTrack || 'junior').toUpperCase()} Track`}
+                                              {`${(teamCommercialDraft.youthTrack || 'junior').toUpperCase()} · ${
+                                                teamCommercialDraft.experienceAudience === 'all-performers'
+                                                  ? 'ALL PERFORMERS'
+                                                  : 'ATHLETES'
+                                              }`}
                                             </div>
                                           </div>
                                           <div className="pcp-commercial-shell">
@@ -4027,6 +4049,26 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   {YOUTH_TRACK_OPTIONS.map((option) => (
                                                     <option key={option.value} value={option.value}>
                                                       {option.label} — {option.description}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              </label>
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Experience Audience</span>
+                                                <select
+                                                  className="pcp-finp pcp-select"
+                                                  value={teamCommercialDraft.experienceAudience || 'athletes'}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'experienceAudience',
+                                                      event.target.value as PulseCheckExperienceAudience
+                                                    )
+                                                  }
+                                                >
+                                                  {EXPERIENCE_AUDIENCE_OPTIONS.map((option) => (
+                                                    <option key={option.value} value={option.value}>
+                                                      {option.label}: {option.description}
                                                     </option>
                                                   ))}
                                                 </select>
@@ -5184,6 +5226,25 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           {YOUTH_TRACK_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value}>
                               {option.label} — {option.description}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Experience Audience</span>
+                        <select
+                          className="pcp-finp pcp-select"
+                          value={teamForm.commercialConfig.experienceAudience}
+                          onChange={(event) =>
+                            handleTeamCommercialFieldChange(
+                              'experienceAudience',
+                              event.target.value as PulseCheckExperienceAudience
+                            )
+                          }
+                        >
+                          {EXPERIENCE_AUDIENCE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}: {option.description}
                             </option>
                           ))}
                         </select>

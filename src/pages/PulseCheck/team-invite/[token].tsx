@@ -114,6 +114,10 @@ const normalizeInviteCommercialSnapshot = (
     String(candidate.teamPlanStatus || defaults.teamPlanStatus).trim() === 'active' ? 'active' : 'inactive';
   const youthTrackRaw = String(candidate.youthTrack || defaults.youthTrack).trim();
   const youthTrack = youthTrackRaw === 'pro' || youthTrackRaw === 'rookie' ? youthTrackRaw : 'junior';
+  const experienceAudience =
+    String(candidate.experienceAudience || defaults.experienceAudience).trim() === 'all-performers'
+      ? 'all-performers'
+      : 'athletes';
   const referralRevenueSharePct = Number.isFinite(Number(candidate.referralRevenueSharePct))
     ? Math.max(0, Math.min(100, Number(candidate.referralRevenueSharePct)))
     : defaults.referralRevenueSharePct;
@@ -121,6 +125,7 @@ const normalizeInviteCommercialSnapshot = (
     commercialModel,
     teamPlanStatus,
     youthTrack,
+    experienceAudience,
     referralKickbackEnabled:
       typeof candidate.referralKickbackEnabled === 'boolean'
         ? candidate.referralKickbackEnabled

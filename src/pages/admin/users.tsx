@@ -4,13 +4,14 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, Users, LogIn, Search, Sparkles, Clipboard, LayoutDashboard } from 'lucide-react';
+import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, Users, LogIn, Search, Sparkles, Clipboard, LayoutDashboard, GitMerge } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { BetaApplication } from '../../api/firebase/admin/types';
 import { SubscriptionType } from '../../api/firebase/user/types';
+import AccountMergeModal from '../../components/admin/AccountMergeModal';
 
 
 type User = {
@@ -246,6 +247,7 @@ const UsersManagement: React.FC = () => {
     userId: string;
     target: RemoteLoginTarget;
   } | null>(null);
+  const [mergeSourceUser, setMergeSourceUser] = useState<User | null>(null);
 
   // *** START: State for Username Migration ***
   const [showUsernameMigrationModal, setShowUsernameMigrationModal] = useState(false);
@@ -4070,6 +4072,14 @@ const UsersManagement: React.FC = () => {
                                     <LayoutDashboard className="h-3 w-3" />
                                   )}
                                 </button>
+                                <button
+                                  onClick={() => setMergeSourceUser(user)}
+                                  className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-amber-900/30 text-amber-300 hover:bg-amber-900/50 border border-amber-900"
+                                  aria-label={`Combine duplicate account for ${user.username || user.email}`}
+                                  title={`Combine ${user.username || user.email} with another account`}
+                                >
+                                  <GitMerge className="h-3 w-3" />
+                                </button>
                               <button
                                 onClick={() => handleDeleteUser(user)}
                                 disabled={processingDelete === user.id || isBatchDeleting}
@@ -4616,6 +4626,18 @@ const UsersManagement: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {mergeSourceUser && (
+        <AccountMergeModal
+          source={mergeSourceUser}
+          users={users}
+          onClose={() => setMergeSourceUser(null)}
+          onMerged={() => {
+            setToastMessage({ type: 'success', text: 'Account records combined. The owner can finish linking from Settings.' });
+            void loadAllUsers();
+          }}
+        />
       )}
     </AdminRouteGuard>
   );

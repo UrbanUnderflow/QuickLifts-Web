@@ -12,7 +12,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, PulseCheck elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-07-24',
+  lastUpdated: '2026-07-25',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -122,6 +122,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-team-pilot-cohort-onboarding-architecture', label: 'Team & Pilot Onboarding', description: 'How organizations, teams, pilots, cohorts, clinicians, and enrollments enter the system.', parentSectionId: 'pulsecheck-member-onboarding-guide' },
     { id: 'pulsecheck-permissions-visibility-model', label: 'Permissions & Visibility', description: 'Role-based access, invite-linked permissions, and minimum-necessary visibility rules.' },
     { id: 'pulsecheck-coach-dashboard-information-architecture', label: 'Coach Dashboard IA', description: 'Coach-facing information hierarchy, workflows, and privacy boundaries for roster visibility.' },
+    { id: 'pulsecheck-coach-service-payments', label: 'Coach Service Payments', description: 'Stripe PaymentSheet, Apple Pay, Connect destination charges, verified scheduling, shared booking cards, service earnings, refunds, and production operations.', parentSectionId: 'pulsecheck-coach-dashboard-information-architecture' },
     { id: 'pulsecheck-nora-moderated-checkin-spec', label: 'Nora-Moderated Check-In', description: 'Trust-preserving coach↔athlete check-in moderated by Nora — disclosure model, end-to-end flow, locked decisions, and the therapeutic-mediation + sports-psychology research it is grounded in.' },
     { id: 'pulsecheck-profile-architecture', label: 'Profile System', description: 'Parent artifact for PulseCheck profile information architecture, milestone snapshots, and export contract rules.' },
     { id: 'pulsecheck-profile-snapshot-export-spec', label: 'Profile Snapshot & Export Spec', description: 'Canonical snapshot storage, idempotent write protocol, revision history, and canonical-first research export contract.', parentSectionId: 'pulsecheck-profile-architecture' },
@@ -147,6 +148,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the PulseCheck Coach Service Payments artifact under Coach Dashboard IA. It documents Stripe PaymentSheet, Apple Pay release requirements, fixed-price server catalog, Connect destination charges, payment verification, paid-only scheduling, shared booking cards, service earnings, webhook recovery, refunds, environment keys, tests, and code ownership.',
       'Expanded the PulseCheck Sports Intelligence source of truth with separate scenario and biometric-insight archetype axes, catalog-first sport/position/event/division resolution, reviewed TypeScript-to-Swift mappings, CI coverage gates, sport-native event vocabulary, visible personalization badges, scenario-pack telemetry, and general fallback rules.',
       'Added the Athlete Daily State Loop: morning and evening check-ins share one athlete-local daily record, both answers can be revised before the day resets, drained athletes can enter Energy Recalibration, and silent device alignment builds pattern memory without overruling self-report.',
       'Replaced Focus, Composure, and Decision as the primary athlete profile scores with Consistency, Follow-through, Feeling Good, and Overall Coherence. The default window is 14 days, eligible assignments are capped at three per day, and missing evidence never becomes zero.',

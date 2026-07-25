@@ -16,6 +16,12 @@ import { useUser } from '../../hooks/useUser';
 import PageHead from '../../components/PageHead';
 import { useDispatch } from 'react-redux';
 import { toggleDevMode } from '../../redux/devModeSlice';
+import {
+  assertAccountIsCanonical,
+  linkRememberedProviderCredential,
+  rejectAccidentalNewSocialLogin,
+  rememberProviderCredentialFromError,
+} from '../../api/firebase/auth/accountLinking';
 
 const PULSECHECK_PURPLE = '#E0FE10';
 const PULSECHECK_PURPLE_DEEP = '#A6C900';
@@ -212,6 +218,7 @@ const PulseCheckLoginPage: NextPage = () => {
   const ensureFirestoreUser = async (firebaseUser: any) => {
     let firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
     if (!firestoreUser) {
+      await assertAccountIsCanonical(firebaseUser);
       if (!firebaseUser.email) {
         throw new Error('Authentication did not provide an email address.');
       }
@@ -287,6 +294,7 @@ const PulseCheckLoginPage: NextPage = () => {
         }
 
         const result = await authService.signInWithEmail(normalizedEmail, password);
+        await linkRememberedProviderCredential(result.user);
         await ensureFirestoreUser(result.user);
         enterApp();
       } else {
@@ -339,6 +347,10 @@ const PulseCheckLoginPage: NextPage = () => {
       setActiveProvider('google');
 
       const result = await authService.signInWithGoogle();
+      if (await rejectAccidentalNewSocialLogin(result)) {
+        setError('We could not find an existing Pulse account for that Google sign-in. Create a new account, or sign in with your existing method and connect Google in Settings.');
+        return;
+      }
       const user = result.user;
 
       if (!user || !user.email) {
@@ -348,6 +360,7 @@ const PulseCheckLoginPage: NextPage = () => {
         setActiveProvider(null);
         return;
       }
+      await linkRememberedProviderCredential(user);
 
       console.log('[PulseCheck Login] Google sign-in success:', { uid: user.uid, email: user.email });
       await ensureFirestoreUser(user);
@@ -367,7 +380,9 @@ const PulseCheckLoginPage: NextPage = () => {
           errorMessage = 'Another sign-in attempt is already in progress';
           break;
         case 'auth/account-exists-with-different-credential':
-          errorMessage = 'An account already exists with this email using a different sign-in method.';
+          errorMessage = rememberProviderCredentialFromError('google.com', err)
+            ? 'Sign in with your existing method on this screen. Google will be connected automatically.'
+            : 'An account already exists with this email using another sign-in method.';
           break;
         case 'auth/network-request-failed':
           errorMessage = 'Network error. Please check your connection and try again';
@@ -399,7 +414,12 @@ const PulseCheckLoginPage: NextPage = () => {
       try {
         // Sign in with popup — mirrors SignInModal line 319
         const result: UserCredential = await signInWithPopup(auth, appleProvider);
+        if (await rejectAccidentalNewSocialLogin(result)) {
+          setError('We could not find an existing Pulse account for that Apple sign-in. Sign in with your existing email first, then connect Apple in Settings.');
+          return;
+        }
         const user = result.user;
+        await linkRememberedProviderCredential(user);
 
         // Fetch or create user in Firestore — mirrors SignInModal lines 322-330
         let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
@@ -422,6 +442,15 @@ const PulseCheckLoginPage: NextPage = () => {
         enterApp();
       } catch (error: unknown) {
         console.error('[PulseCheck Login] Apple sign-in popup error:', error);
+        if ((error as any)?.code === 'auth/account-exists-with-different-credential') {
+          const remembered = rememberProviderCredentialFromError('apple.com', error);
+          setError(
+            remembered
+              ? 'Sign in with your existing method on this screen. Apple will be connected automatically.'
+              : 'An account already exists with this email using another sign-in method.',
+          );
+          return;
+        }
         if (error instanceof Error) {
           setError(error.message);
         } else {

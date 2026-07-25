@@ -504,6 +504,503 @@ function EcosystemMap({
   );
 }
 
+const COACH_SERVICE_CATALOG = [
+  {
+    id: "one-on-one-video",
+    name: "One-on-one video",
+    price: "$50.00",
+    amountCents: "5000",
+  },
+  {
+    id: "video-posing-session",
+    name: "Video posing session",
+    price: "$50.00",
+    amountCents: "5000",
+  },
+];
+
+const COACH_SERVICE_ENDPOINTS = [
+  {
+    endpoint: "create-pulsecheck-coach-service-payment-intent",
+    responsibility:
+      "Authenticates the athlete, validates conversation ownership, resolves the fixed service price and coach Stripe account, then creates an idempotent destination-charge PaymentIntent.",
+  },
+  {
+    endpoint: "confirm-pulsecheck-coach-service-payment",
+    responsibility:
+      "Retrieves the PaymentIntent from Stripe and marks the service order paid only when Stripe reports succeeded.",
+  },
+  {
+    endpoint: "book-pulsecheck-coach-service",
+    responsibility:
+      "Requires a paid order, validates the athlete and conversation again, saves the appointment, and writes the shared activeBooking card.",
+  },
+  {
+    endpoint: "stripe-webhook",
+    responsibility:
+      "Provides durable payment success, failure, and refund reconciliation when the app closes or an event arrives later.",
+  },
+  {
+    endpoint: "get-pulsecheck-coach-earnings",
+    responsibility:
+      "Returns subscription earnings and verified additional-service transactions for the authenticated coach dashboard.",
+  },
+];
+
+const COACH_SERVICE_ENVIRONMENT_KEYS = [
+  "STRIPE_SECRET_KEY",
+  "STRIPE_TEST_SECRET_KEY",
+  "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+  "NEXT_PUBLIC_TEST_STRIPE_PUBLISHABLE_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+];
+
+const CoachServicePaymentsSystemOverview = () => {
+  const flow = [
+    {
+      title: "Athlete selects a service",
+      body:
+        "The conversation shows a horizontal service strip above the message composer. The client sends the service id, conversation id, and a unique checkout id.",
+    },
+    {
+      title: "Server creates the checkout",
+      body:
+        "The server owns the $50 price, verifies the athlete belongs to the conversation, confirms the coach can accept charges, and creates a Stripe PaymentIntent.",
+    },
+    {
+      title: "Stripe presents payment",
+      body:
+        "Native PaymentSheet presents credit card entry and Apple Pay when the device, merchant profile, and wallet are eligible.",
+    },
+    {
+      title: "Server verifies success",
+      body:
+        "The app asks the server to retrieve the PaymentIntent. Scheduling unlocks after Stripe reports succeeded. A retry verifies the same order without creating a second charge.",
+    },
+    {
+      title: "Athlete schedules",
+      body:
+        "The athlete chooses a future date and time. The booking endpoint permits the write only for the paid order and matching conversation.",
+    },
+    {
+      title: "Both people retain the booking",
+      body:
+        "The conversation activeBooking record drives the sticky chat card for athlete and coach. The paid order simultaneously becomes part of the coach earnings ledger.",
+    },
+  ];
+
+  const safeguards = [
+    "Service prices and currency are resolved from the server catalog.",
+    "Firebase ID token authentication is required at every payment and booking step.",
+    "The signed-in athlete must match the conversation athleteId.",
+    "The coach Stripe Connect account must exist and have charges_enabled.",
+    "PaymentIntent creation uses an athlete and checkout scoped idempotency key.",
+    "The PaymentIntent metadata must match the order and athlete before paid status is written.",
+    "Scheduling requires an order status of paid or booked.",
+    "Paid and booked orders count as earnings. Failed and refunded orders are excluded.",
+    "A full refund removes the matching sticky booking card from the conversation.",
+  ];
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-500/10 via-[#090f1c] to-cyan-500/5 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-4xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+              PulseCheck commerce architecture
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              Coach additional-service payments
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+              Athletes purchase one-time services from their coach conversation
+              through Stripe PaymentSheet. The platform verifies payment before
+              scheduling, persists a booking visible to both participants, routes
+              the coach share through Stripe Connect, and reports the transaction
+              beside subscription earnings.
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+            Implemented
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["Price", "$50 per service"],
+            ["Platform fee", "3%"],
+            ["Coach net", "$48.50"],
+            ["Payment methods", "Card + Apple Pay"],
+          ].map(([label, value]) => (
+            <div
+              key={label}
+              className="rounded-xl border border-white/5 bg-black/20 p-4"
+            >
+              <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                {label}
+              </p>
+              <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+        <h3 className="text-lg font-semibold text-white">End-to-end flow</h3>
+        <p className="mt-1 text-sm text-zinc-400">
+          Payment and scheduling are separate verified stages so a booking cannot
+          be forged from the client.
+        </p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {flow.map((step, index) => (
+            <article
+              key={step.title}
+              className="flex gap-3 rounded-xl border border-zinc-800 bg-black/20 p-4"
+            >
+              <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-violet-400/30 bg-violet-400/10 text-xs font-bold text-violet-200">
+                {index + 1}
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">{step.title}</h4>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  {step.body}
+                </p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">Service catalog</h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            The Netlify function catalog is the price source of truth.
+          </p>
+          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
+            <div className="grid grid-cols-[1fr_auto] bg-white/[0.03] px-4 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              <span>Service</span>
+              <span>Price</span>
+            </div>
+            {COACH_SERVICE_CATALOG.map((service) => (
+              <div
+                key={service.id}
+                className="grid grid-cols-[1fr_auto] gap-4 border-t border-zinc-800 px-4 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">{service.name}</p>
+                  <p className="mt-1 font-mono text-[10px] text-zinc-500">
+                    {service.id} · {service.amountCents} cents · USD
+                  </p>
+                </div>
+                <p className="text-sm font-semibold text-emerald-300">
+                  {service.price}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Stripe Connect money movement
+          </h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Each purchase is a destination charge created on the platform account.
+          </p>
+          <div className="mt-4 space-y-3">
+            {[
+              ["Athlete charge", "$50.00"],
+              ["transfer_data.destination", "Coach connected account"],
+              ["application_fee_amount", "$1.50"],
+              ["Coach net transfer", "$48.50"],
+              ["Tax classification metadata", "service_income"],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-black/20 px-4 py-3"
+              >
+                <span className="text-xs text-zinc-400">{label}</span>
+                <span className="text-right text-xs font-semibold text-white">
+                  {value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+        <h3 className="text-lg font-semibold text-white">Server endpoints</h3>
+        <p className="mt-1 text-sm text-zinc-400">
+          All sensitive decisions live in authenticated server functions.
+        </p>
+        <div className="mt-4 space-y-2">
+          {COACH_SERVICE_ENDPOINTS.map((item) => (
+            <article
+              key={item.endpoint}
+              className="grid gap-2 rounded-xl border border-zinc-800 bg-black/20 p-4 lg:grid-cols-[340px_1fr]"
+            >
+              <code className="break-all text-xs text-cyan-300">
+                {item.endpoint}
+              </code>
+              <p className="text-xs leading-relaxed text-zinc-400">
+                {item.responsibility}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Firestore source of truth
+          </h3>
+          <div className="mt-4 space-y-4 text-sm">
+            <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.05] p-4">
+              <code className="text-xs text-cyan-300">
+                pulsecheck-coach-service-orders/{"{orderId}"}
+              </code>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                Payment and earnings ledger. Stores participant ids, service,
+                fixed amount, platform fee, coach net, PaymentIntent id, payment
+                status, paid time, scheduled time, and refund state.
+              </p>
+            </div>
+            <div className="rounded-xl border border-violet-400/20 bg-violet-400/[0.05] p-4">
+              <code className="text-xs text-violet-300">
+                coach-athlete-conversations/{"{conversationId}"}.activeBooking
+              </code>
+              <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                Shared read model for the sticky booking card. Contains order and
+                PaymentIntent references, service, price, scheduled time, booked
+                time, and booking athlete.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border border-zinc-800 bg-black/20 p-4">
+            <p className="text-xs font-semibold text-white">Order lifecycle</p>
+            <p className="mt-2 font-mono text-[11px] leading-relaxed text-zinc-400">
+              payment_pending → paid → booked
+              <br />
+              payment_pending → payment_failed
+              <br />
+              paid/booked → refunded or partially_refunded
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Coach earnings surface
+          </h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            Additional services appear beside the existing subscription revenue
+            share in the coach Earnings tab.
+          </p>
+          <ul className="mt-4 space-y-2 text-xs leading-relaxed text-zinc-300">
+            {[
+              "Earnings is available to Stripe-connected service sellers and eligible subscription revenue recipients.",
+              "Service summary shows this-month net, all-time net, and transaction count.",
+              "Rows show service, athlete, paid or booked status, scheduled time, gross sale, platform fee, and coach net.",
+              "The dashboard queries orders by coachUserId and counts paid or booked records.",
+              "Refunded and failed orders are excluded from earned totals.",
+            ].map((item) => (
+              <li key={item} className="flex gap-2">
+                <Check className="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-300" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-emerald-300" />
+          <h3 className="text-lg font-semibold text-white">
+            Security and integrity controls
+          </h3>
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {safeguards.map((item) => (
+            <div
+              key={item}
+              className="flex gap-2 rounded-xl border border-zinc-800 bg-black/20 p-3"
+            >
+              <Check className="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-300" />
+              <p className="text-xs leading-relaxed text-zinc-400">{item}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Apple Pay release requirements
+          </h3>
+          <p className="mt-1 text-sm text-zinc-400">
+            The iOS code and entitlement use merchant id{" "}
+            <code className="text-amber-200">
+              merchant.com.fitwithpulse.pulsecheck
+            </code>
+            .
+          </p>
+          <ol className="mt-4 space-y-2 text-xs leading-relaxed text-zinc-300">
+            {[
+              "Register the merchant id for the PulseCheck Apple developer team.",
+              "Create the Apple Pay payment processing certificate through Stripe.",
+              "Refresh the PulseCheck provisioning profiles with the Apple Pay entitlement.",
+              "Enable the merchant in the matching Stripe live and test environments.",
+              "Test on an Apple Pay capable physical device with an eligible Wallet card.",
+            ].map((item, index) => (
+              <li key={item} className="flex gap-3">
+                <span className="text-amber-300">{index + 1}.</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+            PaymentSheet presents Apple Pay when the device, Wallet, Stripe
+            account, merchant certificate, and signed app build are eligible.
+            Credit card entry remains available through the same PaymentIntent.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Environment and webhook configuration
+          </h3>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {COACH_SERVICE_ENVIRONMENT_KEYS.map((key) => (
+              <code
+                key={key}
+                className="rounded-lg border border-zinc-700 bg-black/30 px-2.5 py-1.5 text-[11px] text-cyan-300"
+              >
+                {key}
+              </code>
+            ))}
+          </div>
+          <div className="mt-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Stripe webhook events
+            </p>
+            <div className="mt-2 space-y-2">
+              {[
+                "payment_intent.succeeded",
+                "payment_intent.payment_failed",
+                "charge.refunded",
+              ].map((eventName) => (
+                <div
+                  key={eventName}
+                  className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2 font-mono text-xs text-violet-300"
+                >
+                  {eventName}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Failure and recovery behavior
+          </h3>
+          <ul className="mt-4 space-y-2 text-xs leading-relaxed text-zinc-400">
+            {[
+              "PaymentSheet cancellation leaves the order unbooked and returns the athlete to checkout.",
+              "A completed PaymentSheet retries server verification against the same order rather than creating another charge.",
+              "Payment failures write failure status, code, and message through the webhook.",
+              "The webhook marks successful payments even when the app closes before confirmation.",
+              "A full refund removes the matching active booking card and excludes the transaction from earnings.",
+              "A partially refunded order is excluded from earned totals until refund accounting policy is finalized.",
+            ].map((item) => (
+              <li key={item} className="flex gap-2">
+                <Activity className="mt-0.5 h-3.5 w-3.5 flex-none text-violet-300" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h3 className="text-lg font-semibold text-white">
+            Verification evidence
+          </h3>
+          <div className="mt-4 space-y-3">
+            {[
+              ["iOS", "Simulator build succeeded with StripePaymentSheet 26.4.1."],
+              ["Web", "TypeScript typecheck passed for the coach dashboard."],
+              [
+                "Server",
+                "Focused tests cover fixed pricing, 3% routing, participant authorization, Stripe account readiness, Stripe success verification, paid-only booking, and shared booking persistence.",
+              ],
+            ].map(([surface, result]) => (
+              <div
+                key={surface}
+                className="rounded-xl border border-zinc-800 bg-black/20 p-4"
+              >
+                <p className="text-xs font-semibold text-emerald-300">
+                  {surface}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  {result}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+        <h3 className="text-lg font-semibold text-white">Code ownership map</h3>
+        <div className="mt-4 grid gap-2 lg:grid-cols-2">
+          {[
+            [
+              "iOS checkout client",
+              "PulseCheck/Services/CoachServicePaymentService.swift",
+            ],
+            ["iOS conversation UI", "PulseCheck/Views/NoraInboxView.swift"],
+            [
+              "iOS shared booking model",
+              "PulseCheck/Services/CoachAthleteMessagingService.swift",
+            ],
+            [
+              "Server service contract",
+              "netlify/functions/lib/pulsecheck-coach-services.js",
+            ],
+            [
+              "Stripe webhook reconciliation",
+              "netlify/functions/stripe-webhook.js",
+            ],
+            [
+              "Coach earnings API",
+              "netlify/functions/get-pulsecheck-coach-earnings.js",
+            ],
+            ["Coach earnings UI", "src/pages/coach/dashboard.tsx"],
+          ].map(([label, path]) => (
+            <div
+              key={label}
+              className="rounded-xl border border-zinc-800 bg-black/20 p-3"
+            >
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+                {label}
+              </p>
+              <code className="mt-1 block break-all text-xs text-cyan-300">
+                {path}
+              </code>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+};
+
 const SystemOverviewPage: React.FC = () => {
   const [activeSystemId, setActiveSystemId] = useState<string>(
     SYSTEM_TABS[0].id,
@@ -644,6 +1141,26 @@ const SystemOverviewPage: React.FC = () => {
               "athlete transparency",
               "rep progress",
               "progression criteria",
+            );
+            break;
+          case "pulsecheck-coach-dashboard-information-architecture":
+            searchTerms.push(
+              "Stripe",
+              "Stripe Connect",
+              "PaymentIntent",
+              "PaymentSheet",
+              "Apple Pay",
+              "coach services",
+              "one-on-one video",
+              "video posing session",
+              "service earnings",
+              "destination charge",
+              "application fee",
+              "booking",
+              "activeBooking",
+              "webhook",
+              "refund",
+              "pulsecheck-coach-service-orders",
             );
             break;
           case "ownership-release-matrix":
@@ -2107,6 +2624,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-coach-dashboard-information-architecture":
         return <PulseCheckCoachDashboardInformationArchitectureTab />;
+
+      case "pulsecheck-coach-service-payments":
+        return <CoachServicePaymentsSystemOverview />;
 
       case "pulsecheck-profile-architecture":
         return <PulseCheckProfileArchitectureTab />;

@@ -15,6 +15,12 @@ import { userService, User, UserLevel, BodyWeight } from "../api/firebase/user";
 import { auth, db } from "../api/firebase/config";
 import { useRouter } from 'next/router';
 import { firebaseStorageService, UploadImageType } from '../api/firebase/storage/service';
+import {
+  assertAccountIsCanonical,
+  linkRememberedProviderCredential,
+  rejectAccidentalNewSocialLogin,
+  rememberProviderCredentialFromError,
+} from '../api/firebase/auth/accountLinking';
 
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
@@ -585,10 +591,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
         try {
           // Sign in with popup
           const result: UserCredential = await signInWithPopup(auth, appleProvider);
+          if (!isSignUp && await rejectAccidentalNewSocialLogin(result)) {
+            setError('We could not find an existing Pulse account for that Apple sign-in. Sign in with your existing email first, then connect Apple in Settings.');
+            setShowError(true);
+            return;
+          }
           const user = result.user;
+          await linkRememberedProviderCredential(user);
           // Fetch or create user in Firestore
           let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
           if (!firestoreUser) {
+            await assertAccountIsCanonical(user);
             if (!user.email) {
               throw new Error('Apple sign-in did not return an email address.');
             }
@@ -663,7 +676,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
       } else if (provider === 'google') {
         const result = await authService.signInWithGoogle();
+        if (!isSignUp && await rejectAccidentalNewSocialLogin(result)) {
+          setError('We could not find an existing Pulse account for that Google sign-in. Create a new account, or sign in with your existing method and connect Google in Settings.');
+          setShowError(true);
+          return;
+        }
         const user = result.user;
+        await linkRememberedProviderCredential(user);
         // Strict email check
         if (!user || !user.email) {
           console.error('[SignInModal] Google sign-in completed but no email was provided. Cannot create user.');
@@ -687,6 +706,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           console.log('[SignInModal] Full Firestore user object after sign in:', JSON.parse(JSON.stringify(firestoreUser)));
         }
         if (!firestoreUser) {
+          await assertAccountIsCanonical(user);
           // Email exists, proceed with creation
           console.log('[SignInModal] Creating new Firestore user after Google Sign-In');
           firestoreUser = new User(user.uid, {
@@ -778,7 +798,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
             errorMessage = "Another sign-in attempt is already in progress";
             break;
           case 'auth/account-exists-with-different-credential':
-            errorMessage = "An account already exists with the same email address but different sign-in credentials. Please sign in using the original account method.";
+            errorMessage = rememberProviderCredentialFromError(
+              provider === 'apple' ? 'apple.com' : 'google.com',
+              error,
+            )
+              ? `Sign in with your existing method on this screen. ${provider === 'apple' ? 'Apple' : 'Google'} will be connected automatically.`
+              : "An account already exists with that email using another sign-in method.";
             break;
           case 'auth/network-request-failed':
             errorMessage = "Network error. Please check your internet connection and try again";
@@ -1346,6 +1371,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setError(null);
 
         const result = await authService.signInWithEmail(email, password);
+        await linkRememberedProviderCredential(result.user);
         const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
         userService.nonUICurrentUser = userDoc;
 

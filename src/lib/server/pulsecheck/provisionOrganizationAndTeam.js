@@ -49,10 +49,15 @@ function normalizeTeamCommercialConfig(value) {
   const candidate = value && typeof value === 'object' ? value : {};
   const commercialModel = normalizeString(candidate.commercialModel);
   const teamPlanStatus = normalizeString(candidate.teamPlanStatus);
+  const youthTrack = normalizeString(candidate.youthTrack);
+  const experienceAudience = normalizeString(candidate.experienceAudience);
 
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
+    youthTrack: youthTrack === 'pro' || youthTrack === 'rookie' ? youthTrack : 'junior',
+    experienceAudience:
+      experienceAudience === 'all-performers' ? 'all-performers' : 'athletes',
     referralKickbackEnabled: Boolean(candidate.referralKickbackEnabled),
     referralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.referralRevenueSharePct),
     revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
@@ -299,6 +304,8 @@ function buildCanaryProvisioningInput(params = {}) {
       commercialConfig: {
         commercialModel: 'athlete-pay',
         teamPlanStatus: 'inactive',
+        youthTrack: 'junior',
+        experienceAudience: 'athletes',
         referralKickbackEnabled: false,
         referralRevenueSharePct: 0,
         revenueRecipientRole: 'team-admin',

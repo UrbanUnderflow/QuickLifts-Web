@@ -8,6 +8,12 @@ import { auth } from '../../api/firebase/config';
 import authService from '../../api/firebase/auth';
 import { userService, User, SubscriptionType } from '../../api/firebase/user';
 import { useUser } from '../../hooks/useUser';
+import {
+  assertAccountIsCanonical,
+  linkRememberedProviderCredential,
+  rejectAccidentalNewSocialLogin,
+  rememberProviderCredentialFromError,
+} from '../../api/firebase/auth/accountLinking';
 
 // Coach sign-in for the PulseCheck coach dashboard. Mirrors the other auth
 // surfaces (PulseCheck/login, SignInModal): email + password, Google, Apple.
@@ -57,6 +63,7 @@ const CoachLogin: NextPage = () => {
   const ensureFirestoreUser = async (firebaseUser: any) => {
     let firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
     if (!firestoreUser) {
+      await assertAccountIsCanonical(firebaseUser);
       if (!firebaseUser.email) {
         throw new Error('Authentication did not provide an email address.');
       }
@@ -126,6 +133,7 @@ const CoachLogin: NextPage = () => {
       const normalizedEmail = email.trim().toLowerCase();
       if (emailAuthMode === 'password') {
         const result = await authService.signInWithEmail(normalizedEmail, password);
+        await linkRememberedProviderCredential(result.user);
         await ensureFirestoreUser(result.user);
         goToApp();
       } else {
@@ -180,12 +188,17 @@ const CoachLogin: NextPage = () => {
       setPending('google');
       setError(null);
       const result = await authService.signInWithGoogle();
+      if (await rejectAccidentalNewSocialLogin(result)) {
+        setError('We could not find an existing Pulse account for that Google sign-in. Create a new account, or sign in with your existing method and connect Google in Settings.');
+        return;
+      }
       const user = result.user;
       if (!user || !user.email) {
         setError('Sign-in failed: an email address is required.');
         setPending(null);
         return;
       }
+      await linkRememberedProviderCredential(user);
       await ensureFirestoreUser(user);
       goToApp();
     } catch (err: any) {
@@ -200,6 +213,13 @@ const CoachLogin: NextPage = () => {
           break;
         case 'auth/unauthorized-domain':
           setError('This domain isn’t authorized for sign-in yet. Contact support.');
+          break;
+        case 'auth/account-exists-with-different-credential':
+          if (rememberProviderCredentialFromError('google.com', err)) {
+            setError('Sign in with your existing method on this screen. Google will be connected automatically.');
+          } else {
+            setError('An account already exists with this email using another sign-in method.');
+          }
           break;
         default:
           setError(err?.message || 'Sign in failed. Please try again.');
@@ -216,12 +236,17 @@ const CoachLogin: NextPage = () => {
       appleProvider.addScope('email');
       appleProvider.addScope('name');
       const result: UserCredential = await signInWithPopup(auth, appleProvider);
+      if (await rejectAccidentalNewSocialLogin(result)) {
+        setError('We could not find an existing Pulse account for that Apple sign-in. Sign in with your existing email first, then connect Apple in Settings.');
+        return;
+      }
       const user = result.user;
       if (!user || !user.email) {
         setError('Apple sign-in did not return an email address.');
         setPending(null);
         return;
       }
+      await linkRememberedProviderCredential(user);
       await ensureFirestoreUser(user);
       goToApp();
     } catch (err: any) {
@@ -235,7 +260,11 @@ const CoachLogin: NextPage = () => {
           setError(null);
           break;
         case 'auth/account-exists-with-different-credential':
-          setError('An account already exists with this email using a different sign-in method.');
+          if (rememberProviderCredentialFromError('apple.com', err)) {
+            setError('Sign in with your existing method on this screen. Apple will be connected automatically.');
+          } else {
+            setError('An account already exists with this email using another sign-in method.');
+          }
           break;
         case 'auth/operation-not-allowed':
           setError('Apple sign-in isn’t available here. Try Google or email instead.');

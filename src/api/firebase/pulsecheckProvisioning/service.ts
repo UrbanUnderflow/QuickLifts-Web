@@ -218,6 +218,12 @@ const normalizeYouthTrack = (value: unknown): PulseCheckTeamCommercialConfig['yo
   }
   return normalized === 'pro' ? 'pro' : 'junior';
 };
+const normalizeExperienceAudience = (
+  value: unknown
+): PulseCheckTeamCommercialConfig['experienceAudience'] =>
+  normalizeString(typeof value === 'string' ? value : '') === 'all-performers'
+    ? 'all-performers'
+    : 'athletes';
 const normalizeReferralRevenueSharePct = (value: unknown) => {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) return 0;
@@ -233,6 +239,9 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
     youthTrack: normalizeYouthTrack(candidate.youthTrack ?? defaults.youthTrack),
+    experienceAudience: normalizeExperienceAudience(
+      candidate.experienceAudience ?? defaults.experienceAudience
+    ),
     referralKickbackEnabled:
       typeof candidate.referralKickbackEnabled === 'boolean'
         ? candidate.referralKickbackEnabled

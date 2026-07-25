@@ -38,6 +38,7 @@ export type PulseCheckResearchConsentStatus = 'not-required' | 'pending' | 'acce
 export type PulseCheckTeamCommercialModel = 'athlete-pay' | 'team-plan';
 export type PulseCheckTeamPlanStatus = 'inactive' | 'active';
 export type PulseCheckYouthTrack = 'pro' | 'junior' | 'rookie';
+export type PulseCheckExperienceAudience = 'athletes' | 'all-performers';
 export type PulseCheckRevenueRecipientRole = 'team-admin' | 'coach' | 'organization-owner';
 export type PulseCheckTeamMembershipRole =
   | 'team-admin'
@@ -104,6 +105,7 @@ export interface PulseCheckTeamCommercialConfig {
   commercialModel: PulseCheckTeamCommercialModel;
   teamPlanStatus: PulseCheckTeamPlanStatus;
   youthTrack: PulseCheckYouthTrack;
+  experienceAudience: PulseCheckExperienceAudience;
   referralKickbackEnabled: boolean;
   referralRevenueSharePct: number;
   revenueRecipientRole: PulseCheckRevenueRecipientRole;
@@ -125,6 +127,7 @@ export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommer
   commercialModel: 'athlete-pay',
   teamPlanStatus: 'inactive',
   youthTrack: 'junior',
+  experienceAudience: 'athletes',
   referralKickbackEnabled: false,
   referralRevenueSharePct: 0,
   revenueRecipientRole: 'team-admin',

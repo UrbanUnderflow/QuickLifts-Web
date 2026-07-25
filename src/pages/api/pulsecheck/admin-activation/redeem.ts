@@ -61,11 +61,16 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
   const commercialModel = normalizeString(candidate.commercialModel ?? defaults.commercialModel);
   const teamPlanStatus = normalizeString(candidate.teamPlanStatus ?? defaults.teamPlanStatus);
   const youthTrack = normalizeString(candidate.youthTrack ?? defaults.youthTrack);
+  const experienceAudience = normalizeString(
+    candidate.experienceAudience ?? defaults.experienceAudience
+  );
 
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
     youthTrack: youthTrack === 'pro' || youthTrack === 'rookie' ? youthTrack : 'junior',
+    experienceAudience:
+      experienceAudience === 'all-performers' ? 'all-performers' : 'athletes',
     referralKickbackEnabled:
       typeof candidate.referralKickbackEnabled === 'boolean'
         ? candidate.referralKickbackEnabled

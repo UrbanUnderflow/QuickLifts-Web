@@ -23,6 +23,11 @@ const {
   subscriptionPaymentStatus,
   coachingCheckoutResult,
 } = require('./lib/coaching');
+const {
+  markOrderPaid,
+  normalizeString: normalizeCoachServiceString,
+  orderRef: coachServiceOrderRef,
+} = require('./lib/pulsecheck-coach-services');
 
 // Subscription type mappings
 const SubscriptionType = {
@@ -183,6 +188,23 @@ exports.handler = async (event) => {
       case 'account.updated':
         await handleAccountUpdated(stripeEvent.data.object);
         break;
+      case 'payment_intent.succeeded':
+        await markOrderPaid({
+          paymentIntent: stripeEvent.data.object,
+          source: 'stripe-webhook',
+        });
+        break;
+      case 'payment_intent.payment_failed':
+        await handleCoachServicePaymentFailure(stripeEvent.data.object);
+        break;
+      case 'charge.refunded':
+        await handleCoachServiceRefund(
+          stripeEvent.data.object,
+          stripeEvent.livemode
+            ? stripe
+            : require('stripe')(process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY)
+        );
+        break;
       // Handle other event types as needed
       default:
         console.log(`Unhandled event type: ${stripeEvent.type}`);
@@ -200,6 +222,70 @@ exports.handler = async (event) => {
     };
   }
 };
+
+async function handleCoachServicePaymentFailure(paymentIntent) {
+  const metadata = paymentIntent?.metadata || {};
+  if (normalizeCoachServiceString(metadata.payment_type) !== 'pulsecheck_coach_service') return;
+  const orderId = normalizeCoachServiceString(metadata.order_id);
+  if (!orderId) return;
+
+  await coachServiceOrderRef(orderId).set({
+    status: 'payment_failed',
+    paymentStatus: normalizeCoachServiceString(paymentIntent.status),
+    failureCode: normalizeCoachServiceString(paymentIntent.last_payment_error?.code),
+    failureMessage: normalizeCoachServiceString(paymentIntent.last_payment_error?.message),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function handleCoachServiceRefund(charge, stripeClient = stripe) {
+  const paymentIntentId =
+    typeof charge?.payment_intent === 'string'
+      ? charge.payment_intent
+      : normalizeCoachServiceString(charge?.payment_intent?.id);
+  if (!paymentIntentId) return;
+
+  const paymentIntent = await stripeClient.paymentIntents.retrieve(paymentIntentId);
+  const metadata = paymentIntent?.metadata || {};
+  if (normalizeCoachServiceString(metadata.payment_type) !== 'pulsecheck_coach_service') return;
+  const orderId = normalizeCoachServiceString(metadata.order_id);
+  if (!orderId) return;
+
+  const serviceOrderRef = coachServiceOrderRef(orderId);
+  await db.runTransaction(async (transaction) => {
+    const orderSnap = await transaction.get(serviceOrderRef);
+    if (!orderSnap.exists) return;
+    const order = orderSnap.data() || {};
+    const conversationId = normalizeCoachServiceString(order.conversationId);
+    const conversationRef = conversationId
+      ? db.collection('coach-athlete-conversations').doc(conversationId)
+      : null;
+    const conversationSnap = conversationRef
+      ? await transaction.get(conversationRef)
+      : null;
+
+    transaction.set(serviceOrderRef, {
+      status: charge.refunded ? 'refunded' : 'partially_refunded',
+      amountRefundedCents: Number(charge.amount_refunded) || 0,
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    if (
+      charge.refunded
+      && conversationRef
+      && conversationSnap?.exists
+      && normalizeCoachServiceString(conversationSnap.data()?.activeBooking?.orderId) === orderId
+    ) {
+      transaction.update(conversationRef, {
+        activeBooking: admin.firestore.FieldValue.delete(),
+        lastMessage: `${normalizeCoachServiceString(order.serviceTitle) || 'Coach service'} refunded`,
+        lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+}
 
 // Handle subscription created event
 async function handleSubscriptionCreated(subscription) {

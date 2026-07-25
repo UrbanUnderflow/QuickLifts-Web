@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { browserPopupRedirectResolver, createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, signInWithPopup } from 'firebase/auth';
+import { browserPopupRedirectResolver, createUserWithEmailAndPassword, deleteUser, getAdditionalUserInfo, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
@@ -217,6 +217,25 @@ const SignUpPage: React.FC = () => {
       const result = await signInWithPopup(auth, authProvider, browserPopupRedirectResolver);
       const firebaseUser = result.user;
       const email = firebaseUser.email || '';
+
+      if (getAdditionalUserInfo(result)?.isNewUser) {
+        const confirmedFirstAccount = window.confirm(
+          'Is this your first Pulse account?\n\nChoose Cancel if you already use Pulse with email, Apple, or Google. Sign in to that account first, then connect this method in Settings so your teams and subscription stay together.',
+        );
+        if (!confirmedFirstAccount) {
+          await deleteUser(firebaseUser);
+          await signOut(auth).catch(() => undefined);
+          setError(
+            isCoachSignUp
+              ? 'Your new duplicate was removed. Sign in to your existing account, then connect this sign-in method in Settings.'
+              : 'Your new duplicate was removed. Sign in to your existing account, then connect this sign-in method in Settings.',
+          );
+          if (isCoachSignUp) {
+            void router.push('/coach/login');
+          }
+          return;
+        }
+      }
 
       if (!email) {
         setError('That account did not share an email address. Try signing up with email instead.');

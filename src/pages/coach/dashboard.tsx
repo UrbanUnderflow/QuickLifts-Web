@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
+import AccountSignInMethods from '../../components/auth/AccountSignInMethods';
 import AthleteReadinessCard from '../../components/AthleteReadinessCard';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { getCategoryLabel, EscalationCategory } from '../../api/firebase/escalation/types';
@@ -516,6 +517,7 @@ type ViewKey =
   | 'alerts'
   | 'inbox'
   | 'roster'
+  | 'referrals'
   | 'staff'
   | 'nora'
   | 'schedule'
@@ -528,6 +530,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'alerts', label: 'Athlete Alerts', icon: Flame },
   { key: 'inbox', label: 'Inbox', icon: Inbox },
   { key: 'roster', label: 'Team Roster', icon: Users },
+  { key: 'referrals', label: 'Referral Links', icon: Link2 },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'nora', label: 'Train Nora', icon: Brain },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
@@ -658,6 +661,8 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         case 'inbox':
         case 'reports':
           return can('coaching');
+        case 'referrals':
+          return can('coaching') || can('administrative');
         case 'alerts':
           return can('coaching') || can('athletic_trainer');
         case 'staff':
@@ -679,6 +684,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   );
 
   const navItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
+  const canManageAthleteInvites = can('admin') || can('coaching') || can('administrative');
 
   // If the active tab becomes disallowed (capabilities narrowed after load), land
   // the coach on the first tab they can actually see.
@@ -878,7 +884,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         coachId={coachId}
                         coachName={coachName}
                         coachEmail={coachEmail}
-                        canInvite={can('admin') || can('coaching') || can('administrative')}
+                        canInvite={canManageAthleteInvites}
                         canRevoke={can('admin')}
                       />
                       <RosterSection
@@ -887,6 +893,16 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         onSelectAthlete={setSelectedAthleteId}
                       />
                     </div>
+                  )}
+                  {view === 'referrals' && (
+                    <ReferralLinksSection
+                      isDemo={isDemo}
+                      coachId={coachId}
+                      coachName={coachName}
+                      coachEmail={coachEmail}
+                      canInvite={canManageAthleteInvites}
+                      canRevoke={can('admin')}
+                    />
                   )}
                   {view === 'staff' && (
                     <StaffSection
@@ -1054,15 +1070,14 @@ const CoachDashboard: React.FC = () => {
     };
   }, [currentUser?.id, trainingMode]);
 
-  // Earnings tab is visible when one of this coach's teams has referral
-  // kickback enabled and the coach owns that team's revenue share. Legacy coach
-  // roster teams predate the explicit recipient field, so their legacy coach is
-  // the safe fallback until the admin saves an explicit recipient.
+  // Earnings is available for Stripe-connected service sellers and for coaches
+  // who receive a team's subscription revenue share.
   useEffect(() => {
     if (trainingMode !== false) return;
     let cancelled = false;
     const loadEarnings = async () => {
       if (!currentUser?.id) return;
+      const hasServicePayouts = Boolean(currentUser.creator?.stripeAccountId);
       try {
         const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
         for (const membership of memberships) {
@@ -1085,17 +1100,17 @@ const CoachDashboard: React.FC = () => {
             return;
           }
         }
-        if (!cancelled) setEarnings({ enabled: false, sharePct: 0 });
+        if (!cancelled) setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
       } catch (err) {
         console.error('[CoachDashboard] failed to resolve earnings eligibility', err);
-        if (!cancelled) setEarnings({ enabled: false, sharePct: 0 });
+        if (!cancelled) setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
       }
     };
     loadEarnings();
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, trainingMode]);
+  }, [currentUser?.id, currentUser?.creator?.stripeAccountId, trainingMode]);
 
   // Resolve the coach's own capabilities from their team membership. Prefer the
   // persisted staffCapabilities; fall back to the legacy role mapping; if nothing
@@ -3898,6 +3913,53 @@ const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
   },
 ];
 
+const ReferralLinksSection: React.FC<{
+  isDemo?: boolean;
+  coachId?: string;
+  coachName?: string;
+  coachEmail?: string;
+  canInvite?: boolean;
+  canRevoke?: boolean;
+}> = ({ isDemo, coachId, coachName, coachEmail, canInvite = false, canRevoke = false }) => (
+  <div className="space-y-5">
+    <div className="rounded-2xl border border-[#E0FE10]/20 bg-gradient-to-br from-[#E0FE10]/8 to-green-500/5 p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-[#E0FE10]/15">
+          <Link2 className="h-4 w-4 text-[#E0FE10]" />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-white">Referral Links</div>
+          <div className="mt-1 text-sm leading-relaxed text-zinc-400">
+            Share invite links that attach new people to your PulseCheck team and keep attribution tied to the right coach.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white">Athlete team invite</div>
+          <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+            Athletes who use this link join the platform under your team and appear in Team Roster.
+          </div>
+        </div>
+        <span className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-green-400">
+          Active
+        </span>
+      </div>
+      <AthleteInviteSection
+        isDemo={isDemo}
+        coachId={coachId}
+        coachName={coachName}
+        coachEmail={coachEmail}
+        canInvite={canInvite}
+        canRevoke={canRevoke}
+      />
+    </div>
+  </div>
+);
+
 const AthleteInviteSection: React.FC<{
   isDemo?: boolean;
   coachId?: string;
@@ -5571,6 +5633,19 @@ type MemberSubscriptionEarning = {
   }>;
 };
 
+type CoachServiceEarning = {
+  id: string;
+  athleteName: string;
+  serviceTitle: string;
+  status: string;
+  amount: number;
+  platformFee: number;
+  coachNet: number;
+  currency: string;
+  paidAt: Date | null;
+  scheduledAt: Date | null;
+};
+
 const coachEarningsFunctionUrl = () => {
   const configuredBaseUrl = (
     process.env.NEXT_PUBLIC_FUNCTION_BASE_URL
@@ -5594,12 +5669,18 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(!isDemo);
   const [subscriptionsError, setSubscriptionsError] = useState('');
   const [liveShare, setLiveShare] = useState(revenueSharePct);
+  const [serviceEarnings, setServiceEarnings] = useState<CoachServiceEarning[]>([]);
+  const [serviceCurrentMonthNet, setServiceCurrentMonthNet] = useState(0);
+  const [serviceLifetimeNet, setServiceLifetimeNet] = useState(0);
 
   useEffect(() => {
     if (isDemo) {
       setSubscriptionsLoading(false);
       setSubscriptionsError('');
       setMemberSubscriptions([]);
+      setServiceEarnings([]);
+      setServiceCurrentMonthNet(0);
+      setServiceLifetimeNet(0);
       return;
     }
 
@@ -5624,6 +5705,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
         }
 
         const earnings = payload.earnings || {};
+        const serviceSummary = earnings.serviceEarnings || {};
         const rows: MemberSubscriptionEarning[] = (Array.isArray(earnings.members) ? earnings.members : [])
           .map((member: any) => ({
             id: String(member.userId || ''),
@@ -5651,6 +5733,20 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
               amountAvailable: payment.amountAvailable !== false,
             })),
           }));
+        const serviceRows: CoachServiceEarning[] = (
+          Array.isArray(serviceSummary.transactions) ? serviceSummary.transactions : []
+        ).map((transaction: any) => ({
+          id: String(transaction.orderId || transaction.id || ''),
+          athleteName: String(transaction.athleteName || 'Athlete'),
+          serviceTitle: String(transaction.serviceTitle || 'Coach service'),
+          status: String(transaction.status || 'paid'),
+          amount: (Number(transaction.amountCents) || 0) / 100,
+          platformFee: (Number(transaction.platformFeeCents) || 0) / 100,
+          coachNet: (Number(transaction.coachNetCents) || 0) / 100,
+          currency: String(transaction.currency || 'usd').toUpperCase(),
+          paidAt: transaction.paidAt ? new Date(transaction.paidAt) : null,
+          scheduledAt: transaction.scheduledAt ? new Date(transaction.scheduledAt) : null,
+        }));
 
         rows.sort((left, right) =>
           Number(right.isActive) - Number(left.isActive)
@@ -5659,11 +5755,17 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
         if (!cancelled) {
           setMemberSubscriptions(rows);
           setLiveShare(Number(earnings.sharePct) || revenueSharePct);
+          setServiceEarnings(serviceRows);
+          setServiceCurrentMonthNet((Number(serviceSummary.currentMonthNetCents) || 0) / 100);
+          setServiceLifetimeNet((Number(serviceSummary.lifetimeNetCents) || 0) / 100);
         }
       } catch (error) {
         console.error('[CoachDashboard] failed to load member subscriptions', error);
         if (!cancelled) {
           setMemberSubscriptions([]);
+          setServiceEarnings([]);
+          setServiceCurrentMonthNet(0);
+          setServiceLifetimeNet(0);
           setSubscriptionsError(
             error instanceof Error
               ? error.message
@@ -5722,13 +5824,18 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           </div>
           <div>
             <div className="text-sm font-bold text-white">Earnings</div>
-            <div className="text-xs text-zinc-500">Your referral kickback from athlete-paid conversions</div>
+            <div className="text-xs text-zinc-500">Subscription shares and additional services in one place</div>
           </div>
         </div>
         <p className="text-sm text-zinc-300 leading-relaxed">
-          When an athlete you invited subscribes to a paid plan,{' '}
-          <span className="text-[#E0FE10] font-medium">{effectiveShare}%</span> of their subscription routes back to you.
-          Earnings update as athletes convert and renew.
+          Service purchases route to your connected Stripe account.{' '}
+          {effectiveShare > 0 && (
+            <>
+              When an athlete you invited subscribes to a paid plan,{' '}
+              <span className="text-[#E0FE10] font-medium">{effectiveShare}%</span> of their subscription routes back to you.{' '}
+            </>
+          )}
+          Your earning streams update here.
         </p>
       </div>
 
@@ -5741,6 +5848,84 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           value={isDemo ? `${effectiveShare}%` : activeSubscriberCount}
         />
       </div>
+
+      {!isDemo && (
+        <div>
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+                Additional service earnings
+              </div>
+              <div className="mt-1 text-xs text-zinc-500">
+                One-time purchases paid through your connected Stripe account
+              </div>
+            </div>
+            <div className="flex gap-2 text-xs">
+              <div className="rounded-lg border border-white/5 bg-zinc-900/50 px-3 py-2 text-zinc-400">
+                This month <span className="ml-1 font-bold text-white">{fmt(serviceCurrentMonthNet)}</span>
+              </div>
+              <div className="rounded-lg border border-[#E0FE10]/15 bg-[#E0FE10]/5 px-3 py-2 text-zinc-400">
+                All time <span className="ml-1 font-bold text-[#E0FE10]">{fmt(serviceLifetimeNet)}</span>
+              </div>
+            </div>
+          </div>
+
+          {subscriptionsLoading ? (
+            <LoadingBlock label="Loading service earnings..." />
+          ) : serviceEarnings.length === 0 ? (
+            <EmptyBlock
+              icon={CalendarDays}
+              title="No service purchases yet"
+              body="One-on-one video and video posing purchases will appear here after Stripe confirms payment."
+            />
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-zinc-700/30 bg-zinc-800/40">
+              <div className="divide-y divide-zinc-700/30">
+                {serviceEarnings.map((earning) => (
+                  <div
+                    key={earning.id}
+                    className="grid gap-3 p-3 sm:grid-cols-[1fr_auto] sm:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="truncate text-sm font-medium text-white">{earning.serviceTitle}</div>
+                        <span className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-300">
+                          {earning.status === 'booked' ? 'Booked' : 'Paid'}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-500">
+                        {earning.athleteName}
+                        {earning.scheduledAt
+                          ? ` · ${earning.scheduledAt.toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            })} at ${earning.scheduledAt.toLocaleTimeString('en-US', {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}`
+                          : earning.paidAt
+                            ? ` · paid ${earning.paidAt.toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}`
+                            : ''}
+                      </div>
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <div className="text-sm font-bold text-[#E0FE10]">+{fmt(earning.coachNet)}</div>
+                      <div className="text-[10px] text-zinc-500">
+                        {fmt(earning.amount)} {earning.currency} sale · {fmt(earning.platformFee)} platform fee
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
@@ -5995,6 +6180,7 @@ const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coac
         <div className="bg-zinc-800/60 rounded-lg px-3 py-2 text-sm break-all">{email || '—'}</div>
       </div>
     </div>
+    <AccountSignInMethods compact />
     <LocalFirebaseEnvironmentPanel />
   </div>
 );

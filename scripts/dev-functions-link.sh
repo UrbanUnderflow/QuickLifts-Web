@@ -28,6 +28,7 @@ CORE_FUNCTIONS=(
   check-env
   get-user-by-id
   delete-user
+  merge-accounts
   reset-onboarding
 
   # Payments & Checkout (if testing payment flows)
@@ -121,7 +122,7 @@ for fn in "${CORE_FUNCTIONS[@]}"; do
 done
 
 # Also link shared assets/config directories
-for shared in "assets" "config" "shared" "utils"; do
+for shared in "assets" "config" "lib" "shared" "utils"; do
   if [ -d "$SRC_DIR/$shared" ]; then
     ln -s "$(cd "$SRC_DIR/$shared" && pwd)" "$DEV_DIR/$shared"
     echo "  📁 Linked shared directory: $shared"

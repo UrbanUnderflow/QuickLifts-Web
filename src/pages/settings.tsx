@@ -2,6 +2,7 @@ import React from 'react';
 import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
 import { useUser } from '../hooks/useUser';
+import AccountSignInMethods from '../components/auth/AccountSignInMethods';
 
 interface SettingRowProps {
   title: string;
@@ -119,6 +120,8 @@ const SettingsPage: NextPage = () => {
             subtitle={email}
           />
 
+          <AccountSignInMethods />
+
           {/* Coach-led organization setup */}
           <SettingRow
             title="Coach-Led Organization Setup"
@@ -193,6 +196,5 @@ const SettingsPage: NextPage = () => {
 };
 
 export default SettingsPage;
-
 
 
