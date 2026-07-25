@@ -26,8 +26,8 @@ test('coach dashboard resolves legacy revenue recipients and securely loads live
   );
   assert.match(
     dashboardSource,
-    /Paid invoice history/,
-    'the live earnings tab should identify the member subscription list'
+    /Transaction history/,
+    'the live earnings tab should identify the complete member transaction list'
   );
   assert.match(
     dashboardSource,

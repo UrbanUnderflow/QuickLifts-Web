@@ -13,7 +13,14 @@ const snapshot = (id, value) => ({
   data: () => value,
 });
 
-const createDb = () => {
+const createDb = ({
+  sharePct = 20,
+  platform = 'Web',
+  subscriptionType = 'Monthly Subscriber',
+  stripeSubscriptionId = 'sub_athlete_1',
+  rcAppUserId = null,
+  planType = 'pulsecheck-monthly',
+} = {}) => {
   const memberships = [
     {
       id: 'staff-1',
@@ -36,7 +43,7 @@ const createDb = () => {
       legacyCoachId: 'coach-calvin',
       commercialConfig: {
         referralKickbackEnabled: true,
-        referralRevenueSharePct: 20,
+        referralRevenueSharePct: sharePct,
         revenueRecipientRole: 'coach',
         revenueRecipientUserId: '',
       },
@@ -44,14 +51,15 @@ const createDb = () => {
     'users/athlete-1': {
       displayName: 'Subscribed Athlete',
       email: 'athlete@example.com',
-      subscriptionType: 'Monthly Subscriber',
-      stripeSubscriptionId: 'sub_athlete_1',
+      subscriptionType,
+      stripeSubscriptionId,
     },
     'subscriptions/athlete-1': {
       userId: 'athlete-1',
-      platform: 'Web',
-      stripeSubscriptionId: 'sub_athlete_1',
-      plans: [{ type: 'pulsecheck-monthly', expiration: 2_000_000_000 }],
+      platform,
+      stripeSubscriptionId,
+      rcAppUserId,
+      plans: [{ type: planType, expiration: 2_000_000_000 }],
     },
   };
 
@@ -81,7 +89,7 @@ const createDb = () => {
   };
 };
 
-const loadHandler = () => {
+const loadHandler = ({ db = createDb() } = {}) => {
   delete require.cache[functionPath];
   delete require.cache[configPath];
 
@@ -98,7 +106,7 @@ const loadHandler = () => {
           },
         }),
       },
-      db: createDb(),
+      db,
       headers: {
         'Access-Control-Allow-Origin': '*',
       },
@@ -216,4 +224,96 @@ test('coach earnings requires a signed-in Firebase user', async () => {
   const handler = loadHandler();
   const response = await handler({ httpMethod: 'GET', headers: {} });
   assert.equal(response.statusCode, 401);
+});
+
+test('Apple subscribers use recorded RevenueCat revenue and return every renewal', async () => {
+  const previousApiKey = process.env.REVENUECAT_API_KEY_PULSECHECK;
+  const previousProjectId = process.env.REVENUECAT_PROJECT_ID_PULSECHECK;
+  const originalFetch = global.fetch;
+  process.env.REVENUECAT_API_KEY_PULSECHECK = 'rc-secret';
+  process.env.REVENUECAT_PROJECT_ID_PULSECHECK = 'rc-project';
+
+  const jsonResponse = (body) => ({
+    ok: true,
+    status: 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  });
+
+  global.fetch = async (url, options) => {
+    assert.equal(options.headers.Authorization, 'Bearer rc-secret');
+    if (url.includes('/customers/revenuecat-athlete/subscriptions')) {
+      return jsonResponse({
+        items: [{
+          id: 'rc-subscription-1',
+          customer_id: 'revenuecat-athlete',
+          product_id: 'product-monthly',
+          gives_access: true,
+          status: 'active',
+          current_period_ends_at: 2_000_000_000_000,
+          total_revenue_in_usd: {
+            currency: 'USD',
+            gross: 74.97,
+          },
+        }],
+      });
+    }
+    if (url.includes('/subscriptions/rc-subscription-1/transactions')) {
+      return jsonResponse({
+        items: [
+          {
+            id: 'apple-january',
+            purchased_at: 1_767_225_600_000,
+            product_store_identifier: 'pc_1m',
+          },
+          {
+            id: 'apple-february',
+            purchased_at: 1_769_904_000_000,
+            product_store_identifier: 'pc_1m',
+          },
+          {
+            id: 'apple-march',
+            purchased_at: 1_772_323_200_000,
+            product_store_identifier: 'pc_1m',
+          },
+        ],
+      });
+    }
+    throw new Error(`Unexpected RevenueCat URL: ${url}`);
+  };
+
+  try {
+    const handler = loadHandler({
+      db: createDb({
+        sharePct: 35,
+        platform: 'ios',
+        stripeSubscriptionId: null,
+        rcAppUserId: 'revenuecat-athlete',
+      }),
+    });
+    const response = await handler({
+      httpMethod: 'GET',
+      headers: { authorization: 'Bearer coach-token' },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const payload = JSON.parse(response.body);
+    const member = payload.earnings.members[0];
+    assert.equal(member.plan, 'PulseCheck Monthly');
+    assert.equal(member.subscriptionAmountCents, 2499);
+    assert.equal(member.estimatedMonthlyShareCents, 875);
+    assert.equal(member.payments.length, 3);
+    assert.equal(member.lifetimePaidCents, 7497);
+    assert.equal(member.lifetimeShareCents, 2625);
+    assert.deepEqual(
+      member.payments.map((payment) => payment.amountPaidCents),
+      [2499, 2499, 2499]
+    );
+  } finally {
+    global.fetch = originalFetch;
+    if (previousApiKey == null) delete process.env.REVENUECAT_API_KEY_PULSECHECK;
+    else process.env.REVENUECAT_API_KEY_PULSECHECK = previousApiKey;
+    if (previousProjectId == null) delete process.env.REVENUECAT_PROJECT_ID_PULSECHECK;
+    else process.env.REVENUECAT_PROJECT_ID_PULSECHECK = previousProjectId;
+  }
 });

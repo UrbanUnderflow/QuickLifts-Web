@@ -32,16 +32,16 @@ const planSnapshot = (rawPlanType) => {
     return {
       label: 'PulseCheck Annual',
       billingInterval: 'year',
-      subscriptionAmountCents: 11900,
-      monthlyRevenueCents: Math.round(11900 / 12),
+      subscriptionAmountCents: 0,
+      monthlyRevenueCents: 0,
     };
   }
   if (planType.includes('monthly') || planType.includes('month') || planType.includes('pc_1m')) {
     return {
       label: 'PulseCheck Monthly',
       billingInterval: 'month',
-      subscriptionAmountCents: 1299,
-      monthlyRevenueCents: 1299,
+      subscriptionAmountCents: 0,
+      monthlyRevenueCents: 0,
     };
   }
   if (planType.includes('team plan')) {
@@ -167,6 +167,184 @@ const loadAllPaidInvoices = async (subscriptionId) => {
   });
 };
 
+const revenueCatConfigs = () => {
+  const configs = [
+    {
+      apiKey: process.env.REVENUECAT_API_KEY_PULSECHECK,
+      projectId: process.env.REVENUECAT_PROJECT_ID_PULSECHECK || process.env.REVENUECAT_PROJECT_ID,
+    },
+    {
+      apiKey: process.env.REVENUECAT_API_KEY,
+      projectId: process.env.REVENUECAT_PROJECT_ID,
+    },
+  ];
+
+  return configs
+    .map((config) => ({
+      apiKey: normalizeString(config.apiKey),
+      projectId: normalizeString(config.projectId),
+    }))
+    .filter(
+      (config, index, all) =>
+        config.apiKey
+        && config.projectId
+        && all.findIndex(
+          (candidate) =>
+            candidate.apiKey === config.apiKey && candidate.projectId === config.projectId
+        ) === index
+    );
+};
+
+const fetchRevenueCatJson = async ({ apiKey, url }) => {
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: 'application/json',
+    },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`RevenueCat request failed (${response.status}): ${body.slice(0, 300)}`);
+  }
+  return response.json();
+};
+
+const loadRevenueCatPages = async ({ apiKey, firstUrl }) => {
+  const items = [];
+  let nextUrl = firstUrl;
+  while (nextUrl) {
+    const page = await fetchRevenueCatJson({ apiKey, url: nextUrl });
+    if (!page) return null;
+    items.push(...(Array.isArray(page.items) ? page.items : []));
+    nextUrl = page.next_page
+      ? new URL(page.next_page, 'https://api.revenuecat.com').toString()
+      : '';
+  }
+  return items;
+};
+
+const loadRevenueCatPaymentHistory = async ({ customerIds, sharePct }) => {
+  const configs = revenueCatConfigs();
+  if (configs.length === 0) {
+    throw new Error('RevenueCat transaction history is not configured.');
+  }
+
+  let lastError;
+  for (const config of configs) {
+    for (const customerId of customerIds.map(normalizeString).filter(Boolean)) {
+      try {
+        const encodedProjectId = encodeURIComponent(config.projectId);
+        const encodedCustomerId = encodeURIComponent(customerId);
+        const subscriptions = await loadRevenueCatPages({
+          apiKey: config.apiKey,
+          firstUrl:
+            `https://api.revenuecat.com/v2/projects/${encodedProjectId}`
+            + `/customers/${encodedCustomerId}/subscriptions?environment=production&limit=100`,
+        });
+        if (!subscriptions?.length) continue;
+
+        const transactionGroups = await Promise.all(
+          subscriptions.map(async (subscription) => {
+            const subscriptionId = normalizeString(subscription.id);
+            if (!subscriptionId) return { subscription, transactions: [] };
+            const transactions = await loadRevenueCatPages({
+              apiKey: config.apiKey,
+              firstUrl:
+                `https://api.revenuecat.com/v2/projects/${encodedProjectId}`
+                + `/subscriptions/${encodeURIComponent(subscriptionId)}/transactions`,
+            });
+            return { subscription, transactions: transactions || [] };
+          })
+        );
+
+        const payments = [];
+        for (const { subscription, transactions } of transactionGroups) {
+          const productIdentifier =
+            normalizeString(subscription.product?.store_identifier)
+            || normalizeString(subscription.product_store_identifier)
+            || normalizeString(transactions[0]?.product_store_identifier);
+          const grossRevenueUsd = Number(subscription.total_revenue_in_usd?.gross);
+          const averagePaidCents =
+            Number.isFinite(grossRevenueUsd)
+            && grossRevenueUsd > 0
+            && transactions.length > 0
+              ? Math.round((grossRevenueUsd * 100) / transactions.length)
+              : 0;
+
+          transactions.forEach((transaction, index) => {
+            const transactionProductId =
+              normalizeString(transaction.product_store_identifier) || productIdentifier;
+            const transactionPlan = planSnapshot(transactionProductId);
+            const amountPaidCents =
+              averagePaidCents > 0
+                ? averagePaidCents
+                : 0;
+
+            const purchasedAtMs = Number(transaction.purchased_at) || 0;
+            payments.push({
+              id:
+                normalizeString(transaction.id)
+                || `${normalizeString(subscription.id)}_${purchasedAtMs || index}`,
+              paidAt: purchasedAtMs ? new Date(purchasedAtMs).toISOString() : null,
+              amountPaidCents,
+              coachShareCents: calculateShareCents(amountPaidCents, sharePct),
+              amountAvailable: amountPaidCents > 0,
+              currency: normalizeStatus(subscription.total_revenue_in_usd?.currency) || 'usd',
+              billingReason: index === 0 ? 'subscription_create' : 'subscription_cycle',
+              billingInterval: transactionPlan.billingInterval,
+              planLabel: transactionPlan.label,
+              source: 'revenuecat',
+            });
+          });
+        }
+
+        const activeSubscription =
+          subscriptions.find(
+            (subscription) =>
+              subscription.gives_access === true
+              || isActiveStatus(subscription.status)
+          )
+          || subscriptions
+            .slice()
+            .sort(
+              (left, right) =>
+                Number(right.current_period_ends_at || right.ends_at || 0)
+                - Number(left.current_period_ends_at || left.ends_at || 0)
+            )[0];
+        const sortedPayments = payments
+          .sort((left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || '')));
+        const latestPayment = sortedPayments[0] || null;
+        const activeProductIdentifier =
+          normalizeString(activeSubscription?.product?.store_identifier)
+          || normalizeString(activeSubscription?.product_store_identifier)
+          || normalizeString(latestPayment?.planLabel);
+        const activePlan = planSnapshot(activeProductIdentifier);
+        const currentAmountCents =
+          Number(latestPayment?.amountPaidCents)
+          || activePlan.subscriptionAmountCents;
+
+        return {
+          activeSubscription,
+          plan: {
+            ...activePlan,
+            subscriptionAmountCents: currentAmountCents,
+            monthlyRevenueCents:
+              activePlan.billingInterval === 'year'
+                ? Math.round(currentAmountCents / 12)
+                : currentAmountCents,
+          },
+          payments: sortedPayments,
+        };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+  }
+
+  throw lastError || new Error('RevenueCat transaction history could not be loaded.');
+};
+
 const invoiceRows = ({ invoices, sharePct }) =>
   invoices
     .filter((invoice) => normalizeStatus(invoice.status) === 'paid' && Number(invoice.amount_paid) > 0)
@@ -180,6 +358,7 @@ const invoiceRows = ({ invoices, sharePct }) =>
         paidAt: paidAtSeconds ? new Date(paidAtSeconds * 1000).toISOString() : null,
         amountPaidCents,
         coachShareCents: calculateShareCents(amountPaidCents, sharePct),
+        amountAvailable: true,
         currency: normalizeStatus(invoice.currency) || 'usd',
         billingReason: normalizeString(invoice.billing_reason) || null,
         billingInterval: normalizeString(line.price?.recurring?.interval) || null,
@@ -212,13 +391,35 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
   const stripeSubscriptionId = normalizeString(
     subscriptionRecord.stripeSubscriptionId || user.stripeSubscriptionId
   );
+  const platform = normalizeStatus(subscriptionRecord.platform || user.subscriptionPlatform);
+  const isAppleSubscription = platform === 'ios' || platform === 'apple';
 
   let stripeSubscription = null;
   let paidInvoices = [];
-  let invoiceHistoryAvailable = Boolean(stripeSubscriptionId);
+  let revenueCatHistory = null;
+  let invoiceHistoryAvailable = Boolean(stripeSubscriptionId || isAppleSubscription);
   let invoiceHistoryMessage = '';
 
-  if (stripeSubscriptionId) {
+  if (isAppleSubscription) {
+    const revenueCatCustomerIds = [
+      subscriptionRecord.rcAppUserId,
+      ...(Array.isArray(subscriptionRecord.rcAliases) ? subscriptionRecord.rcAliases : []),
+      user.revenuecat?.appUserId,
+      ...(Array.isArray(user.revenuecat?.aliases) ? user.revenuecat.aliases : []),
+      athleteUserId,
+      user.username,
+      user.email,
+    ];
+    try {
+      revenueCatHistory = await loadRevenueCatPaymentHistory({
+        customerIds: [...new Set(revenueCatCustomerIds.map(normalizeString).filter(Boolean))],
+        sharePct,
+      });
+    } catch (error) {
+      invoiceHistoryAvailable = false;
+      invoiceHistoryMessage = 'Apple transaction history is temporarily unavailable.';
+    }
+  } else if (stripeSubscriptionId) {
     const [subscriptionResult, invoiceResult] = await Promise.allSettled([
       loadStripeSubscription(stripeSubscriptionId),
       loadAllPaidInvoices(stripeSubscriptionId),
@@ -234,42 +435,44 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
     }
   } else {
     invoiceHistoryAvailable = false;
-    invoiceHistoryMessage =
-      normalizeStatus(subscriptionRecord.platform || user.subscriptionPlatform) === 'ios'
-        ? 'Apple payment history is not available in this dashboard yet.'
-        : 'Stripe payment history has not been linked to this member.';
+    invoiceHistoryMessage = 'Stripe payment history has not been linked to this member.';
   }
 
   const stripePrice = stripeSubscription?.items?.data?.[0]?.price || {};
   const stripePlan = stripePrice.id || stripePrice.recurring?.interval
     ? planSnapshot(stripePrice.recurring?.interval)
     : null;
-  const resolvedPlan = stripePlan || fallbackPlan;
+  const resolvedPlan = revenueCatHistory?.plan || stripePlan || fallbackPlan;
   if (stripePrice.recurring?.interval === 'year') {
     resolvedPlan.label = 'PulseCheck Annual';
     resolvedPlan.billingInterval = 'year';
-    resolvedPlan.subscriptionAmountCents = Number(stripePrice.unit_amount) || 11900;
+    resolvedPlan.subscriptionAmountCents = Number(stripePrice.unit_amount) || 0;
     resolvedPlan.monthlyRevenueCents = Math.round(resolvedPlan.subscriptionAmountCents / 12);
   } else if (stripePrice.recurring?.interval === 'month') {
     resolvedPlan.label = 'PulseCheck Monthly';
     resolvedPlan.billingInterval = 'month';
-    resolvedPlan.subscriptionAmountCents = Number(stripePrice.unit_amount) || 1299;
+    resolvedPlan.subscriptionAmountCents = Number(stripePrice.unit_amount) || 0;
     resolvedPlan.monthlyRevenueCents = resolvedPlan.subscriptionAmountCents;
   }
 
   const expirationMs = timestampMillis(
-    stripeSubscription?.current_period_end
+    revenueCatHistory?.activeSubscription?.current_period_ends_at
+    || revenueCatHistory?.activeSubscription?.ends_at
+    || stripeSubscription?.current_period_end
     || latestPlan.expiration
     || subscriptionRecord.currentPeriodEnd
     || subscriptionRecord.expiration
   );
   const fallbackActiveType = /(subscriber|monthly|annual)/i.test(String(rawPlanType));
-  const isActive = stripeSubscription
-    ? isActiveStatus(stripeSubscription.status)
-    : expirationMs
-      ? expirationMs > Date.now()
-      : fallbackActiveType;
-  const payments = invoiceRows({ invoices: paidInvoices, sharePct });
+  const isActive = revenueCatHistory?.activeSubscription
+    ? revenueCatHistory.activeSubscription.gives_access === true
+      || isActiveStatus(revenueCatHistory.activeSubscription.status)
+    : stripeSubscription
+      ? isActiveStatus(stripeSubscription.status)
+      : expirationMs
+        ? expirationMs > Date.now()
+        : fallbackActiveType;
+  const payments = revenueCatHistory?.payments || invoiceRows({ invoices: paidInvoices, sharePct });
 
   return {
     userId: athleteUserId,

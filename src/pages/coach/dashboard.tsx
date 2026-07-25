@@ -5567,6 +5567,7 @@ type MemberSubscriptionEarning = {
     amountPaid: number;
     shareAmount: number;
     currency: string;
+    amountAvailable: boolean;
   }>;
 };
 
@@ -5647,6 +5648,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
               amountPaid: (Number(payment.amountPaidCents) || 0) / 100,
               shareAmount: (Number(payment.coachShareCents) || 0) / 100,
               currency: String(payment.currency || 'usd').toUpperCase(),
+              amountAvailable: payment.amountAvailable !== false,
             })),
           }));
 
@@ -5815,7 +5817,9 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                     <div className="text-xs text-zinc-500">
                       {member.plan}
                       {member.isActive && member.billingPeriod
-                        ? ` · ${fmt(member.subscriptionCost)} billed ${member.billingPeriod === 'year' ? 'yearly' : 'monthly'}`
+                        ? member.subscriptionCost > 0
+                          ? ` · ${fmt(member.subscriptionCost)} billed ${member.billingPeriod === 'year' ? 'yearly' : 'monthly'}`
+                          : ' · recorded price unavailable'
                         : ''}
                       {member.isActive && member.expiration
                         ? ` · renews ${member.expiration.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
@@ -5839,7 +5843,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                 {member.payments.length > 0 ? (
                   <div className="border-t border-zinc-700/30 px-3 py-2">
                     <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Paid invoice history
+                      Transaction history
                     </div>
                     <div className="divide-y divide-zinc-700/30">
                       {member.payments.map((payment) => (
@@ -5854,10 +5858,12 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                               : 'Paid invoice'}
                           </div>
                           <div className="text-zinc-500">
-                            {fmt(payment.amountPaid)} {payment.currency}
+                            {payment.amountAvailable
+                              ? `${fmt(payment.amountPaid)} ${payment.currency}`
+                              : 'Amount unavailable'}
                           </div>
-                          <div className="font-semibold text-[#E0FE10]">
-                            +{fmt(payment.shareAmount)}
+                          <div className={`font-semibold ${payment.amountAvailable ? 'text-[#E0FE10]' : 'text-zinc-500'}`}>
+                            {payment.amountAvailable ? `+${fmt(payment.shareAmount)}` : 'Share unavailable'}
                           </div>
                         </div>
                       ))}
