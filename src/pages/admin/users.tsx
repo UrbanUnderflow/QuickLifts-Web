@@ -69,6 +69,14 @@ const remoteLoginTargets: Record<RemoteLoginTarget, { destination: string; label
   },
 };
 
+const getRemoteLoginFunctionUrl = (functionName: string) => {
+  const configuredBaseUrl = (process.env.NEXT_PUBLIC_REMOTE_LOGIN_FUNCTION_BASE_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+
+  return `${configuredBaseUrl}/.netlify/functions/${functionName}`;
+};
+
 const originTabConfigs: Array<{
   tab: OriginTabType;
   key: RegistrationOriginKey;
@@ -2722,7 +2730,7 @@ const UsersManagement: React.FC = () => {
       }
 
       // Generate remote login token
-      const response = await fetch('/.netlify/functions/generate-remote-login-token', {
+      const response = await fetch(getRemoteLoginFunctionUrl('generate-remote-login-token'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2741,7 +2749,7 @@ const UsersManagement: React.FC = () => {
       const { token } = await response.json();
 
       // Consume the token and get custom token
-      const loginResponse = await fetch('/.netlify/functions/consume-remote-login-token', {
+      const loginResponse = await fetch(getRemoteLoginFunctionUrl('consume-remote-login-token'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

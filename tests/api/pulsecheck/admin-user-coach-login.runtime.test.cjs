@@ -27,6 +27,11 @@ test('user management can impersonate a user directly into the PulseCheck coach 
   );
   assert.match(
     usersAdminSource,
+    /NEXT_PUBLIC_REMOTE_LOGIN_FUNCTION_BASE_URL/,
+    'local development should support routing privileged impersonation calls through a credentialed server'
+  );
+  assert.match(
+    usersAdminSource,
     /Log in to PulseCheck Coach Dashboard as/,
     'the new action should be clearly identified for admins'
   );

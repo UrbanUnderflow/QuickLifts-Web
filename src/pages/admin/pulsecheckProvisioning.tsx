@@ -1966,7 +1966,40 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setMessage(null);
 
     try {
-      await pulseCheckProvisioningService.updateTeamCommercialConfig(team.id, draft);
+      let nextDraft = draft;
+      if (draft.referralKickbackEnabled && !draft.revenueRecipientUserId) {
+        const organizationStaff = orgStaffById[team.organizationId] || [];
+        const legacyCoach = team.legacyCoachId
+          ? organizationStaff.find((staff) => staff.userId === team.legacyCoachId)
+          : null;
+        const teamAdmins = organizationStaff.filter((staff) => staff.role === 'team-admin');
+        const inferredRecipient =
+          legacyCoach
+          || (team.legacyCoachId
+            ? {
+                userId: team.legacyCoachId,
+                role: 'coach' as const,
+              }
+            : null)
+          || (teamAdmins.length === 1 ? teamAdmins[0] : null)
+          || (organizationStaff.length === 1 ? organizationStaff[0] : null);
+
+        if (!inferredRecipient) {
+          throw new Error('Select the staff member who should receive this team’s referral revenue.');
+        }
+
+        nextDraft = {
+          ...draft,
+          revenueRecipientUserId: inferredRecipient.userId,
+          revenueRecipientRole: mapMembershipRoleToRecipientRole(inferredRecipient.role),
+        };
+      }
+
+      await pulseCheckProvisioningService.updateTeamCommercialConfig(team.id, nextDraft);
+      setTeamCommercialDrafts((current) => ({
+        ...current,
+        [team.id]: nextDraft,
+      }));
       await loadData();
       setMessage({
         type: 'success',
@@ -1974,7 +2007,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
       });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to update team commercial config:', error);
-      setMessage({ type: 'error', text: 'Failed to update team commercial config.' });
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to update team commercial config.',
+      });
     } finally {
       setTeamCommercialSavingId((current) => (current === team.id ? null : current));
     }

@@ -560,8 +560,8 @@ interface CoachDashboardShellProps {
   /** Persist edits made in the profile modal. Omitted in demo (edits stay local). */
   onSaveProfile?: (next: { name: string; email: string; title: string; bio: string; avatarUrl: string }) => Promise<void>;
   isDemo?: boolean;
-  /** Earnings tab is shown only when this team has referral kickback on AND the
-   *  current user is the configured revenue recipient. */
+  /** Earnings tab is shown when referral kickback is enabled and the current
+   *  user is the configured or safely inferred revenue recipient. */
   earningsEnabled?: boolean;
   revenueSharePct?: number;
   /** The signed-in coach's own staff capabilities — gates which tabs/details are
@@ -1054,8 +1054,10 @@ const CoachDashboard: React.FC = () => {
     };
   }, [currentUser?.id, trainingMode]);
 
-  // Earnings tab is visible only when one of this coach's teams has referral
-  // kickback enabled AND this coach is the configured revenue recipient.
+  // Earnings tab is visible when one of this coach's teams has referral
+  // kickback enabled and the coach owns that team's revenue share. Legacy coach
+  // roster teams predate the explicit recipient field, so their legacy coach is
+  // the safe fallback until the admin saves an explicit recipient.
   useEffect(() => {
     if (trainingMode !== false) return;
     let cancelled = false;
@@ -1067,7 +1069,18 @@ const CoachDashboard: React.FC = () => {
           if (membership.role === 'athlete') continue;
           const team = await pulseCheckProvisioningService.getTeam(membership.teamId);
           const cfg = team?.commercialConfig;
-          if (cfg?.referralKickbackEnabled && cfg.revenueRecipientUserId === currentUser.id) {
+          const isConfiguredRecipient = cfg?.revenueRecipientUserId === currentUser.id;
+          const isLegacyCoachRecipient =
+            !cfg?.revenueRecipientUserId && team?.legacyCoachId === currentUser.id;
+          const isDefaultTeamAdminRecipient =
+            !cfg?.revenueRecipientUserId
+            && cfg?.revenueRecipientRole === 'team-admin'
+            && membership.role === 'team-admin';
+
+          if (
+            cfg?.referralKickbackEnabled
+            && (isConfiguredRecipient || isLegacyCoachRecipient || isDefaultTeamAdminRecipient)
+          ) {
             if (!cancelled) setEarnings({ enabled: true, sharePct: cfg.referralRevenueSharePct || 0 });
             return;
           }
@@ -5534,6 +5547,40 @@ type Conversion = {
   date: Date;
 };
 
+type MemberSubscriptionEarning = {
+  id: string;
+  name: string;
+  initials: string;
+  plan: string;
+  isActive: boolean;
+  subscriptionCost: number;
+  monthlyShareAmount: number;
+  billingPeriod: 'month' | 'year' | null;
+  expiration: Date | null;
+  sharePct: number;
+  lifetimeShareAmount: number;
+  invoiceHistoryAvailable: boolean;
+  invoiceHistoryMessage: string;
+  payments: Array<{
+    id: string;
+    paidAt: Date | null;
+    amountPaid: number;
+    shareAmount: number;
+    currency: string;
+  }>;
+};
+
+const coachEarningsFunctionUrl = () => {
+  const configuredBaseUrl = (
+    process.env.NEXT_PUBLIC_FUNCTION_BASE_URL
+    || process.env.NEXT_PUBLIC_REMOTE_LOGIN_FUNCTION_BASE_URL
+    || ''
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  return `${configuredBaseUrl}/.netlify/functions/get-pulsecheck-coach-earnings`;
+};
+
 const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; revenueSharePct?: number }> = ({
   athletes,
   isDemo,
@@ -5542,6 +5589,97 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
   // Demo defaults to a 20% share if provisioning hasn't set one, so the tab demonstrates real numbers.
   const share = isDemo && !revenueSharePct ? 20 : revenueSharePct;
   const fmt = (n: number) => `$${n.toFixed(2)}`;
+  const [memberSubscriptions, setMemberSubscriptions] = useState<MemberSubscriptionEarning[]>([]);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(!isDemo);
+  const [subscriptionsError, setSubscriptionsError] = useState('');
+  const [liveShare, setLiveShare] = useState(revenueSharePct);
+
+  useEffect(() => {
+    if (isDemo) {
+      setSubscriptionsLoading(false);
+      setSubscriptionsError('');
+      setMemberSubscriptions([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadSubscriptions = async () => {
+      setSubscriptionsLoading(true);
+      setSubscriptionsError('');
+
+      try {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser) throw new Error('Sign in again to view earnings.');
+        const idToken = await firebaseUser.getIdToken();
+        const response = await fetch(coachEarningsFunctionUrl(), {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || 'Earnings could not be loaded.');
+        }
+
+        const earnings = payload.earnings || {};
+        const rows: MemberSubscriptionEarning[] = (Array.isArray(earnings.members) ? earnings.members : [])
+          .map((member: any) => ({
+            id: String(member.userId || ''),
+            name: String(member.name || member.email || 'Team member'),
+            initials: initialsOf(member.name || member.email || 'Team member'),
+            plan: String(member.plan || 'Paid plan unavailable'),
+            isActive: Boolean(member.isActive),
+            subscriptionCost: (Number(member.subscriptionAmountCents) || 0) / 100,
+            monthlyShareAmount: (Number(member.estimatedMonthlyShareCents) || 0) / 100,
+            billingPeriod:
+              member.billingInterval === 'month' || member.billingInterval === 'year'
+                ? member.billingInterval
+                : null,
+            expiration: member.currentPeriodEnd ? new Date(member.currentPeriodEnd) : null,
+            sharePct: Number(member.sharePct) || Number(earnings.sharePct) || share,
+            lifetimeShareAmount: (Number(member.lifetimeShareCents) || 0) / 100,
+            invoiceHistoryAvailable: Boolean(member.invoiceHistoryAvailable),
+            invoiceHistoryMessage: String(member.invoiceHistoryMessage || ''),
+            payments: (Array.isArray(member.payments) ? member.payments : []).map((payment: any) => ({
+              id: String(payment.id || ''),
+              paidAt: payment.paidAt ? new Date(payment.paidAt) : null,
+              amountPaid: (Number(payment.amountPaidCents) || 0) / 100,
+              shareAmount: (Number(payment.coachShareCents) || 0) / 100,
+              currency: String(payment.currency || 'usd').toUpperCase(),
+            })),
+          }));
+
+        rows.sort((left, right) =>
+          Number(right.isActive) - Number(left.isActive)
+          || left.name.localeCompare(right.name)
+        );
+        if (!cancelled) {
+          setMemberSubscriptions(rows);
+          setLiveShare(Number(earnings.sharePct) || revenueSharePct);
+        }
+      } catch (error) {
+        console.error('[CoachDashboard] failed to load member subscriptions', error);
+        if (!cancelled) {
+          setMemberSubscriptions([]);
+          setSubscriptionsError(
+            error instanceof Error
+              ? error.message
+              : 'Subscription details could not be loaded. Refresh the dashboard to try again.'
+          );
+        }
+      } finally {
+        if (!cancelled) setSubscriptionsLoading(false);
+      }
+    };
+
+    void loadSubscriptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [athletes, isDemo, revenueSharePct, share]);
+
+  const effectiveShare = isDemo ? share : liveShare || share;
 
   const conversions = useMemo<Conversion[]>(() => {
     if (!isDemo) return [];
@@ -5560,8 +5698,18 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
       }));
   }, [athletes, isDemo, share]);
 
-  const monthlyKickback = useMemo(() => conversions.reduce((sum, c) => sum + c.cut, 0), [conversions]);
+  const monthlyKickback = useMemo(
+    () => isDemo
+      ? conversions.reduce((sum, conversion) => sum + conversion.cut, 0)
+      : memberSubscriptions.reduce((sum, member) => sum + member.monthlyShareAmount, 0),
+    [conversions, isDemo, memberSubscriptions]
+  );
   const lifetime = +(monthlyKickback * 6.5).toFixed(2);
+  const liveLifetime = memberSubscriptions.reduce(
+    (sum, member) => sum + member.lifetimeShareAmount,
+    0
+  );
+  const activeSubscriberCount = memberSubscriptions.filter((member) => member.isActive).length;
 
   return (
     <div className="space-y-5">
@@ -5577,27 +5725,46 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
         </div>
         <p className="text-sm text-zinc-300 leading-relaxed">
           When an athlete you invited subscribes to a paid plan,{' '}
-          <span className="text-[#E0FE10] font-medium">{share}%</span> of their subscription routes back to you.
+          <span className="text-[#E0FE10] font-medium">{effectiveShare}%</span> of their subscription routes back to you.
           Earnings update as athletes convert and renew.
         </p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="This month" value={fmt(monthlyKickback)} accent />
-        <StatTile label="Lifetime" value={fmt(lifetime)} />
-        <StatTile label="Converted referrals" value={conversions.length} dot="bg-green-400" />
-        <StatTile label="Revenue share" value={`${share}%`} />
+        <StatTile label={isDemo ? 'This month' : 'Estimated monthly'} value={fmt(monthlyKickback)} accent />
+        <StatTile label={isDemo ? 'Lifetime' : 'Paid earnings'} value={isDemo ? fmt(lifetime) : fmt(liveLifetime)} />
+        <StatTile label={isDemo ? 'Converted referrals' : 'Team members'} value={isDemo ? conversions.length : memberSubscriptions.length} dot="bg-green-400" />
+        <StatTile
+          label={isDemo ? 'Revenue share' : 'Subscribed members'}
+          value={isDemo ? `${effectiveShare}%` : activeSubscriberCount}
+        />
       </div>
 
       <div>
-        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Recent conversions</div>
-        {conversions.length === 0 ? (
+        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
+          {isDemo ? 'Recent conversions' : 'Member subscriptions'}
+        </div>
+        {!isDemo && subscriptionsLoading ? (
+          <LoadingBlock label="Loading member subscriptions..." />
+        ) : !isDemo && subscriptionsError ? (
+          <EmptyBlock
+            icon={AlertTriangle}
+            title="Subscription details unavailable"
+            body={subscriptionsError}
+          />
+        ) : isDemo && conversions.length === 0 ? (
           <EmptyBlock
             icon={TrendingUp}
             title="No conversions yet"
             body="When athletes you invited subscribe to a paid plan, their conversions and your kickback show up here."
           />
-        ) : (
+        ) : !isDemo && memberSubscriptions.length === 0 ? (
+          <EmptyBlock
+            icon={Users}
+            title="Team roster is empty"
+            body="Member subscription status and your estimated share will appear here as athletes join this team."
+          />
+        ) : isDemo ? (
           <div className="space-y-2">
             {conversions.map((c) => {
               const stale = daysSince(c.date);
@@ -5622,6 +5789,91 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                 </div>
               );
             })}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {memberSubscriptions.map((member) => (
+              <div
+                key={member.id}
+                className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 overflow-hidden"
+              >
+                <div className="flex items-center gap-3 p-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-bold text-[#E0FE10]">{member.initials}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium text-white truncate">{member.name}</div>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                        member.isActive
+                          ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                          : 'border-zinc-700 bg-zinc-800 text-zinc-500'
+                      }`}>
+                        {member.isActive ? 'Subscribed' : 'Not subscribed'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      {member.plan}
+                      {member.isActive && member.billingPeriod
+                        ? ` · ${fmt(member.subscriptionCost)} billed ${member.billingPeriod === 'year' ? 'yearly' : 'monthly'}`
+                        : ''}
+                      {member.isActive && member.expiration
+                        ? ` · renews ${member.expiration.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                        : ''}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className={`text-sm font-bold ${member.monthlyShareAmount > 0 ? 'text-[#E0FE10]' : 'text-zinc-500'}`}>
+                      {member.monthlyShareAmount > 0 ? '+' : ''}{fmt(member.monthlyShareAmount)}
+                    </div>
+                    <div className="text-[10px] text-zinc-500">
+                      {member.monthlyShareAmount > 0
+                        ? `estimated monthly at ${member.sharePct}%`
+                        : member.isActive
+                          ? 'referral share unavailable'
+                          : 'paid plan inactive'}
+                    </div>
+                  </div>
+                </div>
+
+                {member.payments.length > 0 ? (
+                  <div className="border-t border-zinc-700/30 px-3 py-2">
+                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Paid invoice history
+                    </div>
+                    <div className="divide-y divide-zinc-700/30">
+                      {member.payments.map((payment) => (
+                        <div key={payment.id} className="grid grid-cols-[1fr_auto_auto] gap-4 py-2 text-xs">
+                          <div className="text-zinc-300">
+                            {payment.paidAt
+                              ? payment.paidAt.toLocaleDateString('en-US', {
+                                  month: 'long',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })
+                              : 'Paid invoice'}
+                          </div>
+                          <div className="text-zinc-500">
+                            {fmt(payment.amountPaid)} {payment.currency}
+                          </div>
+                          <div className="font-semibold text-[#E0FE10]">
+                            +{fmt(payment.shareAmount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1 border-t border-zinc-700/30 pt-2 text-right text-xs text-zinc-400">
+                      Earned from this athlete:{' '}
+                      <span className="font-semibold text-white">{fmt(member.lifetimeShareAmount)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-t border-zinc-700/30 px-3 py-2 text-xs text-zinc-500">
+                    {member.invoiceHistoryMessage || 'Paid invoices will appear here after the first payment.'}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
