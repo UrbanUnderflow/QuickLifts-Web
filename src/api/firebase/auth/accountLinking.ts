@@ -10,6 +10,7 @@ import {
   linkWithCredential,
   linkWithPopup,
   signInWithCredential,
+  signInWithCustomToken,
   signOut,
   unlink,
   type AuthProvider,
@@ -272,7 +273,7 @@ export const rejectAccidentalNewSocialLogin = async (credential: UserCredential)
   return true;
 };
 
-export const assertAccountIsCanonical = async (user: User) => {
+export const resolveCanonicalAccountAlias = async (user: User): Promise<User> => {
   const token = await user.getIdToken();
   const response = await fetch('/.netlify/functions/merge-accounts', {
     method: 'POST',
@@ -283,16 +284,20 @@ export const assertAccountIsCanonical = async (user: User) => {
     },
     body: JSON.stringify({ action: 'resolve-current-alias' }),
   });
-  if (!response.ok) return;
+  if (!response.ok) return user;
   const payload = await response.json().catch(() => ({}));
-  if (!payload?.alias) return;
+  if (!payload?.alias) return user;
 
-  await signOut(auth).catch(() => undefined);
-  const destination = payload.canonicalEmail
-    ? ` Sign in with ${payload.canonicalEmail}, then connect this method in Settings.`
-    : ' Sign in to the account you kept, then connect this method in Settings.';
-  throw new AccountLinkingError(
-    `This sign-in belongs to an account that was combined.${destination}`,
-    'account-linking/merged-alias',
-  );
+  if (!payload?.customToken) {
+    throw new AccountLinkingError(
+      'This sign-in belongs to a combined account, but the kept account could not be opened.',
+      'account-linking/alias-token-unavailable',
+    );
+  }
+
+  const canonicalCredential = await signInWithCustomToken(auth, payload.customToken);
+  await canonicalCredential.user.getIdToken(true);
+  return canonicalCredential.user;
 };
+
+export const assertAccountIsCanonical = resolveCanonicalAccountAlias;

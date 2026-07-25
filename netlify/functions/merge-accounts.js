@@ -53,15 +53,23 @@ exports.handler = async (event) => {
       const alias = await db.collection('account-aliases').doc(caller.uid).get();
       if (!alias.exists) return json(200, { alias: false });
       const canonicalUid = alias.data()?.canonicalUid;
+      const aliasStatus = alias.data()?.status || null;
+      if (!canonicalUid || aliasStatus === 'failed' || aliasStatus === 'rolled-back') {
+        return json(409, { error: 'This account alias is not ready for sign-in.' });
+      }
       let canonicalEmail = null;
       if (canonicalUid) {
         canonicalEmail = (await auth.getUser(canonicalUid).catch(() => null))?.email || null;
       }
+      const customToken = await auth.createCustomToken(canonicalUid, {
+        accountAliasSourceUid: caller.uid,
+      });
       return json(200, {
         alias: true,
         canonicalUid,
         canonicalEmail,
-        status: alias.data()?.status || null,
+        customToken,
+        status: aliasStatus,
       });
     }
 

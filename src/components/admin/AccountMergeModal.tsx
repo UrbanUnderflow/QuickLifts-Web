@@ -1,5 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, GitMerge, Loader2, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  CheckCircle2,
+  GitMerge,
+  Loader2,
+  Search,
+  X,
+} from 'lucide-react';
 import { auth, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 
 type MergeUser = {
@@ -43,7 +51,9 @@ const AccountMergeModal: React.FC<{
     ),
     [source, users],
   );
+  const [mergeSource, setMergeSource] = useState(source);
   const [canonicalUid, setCanonicalUid] = useState(suggestedCanonical?.id || '');
+  const [accountSearch, setAccountSearch] = useState('');
   const [preview, setPreview] = useState<MergePreview | null>(null);
   const [confirmation, setConfirmation] = useState('');
   const [keepAccountConfirmed, setKeepAccountConfirmed] = useState(false);
@@ -53,7 +63,40 @@ const AccountMergeModal: React.FC<{
   const [mergeId, setMergeId] = useState('');
 
   const canonical = users.find((candidate) => candidate.id === canonicalUid);
-  const expectedConfirmation = canonicalUid ? `MERGE ${source.id} INTO ${canonicalUid}` : '';
+  const canonicalCandidates = useMemo(() => {
+    const query = accountSearch.trim().toLowerCase();
+    const matches = users.filter((candidate) => {
+      if (candidate.id === mergeSource.id) return false;
+      if (!query) return true;
+      return [
+        candidate.email,
+        candidate.username,
+        candidate.displayName,
+        candidate.id,
+      ].some((value) => String(value || '').toLowerCase().includes(query));
+    });
+    if (canonical && !matches.some((candidate) => candidate.id === canonical.id)) {
+      return [canonical, ...matches].slice(0, 100);
+    }
+    return matches.slice(0, 100);
+  }, [accountSearch, canonical, mergeSource.id, users]);
+  const expectedConfirmation = canonicalUid ? `MERGE ${mergeSource.id} INTO ${canonicalUid}` : '';
+
+  const resetReview = () => {
+    setPreview(null);
+    setConfirmation('');
+    setKeepAccountConfirmed(false);
+    setError(null);
+  };
+
+  const swapAccounts = () => {
+    if (!canonical) return;
+    const previousSource = mergeSource;
+    setMergeSource(canonical);
+    setCanonicalUid(previousSource.id);
+    setAccountSearch('');
+    resetReview();
+  };
 
   const callMerge = async (body: Record<string, unknown>) => {
     const currentUser = auth.currentUser;
@@ -101,7 +144,7 @@ const AccountMergeModal: React.FC<{
     try {
       const result = await callMerge({
         action: 'preview',
-        sourceUid: source.id,
+        sourceUid: mergeSource.id,
         canonicalUid,
       });
       setPreview(result as MergePreview);
@@ -118,7 +161,7 @@ const AccountMergeModal: React.FC<{
     try {
       const result = await callMerge({
         action: 'merge-data',
-        sourceUid: source.id,
+        sourceUid: mergeSource.id,
         canonicalUid,
         confirmation,
       });
@@ -177,26 +220,45 @@ const AccountMergeModal: React.FC<{
         </div>
 
         <div className="space-y-5 p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-red-300">Duplicate account</div>
-              <div className="mt-2 text-sm text-white">{source.email || source.username || source.id}</div>
-              <div className="mt-1 break-all font-mono text-xs text-gray-500">{source.id}</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-red-300">Account being retired</div>
+              <div className="mt-2 text-sm text-white">
+                {mergeSource.email || mergeSource.username || mergeSource.id}
+              </div>
+              <div className="mt-1 break-all font-mono text-xs text-gray-500">{mergeSource.id}</div>
             </div>
+            <button
+              type="button"
+              onClick={swapAccounts}
+              disabled={!canonicalUid || busy !== null || merged}
+              className="mx-auto inline-flex items-center gap-2 rounded-lg border border-purple-400/30 bg-purple-500/10 px-3 py-2 text-xs font-semibold text-purple-200 hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Swap which account is kept"
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              Swap
+            </button>
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
               <div className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Account to keep</div>
+              <label className="relative mt-2 block">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+                <input
+                  value={accountSearch}
+                  onChange={(event) => setAccountSearch(event.target.value)}
+                  placeholder="Search email, username, or ID"
+                  className="w-full rounded-lg border border-white/10 bg-[#22262d] py-2 pl-9 pr-3 text-sm text-white placeholder:text-gray-600"
+                />
+              </label>
               <select
                 value={canonicalUid}
                 onChange={(event) => {
                   setCanonicalUid(event.target.value);
-                  setPreview(null);
-                  setConfirmation('');
-                  setKeepAccountConfirmed(false);
+                  resetReview();
                 }}
                 className="mt-2 w-full rounded-lg border border-white/10 bg-[#22262d] px-3 py-2 text-sm text-white"
               >
                 <option value="">Select an account</option>
-                {users.filter((candidate) => candidate.id !== source.id).map((candidate) => (
+                {canonicalCandidates.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
                     {candidate.email || candidate.username || candidate.id}
                     {candidate.username ? ` (${candidate.username})` : ''}

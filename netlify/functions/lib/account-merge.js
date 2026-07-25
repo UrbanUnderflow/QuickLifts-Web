@@ -654,9 +654,15 @@ const executeMerge = async ({
 
     const canonicalUserRef = db.collection('users').doc(canonicalUid);
     const canonicalSubscriptionRef = db.collection('subscriptions').doc(canonicalUid);
+    const signInEmails = [preview.source.email, preview.canonical.email]
+      .map((email) => String(email || '').trim().toLowerCase())
+      .filter(Boolean);
     await Promise.all([
       canonicalUserRef.set({
         accountAliases: admin.firestore.FieldValue.arrayUnion(sourceUid),
+        ...(signInEmails.length > 0
+          ? { signInEmails: admin.firestore.FieldValue.arrayUnion(...signInEmails) }
+          : {}),
         revenueCatAppUserIds: admin.firestore.FieldValue.arrayUnion(sourceUid, canonicalUid),
         updatedAt: timestamp(admin),
       }, { merge: true }),

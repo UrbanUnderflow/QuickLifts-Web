@@ -61,20 +61,20 @@ const CoachLogin: NextPage = () => {
   }, [currentUser, goToApp]);
 
   const ensureFirestoreUser = async (firebaseUser: any) => {
-    let firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
+    const resolvedFirebaseUser = await assertAccountIsCanonical(firebaseUser);
+    let firestoreUser = await userService.fetchUserFromFirestore(resolvedFirebaseUser.uid);
     if (!firestoreUser) {
-      await assertAccountIsCanonical(firebaseUser);
-      if (!firebaseUser.email) {
+      if (!resolvedFirebaseUser.email) {
         throw new Error('Authentication did not provide an email address.');
       }
-      firestoreUser = new User(firebaseUser.uid, {
-        id: firebaseUser.uid,
-        email: firebaseUser.email || '',
-        displayName: firebaseUser.displayName || '',
+      firestoreUser = new User(resolvedFirebaseUser.uid, {
+        id: resolvedFirebaseUser.uid,
+        email: resolvedFirebaseUser.email || '',
+        displayName: resolvedFirebaseUser.displayName || '',
         registrationComplete: false,
         subscriptionType: SubscriptionType.unsubscribed,
       });
-      await userService.createUser(firebaseUser.uid, firestoreUser);
+      await userService.createUser(resolvedFirebaseUser.uid, firestoreUser);
     }
     userService.nonUICurrentUser = firestoreUser;
     return firestoreUser;

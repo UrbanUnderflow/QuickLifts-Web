@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const { repoRoot, withModuleMocks } = require('./_runtimeHarness.cjs');
 
 const {
   canonicalizeData,
@@ -114,4 +116,84 @@ test('merge registry includes the critical identity-owned records', () => {
     new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-assessment-purchases']),
     new Set(['coachUserId', 'revenueRecipientUserId']),
   );
+});
+
+test('merged secondary sign-in receives a custom token for the kept account', async () => {
+  const functionPath = path.join(repoRoot, 'netlify/functions/merge-accounts.js');
+  delete require.cache[functionPath];
+
+  const authCalls = [];
+  const auth = {
+    async verifyIdToken(token) {
+      authCalls.push({ method: 'verifyIdToken', token });
+      return { uid: 'secondary-uid', email: 'secondary@example.com' };
+    },
+    async getUser(uid) {
+      authCalls.push({ method: 'getUser', uid });
+      return { uid, email: 'kept@example.com' };
+    },
+    async createCustomToken(uid, claims) {
+      authCalls.push({ method: 'createCustomToken', uid, claims });
+      return 'custom-token-for-kept-account';
+    },
+  };
+  const db = {
+    collection(collectionName) {
+      assert.equal(collectionName, 'account-aliases');
+      return {
+        doc(uid) {
+          assert.equal(uid, 'secondary-uid');
+          return {
+            async get() {
+              return {
+                exists: true,
+                data: () => ({
+                  canonicalUid: 'kept-uid',
+                  status: 'data-merged',
+                }),
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const { handler } = withModuleMocks(
+    {
+      './config/firebase': {
+        headers: {},
+        getFirebaseAdminApp: () => ({
+          auth: () => auth,
+          firestore: () => db,
+        }),
+      },
+      './lib/account-merge': {
+        buildMergePreview: async () => ({}),
+        executeMerge: async () => ({}),
+        rollbackMerge: async () => ({}),
+      },
+    },
+    () => require(functionPath),
+  );
+
+  const response = await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer secondary-id-token' },
+    body: JSON.stringify({ action: 'resolve-current-alias' }),
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), {
+    alias: true,
+    canonicalUid: 'kept-uid',
+    canonicalEmail: 'kept@example.com',
+    customToken: 'custom-token-for-kept-account',
+    status: 'data-merged',
+  });
+  assert.deepEqual(authCalls.at(-1), {
+    method: 'createCustomToken',
+    uid: 'kept-uid',
+    claims: { accountAliasSourceUid: 'secondary-uid' },
+  });
 });

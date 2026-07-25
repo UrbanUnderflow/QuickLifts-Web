@@ -596,12 +596,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
             setShowError(true);
             return;
           }
-          const user = result.user;
+          let user = result.user;
           await linkRememberedProviderCredential(user);
+          user = await assertAccountIsCanonical(user);
           // Fetch or create user in Firestore
           let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
           if (!firestoreUser) {
-            await assertAccountIsCanonical(user);
             if (!user.email) {
               throw new Error('Apple sign-in did not return an email address.');
             }
@@ -681,8 +681,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
           setShowError(true);
           return;
         }
-        const user = result.user;
+        let user = result.user;
         await linkRememberedProviderCredential(user);
+        user = await assertAccountIsCanonical(user);
         // Strict email check
         if (!user || !user.email) {
           console.error('[SignInModal] Google sign-in completed but no email was provided. Cannot create user.');
@@ -706,7 +707,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
           console.log('[SignInModal] Full Firestore user object after sign in:', JSON.parse(JSON.stringify(firestoreUser)));
         }
         if (!firestoreUser) {
-          await assertAccountIsCanonical(user);
           // Email exists, proceed with creation
           console.log('[SignInModal] Creating new Firestore user after Google Sign-In');
           firestoreUser = new User(user.uid, {
@@ -960,7 +960,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           throw new Error("No user credential found in redirect result");
         }
    
-        const { user } = credential;
+        const user = await assertAccountIsCanonical(credential.user);
         addLog(`User info: providerId=${credential.providerId}, email=${user.email}, isNewUser=${user.metadata.creationTime === user.metadata.lastSignInTime}`);
    
         const _isAppleSignIn = credential.providerId === "apple.com" || user.providerData.some((provider) => provider.providerId === "apple.com");
@@ -1372,7 +1372,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         const result = await authService.signInWithEmail(email, password);
         await linkRememberedProviderCredential(result.user);
-        const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
+        const resolvedUser = await assertAccountIsCanonical(result.user);
+        const userDoc = await userService.fetchUserFromFirestore(resolvedUser.uid);
         userService.nonUICurrentUser = userDoc;
 
         if (userDoc) {
@@ -1398,7 +1399,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
           const betaUserHasAccess = await userService.getBetaUserAccess(userDoc.email, userDoc);
           if (betaUserHasAccess || userDoc.subscriptionType !== SubscriptionType.unsubscribed) {
-            await handleSignInSuccess(result.user);
+            await handleSignInSuccess(resolvedUser);
             return;
           }
 
@@ -1407,7 +1408,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             router.push('/pricing');
             return;
           } else if (shouldBypassSubscriptionGate) {
-            await handleSignInSuccess(result.user);
+            await handleSignInSuccess(resolvedUser);
             return;
           }
         }
@@ -3165,6 +3166,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
     const sessionReturnPath = typeof window !== 'undefined' ? sessionStorage.getItem('pulse_auth_return_path') : null;
 
     try {
+      user = await assertAccountIsCanonical(user);
       const userDoc = await userService.fetchUserFromFirestore(user.uid);
       
       // Enhanced username check with more detailed logging
