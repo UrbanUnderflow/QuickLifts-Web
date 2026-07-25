@@ -31,9 +31,9 @@ import type { ConversationBranch, TranslationDomain } from '../../src/api/fireba
  * composite dayKey of `${ymd}_${lessonId}` — replaying the same lesson
  * on the same day reuses the thread; a different lesson gets its own.
  *
- * Track guard: only athletes on a junior/rookie team may open these
- * (team `commercialConfig.youthTrack`). Athletes with no team resolve
- * to the junior default, mirroring PulseCheckYouthTrackService on iOS.
+ * Track guard: athletes on a junior/rookie track may open these.
+ * Membership overrides resolve first, followed by the team config.
+ * Athletes with no team resolve to the junior default.
  *
  * Body: { lessonId: string, timezone?: string }
  * Returns: { ok, conversationId, state, trigger }
@@ -197,6 +197,7 @@ export const handler: Handler = async (event) => {
 
   // Resolve team + enforce the junior/rookie track guard.
   let teamId = '';
+  let athleteTrackOverride = '';
   let timezone = body.timezone || 'America/New_York';
   try {
     const memSnap = await db
@@ -208,6 +209,7 @@ export const handler: Handler = async (event) => {
     if (!memSnap.empty) {
       const data = memSnap.docs[0].data();
       teamId = (data.teamId as string | undefined) || '';
+      athleteTrackOverride = String(data.athleteTrackOverride || '').trim().toLowerCase();
       if (!body.timezone && data.timezone) timezone = String(data.timezone);
     }
   } catch {
@@ -217,7 +219,13 @@ export const handler: Handler = async (event) => {
   if (teamId) {
     try {
       const teamSnap = await db.collection('pulsecheck-teams').doc(teamId).get();
-      const youthTrack = String(teamSnap.data()?.commercialConfig?.youthTrack || 'junior').toLowerCase();
+      const teamYouthTrack = String(teamSnap.data()?.commercialConfig?.youthTrack || 'junior').toLowerCase();
+      const youthTrack =
+        athleteTrackOverride === 'pro' ||
+        athleteTrackOverride === 'junior' ||
+        athleteTrackOverride === 'rookie'
+          ? athleteTrackOverride
+          : teamYouthTrack;
       if (youthTrack !== 'junior' && youthTrack !== 'rookie') {
         return { statusCode: 403, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'junior_track_required' }) };
       }

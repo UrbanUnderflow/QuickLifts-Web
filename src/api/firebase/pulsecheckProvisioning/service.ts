@@ -10,6 +10,10 @@ import {
   mergePulseCheckRequiredConsents,
   PULSECHECK_INTAKE_FORM_VERSION,
 } from './types';
+import {
+  normalizePulseCheckAthleteAge,
+  normalizePulseCheckAthleteTrackOverride,
+} from '../../../utils/pulsecheckAthleteTrack';
 import { ATHLETE_MENTAL_PROGRESS_COLLECTION } from '../mentaltraining/collections';
 import type { AthleteMentalProgress } from '../mentaltraining/types';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
@@ -64,6 +68,7 @@ import type {
   PulseCheckTeamMembership,
   PulseCheckTeamMembershipRole,
   PulseCheckTeamStatus,
+  PulseCheckYouthTrack,
   StaffPermission,
   PulseCheckCoachIntakeDraftLink,
   PulseCheckInviteLink,
@@ -3113,8 +3118,15 @@ export const pulseCheckProvisioningService = {
     const normalizedRole = input.teamMembershipRole;
     const normalizedStaffCapabilities = normalizeStaffCapabilities(input.staffCapabilities);
     const normalizedTargetEmail = normalizeEmail(input.targetEmail);
+    const normalizedRecipientName = normalizeString(input.recipientName).toLowerCase();
     const normalizedPilotId = normalizeString(input.pilotId);
     const normalizedCohortId = normalizeString(input.cohortId);
+    const normalizedAthleteAge =
+      normalizedRole === 'athlete' ? normalizePulseCheckAthleteAge(input.athleteAge) : null;
+    const normalizedAthleteTrackOverride =
+      normalizedRole === 'athlete'
+        ? normalizePulseCheckAthleteTrackOverride(input.athleteTrackOverride)
+        : null;
     // Team-access invites (org/team/pilot/cohort joins) are reusable by default:
     // one durable link that adds anyone who redeems it into the right bucket and
     // never auto-retires. Pass 'single-use' explicitly to opt out.
@@ -3135,6 +3147,11 @@ export const pulseCheckProvisioningService = {
         (link.teamId || '') === normalizedTeamId &&
         (link.teamMembershipRole || '') === normalizedRole &&
         normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
+        (
+          normalizedTargetEmail ||
+          redemptionMode === 'general' ||
+          normalizeString(link.recipientName).toLowerCase() === normalizedRecipientName
+        ) &&
         (link.pilotId || '') === normalizedPilotId &&
         (link.cohortId || '') === normalizedCohortId &&
         normalizeInviteRedemptionMode(link.redemptionMode) === redemptionMode
@@ -3147,7 +3164,12 @@ export const pulseCheckProvisioningService = {
           toTimestampMillis((right.data() as Record<string, any>).createdAt) -
           toTimestampMillis((left.data() as Record<string, any>).createdAt)
       )[0] || null;
-    const token = normalizeString((mostRecentMatchingLink?.data() as Record<string, any> | undefined)?.token) || crypto.randomUUID();
+    const token =
+      redemptionMode === 'general'
+        ? normalizeString(
+            (mostRecentMatchingLink?.data() as Record<string, any> | undefined)?.token
+          ) || crypto.randomUUID()
+        : crypto.randomUUID();
     const baseUrl = getPulseCheckLinkOrigin();
     const fallbackPath = `/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
     let activationUrl = `${baseUrl}${fallbackPath}`;
@@ -3209,6 +3231,8 @@ export const pulseCheckProvisioningService = {
         targetEmail: normalizedTargetEmail,
         recipientName: normalizeString(input.recipientName),
         invitedTitle: normalizeString(input.invitedTitle),
+        athleteAge: normalizedAthleteAge,
+        athleteTrackOverride: normalizedAthleteTrackOverride,
         prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl),
         commercialSnapshot,
         token,
@@ -3252,6 +3276,8 @@ export const pulseCheckProvisioningService = {
       targetEmail: normalizedTargetEmail,
       recipientName: normalizeString(input.recipientName),
       invitedTitle: normalizeString(input.invitedTitle),
+      athleteAge: normalizedAthleteAge,
+      athleteTrackOverride: normalizedAthleteTrackOverride,
       prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl),
       commercialSnapshot,
       token,
@@ -3696,11 +3722,23 @@ export const pulseCheckProvisioningService = {
     recipientName?: string;
     invitedTitle?: string;
     prefilledProfileImageUrl?: string;
+    athleteAge?: number | null;
+    athleteTrackOverride?: PulseCheckYouthTrack | null;
   }): Promise<void> {
     const inviteRef = doc(db, INVITE_LINKS_COLLECTION, normalizeString(input.inviteId));
     await updateDoc(inviteRef, {
       ...(input.recipientName !== undefined ? { recipientName: normalizeString(input.recipientName) } : {}),
       ...(input.invitedTitle !== undefined ? { invitedTitle: normalizeString(input.invitedTitle) } : {}),
+      ...(input.athleteAge !== undefined
+        ? { athleteAge: normalizePulseCheckAthleteAge(input.athleteAge) }
+        : {}),
+      ...(input.athleteTrackOverride !== undefined
+        ? {
+            athleteTrackOverride: normalizePulseCheckAthleteTrackOverride(
+              input.athleteTrackOverride
+            ),
+          }
+        : {}),
       ...(input.prefilledProfileImageUrl !== undefined
         ? { prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl) }
         : {}),

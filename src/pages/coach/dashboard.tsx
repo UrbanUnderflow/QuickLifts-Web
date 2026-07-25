@@ -91,8 +91,13 @@ import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
 import type {
   PulseCheckInviteLink,
   PulseCheckTeamMembership,
+  PulseCheckYouthTrack,
   StaffPermission,
 } from '../../api/firebase/pulsecheckProvisioning/types';
+import {
+  type PulseCheckAthleteTrackSelection,
+  resolvePulseCheckAthleteInviteTrack,
+} from '../../utils/pulsecheckAthleteTrack';
 import {
   listSentSportsIntelligenceReportsForCoach,
   type CoachReportListItem,
@@ -3901,6 +3906,8 @@ type AthleteInviteRow = {
   token: string;
   // Pre-filled avatar shown on the invite + carried into their profile on join.
   avatarUrl?: string;
+  athleteAge?: number;
+  athleteTrackOverride?: PulseCheckYouthTrack;
 };
 
 const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
@@ -3910,8 +3917,13 @@ const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
     email: 'jordan.lee@school.edu',
     activationUrl: 'https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete-1',
     token: 'demo-athlete-1',
+    athleteAge: 17,
+    athleteTrackOverride: 'junior',
   },
 ];
+
+const pulseCheckTrackLabel = (track: PulseCheckYouthTrack): string =>
+  track === 'pro' ? 'Pro' : track === 'rookie' ? 'Rookie' : 'Junior';
 
 const ReferralLinksSection: React.FC<{
   isDemo?: boolean;
@@ -4128,6 +4140,9 @@ const AthleteInviteSection: React.FC<{
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [age, setAge] = useState('');
+  const [trackSelection, setTrackSelection] =
+    useState<PulseCheckAthleteTrackSelection>('age-based');
   // Opt-in: email this coach when the athlete accepts. hello@fitwithpulse.ai is
   // always notified regardless; this just CCs the inviting coach.
   const [notifyOnAccept, setNotifyOnAccept] = useState(false);
@@ -4140,6 +4155,9 @@ const AthleteInviteSection: React.FC<{
   // Edit-invite modal: tweak a pending athlete's name + pre-filled profile photo.
   const [editingInvite, setEditingInvite] = useState<AthleteInviteRow | null>(null);
   const [invName, setInvName] = useState('');
+  const [invAge, setInvAge] = useState('');
+  const [invTrackSelection, setInvTrackSelection] =
+    useState<PulseCheckAthleteTrackSelection>('team-default');
   const [invPhotoFile, setInvPhotoFile] = useState<File | null>(null);
   const [invPhotoPreview, setInvPhotoPreview] = useState<string | null>(null);
   const [savingInvite, setSavingInvite] = useState(false);
@@ -4148,7 +4166,19 @@ const AthleteInviteSection: React.FC<{
     teamId: string;
     organizationName: string;
     teamName: string;
+    defaultYouthTrack: PulseCheckYouthTrack;
   } | null>(null);
+
+  const teamYouthTrack = team?.defaultYouthTrack || 'junior';
+  const inviteTrackResolution = useMemo(
+    () =>
+      resolvePulseCheckAthleteInviteTrack({
+        athleteAge: age,
+        selection: trackSelection,
+        teamYouthTrack,
+      }),
+    [age, teamYouthTrack, trackSelection]
+  );
 
   // Live: resolve the coach's active team, then pull active athlete invite links.
   const loadInvites = useCallback(async () => {
@@ -4167,6 +4197,7 @@ const AthleteInviteSection: React.FC<{
       const { teamId, organizationId } = own;
       let teamName = 'your team';
       let organizationName = 'your organization';
+      let defaultYouthTrack: PulseCheckYouthTrack = 'junior';
       try {
         const [t, org] = await Promise.all([
           pulseCheckProvisioningService.getTeam(teamId),
@@ -4174,10 +4205,17 @@ const AthleteInviteSection: React.FC<{
         ]);
         teamName = t?.displayName || teamName;
         organizationName = org?.displayName || organizationName;
+        defaultYouthTrack = t?.commercialConfig?.youthTrack || defaultYouthTrack;
       } catch {
         /* names are cosmetic */
       }
-      setTeam({ organizationId, teamId, organizationName, teamName });
+      setTeam({
+        organizationId,
+        teamId,
+        organizationName,
+        teamName,
+        defaultYouthTrack,
+      });
 
       const links = await pulseCheckProvisioningService
         .listTeamInviteLinks(teamId)
@@ -4193,6 +4231,8 @@ const AthleteInviteSection: React.FC<{
           activationUrl: l.activationUrl,
           token: l.token,
           avatarUrl: (l.prefilledProfileImageUrl || '').trim() || undefined,
+          athleteAge: l.athleteAge,
+          athleteTrackOverride: l.athleteTrackOverride,
         }));
       setInvites(rows);
     } catch (err) {
@@ -4209,6 +4249,8 @@ const AthleteInviteSection: React.FC<{
   const openInvite = () => {
     setName('');
     setEmail('');
+    setAge('');
+    setTrackSelection('age-based');
     setNotifyOnAccept(false);
     setCopied(false);
     setInviteOpen(true);
@@ -4230,7 +4272,7 @@ const AthleteInviteSection: React.FC<{
     }
     setBusy(true);
     try {
-      await pulseCheckProvisioningService.createTeamAccessInviteLink({
+      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
         organizationId: team.organizationId,
         teamId: team.teamId,
         teamMembershipRole: 'athlete',
@@ -4239,13 +4281,7 @@ const AthleteInviteSection: React.FC<{
         createdByEmail: coachEmail || '',
       });
       const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
-      const link = links.find(
-        (l) =>
-          l.inviteType === 'team-access' &&
-          l.teamMembershipRole === 'athlete' &&
-          !(l.targetEmail || '') &&
-          l.status === 'active'
-      );
+      const link = links.find((candidate) => candidate.id === inviteId);
       if (link?.activationUrl) {
         setInviteLink(link.activationUrl);
         try {
@@ -4274,10 +4310,22 @@ const AthleteInviteSection: React.FC<{
       return;
     }
     if (!e) return;
+    if (age.trim() && inviteTrackResolution.athleteAge === null) {
+      setToast('Enter a whole-number age between 1 and 120.');
+      return;
+    }
 
     if (isDemo) {
       setInvites((prev) => [
-        { id: `demo-${prev.length + 1}-${e}`, name: n, email: e, activationUrl: inviteLink, token: `demo-${e}` },
+        {
+          id: `demo-${prev.length + 1}-${e}`,
+          name: n,
+          email: e,
+          activationUrl: inviteLink,
+          token: `demo-${e}`,
+          athleteAge: inviteTrackResolution.athleteAge || undefined,
+          athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
+        },
         ...prev,
       ]);
       setToast(`Invite sent to ${n}.`);
@@ -4290,13 +4338,15 @@ const AthleteInviteSection: React.FC<{
     }
     setBusy(true);
     try {
-      await pulseCheckProvisioningService.createTeamAccessInviteLink({
+      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
         organizationId: team.organizationId,
         teamId: team.teamId,
         teamMembershipRole: 'athlete',
         redemptionMode: 'single-use',
         targetEmail: e,
         recipientName: n,
+        athleteAge: inviteTrackResolution.athleteAge || undefined,
+        athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
         createdByUserId: coachId,
         createdByEmail: coachEmail || '',
         createdByName: coachName,
@@ -4304,13 +4354,7 @@ const AthleteInviteSection: React.FC<{
       });
 
       const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
-      const link = links.find(
-        (l) =>
-          l.inviteType === 'team-access' &&
-          l.teamMembershipRole === 'athlete' &&
-          (l.targetEmail || '').toLowerCase() === e.toLowerCase() &&
-          l.status === 'active'
-      );
+      const link = links.find((l) => l.id === inviteId);
 
       let emailSent = false;
       if (link?.activationUrl) {
@@ -4356,6 +4400,81 @@ const AthleteInviteSection: React.FC<{
     } catch (err) {
       console.error('[CoachDashboard] failed to send athlete invite', err);
       setToast('Could not send the invite. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyPersonalInviteLink = async () => {
+    const n = name.trim();
+    if (!n) {
+      setToast("Add the athlete's name first.");
+      return;
+    }
+    if (age.trim() && inviteTrackResolution.athleteAge === null) {
+      setToast('Enter a whole-number age between 1 and 120.');
+      return;
+    }
+
+    if (isDemo) {
+      try {
+        navigator.clipboard?.writeText(inviteLink);
+      } catch {}
+      setInvites((prev) => [
+        {
+          id: `demo-personal-${prev.length + 1}`,
+          name: n,
+          email: '',
+          activationUrl: inviteLink,
+          token: `demo-personal-${prev.length + 1}`,
+          athleteAge: inviteTrackResolution.athleteAge || undefined,
+          athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
+        },
+        ...prev,
+      ]);
+      setCopied(true);
+      setToast(`Copied ${n}'s invite link.`);
+      setInviteOpen(false);
+      return;
+    }
+    if (!team || !coachId) {
+      setToast('Still resolving your team. Try again in a moment.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: team.organizationId,
+        teamId: team.teamId,
+        teamMembershipRole: 'athlete',
+        redemptionMode: 'single-use',
+        recipientName: n,
+        athleteAge: inviteTrackResolution.athleteAge || undefined,
+        athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
+        createdByUserId: coachId,
+        createdByEmail: coachEmail || '',
+        createdByName: coachName,
+        notifyCoachOnAccept: notifyOnAccept,
+      });
+      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
+      const link = links.find((candidate) => candidate.id === inviteId);
+      if (!link?.activationUrl) {
+        setToast('Created the invite, but the link could not be loaded. Refresh and try again.');
+        return;
+      }
+
+      setInviteLink(link.activationUrl);
+      try {
+        navigator.clipboard?.writeText(link.activationUrl);
+      } catch {}
+      setCopied(true);
+      setToast(`Copied ${n}'s invite link.`);
+      setInviteOpen(false);
+      await loadInvites();
+    } catch (err) {
+      console.error('[CoachDashboard] failed to create personal athlete invite', err);
+      setToast('Could not create the invite. Try again.');
     } finally {
       setBusy(false);
     }
@@ -4424,6 +4543,8 @@ const AthleteInviteSection: React.FC<{
   const openEditInvite = (row: AthleteInviteRow) => {
     setEditingInvite(row);
     setInvName(row.name);
+    setInvAge(row.athleteAge ? String(row.athleteAge) : '');
+    setInvTrackSelection(row.athleteTrackOverride || 'team-default');
     setInvPhotoFile(null);
     setInvPhotoPreview(row.avatarUrl || null);
   };
@@ -4438,10 +4559,27 @@ const AthleteInviteSection: React.FC<{
       setToast("Add the athlete's name first.");
       return;
     }
+    const editTrackResolution = resolvePulseCheckAthleteInviteTrack({
+      athleteAge: invAge,
+      selection: invTrackSelection,
+      teamYouthTrack,
+    });
+    if (invAge.trim() && editTrackResolution.athleteAge === null) {
+      setToast('Enter a whole-number age between 1 and 120.');
+      return;
+    }
     if (isDemo) {
       setInvites((prev) =>
         prev.map((i) =>
-          i.id === editingInvite.id ? { ...i, name: n, avatarUrl: invPhotoPreview || i.avatarUrl } : i
+          i.id === editingInvite.id
+            ? {
+                ...i,
+                name: n,
+                avatarUrl: invPhotoPreview || i.avatarUrl,
+                athleteAge: editTrackResolution.athleteAge || undefined,
+                athleteTrackOverride: editTrackResolution.trackOverride || undefined,
+              }
+            : i
         )
       );
       setToast(`Updated ${n}'s invite.`);
@@ -4461,6 +4599,8 @@ const AthleteInviteSection: React.FC<{
       await pulseCheckProvisioningService.updateInviteLinkProfile({
         inviteId: editingInvite.id,
         recipientName: n,
+        athleteAge: editTrackResolution.athleteAge,
+        athleteTrackOverride: editTrackResolution.trackOverride,
         ...(prefilledProfileImageUrl ? { prefilledProfileImageUrl } : {}),
       });
       setToast(`Updated ${n}'s invite.`);
@@ -4553,7 +4693,17 @@ const AthleteInviteSection: React.FC<{
                       <Pencil className="h-3 w-3 flex-none text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100" />
                     )}
                   </div>
-                  <div className="text-[11px] text-zinc-500 truncate">{inv.email || inv.activationUrl}</div>
+                  <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500">
+                    <span className="truncate">{inv.email || inv.activationUrl}</span>
+                    {inv.athleteAge && (
+                      <span className="flex-none rounded-full border border-zinc-700/50 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                        Age {inv.athleteAge}
+                      </span>
+                    )}
+                    <span className="flex-none rounded-full border border-violet-400/25 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-200">
+                      {pulseCheckTrackLabel(inv.athleteTrackOverride || teamYouthTrack)}
+                    </span>
+                  </div>
                 </div>
               </button>
               {canInvite && inv.email && (
@@ -4590,7 +4740,7 @@ const AthleteInviteSection: React.FC<{
         </div>
       )}
 
-      {/* Invite modal — athlete name (required) + email (optional) */}
+      {/* Invite modal: athlete identity, age, track routing, and delivery. */}
       <AnimatePresence>
         {inviteOpen && (
           <motion.div
@@ -4630,6 +4780,55 @@ const AthleteInviteSection: React.FC<{
                   />
                 </div>
 
+                <div className="grid grid-cols-[110px_1fr] gap-3">
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Age
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      inputMode="numeric"
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      placeholder="17"
+                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#E0FE10]/40 focus:outline-none"
+                    />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Experience track
+                    </span>
+                    <select
+                      value={trackSelection}
+                      onChange={(e) =>
+                        setTrackSelection(e.target.value as PulseCheckAthleteTrackSelection)
+                      }
+                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white focus:border-[#E0FE10]/40 focus:outline-none"
+                    >
+                      <option value="age-based">Automatic from age</option>
+                      <option value="team-default">
+                        Team default ({pulseCheckTrackLabel(teamYouthTrack)})
+                      </option>
+                      <option value="junior">Junior</option>
+                      <option value="rookie">Rookie</option>
+                      <option value="pro">Pro</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="rounded-lg border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-[11px] leading-5 text-violet-100">
+                  {trackSelection === 'age-based' && inviteTrackResolution.athleteAge === null
+                    ? `Add an age to route automatically. This invite currently uses the ${pulseCheckTrackLabel(teamYouthTrack)} team default.`
+                    : inviteTrackResolution.source === 'age'
+                      ? `Age ${inviteTrackResolution.athleteAge} routes this athlete to the ${pulseCheckTrackLabel(inviteTrackResolution.effectiveTrack)} track.`
+                      : inviteTrackResolution.source === 'team-default'
+                        ? `This athlete will use the ${pulseCheckTrackLabel(teamYouthTrack)} team default.`
+                        : `This invite assigns the ${pulseCheckTrackLabel(inviteTrackResolution.effectiveTrack)} track for this athlete.`}
+                </div>
+
                 <div className="space-y-2">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
                     Invite by email
@@ -4653,7 +4852,7 @@ const AthleteInviteSection: React.FC<{
                     </button>
                   </div>
                   <p className="text-[11px] text-zinc-600">
-                    Athletes get set up in the PulseCheck app. Email is optional — you can share a link instead.
+                    Athletes get set up in the PulseCheck app. Email is optional. You can share a personal link instead.
                   </p>
                 </div>
 
@@ -4672,12 +4871,12 @@ const AthleteInviteSection: React.FC<{
 
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
                   <div className="min-w-0">
-                    <div className="text-xs font-medium text-zinc-300">Or share a link</div>
+                    <div className="text-xs font-medium text-zinc-300">Or share this athlete&apos;s link</div>
                     <div className="truncate text-[11px] text-zinc-600">{inviteLink}</div>
                   </div>
                   <button
-                    onClick={copyLink}
-                    disabled={busy}
+                    onClick={copyPersonalInviteLink}
+                    disabled={!name.trim() || busy}
                     className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
@@ -4748,8 +4947,45 @@ const AthleteInviteSection: React.FC<{
                     />
                   </div>
                 </div>
+                <div className="grid grid-cols-[110px_1fr] gap-3">
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Age
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={120}
+                      inputMode="numeric"
+                      value={invAge}
+                      onChange={(e) => setInvAge(e.target.value)}
+                      placeholder="17"
+                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#E0FE10]/40 focus:outline-none"
+                    />
+                  </label>
+                  <label className="space-y-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Experience track
+                    </span>
+                    <select
+                      value={invTrackSelection}
+                      onChange={(e) =>
+                        setInvTrackSelection(e.target.value as PulseCheckAthleteTrackSelection)
+                      }
+                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white focus:border-[#E0FE10]/40 focus:outline-none"
+                    >
+                      <option value="age-based">Automatic from age</option>
+                      <option value="team-default">
+                        Team default ({pulseCheckTrackLabel(teamYouthTrack)})
+                      </option>
+                      <option value="junior">Junior</option>
+                      <option value="rookie">Rookie</option>
+                      <option value="pro">Pro</option>
+                    </select>
+                  </label>
+                </div>
                 <p className="text-[11px] text-zinc-600">
-                  These pre-fill the athlete's profile when they accept the invite — they can change them later.
+                  The age and track apply when this athlete accepts the invite.
                 </p>
 
                 <div className="flex items-center justify-end gap-2 pt-1">

@@ -751,6 +751,8 @@ export interface PulseCheckInviteLink {
   invitedTitle?: string;
   recipientName?: string;
   targetEmail?: string;
+  athleteAge?: number;
+  athleteTrackOverride?: PulseCheckYouthTrack;
   commercialSnapshot?: PulseCheckTeamCommercialSnapshot;
   token: string;
   activationUrl: string;
@@ -881,6 +883,8 @@ export interface PulseCheckTeamMembership {
   phone?: string;
   smsConsentAt?: Timestamp | null;
   athleteOnboarding?: PulseCheckAthleteOnboardingState;
+  athleteAge?: number;
+  athleteTrackOverride?: PulseCheckYouthTrack;
   coachIntakeResponses?: PulseCheckIntakeResponses;
   coachIntakeFormVersion?: string;
   coachIntakeCompletedAt?: Timestamp | null;
@@ -966,6 +970,8 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   targetEmail?: string;
   recipientName?: string;
   invitedTitle?: string;
+  athleteAge?: number;
+  athleteTrackOverride?: PulseCheckYouthTrack;
   // Optional profile photo the inviting coach pre-loaded for this staff member;
   // stamped on the invite and applied to their profile when they redeem.
   prefilledProfileImageUrl?: string;

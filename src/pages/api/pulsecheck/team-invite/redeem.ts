@@ -24,6 +24,10 @@ import type {
   PulseCheckTeamCommercialSnapshot,
   PulseCheckTeamMembershipRole,
 } from '../../../../api/firebase/pulsecheckProvisioning/types';
+import {
+  normalizePulseCheckAthleteAge,
+  normalizePulseCheckAthleteTrackOverride,
+} from '../../../../utils/pulsecheckAthleteTrack';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -351,6 +355,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const cohortId = normalizeString(invite.cohortId);
       const teamMembershipRole = normalizeString(invite.teamMembershipRole) as PulseCheckTeamMembershipRole;
       const invitedTitle = normalizeString(invite.invitedTitle);
+      const athleteAge =
+        teamMembershipRole === 'athlete'
+          ? normalizePulseCheckAthleteAge(invite.athleteAge)
+          : null;
+      const athleteTrackOverride =
+        teamMembershipRole === 'athlete'
+          ? normalizePulseCheckAthleteTrackOverride(invite.athleteTrackOverride)
+          : null;
       // Coach-preloaded invite image + notify-coach context (read here so the
       // membership inherits the avatar and the accept email can name the coach).
       const prefilledProfileImageUrl = normalizeString(invite.prefilledProfileImageUrl);
@@ -403,7 +415,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const nextTeamCommercialConfig =
         teamMembershipRole === 'team-admin'
           ? resolveTeamAdminCommercialConfig(teamCommercialConfig, userId)
-          : teamCommercialConfig;
+          : athleteTrackOverride
+            ? { ...teamCommercialConfig, youthTrack: athleteTrackOverride }
+            : teamCommercialConfig;
       const commercialSnapshot = buildTeamCommercialSnapshot({
         organizationId,
         teamId,
@@ -486,6 +500,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // the coach dashboard avatar fallback has data before they upload a photo.
           ...(teamMembershipRole === 'athlete' && prefilledProfileImageUrl
             ? { prefilledProfileImageUrl }
+            : {}),
+          ...(teamMembershipRole === 'athlete'
+            ? {
+                athleteAge,
+                athleteTrackOverride,
+              }
             : {}),
           onboardingStatus: nextMembershipOnboardingStatus,
           commercialAccess: commercialSnapshot,
