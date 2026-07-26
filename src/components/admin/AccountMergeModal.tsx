@@ -75,10 +75,14 @@ const AccountMergeModal: React.FC<{
         candidate.id,
       ].some((value) => String(value || '').toLowerCase().includes(query));
     });
-    if (canonical && !matches.some((candidate) => candidate.id === canonical.id)) {
-      return [canonical, ...matches].slice(0, 100);
+    const visibleMatches = matches.slice(0, 100);
+    if (canonical && !visibleMatches.some((candidate) => candidate.id === canonical.id)) {
+      return [
+        canonical,
+        ...visibleMatches.filter((candidate) => candidate.id !== canonical.id),
+      ].slice(0, 100);
     }
-    return matches.slice(0, 100);
+    return visibleMatches;
   }, [accountSearch, canonical, mergeSource.id, users]);
   const expectedConfirmation = canonicalUid ? `MERGE ${mergeSource.id} INTO ${canonicalUid}` : '';
 
@@ -94,7 +98,12 @@ const AccountMergeModal: React.FC<{
     const previousSource = mergeSource;
     setMergeSource(canonical);
     setCanonicalUid(previousSource.id);
-    setAccountSearch('');
+    setAccountSearch(
+      previousSource.email
+      || previousSource.username
+      || previousSource.displayName
+      || previousSource.id,
+    );
     resetReview();
   };
 

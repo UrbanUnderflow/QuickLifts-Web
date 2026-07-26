@@ -262,8 +262,8 @@ async function openProtocolRuntimeFromHierarchy(page: Page) {
   }
   await expect(page.getByText(/Hierarchy Workspace/i)).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: /Cognitive Reframe/i }).first().click();
-  await expect(page.getByRole('button', { name: /Nerves to Excitement Reframe/i }).first()).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: /Nerves to Excitement Reframe/i }).first().click();
+  await expect(page.getByRole('button', { name: /Nerves to Excitement/i }).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: /Nerves to Excitement/i }).first().click();
   await expect(page.getByRole('button', { name: /Preview Protocol/i })).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: /Preview Protocol/i }).click();
 }

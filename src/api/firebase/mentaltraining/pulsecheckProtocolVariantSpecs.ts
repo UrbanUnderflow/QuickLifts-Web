@@ -78,13 +78,13 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     ],
   }),
   spec('regulation-cognitive_reframe', {
-    label: 'Nerves to Excitement Reframe',
+    label: 'Nerves to Excitement',
     variantKey: 'nerves-to-excitement-reframe',
     category: ExerciseCategory.Mindset,
     deliveryMode: 'guided_reframe',
     legacyExerciseId: 'mindset-nerves-excitement',
     scriptSummary:
-      'A short verbal reappraisal that relabels butterflies and racing physiology as readiness so the athlete can keep the activation and change the interpretation.',
+      'The athlete notices how nerves change the body, chooses a short phrase that frames those changes as preparation, and practices returning attention to the next action.',
     evidenceSummary:
       'This is the most direct cognitive-reframe variant in the registry. The intervention closely matches the experimental "I am excited" paradigm, which has been shown to improve both subjective state and pressured task performance more effectively than trying to calm down completely.',
     sourceReferences: [

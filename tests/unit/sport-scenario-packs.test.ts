@@ -23,12 +23,13 @@ const installFirebaseEnv = () => {
 
 const loadModules = async () => {
   installFirebaseEnv();
-  const [archetypes, library, narration] = await Promise.all([
+  const [archetypes, library, narration, sportConfig] = await Promise.all([
     import('../../src/api/firebase/mentaltraining/sportScenarioArchetypes'),
     import('../../src/api/firebase/mentaltraining/exerciseLibraryService'),
     import('../../src/api/firebase/mentaltraining/moduleNarrationScripts'),
+    import('../../src/api/firebase/pulsecheckSportConfig'),
   ]);
-  return { archetypes, library, narration };
+  return { archetypes, library, narration, sportConfig };
 };
 
 const ADVERSITY_ID = 'viz-adversity-response';
@@ -272,7 +273,9 @@ test('men’s physique nerves pack contains stage-native language only', async (
   const exercise = (library as any).SEEDED_EXERCISES
     .find((item: any) => item.id === 'mindset-nerves-excitement');
   const stage = exercise.sportContentPacks.find((pack: any) => pack.archetype === 'stage');
-  assert.ok(stage?.interaction, 'stage interaction exists');
+  const rehearsal = stage?.interaction?.nervesRehearsal;
+  assert.equal(stage?.interaction?.kind, 'nervesRehearsal');
+  assert.ok(rehearsal, 'stage rehearsal exists');
 
   const lines = JSON.stringify(stage).toLowerCase();
   assert.match(lines, /backstage before prejudging/);
@@ -281,6 +284,142 @@ test('men’s physique nerves pack contains stage-native language only', async (
   assert.doesNotMatch(lines, /\bplay\b/);
   assert.doesNotMatch(lines, /\bgame\b/);
   assert.doesNotMatch(lines, /\bteammate/);
+});
+
+test('Nerves to Excitement has a complete progressive rehearsal pack for every sport archetype', async () => {
+  const { library } = await loadModules();
+  const exercise = (library as any).SEEDED_EXERCISES
+    .find((item: any) => item.id === 'mindset-nerves-excitement');
+
+  assert.ok(exercise, 'Nerves to Excitement exists');
+  assert.equal(exercise.sportContentPacks.length, 8);
+
+  for (const pack of exercise.sportContentPacks) {
+    const rehearsal = pack.interaction?.nervesRehearsal;
+    assert.equal(
+      pack.interaction?.kind,
+      'nervesRehearsal',
+      `${pack.archetype} uses the rehearsal game`,
+    );
+    assert.ok(rehearsal, `${pack.archetype} has a rehearsal config`);
+    assert.equal(rehearsal.contentVersion, 2, `${pack.archetype} uses the current clear-language copy`);
+    assert.equal(rehearsal.awarenessChoices.length, 4);
+    assert.equal(rehearsal.meaningChoices.length, 3);
+    assert.equal(
+      rehearsal.meaningChoices.filter((choice: any) => choice.isTarget).length,
+      1,
+      `${pack.archetype} has one target response`,
+    );
+    assert.equal(rehearsal.cueChoices.length, 3);
+    for (const cue of rehearsal.cueChoices) {
+      assert.ok(
+        cue.trim().split(/\s+/).length <= 8,
+        `${pack.archetype} phrase "${cue}" stays recallable`,
+      );
+    }
+    assert.deepEqual(
+      rehearsal.rehearsalRounds.map((round: any) => round.support),
+      ['visible', 'rebuild', 'recall'],
+      `${pack.archetype} removes support across the three repetitions`,
+    );
+    assert.equal(
+      rehearsal.rehearsalRounds.filter((round: any) => round.support !== 'visible').length,
+      2,
+      `${pack.archetype} requires two unsupported repetitions`,
+    );
+    assert.ok(
+      rehearsal.rehearsalRounds.every((round: any) => round.windowSeconds >= 10),
+      `${pack.archetype} uses a real response window`,
+    );
+    assert.ok(rehearsal.setAction.trim(), `${pack.archetype} has a sport-native set action`);
+    assert.ok(rehearsal.reflectionChoices.length >= 4);
+    assert.ok(rehearsal.closePrompt.trim());
+  }
+});
+
+test('Nerves to Excitement uses direct athlete-facing language in every content pack', async () => {
+  const { library } = await loadModules();
+  const exercise = (library as any).SEEDED_EXERCISES
+    .find((item: any) => item.id === 'mindset-nerves-excitement');
+
+  const collectStrings = (value: unknown): string[] => {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value.flatMap(collectStrings);
+    if (value && typeof value === 'object') {
+      return Object.values(value as Record<string, unknown>).flatMap(collectStrings);
+    }
+    return [];
+  };
+  const banned: Array<[RegExp, string]> = [
+    [/\bwhat meaning\b/i, '"what meaning"'],
+    [/\buseful meaning\b/i, '"useful meaning"'],
+    [/\buseful job\b/i, '"useful job"'],
+    [/\bgive (?:this |the )?energy a job\b/i, '"give the energy a job"'],
+    [/\banother rush\b/i, '"another rush"'],
+    [/\bsame fuel\b/i, '"same fuel"'],
+    [/\bdifferent gear\b/i, '"different gear"'],
+    [/\bpersonal cue\b/i, '"personal cue"'],
+    [/\bthe cue\b/i, '"the cue"'],
+  ];
+
+  for (const pack of exercise.sportContentPacks) {
+    const athleteCopy = collectStrings({
+      applicationCue: pack.applicationCue,
+      interaction: pack.interaction,
+    });
+    for (const line of athleteCopy) {
+      for (const [pattern, label] of banned) {
+        assert.doesNotMatch(
+          line,
+          pattern,
+          `${pack.archetype} must not use ambiguous ${label} language: ${line}`,
+        );
+      }
+      assert.doesNotMatch(
+        line,
+        /\bmy body\b[^.!?]*\byour\b/i,
+        `${pack.archetype} must not mix first- and second-person language: ${line}`,
+      );
+    }
+  }
+
+  const baseCopy = collectStrings({
+    description: exercise.description,
+    exerciseConfig: exercise.exerciseConfig,
+    benefits: exercise.benefits,
+    bestFor: exercise.bestFor,
+    reflection: exercise.reflection,
+    interaction: exercise.interaction,
+    overview: exercise.overview,
+  });
+  for (const line of baseCopy) {
+    for (const [pattern, label] of banned) {
+      assert.doesNotMatch(line, pattern, `base module must not use ambiguous ${label} language: ${line}`);
+    }
+  }
+});
+
+test('every configured sport resolves to a Nerves to Excitement content pack', async () => {
+  const { archetypes, library, sportConfig } = await loadModules();
+  const exercise = (library as any).SEEDED_EXERCISES
+    .find((item: any) => item.id === 'mindset-nerves-excitement');
+  const packsByArchetype = new Map(
+    exercise.sportContentPacks.map((pack: any) => [pack.archetype, pack]),
+  );
+  const catalog = sportConfig.getDefaultPulseCheckSports();
+
+  for (const sport of catalog) {
+    const archetype = archetypes.resolveScenarioArchetype(sport.name, catalog);
+    if (sport.id === 'other') {
+      assert.equal(archetype, 'general');
+      continue;
+    }
+    assert.notEqual(archetype, 'general', `${sport.name} must resolve to a reviewed environment`);
+    assert.ok(
+      packsByArchetype.has(archetype),
+      `${sport.name} must resolve to a complete Nerves to Excitement pack`,
+    );
+  }
 });
 
 test('sport pack copy follows the athlete-facing copy doctrine', async () => {

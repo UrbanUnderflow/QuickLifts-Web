@@ -138,7 +138,7 @@ const PROTOCOL_VISUALS_BY_EXERCISE_ID: Record<string, ProtocolVisualConfig> = {
     gradientClass: 'from-amber-600 to-orange-700',
   },
   'mindset-nerves-excitement': {
-    label: 'Nerves to Excitement Reframe',
+    label: 'Nerves to Excitement',
     Icon: Sparkles,
     accentHex: '#EC4899',
     gradientClass: 'from-pink-500 to-fuchsia-700',

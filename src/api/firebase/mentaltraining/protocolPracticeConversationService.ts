@@ -353,9 +353,9 @@ const SEEDED_PROTOCOL_PRACTICE_SPECS: ProtocolPracticeSpec[] = [
     protocolVariantId: 'regulation-cognitive_reframe--nerves-to-excitement-reframe',
     title: 'Nerves To Excitement Practice',
     inputModes: ['text', 'voice', 'mixed'],
-    practiceIntro: 'Now we practice the reframe. Answer like you are about to say this to yourself before a real rep.',
-    evaluationLead: 'Here is how your reframe rep looked.',
-    nextRepFocus: 'Keep the language short, embodied, and pointed toward readiness rather than fear.',
+    practiceIntro: 'Now practice what you will tell yourself when you notice nerves. Write the words you would actually use.',
+    evaluationLead: 'Here is how clearly your answer recognized the nerves and returned your attention to the next action.',
+    nextRepFocus: 'Keep your phrase short. Name what your body is doing, then tell yourself what to focus on next.',
     rubricLabels: {
       signalAwareness: 'Signal awareness',
       techniqueFidelity: 'Reframe fidelity',
@@ -376,9 +376,9 @@ const SEEDED_PROTOCOL_PRACTICE_SPECS: ProtocolPracticeSpec[] = [
       },
       {
         id: 'reframe-language',
-        label: 'Reframe language',
-        promptText: 'Now reframe those symptoms as readiness, not danger.',
-        placeholder: 'Write the reframe you would actually say...',
+        label: 'Choose your words',
+        promptText: 'What will you tell yourself so these body changes remind you that you are preparing to perform?',
+        placeholder: 'Write the short phrase you would actually say...',
         targetedDimensions: ['techniqueFidelity', 'languageQuality', 'coachability'],
         keywordSignals: {
           techniqueFidelity: ['excited', 'ready', 'fuel', 'opportunity', 'matters'],
@@ -386,7 +386,7 @@ const SEEDED_PROTOCOL_PRACTICE_SPECS: ProtocolPracticeSpec[] = [
           coachability: ['not fear', 'not scared', 'instead'],
         },
         adaptiveFollowUps: [
-          { id: 'reframe-language-followup', targetDimension: 'techniqueFidelity', promptText: 'Tighten the reframe. I need you to turn the same body signal into readiness, not just describe nerves.' },
+          { id: 'reframe-language-followup', targetDimension: 'techniqueFidelity', promptText: 'Try again. Name the body change, then say what action you are ready to take.' },
         ],
       },
       {

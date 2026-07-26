@@ -1659,8 +1659,8 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
   },
   {
     id: 'mindset-nerves-excitement',
-    name: 'Nerves to Excitement Reframe',
-    description: 'Nerves and excitement feel exactly the same in your body. Learn to call that feeling what it really is: ready.',
+    name: 'Nerves to Excitement',
+    description: 'Notice how nerves change your body, decide what to tell yourself, and practice a response you can repeat before and during competition.',
     category: ExerciseCategory.Mindset,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 3,
@@ -1669,98 +1669,81 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
       config: {
         type: 'reframe',
         prompts: [
-          'Notice the symptoms: Racing heart, butterflies, sweaty palms.',
-          'Instead of "I\'m so nervous", say "I\'m so excited".',
-          'Instead of "My heart is racing because I\'m scared", say "My heart is racing because I\'m ready".',
-          'Welcome the energy: "This feeling means I\'m about to do something that matters."',
-          'Channel the energy into movement - dynamic warm-up, shaking out limbs.',
-          'Script: "These butterflies aren\'t fear. They\'re fuel. I\'m not nervous - I\'m READY."',
+          'Notice the first change in your body: a faster heartbeat, different breathing, tight muscles, or faster thoughts.',
+          'Tell yourself, "My body is preparing me to perform."',
+          'Take one steady breath.',
+          'Move your body into the position your sport requires.',
+          'Repeat your short phrase and focus on the next action you can control.',
         ],
         journalRequired: false,
       },
     },
     benefits: [
-      'Backed by Harvard research',
-      'Simple but powerful technique',
-      'Works immediately',
-      'Changes your experience of nerves',
+      'Notice the first way nerves change your body',
+      'Choose a short phrase to tell yourself',
+      'Practice responding under pressure',
+      'Remember your phrase without help',
     ],
-    bestFor: ['pre-competition nerves', 'physical anxiety symptoms', 'butterflies', 'racing heart'],
+    bestFor: ['nerves before competition', 'a faster heartbeat', 'a nervous feeling in your stomach', 'faster thoughts'],
     reflection: {
       questions: [
-        { id: 'belief-level', prompt: 'How much do you believe the reframe right now?', kind: 'scale', scaleLowLabel: 'Not yet', scaleHighLabel: 'Fully' },
+        { id: 'belief-level', prompt: 'How useful did your phrase feel during the practice?', kind: 'scale', scaleLowLabel: 'Not useful yet', scaleHighLabel: 'Very useful' },
       ],
     },
     interaction: {
-      kind: 'choiceDrill',
-      rounds: [
-        {
-          prompt: 'Your heart is racing before competition. What is it telling you?',
-          windowSeconds: 12,
-          choices: [
-            {
-              text: '"My body is building energy for the performance."',
-              isTarget: true,
-              feedback: 'Correct read. A racing heart is your engine warming up, not a warning light.',
-            },
-            {
-              text: '"Something is wrong with me."',
-              feedback: 'Nothing is wrong. Excitement and nerves feel identical in the body. You choose the label.',
-            },
-            {
-              text: '"I have to feel completely calm before I can perform."',
-              feedback: 'You do not need zero energy. You need to point the energy somewhere.',
-            },
-          ],
-        },
-        {
-          prompt: 'Butterflies right before your name gets called. What do they mean?',
-          windowSeconds: 12,
-          choices: [
-            {
-              text: '"This means I am about to do something that matters."',
-              isTarget: true,
-              feedback: 'Yes. Butterflies show up for moments worth caring about.',
-            },
-            {
-              text: '"I am too nervous for this."',
-              feedback: 'Same feeling, wrong label. Call it ready instead of nervous and watch what changes.',
-            },
-            {
-              text: '"Maybe I should not have signed up for this."',
-              feedback: 'The feeling is not a verdict on you. It is energy waiting for a job.',
-            },
-          ],
-        },
-        {
-          prompt: 'Hands buzzing, energy spiking during warm-up. Final call: what is this feeling?',
-          windowSeconds: 12,
-          choices: [
-            {
-              text: '"Fuel. I am ready."',
-              isTarget: true,
-              feedback: 'That is the switch. These butterflies are not fear. They are fuel.',
-            },
-            {
-              text: '"Fear. I should back off."',
-              feedback: 'Backing off gives the energy no direction. Use it for the opening action you prepared.',
-            },
-            {
-              text: '"A problem I need to fix before I start."',
-              feedback: 'This energy can support a strong opening when you connect it to a clear cue.',
-            },
-          ],
-        },
-      ],
+      kind: 'nervesRehearsal',
+      nervesRehearsal: {
+        contentVersion: 2,
+        awarenessPrompt: 'As you get ready to perform, what changes first in your body?',
+        awarenessChoices: [
+          'My heart beats faster',
+          'My breathing changes',
+          'My muscles tighten',
+          'My thoughts speed up',
+        ],
+        awarenessFeedback: 'This is the first sign that you are feeling nervous. Noticing it early gives you time to take one breath, set your body, and choose what to tell yourself.',
+        meaningPrompt: 'You notice that you feel nervous before the performance. What should you tell yourself so you stay focused on what you need to do?',
+        meaningChoices: [
+          {
+            text: '"My faster heartbeat and breathing mean my body is preparing me to perform."',
+            isTarget: true,
+            feedback: 'This answer treats the body changes as preparation and brings your attention back to the performance.',
+          },
+          {
+            text: '"I should double-check the whole plan right now."',
+            feedback: 'Checking every part of your plan at once gives you more to think about. Choose the next action you can control.',
+          },
+          {
+            text: '"I need to know how ready everyone else looks."',
+            feedback: 'Watching everyone else takes your attention away from your own preparation.',
+          },
+        ],
+        cuePrompt: 'Choose a short phrase you can say to yourself when you notice nerves.',
+        cueChoices: ['My body is preparing. I am ready.', 'I am ready. See and move.', 'One breath. Set and perform.'],
+        setAction: 'Stand tall, relax your shoulders, and move into your starting position',
+        rehearsalRounds: [
+          { pressureCue: 'You notice that you feel nervous as you get ready.', support: 'visible', windowSeconds: 18 },
+          { pressureCue: 'The performance is close and your heartbeat gets faster.', support: 'rebuild', windowSeconds: 16 },
+          { pressureCue: 'You feel nervous again during the performance.', support: 'recall', windowSeconds: 14 },
+        ],
+        reflectionPrompt: 'After you took one breath, adjusted your body, and said your phrase, what did you notice?',
+        reflectionChoices: [
+          'I focused on what I needed to do next.',
+          'I still felt nervous, but I knew what to do next.',
+          'I moved too quickly. I want to repeat the last practice.',
+          'The phrase did not help me. I want to choose another.',
+        ],
+        closePrompt: 'You noticed your nerves, took one steady breath, adjusted your body, and used a short phrase. Practice these steps so you can repeat them when you feel pressure.',
+      },
     },
-    origin: 'Based on groundbreaking research by Harvard Business School professor Alison Wood Brooks, published in the Journal of Experimental Psychology (2014). The study proved that saying "I am excited" before a high-pressure task significantly improved performance compared to saying "I am calm" or saying nothing. NBA player Steph Curry and tennis champion Rafael Nadal are known practitioners of this reframing technique.',
-    neuroscience: 'Anxiety and excitement produce neurologically identical physiological responses — elevated heart rate, increased cortisol, heightened arousal. The only difference is cognitive appraisal. Brooks\' research showed that reappraising anxiety as excitement ("excitation transfer") is far easier than trying to calm down because it doesn\'t require shifting arousal levels — only the brain\'s interpretation. This leverages the concept of "cognitive reappraisal," which engages the prefrontal cortex to relabel the amygdala\'s signal from "danger" to "opportunity."',
+    origin: 'Psychologist Alison Wood Brooks studied what happens when people label anxious feelings as excitement before difficult tasks. In her studies, people who said they were excited often performed better than people who tried to force themselves to feel calm.',
+    neuroscience: 'Nerves and excitement can both include a faster heartbeat, quicker breathing, tight muscles, and increased alertness. The words you use do not erase those body changes. Calling them preparation can help you focus on the action you have practiced.',
     overview: {
-      when: 'When you feel butterflies, a racing heart, or pre-competition nerves',
-      focus: 'Relabeling anxiety symptoms as excitement and fuel',
-      timeScale: '3 minutes (instant reframe)',
-      skill: 'Relabeling nerves as readiness',
-      analogy: 'Same engine, different gear — anxiety and excitement are the same fuel, just channeled differently',
+      when: 'When your heartbeat, breathing, muscles, or thoughts change before or during competition',
+      focus: 'Noticing nerves and choosing a short phrase that returns your attention to the next action',
+      timeScale: '3 minutes',
+      skill: 'Responding to nerves with one breath, a sport-specific body position, and clear self-talk',
+      analogy: 'A faster heartbeat can mean your body is preparing for action. You practice what to do when you notice it.',
     },
     iconName: 'sparkles',
     isActive: true,

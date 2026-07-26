@@ -153,7 +153,43 @@ export type ModuleInteractionRound = {
   windowSeconds?: number;
 };
 
-export type ModuleInteractionKind = 'choiceDrill' | 'guidedDwell' | 'lockedReplay';
+export type ModuleInteractionKind =
+  | 'choiceDrill'
+  | 'guidedDwell'
+  | 'lockedReplay'
+  | 'nervesRehearsal';
+
+export type NervesRehearsalSupport = 'visible' | 'rebuild' | 'recall';
+
+export type NervesRehearsalRound = {
+  /** Sport-native pressure moment presented before the athlete begins the rep. */
+  pressureCue: string;
+  /** How much support remains for the athlete's personal cue. */
+  support: NervesRehearsalSupport;
+  /** Real response window. Expiration requires the athlete to repeat the rep. */
+  windowSeconds: number;
+};
+
+export type NervesRehearsalConfig = {
+  /** Increment when athlete-facing copy changes incompatibly. Mobile clients reject older packs. */
+  contentVersion: number;
+  /** Direct awareness question. Every answer is valid body information. */
+  awarenessPrompt: string;
+  awarenessChoices: string[];
+  awarenessFeedback: string;
+  /** Untimed teaching choice. Choice order is randomized in the player. */
+  meaningPrompt: string;
+  meaningChoices: ModuleInteractionChoice[];
+  cuePrompt: string;
+  /** Short, speakable performance cues. */
+  cueChoices: string[];
+  /** Sport-native physical reset paired with the cue. */
+  setAction: string;
+  rehearsalRounds: NervesRehearsalRound[];
+  reflectionPrompt: string;
+  reflectionChoices: string[];
+  closePrompt: string;
+};
 
 // ── Sport scenario packs ────────────────────────────────────────────────────
 // A second archetype axis on the sports intelligence layer: SportsInsight
@@ -212,6 +248,8 @@ export type ModuleInteraction = {
   lockCue?: string;
   /** Closing line for guidedDwell and lockedReplay (narrated). */
   closePrompt?: string;
+  /** Nerves to Excitement progressive awareness and rehearsal game. */
+  nervesRehearsal?: NervesRehearsalConfig;
 };
 
 /**

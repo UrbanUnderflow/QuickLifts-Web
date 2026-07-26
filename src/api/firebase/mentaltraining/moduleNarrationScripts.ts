@@ -309,6 +309,22 @@ function interactionScripts(interaction: ModuleInteraction): Array<{ slot: strin
     push('close-prompt', 'Close', interaction.closePrompt);
   }
 
+  if (interaction.kind === 'nervesRehearsal' && interaction.nervesRehearsal) {
+    const config = interaction.nervesRehearsal;
+    push('awareness-prompt', 'Awareness Prompt', config.awarenessPrompt);
+    push('awareness-feedback', 'Awareness Feedback', config.awarenessFeedback);
+    push('meaning-prompt', 'Meaning Prompt', config.meaningPrompt);
+    config.meaningChoices.forEach((choice, index) => {
+      push(`meaning-feedback-${index + 1}`, `Meaning Feedback ${index + 1}`, choice.feedback);
+    });
+    push('cue-prompt', 'Cue Prompt', config.cuePrompt);
+    config.rehearsalRounds.forEach((round, index) => {
+      push(`rehearsal-${index + 1}`, `Rehearsal ${index + 1}`, round.pressureCue);
+    });
+    push('reflection-prompt', 'Reflection Prompt', config.reflectionPrompt);
+    push('close-prompt', 'Close', config.closePrompt);
+  }
+
   return entries;
 }
 

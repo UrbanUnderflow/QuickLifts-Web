@@ -130,45 +130,110 @@ function choice(
   return { text, feedback, ...(isTarget ? { isTarget: true } : {}) };
 }
 
-function nervesInteraction(context: SportContext): ModuleInteraction {
-  const firstPrompt = context.archetype === 'stage'
-    ? 'Your heart is racing backstage before prejudging. What is it telling you?'
-    : `Your heart is racing ${context.beforeEvent}. What is it telling you?`;
-  const readyAnswer = context.archetype === 'stage'
-    ? '"My body is building energy for the stage."'
-    : `"My body is getting me ready to ${context.perform}."`;
+function nervesCueOptions(context: SportContext): string[] {
+  switch (context.archetype) {
+    case 'invasion':
+      return ['My body is preparing. Next play.', 'I am ready. Read and move.', 'One breath. See the play.'];
+    case 'net_racket':
+      return ['My body is preparing. Next point.', 'I am ready. See and strike.', 'One breath. Play this point.'];
+    case 'race':
+      return ['My body is preparing. Find my rhythm.', 'I am ready. Smooth and fast.', 'One breath. Settle and drive.'];
+    case 'judged':
+      return ['My body is preparing. Trust my routine.', 'I am ready. Stand tall and finish.', 'One breath. Start my routine.'];
+    case 'stage':
+      return ['My body is preparing. Present strong.', 'I am ready. Stand tall and show.', 'One breath. Set my pose.'];
+    case 'precision':
+      return ['My body is preparing. Trust my setup.', 'I am ready. Aim and release.', 'One breath. Take the shot.'];
+    case 'combat':
+      return ['My body is preparing. See clearly.', 'I am ready. Check range and respond.', 'One breath. Take my stance.'];
+    case 'attempt':
+      return ['My body is preparing. Trust my technique.', 'I am ready. Set and finish.', 'One breath. Start my attempt.'];
+  }
+}
 
+function nervesSetAction(context: SportContext): string {
+  switch (context.archetype) {
+    case 'stage':
+      return 'Stand tall, open your chest, and prepare your first pose';
+    case 'race':
+      return 'Stand tall, relax your shoulders, and find your rhythm';
+    case 'combat':
+      return 'Take your stance, check the distance, and keep your eyes up';
+    case 'precision':
+      return 'Plant your feet, relax your shoulders, and look at the target';
+    case 'attempt':
+      return 'Plant your feet, brace your body, and picture your first movement';
+    case 'net_racket':
+      return 'Get on the balls of your feet and face the next point';
+    case 'judged':
+      return 'Stand tall and move into your starting position';
+    case 'invasion':
+      return 'Stand ready, look up, and find the next play';
+  }
+}
+
+function firstPersonPerformance(context: SportContext): string {
+  return context.perform.replace(/\byour\b/gi, 'my');
+}
+
+function nervesInteraction(context: SportContext): ModuleInteraction {
   return {
-    kind: 'choiceDrill',
-    rounds: [
-      {
-        prompt: firstPrompt,
-        windowSeconds: 12,
-        choices: [
-          choice(readyAnswer, 'That energy can support your performance. Give it a useful direction.', true),
-          choice('"Something must be wrong with me."', 'A fast heartbeat can be a normal response to anticipation and effort. Name it before you judge it.'),
-          choice(`"I need every nerve to disappear before I can ${context.perform}."`, 'You can perform with energy in your body. Steady the next action and use what is already there.'),
-        ],
-      },
-      {
-        prompt: `${context.pressureMoment.charAt(0).toUpperCase()}${context.pressureMoment.slice(1)}. Where does your attention go?`,
-        windowSeconds: 12,
-        choices: [
-          choice(`"One breath, then ${context.skill}."`, 'You gave the energy a clear job. That is how excitement becomes useful.', true),
-          choice(`"I need to know what ${context.people} think of me."`, 'Trying to read everyone else pulls attention away from the work you control.'),
-          choice('"I should force myself to feel nothing."', 'Numb is not the goal. Direct the energy toward one clear action.'),
-        ],
-      },
-      {
-        prompt: `You feel another rush ${context.resetMoment}. What do you tell yourself?`,
-        windowSeconds: 12,
-        choices: [
-          choice(`"This is energy. I know where to put it: ${context.skill}."`, 'You named the feeling and connected it to a response you can use.', true),
-          choice('"The feeling decides how I will perform."', 'A feeling gives you information. Your practiced response still leads.'),
-          choice('"I need to hurry so the feeling goes away."', 'Rushing gives the energy control. A clear cue gives it direction.'),
-        ],
-      },
-    ],
+    kind: 'nervesRehearsal',
+    nervesRehearsal: {
+      contentVersion: 2,
+      awarenessPrompt: `As you get ready ${context.beforeEvent}, what changes first in your body?`,
+      awarenessChoices: [
+        'My heart beats faster',
+        'My breathing changes',
+        'My muscles tighten',
+        'My thoughts speed up',
+      ],
+      awarenessFeedback: 'This is the first sign that you are feeling nervous. Noticing it early gives you time to take one breath, set your body, and choose what to tell yourself.',
+      meaningPrompt: `${context.pressureMoment.charAt(0).toUpperCase()}${context.pressureMoment.slice(1)}. What should you tell yourself so you stay focused on ${context.skill}?`,
+      meaningChoices: [
+        choice(
+          `"My faster heartbeat and breathing mean my body is preparing me to ${firstPersonPerformance(context)}."`,
+          `This answer treats the body changes as preparation and brings your attention back to ${context.skill}.`,
+          true,
+        ),
+        choice(
+          '"I should double-check the whole plan right now."',
+          'Checking every part of your plan at once gives you more to think about. Choose the next action you can control.',
+        ),
+        choice(
+          `"I need to know how ready ${context.people} look."`,
+          `Watching ${context.people} takes your attention away from ${context.skill}.`,
+        ),
+      ],
+      cuePrompt: 'Choose a short phrase you can say to yourself when you notice nerves.',
+      cueChoices: nervesCueOptions(context),
+      setAction: nervesSetAction(context),
+      rehearsalRounds: [
+        {
+          pressureCue: `You notice that you feel nervous ${context.beforeEvent}.`,
+          support: 'visible',
+          windowSeconds: 18,
+        },
+        {
+          pressureCue: `${context.pressureMoment.charAt(0).toUpperCase()}${context.pressureMoment.slice(1)}.`,
+          support: 'rebuild',
+          windowSeconds: 16,
+        },
+        {
+          pressureCue: `You feel nervous again ${context.resetMoment}.`,
+          support: 'recall',
+          windowSeconds: 14,
+        },
+      ],
+      reflectionPrompt: 'After you took one breath, adjusted your body, and said your phrase, what did you notice?',
+      reflectionChoices: [
+        'I focused on what I needed to do next.',
+        'I still felt nervous, but I knew what to do next.',
+        'I moved too quickly. I want to repeat the last practice.',
+        'The phrase did not help me. I want to choose another.',
+      ],
+      closePrompt: 'You noticed your nerves, took one steady breath, adjusted your body, and used a short phrase. Practice these steps so you can repeat them when you feel pressure.',
+    },
   };
 }
 
@@ -481,7 +546,7 @@ function applicationCueFor(
     'focus-cue-word': (sport) => `Choose a short cue that brings you back to ${sport.skill} ${sport.resetMoment}.`,
     'focus-body-scan': (sport) => `Notice tension in your body ${sport.beforeEvent}, then release what your performance does not need.`,
     'mindset-pressure-privilege': (sport) => `Practice reading pressure as a sign that this ${sport.event} matters to you.`,
-    'mindset-nerves-excitement': (sport) => `Practice giving pre-${sport.event} energy a useful job in ${sport.skill}.`,
+    'mindset-nerves-excitement': (sport) => `Practice noticing nerves and bringing your attention back to ${sport.skill}.`,
     'mindset-process-focus': (sport) => `Bring your attention back to ${sport.skill} when the result or other people pull it away.`,
     'mindset-growth': (sport) => `Use hard repetitions of ${sport.skill} as information for what to train next.`,
     'confidence-evidence-journal': (sport) => `Collect specific proof from training and each ${sport.event} that your work is building.`,
