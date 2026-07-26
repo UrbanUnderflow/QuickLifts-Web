@@ -56,11 +56,20 @@ const TELEMETRY_ROWS = [
 ];
 
 const COVERAGE_GATES = [
+  'Every seeded skill must contain all eight personalized sport content packs, even when the underlying technique is universal.',
+  'Scenario-heavy skills replace the full interaction. Vocabulary replacement alone cannot repair the wrong setting, action, pressure moment, or answer choices.',
   'Every active sport catalog entry must deliberately resolve to both a scenario archetype and a biometric insight archetype.',
   'The TypeScript catalog mapping is canonical; the Swift mirror must match it exactly for ids and archetypes used on-device.',
   'CI fails on orphan mappings, missing active-sport coverage, TypeScript/Swift drift, or a regression in the known-gap count.',
   'Position, event, and division aliases require fixtures. Men’s Physique and other catalog divisions must not depend on broad words like “game.”',
-  'A personalized badge appears only when the runtime has a resolved sport identity. General fallback uses a generic Sports Intelligence label.',
+  'A personalized badge appears only when the runtime resolved and applied the matching sport content pack. General fallback makes no sport-specific claim.',
+];
+
+const CONTENT_PACK_ROWS = [
+  ['Universal technique', 'Sport-native application cue', 'Breathing, grounding, recovery, and reflection explain exactly where the athlete can apply the same technique in their sport.'],
+  ['Prompt-led skill', 'Application cue plus prompt replacement', 'Power Pose and other prompt-led skills use sport-native preparation and execution language.'],
+  ['Scenario-heavy skill', 'Complete interaction replacement', 'The environment, pressure moment, actions, options, feedback, and completion copy all come from the resolved pack.'],
+  ['Unresolved sport', 'Sport-neutral base curriculum', 'The experience remains useful without claiming that the content was personalized.'],
 ];
 
 export default function PulseCheckSportScenarioPersonalizationTab() {
@@ -83,6 +92,10 @@ export default function PulseCheckSportScenarioPersonalizationTab() {
           {
             title: 'The Badge Must Be Earned',
             body: '“Personalized for {sport}” appears only when the module actually uses the resolved sport pack and vocabulary.',
+          },
+          {
+            title: 'Every Skill Is Covered',
+            body: 'All 26 seeded skills carry the eight required personalized archetype packs. Automated tests block missing coverage.',
           },
         ]}
       />
@@ -111,6 +124,20 @@ export default function PulseCheckSportScenarioPersonalizationTab() {
 
       <SectionBlock icon={Trophy} title="Scenario Archetype Registry">
         <DataTable columns={['Archetype', 'Representative Sports', 'Scenario Language']} rows={ARCHETYPE_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={BookOpen} title="Curriculum-Wide Content Pack Contract">
+        <DataTable columns={['Skill Shape', 'Required Pack Content', 'Runtime Rule']} rows={CONTENT_PACK_ROWS} />
+        <InfoCard
+          title="Coverage Invariant"
+          accent="green"
+          body="The seeded library currently contains 26 skills. Each skill must carry invasion, net/racket, race, judged, stage, precision, combat, and attempt packs: 208 required pack records. Adding a skill without all eight fails the curriculum contract test."
+        />
+        <InfoCard
+          title="Men’s Physique Fixture"
+          accent="red"
+          body="Nerves to Excitement resolves to backstage before prejudging, callouts, posing, and presentation. Locker-room, play, game, and teammate language is rejected by the fixture."
+        />
       </SectionBlock>
 
       <SectionBlock icon={BookOpen} title="Two Independent Sports Intelligence Axes">
@@ -143,7 +170,7 @@ export default function PulseCheckSportScenarioPersonalizationTab() {
           columns={['Runtime State', 'Badge', 'Required Behavior']}
           rows={[
             ['Resolved sport pack', 'Personalized for {sport}', 'Use the sport-specific situations, choices, event vocabulary, and telemetry.'],
-            ['Scenario-capable but unresolved', 'Sports Intelligence scenarios', 'Use the general pack without claiming sport-level tuning.'],
+            ['Scenario-capable but unresolved', 'No sport-specific badge', 'Use the sport-neutral base curriculum without claiming sport-level tuning.'],
             ['Not a Sports Intelligence module', 'No badge', 'Do not add the badge as decoration.'],
           ]}
         />

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
+import admin from '../../../lib/firebase-admin';
 
 type AssessmentId = 'parent' | 'coach' | 'athleticTrainer';
 
@@ -10,6 +11,17 @@ type AssessmentProductConfig = {
   envPaymentLink: string;
   publicEnvPaymentLink: string;
 };
+
+type ReferralMetadata = {
+  referralType: string;
+  coachId: string;
+  coachEmail: string;
+  teamId: string;
+  organizationId: string;
+};
+
+const REFERRAL_ATTRIBUTIONS_COLLECTION = 'pulsecheck-referral-attributions';
+const PARENT_ASSESSMENT_REFERRAL_TYPE = 'parent-assessment';
 
 const ASSESSMENT_PRODUCTS: AssessmentProductConfig[] = [
   {
@@ -81,6 +93,8 @@ const buildClientReferenceId = (metadata: Record<string, string>): string => {
     coachEmail: metadata.coachEmail,
     teamId: metadata.teamId,
     organizationId: metadata.organizationId,
+    purchaserUserId: metadata.purchaserUserId,
+    purchaserEmail: metadata.purchaserEmail,
   };
   return `pc_assessment_${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')}`;
 };
@@ -204,6 +218,49 @@ const loadAssessmentProducts = async (stripe: Stripe) => {
 
 const sanitizeMetadataValue = (value: unknown): string => normalizeString(value).slice(0, 450);
 
+const hasCompleteReferralMetadata = (metadata: ReferralMetadata): boolean =>
+  Boolean(metadata.referralType && metadata.coachId && metadata.teamId && metadata.organizationId);
+
+const referralAttributionDocId = (userId: string, referralType: string): string => `${userId}_${referralType}`;
+
+const loadSavedReferralAttribution = async (
+  userId: string,
+  assessmentId: AssessmentId
+): Promise<ReferralMetadata | null> => {
+  if (assessmentId !== 'parent') return null;
+
+  const snapshot = await admin
+    .firestore()
+    .collection(REFERRAL_ATTRIBUTIONS_COLLECTION)
+    .doc(referralAttributionDocId(userId, PARENT_ASSESSMENT_REFERRAL_TYPE))
+    .get();
+
+  if (!snapshot.exists) return null;
+  const data = snapshot.data() || {};
+  const metadata = {
+    referralType: sanitizeMetadataValue(data.referralType),
+    coachId: sanitizeMetadataValue(data.coachId),
+    coachEmail: sanitizeMetadataValue(data.coachEmail),
+    teamId: sanitizeMetadataValue(data.teamId),
+    organizationId: sanitizeMetadataValue(data.organizationId),
+  };
+
+  return hasCompleteReferralMetadata(metadata) ? metadata : null;
+};
+
+const verifyPurchaser = async (req: NextApiRequest) => {
+  const authHeader = normalizeString(req.headers.authorization);
+  if (!authHeader.startsWith('Bearer ')) {
+    throw new Error('Sign in before purchasing this assessment.');
+  }
+
+  const decoded = await admin.auth().verifyIdToken(authHeader.slice('Bearer '.length));
+  return {
+    userId: decoded.uid,
+    email: normalizeString(decoded.email),
+  };
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.setHeader('Allow', 'GET, POST');
@@ -232,14 +289,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return;
     }
 
-    const metadata = {
-      payment_type: 'pulsecheck_assessment',
-      assessmentId,
+    const purchaser = await verifyPurchaser(req);
+
+    const requestReferralMetadata = {
       referralType: sanitizeMetadataValue(req.body?.referralType),
       coachId: sanitizeMetadataValue(req.body?.coachId),
       coachEmail: sanitizeMetadataValue(req.body?.coachEmail),
       teamId: sanitizeMetadataValue(req.body?.teamId),
       organizationId: sanitizeMetadataValue(req.body?.organizationId),
+    };
+    const savedReferralMetadata = hasCompleteReferralMetadata(requestReferralMetadata)
+      ? null
+      : await loadSavedReferralAttribution(purchaser.userId, assessmentId);
+    const referralMetadata = savedReferralMetadata || requestReferralMetadata;
+
+    const metadata = {
+      payment_type: 'pulsecheck_assessment',
+      assessmentId,
+      referralType: referralMetadata.referralType,
+      coachId: referralMetadata.coachId,
+      coachEmail: referralMetadata.coachEmail,
+      teamId: referralMetadata.teamId,
+      organizationId: referralMetadata.organizationId,
+      purchaserUserId: purchaser.userId,
+      purchaserEmail: purchaser.email || sanitizeMetadataValue(req.body?.purchaserEmail),
     };
 
     if (!stripe) {
@@ -277,8 +350,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const origin = siteOrigin(req);
     const referralParams = new URLSearchParams({
       assessment: assessmentId,
-      paid: 'success',
-      start: '1',
+      payment: 'success',
     });
     const cancelParams = new URLSearchParams({ assessment: assessmentId });
 
@@ -292,11 +364,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: price.id, quantity: 1 }],
-      success_url: `${origin}/elite-athlete-support-readiness-assessments?${referralParams.toString()}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/PulseCheck/assessments?${referralParams.toString()}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/elite-athlete-support-readiness-assessments?${cancelParams.toString()}&purchase=cancelled`,
       client_reference_id: buildClientReferenceId(metadata),
       metadata: checkoutMetadata,
       payment_intent_data: { metadata: checkoutMetadata },
+      ...(metadata.purchaserEmail ? { customer_email: metadata.purchaserEmail } : {}),
       allow_promotion_codes: true,
     });
 
@@ -307,9 +380,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error) {
     console.error('[assessment-checkout] Failed:', error);
-    res.status(500).json({
+    const message = error instanceof Error ? error.message : 'Assessment checkout failed.';
+    const status = message.includes('Sign in before purchasing') || message.includes('Firebase ID token')
+      ? 401
+      : 500;
+    res.status(status).json({
       success: false,
-      message: error instanceof Error ? error.message : 'Assessment checkout failed.',
+      message,
     });
   }
 }

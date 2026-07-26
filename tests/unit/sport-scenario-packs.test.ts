@@ -192,6 +192,155 @@ test('adversity module — pack copy honors athlete-facing copy rules', async ()
   }
 });
 
+test('every seeded skill carries a complete curriculum-wide sport pack set', async () => {
+  const { library } = await loadModules();
+  const required = ['attempt', 'combat', 'invasion', 'judged', 'net_racket', 'precision', 'race', 'stage'];
+  const exercises = (library as any).SEEDED_EXERCISES;
+
+  assert.equal(exercises.length, 26, 'the full seeded curriculum is covered');
+  for (const exercise of exercises) {
+    const packs = exercise.sportContentPacks ?? [];
+    assert.deepEqual(
+      packs.map((pack: any) => pack.archetype).sort(),
+      required,
+      `${exercise.id} has one pack for every supported archetype`,
+    );
+    for (const pack of packs) {
+      assert.ok(pack.applicationCue?.trim(), `${exercise.id}/${pack.archetype} has an application cue`);
+    }
+  }
+});
+
+test('sport content packs contain no undefined values before Firestore sync', async () => {
+  const { library } = await loadModules();
+  const exercises = (library as any).SEEDED_EXERCISES;
+
+  const findUndefinedPath = (value: unknown, path: string): string | null => {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        const found = findUndefinedPath(value[index], `${path}[${index}]`);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        if (child === undefined) return `${path}.${key}`;
+        const found = findUndefinedPath(child, `${path}.${key}`);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  for (const exercise of exercises) {
+    assert.equal(
+      findUndefinedPath(exercise.sportContentPacks, exercise.id),
+      null,
+      `${exercise.id} contains an undefined sport-pack field`,
+    );
+  }
+});
+
+test('scenario-driven skills replace active content for all sport archetypes', async () => {
+  const { library } = await loadModules();
+  const scenarioDrivenIds = [
+    'viz-competition-walkthrough',
+    'viz-perfect-execution',
+    'viz-highlight-reel',
+    'viz-adversity-response',
+    'mindset-pressure-privilege',
+    'mindset-nerves-excitement',
+    'mindset-process-focus',
+    'mindset-growth',
+    'confidence-evidence-journal',
+    'confidence-affirmations',
+    'confidence-inventory',
+  ];
+
+  for (const id of scenarioDrivenIds) {
+    const exercise = (library as any).SEEDED_EXERCISES.find((item: any) => item.id === id);
+    assert.ok(exercise, `${id} exists`);
+    for (const pack of exercise.sportContentPacks) {
+      assert.ok(pack.interaction, `${id}/${pack.archetype} replaces the active interaction`);
+    }
+  }
+});
+
+test('men’s physique nerves pack contains stage-native language only', async () => {
+  const { library } = await loadModules();
+  const exercise = (library as any).SEEDED_EXERCISES
+    .find((item: any) => item.id === 'mindset-nerves-excitement');
+  const stage = exercise.sportContentPacks.find((pack: any) => pack.archetype === 'stage');
+  assert.ok(stage?.interaction, 'stage interaction exists');
+
+  const lines = JSON.stringify(stage).toLowerCase();
+  assert.match(lines, /backstage before prejudging/);
+  assert.match(lines, /stage|posing|pose/);
+  assert.doesNotMatch(lines, /locker room/);
+  assert.doesNotMatch(lines, /\bplay\b/);
+  assert.doesNotMatch(lines, /\bgame\b/);
+  assert.doesNotMatch(lines, /\bteammate/);
+});
+
+test('sport pack copy follows the athlete-facing copy doctrine', async () => {
+  const { library } = await loadModules();
+  const banned: Array<[RegExp, string]> = [
+    [/—/, 'em dash'],
+    [/\bnot\s+[^.!?]{1,70}\bbut\b/i, 'negation-led contrast'],
+    [/\bprepare the pathway\b/i, 'ambiguous pathway language'],
+    [/\bstrengthen your state\b/i, 'adult abstract state language'],
+  ];
+
+  for (const exercise of (library as any).SEEDED_EXERCISES) {
+    for (const pack of exercise.sportContentPacks ?? []) {
+      const copy = JSON.stringify(pack);
+      for (const [pattern, label] of banned) {
+        assert.ok(
+          !pattern.test(copy),
+          `${label} banned in ${exercise.id}/${pack.archetype}`,
+        );
+      }
+    }
+  }
+});
+
+test('generic curriculum fallbacks stay free of setting-specific sport leakage', async () => {
+  const { library } = await loadModules();
+  const banned: Array<[RegExp, string]> = [
+    [/\blocker room\b/i, 'locker-room setting'],
+    [/\bevery play\b/i, 'team-play language'],
+    [/\bthe whistle\b/i, 'whistle language'],
+    [/\bfield conditions\b/i, 'field-only conditions'],
+    [/\bboth teams\b/i, 'team-only comparison'],
+    [/\breading the defense\b/i, 'defense-reading language'],
+    [/\bavoid plays\b/i, 'team-play avoidance'],
+    [/\bfinal score\b/i, 'score-only outcome'],
+    [/\ba game i won\b/i, 'game-only highlight prompt'],
+  ];
+
+  const genericCopy = (exercise: any): string => {
+    const {
+      sportContentPacks: _sportContentPacks,
+      origin: _origin,
+      neuroscience: _neuroscience,
+      ...base
+    } = exercise;
+    if (base.interaction?.scenarioPacks) {
+      const { scenarioPacks: _scenarioPacks, ...baseInteraction } = base.interaction;
+      base.interaction = baseInteraction;
+    }
+    return JSON.stringify(base);
+  };
+
+  for (const exercise of (library as any).SEEDED_EXERCISES) {
+    const copy = genericCopy(exercise);
+    for (const [pattern, label] of banned) {
+      assert.ok(!pattern.test(copy), `${label} leaked into generic fallback for ${exercise.id}`);
+    }
+  }
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Narration enumeration (the byte-hash pre-generation contract)
 // ──────────────────────────────────────────────────────────────────────────────
@@ -230,5 +379,30 @@ test('narration scripts — enumerate pick prompt and every pack line', async ()
   // cueKey formula stays stable for the ai-voice dashboard.
   for (const script of scripts) {
     assert.equal(script.cueKey, `${ADVERSITY_ID}-narration-${script.slot}`);
+  }
+});
+
+test('narration scripts — enumerate every curriculum-wide packed interaction', async () => {
+  const { library, narration } = await loadModules();
+  const scripts = narration.buildModuleNarrationScripts();
+
+  for (const exercise of (library as any).SEEDED_EXERCISES) {
+    const moduleScripts = scripts.filter((script: any) => script.moduleId === exercise.id);
+    for (const pack of exercise.sportContentPacks ?? []) {
+      if (exercise.id === 'focus-3-second-reset') {
+        continue;
+      }
+      assert.ok(
+        moduleScripts.some((script: any) => script.slot === `sport-${pack.archetype}-intro`),
+        `${exercise.id}/${pack.archetype} intro narration is enumerable`,
+      );
+      if (pack.interaction?.rounds?.length) {
+        pack.interaction.rounds.forEach((round: any, roundIndex: number) => {
+          const slot = `sport-${pack.archetype}-drill-round-${roundIndex + 1}`;
+          const script = moduleScripts.find((item: any) => item.slot === slot);
+          assert.equal(script?.text, round.prompt.trim(), `${exercise.id} missing ${slot}`);
+        });
+      }
+    }
   }
 });

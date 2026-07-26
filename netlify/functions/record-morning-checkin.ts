@@ -185,11 +185,11 @@ const reviseMorningConversation = async (
 // `noraResponse` cases — both must pass the Nora voice rubric (10
 // questions) documented at the top of that file.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
-  drained: "You said you feel drained today. Start with Step 1, then move to Step 2 when you're ready.",
-  low:     "You said you feel low today. Start with Step 1 first, then Step 2.",
-  okay:    "You said you feel okay today. Start with Step 1 first, then Step 2.",
-  solid:   "You said you feel good today. Start with Step 1 first, then Step 2.",
-  locked:  "You said you feel locked in today. Start with Step 1 first, then bring that focus into Step 2.",
+  drained: "You said you feel drained today. Your skill training is unlocked below whenever you're ready.",
+  low:     "You said you feel low today. Your skill training is unlocked below whenever you're ready.",
+  okay:    "You said you feel okay today. Your skill training is unlocked below whenever you're ready.",
+  solid:   "You said you feel good today. Your skill training is unlocked below whenever you're ready.",
+  locked:  "You said you feel locked in today. Your skill training is unlocked below whenever you're ready.",
 };
 
 const PROBE_TEXT: Record<CheckinLevel, string> = {
@@ -201,11 +201,11 @@ const PROBE_TEXT: Record<CheckinLevel, string> = {
 };
 
 const ACTION_DELIVERY_TEXT: Record<CheckinLevel, string> = {
-  drained: "Got it. Today's plan is on the home screen. Start with Step 1, then Step 2 when you're ready.",
-  low:     "Heard. Today's plan is on the home screen. Step 1 first, then Step 2.",
-  okay:    "Got it. Today's plan is on the home screen. Step 1 first, then Step 2.",
-  solid:   "Good. Today's plan is on the home screen. Step 1 first, then Step 2.",
-  locked:  "Let's use it. Today's plan is on the home screen. Step 1 first, Step 2 second.",
+  drained: "Got it. Your skill training is unlocked on the home screen whenever you're ready.",
+  low:     "Heard. Your skill training is unlocked on the home screen whenever you're ready.",
+  okay:    "Got it. Your skill training is unlocked on the home screen whenever you're ready.",
+  solid:   "Good. Your skill training is unlocked on the home screen whenever you're ready.",
+  locked:  "Let's use it. Your skill training is unlocked on the home screen whenever you're ready.",
 };
 
 // Domain mapping for Phase C translation lookups during the action-delivery

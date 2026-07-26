@@ -214,6 +214,29 @@ export type ModuleInteraction = {
   closePrompt?: string;
 };
 
+/**
+ * Curriculum-wide sport content overlay.
+ *
+ * Every seeded skill carries one pack for each supported scenario archetype.
+ * The application cue explains where the skill belongs in that sport. Skills
+ * whose actual decisions change by sport can also replace their player
+ * interaction wholesale. This keeps sport context explicit and prevents
+ * generic team-sport copy from leaking into individual or judged sports.
+ */
+export type SportContentPack = {
+  archetype: Exclude<SportScenarioArchetype, 'general'>;
+  /** Admin-facing family label, e.g. "Stage sports". */
+  label: string;
+  /** Short athlete-facing line connecting this skill to the sport. */
+  applicationCue: string;
+  /** Optional sport-native intro copy. */
+  description?: string;
+  /** Optional replacement prompts for legacy prompt-driven skills. */
+  prompts?: string[];
+  /** Optional full replacement for the in-player mechanic. */
+  interaction?: ModuleInteraction;
+};
+
 // ============================================================================
 // MODULE REFLECTION (post-session probing questions)
 // ============================================================================
@@ -261,6 +284,8 @@ export interface MentalExercise {
   /** In-player interactive mechanic. When present, the players render this
    *  instead of passive prompt playback and skip the Nora chat handoff. */
   interaction?: ModuleInteraction;
+  /** Sport-native content for every supported sport archetype. */
+  sportContentPacks?: SportContentPack[];
   /** Post-session probing questions, asked before the mood check. */
   reflection?: ModuleReflection;
   iconName: string;
@@ -1802,6 +1827,9 @@ export function exerciseToFirestore(exercise: MentalExercise): Record<string, an
   if (exercise.interaction) {
     data.interaction = exercise.interaction;
   }
+  if (exercise.sportContentPacks) {
+    data.sportContentPacks = exercise.sportContentPacks;
+  }
   if (exercise.reflection) {
     data.reflection = exercise.reflection;
   }
@@ -1848,6 +1876,7 @@ export function exerciseFromFirestore(id: string, data: Record<string, any>): Me
     neuroscience: data.neuroscience || '',
     overview: data.overview || { when: '', focus: '', timeScale: '', skill: '', analogy: '' },
     interaction: data.interaction,
+    sportContentPacks: data.sportContentPacks,
     reflection: data.reflection,
     iconName: data.iconName || 'brain',
     isActive: data.isActive ?? true,

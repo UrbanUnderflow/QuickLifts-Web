@@ -3,6 +3,10 @@ import type { NextPage } from 'next';
 import { useRouter } from 'next/router';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  type User as FirebaseUser,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import {
   Activity,
   AlertTriangle,
   ArrowLeft,
@@ -17,6 +21,8 @@ import {
   HeartPulse,
   Home,
   LineChart,
+  LogIn,
+  LogOut,
   LockKeyhole,
   Mail,
   RotateCcw,
@@ -26,6 +32,9 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import PageHead from '../components/PageHead';
+import { auth } from '../api/firebase/config';
+import authMethods from '../api/firebase/auth';
+import { signOut as signOutOfFirebase } from '../api/firebase/auth/methods';
 
 type StakeholderId = 'parent' | 'coach' | 'athleticTrainer';
 
@@ -130,6 +139,32 @@ type AssessmentProductInfo = {
   priceLabel: string;
   available?: boolean;
 };
+
+type ReferralAttributionInfo = {
+  referralType: string;
+  coachId: string;
+  coachEmail?: string;
+  teamId: string;
+  organizationId: string;
+  teamName?: string;
+};
+
+type AssessmentAuthPanelProps = {
+  assessment: StakeholderAssessment;
+  email: string;
+  error: string;
+  loading: boolean;
+  magicLinkSent: boolean;
+  mode?: 'purchase' | 'account';
+  onEmailChange: (value: string) => void;
+  onGoogle: () => void;
+  onApple: () => void;
+  onMagicLink: () => void;
+  onClose: () => void;
+};
+
+const ASSESSMENT_PENDING_PURCHASE_KEY = 'pulse_assessment_pending_purchase';
+const ASSESSMENT_MAGIC_EMAIL_KEY = 'pulse_assessment_magic_email';
 
 const COLORS = {
   lime: '#4F6F59',
@@ -991,6 +1026,15 @@ const normalizeAssessmentId = (value: unknown): StakeholderId | null => {
   return null;
 };
 
+const hasCompleteReferralMetadata = (metadata: {
+  referralType: string;
+  coachId: string;
+  teamId: string;
+  organizationId: string;
+}): boolean =>
+  metadata.referralType === 'parent-assessment'
+  && Boolean(metadata.coachId && metadata.teamId && metadata.organizationId);
+
 const domainCopyFor = (assessment: StakeholderAssessment, key: DomainKey) => ({
   label: assessment.domainCopy?.[key]?.label ?? domainConfig[key].label,
   description: assessment.domainCopy?.[key]?.description ?? domainConfig[key].description,
@@ -1214,6 +1258,119 @@ const AssessmentCard: React.FC<{
         </div>
       </div>
     </motion.article>
+  );
+};
+
+const AssessmentAuthPanel: React.FC<AssessmentAuthPanelProps> = ({
+  assessment,
+  email,
+  error,
+  loading,
+  magicLinkSent,
+  mode = 'purchase',
+  onEmailChange,
+  onGoogle,
+  onApple,
+  onMagicLink,
+  onClose,
+}) => {
+  const isPurchase = mode === 'purchase';
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-stone-950/30 px-4 py-5 backdrop-blur-sm sm:items-center">
+      <motion.div
+        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 18, scale: 0.98 }}
+        transition={transition}
+        className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-[0_22px_70px_rgba(68,64,60,0.22)]"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">
+              {isPurchase ? 'Claim your assessment' : 'Log in'}
+            </p>
+            <h3 className="mt-2 text-2xl font-semibold leading-tight text-stone-900">
+              {isPurchase ? assessment.shortTitle : 'Your assessment library'}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-stone-500 transition hover:bg-stone-100 hover:text-stone-900"
+          >
+            Close
+          </button>
+        </div>
+
+        <p className="mt-4 text-sm leading-6 text-stone-500">
+          {isPurchase
+            ? 'Sign in first so your purchase can be saved to your assessment dashboard.'
+            : 'Sign in to view assessments you have purchased and saved.'}
+        </p>
+
+        <div className="mt-5 grid gap-3">
+          <button
+            type="button"
+            onClick={onGoogle}
+            disabled={loading}
+            className="flex min-h-[46px] items-center justify-center rounded-lg border border-stone-200 bg-stone-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Continue with Google
+          </button>
+          <button
+            type="button"
+            onClick={onApple}
+            disabled={loading}
+            className="flex min-h-[46px] items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-stone-900 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Continue with Apple
+          </button>
+        </div>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-stone-200" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400">or</span>
+          <div className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <div className="grid gap-3">
+          <label className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500" htmlFor="assessment-magic-email">
+            Email magic link
+          </label>
+          <input
+            id="assessment-magic-email"
+            type="email"
+            value={email}
+            onChange={(event) => onEmailChange(event.target.value)}
+            placeholder="you@example.com"
+            className="min-h-[46px] rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-stone-400"
+          />
+          <button
+            type="button"
+            onClick={onMagicLink}
+            disabled={loading}
+            className="flex min-h-[46px] items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ backgroundColor: assessment.accent }}
+          >
+            {loading ? 'Working...' : 'Send magic link'}
+          </button>
+        </div>
+
+        {magicLinkSent && (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            {isPurchase
+              ? 'Magic link sent. Open it from this device and we will continue to checkout.'
+              : 'Magic link sent. Open it from this device to finish logging in.'}
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 rounded-lg border border-[#A85353]/25 bg-[#A85353]/5 px-4 py-3 text-sm font-medium text-[#A85353]">
+            {error}
+          </div>
+        )}
+      </motion.div>
+    </div>
   );
 };
 
@@ -1870,6 +2027,16 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
     coach: undefined,
     athleticTrainer: undefined,
   });
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [pendingPurchaseId, setPendingPurchaseId] = useState<StakeholderId | null>(null);
+  const [authPanelOpen, setAuthPanelOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [savedReferralAttribution, setSavedReferralAttribution] = useState<ReferralAttributionInfo | null>(null);
   const [purchasingId, setPurchasingId] = useState<StakeholderId | null>(null);
   const [purchaseError, setPurchaseError] = useState('');
 
@@ -1891,6 +2058,125 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
     router.query.referralType,
     router.query.teamId,
   ]);
+  const referralLinkPresent = useMemo(() => hasCompleteReferralMetadata(referralMetadata), [referralMetadata]);
+  const effectiveReferralMetadata = useMemo(() => {
+    if (!savedReferralAttribution) return referralMetadata;
+    return {
+      referralType: savedReferralAttribution.referralType,
+      coachId: savedReferralAttribution.coachId,
+      coachEmail: savedReferralAttribution.coachEmail || '',
+      teamId: savedReferralAttribution.teamId,
+      organizationId: savedReferralAttribution.organizationId,
+    };
+  }, [referralMetadata, savedReferralAttribution]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      setFirebaseUser(nextUser);
+      setAuthReady(true);
+      if (nextUser?.email) {
+        setAuthEmail((current) => current || nextUser.email || '');
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedPendingPurchaseId = normalizeAssessmentId(window.localStorage.getItem(ASSESSMENT_PENDING_PURCHASE_KEY));
+    if (storedPendingPurchaseId) {
+      setPendingPurchaseId(storedPendingPurchaseId);
+      setSelectedId(storedPendingPurchaseId);
+    }
+
+    const storedEmail = window.localStorage.getItem(ASSESSMENT_MAGIC_EMAIL_KEY);
+    if (storedEmail) setAuthEmail(storedEmail);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!authMethods.isMagicLink(window.location.href)) return;
+
+    const storedEmail = window.localStorage.getItem(ASSESSMENT_MAGIC_EMAIL_KEY) || authEmail;
+    if (!storedEmail) {
+      setAuthPanelOpen(true);
+      setAuthError('Enter the email address you used so we can finish sign-in.');
+      return;
+    }
+
+    let cancelled = false;
+    setAuthLoading(true);
+    authMethods.completeMagicLink(storedEmail, window.location.href)
+      .then(() => {
+        if (cancelled) return;
+        window.localStorage.removeItem(ASSESSMENT_MAGIC_EMAIL_KEY);
+        setAuthPanelOpen(false);
+        setAuthError('');
+        void router.replace(router.pathname, undefined, { shallow: true });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAuthPanelOpen(true);
+        setAuthError(error instanceof Error ? error.message : 'Magic link sign-in could not be completed.');
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authEmail, router]);
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!firebaseUser) {
+      setSavedReferralAttribution(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncReferralAttribution = async () => {
+      try {
+        const idToken = await firebaseUser.getIdToken();
+        const requestOptions: RequestInit = {
+          method: referralLinkPresent ? 'POST' : 'GET',
+          headers: referralLinkPresent
+            ? { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` }
+            : { Authorization: `Bearer ${idToken}` },
+          ...(referralLinkPresent
+            ? {
+                body: JSON.stringify({
+                  ...referralMetadata,
+                  sourceUrl: typeof window !== 'undefined' ? window.location.href : '',
+                }),
+              }
+            : {}),
+        };
+        const endpoint = referralLinkPresent
+          ? '/api/pulsecheck/referral-attribution'
+          : '/api/pulsecheck/referral-attribution?referralType=parent-assessment';
+        const response = await fetch(endpoint, requestOptions);
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.success) {
+          throw new Error(payload?.message || 'Referral could not be saved.');
+        }
+        if (!cancelled) {
+          setSavedReferralAttribution(payload.attribution || null);
+        }
+      } catch (error) {
+        if (!cancelled) console.warn('[AssessmentPage] referral attribution sync failed', error);
+      }
+    };
+
+    void syncReferralAttribution();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, firebaseUser, referralLinkPresent, referralMetadata]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1927,18 +2213,42 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
     };
   }, []);
 
-  const startAssessment = useCallback(async (id: StakeholderId) => {
+  const openSignInForPurchase = useCallback((id: StakeholderId) => {
     setSelectedId(id);
     setPurchaseError('');
+    setAuthError('');
+    setMagicLinkSent(false);
+    setPendingPurchaseId(id);
+    setAuthPanelOpen(true);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ASSESSMENT_PENDING_PURCHASE_KEY, id);
+    }
+  }, []);
+
+  const openSignInForAccount = useCallback(() => {
+    setPurchaseError('');
+    setAuthError('');
+    setMagicLinkSent(false);
+    setPendingPurchaseId(null);
+    setAuthPanelOpen(true);
+  }, []);
+
+  const continueToCheckout = useCallback(async (id: StakeholderId, user: FirebaseUser) => {
+    setSelectedId(id);
+    setPurchaseError('');
+    setAuthPanelOpen(false);
     setPurchasingId(id);
 
     try {
+      const idToken = await user.getIdToken();
       const response = await fetch('/api/pulsecheck/assessment-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({
           assessmentId: id,
           ...referralMetadata,
+          ...effectiveReferralMetadata,
+          purchaserEmail: user.email || authEmail,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -1950,7 +2260,75 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
       setPurchaseError(error instanceof Error ? error.message : 'Checkout could not be opened.');
       setPurchasingId(null);
     }
-  }, [referralMetadata]);
+  }, [authEmail, effectiveReferralMetadata]);
+
+  const startAssessment = useCallback(async (id: StakeholderId) => {
+    if (!firebaseUser) {
+      openSignInForPurchase(id);
+      return;
+    }
+    await continueToCheckout(id, firebaseUser);
+  }, [continueToCheckout, firebaseUser, openSignInForPurchase]);
+
+  useEffect(() => {
+    if (!authReady || !firebaseUser || !pendingPurchaseId || purchasingId) return;
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(ASSESSMENT_PENDING_PURCHASE_KEY);
+    }
+    const nextPurchaseId = pendingPurchaseId;
+    setPendingPurchaseId(null);
+    void continueToCheckout(nextPurchaseId, firebaseUser);
+  }, [authReady, continueToCheckout, firebaseUser, pendingPurchaseId, purchasingId]);
+
+  const signInWithGoogle = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await authMethods.signInWithGoogle();
+      setAuthPanelOpen(false);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Google sign-in could not be completed.');
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const signInWithApple = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await authMethods.signInWithApple();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Apple sign-in could not be completed.');
+      setAuthLoading(false);
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    setAccountMenuOpen(false);
+    setPendingPurchaseId(null);
+    setSavedReferralAttribution(null);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(ASSESSMENT_PENDING_PURCHASE_KEY);
+    }
+    await signOutOfFirebase();
+  }, []);
+
+  const sendMagicLink = useCallback(async () => {
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ASSESSMENT_MAGIC_EMAIL_KEY, authEmail.trim().toLowerCase());
+      }
+      await authMethods.sendMagicLink(authEmail, typeof window !== 'undefined' ? window.location.href : undefined);
+      setMagicLinkSent(true);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Magic link could not be sent.');
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [authEmail]);
 
   useEffect(() => {
     if (!router.isReady) return;
@@ -2014,13 +2392,61 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
                 </button>
               ))}
             </div>
-            <a
-              href="mailto:tre@fitwithpulse.ai?subject=Elite%20Athlete%20Support%20Readiness%20Assessments"
-              className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-700"
-            >
-              <Mail className="h-4 w-4" />
-              <span className="hidden sm:inline">Partner access</span>
-            </a>
+            {authReady && firebaseUser ? (
+              <div className="flex items-center gap-3">
+                <div className="relative hidden min-w-0 sm:block">
+                  <button
+                    type="button"
+                    onClick={() => setAccountMenuOpen((open) => !open)}
+                    className="rounded-lg px-3 py-2 text-right transition hover:bg-stone-200/70 focus:outline-none focus:ring-2 focus:ring-stone-300"
+                    aria-haspopup="menu"
+                    aria-expanded={accountMenuOpen}
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400">Signed in as</div>
+                    <div className="flex max-w-[230px] items-center justify-end gap-1 text-xs font-semibold text-stone-700">
+                      <span className="truncate">{firebaseUser.email || 'Signed in'}</span>
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                    </div>
+                  </button>
+                  {accountMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-[80] mt-2 w-56 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_18px_55px_rgba(68,64,60,0.14)]"
+                    >
+                      <div className="border-b border-stone-100 px-3 py-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-400">Account</div>
+                        <div className="mt-1 truncate text-xs font-semibold text-stone-700">{firebaseUser.email || 'Signed in'}</div>
+                      </div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={signOut}
+                        className="flex w-full items-center gap-2 px-3 py-3 text-left text-sm font-semibold text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Log out
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <a
+                  href="/PulseCheck/assessments"
+                  className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-700"
+                >
+                  <ClipboardCheck className="h-4 w-4" />
+                  <span className="hidden sm:inline">My assessments</span>
+                </a>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={openSignInForAccount}
+                className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                <LogIn className="h-4 w-4" />
+                <span className="hidden sm:inline">Log in</span>
+              </button>
+            )}
           </div>
         </nav>
 
@@ -2041,6 +2467,33 @@ const EliteAthleteSupportReadinessAssessmentsPage: NextPage = () => {
                   {purchaseError}
                 </div>
               )}
+              <AnimatePresence>
+                {authPanelOpen && (
+                  <AssessmentAuthPanel
+                    assessment={assessments.find((assessment) => assessment.id === pendingPurchaseId) || selectedAssessment}
+                    email={authEmail}
+                    error={authError}
+                    loading={authLoading}
+                    magicLinkSent={magicLinkSent}
+                    mode={pendingPurchaseId ? 'purchase' : 'account'}
+                    onEmailChange={(value) => {
+                      setAuthEmail(value);
+                      setAuthError('');
+                    }}
+                    onGoogle={signInWithGoogle}
+                    onApple={signInWithApple}
+                    onMagicLink={sendMagicLink}
+                    onClose={() => {
+                      setAuthPanelOpen(false);
+                      setPendingPurchaseId(null);
+                      setAuthError('');
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.removeItem(ASSESSMENT_PENDING_PURCHASE_KEY);
+                      }
+                    }}
+                  />
+                )}
+              </AnimatePresence>
               <HubView
                 selected={selectedAssessment}
                 products={products}

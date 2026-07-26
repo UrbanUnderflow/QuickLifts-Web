@@ -139,6 +139,26 @@ function genericIntroText(exercise: MentalExercise): string {
   return segments.join(' ');
 }
 
+function sportPackIntroText(
+  exercise: MentalExercise,
+  description: string | undefined,
+  applicationCue: string,
+): string {
+  const segments = [
+    'Nora here.',
+    `${exercise.name}.`,
+    description || exercise.description,
+    applicationCue,
+  ];
+  const config: any = exercise.exerciseConfig?.config ?? {};
+  if (exercise.exerciseConfig?.type === 'focus') {
+    const firstInstruction = trimmed((config.instructions ?? [])[0]);
+    if (firstInstruction) segments.push(`First, ${firstInstruction}`);
+  }
+  segments.push("Find a quiet space, tap begin when you're ready, and I'll coach you through it.");
+  return segments.join(' ');
+}
+
 // Mirrors GenericExercisePlayerView.completionNarrationText.
 function genericCompletionText(exercise: MentalExercise): string {
   return `And that's the end of the ${exercise.name} protocol. Great job. How do you feel?`;
@@ -155,6 +175,21 @@ function simIntroText(exercise: MentalExercise): string {
     `${exercise.name}.`,
     exercise.description,
     `Your core metric today is ${SIM_CORE_METRIC_LABELS[exercise.id] ?? 'Clean execution'}.`,
+    "Tap begin when you're ready.",
+  ].join(' ');
+}
+
+function sportPackSimIntroText(
+  exercise: MentalExercise,
+  description: string | undefined,
+  applicationCue: string,
+): string {
+  return [
+    'Nora here.',
+    `${exercise.name}.`,
+    description || exercise.description,
+    `Your core metric today is ${SIM_CORE_METRIC_LABELS[exercise.id] ?? 'Clean execution'}.`,
+    applicationCue,
     "Tap begin when you're ready.",
   ].join(' ');
 }
@@ -329,6 +364,43 @@ export function buildModuleNarrationScripts(): ModuleNarrationScript[] {
         });
       }
 
+      // Curriculum-wide sport content packs. These lines are emitted for
+      // every archetype so the athlete's selected OpenAI voice can be warmed
+      // before playback. Slots are archetype-prefixed; lookup remains
+      // byte-hash based on the exact spoken text.
+      (exercise.sportContentPacks ?? []).forEach((pack) => {
+        const packPrefix = `sport-${pack.archetype}`;
+        scripts.push({
+          ...base,
+          slot: `${packPrefix}-intro`,
+          cueKey: `${exercise.id}-narration-${packPrefix}-intro`,
+          label: `${exercise.name} — ${pack.label} Intro`,
+          text: sportPackIntroText(exercise, pack.description, pack.applicationCue),
+        });
+
+        if (pack.interaction) {
+          interactionScripts(pack.interaction).forEach(({ slot, label, text }) => {
+            scripts.push({
+              ...base,
+              slot: `${packPrefix}-${slot}`,
+              cueKey: `${exercise.id}-narration-${packPrefix}-${slot}`,
+              label: `${exercise.name} — ${pack.label} ${label}`,
+              text,
+            });
+          });
+        } else {
+          (pack.prompts ?? []).forEach((text, index) => {
+            scripts.push({
+              ...base,
+              slot: `${packPrefix}-step-${index + 1}`,
+              cueKey: `${exercise.id}-narration-${packPrefix}-step-${index + 1}`,
+              label: `${exercise.name} — ${pack.label} Step ${index + 1}`,
+              text,
+            });
+          });
+        }
+      });
+
       // The Anchor Word flow speaks a static prompt before word selection.
       if (exercise.exerciseConfig?.type === 'focus'
         && (exercise.exerciseConfig?.config as any)?.type === 'cue_word') {
@@ -340,6 +412,23 @@ export function buildModuleNarrationScripts(): ModuleNarrationScript[] {
           text: CUE_WORD_PROMPT_TEXT,
         });
       }
+    }
+
+    if (isSim && !isResetGame) {
+      (exercise.sportContentPacks ?? []).forEach((pack) => {
+        const slot = `sport-${pack.archetype}-intro`;
+        scripts.push({
+          ...base,
+          slot,
+          cueKey: `${exercise.id}-narration-${slot}`,
+          label: `${exercise.name} — ${pack.label} Intro`,
+          text: sportPackSimIntroText(
+            exercise,
+            pack.description,
+            pack.applicationCue,
+          ),
+        });
+      });
     }
 
     // Post-module reflection prompts, spoken as each question appears

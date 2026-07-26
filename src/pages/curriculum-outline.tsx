@@ -1680,12 +1680,12 @@ const JuniorCurriculumPage: React.FC = () => {
                   <button
                     onClick={async () => {
                       if (syncingCopy) return;
-                      if (!window.confirm('Push seeded module copy (names, instructions, prompts, configs) onto the existing library docs in the active Firestore database? Merge-writes; runtime fields survive.')) return;
+                      if (!window.confirm('Push seeded module content, including all Sports Intelligence content packs, onto the existing library docs in the active Firestore database? Merge-writes; runtime fields survive.')) return;
                       setSyncingCopy(true);
                       setError(null);
                       try {
                         const result = await simModuleLibraryService.syncSeededCopy();
-                        setActionResult(`Synced seeded copy onto ${result.updated} library modules.`);
+                        setActionResult(`Synced curriculum content and sport packs onto ${result.updated} library modules.`);
                         await refresh();
                       } catch (e) {
                         setError(e instanceof Error ? e.message : String(e));
@@ -1694,11 +1694,11 @@ const JuniorCurriculumPage: React.FC = () => {
                       }
                     }}
                     disabled={syncingCopy}
-                    title="Pushes copy fixes from the bundled module seed (e.g. instruction wording) onto existing sim-modules docs."
+                    title="Pushes curriculum copy, interactions, and all sport content packs onto existing sim-modules and mental-exercises docs."
                     className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-500 shadow-sm transition hover:text-stone-950 disabled:opacity-50"
                   >
                     {syncingCopy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    {syncingCopy ? 'Syncing…' : 'Sync Module Copy'}
+                    {syncingCopy ? 'Syncing…' : 'Sync Module Content'}
                   </button>
                   <button
                     onClick={runSeed}

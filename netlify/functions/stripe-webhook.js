@@ -860,6 +860,8 @@ async function handleAssessmentCheckout(session, lineItems = []) {
   const organizationId = normalizeCoachServiceString(metadata.organizationId);
   const coachId = normalizeCoachServiceString(metadata.coachId);
   const coachEmail = normalizeCoachServiceString(metadata.coachEmail);
+  const purchaserUserId = normalizeCoachServiceString(metadata.purchaserUserId);
+  const purchaserEmail = normalizeCoachServiceString(metadata.purchaserEmail);
   const referralType = normalizeCoachServiceString(metadata.referralType);
   const lineItem = lineItems?.data?.[0] || lineItems?.[0] || null;
   const amountCents = Math.max(0, Number(session.amount_total || lineItem?.amount_total || 0));
@@ -912,6 +914,8 @@ async function handleAssessmentCheckout(session, lineItems = []) {
     teamId: teamId || null,
     coachUserId: coachId || null,
     coachEmail: coachEmail || null,
+    purchaserUserId: purchaserUserId || null,
+    purchaserEmail: purchaserEmail || session.customer_email || null,
     revenueRecipientUserId,
     parentAssessmentReferralKickbackEnabled: kickbackEnabled,
     parentAssessmentReferralRevenueSharePct: sharePct,

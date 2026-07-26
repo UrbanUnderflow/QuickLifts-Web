@@ -89,6 +89,7 @@ test('merge registry includes the critical identity-owned records', () => {
     'pulsecheck-team-revenue-summaries',
     'pulsecheck-coach-service-orders',
     'pulsecheck-assessment-purchases',
+    'pulsecheck-referral-attributions',
     'transactions',
     'coach-athlete-conversations',
     'fitWithPulse-workoutSessions',
@@ -97,6 +98,7 @@ test('merge registry includes the critical identity-owned records', () => {
   }
   for (const field of [
     'coachUserId',
+    'purchaserUserId',
     'revenueRecipientUserId',
     'billingOwnerUserId',
     'commercialConfig.revenueRecipientUserId',
@@ -114,7 +116,11 @@ test('merge registry includes the critical identity-owned records', () => {
   );
   assert.deepEqual(
     new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-assessment-purchases']),
-    new Set(['coachUserId', 'revenueRecipientUserId']),
+    new Set(['purchaserUserId', 'coachUserId', 'revenueRecipientUserId']),
+  );
+  assert.deepEqual(
+    new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-referral-attributions']),
+    new Set(['purchaserUserId', 'coachId']),
   );
 });
 
