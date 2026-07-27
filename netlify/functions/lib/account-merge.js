@@ -12,6 +12,7 @@ const KEYED_DOCUMENT_COLLECTIONS = [
   'macraInsights',
   'macraSuggestedMealPlans',
   'pulsecheck-user-revenue-summaries',
+  'pulsecheck-coach-payout-states',
 ];
 
 const USER_REFERENCE_COLLECTIONS = [
@@ -47,6 +48,7 @@ const USER_REFERENCE_COLLECTIONS = [
   'bodyWeight',
   'payments',
   'payoutRecords',
+  'pulsecheck-coach-payout-requests',
   'transactions',
   'pulsecheck-revenue-events',
   'pulsecheck-team-revenue-summaries',
@@ -125,6 +127,7 @@ const REFERENCE_FIELDS_BY_COLLECTION = {
   'escalation-records': ['userId', 'athleteId', 'coachId', 'assignedTo'],
   'payments': ['userId', 'firebaseUid', 'coachId', 'coachUserId', 'revenueRecipientUserId'],
   'payoutRecords': ['userId', 'coachId'],
+  'pulsecheck-coach-payout-requests': ['coachUserId'],
   'transactions': [
     'userId',
     'firebaseUid',
@@ -636,13 +639,28 @@ const executeMerge = async ({
       const destination = await destinationRef.get();
       await archiveDocument({ auditRef, snapshot: source, admin });
       await archiveDocument({ auditRef, snapshot: destination, admin });
+      const mergedData = mergeDataCanonicalWins(
+        source.data(),
+        destination.exists ? destination.data() : null,
+        sourceUid,
+        canonicalUid,
+      );
+      if (collectionName === 'pulsecheck-coach-payout-states') {
+        const sourceState = source.data() || {};
+        const destinationState = destination.exists ? destination.data() || {} : {};
+        mergedData.paidCents =
+          Math.max(0, Number(sourceState.paidCents) || 0)
+          + Math.max(0, Number(destinationState.paidCents) || 0);
+        mergedData.activeRequestId =
+          destinationState.activeRequestId || sourceState.activeRequestId || null;
+        mergedData.requestedCents = destinationState.activeRequestId
+          ? Math.max(0, Number(destinationState.requestedCents) || 0)
+          : sourceState.activeRequestId
+            ? Math.max(0, Number(sourceState.requestedCents) || 0)
+            : 0;
+      }
       await destinationRef.set({
-        ...mergeDataCanonicalWins(
-          source.data(),
-          destination.exists ? destination.data() : null,
-          sourceUid,
-          canonicalUid,
-        ),
+        ...mergedData,
         accountMergedAt: timestamp(admin),
         accountMergedFrom: sourceUid,
       }, { merge: true });

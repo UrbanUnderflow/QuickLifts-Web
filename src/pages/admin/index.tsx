@@ -541,6 +541,12 @@ const adminCardsData = [
     link: "/admin/authorProfiles"
   },
   {
+    title: "PulseCheck Payout Requests",
+    description: "Review coach payout requests, open their chosen payment details, and mark manual transfers complete.",
+    icon: <Wallet className="w-5 h-5" />,
+    link: "/admin/pulsecheckPayouts"
+  },
+  {
     title: "Payout Dashboard",
     description: "View creator wallet balances, historically generated earnings, and monitor Stripe withdrawal logs.",
     icon: <PieChart className="w-5 h-5" />,

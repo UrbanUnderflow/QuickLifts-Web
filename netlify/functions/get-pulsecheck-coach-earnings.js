@@ -1,6 +1,12 @@
 const Stripe = require('stripe');
 const { admin, db, headers } = require('./config/firebase');
 const { normalizeCommercialConfig } = require('./utils/pulsecheck-revenue');
+const {
+  PAYOUT_REQUESTS_COLLECTION,
+  PAYOUT_STATES_COLLECTION,
+  buildPayoutSummary,
+  calculateRevenueBreakdown,
+} = require('./utils/pulsecheck-coach-payouts');
 
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
@@ -8,6 +14,10 @@ const USERS_COLLECTION = 'users';
 const SUBSCRIPTIONS_COLLECTION = 'subscriptions';
 const COACH_SERVICE_ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
 const ASSESSMENT_PURCHASES_COLLECTION = 'pulsecheck-assessment-purchases';
+const configuredAppleCommissionPct = Number(process.env.PULSECHECK_APPLE_COMMISSION_PCT);
+const APPLE_COMMISSION_PCT = Number.isFinite(configuredAppleCommissionPct)
+  ? Math.min(100, Math.max(0, configuredAppleCommissionPct))
+  : 15;
 
 const jsonHeaders = {
   ...headers,
@@ -286,6 +296,11 @@ const loadRevenueCatPaymentHistory = async ({ customerIds, sharePct }) => {
               averagePaidCents > 0
                 ? averagePaidCents
                 : 0;
+            const revenue = calculateRevenueBreakdown({
+              amountCents: amountPaidCents,
+              platformFeePct: APPLE_COMMISSION_PCT,
+              sharePct,
+            });
 
             const purchasedAtMs = Number(transaction.purchased_at) || 0;
             payments.push({
@@ -294,13 +309,18 @@ const loadRevenueCatPaymentHistory = async ({ customerIds, sharePct }) => {
                 || `${normalizeString(subscription.id)}_${purchasedAtMs || index}`,
               paidAt: purchasedAtMs ? new Date(purchasedAtMs).toISOString() : null,
               amountPaidCents,
-              coachShareCents: calculateShareCents(amountPaidCents, sharePct),
+              grossRevenueCents: revenue.grossRevenueCents,
+              platformFeePct: APPLE_COMMISSION_PCT,
+              platformFeeCents: revenue.platformFeeCents,
+              netRevenueCents: revenue.netRevenueCents,
+              coachShareCents: revenue.coachShareCents,
               amountAvailable: amountPaidCents > 0,
               currency: normalizeStatus(subscription.total_revenue_in_usd?.currency) || 'usd',
               billingReason: index === 0 ? 'subscription_create' : 'subscription_cycle',
               billingInterval: transactionPlan.billingInterval,
               planLabel: transactionPlan.label,
-              source: 'revenuecat',
+              source: 'apple_app_store',
+              sourceLabel: 'Apple App Store',
             });
           });
         }
@@ -358,17 +378,28 @@ const invoiceRows = ({ invoices, sharePct }) =>
       const line = invoice.lines?.data?.find((entry) => Number(entry.amount) > 0) || invoice.lines?.data?.[0] || {};
       const amountPaidCents = Number(invoice.amount_paid) || 0;
       const paidAtSeconds = Number(invoice.status_transitions?.paid_at || invoice.created || 0);
+      const revenue = calculateRevenueBreakdown({
+        amountCents: amountPaidCents,
+        platformFeePct: 0,
+        sharePct,
+      });
 
       return {
         id: normalizeString(invoice.id),
         paidAt: paidAtSeconds ? new Date(paidAtSeconds * 1000).toISOString() : null,
         amountPaidCents,
-        coachShareCents: calculateShareCents(amountPaidCents, sharePct),
+        grossRevenueCents: revenue.grossRevenueCents,
+        platformFeePct: 0,
+        platformFeeCents: 0,
+        netRevenueCents: revenue.netRevenueCents,
+        coachShareCents: revenue.coachShareCents,
         amountAvailable: true,
         currency: normalizeStatus(invoice.currency) || 'usd',
         billingReason: normalizeString(invoice.billing_reason) || null,
         billingInterval: normalizeString(line.price?.recurring?.interval) || null,
         planLabel: planSnapshot(line.price?.recurring?.interval || line.description).label,
+        source: 'stripe_web',
+        sourceLabel: 'Stripe Web',
       };
     })
     .sort((left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || '')));
@@ -398,7 +429,16 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
     subscriptionRecord.stripeSubscriptionId || user.stripeSubscriptionId
   );
   const platform = normalizeStatus(subscriptionRecord.platform || user.subscriptionPlatform);
-  const isAppleSubscription = platform === 'ios' || platform === 'apple';
+  const hasRevenueCatIdentity = Boolean(
+    normalizeString(subscriptionRecord.rcAppUserId)
+    || (Array.isArray(subscriptionRecord.rcAliases) && subscriptionRecord.rcAliases.length > 0)
+    || normalizeString(user.revenuecat?.appUserId)
+    || (Array.isArray(user.revenueCatAppUserIds) && user.revenueCatAppUserIds.length > 0)
+  );
+  const isAppleSubscription =
+    platform === 'ios'
+    || platform === 'apple'
+    || (!stripeSubscriptionId && hasRevenueCatIdentity);
 
   let stripeSubscription = null;
   let paidInvoices = [];
@@ -483,6 +523,21 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
         ? expirationMs > Date.now()
         : fallbackActiveType;
   const payments = revenueCatHistory?.payments || invoiceRows({ invoices: paidInvoices, sharePct });
+  const subscriptionSource = isAppleSubscription
+    ? 'apple_app_store'
+    : stripeSubscriptionId
+      ? 'stripe_web'
+      : 'unknown';
+  const subscriptionSourceLabel = subscriptionSource === 'apple_app_store'
+    ? 'Apple App Store'
+    : subscriptionSource === 'stripe_web'
+      ? 'Stripe Web'
+      : 'Payment source unavailable';
+  const monthlyRevenue = calculateRevenueBreakdown({
+    amountCents: resolvedPlan.monthlyRevenueCents,
+    platformFeePct: isAppleSubscription ? APPLE_COMMISSION_PCT : 0,
+    sharePct,
+  });
 
   return {
     userId: athleteUserId,
@@ -498,8 +553,13 @@ const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
     billingInterval: resolvedPlan.billingInterval,
     subscriptionAmountCents: isActive ? resolvedPlan.subscriptionAmountCents : 0,
     monthlyRevenueCents: isActive ? resolvedPlan.monthlyRevenueCents : 0,
+    subscriptionSource,
+    subscriptionSourceLabel,
+    platformFeePct: isAppleSubscription ? APPLE_COMMISSION_PCT : 0,
+    estimatedMonthlyPlatformFeeCents: isActive ? monthlyRevenue.platformFeeCents : 0,
+    estimatedMonthlyNetRevenueCents: isActive ? monthlyRevenue.netRevenueCents : 0,
     estimatedMonthlyShareCents: isActive
-      ? calculateShareCents(resolvedPlan.monthlyRevenueCents, sharePct)
+      ? monthlyRevenue.coachShareCents
       : 0,
     currentPeriodEnd: expirationMs ? new Date(expirationMs).toISOString() : null,
     sharePct,
@@ -630,6 +690,35 @@ const loadCoachServiceEarnings = async (coachUserId) => {
   };
 };
 
+const loadCoachPayoutSummary = async ({ coachUserId, earnedCents }) => {
+  const stateSnapshot = await db
+    .collection(PAYOUT_STATES_COLLECTION)
+    .doc(coachUserId)
+    .get();
+  const state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
+  const activeRequestId = normalizeString(state.activeRequestId);
+  let activeRequest = null;
+
+  if (activeRequestId) {
+    const requestSnapshot = await db
+      .collection(PAYOUT_REQUESTS_COLLECTION)
+      .doc(activeRequestId)
+      .get();
+    if (requestSnapshot.exists) {
+      activeRequest = {
+        id: requestSnapshot.id,
+        ...(requestSnapshot.data() || {}),
+      };
+    }
+  }
+
+  return buildPayoutSummary({
+    earnedCents,
+    state,
+    activeRequest,
+  });
+};
+
 const loadCoachEarnings = async (coachUserId) => {
   const staffSnapshot = await db
     .collection(TEAM_MEMBERSHIPS_COLLECTION)
@@ -695,6 +784,14 @@ const loadCoachEarnings = async (coachUserId) => {
         .reduce((paymentSum, payment) => paymentSum + payment.coachShareCents, 0),
     0
   );
+  const lifetimeShareCents = members.reduce(
+    (sum, member) => sum + member.lifetimeShareCents,
+    0
+  );
+  const payout = await loadCoachPayoutSummary({
+    coachUserId,
+    earnedCents: lifetimeShareCents,
+  });
 
   return {
     coachUserId,
@@ -708,7 +805,8 @@ const loadCoachEarnings = async (coachUserId) => {
       0
     ),
     currentMonthShareCents,
-    lifetimeShareCents: members.reduce((sum, member) => sum + member.lifetimeShareCents, 0),
+    lifetimeShareCents,
+    payout,
     members,
     serviceEarnings,
   };
@@ -755,5 +853,6 @@ module.exports = {
   invoiceRows,
   loadCoachServiceEarnings,
   loadCoachEarnings,
+  loadCoachPayoutSummary,
   teamAllowsCoachEarnings,
 };

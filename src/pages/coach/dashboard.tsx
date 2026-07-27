@@ -78,6 +78,7 @@ import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProv
 import {
   auth,
   getActiveFirebaseProjectId,
+  getFirebaseModeRequestHeaders,
   isLocalFirebaseRuntime,
   isUsingDevFirebase,
   setPreferredFirebaseMode,
@@ -905,6 +906,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       coachId={coachId}
                       coachName={coachName}
                       coachEmail={coachEmail}
+                      athleteReferralRevenueSharePct={revenueSharePct}
                       canInvite={canManageAthleteInvites}
                       canRevoke={can('admin')}
                     />
@@ -3930,9 +3932,18 @@ const ReferralLinksSection: React.FC<{
   coachId?: string;
   coachName?: string;
   coachEmail?: string;
+  athleteReferralRevenueSharePct?: number;
   canInvite?: boolean;
   canRevoke?: boolean;
-}> = ({ isDemo, coachId, coachName, coachEmail, canInvite = false, canRevoke = false }) => (
+}> = ({
+  isDemo,
+  coachId,
+  coachName,
+  coachEmail,
+  athleteReferralRevenueSharePct = 0,
+  canInvite = false,
+  canRevoke = false,
+}) => (
   <div className="space-y-5">
     <div className="rounded-2xl border border-[#E0FE10]/20 bg-gradient-to-br from-[#E0FE10]/8 to-green-500/5 p-5">
       <div className="flex items-start gap-3">
@@ -3968,6 +3979,11 @@ const ReferralLinksSection: React.FC<{
         canInvite={canInvite}
         canRevoke={canRevoke}
       />
+      <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
+        {(isDemo ? 20 : athleteReferralRevenueSharePct) > 0
+          ? `Kickback active: ${isDemo ? 20 : athleteReferralRevenueSharePct}% of athlete-paid subscriptions from athletes who join through this invite can route back to you.`
+          : 'Kickback inactive until it is enabled in Team Commercial Config.'}
+      </div>
     </div>
 
     <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
@@ -6162,15 +6178,26 @@ type MemberSubscriptionEarning = {
   expiration: Date | null;
   sharePct: number;
   lifetimeShareAmount: number;
+  subscriptionSource: 'apple_app_store' | 'stripe_web' | 'unknown';
+  subscriptionSourceLabel: string;
+  platformFeePct: number;
+  estimatedMonthlyPlatformFee: number;
+  estimatedMonthlyNetRevenue: number;
   invoiceHistoryAvailable: boolean;
   invoiceHistoryMessage: string;
   payments: Array<{
     id: string;
     paidAt: Date | null;
     amountPaid: number;
+    grossRevenue: number;
+    platformFeePct: number;
+    platformFee: number;
+    netRevenue: number;
     shareAmount: number;
     currency: string;
     amountAvailable: boolean;
+    source: 'apple_app_store' | 'stripe_web' | 'unknown';
+    sourceLabel: string;
   }>;
 };
 
@@ -6187,6 +6214,27 @@ type CoachServiceEarning = {
   scheduledAt: Date | null;
 };
 
+type CoachPayoutRequest = {
+  id: string;
+  amountCents: number;
+  status: 'requested' | 'paid';
+  paymentMethod: 'zelle' | 'apple_pay' | 'cash_app';
+  paymentMethodLabel: string;
+  paymentDestination: string | null;
+  requestedAt: string | null;
+  paidAt: string | null;
+  emailSent: boolean;
+};
+
+type CoachPayoutSummary = {
+  totalEarnedCents: number;
+  availableCents: number;
+  requestedCents: number;
+  paidCents: number;
+  status: 'available' | 'requested';
+  activeRequest: CoachPayoutRequest | null;
+};
+
 const coachEarningsFunctionUrl = () => {
   const configuredBaseUrl = (
     process.env.NEXT_PUBLIC_FUNCTION_BASE_URL
@@ -6196,6 +6244,17 @@ const coachEarningsFunctionUrl = () => {
     .trim()
     .replace(/\/+$/, '');
   return `${configuredBaseUrl}/.netlify/functions/get-pulsecheck-coach-earnings`;
+};
+
+const coachPayoutFunctionUrl = () => {
+  const configuredBaseUrl = (
+    process.env.NEXT_PUBLIC_FUNCTION_BASE_URL
+    || process.env.NEXT_PUBLIC_REMOTE_LOGIN_FUNCTION_BASE_URL
+    || ''
+  )
+    .trim()
+    .replace(/\/+$/, '');
+  return `${configuredBaseUrl}/.netlify/functions/pulsecheck-coach-payout`;
 };
 
 const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; revenueSharePct?: number }> = ({
@@ -6213,6 +6272,19 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
   const [serviceEarnings, setServiceEarnings] = useState<CoachServiceEarning[]>([]);
   const [serviceCurrentMonthNet, setServiceCurrentMonthNet] = useState(0);
   const [serviceLifetimeNet, setServiceLifetimeNet] = useState(0);
+  const [payout, setPayout] = useState<CoachPayoutSummary>({
+    totalEarnedCents: 0,
+    availableCents: 0,
+    requestedCents: 0,
+    paidCents: 0,
+    status: 'available',
+    activeRequest: null,
+  });
+  const [payoutFormOpen, setPayoutFormOpen] = useState(false);
+  const [payoutMethod, setPayoutMethod] = useState<'zelle' | 'apple_pay' | 'cash_app'>('zelle');
+  const [payoutDestination, setPayoutDestination] = useState('');
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  const [payoutMessage, setPayoutMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (isDemo) {
@@ -6222,6 +6294,14 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
       setServiceEarnings([]);
       setServiceCurrentMonthNet(0);
       setServiceLifetimeNet(0);
+      setPayout({
+        totalEarnedCents: 0,
+        availableCents: 0,
+        requestedCents: 0,
+        paidCents: 0,
+        status: 'available',
+        activeRequest: null,
+      });
       return;
     }
 
@@ -6238,6 +6318,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           method: 'GET',
           headers: {
             Authorization: `Bearer ${idToken}`,
+            ...getFirebaseModeRequestHeaders(),
           },
         });
         const payload = await response.json().catch(() => ({}));
@@ -6247,6 +6328,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
 
         const earnings = payload.earnings || {};
         const serviceSummary = earnings.serviceEarnings || {};
+        const payoutSummary = earnings.payout || {};
         const rows: MemberSubscriptionEarning[] = (Array.isArray(earnings.members) ? earnings.members : [])
           .map((member: any) => ({
             id: String(member.userId || ''),
@@ -6263,15 +6345,36 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
             expiration: member.currentPeriodEnd ? new Date(member.currentPeriodEnd) : null,
             sharePct: Number(member.sharePct) || Number(earnings.sharePct) || share,
             lifetimeShareAmount: (Number(member.lifetimeShareCents) || 0) / 100,
+            subscriptionSource:
+              member.subscriptionSource === 'apple_app_store' || member.subscriptionSource === 'stripe_web'
+                ? member.subscriptionSource
+                : 'unknown',
+            subscriptionSourceLabel: String(member.subscriptionSourceLabel || 'Payment source unavailable'),
+            platformFeePct: Math.max(0, Number(member.platformFeePct) || 0),
+            estimatedMonthlyPlatformFee:
+              (Number(member.estimatedMonthlyPlatformFeeCents) || 0) / 100,
+            estimatedMonthlyNetRevenue:
+              (Number(member.estimatedMonthlyNetRevenueCents) || 0) / 100,
             invoiceHistoryAvailable: Boolean(member.invoiceHistoryAvailable),
             invoiceHistoryMessage: String(member.invoiceHistoryMessage || ''),
             payments: (Array.isArray(member.payments) ? member.payments : []).map((payment: any) => ({
               id: String(payment.id || ''),
               paidAt: payment.paidAt ? new Date(payment.paidAt) : null,
               amountPaid: (Number(payment.amountPaidCents) || 0) / 100,
+              grossRevenue:
+                (Number(payment.grossRevenueCents ?? payment.amountPaidCents) || 0) / 100,
+              platformFeePct: Math.max(0, Number(payment.platformFeePct) || 0),
+              platformFee: (Number(payment.platformFeeCents) || 0) / 100,
+              netRevenue:
+                (Number(payment.netRevenueCents ?? payment.amountPaidCents) || 0) / 100,
               shareAmount: (Number(payment.coachShareCents) || 0) / 100,
               currency: String(payment.currency || 'usd').toUpperCase(),
               amountAvailable: payment.amountAvailable !== false,
+              source:
+                payment.source === 'apple_app_store' || payment.source === 'stripe_web'
+                  ? payment.source
+                  : 'unknown',
+              sourceLabel: String(payment.sourceLabel || 'Payment source unavailable'),
             })),
           }));
         const serviceRows: CoachServiceEarning[] = (
@@ -6299,6 +6402,14 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           setServiceEarnings(serviceRows);
           setServiceCurrentMonthNet((Number(serviceSummary.currentMonthNetCents) || 0) / 100);
           setServiceLifetimeNet((Number(serviceSummary.lifetimeNetCents) || 0) / 100);
+          setPayout({
+            totalEarnedCents: Math.max(0, Number(payoutSummary.totalEarnedCents) || 0),
+            availableCents: Math.max(0, Number(payoutSummary.availableCents) || 0),
+            requestedCents: Math.max(0, Number(payoutSummary.requestedCents) || 0),
+            paidCents: Math.max(0, Number(payoutSummary.paidCents) || 0),
+            status: payoutSummary.status === 'requested' ? 'requested' : 'available',
+            activeRequest: payoutSummary.activeRequest || null,
+          });
         }
       } catch (error) {
         console.error('[CoachDashboard] failed to load member subscriptions', error);
@@ -6307,6 +6418,14 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           setServiceEarnings([]);
           setServiceCurrentMonthNet(0);
           setServiceLifetimeNet(0);
+          setPayout({
+            totalEarnedCents: 0,
+            availableCents: 0,
+            requestedCents: 0,
+            paidCents: 0,
+            status: 'available',
+            activeRequest: null,
+          });
           setSubscriptionsError(
             error instanceof Error
               ? error.message
@@ -6350,11 +6469,61 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
     [conversions, isDemo, memberSubscriptions]
   );
   const lifetime = +(monthlyKickback * 6.5).toFixed(2);
-  const liveLifetime = memberSubscriptions.reduce(
-    (sum, member) => sum + member.lifetimeShareAmount,
-    0
-  );
   const activeSubscriberCount = memberSubscriptions.filter((member) => member.isActive).length;
+  const availablePayout = payout.availableCents / 100;
+  const requestedPayout = payout.requestedCents / 100;
+  const paidPayout = payout.paidCents / 100;
+
+  const submitPayoutRequest = async () => {
+    if (payoutSubmitting) return;
+    setPayoutMessage(null);
+    if (!payoutDestination.trim()) {
+      setPayoutMessage({
+        type: 'error',
+        text: 'Enter the email, phone number, or handle that should receive the payout.',
+      });
+      return;
+    }
+
+    setPayoutSubmitting(true);
+    try {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) throw new Error('Sign in again to request a payout.');
+      const idToken = await firebaseUser.getIdToken();
+      const response = await fetch(coachPayoutFunctionUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({
+          paymentMethod: payoutMethod,
+          paymentDestination: payoutDestination.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message || 'The payout request could not be submitted.');
+      }
+
+      setPayout(payload.payout);
+      setPayoutFormOpen(false);
+      setPayoutMessage({
+        type: 'success',
+        text: payload.emailSent
+          ? 'Payout requested. The Pulse team has been emailed.'
+          : 'Payout requested. It is now visible in the admin payout dashboard.',
+      });
+    } catch (error) {
+      setPayoutMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'The payout request could not be submitted.',
+      });
+    } finally {
+      setPayoutSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -6380,15 +6549,137 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
         </p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label={isDemo ? 'This month' : 'Estimated monthly'} value={fmt(monthlyKickback)} accent />
-        <StatTile label={isDemo ? 'Lifetime' : 'Paid earnings'} value={isDemo ? fmt(lifetime) : fmt(liveLifetime)} />
-        <StatTile label={isDemo ? 'Converted referrals' : 'Team members'} value={isDemo ? conversions.length : memberSubscriptions.length} dot="bg-green-400" />
-        <StatTile
-          label={isDemo ? 'Revenue share' : 'Subscribed members'}
-          value={isDemo ? `${effectiveShare}%` : activeSubscriberCount}
-        />
-      </div>
+      {isDemo ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="This month" value={fmt(monthlyKickback)} accent />
+          <StatTile label="Lifetime" value={fmt(lifetime)} />
+          <StatTile label="Converted referrals" value={conversions.length} dot="bg-green-400" />
+          <StatTile label="Revenue share" value={`${effectiveShare}%`} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+          <StatTile label="Estimated monthly" value={fmt(monthlyKickback)} accent />
+          <StatTile label="Available payout" value={fmt(availablePayout)} />
+          <StatTile label="Payout requested" value={fmt(requestedPayout)} />
+          <StatTile label="Paid out" value={fmt(paidPayout)} />
+          <StatTile label="Subscribed members" value={activeSubscriberCount} dot="bg-green-400" />
+        </div>
+      )}
+
+      {!isDemo && !subscriptionsLoading && !subscriptionsError && (
+        <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/55 p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Wallet className="h-4 w-4 text-[#E0FE10]" />
+                <div className="text-sm font-semibold text-white">Manual payout</div>
+                {payout.status === 'requested' ? (
+                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                    Requested
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">
+                Request the full available referral balance. The Pulse team will send it through your selected method and mark it paid after the transfer is complete.
+              </p>
+              {payout.activeRequest ? (
+                <p className="mt-2 text-xs text-zinc-300">
+                  {fmt(payout.activeRequest.amountCents / 100)} requested through{' '}
+                  {payout.activeRequest.paymentMethodLabel}
+                  {payout.activeRequest.requestedAt
+                    ? ` on ${new Date(payout.activeRequest.requestedAt).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}`
+                    : ''}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPayoutFormOpen((open) => !open);
+                setPayoutMessage(null);
+              }}
+              disabled={availablePayout <= 0 || payout.status === 'requested'}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-[#E0FE10] px-4 text-sm font-bold text-black transition hover:bg-[#ccef0e] disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {payout.status === 'requested'
+                ? 'Request pending'
+                : availablePayout > 0
+                  ? `Request ${fmt(availablePayout)}`
+                  : 'No balance available'}
+            </button>
+          </div>
+
+          {payoutFormOpen && payout.status !== 'requested' ? (
+            <div className="mt-4 border-t border-zinc-700/40 pt-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                How should we send your payout?
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {([
+                  ['zelle', 'Zelle'],
+                  ['apple_pay', 'Apple Pay'],
+                  ['cash_app', 'Cash App'],
+                ] as const).map(([method, label]) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setPayoutMethod(method)}
+                    className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                      payoutMethod === method
+                        ? 'border-[#E0FE10]/50 bg-[#E0FE10]/10 text-[#E0FE10]'
+                        : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="mt-3 block text-xs font-medium text-zinc-400">
+                {payoutMethod === 'cash_app'
+                  ? 'Cash App handle'
+                  : 'Email or phone number'}
+                <input
+                  value={payoutDestination}
+                  onChange={(event) => setPayoutDestination(event.target.value)}
+                  placeholder={payoutMethod === 'cash_app' ? '$cashtag' : 'Email or phone number'}
+                  className="mt-1.5 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none transition focus:border-[#E0FE10]/60"
+                />
+              </label>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => void submitPayoutRequest()}
+                  disabled={payoutSubmitting}
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-[#E0FE10] px-4 text-sm font-bold text-black transition hover:bg-[#ccef0e] disabled:opacity-50"
+                >
+                  {payoutSubmitting ? 'Requesting...' : `Submit ${fmt(availablePayout)} request`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPayoutFormOpen(false)}
+                  className="h-10 rounded-lg border border-zinc-700 px-4 text-sm font-semibold text-zinc-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {payoutMessage ? (
+            <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+              payoutMessage.type === 'success'
+                ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                : 'border-red-500/25 bg-red-500/10 text-red-200'
+            }`}>
+              {payoutMessage.text}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {!isDemo && (
         <div>
@@ -6547,6 +6838,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                           ? ` · ${fmt(member.subscriptionCost)} billed ${member.billingPeriod === 'year' ? 'yearly' : 'monthly'}`
                           : ' · recorded price unavailable'
                         : ''}
+                      {member.isActive ? ` · ${member.subscriptionSourceLabel}` : ''}
                       {member.isActive && member.expiration
                         ? ` · renews ${member.expiration.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                         : ''}
@@ -6558,7 +6850,9 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                     </div>
                     <div className="text-[10px] text-zinc-500">
                       {member.monthlyShareAmount > 0
-                        ? `estimated monthly at ${member.sharePct}%`
+                        ? member.subscriptionSource === 'apple_app_store'
+                          ? `estimated after ${member.platformFeePct}% Apple fee at ${member.sharePct}%`
+                          : `estimated monthly at ${member.sharePct}%`
                         : member.isActive
                           ? 'referral share unavailable'
                           : 'paid plan inactive'}
@@ -6573,7 +6867,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                     </div>
                     <div className="divide-y divide-zinc-700/30">
                       {member.payments.map((payment) => (
-                        <div key={payment.id} className="grid grid-cols-[1fr_auto_auto] gap-4 py-2 text-xs">
+                        <div key={payment.id} className="grid gap-2 py-2 text-xs sm:grid-cols-[minmax(130px,0.7fr)_minmax(260px,1.5fr)_auto] sm:gap-4">
                           <div className="text-zinc-300">
                             {payment.paidAt
                               ? payment.paidAt.toLocaleDateString('en-US', {
@@ -6584,9 +6878,18 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                               : 'Paid invoice'}
                           </div>
                           <div className="text-zinc-500">
-                            {payment.amountAvailable
-                              ? `${fmt(payment.amountPaid)} ${payment.currency}`
-                              : 'Amount unavailable'}
+                            {payment.amountAvailable ? (
+                              payment.source === 'apple_app_store' ? (
+                                <>
+                                  {payment.sourceLabel} · {fmt(payment.grossRevenue)} gross ·{' '}
+                                  -{fmt(payment.platformFee)} Apple fee · {fmt(payment.netRevenue)} net
+                                </>
+                              ) : (
+                                <>
+                                  {payment.sourceLabel} · {fmt(payment.grossRevenue)} {payment.currency}
+                                </>
+                              )
+                            ) : 'Amount unavailable'}
                           </div>
                           <div className={`font-semibold ${payment.amountAvailable ? 'text-[#E0FE10]' : 'text-zinc-500'}`}>
                             {payment.amountAvailable ? `+${fmt(payment.shareAmount)}` : 'Share unavailable'}
