@@ -182,13 +182,6 @@ export default function CoachCalvinGuide() {
                   Open your dashboard
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <a
-                  href="#scores"
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-                >
-                  Start with the two scores
-                  <Gauge className="h-4 w-4 text-[#14E7D0]" />
-                </a>
               </div>
             </div>
 
