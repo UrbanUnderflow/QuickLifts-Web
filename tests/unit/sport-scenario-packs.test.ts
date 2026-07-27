@@ -302,7 +302,7 @@ test('Nerves to Excitement has a complete progressive rehearsal pack for every s
       `${pack.archetype} uses the rehearsal game`,
     );
     assert.ok(rehearsal, `${pack.archetype} has a rehearsal config`);
-    assert.equal(rehearsal.contentVersion, 2, `${pack.archetype} uses the current clear-language copy`);
+    assert.equal(rehearsal.contentVersion, 3, `${pack.archetype} uses the current clear-language copy`);
     assert.equal(rehearsal.awarenessChoices.length, 4);
     assert.equal(rehearsal.meaningChoices.length, 3);
     assert.equal(
@@ -360,6 +360,10 @@ test('Nerves to Excitement uses direct athlete-facing language in every content 
     [/\bdifferent gear\b/i, '"different gear"'],
     [/\bpersonal cue\b/i, '"personal cue"'],
     [/\bthe cue\b/i, '"the cue"'],
+    [/\benergy\b/i, '"energy" instead of naming the body change'],
+    [/\bcue\b/i, '"cue" instead of "phrase"'],
+    [/\bsignal\b/i, '"signal" instead of naming the body change'],
+    [/\brush\b/i, '"rush" instead of naming the body change'],
   ];
 
   for (const pack of exercise.sportContentPacks) {

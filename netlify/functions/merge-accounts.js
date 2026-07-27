@@ -50,7 +50,39 @@ exports.handler = async (event) => {
 
   try {
     if (body.action === 'resolve-current-alias') {
-      const alias = await db.collection('account-aliases').doc(caller.uid).get();
+      const aliasRef = db.collection('account-aliases').doc(caller.uid);
+      let alias = await aliasRef.get();
+
+      if (!alias.exists) {
+        const email = String(caller.email || '').trim().toLowerCase();
+        const providerId = String(caller.firebase?.sign_in_provider || '').trim();
+        const canUseVerifiedSignInEmail =
+          ['google.com', 'password'].includes(providerId)
+          && caller.email_verified === true
+          && Boolean(email);
+
+        if (canUseVerifiedSignInEmail) {
+          const matches = await db.collection('users')
+            .where('signInEmails', 'array-contains', email)
+            .limit(2)
+            .get();
+          const canonicalMatches = matches.docs.filter((document) => document.id !== caller.uid);
+
+          if (canonicalMatches.length === 1) {
+            await aliasRef.set({
+              sourceUid: caller.uid,
+              canonicalUid: canonicalMatches[0].id,
+              status: 'verified-email-alias',
+              providerId,
+              verifiedEmail: email,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            alias = await aliasRef.get();
+          }
+        }
+      }
+
       if (!alias.exists) return json(200, { alias: false });
       const canonicalUid = alias.data()?.canonicalUid;
       const aliasStatus = alias.data()?.status || null;

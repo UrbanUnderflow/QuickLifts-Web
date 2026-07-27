@@ -25,6 +25,7 @@
 
 import { SEEDED_EXERCISES } from './exerciseLibraryService';
 import type { MentalExercise, ModuleInteraction } from './types';
+import { BODY_SCAN_SETTLE_TEXT } from '../../../content/bodyScanScript';
 
 export const MODULE_NARRATION_ENGINE_KEY = 'pulsecheck-module-narration';
 
@@ -120,10 +121,6 @@ const RESET_GAME_CUES: string[] = [
 // Mirrors GenericExercisePlayerView narrationScriptForCurrentPhase (.cueWord).
 const CUE_WORD_PROMPT_TEXT =
   "Choose a short anchor word like focus, locked, or ready. You'll use it to return to this state on demand.";
-
-// Mirrors BodyScanGuidanceStep.settleText (GenericExercisePlayerView.swift).
-const BODY_SCAN_SETTLE_TEXT =
-  'Settle onto your back if you can, or sit fully supported. Put the phone down now. Close your eyes and take two easy breaths. You will hear the next step automatically; no tapping until we finish.';
 
 const trimmed = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 

@@ -1651,7 +1651,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
       commercialConfig: {
         ...current.commercialConfig,
         [field]:
-          field === 'referralRevenueSharePct' || field === 'parentAssessmentReferralRevenueSharePct'
+          field === 'referralRevenueSharePct'
+          || field === 'parentAssessmentReferralRevenueSharePct'
+          || field === 'coachReferralRevenueSharePct'
             ? Math.max(0, Math.min(100, Number(value) || 0))
             : value,
       },
@@ -1669,7 +1671,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
       [teamId]: {
         ...(current[teamId] || getDefaultPulseCheckTeamCommercialConfig()),
         [field]:
-          field === 'referralRevenueSharePct' || field === 'parentAssessmentReferralRevenueSharePct'
+          field === 'referralRevenueSharePct'
+          || field === 'parentAssessmentReferralRevenueSharePct'
+          || field === 'coachReferralRevenueSharePct'
             ? Math.max(0, Math.min(100, Number(value) || 0))
             : value,
       },
@@ -1986,7 +1990,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     try {
       let nextDraft = draft;
       if (
-        (draft.referralKickbackEnabled || draft.parentAssessmentReferralKickbackEnabled) &&
+        (draft.referralKickbackEnabled || draft.parentAssessmentReferralKickbackEnabled || draft.coachReferralKickbackEnabled) &&
         !draft.revenueRecipientUserId
       ) {
         const organizationStaff = orgStaffById[team.organizationId] || [];
@@ -4196,6 +4200,48 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </div>
                                             </label>
 
+                                            <div className="pcp-commercial-grid">
+                                              <label className="pcp-fld">
+                                                <span className="pcp-flbl">Coach Referral Share %</span>
+                                                <input
+                                                  className="pcp-finp"
+                                                  type="number"
+                                                  min={0}
+                                                  max={100}
+                                                  value={teamCommercialDraft.coachReferralRevenueSharePct || 0}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'coachReferralRevenueSharePct',
+                                                      event.target.value
+                                                    )
+                                                  }
+                                                />
+                                              </label>
+                                            </div>
+
+                                            <label className="pcp-checkbox-row">
+                                              <input
+                                                type="checkbox"
+                                                checked={teamCommercialDraft.coachReferralKickbackEnabled || false}
+                                                onChange={(event) =>
+                                                  handleExistingTeamCommercialFieldChange(
+                                                    team.id,
+                                                    'coachReferralKickbackEnabled',
+                                                    event.target.checked
+                                                  )
+                                                }
+                                              />
+                                              <div>
+                                                <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                                                  Enable coach-to-coach referral kickback
+                                                </div>
+                                                <div className="pcp-checkbox-copy">
+                                                  Coaches who use this team's coach referral link can carry attribution so the referring coach can receive a configured share of that coach's athlete-paid subscriptions.
+                                                </div>
+                                              </div>
+                                            </label>
+
                                             <div className="pcp-commercial-footer">
                                               <div className="pcp-card-copy">
                                                 {teamPlanBypass
@@ -5327,6 +5373,42 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
                           <div className="pcp-checkbox-copy">
                             Parent assessment purchases can carry coach and team attribution for a separate configured kickback.
+                          </div>
+                        </div>
+                      </label>
+                      <label className="pcp-fld">
+                        <span className="pcp-flbl">Coach Referral Share %</span>
+                        <input
+                          className="pcp-finp"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={teamForm.commercialConfig.coachReferralRevenueSharePct}
+                          onChange={(event) =>
+                            handleTeamCommercialFieldChange(
+                              'coachReferralRevenueSharePct',
+                              event.target.value
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="pcp-checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={teamForm.commercialConfig.coachReferralKickbackEnabled}
+                          onChange={(event) =>
+                            handleTeamCommercialFieldChange(
+                              'coachReferralKickbackEnabled',
+                              event.target.checked
+                            )
+                          }
+                        />
+                        <div>
+                          <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                            Enable coach-to-coach referral kickback
+                          </div>
+                          <div className="pcp-checkbox-copy">
+                            Coach referral links can attach the referring coach to future athlete-paid subscriptions under the referred coach.
                           </div>
                         </div>
                       </label>

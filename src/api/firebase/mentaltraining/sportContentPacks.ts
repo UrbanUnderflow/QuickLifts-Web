@@ -133,21 +133,21 @@ function choice(
 function nervesCueOptions(context: SportContext): string[] {
   switch (context.archetype) {
     case 'invasion':
-      return ['My body is preparing. Next play.', 'I am ready. Read and move.', 'One breath. See the play.'];
+      return ['My heart is beating faster. Next play.', 'I feel nervous. Read and move.', 'One breath. Find the next play.'];
     case 'net_racket':
-      return ['My body is preparing. Next point.', 'I am ready. See and strike.', 'One breath. Play this point.'];
+      return ['My heart is beating faster. Next point.', 'I feel nervous. See and strike.', 'One breath. Play this point.'];
     case 'race':
-      return ['My body is preparing. Find my rhythm.', 'I am ready. Smooth and fast.', 'One breath. Settle and drive.'];
+      return ['My heart is beating faster. Find my rhythm.', 'I feel nervous. Run my pace.', 'One breath. Settle and drive.'];
     case 'judged':
-      return ['My body is preparing. Trust my routine.', 'I am ready. Stand tall and finish.', 'One breath. Start my routine.'];
+      return ['My heart is beating faster. Trust my routine.', 'I feel nervous. Stand tall and finish.', 'One breath. Start my routine.'];
     case 'stage':
-      return ['My body is preparing. Present strong.', 'I am ready. Stand tall and show.', 'One breath. Set my pose.'];
+      return ['My heart beats faster. Present my best look.', 'I feel nervous. Stand tall and pose.', 'One breath. Set my pose.'];
     case 'precision':
-      return ['My body is preparing. Trust my setup.', 'I am ready. Aim and release.', 'One breath. Take the shot.'];
+      return ['My heart is beating faster. Trust my setup.', 'I feel nervous. Aim and release.', 'One breath. Take the shot.'];
     case 'combat':
-      return ['My body is preparing. See clearly.', 'I am ready. Check range and respond.', 'One breath. Take my stance.'];
+      return ['My heart is beating faster. See clearly.', 'I feel nervous. Check range and respond.', 'One breath. Take my stance.'];
     case 'attempt':
-      return ['My body is preparing. Trust my technique.', 'I am ready. Set and finish.', 'One breath. Start my attempt.'];
+      return ['My heart is beating faster. Trust my technique.', 'I feel nervous. Set and finish.', 'One breath. Start my attempt.'];
   }
 }
 
@@ -180,7 +180,7 @@ function nervesInteraction(context: SportContext): ModuleInteraction {
   return {
     kind: 'nervesRehearsal',
     nervesRehearsal: {
-      contentVersion: 2,
+      contentVersion: 3,
       awarenessPrompt: `As you get ready ${context.beforeEvent}, what changes first in your body?`,
       awarenessChoices: [
         'My heart beats faster',
@@ -192,8 +192,8 @@ function nervesInteraction(context: SportContext): ModuleInteraction {
       meaningPrompt: `${context.pressureMoment.charAt(0).toUpperCase()}${context.pressureMoment.slice(1)}. What should you tell yourself so you stay focused on ${context.skill}?`,
       meaningChoices: [
         choice(
-          `"My faster heartbeat and breathing mean my body is preparing me to ${firstPersonPerformance(context)}."`,
-          `This answer treats the body changes as preparation and brings your attention back to ${context.skill}.`,
+          `"My faster heartbeat and breathing mean my body is getting ready to ${firstPersonPerformance(context)}."`,
+          `This answer names the body changes and brings your attention back to ${context.skill}.`,
           true,
         ),
         choice(
@@ -205,7 +205,7 @@ function nervesInteraction(context: SportContext): ModuleInteraction {
           `Watching ${context.people} takes your attention away from ${context.skill}.`,
         ),
       ],
-      cuePrompt: 'Choose a short phrase you can say to yourself when you notice nerves.',
+      cuePrompt: 'Choose a short sentence to repeat when your heart beats faster, your breathing changes, your muscles tighten, or your thoughts speed up.',
       cueChoices: nervesCueOptions(context),
       setAction: nervesSetAction(context),
       rehearsalRounds: [
@@ -544,7 +544,7 @@ function applicationCueFor(
     'viz-adversity-response': (sport) => `Practice your response to disruptions ${sport.resetMoment} before they happen for real.`,
     'focus-single-point': (sport) => `Build the attention you need to stay with ${sport.skill} one cue at a time.`,
     'focus-cue-word': (sport) => `Choose a short cue that brings you back to ${sport.skill} ${sport.resetMoment}.`,
-    'focus-body-scan': (sport) => `Notice tension in your body ${sport.beforeEvent}, then release what your performance does not need.`,
+    'focus-body-scan': (sport) => `Notice which muscles are tight ${sport.beforeEvent}. Relax any muscle that is not needed for your next movement.`,
     'mindset-pressure-privilege': (sport) => `Practice reading pressure as a sign that this ${sport.event} matters to you.`,
     'mindset-nerves-excitement': (sport) => `Practice noticing nerves and bringing your attention back to ${sport.skill}.`,
     'mindset-process-focus': (sport) => `Bring your attention back to ${sport.skill} when the result or other people pull it away.`,

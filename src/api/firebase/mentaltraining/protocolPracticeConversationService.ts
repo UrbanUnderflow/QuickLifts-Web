@@ -301,7 +301,7 @@ const SEEDED_PROTOCOL_PRACTICE_SPECS: ProtocolPracticeSpec[] = [
     protocolVariantId: 'regulation-focus_narrowing--body-scan-awareness',
     title: 'Body Scan Awareness Practice',
     inputModes: ['text', 'voice', 'mixed'],
-    practiceIntro: 'Now apply it. I want you to name what you notice and what tension you would release before the next technical rep.',
+    practiceIntro: 'Now apply it. Name the muscles that feel tight and the muscles you would deliberately relax before the next technical rep.',
     evaluationLead: 'Here is how your body-scan rep looked.',
     nextRepFocus: 'Make the body signal more specific and tie it directly to release or refocus.',
     rubricLabels: {

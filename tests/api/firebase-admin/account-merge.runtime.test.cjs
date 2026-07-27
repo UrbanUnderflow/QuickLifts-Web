@@ -56,21 +56,25 @@ test('canonicalizeData rewrites nested commercial revenue recipients', () => {
     commercialConfig: {
       revenueRecipientUserId: 'source',
       billingOwnerUserId: 'source',
+      coachReferralRecipientUserId: 'source',
       referralRevenueSharePct: 20,
     },
     coachUserId: 'source',
     revenueRecipientUserId: 'source',
     billingOwnerUserId: 'source',
+    coachReferralRecipientUserId: 'source',
   }, 'source', 'canonical');
 
   assert.deepEqual(result.commercialConfig, {
     revenueRecipientUserId: 'canonical',
     billingOwnerUserId: 'canonical',
+    coachReferralRecipientUserId: 'canonical',
     referralRevenueSharePct: 20,
   });
   assert.equal(result.coachUserId, 'canonical');
   assert.equal(result.revenueRecipientUserId, 'canonical');
   assert.equal(result.billingOwnerUserId, 'canonical');
+  assert.equal(result.coachReferralRecipientUserId, 'canonical');
 });
 
 test('merge registry includes the critical identity-owned records', () => {
@@ -101,14 +105,16 @@ test('merge registry includes the critical identity-owned records', () => {
     'purchaserUserId',
     'revenueRecipientUserId',
     'billingOwnerUserId',
+    'coachReferralRecipientUserId',
     'commercialConfig.revenueRecipientUserId',
     'commercialConfig.billingOwnerUserId',
+    'commercialConfig.coachReferralRecipientUserId',
   ]) {
     assert.ok(SCALAR_USER_FIELDS.includes(field));
   }
   assert.deepEqual(
     new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-revenue-events']),
-    new Set(['subscriberUserId', 'revenueRecipientUserId', 'billingOwnerUserId']),
+    new Set(['subscriberUserId', 'revenueRecipientUserId', 'billingOwnerUserId', 'coachReferralRecipientUserId']),
   );
   assert.deepEqual(
     new Set(REFERENCE_FIELDS_BY_COLLECTION['pulsecheck-coach-service-orders']),
@@ -202,4 +208,101 @@ test('merged secondary sign-in receives a custom token for the kept account', as
     uid: 'kept-uid',
     claims: { accountAliasSourceUid: 'secondary-uid' },
   });
+});
+
+test('verified Google email resolves to the kept account through signInEmails', async () => {
+  const functionPath = path.join(repoRoot, 'netlify/functions/merge-accounts.js');
+  delete require.cache[functionPath];
+
+  let aliasData = null;
+  const aliasRef = {
+    async get() {
+      return {
+        exists: Boolean(aliasData),
+        data: () => aliasData,
+      };
+    },
+    async set(data) {
+      aliasData = { ...(aliasData || {}), ...data };
+    },
+  };
+  const auth = {
+    async verifyIdToken() {
+      return {
+        uid: 'new-google-uid',
+        email: 'coach@example.com',
+        email_verified: true,
+        firebase: { sign_in_provider: 'google.com' },
+      };
+    },
+    async getUser(uid) {
+      assert.equal(uid, 'kept-uid');
+      return { uid, email: 'relay@privaterelay.appleid.com' };
+    },
+    async createCustomToken(uid, claims) {
+      assert.equal(uid, 'kept-uid');
+      assert.deepEqual(claims, { accountAliasSourceUid: 'new-google-uid' });
+      return 'verified-google-custom-token';
+    },
+  };
+  const db = {
+    collection(collectionName) {
+      if (collectionName === 'account-aliases') {
+        return {
+          doc(uid) {
+            assert.equal(uid, 'new-google-uid');
+            return aliasRef;
+          },
+        };
+      }
+      assert.equal(collectionName, 'users');
+      return {
+        where(field, operator, email) {
+          assert.deepEqual([field, operator, email], [
+            'signInEmails',
+            'array-contains',
+            'coach@example.com',
+          ]);
+          return {
+            limit(limit) {
+              assert.equal(limit, 2);
+              return {
+                async get() {
+                  return { docs: [{ id: 'kept-uid' }] };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const { handler } = withModuleMocks(
+    {
+      './config/firebase': {
+        headers: {},
+        getFirebaseAdminApp: () => ({
+          auth: () => auth,
+          firestore: () => db,
+        }),
+      },
+    },
+    () => require(functionPath),
+  );
+
+  const response = await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer verified-google-token' },
+    body: JSON.stringify({ action: 'resolve-current-alias' }),
+  });
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.alias, true);
+  assert.equal(payload.canonicalUid, 'kept-uid');
+  assert.equal(payload.customToken, 'verified-google-custom-token');
+  assert.equal(aliasData.canonicalUid, 'kept-uid');
+  assert.equal(aliasData.status, 'verified-email-alias');
+  assert.equal(aliasData.verifiedEmail, 'coach@example.com');
 });

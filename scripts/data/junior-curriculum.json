@@ -429,7 +429,7 @@
     "durationMinutes": 4,
     "exerciseId": "focus-body-scan",
     "exerciseCategory": "mindset",
-    "noraOpener": "Feelings are information, not instructions. Today you practice the first skill: giving the feeling a name so it gets smaller.",
+    "noraOpener": "Feelings can affect your thoughts and actions. Today you will identify what you feel so you can choose what to do next.",
     "noraProbe": "What feeling shows up most for you on game day: nerves, excitement, frustration, or something else?",
     "probeChoices": [
       "Nerves",
@@ -555,7 +555,7 @@
     "durationMinutes": 5,
     "exerciseId": "focus-body-scan",
     "exerciseCategory": "visualization",
-    "noraOpener": "Stress hides in your body: tight shoulders, clenched jaw, gripped hands. Today you learn to find it and let it go, one spot at a time.",
+    "noraOpener": "Muscle tension can appear in your shoulders, jaw, hands, or stomach. Today you will scan each area, notice tight muscles, and deliberately relax them one area at a time.",
     "noraProbe": "Where does your body hold tension when you're nervous or frustrated?",
     "probeChoices": [
       "Shoulders",
@@ -563,7 +563,7 @@
       "Hands",
       "Stomach"
     ],
-    "takeawayCue": "Find the tight spot, breathe, let it go.",
+    "takeawayCue": "Notice the tight muscle. Unclench it and return to normal breathing.",
     "kind": "lesson"
   },
   {

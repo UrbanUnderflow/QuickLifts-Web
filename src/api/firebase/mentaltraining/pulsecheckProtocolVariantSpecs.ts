@@ -69,9 +69,9 @@ export const SEEDED_PROTOCOL_VARIANT_SPECS: SeedProtocolVariantSpec[] = [
     deliveryMode: 'guided_focus',
     legacyExerciseId: 'focus-body-scan',
     scriptSummary:
-      'A head-to-toe guided scan that helps the athlete notice hidden tension, tighten the link between body signals and attention, and release unnecessary muscular noise before technical work.',
+      'A head-to-toe guided scan that helps the athlete find tight muscles, relax muscles that are not needed, and return attention to the next action.',
     evidenceSummary:
-      'This variant has the clearest rationale when the problem is unnamed tension rather than obvious anxiety. Body-scan interventions have been linked with improved interoception and body-awareness outcomes, which makes this a plausible pre-technical reset for athletes who need to detect and clear somatic interference.',
+      'Use this variant when the athlete feels muscle tension but has not identified where it is. Body-scan practice helps the athlete locate tight muscles, deliberately reduce unnecessary tension, and return attention to the next action.',
     sourceReferences: [
       'Desmedt O et al. Two weeks to tune in: Evaluating the effects of a short-term body scan on interoception. Applied Psychology: Health and Well-Being (2025). https://pmc.ncbi.nlm.nih.gov/articles/PMC12411690/',
       'Treves IN et al. A meta-analysis of the effects of mindfulness meditation training on self-reported interoception. Scientific Reports (2025). PMID: 41198766. https://pubmed.ncbi.nlm.nih.gov/41198766/',

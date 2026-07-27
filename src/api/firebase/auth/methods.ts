@@ -22,6 +22,7 @@ import {
   AppVersionMediaItem,
   buildAppVersionWritePayload,
 } from '../../../utils/appVersioning';
+import { resolveGoogleProviderConflict } from './accountLinking';
 
 export const authMethods: AuthService = {
   async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
@@ -99,6 +100,10 @@ export const authMethods: AuthService = {
       const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
       return result;
     } catch (error) {
+      if ((error as { code?: string })?.code === 'auth/account-exists-with-different-credential') {
+        const resolvedCredential = await resolveGoogleProviderConflict(error);
+        if (resolvedCredential) return resolvedCredential;
+      }
       console.error('Error in signInWithGoogle:', error);
       throw error;
     }

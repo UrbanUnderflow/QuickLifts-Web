@@ -261,6 +261,33 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
     parentAssessmentReferralRevenueSharePct: normalizeReferralRevenueSharePct(
       candidate.parentAssessmentReferralRevenueSharePct ?? defaults.parentAssessmentReferralRevenueSharePct
     ),
+    coachReferralKickbackEnabled:
+      typeof candidate.coachReferralKickbackEnabled === 'boolean'
+        ? candidate.coachReferralKickbackEnabled
+        : defaults.coachReferralKickbackEnabled,
+    coachReferralRevenueSharePct: normalizeReferralRevenueSharePct(
+      candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
+    ),
+    coachReferralRecipientUserId: normalizeString(
+      typeof candidate.coachReferralRecipientUserId === 'string'
+        ? candidate.coachReferralRecipientUserId
+        : defaults.coachReferralRecipientUserId
+    ),
+    coachReferralRecipientEmail: normalizeString(
+      typeof candidate.coachReferralRecipientEmail === 'string'
+        ? candidate.coachReferralRecipientEmail
+        : defaults.coachReferralRecipientEmail
+    ),
+    coachReferralSourceTeamId: normalizeString(
+      typeof candidate.coachReferralSourceTeamId === 'string'
+        ? candidate.coachReferralSourceTeamId
+        : defaults.coachReferralSourceTeamId
+    ),
+    coachReferralSourceOrganizationId: normalizeString(
+      typeof candidate.coachReferralSourceOrganizationId === 'string'
+        ? candidate.coachReferralSourceOrganizationId
+        : defaults.coachReferralSourceOrganizationId
+    ),
     revenueRecipientRole: normalizeRevenueRecipientRole(candidate.revenueRecipientRole),
     revenueRecipientUserId: normalizeString(typeof candidate.revenueRecipientUserId === 'string' ? candidate.revenueRecipientUserId : defaults.revenueRecipientUserId),
     billingOwnerUserId: normalizeString(typeof candidate.billingOwnerUserId === 'string' ? candidate.billingOwnerUserId : defaults.billingOwnerUserId),

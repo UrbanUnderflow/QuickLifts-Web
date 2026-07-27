@@ -67,7 +67,8 @@ const handler = async (event) => {
 
   const { 
     priceId, 
-    userId
+    userId,
+    coachReferral = {}
   } = body;
 
   if (!priceId || !userId) {
@@ -120,6 +121,42 @@ const handler = async (event) => {
       metadata: {},
     });
     const commercialConfig = normalizeCommercialConfig(context?.commercialConfig);
+    const normalizedCoachReferral = {
+      referralType: normalizeString(coachReferral.referralType),
+      referrerCoachId: normalizeString(coachReferral.referrerCoachId),
+      referrerCoachEmail: normalizeString(coachReferral.referrerCoachEmail),
+      referrerTeamId: normalizeString(coachReferral.referrerTeamId),
+      referrerOrganizationId: normalizeString(coachReferral.referrerOrganizationId),
+    };
+    let coachReferralSharePct = 0;
+    let coachReferralEnabled = false;
+
+    if (
+      normalizedCoachReferral.referralType === 'coach-referral' &&
+      normalizedCoachReferral.referrerCoachId &&
+      normalizedCoachReferral.referrerTeamId
+    ) {
+      try {
+        const referrerTeamSnap = await db.collection('pulsecheck-teams').doc(normalizedCoachReferral.referrerTeamId).get();
+        const referrerTeam = referrerTeamSnap.exists ? referrerTeamSnap.data() || {} : null;
+        const referrerMembershipSnap = await db
+          .collection('pulsecheck-team-memberships')
+          .doc(`${normalizedCoachReferral.referrerTeamId}_${normalizedCoachReferral.referrerCoachId}`)
+          .get();
+        const referrerMembership = referrerMembershipSnap.exists ? referrerMembershipSnap.data() || {} : null;
+        const referrerIsTeamCoach = Boolean(referrerTeam) && Boolean(referrerMembership) && referrerMembership.role !== 'athlete';
+
+        if (referrerIsTeamCoach) {
+          const referrerCommercialConfig = normalizeCommercialConfig(referrerTeam.commercialConfig);
+          coachReferralEnabled = Boolean(referrerCommercialConfig.coachReferralKickbackEnabled);
+          coachReferralSharePct = coachReferralEnabled ? Number(referrerCommercialConfig.coachReferralRevenueSharePct) || 0 : 0;
+          normalizedCoachReferral.referrerOrganizationId =
+            normalizeString(referrerTeam.organizationId) || normalizedCoachReferral.referrerOrganizationId;
+        }
+      } catch (error) {
+        console.warn('[CoachCheckout] Failed to resolve coach referral commercial config:', error);
+      }
+    }
     
     // Create a Checkout Session with coach-specific metadata
     const metadata = {
@@ -131,6 +168,12 @@ const handler = async (event) => {
       pulsecheckTeamPlanStatus: commercialConfig.teamPlanStatus,
       pulsecheckRevenueRecipientUserId: commercialConfig.revenueRecipientUserId || '',
       pulsecheckRevenueRecipientRole: commercialConfig.revenueRecipientRole || '',
+      pulsecheckCoachReferralKickbackEnabled: coachReferralEnabled ? 'true' : 'false',
+      pulsecheckCoachReferralRevenueSharePct: String(coachReferralSharePct || 0),
+      pulsecheckCoachReferralRecipientUserId: coachReferralEnabled ? normalizedCoachReferral.referrerCoachId : '',
+      pulsecheckCoachReferralRecipientEmail: coachReferralEnabled ? normalizedCoachReferral.referrerCoachEmail : '',
+      pulsecheckCoachReferralSourceTeamId: coachReferralEnabled ? normalizedCoachReferral.referrerTeamId : '',
+      pulsecheckCoachReferralSourceOrganizationId: coachReferralEnabled ? normalizedCoachReferral.referrerOrganizationId : '',
       createdAt: Date.now().toString(),
     };
 

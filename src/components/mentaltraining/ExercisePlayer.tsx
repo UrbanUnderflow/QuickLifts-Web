@@ -60,6 +60,11 @@ import { db } from '../../api/firebase/config';
 import { RootState } from '../../redux/store';
 import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
+import {
+  BODY_SCAN_SCRIPT,
+  bodyScanInstructionsAreDirect,
+  type BodyScanScriptStep,
+} from '../../content/bodyScanScript';
 
 // ============================================================================
 // TYPES
@@ -1153,63 +1158,6 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
 // BODY SCAN EXERCISE (hands-free guided protocol)
 // ============================================================================
 
-type BodyScanScriptStep = {
-  label: string;
-  text: string;
-  holdWeight: number;
-};
-
-const BODY_SCAN_SETTLE_TEXT =
-  'Settle onto your back if you can, or sit fully supported. Put the phone down now. Close your eyes and take two easy breaths. You will hear the next step automatically; no tapping until we finish.';
-
-const DEFAULT_BODY_SCAN_SCRIPT: BodyScanScriptStep[] = [
-  {
-    label: 'Settle',
-    text: BODY_SCAN_SETTLE_TEXT,
-    holdWeight: 0.25,
-  },
-  {
-    label: 'Breath',
-    text: 'Close your eyes. Let your breathing find an easy pace. Do not force a deep breath. Just notice the body being held by the floor, chair, or bed.',
-    holdWeight: 1,
-  },
-  {
-    label: 'Head',
-    text: 'Bring attention to the top of your head, your forehead, your eyes, and your jaw. If you find gripping there, soften it by one percent.',
-    holdWeight: 1,
-  },
-  {
-    label: 'Neck and Shoulders',
-    text: 'Scan through your neck and shoulders. Let the shoulders drop away from the ears. Let your face stay quiet.',
-    holdWeight: 1.15,
-  },
-  {
-    label: 'Arms',
-    text: 'Move down both arms, through elbows, forearms, wrists, hands, and fingers. Notice whether the hands are holding effort you do not need.',
-    holdWeight: 1,
-  },
-  {
-    label: 'Torso',
-    text: 'Now scan the chest, ribs, stomach, and low back. Let the breath move through this area without trying to control it.',
-    holdWeight: 1.2,
-  },
-  {
-    label: 'Hips and Legs',
-    text: 'Bring attention to the hips, thighs, knees, calves, ankles, and feet. Let the legs get heavy. Let the feet be still.',
-    holdWeight: 1.2,
-  },
-  {
-    label: 'Release',
-    text: 'Now sense the whole body at once. If one area is still tight, breathe toward it gently, then let the next exhale take a little of that effort with it.',
-    holdWeight: 1.1,
-  },
-  {
-    label: 'Return',
-    text: 'Stay with this quieter body for a few more breaths. When the session ends, open your eyes slowly and bring this easier tension level into your next rep.',
-    holdWeight: 0.9,
-  },
-];
-
 function estimateNarrationSeconds(text: string): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(4, Math.ceil(words / 2.35));
@@ -1242,14 +1190,15 @@ function buildBodyScanScript(rawInstructions: unknown, durationSeconds: number):
     : [];
   const shouldUseAuthoredScript =
     authoredInstructions.length >= 4
-    && authoredInstructions.reduce((total, item) => total + item.length, 0) / authoredInstructions.length >= 72;
+    && authoredInstructions.reduce((total, item) => total + item.length, 0) / authoredInstructions.length >= 72
+    && bodyScanInstructionsAreDirect(authoredInstructions);
   const baseScript = shouldUseAuthoredScript
     ? authoredInstructions.map((text, index) => ({
-        label: DEFAULT_BODY_SCAN_SCRIPT[index]?.label || (index === 0 ? 'Settle' : index === authoredInstructions.length - 1 ? 'Return' : `Scan ${index}`),
-        text: index === 0 ? BODY_SCAN_SETTLE_TEXT : text,
+        label: BODY_SCAN_SCRIPT[index]?.label || (index === 0 ? 'Settle' : index === authoredInstructions.length - 1 ? 'Finish' : `Scan ${index}`),
+        text,
         holdWeight: index === 0 ? 0.25 : 1,
       }))
-    : DEFAULT_BODY_SCAN_SCRIPT;
+    : BODY_SCAN_SCRIPT;
 
   const estimatedSpeechSeconds = baseScript.reduce((total, step) => total + estimateNarrationSeconds(step.text), 0);
   const totalHoldWeight = baseScript.reduce((total, step) => total + step.holdWeight, 0) || 1;

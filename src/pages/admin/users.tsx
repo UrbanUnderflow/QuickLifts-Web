@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { db, auth } from '../../api/firebase/config';
-import debounce from 'lodash.debounce';
+import { collection, getDocs, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { db, auth, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, Users, LogIn, Search, Sparkles, Clipboard, LayoutDashboard, GitMerge } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, RepsAndWeightLog } from '../../api/firebase/workout/types';
@@ -19,6 +18,7 @@ type User = {
   email: string;
   displayName: string;
   username: string;
+  signInEmails?: string[];
   isAdmin?: boolean;
   subscriptionType?: SubscriptionType | string;
   registrationEntryPoint?: string;
@@ -59,6 +59,47 @@ type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'bet
 type JoinDateSortDirection = 'asc' | 'desc';
 type RemoteLoginTarget = 'fitWithPulse' | 'pulseCheckCoach';
 
+type AdminUserCounts = {
+  total: number;
+  admins: number;
+  creators: number;
+  origins: Record<RegistrationOriginKey, number>;
+};
+
+type AdminUsersResponse = {
+  users: User[];
+  counts: AdminUserCounts | null;
+  page: {
+    limit: number;
+    returned: number;
+    hasMore: boolean;
+    nextCursor: string | null;
+    searchMode: boolean;
+  };
+};
+
+type LoadUsersOptions = {
+  search?: string;
+  tab?: TabType;
+  direction?: JoinDateSortDirection;
+  append?: boolean;
+  includeCounts?: boolean;
+};
+
+const emptyAdminUserCounts: AdminUserCounts = {
+  total: 0,
+  admins: 0,
+  creators: 0,
+  origins: {
+    fit_with_pulse: 0,
+    macra: 0,
+    pulse_check: 0,
+    pulse_ritual: 0,
+    athletic_council: 0,
+    unknown: 0,
+  },
+};
+
 const remoteLoginTargets: Record<RemoteLoginTarget, { destination: string; label: string }> = {
   fitWithPulse: {
     destination: '/',
@@ -76,6 +117,13 @@ const getRemoteLoginFunctionUrl = (functionName: string) => {
     .replace(/\/+$/, '');
 
   return `${configuredBaseUrl}/.netlify/functions/${functionName}`;
+};
+
+const getAdminIdToken = async () => {
+  await auth.authStateReady();
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('Your admin sign-in expired.');
+  return currentUser.getIdToken();
 };
 
 const originTabConfigs: Array<{
@@ -169,8 +217,6 @@ const shouldLoadMacraProfile = (user: User) => {
     || Boolean(user.athleteSport || user.athleteSportName || user.athleteSportPosition);
 };
 
-const getOriginTabConfig = (tab: TabType) => originTabConfigs.find(config => config.tab === tab);
-
 // Define a type for workout session display data
 type WorkoutSessionDisplay = {
   workout: Workout;
@@ -248,6 +294,11 @@ const UsersManagement: React.FC = () => {
     target: RemoteLoginTarget;
   } | null>(null);
   const [mergeSourceUser, setMergeSourceUser] = useState<User | null>(null);
+  const [userCounts, setUserCounts] = useState<AdminUserCounts>(emptyAdminUserCounts);
+  const [nextUsersCursor, setNextUsersCursor] = useState<string | null>(null);
+  const [hasMoreUsers, setHasMoreUsers] = useState(false);
+  const [loadingMoreUsers, setLoadingMoreUsers] = useState(false);
+  const userRequestIdRef = useRef(0);
 
   // *** START: State for Username Migration ***
   const [showUsernameMigrationModal, setShowUsernameMigrationModal] = useState(false);
@@ -271,82 +322,108 @@ const UsersManagement: React.FC = () => {
       });
   };
 
-  // Check admin status for a user
-  const checkAdminStatus = async (email: string): Promise<boolean> => {
+  const loadAllUsers = async (options: LoadUsersOptions = {}) => {
+    const requestedSearch = options.search ?? searchTerm;
+    const requestedTab = options.tab ?? activeTab;
+    const requestedDirection = options.direction ?? joinDateSortDirection;
+    const append = options.append === true;
+    const includeCounts = options.includeCounts ?? !append;
+    const serverTab = ['workoutSessions', 'logs', 'betaApplications'].includes(requestedTab)
+      ? 'all'
+      : requestedTab;
+    const requestId = ++userRequestIdRef.current;
+
     try {
-      const adminDoc = await getDoc(doc(db, 'admin', email));
-      return adminDoc.exists();
-    } catch (error) {
-      console.error('Error checking admin status:', error);
-      return false;
-    }
-  };
+      if (append) {
+        setLoadingMoreUsers(true);
+      } else {
+        setLoading(true);
+      }
 
-  // Load users and verify their admin status
-  const loadAllUsers = async () => {
-    try {
-      setLoading(true);
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, orderBy('createdAt', 'desc'));
+      const token = await getAdminIdToken();
+      const params = new URLSearchParams({
+        limit: '100',
+        q: requestedSearch.trim(),
+        tab: serverTab,
+        direction: requestedDirection,
+        counts: String(includeCounts),
+      });
+      if (append && nextUsersCursor) params.set('cursor', nextUsersCursor);
 
-      const snapshot = await getDocs(q);
-      
-      const allUsers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        adminVerified: false // Initialize with unverified state
-      })) as User[];
-
-      // Check admin status for each user
-      const usersWithAdminStatus = await Promise.all(
-        allUsers.map(async (user) => {
-          if (user.email) {
-            const isAdminUser = await checkAdminStatus(user.email);
-            return { ...user, adminVerified: isAdminUser };
-          }
-          return user;
-        })
+      const response = await fetch(
+        `${getRemoteLoginFunctionUrl('list-admin-users')}?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...getFirebaseModeRequestHeaders(),
+          },
+        },
       );
+      const payload = await response.json().catch(() => ({})) as Partial<AdminUsersResponse> & { error?: string };
+      if (!response.ok || !Array.isArray(payload.users) || !payload.page) {
+        throw new Error(payload.error || `Users could not be loaded (${response.status}).`);
+      }
+      if (requestId !== userRequestIdRef.current) return;
 
-      const usersWithMacraProfiles = await Promise.all(
-        usersWithAdminStatus.map(async (user) => {
-          if (!shouldLoadMacraProfile(user)) {
-            return user;
-          }
+      const incomingUsers = payload.users;
+      const nextUsers = append
+        ? Array.from(
+          new Map([...users, ...incomingUsers].map(user => [user.id, user])).values(),
+        )
+        : incomingUsers;
 
-          try {
-            const profileDoc = await getDoc(doc(db, 'users', user.id, 'macra', 'profile'));
-            return {
-              ...user,
-              macraProfile: profileDoc.exists() ? profileDoc.data() : null,
-              macraProfileLoaded: true,
-            };
-          } catch (error) {
-            console.warn('Error loading Macra profile for user:', user.id, error);
-            return {
-              ...user,
-              macraProfile: null,
-              macraProfileLoaded: false,
-              macraProfileLoadError: error instanceof Error ? error.message : 'Failed to load Macra profile',
-            };
-          }
-        })
-      );
-
-      // Update state with the final user list that includes admin status
-      setUsers(usersWithMacraProfiles);
-      updateFilteredUsers(usersWithMacraProfiles, searchTerm, activeTab, joinDateSortDirection);
-      
+      setUsers(nextUsers);
+      setFilteredUsers(sortUsersByJoinDate(nextUsers, requestedDirection));
+      setNextUsersCursor(payload.page.nextCursor || null);
+      setHasMoreUsers(payload.page.hasMore);
+      if (payload.counts) {
+        setUserCounts({
+          ...emptyAdminUserCounts,
+          ...payload.counts,
+          origins: {
+            ...emptyAdminUserCounts.origins,
+            ...payload.counts.origins,
+          },
+        });
+      }
     } catch (error) {
       console.error('Error loading users:', error);
-      setToastMessage({ 
-        type: 'error', 
-        text: 'Error loading users. Please try again.' 
+      setToastMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Users could not be loaded. Please try again.',
       });
     } finally {
-      setLoading(false);
+      if (requestId === userRequestIdRef.current) {
+        setLoading(false);
+        setLoadingMoreUsers(false);
+      }
     }
   };
+
+  const searchUsersForMerge = useCallback(async (search: string): Promise<User[]> => {
+    const token = await getAdminIdToken();
+    const params = new URLSearchParams({
+      limit: '100',
+      q: search.trim(),
+      tab: 'all',
+      direction: 'desc',
+      counts: 'false',
+    });
+    const response = await fetch(
+      `${getRemoteLoginFunctionUrl('list-admin-users')}?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+      },
+    );
+    const payload = await response.json().catch(() => ({})) as Partial<AdminUsersResponse> & { error?: string };
+    if (!response.ok || !Array.isArray(payload.users)) {
+      throw new Error(payload.error || 'Accounts could not be searched.');
+    }
+    return payload.users;
+  }, []);
 
   // Toggle admin status
   const toggleAdminStatus = async (user: User) => {
@@ -469,19 +546,7 @@ const UsersManagement: React.FC = () => {
       return filteredUsers.every(user => selectedUserIds.has(user.id));
   }, [filteredUsers, selectedUserIds, isSelectingForDelete]);
 
-  const registrationOriginCounts = useMemo(() => {
-    return originTabConfigs.reduce<Record<RegistrationOriginKey, number>>((counts, config) => {
-      counts[config.key] = users.filter(user => normalizeRegistrationEntryPoint(user.registrationEntryPoint) === config.key).length;
-      return counts;
-    }, {
-      fit_with_pulse: 0,
-      macra: 0,
-      pulse_check: 0,
-      pulse_ritual: 0,
-      athletic_council: 0,
-      unknown: 0,
-    });
-  }, [users]);
+  const registrationOriginCounts = userCounts.origins;
 
   const handleSelectAllVisibleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const isChecked = event.target.checked;
@@ -661,64 +726,22 @@ const UsersManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    loadAllUsers();
     loadBetaApplications(); // Load beta applications on mount to check for existing ones
   }, []);
 
-  // Update filtered users based on search term and active tab
-  const updateFilteredUsers = (
-    allUsers: User[],
-    term: string,
-    tab: TabType,
-    sortDirection: JoinDateSortDirection = joinDateSortDirection
-  ) => {
-    let filtered = [...allUsers];
-    const originConfig = getOriginTabConfig(tab);
-    
-    // Apply tab filter
-    if (originConfig) {
-      filtered = filtered.filter(user => normalizeRegistrationEntryPoint(user.registrationEntryPoint) === originConfig.key);
-    } else if (tab === 'admins') {
-      filtered = filtered.filter(user => user.adminVerified);
-    } else if (tab === 'creators') {
-      // Show only users who have uploaded videos (identified by videoCount > 0)
-      filtered = filtered.filter(user => (user.videoCount || 0) > 0);
-    }
-    
-    // Apply search term filter
-    if (term) {
-      const lowercaseTerm = term.toLowerCase();
-      filtered = filtered.filter(user => 
-        (user.email?.toLowerCase().includes(lowercaseTerm)) ||
-        (user.displayName?.toLowerCase().includes(lowercaseTerm)) ||
-        (user.username?.toLowerCase().includes(lowercaseTerm)) ||
-        (user.id?.toLowerCase().includes(lowercaseTerm)) ||
-        (user.registrationEntryPoint?.toLowerCase().includes(lowercaseTerm)) ||
-        (getMacraCancelFeedbackReason(user).toLowerCase().includes(lowercaseTerm)) ||
-        (getMacraCancelFeedback(user)?.reason?.toString().toLowerCase().includes(lowercaseTerm)) ||
-        (getMacraCancelFeedback(user)?.trigger?.toString().toLowerCase().includes(lowercaseTerm)) ||
-        (getRegistrationOriginConfig(user).label.toLowerCase().includes(lowercaseTerm))
-      );
-    }
-    
-    setFilteredUsers(sortUsersByJoinDate(filtered, sortDirection));
-  };
-
-  // Handle search term changes with debounce
-  const debouncedSearch = useMemo(() => {
-      return debounce((term: string) => {
-          updateFilteredUsers(users, term, activeTab);
-      }, 300);
-  }, [users, activeTab, joinDateSortDirection]); // Recreate debounce function if users, active tab, or sort changes
-
   useEffect(() => {
-      // Call the debounced search function when searchTerm changes
-      debouncedSearch(searchTerm);
-      // Cleanup function to cancel the debounce on unmount or when searchTerm changes rapidly
-      return () => {
-          debouncedSearch.cancel();
-      };
-  }, [searchTerm, debouncedSearch]);
+    if (['workoutSessions', 'logs', 'betaApplications'].includes(activeTab)) return;
+    const delay = searchTerm.trim() ? 350 : 0;
+    const timer = window.setTimeout(() => {
+      void loadAllUsers({
+        search: searchTerm,
+        tab: activeTab,
+        direction: joinDateSortDirection,
+        includeCounts: userCounts.total === 0,
+      });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm, activeTab, joinDateSortDirection]);
 
   const handleRefresh = async () => {
     try {
@@ -739,7 +762,7 @@ const UsersManagement: React.FC = () => {
       setIsSelectingForDelete(false);
       
       // Load fresh data
-      await loadAllUsers();
+      await loadAllUsers({ search: '' });
       
       // If we're on the beta applications tab, refresh that data too
       if (activeTab === 'betaApplications') {
@@ -768,23 +791,10 @@ const UsersManagement: React.FC = () => {
       loadBetaApplications();
     }
     
-    // Only apply filtering for user-list tabs.
-    if (tab !== 'workoutSessions' && tab !== 'betaApplications') {
-      updateFilteredUsers(users, searchTerm, tab);
-    }
-    
-    // If switching away from workout sessions, ensure filtering is correct
-    if (activeTab === 'workoutSessions' && tab !== 'workoutSessions' && tab !== 'betaApplications') {
-      updateFilteredUsers(users, searchTerm, tab);
-    }
   };
 
   const handleJoinDateSortToggle = () => {
-    setJoinDateSortDirection(previousDirection => {
-      const nextDirection = previousDirection === 'desc' ? 'asc' : 'desc';
-      updateFilteredUsers(users, searchTerm, activeTab, nextDirection);
-      return nextDirection;
-    });
+    setJoinDateSortDirection(previousDirection => previousDirection === 'desc' ? 'asc' : 'desc');
   };
 
   // Format date helper function
@@ -1046,15 +1056,25 @@ const UsersManagement: React.FC = () => {
   const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
 
+  const loadUsersForMaintenance = async (): Promise<User[]> => {
+    const snapshot = await getDocs(collection(db, 'users'));
+    return snapshot.docs.map(document => ({
+      id: document.id,
+      ...document.data(),
+    })) as User[];
+  };
+
   // Run comprehensive username diagnostics
   const runUsernameDiagnostics = async () => {
     setRunningDiagnostics(true);
     setDiagnosticResults(null);
     
     try {
+      const allDatabaseUsers = await loadUsersForMaintenance();
+
       // 1. Find duplicate usernames in users collection
       const usernameMap = new Map<string, Array<{ id: string; email: string; displayName: string }>>();
-      users.forEach(user => {
+      allDatabaseUsers.forEach(user => {
         if (user.username) {
           const existing = usernameMap.get(user.username) || [];
           existing.push({ id: user.id, email: user.email, displayName: user.displayName });
@@ -1074,7 +1094,7 @@ const UsersManagement: React.FC = () => {
       });
 
       // 3. Find orphaned username documents (userId doesn't exist in users)
-      const userIds = new Set(users.map(u => u.id));
+      const userIds = new Set(allDatabaseUsers.map(u => u.id));
       const orphanedUsernamesDocs: Array<{ username: string; userId: string }> = [];
       usernamesDocs.forEach((data, username) => {
         if (data.userId && !userIds.has(data.userId)) {
@@ -1084,7 +1104,7 @@ const UsersManagement: React.FC = () => {
 
       // 4. Find users without corresponding username document
       const usersWithoutUsernameDoc: Array<{ id: string; username: string; email: string }> = [];
-      users.forEach(user => {
+      allDatabaseUsers.forEach(user => {
         if (user.username && !usernamesDocs.has(user.username)) {
           usersWithoutUsernameDoc.push({ id: user.id, username: user.username, email: user.email });
         }
@@ -1092,7 +1112,7 @@ const UsersManagement: React.FC = () => {
 
       // 5. Find mismatched userIds (username doc points to different user than expected)
       const mismatchedUserIds: Array<{ username: string; usernameDocUserId: string; actualUserId: string; email: string }> = [];
-      users.forEach(user => {
+      allDatabaseUsers.forEach(user => {
         if (user.username) {
           const usernameDoc = usernamesDocs.get(user.username);
           if (usernameDoc && usernameDoc.userId && usernameDoc.userId !== user.id) {
@@ -1305,7 +1325,8 @@ const UsersManagement: React.FC = () => {
     setMigrationResults({ success: 0, failed: 0, skipped: 0 });
     
     try {
-      const badUsers = users.filter(user => {
+      const allDatabaseUsers = await loadUsersForMaintenance();
+      const badUsers = allDatabaseUsers.filter(user => {
         if (!user.username) return false;
         // Check if username has invalid characters (spaces, special chars, uppercase)
         const hasInvalidChars = !isValidUsername(user.username);
@@ -2985,7 +3006,7 @@ const UsersManagement: React.FC = () => {
               >
                 All Users
                 <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
-                  {users.length}
+                  {userCounts.total}
                 </span>
                 {activeTab === 'all' && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
@@ -3002,7 +3023,7 @@ const UsersManagement: React.FC = () => {
               >
                 Admins Only
                 <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
-                  {users.filter(u => u.adminVerified).length}
+                  {userCounts.admins}
                 </span>
                 {activeTab === 'admins' && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
@@ -3023,7 +3044,7 @@ const UsersManagement: React.FC = () => {
                   <Activity className="h-4 w-4 mr-1" />
                   Creator Tab
                   <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
-                    {users.filter(u => (u.videoCount || 0) > 0).length}
+                    {userCounts.creators}
                   </span>
                 </div>
                 {activeTab === 'creators' && (
@@ -3766,7 +3787,14 @@ const UsersManagement: React.FC = () => {
               <div>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-xs text-gray-400">
-                    Showing <span className="font-semibold text-gray-200">{filteredUsers.length}</span> users. Copy exports the current filtered and sorted table.
+                    Showing <span className="font-semibold text-gray-200">{filteredUsers.length}</span>
+                    {activeTab === 'all' && !searchTerm.trim() && (
+                      <> of <span className="font-semibold text-gray-200">{userCounts.total}</span></>
+                    )}{' '}
+                    users. Copy exports the current results.
+                    {hasMoreUsers && (searchTerm.trim() || activeTab !== 'all') && (
+                      <span className="ml-1 text-amber-300">The first 100 matches are shown. Add more detail to the search to narrow the results.</span>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -4127,6 +4155,24 @@ const UsersManagement: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
+                      {hasMoreUsers && activeTab === 'all' && !searchTerm.trim() && (
+                        <div className="mt-4 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => void loadAllUsers({
+                              search: '',
+                              tab: 'all',
+                              direction: joinDateSortDirection,
+                              append: true,
+                              includeCounts: false,
+                            })}
+                            disabled={loadingMoreUsers || isBatchDeleting}
+                            className="rounded-lg border border-gray-700 bg-[#262a30] px-5 py-2.5 text-sm font-medium text-gray-200 transition hover:border-gray-600 hover:bg-[#2a2f36] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {loadingMoreUsers ? 'Loading users...' : 'Load 100 more'}
+                          </button>
+                        </div>
+                      )}
               </div>
             )}
           </div>
@@ -4632,6 +4678,7 @@ const UsersManagement: React.FC = () => {
         <AccountMergeModal
           source={mergeSourceUser}
           users={users}
+          searchUsers={searchUsersForMerge}
           onClose={() => setMergeSourceUser(null)}
           onMerged={() => {
             setToastMessage({ type: 'success', text: 'Account records combined. The owner can finish linking from Settings.' });

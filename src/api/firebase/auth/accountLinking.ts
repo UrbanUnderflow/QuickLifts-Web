@@ -255,6 +255,33 @@ export const rememberProviderCredentialFromError = (
   return true;
 };
 
+export const resolveGoogleProviderConflict = async (
+  unknownError: unknown,
+): Promise<UserCredential | null> => {
+  const credential = credentialFromLinkError('google.com', unknownError as AuthError);
+  if (!credential?.idToken) return null;
+
+  const response = await fetch('/.netlify/functions/resolve-verified-google-signin', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getFirebaseModeRequestHeaders(),
+    },
+    body: JSON.stringify({ googleIdToken: credential.idToken }),
+  });
+  if (!response.ok) return null;
+
+  const payload = await response.json().catch(() => ({}));
+  if (!payload?.customToken) return null;
+
+  const canonicalCredential = await signInWithCustomToken(auth, payload.customToken);
+  await linkWithCredential(canonicalCredential.user, credential);
+  await canonicalCredential.user.reload();
+  await canonicalCredential.user.getIdToken(true);
+  await syncProviderSummary(canonicalCredential.user);
+  return canonicalCredential;
+};
+
 export const linkRememberedProviderCredential = async (user: User) => {
   if (!pendingConflict) return null;
   const remembered = pendingConflict;
@@ -266,14 +293,7 @@ export const linkRememberedProviderCredential = async (user: User) => {
   return remembered.providerId;
 };
 
-export const rejectAccidentalNewSocialLogin = async (credential: UserCredential) => {
-  if (!getAdditionalUserInfo(credential)?.isNewUser) return false;
-  await deleteUser(credential.user);
-  await signOut(auth).catch(() => undefined);
-  return true;
-};
-
-export const resolveCanonicalAccountAlias = async (user: User): Promise<User> => {
+const requestCanonicalAccountAlias = async (user: User) => {
   const token = await user.getIdToken();
   const response = await fetch('/.netlify/functions/merge-accounts', {
     method: 'POST',
@@ -284,8 +304,25 @@ export const resolveCanonicalAccountAlias = async (user: User): Promise<User> =>
     },
     body: JSON.stringify({ action: 'resolve-current-alias' }),
   });
-  if (!response.ok) return user;
-  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) return null;
+  return response.json().catch(() => null);
+};
+
+export const rejectAccidentalNewSocialLogin = async (credential: UserCredential) => {
+  if (!getAdditionalUserInfo(credential)?.isNewUser) return false;
+
+  const alias = await requestCanonicalAccountAlias(credential.user);
+  if (alias?.alias && alias?.customToken) {
+    return false;
+  }
+
+  await deleteUser(credential.user);
+  await signOut(auth).catch(() => undefined);
+  return true;
+};
+
+export const resolveCanonicalAccountAlias = async (user: User): Promise<User> => {
+  const payload = await requestCanonicalAccountAlias(user);
   if (!payload?.alias) return user;
 
   if (!payload?.customToken) {

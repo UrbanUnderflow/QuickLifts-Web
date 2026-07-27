@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -39,9 +39,10 @@ type MergePreview = {
 const AccountMergeModal: React.FC<{
   source: MergeUser;
   users: MergeUser[];
+  searchUsers?: (query: string) => Promise<MergeUser[]>;
   onClose: () => void;
   onMerged: () => void;
-}> = ({ source, users, onClose, onMerged }) => {
+}> = ({ source, users, searchUsers, onClose, onMerged }) => {
   const suggestedCanonical = useMemo(
     () => users.find(
       (candidate) =>
@@ -61,11 +62,19 @@ const AccountMergeModal: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [merged, setMerged] = useState(false);
   const [mergeId, setMergeId] = useState('');
+  const [remoteUsers, setRemoteUsers] = useState<MergeUser[]>([]);
+  const [searchingAccounts, setSearchingAccounts] = useState(false);
 
-  const canonical = users.find((candidate) => candidate.id === canonicalUid);
+  const availableUsers = useMemo(
+    () => Array.from(
+      new Map([...users, ...remoteUsers].map(candidate => [candidate.id, candidate])).values(),
+    ),
+    [remoteUsers, users],
+  );
+  const canonical = availableUsers.find((candidate) => candidate.id === canonicalUid);
   const canonicalCandidates = useMemo(() => {
     const query = accountSearch.trim().toLowerCase();
-    const matches = users.filter((candidate) => {
+    const matches = availableUsers.filter((candidate) => {
       if (candidate.id === mergeSource.id) return false;
       if (!query) return true;
       return [
@@ -83,8 +92,37 @@ const AccountMergeModal: React.FC<{
       ].slice(0, 100);
     }
     return visibleMatches;
-  }, [accountSearch, canonical, mergeSource.id, users]);
+  }, [accountSearch, availableUsers, canonical, mergeSource.id]);
   const expectedConfirmation = canonicalUid ? `MERGE ${mergeSource.id} INTO ${canonicalUid}` : '';
+
+  useEffect(() => {
+    const query = accountSearch.trim();
+    if (!searchUsers || query.length < 2) {
+      setRemoteUsers([]);
+      setSearchingAccounts(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setSearchingAccounts(true);
+      searchUsers(query)
+        .then((matches) => {
+          if (!cancelled) setRemoteUsers(matches);
+        })
+        .catch(() => {
+          if (!cancelled) setRemoteUsers([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchingAccounts(false);
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [accountSearch, searchUsers]);
 
   const resetReview = () => {
     setPreview(null);
@@ -274,6 +312,12 @@ const AccountMergeModal: React.FC<{
                   </option>
                 ))}
               </select>
+              {searchingAccounts && (
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Searching all accounts...
+                </div>
+              )}
               {canonical && <div className="mt-1 break-all font-mono text-xs text-gray-500">{canonical.id}</div>}
             </div>
           </div>
@@ -380,8 +424,8 @@ const AccountMergeModal: React.FC<{
                 Account records combined
               </div>
               <p className="mt-2 text-sm leading-6 text-gray-300">
-                The owner can now sign in to the kept account and open Settings to connect Apple or Google.
-                That final step proves ownership and moves the sign-in method onto the kept account.
+                Existing aliases and verified Google emails now open the kept account automatically.
+                Settings can still be used to review or change connected sign-in methods.
               </p>
               {mergeId && (
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-emerald-500/10 pt-3">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
+import { useRouter } from 'next/router';
 import { useUser } from '../hooks/useUser';
 import { getStripePublishableKey } from '../utils/stripeKey';
 import { getPriceId } from '../utils/stripeConstants';
@@ -13,6 +14,7 @@ interface Props {
 }
 
 const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
+  const router = useRouter();
   const currentUser = useUser();
   const [planType, setPlanType] = useState<'monthly' | 'annual'>('monthly');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -39,6 +41,14 @@ const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
 
     try {
       const priceId = getPriceId('coach', planType);
+      const coachReferral = {
+        referralType: typeof router.query.referralType === 'string' ? router.query.referralType : '',
+        referrerCoachId: typeof router.query.referrerCoachId === 'string' ? router.query.referrerCoachId : '',
+        referrerCoachEmail: typeof router.query.referrerCoachEmail === 'string' ? router.query.referrerCoachEmail : '',
+        referrerTeamId: typeof router.query.referrerTeamId === 'string' ? router.query.referrerTeamId : '',
+        referrerOrganizationId:
+          typeof router.query.referrerOrganizationId === 'string' ? router.query.referrerOrganizationId : '',
+      };
       
       console.log('[CoachSubscription] Creating coach checkout session for:', { 
         userId: currentUser.id, 
@@ -53,7 +63,8 @@ const CoachProductModal: React.FC<Props> = ({ isOpen, closeModal }) => {
         body: JSON.stringify({ 
           priceId,
           userId: currentUser.id,
-          userType: 'coach' // Standard coach, not partner
+          userType: 'coach', // Standard coach, not partner
+          coachReferral,
         }),
       });
 

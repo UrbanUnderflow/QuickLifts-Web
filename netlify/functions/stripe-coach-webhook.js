@@ -103,6 +103,7 @@ async function syncCoachBillingSubscription(subscription) {
       },
     },
   });
+  const nextCommercialConfig = commercialUpdate?.commercialConfig || context.commercialConfig || {};
 
   await recalculatePulseCheckRevenueSummaries({
     db,
@@ -111,6 +112,10 @@ async function syncCoachBillingSubscription(subscription) {
     userIds: [
       context.commercialConfig.revenueRecipientUserId,
       context.commercialConfig.billingOwnerUserId,
+      context.commercialConfig.coachReferralRecipientUserId,
+      nextCommercialConfig.revenueRecipientUserId,
+      nextCommercialConfig.billingOwnerUserId,
+      nextCommercialConfig.coachReferralRecipientUserId,
       userId,
     ].filter(Boolean),
   });

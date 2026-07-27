@@ -27,6 +27,8 @@ CORE_FUNCTIONS=(
   check-admin
   check-env
   get-user-by-id
+  list-admin-users
+  resolve-verified-google-signin
   delete-user
   merge-accounts
   reset-onboarding

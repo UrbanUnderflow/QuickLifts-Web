@@ -30,6 +30,7 @@ import {
 import { SIM_MODULES_COLLECTION } from './collections';
 import { getSimSpec, getSimSpecByLegacyExerciseId } from './taxonomy';
 import { buildSportContentPacks } from './sportContentPacks';
+import { BODY_SCAN_INSTRUCTIONS } from '../../../content/bodyScanScript';
 
 const COLLECTION = SIM_MODULES_COLLECTION;
 
@@ -1490,7 +1491,7 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
   {
     id: 'focus-body-scan',
     name: 'Body Scan Awareness',
-    description: 'A head-to-toe scan of your body to find hidden tension and let it go.',
+    description: 'A head-to-toe check that helps you notice tight muscles and deliberately relax them.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 5,
@@ -1500,37 +1501,27 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
         type: 'body_scan',
         duration: 300,
         progressionLevel: 1,
-        instructions: [
-          'Settle onto your back if you can, or sit fully supported. Put the phone down now. Close your eyes and take two easy breaths. You will hear the next step automatically; no tapping until we finish.',
-          'Close your eyes. Let your breathing find an easy pace. Do not force a deep breath. Just notice the body being held by the floor, chair, or bed.',
-          'Bring attention to the top of your head, your forehead, your eyes, and your jaw. If you find gripping there, soften it by one percent.',
-          'Scan through your neck and shoulders. Let the shoulders drop away from the ears. Let your face stay quiet.',
-          'Move down both arms, through elbows, forearms, wrists, hands, and fingers. Notice whether the hands are holding effort you do not need.',
-          'Now scan the chest, ribs, stomach, and low back. Let the breath move through this area without trying to control it.',
-          'Bring attention to the hips, thighs, knees, calves, ankles, and feet. Let the legs get heavy. Let the feet be still.',
-          'Now sense the whole body at once. If one area is still tight, breathe toward it gently, then let the next exhale take a little of that effort with it.',
-          'Stay with this quieter body for a few more breaths. When the session ends, open your eyes slowly and bring this easier tension level into whatever you do next.',
-        ],
+        instructions: BODY_SCAN_INSTRUCTIONS,
       },
     },
     benefits: [
-      'Increases body awareness',
-      'Releases unnecessary tension',
-      'Calms the mind',
-      'Good warm-up for performance',
+      'Improves your ability to notice body changes',
+      'Practices releasing unnecessary muscle tension',
+      'Helps you notice changes in your breathing',
+      'Prepares your body for the next activity',
     ],
     bestFor: ['pre-competition', 'before technical work', 'rest periods', 'sleep prep'],
     reflection: {
       questions: [
         { id: 'tension-spot', prompt: 'Where were you holding the most tension?', kind: 'choice', choices: ['Head and jaw', 'Neck and shoulders', 'Chest and stomach', 'Hips and legs'] },
-        { id: 'calm-level', prompt: 'How relaxed is your body now?', kind: 'scale', scaleLowLabel: 'Still tight', scaleHighLabel: 'Fully loose' },
+        { id: 'calm-level', prompt: 'How much muscle tension do you notice now?', kind: 'scale', scaleLowLabel: 'A lot of tension', scaleHighLabel: 'Very little tension' },
       ],
     },
     origin: 'Adapted from the Body Scan meditation technique developed by Dr. Jon Kabat-Zinn at the University of Massachusetts Medical School as part of Mindfulness-Based Stress Reduction (MBSR). Used by the U.S. Marine Corps Mindfulness-Based Mind Fitness Training (MMFT) program, and by NFL teams including the Seattle Seahawks under coach Pete Carroll\'s mindfulness-based performance culture.',
     neuroscience: 'Body scanning activates the insular cortex — the brain region responsible for interoception (internal body awareness). Athletes with higher interoceptive accuracy demonstrate superior reaction times, better injury prevention, and more refined movement quality. Research published in Frontiers in Human Neuroscience shows that regular body scan practice increases grey matter density in the insula, leading to heightened proprioception — the ability to sense exactly where your body is in space, which is critical for athletic performance.',
     overview: {
       when: 'Pre-competition warm-up, before technical work, or before sleep',
-      focus: 'Scanning your body to release hidden tension and sharpen awareness',
+      focus: 'Checking each area of your body for tight muscles and deliberately relaxing them',
       timeScale: '5 minutes (full head-to-toe scan)',
       skill: 'Body awareness and tension release',
       analogy: 'Like running a diagnostic scan on a race car before the race — identifying and fixing issues before they cost you',
@@ -1693,7 +1684,7 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
     interaction: {
       kind: 'nervesRehearsal',
       nervesRehearsal: {
-        contentVersion: 2,
+        contentVersion: 3,
         awarenessPrompt: 'As you get ready to perform, what changes first in your body?',
         awarenessChoices: [
           'My heart beats faster',
@@ -1705,9 +1696,9 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
         meaningPrompt: 'You notice that you feel nervous before the performance. What should you tell yourself so you stay focused on what you need to do?',
         meaningChoices: [
           {
-            text: '"My faster heartbeat and breathing mean my body is preparing me to perform."',
+            text: '"My faster heartbeat and breathing mean my body is getting ready to perform."',
             isTarget: true,
-            feedback: 'This answer treats the body changes as preparation and brings your attention back to the performance.',
+            feedback: 'This answer names the body changes and brings your attention back to the performance.',
           },
           {
             text: '"I should double-check the whole plan right now."',
@@ -1718,8 +1709,8 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
             feedback: 'Watching everyone else takes your attention away from your own preparation.',
           },
         ],
-        cuePrompt: 'Choose a short phrase you can say to yourself when you notice nerves.',
-        cueChoices: ['My body is preparing. I am ready.', 'I am ready. See and move.', 'One breath. Set and perform.'],
+        cuePrompt: 'Choose a short sentence to repeat when your heart beats faster, your breathing changes, your muscles tighten, or your thoughts speed up.',
+        cueChoices: ['My heart is beating faster. I am ready.', 'I feel nervous. See and move.', 'One breath. Set and perform.'],
         setAction: 'Stand tall, relax your shoulders, and move into your starting position',
         rehearsalRounds: [
           { pressureCue: 'You notice that you feel nervous as you get ready.', support: 'visible', windowSeconds: 18 },

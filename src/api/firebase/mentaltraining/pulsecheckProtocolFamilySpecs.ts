@@ -73,9 +73,9 @@ export const SEEDED_PROTOCOL_FAMILY_SPECS: SeedProtocolFamilySpec[] = [
     mechanismSummary:
       'Interoceptive attention narrows awareness from diffuse threat monitoring toward concrete bodily signals, making tension easier to detect and less likely to run the session.',
     targetBottleneck:
-      'Hidden tension, somatic noise, and scattered attention that prevent the athlete from settling into useful execution.',
+      'Muscle tension the athlete has not noticed and attention that has moved away from the next action.',
     expectedStateShift:
-      'Shift the athlete from diffuse stress monitoring to precise body awareness and quieter attentional control.',
+      'Help the athlete identify specific body changes and return attention to the next action.',
     evidenceSummary:
       'Body-scan style practices appear to improve interoception and body awareness. Recent short-term intervention work found that daily body-scan practice increased self-reported interoception and several interoceptive outcomes relative to passive control. A broader mindfulness meta-analysis also found small-to-medium gains in self-reported interoception, supporting body-aware grounding as a plausible regulation tool.',
     sourceReferences: [

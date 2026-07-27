@@ -1321,7 +1321,7 @@ const BODY_SCAN_RUNTIME_CUES: ProtocolCueDef[] = [
     protocolClass: 'regulation',
     responseFamily: 'focus_narrowing',
     runtimeRole: 'transition',
-    description: 'Soft step-transition signal for Body Scan Awareness so quiet holds feel active instead of stalled.',
+    description: 'Soft step-transition sound for Body Scan Awareness so pauses between spoken instructions feel intentional.',
     prompt:
       'A very soft calming transition signal for a guided body scan: breath-like airy chime, warm glass resonance, gentle exhale tail, subtle and reassuring, no melody, no music, no speech.',
     durationSeconds: 2,

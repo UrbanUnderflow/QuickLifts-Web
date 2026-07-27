@@ -124,6 +124,9 @@ const normalizeInviteCommercialSnapshot = (
   const parentAssessmentReferralRevenueSharePct = Number.isFinite(Number(candidate.parentAssessmentReferralRevenueSharePct))
     ? Math.max(0, Math.min(100, Number(candidate.parentAssessmentReferralRevenueSharePct)))
     : defaults.parentAssessmentReferralRevenueSharePct;
+  const coachReferralRevenueSharePct = Number.isFinite(Number(candidate.coachReferralRevenueSharePct))
+    ? Math.max(0, Math.min(100, Number(candidate.coachReferralRevenueSharePct)))
+    : defaults.coachReferralRevenueSharePct;
   const snapshot: PulseCheckTeamCommercialSnapshot = {
     commercialModel,
     teamPlanStatus,
@@ -139,6 +142,15 @@ const normalizeInviteCommercialSnapshot = (
         ? candidate.parentAssessmentReferralKickbackEnabled
         : defaults.parentAssessmentReferralKickbackEnabled,
     parentAssessmentReferralRevenueSharePct,
+    coachReferralKickbackEnabled:
+      typeof candidate.coachReferralKickbackEnabled === 'boolean'
+        ? candidate.coachReferralKickbackEnabled
+        : defaults.coachReferralKickbackEnabled,
+    coachReferralRevenueSharePct,
+    coachReferralRecipientUserId: String(candidate.coachReferralRecipientUserId || defaults.coachReferralRecipientUserId || ''),
+    coachReferralRecipientEmail: String(candidate.coachReferralRecipientEmail || defaults.coachReferralRecipientEmail || ''),
+    coachReferralSourceTeamId: String(candidate.coachReferralSourceTeamId || defaults.coachReferralSourceTeamId || ''),
+    coachReferralSourceOrganizationId: String(candidate.coachReferralSourceOrganizationId || defaults.coachReferralSourceOrganizationId || ''),
     revenueRecipientRole:
       String(candidate.revenueRecipientRole || defaults.revenueRecipientRole).trim() === 'coach'
         ? 'coach'

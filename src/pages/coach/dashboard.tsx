@@ -3989,6 +3989,26 @@ const ReferralLinksSection: React.FC<{
         canInvite={canInvite}
       />
     </div>
+
+    <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white">Coach referral</div>
+          <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+            Coaches can use this link to start PulseCheck with attribution back to you for their future athlete-paid subscriptions.
+          </div>
+        </div>
+        <span className="rounded-full border border-purple-500/25 bg-purple-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-purple-300">
+          Coach
+        </span>
+      </div>
+      <CoachReferralLinkSection
+        isDemo={isDemo}
+        coachId={coachId}
+        coachEmail={coachEmail}
+        canInvite={canInvite}
+      />
+    </div>
   </div>
 );
 
@@ -4119,6 +4139,138 @@ const ParentAssessmentReferralLinkSection: React.FC<{
       <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
         {team?.parentAssessmentReferralKickbackEnabled
           ? `Kickback active: ${team.parentAssessmentReferralRevenueSharePct}% of parent assessment purchases can route to the configured revenue recipient.`
+          : 'Kickback inactive until it is enabled in Team Commercial Config.'}
+      </div>
+    </div>
+  );
+};
+
+const CoachReferralLinkSection: React.FC<{
+  isDemo?: boolean;
+  coachId?: string;
+  coachEmail?: string;
+  canInvite?: boolean;
+}> = ({ isDemo, coachId, coachEmail, canInvite = false }) => {
+  const [team, setTeam] = useState<{
+    organizationId: string;
+    teamId: string;
+    teamName: string;
+    coachReferralKickbackEnabled: boolean;
+    coachReferralRevenueSharePct: number;
+  } | null>(
+    isDemo
+      ? {
+          organizationId: 'demo-organization',
+          teamId: 'demo-team',
+          teamName: 'Demo Team',
+          coachReferralKickbackEnabled: true,
+          coachReferralRevenueSharePct: 10,
+        }
+      : null
+  );
+  const [loading, setLoading] = useState(!isDemo);
+  const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTeam = async () => {
+      if (isDemo || !coachId) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
+        const own = memberships.find((membership) => membership.role !== 'athlete');
+        if (!own) {
+          if (!cancelled) setTeam(null);
+          return;
+        }
+
+        const resolvedTeam = await pulseCheckProvisioningService.getTeam(own.teamId);
+        if (!cancelled) {
+          setTeam({
+            organizationId: own.organizationId,
+            teamId: own.teamId,
+            teamName: resolvedTeam?.displayName || 'your team',
+            coachReferralKickbackEnabled:
+              resolvedTeam?.commercialConfig?.coachReferralKickbackEnabled || false,
+            coachReferralRevenueSharePct:
+              resolvedTeam?.commercialConfig?.coachReferralRevenueSharePct || 0,
+          });
+        }
+      } catch (error) {
+        console.error('[CoachDashboard] failed to resolve coach referral context', error);
+        if (!cancelled) setTeam(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void loadTeam();
+    return () => {
+      cancelled = true;
+    };
+  }, [coachId, isDemo]);
+
+  const referralUrl = useMemo(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+    const params = new URLSearchParams({
+      referralType: 'coach-referral',
+      referrerCoachId: coachId || 'demo-coach',
+      referrerCoachEmail: coachEmail || '',
+      referrerTeamId: team?.teamId || 'demo-team',
+      referrerOrganizationId: team?.organizationId || 'demo-organization',
+    });
+    return `${origin}/PulseCheck/coach?${params.toString()}`;
+  }, [coachEmail, coachId, team?.organizationId, team?.teamId]);
+
+  const copyReferralLink = async () => {
+    if (!team && !isDemo) {
+      setToast('Still resolving your team — try again in a moment.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard?.writeText(referralUrl);
+      setCopied(true);
+      setToast('Coach referral link copied.');
+    } catch {
+      setToast('Could not copy the link. Select and copy it manually.');
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {toast && (
+        <div className="text-xs text-[#E0FE10] bg-[#E0FE10]/10 border border-[#E0FE10]/25 rounded-lg px-3 py-2">
+          {toast}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+        <div className="min-w-0 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
+          <div className="text-xs font-medium text-zinc-300">
+            {loading ? 'Resolving team...' : team?.teamName || 'Coach referral link'}
+          </div>
+          <div className="mt-1 truncate text-[11px] text-zinc-600">{referralUrl}</div>
+        </div>
+        <button
+          onClick={copyReferralLink}
+          disabled={!canInvite || loading}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? 'Copied' : 'Copy referral link'}
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
+        {team?.coachReferralKickbackEnabled
+          ? `Kickback active: ${team.coachReferralRevenueSharePct}% of athlete-paid subscriptions under referred coaches can route back to you.`
           : 'Kickback inactive until it is enabled in Team Commercial Config.'}
       </div>
     </div>

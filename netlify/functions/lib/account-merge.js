@@ -89,8 +89,10 @@ const SCALAR_USER_FIELDS = [
   'purchaserUserId',
   'revenueRecipientUserId',
   'billingOwnerUserId',
+  'coachReferralRecipientUserId',
   'commercialConfig.revenueRecipientUserId',
   'commercialConfig.billingOwnerUserId',
+  'commercialConfig.coachReferralRecipientUserId',
 ];
 
 const ARRAY_USER_FIELDS = [
@@ -136,10 +138,12 @@ const REFERENCE_FIELDS_BY_COLLECTION = {
     'subscriberUserId',
     'revenueRecipientUserId',
     'billingOwnerUserId',
+    'coachReferralRecipientUserId',
   ],
   'pulsecheck-team-revenue-summaries': [
     'revenueRecipientUserId',
     'billingOwnerUserId',
+    'coachReferralRecipientUserId',
   ],
   'pulsecheck-coach-service-orders': [
     'coachUserId',
@@ -168,6 +172,7 @@ const REFERENCE_FIELDS_BY_COLLECTION = {
     'createdBy',
     'commercialConfig.revenueRecipientUserId',
     'commercialConfig.billingOwnerUserId',
+    'commercialConfig.coachReferralRecipientUserId',
     'coachIds',
   ],
   'pulsecheck-organizations': ['ownerUserId', 'createdBy', 'legacyCoachId', 'memberIds'],

@@ -55,6 +55,12 @@ const getDefaultCommercialConfig = () => ({
   referralRevenueSharePct: 0,
   parentAssessmentReferralKickbackEnabled: false,
   parentAssessmentReferralRevenueSharePct: 0,
+  coachReferralKickbackEnabled: false,
+  coachReferralRevenueSharePct: 0,
+  coachReferralRecipientUserId: '',
+  coachReferralRecipientEmail: '',
+  coachReferralSourceTeamId: '',
+  coachReferralSourceOrganizationId: '',
   revenueRecipientRole: 'team-admin',
   revenueRecipientUserId: '',
   billingOwnerUserId: '',
@@ -83,6 +89,16 @@ const normalizeCommercialConfig = (value) => {
     parentAssessmentReferralRevenueSharePct: normalizeRevenueSharePct(
       candidate.parentAssessmentReferralRevenueSharePct ?? defaults.parentAssessmentReferralRevenueSharePct
     ),
+    coachReferralKickbackEnabled: normalizeBoolean(
+      candidate.coachReferralKickbackEnabled ?? defaults.coachReferralKickbackEnabled
+    ),
+    coachReferralRevenueSharePct: normalizeRevenueSharePct(
+      candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
+    ),
+    coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId ?? defaults.coachReferralRecipientUserId),
+    coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail ?? defaults.coachReferralRecipientEmail),
+    coachReferralSourceTeamId: normalizeString(candidate.coachReferralSourceTeamId ?? defaults.coachReferralSourceTeamId),
+    coachReferralSourceOrganizationId: normalizeString(candidate.coachReferralSourceOrganizationId ?? defaults.coachReferralSourceOrganizationId),
     revenueRecipientRole:
       revenueRecipientRole === 'coach'
         ? 'coach'
@@ -128,6 +144,12 @@ const readPulseCheckAttributionFromMetadata = (metadata = {}) => ({
   referralRevenueSharePct: normalizeRevenueSharePct(metadata.pulsecheckReferralRevenueSharePct),
   revenueRecipientUserId: normalizeString(metadata.pulsecheckRevenueRecipientUserId),
   revenueRecipientRole: normalizeString(metadata.pulsecheckRevenueRecipientRole),
+  coachReferralKickbackEnabled: normalizeBoolean(metadata.pulsecheckCoachReferralKickbackEnabled),
+  coachReferralRevenueSharePct: normalizeRevenueSharePct(metadata.pulsecheckCoachReferralRevenueSharePct),
+  coachReferralRecipientUserId: normalizeString(metadata.pulsecheckCoachReferralRecipientUserId),
+  coachReferralRecipientEmail: normalizeString(metadata.pulsecheckCoachReferralRecipientEmail),
+  coachReferralSourceTeamId: normalizeString(metadata.pulsecheckCoachReferralSourceTeamId),
+  coachReferralSourceOrganizationId: normalizeString(metadata.pulsecheckCoachReferralSourceOrganizationId),
 });
 
 const priceSnapshotFromKnownPlan = ({ userType, planType }) => {
@@ -299,6 +321,12 @@ async function resolvePulseCheckCommercialContext({ db, userId, metadata = {} })
       teamPlanStatus: pulseMeta.teamPlanStatus,
       referralKickbackEnabled: pulseMeta.referralKickbackEnabled,
       referralRevenueSharePct: pulseMeta.referralRevenueSharePct,
+      coachReferralKickbackEnabled: pulseMeta.coachReferralKickbackEnabled,
+      coachReferralRevenueSharePct: pulseMeta.coachReferralRevenueSharePct,
+      coachReferralRecipientUserId: pulseMeta.coachReferralRecipientUserId,
+      coachReferralRecipientEmail: pulseMeta.coachReferralRecipientEmail,
+      coachReferralSourceTeamId: pulseMeta.coachReferralSourceTeamId,
+      coachReferralSourceOrganizationId: pulseMeta.coachReferralSourceOrganizationId,
       revenueRecipientUserId: pulseMeta.revenueRecipientUserId,
       revenueRecipientRole: pulseMeta.revenueRecipientRole,
     }
@@ -379,6 +407,12 @@ async function upsertPulseCheckRevenueEvent({
       teamPlanBypassesPaywall: deriveTeamPlanBypass(commercialConfig),
       referralKickbackEnabled: commercialConfig.referralKickbackEnabled,
       referralRevenueSharePct: commercialConfig.referralRevenueSharePct,
+      coachReferralKickbackEnabled: commercialConfig.coachReferralKickbackEnabled,
+      coachReferralRevenueSharePct: commercialConfig.coachReferralRevenueSharePct,
+      coachReferralRecipientUserId: commercialConfig.coachReferralRecipientUserId || null,
+      coachReferralRecipientEmail: commercialConfig.coachReferralRecipientEmail || null,
+      coachReferralSourceTeamId: commercialConfig.coachReferralSourceTeamId || null,
+      coachReferralSourceOrganizationId: commercialConfig.coachReferralSourceOrganizationId || null,
       revenueRecipientUserId: commercialConfig.revenueRecipientUserId || null,
       revenueRecipientRole: commercialConfig.revenueRecipientRole || null,
       billingOwnerUserId: commercialConfig.billingOwnerUserId || null,
@@ -428,6 +462,7 @@ async function syncTeamCommercialConfigFromSubscription({
   }
 
   const currentConfig = normalizeCommercialConfig(resolvedContext.team.commercialConfig);
+  const pulseMeta = readPulseCheckAttributionFromMetadata(subscription?.metadata || {});
   const nextConfig = {
     ...currentConfig,
     billingCustomerId:
@@ -439,6 +474,19 @@ async function syncTeamCommercialConfigFromSubscription({
 
   if (forceTeamPlan) {
     nextConfig.commercialModel = 'team-plan';
+  }
+
+  if (
+    pulseMeta.coachReferralKickbackEnabled &&
+    pulseMeta.coachReferralRecipientUserId &&
+    !nextConfig.coachReferralRecipientUserId
+  ) {
+    nextConfig.coachReferralKickbackEnabled = true;
+    nextConfig.coachReferralRevenueSharePct = pulseMeta.coachReferralRevenueSharePct;
+    nextConfig.coachReferralRecipientUserId = pulseMeta.coachReferralRecipientUserId;
+    nextConfig.coachReferralRecipientEmail = pulseMeta.coachReferralRecipientEmail;
+    nextConfig.coachReferralSourceTeamId = pulseMeta.coachReferralSourceTeamId;
+    nextConfig.coachReferralSourceOrganizationId = pulseMeta.coachReferralSourceOrganizationId;
   }
 
   if (isSubscriptionActive(subscription?.status)) {
@@ -568,8 +616,15 @@ async function recalculatePulseCheckRevenueSummaries({ db, admin, teamIds = [], 
     const coveredAthleteCount = teamPlanBypassesPaywall ? athleteRoster.length : 0;
     const payoutRatePct = commercialConfig.referralKickbackEnabled ? commercialConfig.referralRevenueSharePct : 0;
     const recipientPayoutMrrCents = Math.round(athleteSubscriptionMrrCents * (payoutRatePct / 100));
+    const coachReferralPayoutRatePct = commercialConfig.coachReferralKickbackEnabled
+      ? commercialConfig.coachReferralRevenueSharePct
+      : 0;
+    const coachReferralRecipientUserId = normalizeString(commercialConfig.coachReferralRecipientUserId);
+    const coachReferralPayoutMrrCents = coachReferralRecipientUserId
+      ? Math.round(athleteSubscriptionMrrCents * (coachReferralPayoutRatePct / 100))
+      : 0;
     const totalGrossMrrCents = athleteSubscriptionMrrCents + teamPlanBillingMrrCents;
-    const platformNetMrrCents = totalGrossMrrCents - recipientPayoutMrrCents;
+    const platformNetMrrCents = totalGrossMrrCents - recipientPayoutMrrCents - coachReferralPayoutMrrCents;
     const lastRevenueEventAt = teamEvents.reduce((latest, event) => {
       const value = Math.max(toMillis(event.updatedAt), toMillis(event.createdAt));
       return value > latest ? value : latest;
@@ -587,6 +642,12 @@ async function recalculatePulseCheckRevenueSummaries({ db, admin, teamIds = [], 
       teamPlanBypassesPaywall,
       referralKickbackEnabled: commercialConfig.referralKickbackEnabled,
       referralRevenueSharePct: commercialConfig.referralRevenueSharePct,
+      coachReferralKickbackEnabled: commercialConfig.coachReferralKickbackEnabled,
+      coachReferralRevenueSharePct: commercialConfig.coachReferralRevenueSharePct,
+      coachReferralRecipientUserId: coachReferralRecipientUserId || null,
+      coachReferralRecipientEmail: commercialConfig.coachReferralRecipientEmail || null,
+      coachReferralSourceTeamId: commercialConfig.coachReferralSourceTeamId || null,
+      coachReferralSourceOrganizationId: commercialConfig.coachReferralSourceOrganizationId || null,
       revenueRecipientUserId: resolvedRevenueRecipientUserId || null,
       revenueRecipientRole: commercialConfig.revenueRecipientRole || null,
       billingOwnerUserId: commercialConfig.billingOwnerUserId || null,
@@ -600,6 +661,7 @@ async function recalculatePulseCheckRevenueSummaries({ db, admin, teamIds = [], 
       teamPlanBillingMrrCents,
       totalGrossMrrCents,
       recipientPayoutMrrCents,
+      coachReferralPayoutMrrCents,
       platformNetMrrCents,
       lastRevenueEventAt: lastRevenueEventAt ? admin.firestore.Timestamp.fromMillis(lastRevenueEventAt) : null,
       calculatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -651,6 +713,51 @@ async function recalculatePulseCheckRevenueSummaries({ db, admin, teamIds = [], 
       recipientCurrent.platformNetMrrCents += teamSummary.platformNetMrrCents;
       recipientCurrent.lastRevenueEventAt = Math.max(recipientCurrent.lastRevenueEventAt, lastRevenueEventAt);
       recipientAggregation.set(resolvedRevenueRecipientUserId, recipientCurrent);
+    }
+
+    if (commercialConfig.coachReferralKickbackEnabled && coachReferralRecipientUserId) {
+      const coachReferralCurrent = recipientAggregation.get(coachReferralRecipientUserId) || {
+        userId: coachReferralRecipientUserId,
+        teamIds: new Set(),
+        teamBreakdown: [],
+        athleteRosterCount: 0,
+        activeAthleteSubscriberCount: 0,
+        coveredAthleteCount: 0,
+        athleteSubscriptionMrrCents: 0,
+        teamPlanBillingMrrCents: 0,
+        totalGrossMrrCents: 0,
+        estimatedPayoutMrrCents: 0,
+        platformNetMrrCents: 0,
+        lastRevenueEventAt: 0,
+      };
+      coachReferralCurrent.teamIds.add(teamId);
+      coachReferralCurrent.teamBreakdown.push({
+        teamId,
+        organizationId: organizationId || null,
+        organizationName: teamSummary.organizationName,
+        teamName: teamSummary.teamName,
+        commercialModel: teamSummary.commercialModel,
+        teamPlanStatus: teamSummary.teamPlanStatus,
+        teamPlanBypassesPaywall: teamSummary.teamPlanBypassesPaywall,
+        athleteRosterCount: teamSummary.athleteRosterCount,
+        activeAthleteSubscriberCount: teamSummary.activeAthleteSubscriberCount,
+        coveredAthleteCount: teamSummary.coveredAthleteCount,
+        athleteSubscriptionMrrCents: teamSummary.athleteSubscriptionMrrCents,
+        teamPlanBillingMrrCents: teamSummary.teamPlanBillingMrrCents,
+        totalGrossMrrCents: teamSummary.totalGrossMrrCents,
+        estimatedPayoutMrrCents: teamSummary.coachReferralPayoutMrrCents,
+        payoutSource: 'coach-referral',
+      });
+      coachReferralCurrent.athleteRosterCount += teamSummary.athleteRosterCount;
+      coachReferralCurrent.activeAthleteSubscriberCount += teamSummary.activeAthleteSubscriberCount;
+      coachReferralCurrent.coveredAthleteCount += teamSummary.coveredAthleteCount;
+      coachReferralCurrent.athleteSubscriptionMrrCents += teamSummary.athleteSubscriptionMrrCents;
+      coachReferralCurrent.teamPlanBillingMrrCents += teamSummary.teamPlanBillingMrrCents;
+      coachReferralCurrent.totalGrossMrrCents += teamSummary.totalGrossMrrCents;
+      coachReferralCurrent.estimatedPayoutMrrCents += teamSummary.coachReferralPayoutMrrCents;
+      coachReferralCurrent.platformNetMrrCents += teamSummary.platformNetMrrCents;
+      coachReferralCurrent.lastRevenueEventAt = Math.max(coachReferralCurrent.lastRevenueEventAt, lastRevenueEventAt);
+      recipientAggregation.set(coachReferralRecipientUserId, coachReferralCurrent);
     }
 
     const billingOwnerUserId = normalizeString(commercialConfig.billingOwnerUserId);
