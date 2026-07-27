@@ -4,7 +4,12 @@ import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { privacyService } from '../privacy/service';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
-import type { PulseCheckRosterVisibilityScope, PulseCheckTeamMembership, PulseCheckTeamMembershipRole } from '../pulsecheckProvisioning/types';
+import type {
+  PulseCheckRosterVisibilityScope,
+  PulseCheckTeamMembership,
+  PulseCheckTeamMembershipRole,
+  PulseCheckYouthTrack,
+} from '../pulsecheckProvisioning/types';
 import {
   CurriculumAssignmentStatus,
   PulseCheckDailyAssignmentStatus,
@@ -37,6 +42,11 @@ export interface AthleteReadinessDailyDetail {
   moduleAssignedCount: number;
   moduleCompletedCount: number;
   moduleDurationSeconds: number;
+  coherenceMorningLevel: string | null;
+  coherenceEveningLevel: string | null;
+  coherenceCompletedTraining: boolean;
+  coherenceEligibleTaskCount: number;
+  coherenceCompletedTaskCount: number;
 }
 
 export interface ConversationMessage {
@@ -984,6 +994,14 @@ class CoachService {
       console.log(`[CoachService] Fetching connected athletes for coach: ${coachId}`);
       const connections = await this.listPulseCheckAthleteConnectionsForCoach(coachId);
       console.log(`[CoachService] Found ${connections.length} PulseCheck athlete memberships for coach`);
+      const teamIds = Array.from(new Set(connections.map((connection) => connection.athleteMembership.teamId)));
+      const teamEntries = await Promise.all(
+        teamIds.map(async (teamId) => [
+          teamId,
+          await pulseCheckProvisioningService.getTeam(teamId).catch(() => null),
+        ] as const)
+      );
+      const teamsById = new Map(teamEntries);
 
       const athletes = [];
       for (const connection of connections) {
@@ -1021,12 +1039,18 @@ class CoachService {
             membership?.prefilledProfileImageUrl ||
             membership?.athleteOnboarding?.prefilledProfileImageUrl ||
             '';
+          const team = teamsById.get(connection.athleteMembership.teamId);
+          const youthTrack =
+            connection.athleteMembership.athleteTrackOverride ||
+            team?.commercialConfig?.youthTrack ||
+            'junior';
 
           athletes.push({
             id: athleteUserId,
             displayName: userData.displayName || userData.username || 'Unknown User',
             email: userData.email || '',
             profileImageUrl: ownProfileImage || preloadedInviteImage || undefined,
+            youthTrack,
             linkedAt: connection.linkedAt,
             lastActiveDate: lastActive,
             ...athleteStats
@@ -1311,7 +1335,11 @@ class CoachService {
     }
   }
 
-  async getAthleteReadinessDailyDetails(athleteUserId: string, days: number = 14): Promise<AthleteReadinessDailyDetail[]> {
+  async getAthleteReadinessDailyDetails(
+    athleteUserId: string,
+    days: number = 14,
+    youthTrack: PulseCheckYouthTrack = 'pro'
+  ): Promise<AthleteReadinessDailyDetail[]> {
     try {
       const windowDays = Math.max(1, Math.min(60, Math.round(days || 14)));
       const today = new Date();
@@ -1328,6 +1356,7 @@ class CoachService {
         noraTexts: string[];
         completedDailyAssignmentIds: Set<string>;
         countedCompletionKeys: Set<string>;
+        coherenceCompletionIdentities: Set<string>;
       };
 
       const byDate = new Map<string, DailyAccumulator>(
@@ -1343,9 +1372,15 @@ class CoachService {
             moduleAssignedCount: 0,
             moduleCompletedCount: 0,
             moduleDurationSeconds: 0,
+            coherenceMorningLevel: null,
+            coherenceEveningLevel: null,
+            coherenceCompletedTraining: false,
+            coherenceEligibleTaskCount: 0,
+            coherenceCompletedTaskCount: 0,
             noraTexts: [],
             completedDailyAssignmentIds: new Set<string>(),
             countedCompletionKeys: new Set<string>(),
+            coherenceCompletionIdentities: new Set<string>(),
           },
         ])
       );
@@ -1360,6 +1395,20 @@ class CoachService {
         if (!detail) return;
         detail.checkInCompleted = true;
         detail.checkInCount += 1;
+      };
+
+      const markPulseCheckCoherenceCheckIn = (data: Record<string, any>) => {
+        markCheckIn(data);
+        const detail = getDay(resolveDayKey(data));
+        if (!detail) return;
+        const morningLevel = String(data.level || '').trim();
+        const evening =
+          data.eveningCheckIn && typeof data.eveningCheckIn === 'object'
+            ? data.eveningCheckIn
+            : null;
+        const eveningLevel = String(evening?.level || '').trim();
+        detail.coherenceMorningLevel = morningLevel || null;
+        detail.coherenceEveningLevel = eveningLevel || null;
       };
 
       const addNoraMessages = (dateKey: string | null, messages: string[]) => {
@@ -1392,6 +1441,19 @@ class CoachService {
         if (!detail) return;
 
         const dailyAssignmentId = String(data.dailyAssignmentId || data.assignmentId || data.pulseCheckDailyAssignmentId || '').trim();
+        const coherenceIdentity = [
+          ['dailyAssignmentId', data.dailyAssignmentId],
+          ['assignmentId', data.assignmentId],
+          ['exerciseId', data.exerciseId],
+          ['simSessionId', data.simSessionId],
+        ].find(([, value]) => String(value || '').trim());
+        detail.coherenceCompletionIdentities.add(
+          coherenceIdentity
+            ? `${coherenceIdentity[0]}:${String(coherenceIdentity[1]).trim()}`
+            : `${source}:${rawId}`
+        );
+        detail.coherenceCompletedTraining = true;
+
         if (dailyAssignmentId && detail.completedDailyAssignmentIds.has(dailyAssignmentId)) return;
 
         const key = `${source}:${rawId || dailyAssignmentId || detail.countedCompletionKeys.size}`;
@@ -1415,6 +1477,7 @@ class CoachService {
         simCompletionSnapshot,
         iosCompletionSnapshot,
         simSessionSnapshot,
+        juniorProgressSnapshot,
       ] = await Promise.all([
         getDocs(collection(db, MENTAL_CHECKINS_ROOT, athleteUserId, 'check-ins')).catch(() => null),
         getDocs(query(collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION), where('athleteUserId', '==', athleteUserId))).catch(() => null),
@@ -1424,10 +1487,15 @@ class CoachService {
         getDocs(collection(db, SIM_COMPLETIONS_ROOT, athleteUserId, 'completions')).catch(() => null),
         getDocs(collection(db, IOS_MENTAL_COMPLETIONS_ROOT, athleteUserId, 'completions')).catch(() => null),
         getDocs(collection(db, SIM_SESSIONS_ROOT, athleteUserId, 'sessions')).catch(() => null),
+        youthTrack === 'pro'
+          ? Promise.resolve(null)
+          : getDoc(doc(db, 'junior-progress', athleteUserId)).catch(() => null),
       ]);
 
       mentalCheckInSnapshot?.docs.forEach((docSnapshot) => markCheckIn(docSnapshot.data()));
-      morningCheckInSnapshot?.docs.forEach((docSnapshot) => markCheckIn(docSnapshot.data()));
+      morningCheckInSnapshot?.docs.forEach((docSnapshot) =>
+        markPulseCheckCoherenceCheckIn(docSnapshot.data())
+      );
 
       conversationSnapshot?.docs.forEach((docSnapshot) => {
         const data = docSnapshot.data();
@@ -1454,6 +1522,11 @@ class CoachService {
           extractPulseCheckConversationTexts(turns)
         );
       });
+
+      const coherenceAssignmentRecords = (dailyAssignmentSnapshot?.docs || []).map((docSnapshot) => ({
+        id: docSnapshot.id,
+        data: docSnapshot.data() as Record<string, any>,
+      }));
 
       dailyAssignmentSnapshot?.docs.forEach((docSnapshot) => {
         const assignment = pulseCheckDailyAssignmentFromFirestore(
@@ -1512,6 +1585,138 @@ class CoachService {
         );
       });
 
+      const completedAssignmentIdsByDate = new Map<string, Set<string>>();
+      for (const record of coherenceAssignmentRecords) {
+        const sourceDate = String(record.data.sourceDate || '').trim();
+        const status = String(record.data.status || '').trim().toLowerCase();
+        const actionType = String(record.data.actionType || '').trim().toLowerCase();
+        if (!allowedDates.has(sourceDate) || status !== 'completed' || actionType === 'check_in') continue;
+        const completedIds = completedAssignmentIdsByDate.get(sourceDate) || new Set<string>();
+        completedIds.add(record.id);
+        completedAssignmentIdsByDate.set(sourceDate, completedIds);
+        const detail = byDate.get(sourceDate);
+        if (detail) detail.coherenceCompletedTraining = true;
+      }
+
+      for (const detail of byDate.values()) {
+        detail.coherenceCompletedTaskCount = Math.min(
+          detail.coherenceCompletionIdentities.size,
+          3
+        );
+      }
+
+      if (youthTrack === 'junior') {
+        const dailyCompletedPillarIds =
+          juniorProgressSnapshot?.exists() &&
+          juniorProgressSnapshot.data()?.dailyCompletedPillarIds &&
+          typeof juniorProgressSnapshot.data()?.dailyCompletedPillarIds === 'object'
+            ? juniorProgressSnapshot.data()?.dailyCompletedPillarIds as Record<string, unknown>
+            : {};
+
+        for (const dateKey of dateKeys) {
+          const detail = byDate.get(dateKey);
+          if (!detail) continue;
+          const pillarIds = Array.isArray(dailyCompletedPillarIds[dateKey])
+            ? dailyCompletedPillarIds[dateKey] as unknown[]
+            : [];
+          const juniorCompletedCount = Math.min(
+            new Set(pillarIds.map((value) => String(value))).size,
+            3
+          );
+          const recordedAssignmentCount = Math.min(
+            completedAssignmentIdsByDate.get(dateKey)?.size || 0,
+            3
+          );
+          detail.coherenceEligibleTaskCount = 3;
+          detail.coherenceCompletedTaskCount = Math.min(
+            Math.max(
+              detail.coherenceCompletedTaskCount,
+              juniorCompletedCount,
+              recordedAssignmentCount
+            ),
+            3
+          );
+          if (detail.coherenceCompletedTaskCount > 0) {
+            detail.coherenceCompletedTraining = true;
+          }
+        }
+      } else {
+        const latestAssignmentByLineage = new Map<
+          string,
+          { id: string; revision: number; data: Record<string, any> }
+        >();
+        for (const record of coherenceAssignmentRecords) {
+          const sourceDate = String(record.data.sourceDate || '').trim();
+          if (!allowedDates.has(sourceDate)) continue;
+          const lineageId = String(record.data.lineageId || record.id);
+          const revisionValue = Number(record.data.revision);
+          const revision = Number.isFinite(revisionValue) ? revisionValue : 1;
+          const key = `${sourceDate}|${lineageId}`;
+          const existing = latestAssignmentByLineage.get(key);
+          if (!existing || revision > existing.revision) {
+            latestAssignmentByLineage.set(key, { id: record.id, revision, data: record.data });
+          }
+        }
+
+        const assignedCountByDate = new Map<string, number>();
+        const completedCountByDate = new Map<string, number>();
+        for (const assignment of latestAssignmentByLineage.values()) {
+          const sourceDate = String(assignment.data.sourceDate || '').trim();
+          const status = String(assignment.data.status || 'assigned').trim().toLowerCase();
+          const actionType = String(assignment.data.actionType || '').trim().toLowerCase();
+          if (
+            !allowedDates.has(sourceDate) ||
+            ['superseded', 'overridden', 'deferred'].includes(status) ||
+            actionType === 'check_in'
+          ) {
+            continue;
+          }
+          const hasSlateMetadata = [
+            'curriculumSlateId',
+            'curriculumSlotIndex',
+            'curriculumIsDueToday',
+            'isPrimaryForDate',
+          ].some((field) => assignment.data[field] !== undefined && assignment.data[field] !== null);
+          const athleteFacing =
+            !hasSlateMetadata ||
+            assignment.data.curriculumIsDueToday === true ||
+            assignment.data.isPrimaryForDate === true ||
+            Number(assignment.data.curriculumSlotIndex) === 1;
+          if (!athleteFacing) continue;
+
+          assignedCountByDate.set(sourceDate, (assignedCountByDate.get(sourceDate) || 0) + 1);
+          if (status === 'completed') {
+            completedCountByDate.set(sourceDate, (completedCountByDate.get(sourceDate) || 0) + 1);
+          }
+        }
+
+        const assignmentDateKeys = new Set([
+          ...assignedCountByDate.keys(),
+          ...completedAssignmentIdsByDate.keys(),
+        ]);
+        for (const dateKey of assignmentDateKeys) {
+          const detail = byDate.get(dateKey);
+          if (!detail) continue;
+          const recordedCompletionCount = completedAssignmentIdsByDate.get(dateKey)?.size || 0;
+          const assignedCount = Math.min(
+            Math.max(assignedCountByDate.get(dateKey) || 0, recordedCompletionCount),
+            3
+          );
+          const assignmentCompletionCount = Math.min(
+            Math.max(completedCountByDate.get(dateKey) || 0, recordedCompletionCount),
+            assignedCount
+          );
+          detail.coherenceEligibleTaskCount = assignedCount;
+          detail.coherenceCompletedTaskCount = Math.min(
+            Math.max(detail.coherenceCompletedTaskCount, assignmentCompletionCount),
+            3
+          );
+          if (assignmentCompletionCount > 0) {
+            detail.coherenceCompletedTraining = true;
+          }
+        }
+      }
+
       return dateKeys.map((date) => {
         const detail = byDate.get(date)!;
         return {
@@ -1524,6 +1729,11 @@ class CoachService {
           moduleAssignedCount: detail.moduleAssignedCount,
           moduleCompletedCount: detail.moduleCompletedCount,
           moduleDurationSeconds: detail.moduleDurationSeconds,
+          coherenceMorningLevel: detail.coherenceMorningLevel,
+          coherenceEveningLevel: detail.coherenceEveningLevel,
+          coherenceCompletedTraining: detail.coherenceCompletedTraining,
+          coherenceEligibleTaskCount: detail.coherenceEligibleTaskCount,
+          coherenceCompletedTaskCount: detail.coherenceCompletedTaskCount,
         };
       });
     } catch (error) {

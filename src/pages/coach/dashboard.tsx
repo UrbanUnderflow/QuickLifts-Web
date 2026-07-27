@@ -100,6 +100,12 @@ import {
   resolvePulseCheckAthleteInviteTrack,
 } from '../../utils/pulsecheckAthleteTrack';
 import {
+  calculatePulseCheckCoherence,
+  calculatePulseCheckTeamCoherence,
+  type PulseCheckCoherenceSnapshot,
+  type PulseCheckTeamCoherenceSnapshot,
+} from '../../utils/pulsecheckCoherence';
+import {
   listSentSportsIntelligenceReportsForCoach,
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
@@ -136,6 +142,7 @@ type CoachAthlete = {
   deviceConnected?: boolean;
   deviceDailyPresence?: boolean[];
   deviceStatus?: AthleteDeviceStatus;
+  youthTrack?: PulseCheckYouthTrack;
 };
 
 type AthleteProfileHistoryRow = {
@@ -249,6 +256,22 @@ const averageTeamAdherence = (breakdowns: AthleteAdherenceBreakdown[]): TeamAdhe
   modules: clampPct(average(breakdowns.map((item) => item.modules))),
   overall: clampPct(average(breakdowns.map((item) => item.overall))),
 });
+
+const deriveAthleteCoherence = (
+  details: AthleteReadinessDailyDetail[],
+  windowDays = 14
+): PulseCheckCoherenceSnapshot =>
+  calculatePulseCheckCoherence(
+    details.slice(-windowDays).map((detail) => ({
+      dateKey: detail.date,
+      morningLevel: detail.coherenceMorningLevel,
+      eveningLevel: detail.coherenceEveningLevel,
+      completedTraining: detail.coherenceCompletedTraining,
+      eligibleTaskCount: detail.coherenceEligibleTaskCount,
+      completedTaskCount: detail.coherenceCompletedTaskCount,
+    })),
+    windowDays
+  );
 
 const relativeWhen = (d?: Date): string => {
   const days = daysSince(d);
@@ -1260,6 +1283,7 @@ const HomeSection: React.FC<{
   onSelectAthlete: (id: string) => void;
 }> = ({ athletes, loading, isDemo, onSelectAthlete }) => {
   const [liveAdherence, setLiveAdherence] = useState<TeamAdherenceBreakdown | null>(null);
+  const [liveCoherence, setLiveCoherence] = useState<PulseCheckTeamCoherenceSnapshot | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<StatusKey, number> = {
@@ -1279,31 +1303,43 @@ const HomeSection: React.FC<{
     let cancelled = false;
     if (isDemo) {
       setLiveAdherence(null);
+      setLiveCoherence(null);
       return () => {
         cancelled = true;
       };
     }
     if (athletes.length === 0) {
       setLiveAdherence(averageTeamAdherence([]));
+      setLiveCoherence(calculatePulseCheckTeamCoherence([]));
       return () => {
         cancelled = true;
       };
     }
 
     setLiveAdherence(null);
+    setLiveCoherence(null);
     Promise.all(
       athletes.map(async (athlete) => {
         const details = await coachService
-          .getAthleteReadinessDailyDetails(athlete.id, 14)
+          .getAthleteReadinessDailyDetails(athlete.id, 14, athlete.youthTrack || 'pro')
           .catch((): AthleteReadinessDailyDetail[] => []);
-        return deriveAthleteAdherenceBreakdown(athlete, details, 14);
+        return {
+          adherence: deriveAthleteAdherenceBreakdown(athlete, details, 14),
+          coherence: deriveAthleteCoherence(details, 14),
+        };
       })
     )
-      .then((breakdowns) => {
-        if (!cancelled) setLiveAdherence(averageTeamAdherence(breakdowns));
+      .then((metrics) => {
+        if (!cancelled) {
+          setLiveAdherence(averageTeamAdherence(metrics.map((item) => item.adherence)));
+          setLiveCoherence(calculatePulseCheckTeamCoherence(metrics.map((item) => item.coherence)));
+        }
       })
       .catch(() => {
-        if (!cancelled) setLiveAdherence(averageTeamAdherence([]));
+        if (!cancelled) {
+          setLiveAdherence(averageTeamAdherence([]));
+          setLiveCoherence(calculatePulseCheckTeamCoherence([]));
+        }
       });
 
     return () => {
@@ -1327,10 +1363,25 @@ const HomeSection: React.FC<{
     return liveAdherence || averageTeamAdherence([]);
   }, [athletes, isDemo, liveAdherence]);
 
+  const coherence = useMemo<PulseCheckTeamCoherenceSnapshot>(() => {
+    if (isDemo) {
+      return {
+        athleteCount: athletes.length,
+        scoredAthleteCount: athletes.length,
+        buildingAthleteCount: 0,
+        consistencyPercent: 71,
+        followThroughPercent: 67,
+        feelingGoodPercent: 75,
+        coherencePercent: 71,
+      };
+    }
+    return liveCoherence || calculatePulseCheckTeamCoherence([]);
+  }, [athletes.length, isDemo, liveCoherence]);
+
   return (
     <div className="space-y-6">
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <StatTile id="tile-total" label="Total Athletes" value={athletes.length} accent />
         <StatTile id="tile-optimal" label="Optimal" value={counts.optimal} dot="bg-green-400" />
         <StatTile id="tile-attention" label="Needs Attention" value={counts.elevated + counts.escalated} dot="bg-orange-400" />
@@ -1342,6 +1393,11 @@ const HomeSection: React.FC<{
           overall={adherence.overall}
           loading={!isDemo && athletes.length > 0 && liveAdherence === null}
           athletes={athletes}
+        />
+        <CoherenceTile
+          id="tile-coherence"
+          snapshot={coherence}
+          loading={!isDemo && athletes.length > 0 && liveCoherence === null}
         />
       </div>
 
@@ -7144,6 +7200,88 @@ const AdherenceTile: React.FC<{
                 +{sortedDeviceStatuses.length - 6} more athletes
               </div>
             )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CoherenceTile: React.FC<{
+  id?: string;
+  snapshot: PulseCheckTeamCoherenceSnapshot;
+  loading?: boolean;
+}> = ({ id, snapshot, loading }) => {
+  const rows: Array<{ label: string; value: number | null }> = [
+    { label: 'Showing up', value: snapshot.consistencyPercent },
+    { label: 'Training', value: snapshot.followThroughPercent },
+    { label: 'Feeling good', value: snapshot.feelingGoodPercent },
+  ];
+  const displayScore = snapshot.coherencePercent;
+
+  return (
+    <div id={id} className="group relative rounded-xl bg-zinc-900/50 border border-white/5 p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-2 h-2 rounded-full bg-[#14E7D0]" />
+        <span className="text-xs text-zinc-500">Coherence</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-2xl font-bold text-white">
+          {loading ? '...' : displayScore === null ? 'Building' : displayScore}
+        </span>
+        {!loading && displayScore !== null && (
+          <span className="text-sm font-semibold text-zinc-500">%</span>
+        )}
+      </div>
+      <div className="mt-2 space-y-1">
+        {rows.map((row) => {
+          const value = row.value ?? 0;
+          return (
+            <div key={row.label} className="flex items-center gap-2">
+              <span className="w-[92px] flex-none text-[10px] uppercase tracking-wide text-zinc-500">
+                {row.label}
+              </span>
+              <span className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
+                <span
+                  className="block h-full rounded-full bg-[#14E7D0]/70"
+                  style={{ width: `${value}%` }}
+                />
+              </span>
+              <span className="w-7 flex-none text-right text-[10px] font-medium text-zinc-400">
+                {row.value === null ? '...' : `${row.value}%`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {snapshot.athleteCount > 0 && (
+        <div className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-white/10 bg-zinc-950/95 p-3 opacity-0 shadow-2xl backdrop-blur transition group-hover:opacity-100">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
+            <div>
+              <div className="text-xs font-semibold text-white">Team coherence</div>
+              <div className="text-[10px] text-zinc-500">
+                Average of established 14-day athlete patterns
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-bold text-white">
+                {loading ? '...' : displayScore === null ? 'Building' : `${displayScore}%`}
+              </div>
+              <div className="text-[10px] text-zinc-600">team average</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 py-2">
+            <MetricTile label="Roster" value={snapshot.athleteCount} />
+            <MetricTile label="Scored" value={snapshot.scoredAthleteCount} />
+            <MetricTile label="Building" value={snapshot.buildingAthleteCount} />
+          </div>
+
+          <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2 text-[10px] leading-4 text-zinc-400">
+            PulseCheck combines showing up, assigned training, and Solid or Locked In check-ins.
+            Each athlete needs three observed days and two available measures before their score
+            joins the roster average.
           </div>
         </div>
       )}
