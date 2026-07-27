@@ -153,6 +153,27 @@ export default function CoachCalvinGuide() {
                 This guide shows you where to look, what each score means, how to give Nora
                 team knowledge, how referrals work, and how to request your earnings.
               </p>
+              <div className="mt-7 max-w-2xl rounded-2xl border border-[#14E7D0]/25 bg-[#14E7D0]/8 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-xl bg-[#14E7D0]/12">
+                    <LogIn className="h-4 w-4 text-[#14E7D0]" />
+                  </span>
+                  <div>
+                    <div className="text-sm font-bold text-white">Sign in with Apple or Google</div>
+                    <p className="mt-1 text-sm leading-6 text-zinc-300">
+                      Both methods open the same Coach Calvin profile. Use Apple with{' '}
+                      <span className="font-semibold text-white">
+                        krdjncwf9s@privaterelay.appleid.com
+                      </span>{' '}
+                      or Google with{' '}
+                      <span className="font-semibold text-white">
+                        physiquesusa.programs@gmail.com
+                      </span>
+                      .
+                    </p>
+                  </div>
+                </div>
+              </div>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
                   href={DASHBOARD_URL}
@@ -238,20 +259,22 @@ export default function CoachCalvinGuide() {
                 </h2>
                 <p className="mt-4 text-base leading-7 text-zinc-400">
                   Use the coach sign-in page each time you want to review your roster. Your
-                  connected sign-in methods all lead to the same combined Calvin profile.
+                  Apple private relay email and Gmail sign-in both lead to the same combined
+                  Calvin profile.
                 </p>
                 <div className="mt-7">
                   <ActionList
                     items={[
                       <>Open <strong className="text-white">Coach sign in</strong>.</>,
                       <>
-                        Choose <strong className="text-white">Magic link</strong>,{' '}
-                        <strong className="text-white">Google</strong>, or{' '}
-                        <strong className="text-white">Apple</strong>.
+                        Choose <strong className="text-white">Apple</strong> with{' '}
+                        <strong className="text-white">krdjncwf9s@privaterelay.appleid.com</strong>{' '}
+                        or <strong className="text-white">Google</strong> with{' '}
+                        <strong className="text-white">physiquesusa.programs@gmail.com</strong>.
                       </>,
                       <>
-                        For a magic link, open the email on the same device and select the secure
-                        sign-in button.
+                        If you use magic link, send it to the Gmail address and open the email on
+                        the same device.
                       </>,
                       <>
                         After sign-in, PulseCheck opens your{' '}
