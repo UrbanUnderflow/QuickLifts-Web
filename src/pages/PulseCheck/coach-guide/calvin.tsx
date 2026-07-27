@@ -337,30 +337,31 @@ export default function CoachCalvinGuide() {
               <div>
                 <SectionEyebrow number="02">View your athletes</SectionEyebrow>
                 <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Start with the roster, then open the athlete.
+                  Start on the Readiness Dashboard.
                 </h2>
                 <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-400">
-                  Team Roster gives you a quick list of every athlete, today&apos;s check-in
-                  status, and who may need attention. Select any athlete row to open their
-                  individual view.
+                  The Readiness Dashboard is your first stop. It shows every athlete as a card,
+                  highlights who may need attention, and gives you a quick read on today&apos;s
+                  check-ins before you open an individual athlete.
                 </p>
                 <div className="mt-7">
                   <ActionList
                     items={[
                       <>
-                        Select <strong className="text-white">Team Roster</strong> in the left menu.
+                        Select <strong className="text-white">Readiness Dashboard</strong> in the
+                        left menu.
                       </>,
                       <>
-                        Scan <strong className="text-white">Team Status Overview</strong> for the
-                        number checked in today.
+                        Scan the athlete cards for check-in status, coherence, adherence, and who
+                        needs attention.
                       </>,
                       <>
-                        Select an athlete to see their recent check-ins, training, device status,
+                        Open an athlete card to review recent check-ins, training, device status,
                         and messages.
                       </>,
                       <>
-                        Use <strong className="text-white">Readiness Dashboard</strong> when you
-                        want card views for the whole roster.
+                        Use <strong className="text-white">Team Roster</strong> when you want a
+                        compact list view of everyone on the team.
                       </>,
                     ]}
                   />
