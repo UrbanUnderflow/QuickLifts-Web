@@ -463,8 +463,8 @@ export default function CoachCalvinGuide() {
 
             <div className="mt-8 overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#111217]">
               <GuideScreenshot
-                src="/coach-guide/calvin/readiness-metrics.png"
-                alt="PulseCheck readiness dashboard metrics including adherence"
+                src="/coach-guide/calvin/readiness-metrics.png?v=20260727"
+                alt="Coach Calvin's PulseCheck readiness dashboard showing roster coherence and adherence"
                 label="Live dashboard view"
               />
               <div className="grid gap-4 border-t border-white/10 p-6 sm:grid-cols-3">
