@@ -1380,11 +1380,20 @@ const HomeSection: React.FC<{
 
   return (
     <div className="space-y-6">
-      {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+      {/* Roster snapshot */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatTile id="tile-total" label="Total Athletes" value={athletes.length} accent />
         <StatTile id="tile-optimal" label="Optimal" value={counts.optimal} dot="bg-green-400" />
         <StatTile id="tile-attention" label="Needs Attention" value={counts.elevated + counts.escalated} dot="bg-orange-400" />
+      </div>
+
+      {/* Primary coaching metrics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <CoherenceTile
+          id="tile-coherence"
+          snapshot={coherence}
+          loading={!isDemo && athletes.length > 0 && liveCoherence === null}
+        />
         <AdherenceTile
           id="tile-adherence"
           checkIn={adherence.checkIn}
@@ -1393,11 +1402,6 @@ const HomeSection: React.FC<{
           overall={adherence.overall}
           loading={!isDemo && athletes.length > 0 && liveAdherence === null}
           athletes={athletes}
-        />
-        <CoherenceTile
-          id="tile-coherence"
-          snapshot={coherence}
-          loading={!isDemo && athletes.length > 0 && liveCoherence === null}
         />
       </div>
 
@@ -7135,26 +7139,42 @@ const AdherenceTile: React.FC<{
     return leftPct - rightPct;
   });
   return (
-    <div id={id} className="group relative rounded-xl bg-zinc-900/50 border border-white/5 p-4">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-2 h-2 rounded-full bg-[#E0FE10]" />
-        <span className="text-xs text-zinc-500">Adherence</span>
+    <div
+      id={id}
+      className="group relative rounded-[1.75rem] border border-[#E0FE10]/25 bg-[#E0FE10]/[0.045] p-6 sm:p-8"
+    >
+      <div className="flex items-start justify-between gap-5">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-[#E0FE10]">
+            <ClipboardList className="h-4 w-4" />
+            Adherence
+          </div>
+          <div className="mt-3 flex items-baseline gap-1">
+            <span className="text-4xl font-bold text-white">{loading ? '—' : displayOverall}</span>
+            <span className="text-lg font-semibold text-zinc-500">%</span>
+          </div>
+        </div>
+        <span className="rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-3 py-1 text-xs font-semibold text-[#E0FE10]">
+          Daily habits
+        </span>
       </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-bold text-white">{loading ? '—' : displayOverall}</span>
-        <span className="text-sm font-semibold text-zinc-500">%</span>
-      </div>
-      <div className="mt-2 space-y-1">
+      <div className="mt-7 space-y-3">
         {rows.map((r) => (
-          <div key={r.label} className="flex items-center gap-2">
-            <span className="w-[92px] flex-none text-[10px] uppercase tracking-wide text-zinc-500">{r.label}</span>
-            <span className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
-              <span className="block h-full rounded-full bg-[#E0FE10]/70" style={{ width: `${r.value}%` }} />
+          <div key={r.label} className="flex items-center gap-3">
+            <span className="w-28 flex-none text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
+              {r.label}
             </span>
-            <span className="w-7 flex-none text-right text-[10px] font-medium text-zinc-400">{r.value}%</span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
+              <span className="block h-full rounded-full bg-[#E0FE10]" style={{ width: `${r.value}%` }} />
+            </span>
+            <span className="w-9 flex-none text-right text-xs font-semibold text-zinc-400">{r.value}%</span>
           </div>
         ))}
       </div>
+      <p className="mt-6 text-sm leading-6 text-zinc-400">
+        Adherence averages check-ins, connected-device wear, and completed mental modules across
+        the last 14 days. A low smaller bar tells you the exact habit to support next.
+      </p>
       {athletes.length > 0 && (
         <div className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-white/10 bg-zinc-950/95 p-3 opacity-0 shadow-2xl backdrop-blur transition group-hover:opacity-100">
           <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
@@ -7220,40 +7240,55 @@ const CoherenceTile: React.FC<{
   const displayScore = snapshot.coherencePercent;
 
   return (
-    <div id={id} className="group relative rounded-xl bg-zinc-900/50 border border-white/5 p-4">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-2 h-2 rounded-full bg-[#14E7D0]" />
-        <span className="text-xs text-zinc-500">Coherence</span>
-      </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-bold text-white">
-          {loading ? '...' : displayScore === null ? 'Building' : displayScore}
+    <div
+      id={id}
+      className="group relative rounded-[1.75rem] border border-[#14E7D0]/25 bg-[#14E7D0]/[0.055] p-6 sm:p-8"
+    >
+      <div className="flex items-start justify-between gap-5">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold text-[#63f6e8]">
+            <Heart className="h-4 w-4" />
+            Coherence
+          </div>
+          <div className="mt-3 flex items-baseline gap-1">
+            <span className="text-4xl font-bold text-white">
+              {loading ? '...' : displayScore === null ? 'Building' : displayScore}
+            </span>
+            {!loading && displayScore !== null && (
+              <span className="text-lg font-semibold text-zinc-500">%</span>
+            )}
+          </div>
+        </div>
+        <span className="rounded-full border border-[#14E7D0]/20 bg-[#14E7D0]/10 px-3 py-1 text-xs font-semibold text-[#63f6e8]">
+          14-day pattern
         </span>
-        {!loading && displayScore !== null && (
-          <span className="text-sm font-semibold text-zinc-500">%</span>
-        )}
       </div>
-      <div className="mt-2 space-y-1">
+      <div className="mt-7 space-y-3">
         {rows.map((row) => {
           const value = row.value ?? 0;
           return (
-            <div key={row.label} className="flex items-center gap-2">
-              <span className="w-[92px] flex-none text-[10px] uppercase tracking-wide text-zinc-500">
+            <div key={row.label} className="flex items-center gap-3">
+              <span className="w-28 flex-none text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-500">
                 {row.label}
               </span>
-              <span className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
                 <span
-                  className="block h-full rounded-full bg-[#14E7D0]/70"
+                  className="block h-full rounded-full bg-[#14E7D0]"
                   style={{ width: `${value}%` }}
                 />
               </span>
-              <span className="w-7 flex-none text-right text-[10px] font-medium text-zinc-400">
+              <span className="w-9 flex-none text-right text-xs font-semibold text-zinc-400">
                 {row.value === null ? '...' : `${row.value}%`}
               </span>
             </div>
           );
         })}
       </div>
+      <p className="mt-6 text-sm leading-6 text-zinc-400">
+        Coherence combines showing up, completing assigned training, and days the athlete reports
+        feeling Solid or Locked In. A rising score means those pieces are lining up more often.
+        “Building” means PulseCheck is still collecting the roster&apos;s first usable pattern.
+      </p>
 
       {snapshot.athleteCount > 0 && (
         <div className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-white/10 bg-zinc-950/95 p-3 opacity-0 shadow-2xl backdrop-blur transition group-hover:opacity-100">
