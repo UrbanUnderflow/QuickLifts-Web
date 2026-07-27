@@ -129,8 +129,12 @@ import {
 type CoachAthlete = {
   id: string;
   displayName: string;
+  username?: string;
   email: string;
   profileImageUrl?: string;
+  teamName?: string;
+  sportOrProgram?: string;
+  athleteAge?: number;
   lastActiveDate?: Date;
   conversationCount: number;
   totalSessions: number;
@@ -1437,8 +1441,13 @@ const HomeSection: React.FC<{
                 athlete={{
                   id: a.id,
                   displayName: a.displayName,
+                  username: a.username,
                   email: a.email,
                   profileImageUrl: a.profileImageUrl,
+                  teamName: a.teamName,
+                  sportOrProgram: a.sportOrProgram,
+                  athleteAge: a.athleteAge,
+                  youthTrack: a.youthTrack,
                   conversationCount: a.conversationCount,
                   totalSessions: a.totalSessions,
                   weeklyGoalProgress: a.weeklyGoalProgress,

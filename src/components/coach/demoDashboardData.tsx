@@ -20,11 +20,17 @@ export const DEMO_COACH_ID = 'demo-coach';
 
 const firstNames = ['Tremaine', 'Alex', 'Jordan', 'Sam', 'Taylor', 'Riley', 'Casey', 'Morgan', 'Jamie', 'Devon', 'Avery', 'Cameron', 'Drew', 'Quinn', 'Reese', 'Skyler'];
 const lastNames = ['Grant', 'Morgan', 'King', 'Lee', 'Brooks', 'Chen', 'Rivera', 'Thompson', 'Okafor', 'Washington', 'Rodriguez', 'Williams', 'Johnson', 'Martinez', 'Davis', 'Patel'];
+const demoSports = ['Football', 'Basketball', 'Track & Field', 'Soccer', 'Volleyball', 'Baseball'];
 
 export type DemoAthlete = {
   id: string;
   displayName: string;
+  username?: string;
   email: string;
+  teamName?: string;
+  sportOrProgram?: string;
+  athleteAge?: number;
+  youthTrack?: 'junior' | 'pro';
   conversationCount: number;
   totalSessions: number;
   weeklyGoalProgress: number;
@@ -43,7 +49,12 @@ export const DEMO_ATHLETES: DemoAthlete[] = Array.from({ length: 16 }).map((_, i
   return {
     id: `demo-a${i + 1}`,
     displayName: `${fname} ${lname}`,
+    username: `${fname}${lname}${i + 7}`.toLowerCase(),
     email: `${fname}.${lname}`.toLowerCase() + '@example.com',
+    teamName: 'PulseCheck Demo Team',
+    sportOrProgram: demoSports[i % demoSports.length],
+    athleteAge: 14 + (i % 8),
+    youthTrack: i % 5 === 0 ? 'pro' : 'junior',
     conversationCount: conversations,
     totalSessions: 8 + ((i * 11) % 120),
     weeklyGoalProgress: (i * 13) % 101,

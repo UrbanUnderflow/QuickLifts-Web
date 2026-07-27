@@ -23,8 +23,12 @@ import { useUser } from '../hooks/useUser';
 interface AthleteData {
   id: string;
   displayName: string;
+  username?: string;
   email: string;
   profileImageUrl?: string;
+  teamName?: string;
+  sportOrProgram?: string;
+  athleteAge?: number;
   lastActiveDate?: Date;
   totalSessions?: number;
   weeklyGoalProgress?: number;
@@ -35,6 +39,7 @@ interface AthleteData {
   deviceConnected?: boolean;
   deviceDailyPresence?: boolean[];
   deviceStatus?: AthleteDeviceStatus;
+  youthTrack?: string;
 }
 
 // Trend-level theme extraction from a day's check-in messages (no transcripts).
@@ -72,6 +77,30 @@ const daysSince = (d?: Date): number | null => {
   if (!d || isNaN(d.getTime())) return null;
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 };
+
+const compactTrackLabel = (track?: string): string => {
+  if (!track) return '';
+  if (track === 'junior') return 'Junior';
+  if (track === 'pro') return 'Pro';
+  return track
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const ageGroupLabel = (age?: number, track?: string): string => {
+  if (typeof age === 'number' && Number.isFinite(age) && age > 0) {
+    if (age <= 12) return `Youth · ${age}`;
+    if (age <= 18) return `Teen · ${age}`;
+    if (age <= 22) return `College-age · ${age}`;
+    return `Adult · ${age}`;
+  }
+  const trackLabel = compactTrackLabel(track);
+  return trackLabel ? `${trackLabel} track` : '';
+};
+
+const profileInitial = (name: string) => (name.trim().charAt(0) || 'A').toUpperCase();
 
 const formatDeviceTime = (seconds?: number | null): string => {
   if (!seconds) return 'No data yet';
@@ -244,6 +273,7 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
   const [history, setHistory] = useState<DailySentimentRecord[] | null>(null);
   const [readinessDetails, setReadinessDetails] = useState<AthleteReadinessDailyDetail[] | null>(demo ? [] : null);
   const [messagingOpen, setMessagingOpen] = useState(false);
+  const [profileHover, setProfileHover] = useState<{ x: number; y: number; placement: 'above' | 'below' } | null>(null);
   const currentUser = useUser();
 
   useEffect(() => {
@@ -575,6 +605,35 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
     : adherenceStats.overallPct >= 40
       ? 'border-amber-300/25 bg-amber-300/[0.1] text-amber-200'
       : 'border-red-300/25 bg-red-300/[0.1] text-red-200';
+  const profileRows = useMemo(
+    () =>
+      [
+        { label: 'Username', value: athlete.username ? `@${athlete.username.replace(/^@/, '')}` : '' },
+        { label: 'Email', value: athlete.email },
+        { label: 'Sport', value: athlete.sportOrProgram },
+        { label: 'Team', value: athlete.teamName },
+        { label: 'Age group', value: ageGroupLabel(athlete.athleteAge, athlete.youthTrack) },
+      ].filter((row) => row.value && row.value.trim().length > 0),
+    [
+      athlete.athleteAge,
+      athlete.email,
+      athlete.sportOrProgram,
+      athlete.teamName,
+      athlete.username,
+      athlete.youthTrack,
+    ]
+  );
+  const onProfileEnter = useCallback((e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const half = 144;
+    const placement = r.top < 220 ? 'below' : 'above';
+    const x = Math.max(
+      half + 8,
+      Math.min((typeof window !== 'undefined' ? window.innerWidth : 1280) - half - 8, r.left + r.width / 2)
+    );
+    setProfileHover({ x, y: placement === 'below' ? r.bottom : r.top, placement });
+  }, []);
+  const onProfileLeave = useCallback(() => setProfileHover(null), []);
 
   return (
     <>
@@ -588,16 +647,24 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
 
         {/* Header: identity + status chip */}
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div
+            tabIndex={0}
+            onMouseEnter={onProfileEnter}
+            onMouseLeave={onProfileLeave}
+            onFocus={onProfileEnter}
+            onBlur={onProfileLeave}
+            className="group/athlete-profile flex min-w-0 cursor-help items-center gap-2.5 rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-[#E0FE10]/50"
+            aria-label={`Preview ${athlete.displayName}'s profile`}
+          >
             {athlete.profileImageUrl ? (
-              <img src={athlete.profileImageUrl} alt={athlete.displayName} className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-white/10" />
+              <img src={athlete.profileImageUrl} alt={athlete.displayName} className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-white/10 transition group-hover/athlete-profile:ring-white/30" />
             ) : (
-              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-zinc-800 ring-1 ring-white/10">
+              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-zinc-800 ring-1 ring-white/10 transition group-hover/athlete-profile:ring-white/30">
                 <User className="h-4 w-4 text-zinc-400" />
               </span>
             )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">{athlete.displayName}</p>
+              <p className="truncate text-sm font-semibold text-white transition group-hover/athlete-profile:text-[#E0FE10]">{athlete.displayName}</p>
               <p className="truncate text-[11px] text-zinc-500">{lastCheckin}</p>
             </div>
           </div>
@@ -757,6 +824,60 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           </button>
         </div>
       </div>
+
+      {/* Athlete profile preview */}
+      {profileHover && (
+        <div
+          className="pointer-events-none fixed z-[80]"
+          style={{
+            left: profileHover.x,
+            top: profileHover.y,
+            transform:
+              profileHover.placement === 'below'
+                ? 'translate(-50%, 10px)'
+                : 'translate(-50%, calc(-100% - 10px))',
+          }}
+        >
+          <div className="w-72 rounded-xl border border-white/10 bg-zinc-900/[0.98] p-3 shadow-2xl backdrop-blur">
+            <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+              {athlete.profileImageUrl ? (
+                <img
+                  src={athlete.profileImageUrl}
+                  alt=""
+                  className="h-11 w-11 flex-none rounded-full object-cover ring-1 ring-white/10"
+                />
+              ) : (
+                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-zinc-800 text-sm font-bold text-zinc-200 ring-1 ring-white/10">
+                  {profileInitial(athlete.displayName)}
+                </span>
+              )}
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-white">{athlete.displayName}</div>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.dot }} />
+                  <span className="truncate text-[11px] font-medium" style={{ color: meta.text }}>
+                    {meta.label}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {profileRows.length > 0 ? (
+              <div className="mt-2 space-y-1.5 text-[11px]">
+                {profileRows.map((row) => (
+                  <div key={row.label} className="flex justify-between gap-3">
+                    <span className="flex-none text-zinc-500">{row.label}</span>
+                    <span className="min-w-0 truncate text-right text-zinc-200">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] leading-4 text-zinc-500">
+                No additional profile details have been added yet.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Device hover detail */}
       {deviceHover && (

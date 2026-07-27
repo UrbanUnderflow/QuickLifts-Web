@@ -1048,8 +1048,15 @@ class CoachService {
           athletes.push({
             id: athleteUserId,
             displayName: userData.displayName || userData.username || 'Unknown User',
+            username: userData.username || '',
             email: userData.email || '',
             profileImageUrl: ownProfileImage || preloadedInviteImage || undefined,
+            teamName: team?.displayName || '',
+            sportOrProgram: team?.sportOrProgram || '',
+            athleteAge:
+              typeof membership?.athleteAge === 'number'
+                ? membership.athleteAge
+                : undefined,
             youthTrack,
             linkedAt: connection.linkedAt,
             lastActiveDate: lastActive,
