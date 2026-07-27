@@ -9,7 +9,6 @@ import {
   ClipboardCheck,
   FileText,
   Gauge,
-  Heart,
   Link2,
   LogIn,
   MessageCircle,
@@ -93,24 +92,6 @@ const ActionList = ({ items }: { items: React.ReactNode[] }) => (
       </li>
     ))}
   </ol>
-);
-
-const MetricBar = ({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) => (
-  <div className="grid grid-cols-[92px_1fr_44px] items-center gap-3">
-    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</span>
-    <span className="h-1.5 overflow-hidden rounded-full bg-white/10">
-      <span className={`block h-full rounded-full ${color}`} style={{ width: value }} />
-    </span>
-    <span className="text-right text-xs font-semibold text-zinc-300">{value}</span>
-  </div>
 );
 
 export default function CoachCalvinGuide() {
@@ -404,64 +385,7 @@ export default function CoachCalvinGuide() {
               </p>
             </div>
 
-            <div className="mt-10 grid gap-5 lg:grid-cols-2">
-              <article className="rounded-[1.75rem] border border-[#14E7D0]/25 bg-[#14E7D0]/[0.055] p-6 sm:p-8">
-                <div className="flex items-start justify-between gap-5">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#63f6e8]">
-                      <Heart className="h-4 w-4" />
-                      Coherence
-                    </div>
-                    <div className="mt-3 text-4xl font-bold">
-                      68<span className="ml-1 text-lg text-zinc-500">%</span>
-                    </div>
-                  </div>
-                  <span className="rounded-full border border-[#14E7D0]/20 bg-[#14E7D0]/10 px-3 py-1 text-xs font-semibold text-[#63f6e8]">
-                    14-day pattern
-                  </span>
-                </div>
-                <div className="mt-7 space-y-3">
-                  <MetricBar label="Showing up" value="71%" color="bg-[#14E7D0]" />
-                  <MetricBar label="Training" value="62%" color="bg-[#14E7D0]" />
-                  <MetricBar label="Feeling good" value="70%" color="bg-[#14E7D0]" />
-                </div>
-                <p className="mt-6 text-sm leading-6 text-zinc-400">
-                  Coherence combines showing up, completing assigned training, and days the
-                  athlete reports feeling Solid or Locked In. A rising score means those pieces
-                  are lining up more often. “Building” means PulseCheck is still collecting the
-                  athlete&apos;s first usable pattern.
-                </p>
-              </article>
-
-              <article className="rounded-[1.75rem] border border-[#E0FE10]/25 bg-[#E0FE10]/[0.045] p-6 sm:p-8">
-                <div className="flex items-start justify-between gap-5">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-bold text-[#E0FE10]">
-                      <ClipboardCheck className="h-4 w-4" />
-                      Adherence
-                    </div>
-                    <div className="mt-3 text-4xl font-bold">
-                      54<span className="ml-1 text-lg text-zinc-500">%</span>
-                    </div>
-                  </div>
-                  <span className="rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-3 py-1 text-xs font-semibold text-[#E0FE10]">
-                    Daily habits
-                  </span>
-                </div>
-                <div className="mt-7 space-y-3">
-                  <MetricBar label="Checked in" value="64%" color="bg-[#E0FE10]" />
-                  <MetricBar label="Device worn" value="71%" color="bg-[#E0FE10]" />
-                  <MetricBar label="Mental modules" value="27%" color="bg-[#E0FE10]" />
-                </div>
-                <p className="mt-6 text-sm leading-6 text-zinc-400">
-                  Adherence averages check-ins, connected-device wear, and completed mental
-                  modules across the last 14 days. A low smaller bar tells you the exact habit to
-                  support next.
-                </p>
-              </article>
-            </div>
-
-            <div className="mt-8 overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#111217]">
+            <div className="mt-10 overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#111217]">
               <GuideScreenshot
                 src="/coach-guide/calvin/readiness-metrics.png?v=20260727"
                 alt="Coach Calvin's PulseCheck readiness dashboard showing roster coherence and adherence"
