@@ -6318,6 +6318,8 @@ const CoachServicesSection: React.FC<{
   const [loading, setLoading] = useState(!isDemo);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [previewService, setPreviewService] = useState<PulseCheckCoachService | null>(null);
+  const [previewStep, setPreviewStep] = useState(0);
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -6363,6 +6365,11 @@ const CoachServicesSection: React.FC<{
       serviceType: service.serviceType,
       price: (service.priceCents / 100).toFixed(2),
     });
+  };
+
+  const openPreview = (service: PulseCheckCoachService) => {
+    setPreviewService(service);
+    setPreviewStep(0);
   };
 
   const saveService = async () => {
@@ -6600,6 +6607,13 @@ const CoachServicesSection: React.FC<{
                         </button>
                         <button
                           type="button"
+                          onClick={() => openPreview(service)}
+                          className="h-9 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/15"
+                        >
+                          Preview purchase
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void toggleStatus(service)}
                           className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white"
                         >
@@ -6612,6 +6626,202 @@ const CoachServicesSection: React.FC<{
               })}
             </div>
           )}
+        </div>
+      </div>
+
+      {previewService ? (
+        <ServicePurchasePreviewModal
+          service={previewService}
+          step={previewStep}
+          onStepChange={setPreviewStep}
+          onClose={() => setPreviewService(null)}
+        />
+      ) : null}
+    </div>
+  );
+};
+
+const ServicePurchasePreviewModal: React.FC<{
+  service: PulseCheckCoachService;
+  step: number;
+  onStepChange: (step: number) => void;
+  onClose: () => void;
+}> = ({ service, step, onStepChange, onClose }) => {
+  const fees = calculatePulseCheckServiceFees(service.priceCents);
+  const steps = [
+    {
+      eyebrow: '01 · Service selected',
+      title: service.title,
+      body:
+        service.serviceType === 'subscription'
+          ? 'The athlete sees what is included in the ongoing service before starting subscription checkout.'
+          : 'The athlete sees what is included before paying. After payment, PulseCheck moves them into the booking flow.',
+    },
+    {
+      eyebrow: '02 · Test payment',
+      title: 'Use Stripe test card details',
+      body: 'In test mode, Stripe accepts its mock card details so we can walk through the checkout without charging real money.',
+    },
+    {
+      eyebrow: '03 · Confirmation',
+      title: service.serviceType === 'subscription' ? 'Subscription service active' : 'Payment complete',
+      body:
+        service.serviceType === 'subscription'
+          ? 'PulseCheck shows the service details page and stores the active service on the order.'
+          : 'PulseCheck confirms payment, then the athlete picks a calendar time using the booking flow.',
+    },
+  ];
+  const current = steps[Math.max(0, Math.min(step, steps.length - 1))];
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-sm">
+      <div className="w-full max-w-3xl overflow-hidden rounded-3xl border border-cyan-300/20 bg-[#11131a] shadow-2xl shadow-black/60">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-[0.22em] text-cyan-200">
+              Athlete purchase demo
+            </div>
+            <h3 className="mt-2 text-xl font-black text-white">
+              Preview the additional service flow
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-zinc-400">
+              This is the screen-demo version. For a live Stripe test, use test keys and the mock card below.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 p-2 text-zinc-400 transition hover:text-white"
+            aria-label="Close purchase demo"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="border-b border-white/10 p-5 lg:border-b-0 lg:border-r">
+            <div className="space-y-2">
+              {steps.map((item, index) => (
+                <button
+                  key={item.eyebrow}
+                  type="button"
+                  onClick={() => onStepChange(index)}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
+                    index === step
+                      ? 'border-cyan-300/40 bg-cyan-300/10'
+                      : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.05]'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+                    {item.eyebrow}
+                  </div>
+                  <div className="mt-1 text-sm font-semibold text-white">{item.title}</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-[#E0FE10]/15 bg-[#E0FE10]/5 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Price summary
+              </div>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between gap-3 text-zinc-400">
+                  <span>Coach service price</span>
+                  <span className="font-semibold text-white">{currencyFromCents(fees.coachPriceCents)}</span>
+                </div>
+                <div className="flex justify-between gap-3 text-zinc-400">
+                  <span>Processing added</span>
+                  <span className="font-semibold text-cyan-200">{currencyFromCents(fees.processingFeeCents)}</span>
+                </div>
+                <div className="border-t border-white/10 pt-2 flex justify-between gap-3 text-zinc-300">
+                  <span>Athlete pays</span>
+                  <span className="font-black text-[#E0FE10]">{currencyFromCents(fees.totalCents)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5">
+            <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+              <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
+                {current.eyebrow}
+              </div>
+              <h4 className="mt-3 text-2xl font-black text-white">{current.title}</h4>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-400">{current.body}</p>
+
+              {step === 0 ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                    Service details
+                  </div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                    {service.description || 'No service details added yet.'}
+                  </p>
+                  <div className="mt-3 inline-flex rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+                    {service.serviceType === 'subscription' ? 'Monthly subscription service' : 'One-time booked service'}
+                  </div>
+                </div>
+              ) : null}
+
+              {step === 1 ? (
+                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Card number</div>
+                      <div className="mt-1 font-mono text-white">4242 4242 4242 4242</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Expiry / CVC</div>
+                      <div className="mt-1 font-mono text-white">12/34 · 123</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">ZIP</div>
+                      <div className="mt-1 font-mono text-white">Any value</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Expected result</div>
+                      <div className="mt-1 text-emerald-200">Payment succeeds</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs leading-relaxed text-amber-100">
+                    Do not use real cards in test mode. Stripe test cards only work with test API keys.
+                  </div>
+                </div>
+              ) : null}
+
+              {step === 2 ? (
+                <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-200">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Purchase confirmed
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                    {service.serviceType === 'subscription'
+                      ? 'The athlete lands on the service details page. The order is stored as an active subscription service once Stripe confirms checkout.'
+                      : 'The athlete continues into the calendar booking flow. Once they choose a time, the booking appears in the conversation and coach earnings.'}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-5 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => onStepChange(Math.max(0, step - 1))}
+                  disabled={step === 0}
+                  className="h-10 rounded-lg border border-zinc-700 px-4 text-sm font-semibold text-zinc-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (step >= steps.length - 1 ? onClose() : onStepChange(step + 1))}
+                  className="h-10 rounded-lg bg-[#E0FE10] px-4 text-sm font-bold text-black transition hover:bg-[#ccef0e]"
+                >
+                  {step >= steps.length - 1 ? 'Done' : 'Next step'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
