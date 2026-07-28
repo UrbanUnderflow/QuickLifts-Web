@@ -26,6 +26,7 @@ const {
 } = require('./lib/coaching');
 const {
   markOrderPaid,
+  markSubscriptionOrderActive,
   normalizeString: normalizeCoachServiceString,
   orderRef: coachServiceOrderRef,
 } = require('./lib/pulsecheck-coach-services');
@@ -959,6 +960,14 @@ async function handleCheckoutSessionCompleted(session) {
     // doesn't fall through to the round/challenge purchase path.
     if (isCoachingSession(session)) {
       await handleCoachingCheckout(session);
+      return;
+    }
+
+    if (normalizeCoachServiceString(session?.metadata?.payment_type) === 'pulsecheck_coach_service_subscription') {
+      await markSubscriptionOrderActive({
+        session,
+        source: 'stripe-webhook',
+      });
       return;
     }
 

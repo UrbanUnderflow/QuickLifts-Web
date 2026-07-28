@@ -230,6 +230,36 @@ const markOrderPaid = async ({ paymentIntent, source = 'api', database = db }) =
   return ref;
 };
 
+const markSubscriptionOrderActive = async ({ session, source = 'stripe-webhook', database = db }) => {
+  const metadata = session?.metadata || {};
+  if (normalizeString(metadata.payment_type) !== 'pulsecheck_coach_service_subscription') {
+    return null;
+  }
+
+  const orderId = normalizeString(metadata.order_id);
+  if (!orderId) return null;
+
+  const ref = orderRef(orderId, database);
+  await ref.set({
+    status: 'active',
+    paymentStatus: normalizeString(session.payment_status) || 'paid',
+    stripeSessionId: normalizeString(session.id),
+    stripeSubscriptionId:
+      typeof session.subscription === 'string'
+        ? normalizeString(session.subscription)
+        : normalizeString(session.subscription?.id),
+    stripeCustomerId:
+      typeof session.customer === 'string'
+        ? normalizeString(session.customer)
+        : normalizeString(session.customer?.id),
+    subscriptionActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    paymentVerificationSource: source,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return ref;
+};
+
 module.exports = {
   CONVERSATIONS_COLLECTION,
   ORDERS_COLLECTION,
@@ -242,6 +272,7 @@ module.exports = {
   getService,
   loadService,
   loadConversationForAthlete,
+  markSubscriptionOrderActive,
   markOrderPaid,
   normalizeString,
   orderRef,
