@@ -1,5 +1,5 @@
 const Stripe = require('stripe');
-const { admin, headers, isDevMode, getFirebaseAdminApp } = require('./config/firebase');
+const { admin, headers, getFirebaseAdminApp } = require('./config/firebase');
 const {
   loadService,
   loadConversationForAthlete,
@@ -16,25 +16,49 @@ const jsonHeaders = {
   'Cache-Control': 'private, no-store',
 };
 
+const STRIPE_PUBLISHABLE_KEY_LIVE =
+  'pk_live_51Sd8YLIkArZc741WXCIF0xMlq4OUccnkkSsoJ3MqY9Wiu0xsAqRZeHdxijRnOa050a2k8WwqtVi6EsyhPZ6lfS5w00l9L49dzX';
+const STRIPE_PUBLISHABLE_KEY_TEST =
+  'pk_test_51Sd8YLIkArZc741WNSWroMed1dRRfjfA2bQBniDTFsiEiVKtbxGU5IhpR5u2HimyiR9OHqgvxgHFFrMjqxFl7YUC00WpY2G0dn';
+
+const stripeTestMode = (event) => {
+  const explicitMode =
+    event.headers?.['x-pulsecheck-stripe-mode']
+    || event.headers?.['X-PulseCheck-Stripe-Mode'];
+  const normalizedMode = normalizeString(explicitMode).toLowerCase();
+  if (normalizedMode === 'test') return true;
+  if (normalizedMode === 'live') return false;
+
+  const referer = event.headers?.referer || event.headers?.origin || '';
+  return referer.includes('localhost') || referer.includes('127.0.0.1');
+};
+
 const stripeConfiguration = (event) => {
-  const development = isDevMode(event);
-  const secretKey = development
+  const testMode = stripeTestMode(event);
+  const secretKey = testMode
     ? process.env.STRIPE_TEST_SECRET_KEY
     : process.env.STRIPE_SECRET_KEY;
-  const publishableKey = development
+  const publishableKey = testMode
     ? process.env.NEXT_PUBLIC_TEST_STRIPE_PUBLISHABLE_KEY
       || process.env.STRIPE_TEST_PUBLISHABLE_KEY
+      || STRIPE_PUBLISHABLE_KEY_TEST
     : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-      || process.env.STRIPE_PUBLISHABLE_KEY;
+      || process.env.STRIPE_PUBLISHABLE_KEY
+      || STRIPE_PUBLISHABLE_KEY_LIVE;
 
-  if (!secretKey || !publishableKey) {
-    const error = new Error('Stripe checkout is not configured for this environment.');
+  if (!secretKey) {
+    const error = new Error(
+      testMode
+        ? 'Stripe test checkout is not configured. Add STRIPE_TEST_SECRET_KEY or use live Stripe mode.'
+        : 'Stripe live checkout is not configured. Add STRIPE_SECRET_KEY.'
+    );
     error.statusCode = 503;
     throw error;
   }
   return {
     stripe: new Stripe(secretKey, { apiVersion: '2023-10-16' }),
     publishableKey,
+    stripeMode: testMode ? 'test' : 'live',
   };
 };
 
@@ -93,7 +117,7 @@ const handler = async (event) => {
       throw error;
     }
 
-    const { stripe, publishableKey } = stripeConfiguration(event);
+    const { stripe, publishableKey, stripeMode } = stripeConfiguration(event);
     const account = await stripe.accounts.retrieve(connectedAccountId);
     if (!account.charges_enabled) {
       const error = new Error('Your coach’s Stripe account is not ready to accept payments.');
@@ -158,6 +182,7 @@ const handler = async (event) => {
       coachNetCents: pricing.coachNetCents,
       currency: service.currency,
       status: 'payment_pending',
+      stripeMode,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: false });
@@ -174,6 +199,7 @@ const handler = async (event) => {
         description: `${service.title} with ${normalizeString(conversation.data.coachName) || 'coach'}`,
         metadata: {
           platform: 'pulsecheck',
+          stripe_mode: stripeMode,
           payment_type: 'pulsecheck_coach_service',
           tax_classification: 'service_income',
           order_id: checkoutId,
@@ -218,6 +244,7 @@ const handler = async (event) => {
         coachPriceCents: pricing.coachPriceCents,
         processingFeeCents: pricing.processingFeeCents,
         currency: service.currency,
+        stripeMode,
       }),
     };
   } catch (error) {

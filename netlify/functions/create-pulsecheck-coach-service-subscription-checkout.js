@@ -1,5 +1,5 @@
 const Stripe = require('stripe');
-const { admin, headers, isDevMode, getFirebaseAdminApp } = require('./config/firebase');
+const { admin, headers, getFirebaseAdminApp } = require('./config/firebase');
 const {
   loadConversationForAthlete,
   loadService,
@@ -17,18 +17,37 @@ const jsonHeaders = {
   'Cache-Control': 'private, no-store',
 };
 
+const stripeTestMode = (event) => {
+  const explicitMode =
+    event.headers?.['x-pulsecheck-stripe-mode']
+    || event.headers?.['X-PulseCheck-Stripe-Mode'];
+  const normalizedMode = normalizeString(explicitMode).toLowerCase();
+  if (normalizedMode === 'test') return true;
+  if (normalizedMode === 'live') return false;
+
+  const referer = event.headers?.referer || event.headers?.origin || '';
+  return referer.includes('localhost') || referer.includes('127.0.0.1');
+};
+
 const stripeConfiguration = (event) => {
-  const development = isDevMode(event);
-  const secretKey = development
+  const testMode = stripeTestMode(event);
+  const secretKey = testMode
     ? process.env.STRIPE_TEST_SECRET_KEY
     : process.env.STRIPE_SECRET_KEY;
 
   if (!secretKey) {
-    const error = new Error('Stripe checkout is not configured for this environment.');
+    const error = new Error(
+      testMode
+        ? 'Stripe test checkout is not configured. Add STRIPE_TEST_SECRET_KEY or use live Stripe mode.'
+        : 'Stripe live checkout is not configured. Add STRIPE_SECRET_KEY.'
+    );
     error.statusCode = 503;
     throw error;
   }
-  return new Stripe(secretKey, { apiVersion: '2023-10-16' });
+  return {
+    stripe: new Stripe(secretKey, { apiVersion: '2023-10-16' }),
+    stripeMode: testMode ? 'test' : 'live',
+  };
 };
 
 const siteOrigin = (event) => {
@@ -84,7 +103,7 @@ const handler = async (event) => {
       throw error;
     }
 
-    const stripe = stripeConfiguration(event);
+    const { stripe, stripeMode } = stripeConfiguration(event);
     const account = await stripe.accounts.retrieve(connectedAccountId);
     if (!account.charges_enabled) {
       const error = new Error('Your coach’s Stripe account is not ready to accept subscription payments.');
@@ -146,6 +165,7 @@ const handler = async (event) => {
         application_fee_percent: applicationFeePercent,
         metadata: {
           platform: 'pulsecheck',
+          stripe_mode: stripeMode,
           payment_type: 'pulsecheck_coach_service_subscription',
           order_id: checkoutId,
           conversation_id: conversation.id,
@@ -156,6 +176,7 @@ const handler = async (event) => {
       },
       metadata: {
         platform: 'pulsecheck',
+        stripe_mode: stripeMode,
         payment_type: 'pulsecheck_coach_service_subscription',
         order_id: checkoutId,
         conversation_id: conversation.id,
@@ -193,6 +214,7 @@ const handler = async (event) => {
       currency: service.currency,
       stripeSessionId: session.id,
       stripeSessionUrl: session.url,
+      stripeMode,
       status: 'subscription_checkout_created',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
