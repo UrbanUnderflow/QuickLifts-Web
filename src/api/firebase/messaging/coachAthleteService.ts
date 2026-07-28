@@ -2,7 +2,9 @@ import {
   collection, 
   doc, 
   addDoc, 
+  getDoc,
   getDocs, 
+  increment,
   query, 
   where, 
   orderBy, 
@@ -129,6 +131,11 @@ class CoachAthleteMessagingService {
   ): Promise<CoachAthleteMessage> {
     try {
       const batch = writeBatch(db);
+      const conversationRef = doc(db, this.conversationsCollection, conversationId);
+      const conversationSnap = await getDoc(conversationRef);
+      const conversation = conversationSnap.data();
+      const recipientId =
+        senderType === 'coach' ? conversation?.athleteId : conversation?.coachId;
       
       // Add message
       const messagesRef = collection(db, this.messagesCollection);
@@ -148,15 +155,16 @@ class CoachAthleteMessagingService {
       batch.set(messageDoc, messageData);
       
       // Update conversation
-      const conversationRef = doc(db, this.conversationsCollection, conversationId);
-      const conversationUpdate = {
+      const conversationUpdate: Record<string, any> = {
         lastMessage: content,
         lastMessageTimestamp: serverTimestamp(),
         lastMessageSenderId: senderId,
         updatedAt: serverTimestamp(),
-        // Increment unread count for the recipient
-        [`unreadCount.${senderId === 'coach' ? 'athlete' : 'coach'}`]: 1
       };
+
+      if (recipientId) {
+        conversationUpdate[`unreadCount.${recipientId}`] = increment(1);
+      }
       
       batch.update(conversationRef, conversationUpdate);
       

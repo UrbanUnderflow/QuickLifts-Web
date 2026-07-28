@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import {
   Home,
   Flame,
@@ -77,6 +78,7 @@ import { resolveCurriculumItemAccent } from '../../utils/pulseCheckModuleVisuals
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
   auth,
+  db,
   getActiveFirebaseProjectId,
   getFirebaseModeRequestHeaders,
   isLocalFirebaseRuntime,
@@ -515,12 +517,14 @@ const initialsOf = (name?: string): string => {
 
 type InboxThread = {
   id: string;
+  athleteId?: string;
   name: string;
   initials: string;
   status: StatusKey;
   lastMessage: string;
   ts?: Date;
   unread: boolean;
+  unreadCount?: number;
 };
 
 const INBOX_SAMPLES: Record<StatusKey, string> = {
@@ -550,6 +554,47 @@ const buildInboxThreads = (athletes: CoachAthlete[]): InboxThread[] =>
     })
     .sort((x, y) => (y.ts?.getTime() || 0) - (x.ts?.getTime() || 0))
     .slice(0, 14);
+
+const buildCoachConversationThreads = (
+  rows: any[],
+  coachId?: string,
+  athletes: CoachAthlete[] = []
+): InboxThread[] => {
+  const athleteById = new Map(athletes.map((athlete) => [athlete.id, athlete]));
+
+  return rows
+    .filter((row) => typeof row?.lastMessage === 'string' && row.lastMessage.trim().length > 0)
+    .map((row) => {
+      const athlete = athleteById.get(row.athleteId);
+      const name = row.athleteName || athlete?.displayName || 'Athlete';
+      const status = athlete ? deriveStatus(athlete) : 'pending';
+      const unreadCount =
+        coachId && row.unreadCount && typeof row.unreadCount[coachId] === 'number'
+          ? row.unreadCount[coachId]
+          : 0;
+
+      return {
+        id: row.id,
+        athleteId: row.athleteId,
+        name,
+        initials: initialsOf(name),
+        status,
+        lastMessage: row.lastMessage,
+        ts: convertConversationDate(row.lastMessageTimestamp || row.updatedAt || row.createdAt),
+        unread: unreadCount > 0 || (Boolean(row.lastMessageSenderId) && row.lastMessageSenderId !== coachId),
+        unreadCount,
+      };
+    })
+    .sort((x, y) => (y.ts?.getTime() || 0) - (x.ts?.getTime() || 0));
+};
+
+const convertConversationDate = (value: any): Date | undefined => {
+  if (!value) return undefined;
+  if (typeof value.toDate === 'function') return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value < 10_000_000_000 ? value * 1000 : value);
+  return undefined;
+};
 
 type ViewKey =
   | 'home'
@@ -925,7 +970,14 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   {view === 'alerts' && (
                     <AlertsSection alerts={alerts} loading={loadingAthletes} canSeeTier3={canSeeTier3} />
                   )}
-                  {view === 'inbox' && <InboxSection athletes={athletes} loading={loadingAthletes} isDemo={isDemo} />}
+                  {view === 'inbox' && (
+                    <InboxSection
+                      athletes={athletes}
+                      loading={loadingAthletes}
+                      coachId={coachId}
+                      isDemo={isDemo}
+                    />
+                  )}
                   {view === 'roster' && (
                     <div className="space-y-5">
                       <AthleteInviteSection
@@ -1907,15 +1959,60 @@ const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean; canSee
 // Inbox — athlete ↔ coach messages
 // ---------------------------------------------------------------------------
 
-const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDemo?: boolean }> = ({
+const InboxSection: React.FC<{
+  athletes: CoachAthlete[];
+  loading: boolean;
+  coachId?: string;
+  isDemo?: boolean;
+}> = ({
   athletes,
   loading,
+  coachId,
   isDemo,
 }) => {
-  const threads = useMemo(() => (isDemo ? buildInboxThreads(athletes) : []), [athletes, isDemo]);
+  const router = useRouter();
+  const [liveRows, setLiveRows] = useState<any[]>([]);
+  const [loadingLiveThreads, setLoadingLiveThreads] = useState(false);
+  const threads = useMemo(
+    () => (isDemo ? buildInboxThreads(athletes) : buildCoachConversationThreads(liveRows, coachId, athletes)),
+    [athletes, coachId, isDemo, liveRows]
+  );
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
 
-  if (loading) return <LoadingBlock label="Loading your inbox…" />;
+  useEffect(() => {
+    if (isDemo) {
+      setLiveRows([]);
+      setLoadingLiveThreads(false);
+      return;
+    }
+    if (!coachId) {
+      setLiveRows([]);
+      setLoadingLiveThreads(false);
+      return;
+    }
+
+    setLoadingLiveThreads(true);
+    const conversationsQuery = query(
+      collection(db, 'coach-athlete-conversations'),
+      where('coachId', '==', coachId),
+      orderBy('lastMessageTimestamp', 'desc')
+    );
+
+    return onSnapshot(
+      conversationsQuery,
+      (snapshot) => {
+        setLiveRows(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        setLoadingLiveThreads(false);
+      },
+      (error) => {
+        console.error('[CoachDashboard] failed to load coach inbox', error);
+        setLiveRows([]);
+        setLoadingLiveThreads(false);
+      }
+    );
+  }, [coachId, isDemo]);
+
+  if (loading || loadingLiveThreads) return <LoadingBlock label="Loading your inbox…" />;
 
   if (threads.length === 0) {
     return (
@@ -1948,7 +2045,10 @@ const InboxSection: React.FC<{ athletes: CoachAthlete[]; loading: boolean; isDem
           return (
             <button
               key={t.id}
-              onClick={() => setReadIds((prev) => new Set(prev).add(t.id))}
+              onClick={() => {
+                setReadIds((prev) => new Set(prev).add(t.id));
+                if (!isDemo) router.push(`/PulseCheck/messages/${t.id}`);
+              }}
               className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors ${
                 unread
                   ? 'bg-zinc-800/60 border-[#E0FE10]/20 hover:bg-zinc-800/80'
