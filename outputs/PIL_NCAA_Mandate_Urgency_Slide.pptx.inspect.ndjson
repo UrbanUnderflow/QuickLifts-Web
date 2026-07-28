@@ -1,0 +1,46 @@
+{"kind":"deck","id":"pr/d7zeoc","name":"Deck"}
+{"kind":"layout","layoutId":"e5097a4e-45a2-46e6-bfea-ce867a9c46b7","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"57515e8a-1b30-42ef-a478-1337d1f5cb9b","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/wygnc2","slide":1,"title":"WHY SCHOOLS MUST ACT","textShapes":27}
+{"kind":"shape","id":"sh/i9c72hcv","slide":1,"name":"right-depth-panel","bbox":[778,0,502,720]}
+{"kind":"shape","id":"sh/5c3qdwbm","slide":1,"name":"eyebrow-pill","bbox":[70,38,306,42]}
+{"kind":"shape","id":"sh/kbup4ru1","slide":1,"name":"eyebrow-dot","bbox":[91,54,9,9]}
+{"kind":"textbox","id":"sh/7yl8fmtc","slide":1,"name":"eyebrow","text":"WHY SCHOOLS MUST ACT","textPreview":"WHY SCHOOLS MUST ACT","textChars":20,"textLines":1,"bbox":[112,48,238,23]}
+{"kind":"textbox","id":"sh/6xc76hcr","slide":1,"name":"bylaw","text":"NCAA BYLAW 20.2.4.25","textPreview":"NCAA BYLAW 20.2.4.25","textChars":20,"textLines":1,"bbox":[1008,51,202,18]}
+{"kind":"textbox","id":"sh/t0nqhwbi","slide":1,"name":"headline-primary","text":"THE MANDATE IS ACTIVE.","textPreview":"THE MANDATE IS ACTIVE.","textChars":22,"textLines":1,"bbox":[70,101,1140,66]}
+{"kind":"textbox","id":"sh/szup8rux","slide":1,"name":"headline-secondary","text":"COMPLIANCE MUST BE CONFIRMED—EVERY YEAR.","textPreview":"COMPLIANCE MUST BE CONFIRMED—EVERY YEAR.","textChars":40,"textLines":1,"bbox":[70,166,1140,50]}
+{"kind":"textbox","id":"sh/f258j6to","slide":1,"name":"scope-explanation","text":"Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and mental-health support is in place.","textPreview":"Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and mental-health ...","textChars":157,"textLines":1,"bbox":[70,223,1115,45]}
+{"kind":"shape","id":"sh/u1w7a1c3","slide":1,"name":"main-divider","bbox":[70,285,1140,1]}
+{"kind":"shape","id":"sh/gr61kzqh","slide":1,"name":"deadline-accent","bbox":[70,315,7,286]}
+{"kind":"textbox","id":"sh/1sf2t472","slide":1,"name":"deadline-label","text":"NEXT ANNUAL NCAA DEADLINE","textPreview":"NEXT ANNUAL NCAA DEADLINE","textChars":25,"textLines":1,"bbox":[99,315,350,25]}
+{"kind":"textbox","id":"sh/epojip8r","slide":1,"name":"deadline-month-day","text":"NOV. 6","textPreview":"NOV. 6","textChars":6,"textLines":1,"bbox":[91,345,360,105]}
+{"kind":"textbox","id":"sh/fqxkrupw","slide":1,"name":"deadline-year","text":"2026","textPreview":"2026","textChars":4,"textLines":1,"bbox":[98,444,350,72]}
+{"kind":"textbox","id":"sh/ofq1ozqt","slide":1,"name":"deadline-note","text":"Schools are not simply encouraged to act. Their leadership must formally confirm compliance with the NCAA’s health, safety and mental-health guidance.","textPreview":"Schools are not simply encouraged to act. Their leadership must formally confirm compliance with the NCAA’s health, safety and mental-hea...","textChars":150,"textLines":1,"bbox":[99,526,336,79]}
+{"kind":"textbox","id":"sh/pgz2x47e","slide":1,"name":"requirements-heading","text":"WHAT SCHOOLS MUST HAVE IN PLACE","textPreview":"WHAT SCHOOLS MUST HAVE IN PLACE","textChars":31,"textLines":1,"bbox":[493,315,690,26]}
+{"kind":"shape","id":"sh/2d8jm98n","slide":1,"name":"practice-accent-1","bbox":[493,360,6,47]}
+{"kind":"textbox","id":"sh/3ehkvup8","slide":1,"name":"practice-number-1","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[513,356,42,24]}
+{"kind":"textbox","id":"sh/cjq1sjqp","slide":1,"name":"practice-label-1","text":"HEALTHY ENVIRONMENTS","textPreview":"HEALTHY ENVIRONMENTS","textChars":20,"textLines":1,"bbox":[513,379,300,30]}
+{"kind":"shape","id":"sh/dkj21o7a","slide":1,"name":"practice-accent-2","bbox":[846,360,6,47]}
+{"kind":"textbox","id":"sh/l0f2l4ze","slide":1,"name":"practice-number-2","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[866,356,42,24]}
+{"kind":"textbox","id":"sh/kz61cjit","slide":1,"name":"practice-label-2","text":"MENTAL-HEALTH SCREENING","textPreview":"MENTAL-HEALTH SCREENING","textChars":23,"textLines":1,"bbox":[866,379,317,30]}
+{"kind":"shape","id":"sh/zydkjeh8","slide":1,"name":"practice-accent-3","bbox":[493,430,6,47]}
+{"kind":"textbox","id":"sh/yx4ja903","slide":1,"name":"practice-number-3","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[513,426,42,24]}
+{"kind":"textbox","id":"sh/94f29ozq","slide":1,"name":"practice-label-3","text":"WRITTEN RESPONSE PLANS","textPreview":"WRITTEN RESPONSE PLANS","textChars":22,"textLines":1,"bbox":[513,449,300,30]}
+{"kind":"shape","id":"sh/8361gji5","slide":1,"name":"practice-accent-4","bbox":[846,430,6,47]}
+{"kind":"textbox","id":"sh/72xk7ehk","slide":1,"name":"practice-number-4","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[866,426,42,24]}
+{"kind":"textbox","id":"sh/m1oje90z","slide":1,"name":"practice-label-4","text":"ACCESS TO LICENSED PROVIDERS","textPreview":"ACCESS TO LICENSED PROVIDERS","textChars":28,"textLines":1,"bbox":[866,449,317,30]}
+{"kind":"shape","id":"sh/p8vidkz6","slide":1,"name":"right-divider","bbox":[493,496,690,1]}
+{"kind":"textbox","id":"sh/o7214zil","slide":1,"name":"accountability-heading","text":"THE SCHOOL LEADERS WHO MUST CONFIRM IT","textPreview":"THE SCHOOL LEADERS WHO MUST CONFIRM IT","textChars":38,"textLines":1,"bbox":[493,513,690,24]}
+{"kind":"textbox","id":"sh/e1g7y1c7","slide":1,"name":"accountability-explanation","text":"The NCAA form must be signed by:","textPreview":"The NCAA form must be signed by:","textChars":32,"textLines":1,"bbox":[493,541,690,22]}
+{"kind":"shape","id":"sh/f298r6ts","slide":1,"name":"leader-1-surface","bbox":[493,570,216,52]}
+{"kind":"textbox","id":"sh/g3ip0bud","slide":1,"name":"leader-1-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[509,579,30,30]}
+{"kind":"textbox","id":"sh/14rqtgby","slide":1,"name":"leader-1-role","text":"SCHOOL PRESIDENT\nOR CHANCELLOR","textPreview":"SCHOOL PRESIDENT | OR CHANCELLOR","textChars":30,"textLines":2,"bbox":[539,578,158,34]}
+{"kind":"shape","id":"sh/250721cj","slide":1,"name":"leader-2-surface","bbox":[721,570,216,52]}
+{"kind":"textbox","id":"sh/3698v6t4","slide":1,"name":"leader-2-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[737,579,30,30]}
+{"kind":"textbox","id":"sh/o7ip4bup","slide":1,"name":"leader-2-role","text":"ATHLETIC\nDIRECTOR","textPreview":"ATHLETIC | DIRECTOR","textChars":17,"textLines":2,"bbox":[767,578,158,34]}
+{"kind":"shape","id":"sh/psrqxgbu","slide":1,"name":"leader-3-surface","bbox":[949,570,234,52]}
+{"kind":"textbox","id":"sh/i9w7qhcz","slide":1,"name":"leader-3-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[965,579,30,30]}
+{"kind":"textbox","id":"sh/ja5ojmtk","slide":1,"name":"leader-3-role","text":"ATHLETICS HEALTH\nCARE ADMINISTRATOR","textPreview":"ATHLETICS HEALTH | CARE ADMINISTRATOR","textChars":35,"textLines":2,"bbox":[995,578,176,34]}
+{"kind":"shape","id":"sh/zqx4ny5o","slide":1,"name":"pulsecheck-band","bbox":[70,646,1140,48]}
+{"kind":"textbox","id":"sh/y5oned43","slide":1,"name":"pulsecheck-value","text":"PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE.","textPreview":"PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE.","textChars":99,"textLines":1,"bbox":[92,657,1096,26]}
+{"kind":"notes","id":"nt/wygnc2","slide":1,"text":"The urgency is institutional, not hypothetical: the NCAA’s mental-health best practices are legislatively required across member schools. Division I schools—and Division II/III institutions sponsoring a Division I sport—must annually attest to compliance with consensus-based health, safety and performance guidance. The next listed deadline is Nov. 6, 2026. The responsible signers are the school president or chancellor, athletic director, and campus athletics health care administrator.\n\n[Sources]\n- https://www.ncaa.org/governance/legislation-policy/membership-attestation-requirements/\n- https://www.ncaa.org/what-we-do/health-safety-and-performance/mental-health/best-practices/\n[/Sources]"}

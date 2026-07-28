@@ -1,0 +1,2316 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/wygnc2",
+    "id": "wygnc2",
+    "slide": 1,
+    "layoutId": "57515e8a-1b30-42ef-a478-1337d1f5cb9b",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "e5097a4e-45a2-46e6-bfea-ce867a9c46b7",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#070A0B",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "57515e8a-1b30-42ef-a478-1337d1f5cb9b",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "e5097a4e-45a2-46e6-bfea-ce867a9c46b7",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "e5097a4e-45a2-46e6-bfea-ce867a9c46b7",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i9c72hcv",
+      "id": "1",
+      "name": "right-depth-panel",
+      "bbox": [
+        778,
+        0,
+        502,
+        720
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5c3qdwbm",
+      "id": "2",
+      "name": "eyebrow-pill",
+      "bbox": [
+        70,
+        38,
+        306,
+        42
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#101416",
+      "lineColor": "#30363B",
+      "lineWidth": 1
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kbup4ru1",
+      "id": "3",
+      "name": "eyebrow-dot",
+      "bbox": [
+        91,
+        54,
+        9,
+        9
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7yl8fmtc",
+      "id": "4",
+      "name": "eyebrow",
+      "bbox": [
+        112,
+        48,
+        238,
+        23
+      ],
+      "geometry": "rect",
+      "text": "WHY SCHOOLS MUST ACT",
+      "textPreview": "WHY SCHOOLS MUST ACT",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WHY SCHOOLS MUST ACT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WHY SCHOOLS MUST ACT",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WHY SCHOOLS MUST ACT",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6xc76hcr",
+      "id": "5",
+      "name": "bylaw",
+      "bbox": [
+        1008,
+        51,
+        202,
+        18
+      ],
+      "geometry": "rect",
+      "text": "NCAA BYLAW 20.2.4.25",
+      "textPreview": "NCAA BYLAW 20.2.4.25",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Arial",
+        "color": "#707680",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NCAA BYLAW 20.2.4.25"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NCAA BYLAW 20.2.4.25",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Arial",
+            "color": "#707680",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NCAA BYLAW 20.2.4.25",
+              "fontSize": 12,
+              "typeface": "Arial",
+              "color": "#707680",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t0nqhwbi",
+      "id": "6",
+      "name": "headline-primary",
+      "bbox": [
+        70,
+        101,
+        1140,
+        66
+      ],
+      "geometry": "rect",
+      "text": "THE MANDATE IS ACTIVE.",
+      "textPreview": "THE MANDATE IS ACTIVE.",
+      "resolvedFontSize": 55,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 60,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.92,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE MANDATE IS ACTIVE."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE MANDATE IS ACTIVE.",
+          "resolvedTextStyle": {
+            "fontSize": 60,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE MANDATE IS ACTIVE.",
+              "fontSize": 60,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/szup8rux",
+      "id": "7",
+      "name": "headline-secondary",
+      "bbox": [
+        70,
+        166,
+        1140,
+        50
+      ],
+      "geometry": "rect",
+      "text": "COMPLIANCE MUST BE CONFIRMED—EVERY YEAR.",
+      "textPreview": "COMPLIANCE MUST BE CONFIRMED—EVERY YEAR.",
+      "resolvedFontSize": 41,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 41,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "COMPLIANCE MUST BE CONFIRMED—EVERY YEAR."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "COMPLIANCE MUST BE CONFIRMED—EVERY YEAR.",
+          "resolvedTextStyle": {
+            "fontSize": 41,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "COMPLIANCE MUST BE CONFIRMED—EVERY YEAR.",
+              "fontSize": 41,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f258j6to",
+      "id": "8",
+      "name": "scope-explanation",
+      "bbox": [
+        70,
+        223,
+        1115,
+        45
+      ],
+      "geometry": "rect",
+      "text": "Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and mental-health support is in place.",
+      "textPreview": "Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and mental-health ...",
+      "resolvedFontSize": 18.75,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#A7AAB2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.99,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and"
+          },
+          {
+            "index": 2,
+            "text": "mental-health support is in place."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and mental-health support is in place.",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#A7AAB2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Division I schools—and any school sponsoring a Division I sport—must formally confirm that NCAA-aligned health, safety and mental-health support is in place.",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#A7AAB2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u1w7a1c3",
+      "id": "9",
+      "name": "main-divider",
+      "bbox": [
+        70,
+        285,
+        1140,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#30363B",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gr61kzqh",
+      "id": "10",
+      "name": "deadline-accent",
+      "bbox": [
+        70,
+        315,
+        7,
+        286
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1sf2t472",
+      "id": "11",
+      "name": "deadline-label",
+      "bbox": [
+        99,
+        315,
+        350,
+        25
+      ],
+      "geometry": "rect",
+      "text": "NEXT ANNUAL NCAA DEADLINE",
+      "textPreview": "NEXT ANNUAL NCAA DEADLINE",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#A7AAB2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NEXT ANNUAL NCAA DEADLINE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NEXT ANNUAL NCAA DEADLINE",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#A7AAB2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NEXT ANNUAL NCAA DEADLINE",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#A7AAB2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/epojip8r",
+      "id": "12",
+      "name": "deadline-month-day",
+      "bbox": [
+        91,
+        345,
+        360,
+        105
+      ],
+      "geometry": "rect",
+      "text": "NOV. 6",
+      "textPreview": "NOV. 6",
+      "resolvedFontSize": 87.5,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 92,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.95,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NOV. 6"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NOV. 6",
+          "resolvedTextStyle": {
+            "fontSize": 92,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NOV. 6",
+              "fontSize": 92,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fqxkrupw",
+      "id": "13",
+      "name": "deadline-year",
+      "bbox": [
+        98,
+        444,
+        350,
+        72
+      ],
+      "geometry": "rect",
+      "text": "2026",
+      "textPreview": "2026",
+      "resolvedFontSize": 58,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 58,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2026"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2026",
+          "resolvedTextStyle": {
+            "fontSize": 58,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "2026",
+              "fontSize": 58,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ofq1ozqt",
+      "id": "14",
+      "name": "deadline-note",
+      "bbox": [
+        99,
+        526,
+        336,
+        79
+      ],
+      "geometry": "rect",
+      "text": "Schools are not simply encouraged to act. Their leadership must formally confirm compliance with the NCAA’s health, safety and mental-health guidance.",
+      "textPreview": "Schools are not simply encouraged to act. Their leadership must formally confirm compliance with the NCAA’s health, safety and mental-hea...",
+      "resolvedFontSize": 16.46,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#A7AAB2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.97,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Schools are not simply encouraged to act."
+          },
+          {
+            "index": 2,
+            "text": "Their leadership must formally confirm"
+          },
+          {
+            "index": 3,
+            "text": "compliance with the NCAA’s health, safety"
+          },
+          {
+            "index": 4,
+            "text": "and mental-health guidance."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Schools are not simply encouraged to act. Their leadership must formally confirm compliance with the NCAA’s health, safety and mental-health guidance.",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#A7AAB2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Schools are not simply encouraged to act. Their leadership must formally confirm compliance with the NCAA’s health, safety and mental-health guidance.",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#A7AAB2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pgz2x47e",
+      "id": "15",
+      "name": "requirements-heading",
+      "bbox": [
+        493,
+        315,
+        690,
+        26
+      ],
+      "geometry": "rect",
+      "text": "WHAT SCHOOLS MUST HAVE IN PLACE",
+      "textPreview": "WHAT SCHOOLS MUST HAVE IN PLACE",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WHAT SCHOOLS MUST HAVE IN PLACE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WHAT SCHOOLS MUST HAVE IN PLACE",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WHAT SCHOOLS MUST HAVE IN PLACE",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2d8jm98n",
+      "id": "16",
+      "name": "practice-accent-1",
+      "bbox": [
+        493,
+        360,
+        6,
+        47
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#4D8FFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ehkvup8",
+      "id": "17",
+      "name": "practice-number-1",
+      "bbox": [
+        513,
+        356,
+        42,
+        24
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cjq1sjqp",
+      "id": "18",
+      "name": "practice-label-1",
+      "bbox": [
+        513,
+        379,
+        300,
+        30
+      ],
+      "geometry": "rect",
+      "text": "HEALTHY ENVIRONMENTS",
+      "textPreview": "HEALTHY ENVIRONMENTS",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "HEALTHY ENVIRONMENTS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "HEALTHY ENVIRONMENTS",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "HEALTHY ENVIRONMENTS",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dkj21o7a",
+      "id": "19",
+      "name": "practice-accent-2",
+      "bbox": [
+        846,
+        360,
+        6,
+        47
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#9B72FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l0f2l4ze",
+      "id": "20",
+      "name": "practice-number-2",
+      "bbox": [
+        866,
+        356,
+        42,
+        24
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#9B72FF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#9B72FF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#9B72FF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kz61cjit",
+      "id": "21",
+      "name": "practice-label-2",
+      "bbox": [
+        866,
+        379,
+        317,
+        30
+      ],
+      "geometry": "rect",
+      "text": "MENTAL-HEALTH SCREENING",
+      "textPreview": "MENTAL-HEALTH SCREENING",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "MENTAL-HEALTH SCREENING"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "MENTAL-HEALTH SCREENING",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "MENTAL-HEALTH SCREENING",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zydkjeh8",
+      "id": "22",
+      "name": "practice-accent-3",
+      "bbox": [
+        493,
+        430,
+        6,
+        47
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F35D9D",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yx4ja903",
+      "id": "23",
+      "name": "practice-number-3",
+      "bbox": [
+        513,
+        426,
+        42,
+        24
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F35D9D",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F35D9D",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F35D9D",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/94f29ozq",
+      "id": "24",
+      "name": "practice-label-3",
+      "bbox": [
+        513,
+        449,
+        300,
+        30
+      ],
+      "geometry": "rect",
+      "text": "WRITTEN RESPONSE PLANS",
+      "textPreview": "WRITTEN RESPONSE PLANS",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WRITTEN RESPONSE PLANS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WRITTEN RESPONSE PLANS",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WRITTEN RESPONSE PLANS",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8361gji5",
+      "id": "25",
+      "name": "practice-accent-4",
+      "bbox": [
+        846,
+        430,
+        6,
+        47
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FF9C38",
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/72xk7ehk",
+      "id": "26",
+      "name": "practice-number-4",
+      "bbox": [
+        866,
+        426,
+        42,
+        24
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#FF9C38",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#FF9C38",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#FF9C38",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m1oje90z",
+      "id": "27",
+      "name": "practice-label-4",
+      "bbox": [
+        866,
+        449,
+        317,
+        30
+      ],
+      "geometry": "rect",
+      "text": "ACCESS TO LICENSED PROVIDERS",
+      "textPreview": "ACCESS TO LICENSED PROVIDERS",
+      "resolvedFontSize": 18.34,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.97,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ACCESS TO LICENSED"
+          },
+          {
+            "index": 2,
+            "text": "PROVIDERS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ACCESS TO LICENSED PROVIDERS",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ACCESS TO LICENSED PROVIDERS",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p8vidkz6",
+      "id": "28",
+      "name": "right-divider",
+      "bbox": [
+        493,
+        496,
+        690,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#30363B",
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/o7214zil",
+      "id": "29",
+      "name": "accountability-heading",
+      "bbox": [
+        493,
+        513,
+        690,
+        24
+      ],
+      "geometry": "rect",
+      "text": "THE SCHOOL LEADERS WHO MUST CONFIRM IT",
+      "textPreview": "THE SCHOOL LEADERS WHO MUST CONFIRM IT",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE SCHOOL LEADERS WHO MUST CONFIRM IT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE SCHOOL LEADERS WHO MUST CONFIRM IT",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE SCHOOL LEADERS WHO MUST CONFIRM IT",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e1g7y1c7",
+      "id": "30",
+      "name": "accountability-explanation",
+      "bbox": [
+        493,
+        541,
+        690,
+        22
+      ],
+      "geometry": "rect",
+      "text": "The NCAA form must be signed by:",
+      "textPreview": "The NCAA form must be signed by:",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#A7AAB2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The NCAA form must be signed by:"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The NCAA form must be signed by:",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#A7AAB2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The NCAA form must be signed by:",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#A7AAB2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f298r6ts",
+      "id": "31",
+      "name": "leader-1-surface",
+      "bbox": [
+        493,
+        570,
+        216,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#14191C",
+      "lineColor": "#30363B",
+      "lineWidth": 1
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/g3ip0bud",
+      "id": "32",
+      "name": "leader-1-number",
+      "bbox": [
+        509,
+        579,
+        30,
+        30
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/14rqtgby",
+      "id": "33",
+      "name": "leader-1-role",
+      "bbox": [
+        539,
+        578,
+        158,
+        34
+      ],
+      "geometry": "rect",
+      "text": "SCHOOL PRESIDENT\nOR CHANCELLOR",
+      "textPreview": "SCHOOL PRESIDENT | OR CHANCELLOR",
+      "resolvedFontSize": 14.17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.89,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SCHOOL PRESIDENT"
+          },
+          {
+            "index": 2,
+            "text": "OR CHANCELLOR"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SCHOOL PRESIDENT",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SCHOOL PRESIDENT",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "OR CHANCELLOR",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "OR CHANCELLOR",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/250721cj",
+      "id": "34",
+      "name": "leader-2-surface",
+      "bbox": [
+        721,
+        570,
+        216,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#14191C",
+      "lineColor": "#30363B",
+      "lineWidth": 1
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3698v6t4",
+      "id": "35",
+      "name": "leader-2-number",
+      "bbox": [
+        737,
+        579,
+        30,
+        30
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/o7ip4bup",
+      "id": "36",
+      "name": "leader-2-role",
+      "bbox": [
+        767,
+        578,
+        158,
+        34
+      ],
+      "geometry": "rect",
+      "text": "ATHLETIC\nDIRECTOR",
+      "textPreview": "ATHLETIC | DIRECTOR",
+      "resolvedFontSize": 14.17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.89,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ATHLETIC"
+          },
+          {
+            "index": 2,
+            "text": "DIRECTOR"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ATHLETIC",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ATHLETIC",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "DIRECTOR",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "DIRECTOR",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/psrqxgbu",
+      "id": "37",
+      "name": "leader-3-surface",
+      "bbox": [
+        949,
+        570,
+        234,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#14191C",
+      "lineColor": "#30363B",
+      "lineWidth": 1
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i9w7qhcz",
+      "id": "38",
+      "name": "leader-3-number",
+      "bbox": [
+        965,
+        579,
+        30,
+        30
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ja5ojmtk",
+      "id": "39",
+      "name": "leader-3-role",
+      "bbox": [
+        995,
+        578,
+        176,
+        34
+      ],
+      "geometry": "rect",
+      "text": "ATHLETICS HEALTH\nCARE ADMINISTRATOR",
+      "textPreview": "ATHLETICS HEALTH | CARE ADMINISTRATOR",
+      "resolvedFontSize": 14.17,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.89,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ATHLETICS HEALTH"
+          },
+          {
+            "index": 2,
+            "text": "CARE ADMINISTRATOR"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ATHLETICS HEALTH",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ATHLETICS HEALTH",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "CARE ADMINISTRATOR",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CARE ADMINISTRATOR",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zqx4ny5o",
+      "id": "40",
+      "name": "pulsecheck-band",
+      "bbox": [
+        70,
+        646,
+        1140,
+        48
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#151C0F",
+      "lineColor": "#435600",
+      "lineWidth": 1
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y5oned43",
+      "id": "41",
+      "name": "pulsecheck-value",
+      "bbox": [
+        92,
+        657,
+        1096,
+        26
+      ],
+      "geometry": "rect",
+      "text": "PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE.",
+      "textPreview": "PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PULSECHECK HELPS ATHLETIC DEPARTMENTS IMPLEMENT, MEASURE AND DOCUMENT THE SYSTEM BEHIND COMPLIANCE.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

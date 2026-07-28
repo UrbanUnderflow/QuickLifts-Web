@@ -1,0 +1,11 @@
+Communication job: By the end of this slide, investors should understand that NCAA mental-health support is an active institutional requirement, Division I schools must confirm compliance annually, and PulseCheck supports the operational work behind that compliance.
+
+Official sources:
+- NCAA Membership Attestation Requirements: https://www.ncaa.org/governance/legislation-policy/membership-attestation-requirements/
+  Used for the Nov. 6, 2026 deadline; applicability to Division I and Division II/III schools sponsoring a Division I sport; the annual compliance requirement; and the three responsible signatories.
+- NCAA Mental Health Best Practices: https://www.ncaa.org/what-we-do/health-safety-and-performance/mental-health/best-practices/
+  Used for the four best-practice areas and the statement that all NCAA schools are legislatively required to provide mental-health services and resources consistent with the best practices.
+
+Visual direction:
+- Match the existing Pulse investor deck: near-black canvas, Arial typography, large white headline, neon-lime urgency accent, subtle blue/violet/pink/orange secondary accents, thin rules, and restrained rounded surfaces.
+- No external visual assets used.
