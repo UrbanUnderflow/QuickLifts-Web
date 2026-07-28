@@ -26,6 +26,7 @@ type ExtractLeadRequest = {
 const extractStringFields = [
   'title',
   'organization',
+  'description',
   'owner',
   'stage',
   'amount',
@@ -253,6 +254,7 @@ const normalizeExtractedItem = (
   return {
     title: cleanString(parsed.title, 240),
     organization: cleanString(parsed.organization, 240),
+    description: cleanString(parsed.description, 600),
     owner: cleanString(parsed.owner, 120),
     stage: parsedStage && stageIds.includes(parsedStage) ? parsedStage : fallbackStage,
     priority: ['high', 'medium', 'low'].includes(parsedPriority) ? parsedPriority : 'medium',
@@ -310,6 +312,7 @@ Return only JSON with this shape:
 {
   "title": string,
   "organization": string,
+  "description": string,
   "owner": string,
   "stage": string,
   "priority": "high" | "medium" | "low",
@@ -345,6 +348,7 @@ Rules:
 - Pick "stage" from the provided stage ids only. If unsure, use the first stage id.
 - "title" should be a short lead name, not a marketing headline.
 - "organization" should be the company, school, grant program, competition, fund, or partner name.
+- "description" should be a concise 1-2 sentence summary of the actual entity being analyzed, based only on source text. Explain what the entity is, not why PipeLists is analyzing it.
 - "nextStep" should be a practical next action for following up.
 - "notes" should be blank unless the page contains deal-moving context: buyer angle, eligibility nuance, budget/funding detail, deadline risk, procurement constraint, relationship context, strategic fit, or a prep detail that changes what the user should do.
 - Do not use "notes" to summarize what the page is, describe the website, or explain generic relevance. If the only note is "this page appears to be..." or "may be relevant...", return "".

@@ -108,7 +108,21 @@ type InviteHistoryEntry = {
   }>;
   inviteUrl: string;
 };
-type ActivityLogType = 'update' | 'application' | 'meeting' | 'follow-up' | 'decision' | 'risk' | 'document' | 'metrics';
+type ActivityLogType =
+  | 'update'
+  | 'cold-outreach'
+  | 'follow-up-first'
+  | 'follow-up-second'
+  | 'follow-up-third'
+  | 'closed-no-response'
+  | 'closed-response-no-interest'
+  | 'application'
+  | 'meeting'
+  | 'follow-up'
+  | 'decision'
+  | 'risk'
+  | 'document'
+  | 'metrics';
 type ContactEmailType = 'metrics-update' | 'general-update';
 type LogEmailFilter = 'all' | 'investor-update' | 'general-update';
 type ContactEmailAttachment = {
@@ -206,6 +220,7 @@ type PipelineItem = {
   id: string;
   title: string;
   organization: string;
+  description: string;
   owner: string;
   contactEmails: string[];
   contactPhone: string;
@@ -382,6 +397,12 @@ const importanceLabel = (priority: PipelinePriority) =>
 
 const logTypeLabels: Record<ActivityLogType, string> = {
   update: 'General Update',
+  'cold-outreach': 'Cold Outreach',
+  'follow-up-first': 'Follow Up 1st Attempt',
+  'follow-up-second': 'Follow Up 2nd Attempt',
+  'follow-up-third': 'Follow Up 3rd Attempt',
+  'closed-no-response': 'Closed No Response',
+  'closed-response-no-interest': 'Closed Response No Interest',
   application: 'Application',
   meeting: 'Meeting',
   'follow-up': 'Follow-Up',
@@ -421,6 +442,12 @@ const contactEmailStatusOptions = [
 
 const logNextStepOptions: Record<ActivityLogType, string[]> = {
   update: ['Review status', 'Send update', 'Follow up', 'Wait for response'],
+  'cold-outreach': ['Follow up', 'Wait for response', 'Send supporting materials', 'Schedule meeting'],
+  'follow-up-first': ['Send second follow-up', 'Wait for response', 'Send supporting materials', 'Schedule meeting'],
+  'follow-up-second': ['Send third follow-up', 'Wait for response', 'Send supporting materials', 'Schedule meeting'],
+  'follow-up-third': ['Close no response', 'Close no interest', 'Wait for response'],
+  'closed-no-response': ['Revisit later', 'Archive lead'],
+  'closed-response-no-interest': ['Revisit later', 'Archive lead'],
   application: ['Prepare application', 'Submit application', 'Send supporting materials', 'Wait for results', 'Follow up'],
   meeting: ['Schedule meeting', 'Send recap', 'Send materials', 'Follow up', 'Wait for response'],
   'follow-up': ['Follow up', 'Send reminder', 'Send requested info', 'Schedule meeting', 'Wait for response'],
@@ -1096,6 +1123,7 @@ const shouldUseRedirectSignIn = () => {
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
   organization: '',
+  description: '',
   owner: '',
   contactEmails: [],
   contactPhone: '',
@@ -1306,6 +1334,7 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   const now = new Date().toISOString();
   return {
     ...draft,
+    description: draft.description.trim(),
     contactEmails: normalizeContactEmails(draft.contactEmails),
     contactPhone: draft.contactPhone.trim(),
     linkedinUrl: normalizeLinkedInProfileUrlForLead(draft.linkedinUrl, draft.title, draft.organization),
@@ -1522,6 +1551,7 @@ const generatedLeadKey = (lead: Pick<ItemDraft, 'title' | 'organization' | 'sour
 const leadSearchStringFields = [
   'title',
   'organization',
+  'description',
   'owner',
   'contactPhone',
   'linkedinUrl',
@@ -1999,6 +2029,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     ...item,
     title,
     organization,
+    description: item.description || '',
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
     contactPhone: item.contactPhone || '',
@@ -3635,6 +3666,7 @@ const PipelinePage: NextPage = () => {
           [
             item.title,
             item.organization,
+            item.description,
             item.owner,
             item.nextStep,
             item.amount,
@@ -4250,6 +4282,7 @@ const PipelinePage: NextPage = () => {
                   lead: {
                     title: selectedDetailItem.title,
                     organization: selectedDetailItem.organization,
+                    description: selectedDetailItem.description,
                     owner: selectedDetailItem.owner,
                     contactEmails: selectedDetailItem.contactEmails,
                     contactPhone: selectedDetailItem.contactPhone,
@@ -4349,7 +4382,7 @@ Return one enriched result only. Validate every claim against a credible source.
 
 LinkedIn verification is strict: treat any existing LinkedIn URL as untrusted. Never construct a profile URL from a person's name, never reuse a URL just because its slug looks plausible, and never return a profile unless a web result or the profile page itself confirms the exact person's name and current organization or role. If that exact match cannot be verified, return an empty linkedinUrl.
 
-Preserve the identity of the existing record unless a source corrects it. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
+Preserve the identity of the existing record unless a source corrects it. Populate description with a concise 1-2 sentence source-supported summary of what the entity is. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
             },
             {
               role: 'user',
@@ -4361,6 +4394,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
                   existingLead: {
                     title: selectedDetailItem.title,
                     organization: selectedDetailItem.organization,
+                    description: selectedDetailItem.description,
                     contactEmails: selectedDetailItem.contactEmails,
                     contactPhone: selectedDetailItem.contactPhone,
                     linkedinUrl: selectedDetailItem.linkedinUrl,
@@ -4407,6 +4441,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
         ...suggestedResult,
         title: suggestedResult.title === 'Untitled opportunity' ? selectedDetailItem.title : suggestedResult.title,
         organization: suggestedResult.organization || selectedDetailItem.organization,
+        description: suggestedResult.description || selectedDetailItem.description,
         owner: suggestedResult.owner || selectedDetailItem.owner,
         linkedinUrl: verifiedLinkedInUrl,
         sourceUrl: suggestedResult.sourceUrl || normalizeLeadInputUrl(selectedDetailItem.sourceUrl)?.toString() || '',
@@ -4425,15 +4460,16 @@ Preserve the identity of the existing record unless a source corrects it. Provid
       }
       result.sourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || result.sourceUrl)?.toString() || result.sourceUrl;
 
-      const foundNewPublicData = Boolean(
-        suggestedResult.contactEmails.length ||
-          suggestedResult.contactPhone ||
-          suggestedResult.linkedinUrl ||
-          suggestedResult.rationale ||
-          suggestedResult.sourceEvidence ||
-          suggestedResult.nextStep ||
-          suggestedResult.notes,
-      );
+      const foundNewPublicData = [
+        suggestedResult.description,
+        suggestedResult.contactEmails.length,
+        suggestedResult.contactPhone,
+        suggestedResult.linkedinUrl,
+        suggestedResult.rationale,
+        suggestedResult.sourceEvidence,
+        suggestedResult.nextStep,
+        suggestedResult.notes,
+      ].some(Boolean);
       setItemResearchResult(result);
       setItemResearchMessage(
         foundNewPublicData
@@ -4479,6 +4515,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
                       ...item,
                       title: result.title || item.title,
                       organization: result.organization || item.organization,
+                      description: result.description || item.description,
                       owner: result.owner || item.owner,
                       contactEmails,
                       contactPhone: result.contactPhone || item.contactPhone,
@@ -4979,6 +5016,7 @@ Preserve the identity of the existing record unless a source corrects it. Provid
       ...defaultDraft(stage),
       title,
       organization,
+      description: normalizeResearchText(lead.description),
       owner: normalizeResearchText(lead.owner),
       contactEmails: normalizeContactEmails((lead as { contactEmails?: unknown }).contactEmails),
       contactPhone: normalizeResearchText(lead.contactPhone),
@@ -5088,6 +5126,7 @@ Rules:
 - Include contactEmails only when a valid email is visibly published by a credible source. Otherwise return an empty array after checking; do not guess email patterns.
 - Include linkedinUrl only for a valid public LinkedIn profile URL. Include contactPhone only for a publicly published business phone number. Leave either field as an empty string when no credible source provides it.
 - For a person, title must be the person's name and organization should identify their current role and organization. For an organization, title and organization may match when no individual is named.
+- description must concisely summarize what the person or organization is in 1-2 source-supported sentences.
 - Use the provided stage ids only. For new contacts, default to the first stage unless the pasted text clearly establishes a stronger relationship status.
 - Keep notes blank unless there is material relationship context, an introduction path, a concrete partnership angle, or a specific constraint.
 - rationale should explain the useful relationship angle in one concise sentence. sourceEvidence should identify the supporting source and what it establishes. deadlineStatus should be "no fixed deadline" for contact research.
@@ -5246,6 +5285,7 @@ Research rules:
 - If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD.
 - dueDate can be "" unless the source provides a real deadline or the user's prompt explicitly requires one.
 - Pick stage from the provided stage ids only. If unsure, use the first stage id.
+- description must concisely summarize what the entity is in 1-2 source-supported sentences. Keep fit analysis, prep angle, and recommendations in notes or rationale instead.
 - Keep notes blank unless there is deal-moving context: risk, eligibility nuance, budget/funding detail, buyer angle, procurement constraint, strategic fit, or prep detail. Do not summarize what the page is. Do not write generic "may be relevant" notes or "AI confidence".
 - sourceEvidence must briefly name the source support used, including the deadline when relevant.
 - deadlineStatus must state whether the lead has a future deadline, no fixed deadline, or an optional follow-up date.
@@ -5496,6 +5536,7 @@ Research rules:
       ['PipeList', activeList.name],
       ['Template', templateCatalog[activeList.templateKey].label],
       ['Organization', item.organization],
+      ['Description', item.description],
       isInvestorUpdateContactsList
         ? ['Email Status', emailStatusLabel(item)]
         : ['Stage', `${stage.label} (${item.stage})`],
@@ -5918,6 +5959,7 @@ Research rules:
         ...defaultDraft(nextItem.stage),
         title: nextItem.title,
         organization: nextItem.organization,
+        description: nextItem.description,
         owner: nextItem.owner,
         contactEmails: nextItem.contactEmails,
         stage: nextItem.stage,
@@ -6050,6 +6092,7 @@ Research rules:
         ...defaultDraft(nextItem.stage),
         title: nextItem.title,
         organization: nextItem.organization,
+        description: nextItem.description,
         owner: nextItem.owner,
         contactEmails: nextItem.contactEmails,
         stage: nextItem.stage,
@@ -6171,6 +6214,7 @@ Research rules:
           updatesByItemId.set(item.id, {
             sourceUrl: verifiedSourceUrl,
             organization: item.organization.trim() ? item.organization : extracted.organization?.trim() || '',
+            description: item.description.trim() ? item.description : extracted.description?.trim() || '',
             amount: item.amount.trim() ? item.amount : extracted.amount?.trim() || '',
             segment: item.segment.trim() ? item.segment : extracted.segment?.trim() || '',
             decisionMaker: item.decisionMaker.trim() ? item.decisionMaker : extracted.decisionMaker?.trim() || '',
@@ -6604,6 +6648,7 @@ Research rules:
         'Template',
         'Title',
         'Organization',
+        'Description',
         'Stage',
         'Importance',
         'Owner',
@@ -6633,6 +6678,7 @@ Research rules:
           templateCatalog[activeList.templateKey].label,
           item.title,
           item.organization,
+          item.description,
           stage.label,
           item.priority,
           item.owner,
@@ -7596,6 +7642,7 @@ Research rules:
 
       <div className="grid gap-3 md:grid-cols-2">
         {[
+          ['description', 'Description', 'What this entity is and why it matters'],
           ['pilotScope', 'Scope', 'Timeline, scope, requirements, and commitments'],
           ['nextStep', 'Next Step', 'The next action that moves this forward'],
           ['grossMargin', 'Margin Notes', 'Revenue, costs, or margin context'],
@@ -7605,7 +7652,7 @@ Research rules:
           ['lossReason', 'Loss Reason', 'Only if paused or closed lost'],
           ['notes', 'Notes', 'Context'],
         ].map(([key, label, placeholder]) => (
-          <label key={key} className={key === 'notes' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
+          <label key={key} className={key === 'description' || key === 'notes' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
             <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
             <textarea
               id={`pipe-${key}`}
@@ -9966,6 +10013,11 @@ Research rules:
                             </div>
 
                             <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                              {lead.description && (
+                                <p className="break-words md:col-span-2">
+                                  <span className="font-semibold text-stone-800">Description:</span> {lead.description}
+                                </p>
+                              )}
                               {lead.rationale && (
                                 <p className="break-words">
                                   <span className="font-semibold text-stone-800">Fit:</span> {lead.rationale}
@@ -10161,6 +10213,11 @@ Research rules:
                             </div>
 
                             <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                              {lead.description && (
+                                <p className="break-words md:col-span-2">
+                                  <span className="font-semibold text-stone-800">Description:</span> {lead.description}
+                                </p>
+                              )}
                               {lead.rationale && (
                                 <p className="break-words">
                                   <span className="font-semibold text-stone-800">Fit:</span> {lead.rationale}
@@ -11254,6 +11311,7 @@ Research rules:
                 ])}
 
                 {renderDetailGrid('grid gap-3 md:grid-cols-2', [
+                  { label: 'Description', value: selectedDetailItem.description, wide: true },
                   { label: 'Next Step', value: selectedDetailItem.nextStep, wide: true },
                   { label: 'Notes', value: selectedDetailItem.notes, wide: true },
                   {

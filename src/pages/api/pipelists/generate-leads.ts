@@ -35,6 +35,7 @@ type GenerateLeadsRequest = {
 type LeadCandidate = {
   title: string;
   organization: string;
+  description: string;
   owner: string;
   stage: string;
   priority: 'high' | 'medium' | 'low';
@@ -67,6 +68,7 @@ type LeadCandidate = {
 const leadStringFields = [
   'title',
   'organization',
+  'description',
   'owner',
   'stage',
   'amount',
@@ -274,6 +276,7 @@ const sanitizeLead = (
   return {
     title: cleanString(record.title, 240),
     organization: cleanString(record.organization, 240),
+    description: cleanString(record.description, 600),
     owner: cleanString(record.owner, 120),
     stage: stageIds.includes(stage) ? stage : fallbackStage,
     priority: priority === 'high' || priority === 'low' ? priority : 'medium',
@@ -385,6 +388,7 @@ Research rules:
 - Use web search and return leads supported by current sources.
 - Return only leads that are relevant to the active PipeList and the user's adjustments.
 - A lead must be a specific actionable entity: a named fund, person, company, program, grant, competition, contract, school, partner, or opportunity.
+- description must concisely summarize what the entity is in 1-2 source-supported sentences. Keep fit analysis, prep angle, and recommendations in notes or rationale instead.
 - Do not return source pages that are merely lists of other leads, directories, databases, rankings, roundups, market maps, article collections, or sector overviews.
 - If a useful source page is a list/directory/roundup, treat it as a research source only: open or follow the entries, extract the individual leads from that page, and return those individual leads instead.
 - Each returned lead's sourceUrl must point to that individual lead's official page, LinkedIn/profile page, application page, fund page, or program page. Do not use a directory/list page as sourceUrl unless it is also the official page for that exact lead.
