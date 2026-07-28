@@ -157,6 +157,7 @@ service cloud.firestore {
         'athletic-mind-hub-change-log',
         'beta-applications',
         'coach-nora-vault',
+        'pulsecheck-coach-services',
         'coach-team-schedule',
         'company-config',
         'curriculum-notes',
@@ -198,6 +199,11 @@ service cloud.firestore {
             && 'admin' in get(pcMembershipPath(teamId)).data.staffCapabilities
           )
         );
+    }
+    function pcIsTeamStaff(teamId) {
+      return isSignedIn()
+        && exists(pcMembershipPath(teamId))
+        && get(pcMembershipPath(teamId)).data.role != 'athlete';
     }
     // A redeeming user may flip an invite link to redeemed for themselves without
     // being a team manager (mirrors the redeem transaction's invite-link write).
@@ -668,6 +674,24 @@ service cloud.firestore {
         && request.resource.data.coachId == request.auth.uid;
       allow update, delete: if isSignedIn()
         && resource.data.coachId == request.auth.uid;
+    }
+
+    // Coach-managed add-on services. The provisioning team switch gates whether
+    // the tab appears; rules keep writes owned by the coach or a team admin.
+    match /pulsecheck-coach-services/{serviceId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.coachUserId == request.auth.uid
+          && pcIsTeamStaff(request.resource.data.teamId)
+        );
+      allow update, delete: if isSignedIn()
+        && (
+          resource.data.coachUserId == request.auth.uid
+          || pcCanManageTeam(resource.data.teamId)
+          || isAdminUser()
+        );
     }
 
     // PulseCheck staff invites. Reads stay open to signed-in clients (a not-yet-

@@ -112,6 +112,7 @@ export interface PulseCheckTeamCommercialConfig {
   parentAssessmentReferralRevenueSharePct: number;
   coachReferralKickbackEnabled: boolean;
   coachReferralRevenueSharePct: number;
+  additionalServicesEnabled: boolean;
   coachReferralRecipientUserId?: string;
   coachReferralRecipientEmail?: string;
   coachReferralSourceTeamId?: string;
@@ -142,6 +143,7 @@ export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommer
   parentAssessmentReferralRevenueSharePct: 0,
   coachReferralKickbackEnabled: false,
   coachReferralRevenueSharePct: 0,
+  additionalServicesEnabled: false,
   coachReferralRecipientUserId: '',
   coachReferralRecipientEmail: '',
   coachReferralSourceTeamId: '',

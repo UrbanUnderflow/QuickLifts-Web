@@ -4242,6 +4242,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </div>
                                             </label>
 
+                                            <label className="pcp-checkbox-row">
+                                              <input
+                                                type="checkbox"
+                                                checked={teamCommercialDraft.additionalServicesEnabled || false}
+                                                onChange={(event) =>
+                                                  handleExistingTeamCommercialFieldChange(
+                                                    team.id,
+                                                    'additionalServicesEnabled',
+                                                    event.target.checked
+                                                  )
+                                                }
+                                              />
+                                              <div>
+                                                <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                                                  Enable coach additional services
+                                                </div>
+                                                <div className="pcp-checkbox-copy">
+                                                  Shows the coach Services tab so they can sell one-time booked services or ongoing subscription services.
+                                                </div>
+                                              </div>
+                                            </label>
+
                                             <div className="pcp-commercial-footer">
                                               <div className="pcp-card-copy">
                                                 {teamPlanBypass
@@ -5409,6 +5431,26 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
                           <div className="pcp-checkbox-copy">
                             Coach referral links can attach the referring coach to future athlete-paid subscriptions under the referred coach.
+                          </div>
+                        </div>
+                      </label>
+                      <label className="pcp-checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={teamForm.commercialConfig.additionalServicesEnabled}
+                          onChange={(event) =>
+                            handleTeamCommercialFieldChange(
+                              'additionalServicesEnabled',
+                              event.target.checked
+                            )
+                          }
+                        />
+                        <div>
+                          <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
+                            Enable coach additional services
+                          </div>
+                          <div className="pcp-checkbox-copy">
+                            Off by default. Turn this on when the coach should sell add-on services from the dashboard.
                           </div>
                         </div>
                       </label>

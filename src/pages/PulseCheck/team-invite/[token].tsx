@@ -147,6 +147,10 @@ const normalizeInviteCommercialSnapshot = (
         ? candidate.coachReferralKickbackEnabled
         : defaults.coachReferralKickbackEnabled,
     coachReferralRevenueSharePct,
+    additionalServicesEnabled:
+      typeof candidate.additionalServicesEnabled === 'boolean'
+        ? candidate.additionalServicesEnabled
+        : defaults.additionalServicesEnabled,
     coachReferralRecipientUserId: String(candidate.coachReferralRecipientUserId || defaults.coachReferralRecipientUserId || ''),
     coachReferralRecipientEmail: String(candidate.coachReferralRecipientEmail || defaults.coachReferralRecipientEmail || ''),
     coachReferralSourceTeamId: String(candidate.coachReferralSourceTeamId || defaults.coachReferralSourceTeamId || ''),

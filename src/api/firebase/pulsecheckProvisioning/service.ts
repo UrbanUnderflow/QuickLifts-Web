@@ -268,6 +268,10 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
     coachReferralRevenueSharePct: normalizeReferralRevenueSharePct(
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
     ),
+    additionalServicesEnabled:
+      typeof candidate.additionalServicesEnabled === 'boolean'
+        ? candidate.additionalServicesEnabled
+        : defaults.additionalServicesEnabled,
     coachReferralRecipientUserId: normalizeString(
       typeof candidate.coachReferralRecipientUserId === 'string'
         ? candidate.coachReferralRecipientUserId

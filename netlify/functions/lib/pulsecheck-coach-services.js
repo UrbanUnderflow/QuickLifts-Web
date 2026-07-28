@@ -3,7 +3,10 @@ const { getFirebaseAdminApp } = require('../config/firebase');
 
 const ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
 const CONVERSATIONS_COLLECTION = 'coach-athlete-conversations';
+const SERVICES_COLLECTION = 'pulsecheck-coach-services';
 const PLATFORM_FEE_PERCENT = 3;
+const STRIPE_PROCESSING_PERCENT = 2.9;
+const STRIPE_PROCESSING_FIXED_CENTS = 30;
 
 const SERVICE_CATALOG = Object.freeze({
   'one-on-one-video': Object.freeze({
@@ -25,6 +28,87 @@ const platformFeeCents = (amountCents) =>
   Math.round((Number(amountCents) || 0) * (PLATFORM_FEE_PERCENT / 100));
 
 const getService = (serviceId) => SERVICE_CATALOG[normalizeString(serviceId)] || null;
+
+const normalizeServiceType = (value) =>
+  normalizeString(value) === 'subscription' ? 'subscription' : 'one_time';
+
+const stripeProcessingFeeCents = (totalCents) =>
+  Math.max(0, Math.round((Number(totalCents) || 0) * (STRIPE_PROCESSING_PERCENT / 100)) + STRIPE_PROCESSING_FIXED_CENTS);
+
+const buyerProcessingFeeCents = (coachPriceCents) => {
+  const base = Math.max(0, Number(coachPriceCents) || 0);
+  if (!base) return 0;
+  const platformFee = platformFeeCents(base);
+  // Stripe's percentage is charged on the full amount the buyer pays, so solve
+  // for the total that covers coach price + Pulse platform fee + Stripe estimate.
+  const percentageRate = STRIPE_PROCESSING_PERCENT / 100;
+  const grossedUpTotal = Math.ceil((base + platformFee + STRIPE_PROCESSING_FIXED_CENTS) / (1 - percentageRate));
+  return Math.max(0, grossedUpTotal - base);
+};
+
+const servicePricingBreakdown = (coachPriceCents) => {
+  const amountCents = Math.max(0, Number(coachPriceCents) || 0);
+  const processingFeeCents = buyerProcessingFeeCents(amountCents);
+  const totalAmountCents = amountCents + processingFeeCents;
+  return {
+    amountCents,
+    coachPriceCents: amountCents,
+    processingFeeCents,
+    totalAmountCents,
+    platformFeeCents: platformFeeCents(amountCents),
+    estimatedStripeFeeCents: stripeProcessingFeeCents(totalAmountCents),
+    coachNetCents: amountCents,
+    platformFeePercent: PLATFORM_FEE_PERCENT,
+    stripeProcessingPercent: STRIPE_PROCESSING_PERCENT,
+    stripeProcessingFixedCents: STRIPE_PROCESSING_FIXED_CENTS,
+  };
+};
+
+const normalizeDynamicService = (snap) => {
+  if (!snap?.exists) return null;
+  const data = snap.data() || {};
+  const priceCents = Math.max(0, Number(data.priceCents ?? data.amountCents) || 0);
+  if (priceCents < 50) return null;
+  return {
+    id: snap.id,
+    title: normalizeString(data.title) || 'Coach service',
+    description: normalizeString(data.description),
+    amountCents: priceCents,
+    currency: normalizeString(data.currency).toLowerCase() || 'usd',
+    serviceType: normalizeServiceType(data.serviceType),
+    status: normalizeString(data.status) || 'active',
+    coachUserId: normalizeString(data.coachUserId),
+    teamId: normalizeString(data.teamId),
+    organizationId: normalizeString(data.organizationId),
+  };
+};
+
+const loadService = async ({ serviceId, conversation, database = db }) => {
+  const catalogService = getService(serviceId);
+  if (catalogService) {
+    return {
+      ...catalogService,
+      serviceType: 'one_time',
+      status: 'active',
+      coachUserId: conversation?.coachUserId || '',
+    };
+  }
+
+  const normalizedServiceId = normalizeString(serviceId);
+  if (!normalizedServiceId) return null;
+  const snap = await database.collection(SERVICES_COLLECTION).doc(normalizedServiceId).get();
+  const service = normalizeDynamicService(snap);
+  if (!service || service.status !== 'active') return null;
+  if (conversation?.coachUserId && service.coachUserId !== conversation.coachUserId) return null;
+  const conversationTeamId = normalizeString(conversation?.data?.teamId || conversation?.data?.pulseCheckTeamId);
+  if (service.teamId && conversationTeamId && service.teamId !== conversationTeamId) return null;
+  if (service.teamId) {
+    const teamSnap = await database.collection('pulsecheck-teams').doc(service.teamId).get();
+    const team = teamSnap.exists ? teamSnap.data() || {} : {};
+    if (team?.commercialConfig?.additionalServicesEnabled !== true) return null;
+  }
+  return service;
+};
 
 const verifyFirebaseUser = async (event) => {
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
@@ -149,9 +233,14 @@ const markOrderPaid = async ({ paymentIntent, source = 'api', database = db }) =
 module.exports = {
   CONVERSATIONS_COLLECTION,
   ORDERS_COLLECTION,
+  SERVICES_COLLECTION,
   PLATFORM_FEE_PERCENT,
+  STRIPE_PROCESSING_FIXED_CENTS,
+  STRIPE_PROCESSING_PERCENT,
   SERVICE_CATALOG,
+  buyerProcessingFeeCents,
   getService,
+  loadService,
   loadConversationForAthlete,
   markOrderPaid,
   normalizeString,
@@ -159,5 +248,7 @@ module.exports = {
   platformFeeCents,
   resolveCoachStripeAccount,
   serializeBooking,
+  servicePricingBreakdown,
+  stripeProcessingFeeCents,
   verifyFirebaseUser,
 };

@@ -57,6 +57,7 @@ const getDefaultCommercialConfig = () => ({
   parentAssessmentReferralRevenueSharePct: 0,
   coachReferralKickbackEnabled: false,
   coachReferralRevenueSharePct: 0,
+  additionalServicesEnabled: false,
   coachReferralRecipientUserId: '',
   coachReferralRecipientEmail: '',
   coachReferralSourceTeamId: '',
@@ -94,6 +95,9 @@ const normalizeCommercialConfig = (value) => {
     ),
     coachReferralRevenueSharePct: normalizeRevenueSharePct(
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
+    ),
+    additionalServicesEnabled: normalizeBoolean(
+      candidate.additionalServicesEnabled ?? defaults.additionalServicesEnabled
     ),
     coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId ?? defaults.coachReferralRecipientUserId),
     coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail ?? defaults.coachReferralRecipientEmail),
@@ -409,6 +413,7 @@ async function upsertPulseCheckRevenueEvent({
       referralRevenueSharePct: commercialConfig.referralRevenueSharePct,
       coachReferralKickbackEnabled: commercialConfig.coachReferralKickbackEnabled,
       coachReferralRevenueSharePct: commercialConfig.coachReferralRevenueSharePct,
+      additionalServicesEnabled: commercialConfig.additionalServicesEnabled,
       coachReferralRecipientUserId: commercialConfig.coachReferralRecipientUserId || null,
       coachReferralRecipientEmail: commercialConfig.coachReferralRecipientEmail || null,
       coachReferralSourceTeamId: commercialConfig.coachReferralSourceTeamId || null,

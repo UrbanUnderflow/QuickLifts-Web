@@ -109,6 +109,12 @@ import {
   listSentSportsIntelligenceReportsForCoach,
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
+import {
+  calculatePulseCheckServiceFees,
+  pulseCheckCoachServices,
+  type PulseCheckCoachService,
+  type PulseCheckCoachServiceType,
+} from '../../api/firebase/pulsecheckCoachServices';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
 import ScheduleBoard from '../../components/coach/ScheduleBoard';
 import NoraDashboardTraining from '../../components/coach/NoraDashboardTraining';
@@ -551,6 +557,7 @@ type ViewKey =
   | 'inbox'
   | 'roster'
   | 'referrals'
+  | 'services'
   | 'staff'
   | 'nora'
   | 'schedule'
@@ -564,6 +571,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'inbox', label: 'Inbox', icon: Inbox },
   { key: 'roster', label: 'Team Roster', icon: Users },
   { key: 'referrals', label: 'Referral Links', icon: Link2 },
+  { key: 'services', label: 'Services', icon: ClipboardList },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'nora', label: 'Train Nora', icon: Brain },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
@@ -600,6 +608,9 @@ interface CoachDashboardShellProps {
    *  user is the configured or safely inferred revenue recipient. */
   earningsEnabled?: boolean;
   revenueSharePct?: number;
+  additionalServicesEnabled?: boolean;
+  additionalServicesTeamId?: string;
+  additionalServicesOrganizationId?: string;
   /** The signed-in coach's own staff capabilities — gates which tabs/details are
    *  shown. Defaults to a full set (demo + safe fallback show everything). */
   viewerCapabilities?: StaffPermission[];
@@ -619,6 +630,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   isDemo = false,
   earningsEnabled = false,
   revenueSharePct = 0,
+  additionalServicesEnabled = false,
+  additionalServicesTeamId = '',
+  additionalServicesOrganizationId = '',
   viewerCapabilities = ['admin', 'administrative', 'coaching', 'athletic_trainer'],
 }) => {
   const router = useRouter();
@@ -696,6 +710,8 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           return can('coaching');
         case 'referrals':
           return can('coaching') || can('administrative');
+        case 'services':
+          return additionalServicesEnabled && (can('coaching') || can('administrative'));
         case 'alerts':
           return can('coaching') || can('athletic_trainer');
         case 'staff':
@@ -713,7 +729,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           return true;
       }
     },
-    [can, earningsEnabled]
+    [additionalServicesEnabled, can, earningsEnabled]
   );
 
   const navItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
@@ -938,6 +954,14 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       canRevoke={can('admin')}
                     />
                   )}
+                  {view === 'services' && additionalServicesEnabled && (
+                    <CoachServicesSection
+                      coachId={coachId || ''}
+                      teamId={additionalServicesTeamId}
+                      organizationId={additionalServicesOrganizationId}
+                      isDemo={isDemo}
+                    />
+                  )}
                   {view === 'staff' && (
                     <StaffSection
                       isDemo={isDemo}
@@ -999,6 +1023,15 @@ const CoachDashboard: React.FC = () => {
   const [earnings, setEarnings] = useState<{ enabled: boolean; sharePct: number }>({
     enabled: false,
     sharePct: 0,
+  });
+  const [additionalServices, setAdditionalServices] = useState<{
+    enabled: boolean;
+    teamId: string;
+    organizationId: string;
+  }>({
+    enabled: false,
+    teamId: '',
+    organizationId: '',
   });
   // The signed-in coach's own staff capabilities for their active team. Drives
   // feature gating (Reports/insights, Tier-3 detail, Schedule/Train Nora). Starts
@@ -1105,19 +1138,29 @@ const CoachDashboard: React.FC = () => {
   }, [currentUser?.id, trainingMode]);
 
   // Earnings is available for Stripe-connected service sellers and for coaches
-  // who receive a team's subscription revenue share.
+  // who receive a team's subscription revenue share. Additional Services is a
+  // separate commercial-config switch on the coach's team.
   useEffect(() => {
     if (trainingMode !== false) return;
     let cancelled = false;
     const loadEarnings = async () => {
       if (!currentUser?.id) return;
       const hasServicePayouts = Boolean(currentUser.creator?.stripeAccountId);
+      let servicesAccess = { enabled: false, teamId: '', organizationId: '' };
       try {
         const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+        let earningsResolved = false;
         for (const membership of memberships) {
           if (membership.role === 'athlete') continue;
           const team = await pulseCheckProvisioningService.getTeam(membership.teamId);
           const cfg = team?.commercialConfig;
+          if (cfg?.additionalServicesEnabled && !servicesAccess.enabled) {
+            servicesAccess = {
+              enabled: true,
+              teamId: team?.id || membership.teamId,
+              organizationId: team?.organizationId || membership.organizationId || '',
+            };
+          }
           const isConfiguredRecipient = cfg?.revenueRecipientUserId === currentUser.id;
           const isLegacyCoachRecipient =
             !cfg?.revenueRecipientUserId && team?.legacyCoachId === currentUser.id;
@@ -1131,13 +1174,19 @@ const CoachDashboard: React.FC = () => {
             && (isConfiguredRecipient || isLegacyCoachRecipient || isDefaultTeamAdminRecipient)
           ) {
             if (!cancelled) setEarnings({ enabled: true, sharePct: cfg.referralRevenueSharePct || 0 });
-            return;
+            earningsResolved = true;
           }
         }
-        if (!cancelled) setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
+        if (!cancelled) {
+          if (!earningsResolved) setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
+          setAdditionalServices(servicesAccess);
+        }
       } catch (err) {
         console.error('[CoachDashboard] failed to resolve earnings eligibility', err);
-        if (!cancelled) setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
+        if (!cancelled) {
+          setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
+          setAdditionalServices({ enabled: false, teamId: '', organizationId: '' });
+        }
       }
     };
     loadEarnings();
@@ -1251,6 +1300,9 @@ const CoachDashboard: React.FC = () => {
               isDemo
               earningsEnabled
               revenueSharePct={20}
+              additionalServicesEnabled
+              additionalServicesTeamId="demo-team"
+              additionalServicesOrganizationId="demo-org"
             />
           )}
           {mockReady && <NoraDashboardTraining onComplete={finishTraining} />}
@@ -1269,6 +1321,9 @@ const CoachDashboard: React.FC = () => {
           onSaveProfile={handleSaveProfile}
           earningsEnabled={earnings.enabled}
           revenueSharePct={earnings.sharePct}
+          additionalServicesEnabled={additionalServices.enabled}
+          additionalServicesTeamId={additionalServices.teamId}
+          additionalServicesOrganizationId={additionalServices.organizationId}
           viewerCapabilities={viewerCapabilities}
         />
       )}
@@ -6214,6 +6269,350 @@ const ReportsSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coac
             )}
           />
         ))}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Services — coach-managed add-ons
+// ---------------------------------------------------------------------------
+
+const currencyFromCents = (cents: number) => `$${(Math.max(0, Number(cents) || 0) / 100).toFixed(2)}`;
+
+const demoCoachServices: PulseCheckCoachService[] = [
+  {
+    id: 'demo-one-time',
+    coachUserId: DEMO_COACH_ID,
+    teamId: 'demo-team',
+    organizationId: 'demo-org',
+    title: 'One-on-one video check-in',
+    description: 'A focused video session for posing, prep questions, or a week-of-show reset.',
+    serviceType: 'one_time',
+    priceCents: 5000,
+    currency: 'usd',
+    status: 'active',
+  },
+  {
+    id: 'demo-subscription',
+    coachUserId: DEMO_COACH_ID,
+    teamId: 'demo-team',
+    organizationId: 'demo-org',
+    title: 'Monthly posing support',
+    description: 'Ongoing paid support with details shown after the athlete purchases.',
+    serviceType: 'subscription',
+    priceCents: 9900,
+    currency: 'usd',
+    status: 'inactive',
+  },
+];
+
+const CoachServicesSection: React.FC<{
+  coachId: string;
+  teamId: string;
+  organizationId: string;
+  isDemo?: boolean;
+}> = ({ coachId, teamId, organizationId, isDemo }) => {
+  const dispatch = useDispatch();
+  const [services, setServices] = useState<PulseCheckCoachService[]>(isDemo ? demoCoachServices : []);
+  const [loading, setLoading] = useState(!isDemo);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    serviceType: 'one_time' as PulseCheckCoachServiceType,
+    price: '',
+  });
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ title: '', description: '', serviceType: 'one_time', price: '' });
+  };
+
+  const loadServices = useCallback(async () => {
+    if (isDemo) {
+      setServices(demoCoachServices);
+      setLoading(false);
+      return;
+    }
+    if (!coachId) return;
+    setLoading(true);
+    try {
+      setServices(await pulseCheckCoachServices.listForCoach(coachId));
+    } catch (error) {
+      console.error('[CoachDashboard] failed to load services', error);
+      dispatch(showToast({ message: 'Could not load services. Please refresh and try again.', type: 'error' }));
+    } finally {
+      setLoading(false);
+    }
+  }, [coachId, dispatch, isDemo]);
+
+  useEffect(() => {
+    void loadServices();
+  }, [loadServices]);
+
+  const formPriceCents = Math.round((Number.parseFloat(form.price) || 0) * 100);
+  const feePreview = calculatePulseCheckServiceFees(formPriceCents);
+
+  const startEdit = (service: PulseCheckCoachService) => {
+    setEditingId(service.id);
+    setForm({
+      title: service.title,
+      description: service.description,
+      serviceType: service.serviceType,
+      price: (service.priceCents / 100).toFixed(2),
+    });
+  };
+
+  const saveService = async () => {
+    if (saving) return;
+    const title = form.title.trim();
+    const priceCents = Math.round((Number.parseFloat(form.price) || 0) * 100);
+    if (!title || priceCents < 50) {
+      dispatch(showToast({ message: 'Add a title and a price of at least $0.50.', type: 'error' }));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        coachUserId: coachId,
+        teamId,
+        organizationId,
+        title,
+        description: form.description.trim(),
+        serviceType: form.serviceType,
+        priceCents,
+        currency: 'usd',
+        status: 'active' as const,
+      };
+      if (isDemo) {
+        if (editingId) {
+          setServices((current) =>
+            current.map((service) => (service.id === editingId ? { ...service, ...payload } : service))
+          );
+        } else {
+          setServices((current) => [{ ...payload, id: `demo-${Date.now()}` }, ...current]);
+        }
+      } else if (editingId) {
+        await pulseCheckCoachServices.update(editingId, payload);
+        await loadServices();
+      } else {
+        await pulseCheckCoachServices.create(payload);
+        await loadServices();
+      }
+      resetForm();
+      dispatch(showToast({ message: editingId ? 'Service updated.' : 'Service added.', type: 'success' }));
+    } catch (error) {
+      console.error('[CoachDashboard] failed to save service', error);
+      dispatch(showToast({ message: 'Could not save this service. Please try again.', type: 'error' }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleStatus = async (service: PulseCheckCoachService) => {
+    const nextStatus = service.status === 'active' ? 'inactive' : 'active';
+    if (isDemo) {
+      setServices((current) =>
+        current.map((item) => (item.id === service.id ? { ...item, status: nextStatus } : item))
+      );
+      return;
+    }
+    try {
+      await pulseCheckCoachServices.update(service.id, { status: nextStatus });
+      await loadServices();
+    } catch (error) {
+      console.error('[CoachDashboard] failed to update service status', error);
+      dispatch(showToast({ message: 'Could not update service status.', type: 'error' }));
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-400/8 to-[#E0FE10]/5 p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-8 h-8 rounded-lg bg-cyan-400/15 flex items-center justify-center">
+            <ClipboardList className="w-4 h-4 text-cyan-200" />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-white">Additional Services</div>
+            <div className="text-xs text-zinc-500">Create one-time booked sessions or ongoing paid services</div>
+          </div>
+        </div>
+        <p className="text-sm text-zinc-300 leading-relaxed">
+          Set the coach price you want to keep. Pulse adds the processing fee on top for the athlete so the listed service price stays intact for the coach payout.
+        </p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/55 p-4">
+          <div className="mb-4">
+            <div className="text-sm font-semibold text-white">{editingId ? 'Edit service' : 'Add a service'}</div>
+            <div className="mt-1 text-xs text-zinc-500">
+              One-time services trigger the booking flow after payment. Subscription services show service details after purchase.
+            </div>
+          </div>
+          <div className="space-y-3">
+            <label className="block text-xs font-medium text-zinc-400">
+              Service name
+              <input
+                value={form.title}
+                onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Example: One-on-one posing review"
+                className="mt-1.5 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+              />
+            </label>
+            <label className="block text-xs font-medium text-zinc-400">
+              Details
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                placeholder="What the athlete gets, how to prepare, and what happens next."
+                rows={4}
+                className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300/60"
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium text-zinc-400">
+                Type
+                <select
+                  value={form.serviceType}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      serviceType: event.target.value as PulseCheckCoachServiceType,
+                    }))
+                  }
+                  className="mt-1.5 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                >
+                  <option value="one_time">One-time booked service</option>
+                  <option value="subscription">Ongoing subscription service</option>
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-zinc-400">
+                Coach price
+                <input
+                  value={form.price}
+                  onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))}
+                  placeholder="50.00"
+                  inputMode="decimal"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
+                />
+              </label>
+            </div>
+            <div className="rounded-lg border border-white/5 bg-black/25 p-3">
+              <div className="grid gap-2 text-xs sm:grid-cols-3">
+                <div className="text-zinc-500">Coach keeps <span className="block text-sm font-bold text-white">{currencyFromCents(feePreview.coachPriceCents)}</span></div>
+                <div className="text-zinc-500">Processing added <span className="block text-sm font-bold text-cyan-200">{currencyFromCents(feePreview.processingFeeCents)}</span></div>
+                <div className="text-zinc-500">Athlete pays <span className="block text-sm font-bold text-[#E0FE10]">{currencyFromCents(feePreview.totalCents)}</span></div>
+              </div>
+              <div className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+                Processing is estimated from Stripe card fees plus the 3% Pulse platform fee used by the paid training plan flow.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void saveService()}
+                disabled={saving}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-[#E0FE10] px-4 text-sm font-bold text-black transition hover:bg-[#ccef0e] disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : editingId ? 'Save changes' : 'Add service'}
+              </button>
+              {editingId ? (
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="h-10 rounded-lg border border-zinc-700 px-4 text-sm font-semibold text-zinc-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-700/40 bg-zinc-900/55 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white">Service catalog</div>
+              <div className="mt-1 text-xs text-zinc-500">Active services can appear in athlete purchase flows.</div>
+            </div>
+            {!isDemo ? (
+              <button
+                type="button"
+                onClick={() => void loadServices()}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh
+              </button>
+            ) : null}
+          </div>
+
+          {loading ? (
+            <LoadingBlock label="Loading services..." />
+          ) : services.length === 0 ? (
+            <EmptyBlock
+              icon={ClipboardList}
+              title="No services yet"
+              body="Add the coach's first service, set the price, and Pulse will handle the processing-fee preview."
+            />
+          ) : (
+            <div className="space-y-3">
+              {services.map((service) => {
+                const fees = calculatePulseCheckServiceFees(service.priceCents);
+                return (
+                  <div key={service.id} className="rounded-xl border border-zinc-700/35 bg-black/20 p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate text-sm font-semibold text-white">{service.title}</div>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                            service.status === 'active'
+                              ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
+                              : 'border-zinc-600 bg-zinc-800 text-zinc-400'
+                          }`}>
+                            {service.status === 'active' ? 'Active' : 'Inactive'}
+                          </span>
+                          <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200">
+                            {service.serviceType === 'subscription' ? 'Subscription' : 'One-time booking'}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {service.description || 'No details added yet.'}
+                        </div>
+                        <div className="mt-2 text-[11px] text-zinc-500">
+                          Coach keeps <span className="text-white">{currencyFromCents(fees.coachPriceCents)}</span>
+                          {' · '}athlete pays <span className="text-[#E0FE10]">{currencyFromCents(fees.totalCents)}</span>
+                          {' · '}processing <span className="text-cyan-200">{currencyFromCents(fees.processingFeeCents)}</span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(service)}
+                          className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void toggleStatus(service)}
+                          className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white"
+                        >
+                          {service.status === 'active' ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 const Stripe = require('stripe');
 const { admin, headers, isDevMode, getFirebaseAdminApp } = require('./config/firebase');
 const {
-  getService,
+  loadService,
   loadConversationForAthlete,
   normalizeString,
   orderRef,
-  platformFeeCents,
   resolveCoachStripeAccount,
+  servicePricingBreakdown,
   verifyFirebaseUser,
 } = require('./lib/pulsecheck-coach-services');
 
@@ -56,12 +56,6 @@ const handler = async (event) => {
     const database = getFirebaseAdminApp(event).firestore();
     const { userId: athleteUserId, decoded } = await verifyFirebaseUser(event);
     const body = JSON.parse(event.body || '{}');
-    const service = getService(body.serviceId);
-    if (!service) {
-      const error = new Error('This coach service is unavailable.');
-      error.statusCode = 400;
-      throw error;
-    }
     if (!validCheckoutId(body.checkoutId)) {
       const error = new Error('A valid checkout id is required.');
       error.statusCode = 400;
@@ -74,6 +68,21 @@ const handler = async (event) => {
       athleteUserId,
       database,
     });
+    const service = await loadService({
+      serviceId: body.serviceId,
+      conversation,
+      database,
+    });
+    if (!service) {
+      const error = new Error('This coach service is unavailable.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (service.serviceType === 'subscription') {
+      const error = new Error('This service is an ongoing subscription and must be purchased through subscription checkout.');
+      error.statusCode = 400;
+      throw error;
+    }
     const connectedAccountId = await resolveCoachStripeAccount(
       conversation.coachUserId,
       database
@@ -116,14 +125,16 @@ const handler = async (event) => {
             paymentIntentId: paymentIntent.id,
             clientSecret: paymentIntent.client_secret,
             publishableKey,
-            amountCents: service.amountCents,
+            amountCents: existing.totalAmountCents || existing.amountCents || service.amountCents,
+            coachPriceCents: existing.coachPriceCents || existing.amountCents || service.amountCents,
+            processingFeeCents: existing.processingFeeCents || 0,
             currency: service.currency,
           }),
         };
       }
     }
 
-    const platformFee = platformFeeCents(service.amountCents);
+    const pricing = servicePricingBreakdown(service.amountCents);
     await ref.set({
       orderId: checkoutId,
       conversationId: conversation.id,
@@ -138,9 +149,13 @@ const handler = async (event) => {
       connectedAccountId,
       serviceId: service.id,
       serviceTitle: service.title,
-      amountCents: service.amountCents,
-      platformFeeCents: platformFee,
-      coachNetCents: service.amountCents - platformFee,
+      serviceType: service.serviceType,
+      amountCents: pricing.totalAmountCents,
+      coachPriceCents: pricing.coachPriceCents,
+      processingFeeCents: pricing.processingFeeCents,
+      platformFeeCents: pricing.platformFeeCents,
+      estimatedStripeFeeCents: pricing.estimatedStripeFeeCents,
+      coachNetCents: pricing.coachNetCents,
       currency: service.currency,
       status: 'payment_pending',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -150,10 +165,10 @@ const handler = async (event) => {
     let paymentIntent;
     try {
       paymentIntent = await stripe.paymentIntents.create({
-        amount: service.amountCents,
+        amount: pricing.totalAmountCents,
         currency: service.currency,
         payment_method_types: ['card'],
-        application_fee_amount: platformFee,
+        application_fee_amount: pricing.processingFeeCents,
         transfer_data: { destination: connectedAccountId },
         receipt_email: normalizeString(decoded.email) || undefined,
         description: `${service.title} with ${normalizeString(conversation.data.coachName) || 'coach'}`,
@@ -167,8 +182,10 @@ const handler = async (event) => {
           service_title: service.title,
           athlete_user_id: athleteUserId,
           coach_user_id: conversation.coachUserId,
-          amount_cents: String(service.amountCents),
-          platform_fee_cents: String(platformFee),
+          amount_cents: String(pricing.totalAmountCents),
+          coach_price_cents: String(pricing.coachPriceCents),
+          processing_fee_cents: String(pricing.processingFeeCents),
+          platform_fee_cents: String(pricing.platformFeeCents),
         },
       }, {
         idempotencyKey: `pulsecheck-coach-service:${athleteUserId}:${checkoutId}`,
@@ -197,7 +214,9 @@ const handler = async (event) => {
         paymentIntentId: paymentIntent.id,
         clientSecret: paymentIntent.client_secret,
         publishableKey,
-        amountCents: service.amountCents,
+        amountCents: pricing.totalAmountCents,
+        coachPriceCents: pricing.coachPriceCents,
+        processingFeeCents: pricing.processingFeeCents,
         currency: service.currency,
       }),
     };
