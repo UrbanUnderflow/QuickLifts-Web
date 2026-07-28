@@ -1,0 +1,36 @@
+{"kind":"deck","id":"pr/a2ctan","name":"Deck"}
+{"kind":"layout","layoutId":"8bf23472-10c6-4533-8a3b-a8c1d51f72bf","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"528a37d4-57fd-462e-acd1-ddb366132e27","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/w0aboq","slide":1,"title":"GO-TO-MARKET","textShapes":21}
+{"kind":"shape","id":"sh/a9cnmd8f","slide":1,"name":"section-pill","bbox":[62,42,230,40]}
+{"kind":"shape","id":"sh/xc3mhsr6","slide":1,"name":"section-dot","bbox":[80,57,8,8]}
+{"kind":"textbox","id":"sh/wbu5onql","slide":1,"name":"section-label","text":"GO-TO-MARKET","textPreview":"GO-TO-MARKET","textChars":12,"textLines":1,"bbox":[102,51,165,22]}
+{"kind":"shape","id":"sh/n614bi9o","slide":1,"name":"icp-patch","bbox":[1001,36,226,79]}
+{"kind":"textbox","id":"sh/mlsnid8j","slide":1,"name":"icp-kicker","text":"BEACHHEAD ICP","textPreview":"BEACHHEAD ICP","textChars":13,"textLines":1,"bbox":[1020,48,188,18]}
+{"kind":"textbox","id":"sh/983mdsru","slide":1,"name":"icp-title","text":"ATHLETIC DIRECTORS","textPreview":"ATHLETIC DIRECTORS","textChars":18,"textLines":1,"bbox":[1014,67,200,22]}
+{"kind":"textbox","id":"sh/o7u5knq9","slide":1,"name":"icp-scope","text":"NCAA  •  NAIA  •  NJCAA","textPreview":"NCAA  •  NAIA  •  NJCAA","textChars":23,"textLines":1,"bbox":[1022,93,184,13]}
+{"kind":"textbox","id":"sh/zi147y9s","slide":1,"name":"headline","text":"Expand across the ecosystem.","textPreview":"Expand across the ecosystem.","textChars":28,"textLines":1,"bbox":[62,112,870,61]}
+{"kind":"shape","id":"sh/ehs3et87","slide":1,"name":"ecosystem-outer","bbox":[43,166,530,510]}
+{"kind":"shape","id":"sh/wb6pojut","slide":1,"name":"ecosystem-youth","bbox":[99,252,418,414]}
+{"kind":"shape","id":"sh/hcf6hobe","slide":1,"name":"ecosystem-college","bbox":[164,330,288,286]}
+{"kind":"shape","id":"sh/u9onm9c3","slide":1,"name":"ecosystem-ncaa","bbox":[244,427,128,128]}
+{"kind":"textbox","id":"sh/vaxofeto","slide":1,"name":"outer-label","text":"FULL INSTITUTIONAL ECOSYSTEM","textPreview":"FULL INSTITUTIONAL ECOSYSTEM","textChars":28,"textLines":1,"bbox":[143,207,329,23]}
+{"kind":"textbox","id":"sh/8nm5kzux","slide":1,"name":"outer-sub","text":"SPORTS  •  EDUCATION  •  WORKFORCE","textPreview":"SPORTS  •  EDUCATION  •  WORKFORCE","textChars":34,"textLines":1,"bbox":[148,232,319,18]}
+{"kind":"textbox","id":"sh/9ov6d4bi","slide":1,"name":"youth-label","text":"YOUTH + AMATEUR ATHLETICS","textPreview":"YOUTH + AMATEUR ATHLETICS","textChars":25,"textLines":1,"bbox":[154,289,310,22]}
+{"kind":"textbox","id":"sh/ml4ni9cr","slide":1,"name":"college-label","text":"COLLEGE ATHLETICS","textPreview":"COLLEGE ATHLETICS","textChars":17,"textLines":1,"bbox":[207,376,202,22]}
+{"kind":"textbox","id":"sh/7mdobetc","slide":1,"name":"ncaa-label","text":"NCAA","textPreview":"NCAA","textChars":4,"textLines":1,"bbox":[261,472,94,34]}
+{"kind":"shape","id":"sh/sjqpw3u1","slide":1,"name":"vertical-divider","bbox":[625,231,0,417]}
+{"kind":"textbox","id":"sh/tkz6p8bm","slide":1,"name":"engine-heading","text":"Three acquisition engines","textPreview":"Three acquisition engines","textChars":25,"textLines":1,"bbox":[671,243,490,41]}
+{"kind":"textbox","id":"sh/1obyt4zu","slide":1,"name":"engine-1-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[671,329,55,38]}
+{"kind":"textbox","id":"sh/gn2xkzi9","slide":1,"name":"engine-1-headline","text":"Athletic Mind Council + Network","textPreview":"Athletic Mind Council + Network","textChars":31,"textLines":1,"bbox":[747,330,436,31]}
+{"kind":"textbox","id":"sh/fmtwruho","slide":1,"name":"engine-1-body","text":"Olympic gold medalists, former professional athletes, clinicians, coaches and sport-governing-body leaders create warm access and credibility.","textPreview":"Olympic gold medalists, former professional athletes, clinicians, coaches and sport-governing-body leaders create warm access and credibi...","textChars":142,"textLines":1,"bbox":[747,367,436,48]}
+{"kind":"shape","id":"sh/elkfip03","slide":1,"name":"engine-rule-1","bbox":[671,426,512,0]}
+{"kind":"textbox","id":"sh/tkbep4zi","slide":1,"name":"engine-2-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[671,450,55,38]}
+{"kind":"textbox","id":"sh/sj2xgzix","slide":1,"name":"engine-2-headline","text":"Athletic Director Conferences","textPreview":"Athletic Director Conferences","textChars":29,"textLines":1,"bbox":[747,451,436,31]}
+{"kind":"textbox","id":"sh/ritwnuhc","slide":1,"name":"engine-2-body","text":"NACDA & Affiliates Convention  •  NCAA Convention\nNIAAA/NFHS National Athletic Directors Conference","textPreview":"NACDA & Affiliates Convention  •  NCAA Convention | NIAAA/NFHS National Athletic Directors Conference","textChars":99,"textLines":2,"bbox":[747,488,436,43]}
+{"kind":"shape","id":"sh/6x0fep07","slide":1,"name":"engine-rule-2","bbox":[671,547,512,0]}
+{"kind":"textbox","id":"sh/5wrelkzm","slide":1,"name":"engine-3-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[671,569,55,38]}
+{"kind":"textbox","id":"sh/4vixcfi1","slide":1,"name":"engine-3-headline","text":"Elite Youth Sporting Events","textPreview":"Elite Youth Sporting Events","textChars":27,"textLines":1,"bbox":[747,570,436,31]}
+{"kind":"textbox","id":"sh/u1gvmlgz","slide":1,"name":"engine-3-body","text":"AAU National Championships  •  Junior Olympic Games  •  Nike EYBL Peach Jam\nUSA Volleyball Junior Nationals  •  US Youth Soccer National Championships  •  New Balance Nationals","textPreview":"AAU National Championships  •  Junior Olympic Games  •  Nike EYBL Peach Jam | USA Volleyball Junior Nationals  •  US Youth Soccer Nationa...","textChars":176,"textLines":2,"bbox":[747,607,436,55]}
+{"kind":"textbox","id":"sh/v2pcvqx4","slide":1,"name":"market-entry-footer","text":"LAND IN COLLEGE  •  PROVE OUTCOMES  •  EXPAND INTO YOUTH  •  SCALE ACROSS THE ECOSYSTEM","textPreview":"LAND IN COLLEGE  •  PROVE OUTCOMES  •  EXPAND INTO YOUTH  •  SCALE ACROSS THE ECOSYSTEM","textChars":87,"textLines":1,"bbox":[319,688,904,18]}
+{"kind":"notes","id":"nt/w0aboq","slide":1,"text":"PulseCheck's beachhead ideal customer profile is the athletic director: the executive buyer responsible for athlete health, performance, compliance and departmental budgets. The company lands inside college athletics, proves measurable outcomes, expands into youth and amateur athletics, and ultimately scales across the broader institutional ecosystem.\n\n[Sources]\n- User-provided GTM slide and positioning.\n- https://nacda.com/sports/2018/7/17/nacda-events-html.aspx\n- https://www.ncaa.org/convention/\n- https://niaaa.org/conferences\n- https://aausports.org/junior-olympic-games/future-dates/\n- https://nikeeyb.com/\n- https://usavolleyball.org/story/usa-volleyball-brings-premier-junior-event-to-indianapolis-in-2026/\n- https://www.usyouthsoccer.org/national-championships/\n- https://nbnationalsout.com/\n[/Sources]"}

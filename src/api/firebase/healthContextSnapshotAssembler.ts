@@ -224,6 +224,84 @@ const scrubZeroMeansMissing = (payload: Record<string, unknown>): Record<string,
   return result;
 };
 
+const SLEEP_SCORE_FIELDS = ['sleepScore', 'sleep_score', 'sleepQualityScore', 'sleepEfficiency'];
+const SLEEP_FIELD_SOURCE_KEYS = [
+  'sleepDuration',
+  'sleepDurationHours',
+  'totalSleepHours',
+  'totalSleepMin',
+  'totalSleepMinutes',
+  'timeInBed',
+  'timeInBedHours',
+  'sleepEfficiency',
+  'sleepScore',
+  'sleep_score',
+  'sleepQualityScore',
+  'deepSleepDuration',
+  'remSleepDuration',
+  'lightSleepDuration',
+  'sleepMidpoint',
+];
+
+const finiteNumber = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+const firstFiniteNumber = (payload: Record<string, unknown>, fields: string[]): number | null => {
+  for (const field of fields) {
+    const value = finiteNumber(payload[field]);
+    if (value !== null && value > 0) return value;
+  }
+  return null;
+};
+
+const sleepDurationHours = (payload: Record<string, unknown>): number | null => {
+  const direct = firstFiniteNumber(payload, ['sleepDuration', 'sleepDurationHours', 'totalSleepHours']);
+  if (direct !== null) return direct;
+  const minutes = firstFiniteNumber(payload, ['totalSleepMin', 'totalSleepMinutes', 'sleepDurationMinutes']);
+  return minutes !== null ? minutes / 60 : null;
+};
+
+const sleepRecordRank = (record: HealthContextSourceRecord): [number, number, number] | null => {
+  const payload = scrubZeroMeansMissing(record.payload as Record<string, unknown>);
+  const duration = sleepDurationHours(payload);
+  const score = firstFiniteNumber(payload, SLEEP_SCORE_FIELDS);
+  if (duration === null && score === null) return null;
+
+  // A 35-minute "sleep" from a device not worn all night should never beat
+  // a real sleep window from another device. Once both windows are plausible,
+  // prefer the better vendor sleep score, then duration, then recency.
+  const plausibility = duration === null ? 0 : (duration >= 2 ? 2 : 1);
+  return [
+    plausibility,
+    score ?? -1,
+    duration ?? -1,
+  ];
+};
+
+const compareSleepRecordRank = (left: [number, number, number], right: [number, number, number]): number => {
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+};
+
+const bestSleepRecord = (records: HealthContextSourceRecord[]): HealthContextSourceRecord | null => {
+  let winner: HealthContextSourceRecord | null = null;
+  let winnerRank: [number, number, number] | null = null;
+
+  for (const record of records) {
+    const rank = sleepRecordRank(record);
+    if (!rank) continue;
+    if (!winner || !winnerRank || compareSleepRecordRank(rank, winnerRank) > 0
+        || (compareSleepRecordRank(rank, winnerRank) === 0 && record.observedAt > winner.observedAt)) {
+      winner = record;
+      winnerRank = rank;
+    }
+  }
+
+  return winner;
+};
+
 const buildDomainBlock = <T extends Record<string, unknown>>(
   domain: HealthContextDomain,
   records: HealthContextSourceRecord[],
@@ -278,6 +356,34 @@ const buildDomainBlock = <T extends Record<string, unknown>>(
         notes.push(`[${domain}] field "${key}" filled from "${family}" (winner "${winnerFamily}" had no value).`);
       }
     }
+  }
+
+  const fieldSources: Record<string, SnapshotSourceId> = {};
+  if (domain === 'recovery') {
+    const sleepWinner = bestSleepRecord(domainRecords);
+    if (sleepWinner) {
+      const sleepPayload = scrubZeroMeansMissing(sleepWinner.payload as Record<string, unknown>);
+      const sleepWinnerSource = familyToSnapshotSource(sleepWinner.sourceFamily);
+      for (const key of SLEEP_FIELD_SOURCE_KEYS) {
+        const value = sleepPayload[key];
+        if (value !== undefined) {
+          mergedPayload[key] = value;
+          fieldSources[key] = sleepWinnerSource;
+        }
+      }
+      if (sleepWinner.sourceFamily !== winnerFamily) {
+        notes.push(
+          `[${domain}] sleep fields selected from "${sleepWinner.sourceFamily}" instead of domain winner "${winnerFamily}" based on sleep score/duration quality.`,
+        );
+      }
+    }
+  }
+
+  if (Object.keys(fieldSources).length > 0) {
+    mergedPayload.fieldSources = {
+      ...((mergedPayload.fieldSources as Record<string, SnapshotSourceId> | undefined) || {}),
+      ...fieldSources,
+    };
   }
 
   const observationTimes: Partial<Record<SnapshotSourceId, string>> = {};

@@ -1,0 +1,24 @@
+Communication job: By the end of the slide, investors should understand that PulseCheck is not another isolated wellness app. It is the sport-specific mental-performance layer connecting physiological readiness, daily mental skills, and licensed-care escalation—and it can enter campuses alongside tools already under contract.
+
+Official sources:
+- TimelyCare home page: https://timelycare.com/
+  Used for TimelyCare's nearly 500 college and university footprint, 24/7 support, counseling/psychiatry and licensed-care positioning.
+- WHOOP Strain: https://support.whoop.com/s/article/WHOOP-Strain
+  Used for physiological strain, cardiovascular/muscular load, and recovery positioning.
+- WHOOP Recovery: https://support.whoop.com/s/article/WHOOP-Recovery
+  Used for daily physiological readiness and recovery positioning.
+- WHOOP + Howard University Athletics: https://www.whoop.com/us/en/press-center/official-performance-partner-howard-university-athletics/
+  Used to verify WHOOP's existing collegiate-athletics footprint.
+- Calm breathing exercises: https://support.calm.com/hc/en-us/articles/360000069973-Breathing-Exercises
+  Used for breathing, focus and relaxation positioning.
+- Calm app overview: https://support.calm.com/hc/en-us/articles/35795753391003-Available-Calm-Apps
+  Used for meditation, sleep and mindfulness positioning.
+
+Claims intentionally avoided:
+- Did not state that "most schools" use TimelyCare; TimelyCare reports nearly 500 colleges and universities.
+- Did not state that schools are broadly unhappy with TimelyCare or that athletes do not use it because no reliable source was provided.
+- Did not state that WHOOP cannot distinguish activity types; WHOOP does log activities. The competitive gap is framed as lack of sport-specific mental-performance training.
+
+Visual direction:
+- Custom one-slide investor-deck visual matching the user's supplied reference: near-black background, Arial, oversized white/neon headline, neon lime for PulseCheck, blue/violet/orange competitor competencies, transparent Venn circles, subtle rounded callout surfaces.
+- No external visual assets used.

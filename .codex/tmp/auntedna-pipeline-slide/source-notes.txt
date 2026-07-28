@@ -1,0 +1,28 @@
+Slide 1 — AuntEDNA.ai clinical + GTM pathway
+
+Public sources
+- https://www.uri.edu/magazine/issues/spring-2023/ensuring-student-athlete-success-on-and-beyond-the-field/
+  Tracey Hathaway’s Division I basketball background at URI and two decades in coaching and athletics administration.
+- https://www.ncaa.org/news/2022/11/22/media-center-arise-program-opening-new-doors-ideas-for-hbcu-student-athletes.aspx
+  NCAA relationship, ARISE program, and Tracey’s playing, coaching, and athletic-director background.
+- https://rwuhawks.com/sports/womens-basketball/roster/coaches/tracey-hathaway/36
+  Tracey’s URI point-guard and women’s basketball coaching experience.
+- https://auntedna.ai/about-us-2/
+  AuntEDNA founder biographies; NCAA/ARISE relationship; Alfreeda Goff Foundation naming; NSF Phase I research; 1,000+ HBCU student-athlete pilot.
+- https://hamptonpirates.com/news/2025/9/11/general-hampton-university-athletics-joins-with-athleda-org-for-student-athlete-programming.aspx
+  The Alfreeda Goff Foundation, formerly athLEDA; NCAA partnership beginning in 2020; 1,300 athletes reached in 2025; Hampton, UMES, Claflin and Clark Atlanta relationships.
+- https://www.linkedin.com/in/jelanna-salas-olivera-she-ella-316a0521
+  Jelanna’s EY, KPMG, Eli Lilly, transformation and healthcare experience.
+- https://www.linkedin.com/posts/auntedna-ai_mentalhealthtech-responsibleai-collegeathletes-activity-7336391390999781377-RZ0e
+  Public description of approximately $275K in NSF non-dilutive support.
+
+Company-provided information
+- 80% adherence evidence across 1,000+ student-athletes.
+- Jelanna’s former cheerleading background.
+- PulseCheck inclusion in Phase II preparation with a $1.4M proposal target for commercialization, pilot subsidy and integrations.
+
+Design assets
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/investor/july-2026/hero-basketball-huddle.png
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/dr-tracey-basketball.jpeg
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/dr-tracey.png
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/jelanna.jpg

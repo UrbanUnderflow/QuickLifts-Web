@@ -1,0 +1,13 @@
+[Sources]
+- User-provided portrait: /Users/tremainegrant/Downloads/1668718172755.jpeg
+- User-provided biographical information for Will Watkins.
+- https://www.linkedin.com/in/will-watkins-78238127
+- https://myemail.constantcontact.com/CAU-Alumni-Newsletter-Issue-7-April-2025.html?aid=2YpslLU8Fck&soid=1139227680712
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/investor/july-2026/hero-basketball-huddle.png
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/tre.jpg
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/bobbyAdvisor.jpg
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/lola.jpg
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/zak.jpg
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/Val.jpg
+- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/ErikEdwards.png
+[/Sources]

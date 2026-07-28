@@ -1,0 +1,11 @@
+[Sources]
+- User-provided GTM slide and positioning.
+- https://nacda.com/sports/2018/7/17/nacda-events-html.aspx
+- https://www.ncaa.org/convention/
+- https://niaaa.org/conferences
+- https://aausports.org/junior-olympic-games/future-dates/
+- https://nikeeyb.com/
+- https://usavolleyball.org/story/usa-volleyball-brings-premier-junior-event-to-indianapolis-in-2026/
+- https://www.usyouthsoccer.org/national-championships/
+- https://nbnationalsout.com/
+[/Sources]

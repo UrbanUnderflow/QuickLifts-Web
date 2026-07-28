@@ -123,6 +123,36 @@ test('assembler — Polar + Oura on recovery domain → Polar wins sleep/recover
   assert.equal(result.snapshot.domains.recovery!.data.sleepEfficiency, 0.93);
 });
 
+test('assembler — valid WHOOP sleep beats a short Oura fragment for sleep fields', async () => {
+  const mod = await loadAssembler();
+  const ouraRecord = buildRecord({
+    id: 'rec-oura-recovery',
+    payload: { sleepDuration: 35 / 60, sleepEfficiency: 68, respiratoryRate: 16 },
+  });
+  const whoopRecord = buildRecord({
+    id: 'rec-whoop-recovery',
+    sourceFamily: 'whoop',
+    sourceType: 'pulsecheck_whoop_recovery',
+    payload: { sleepDuration: 6.2, sleepEfficiency: 86 },
+    sourceMetadata: { syncOrigin: 'pulsecheck_whoop_refresh', writer: 'whoop-sync.js' },
+    provenance: { mode: 'direct', sourceSystem: 'whoop_api', confidenceLabel: 'stable' },
+    dedupeKey: 'athlete-1|whoop|recovery|2026-04-25',
+  });
+
+  const result = await mod.assembleAthleteContextSnapshot({
+    ...baseInput,
+    records: [ouraRecord, whoopRecord],
+  });
+
+  const recovery = result.snapshot.domains.recovery!.data as Record<string, any>;
+  assert.equal(recovery.sleepDuration, 6.2);
+  assert.equal(recovery.sleepEfficiency, 86);
+  assert.equal(recovery.respiratoryRate, 16);
+  assert.equal(recovery.fieldSources.sleepDuration, 'whoop');
+  assert.equal(recovery.fieldSources.sleepEfficiency, 'whoop');
+  assert.equal(result.snapshot.provenance.domainWinners.recovery, 'whoop');
+});
+
 test('assembler — self-report-only on recovery domain caps confidence at emerging', async () => {
   const mod = await loadAssembler();
   const selfReportRecord = buildRecord({

@@ -1,0 +1,2316 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/5x4ohc",
+    "id": "5x4ohc",
+    "slide": 1,
+    "layoutId": "88a97a3c-8751-4949-b988-b2de69e67ccb",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "3fc2e47e-d7d6-4427-839b-2220e84f43ed",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#080A0C",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "88a97a3c-8751-4949-b988-b2de69e67ccb",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "3fc2e47e-d7d6-4427-839b-2220e84f43ed",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "3fc2e47e-d7d6-4427-839b-2220e84f43ed",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9kbutcrm",
+      "id": "1",
+      "name": "section-pill",
+      "bbox": [
+        56,
+        34,
+        245,
+        39
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mhkvyhsv",
+      "id": "2",
+      "name": "section-dot",
+      "bbox": [
+        74,
+        49,
+        8,
+        8
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#FF9C38",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nitcrm9g",
+      "id": "3",
+      "name": "section-label",
+      "bbox": [
+        98,
+        43,
+        170,
+        20
+      ],
+      "geometry": "rect",
+      "text": "COUNCIL OPERATORS",
+      "textPreview": "COUNCIL OPERATORS",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "COUNCIL OPERATORS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "COUNCIL OPERATORS",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "COUNCIL OPERATORS",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wnmd4rqx",
+      "id": "4",
+      "name": "headline",
+      "bbox": [
+        56,
+        100,
+        1110,
+        48
+      ],
+      "geometry": "rect",
+      "text": "The council brings reach, implementation, and clinical depth.",
+      "textPreview": "The council brings reach, implementation, and clinical depth.",
+      "resolvedFontSize": 36,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 36,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The council brings reach, implementation, and clinical depth."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The council brings reach, implementation, and clinical depth.",
+          "resolvedTextStyle": {
+            "fontSize": 36,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The council brings reach, implementation, and clinical depth.",
+              "fontSize": 36,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xovuxwri",
+      "id": "5",
+      "name": "subtitle",
+      "bbox": [
+        56,
+        165,
+        1140,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Operators connect communications, youth sport, technology, sports medicine, campus care, and HBCU networks to accelerate adoption.",
+      "textPreview": "Operators connect communications, youth sport, technology, sports medicine, campus care, and HBCU networks to accelerate adoption.",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Operators connect communications, youth sport, technology, sports medicine, campus care, and HBCU networks to accelerate adoption."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Operators connect communications, youth sport, technology, sports medicine, campus care, and HBCU networks to accelerate adoption.",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Operators connect communications, youth sport, technology, sports medicine, campus care, and HBCU networks to accelerate adoption.",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/al4v2hs7",
+      "id": "6",
+      "name": "operator-1-card",
+      "bbox": [
+        56,
+        225,
+        368,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 25, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 7,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/edsbix8r",
+      "id": "7",
+      "bbox": [
+        76,
+        250,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Jill Geer portrait",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "a807235e-3cd6-4a9b-bd67-781af1c82717",
+        "contentType": "image/png",
+        "byteLength": 31552
+      }
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/critsnat",
+      "id": "8",
+      "name": "operator-1-name",
+      "bbox": [
+        168,
+        245,
+        236,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Jill Geer",
+      "textPreview": "Jill Geer",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Jill Geer"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Jill Geer",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Jill Geer",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dsrulsre",
+      "id": "9",
+      "name": "operator-1-lane",
+      "bbox": [
+        168,
+        277,
+        236,
+        18
+      ],
+      "geometry": "rect",
+      "text": "COMMUNICATIONS + OLYMPIC MOVEMENT",
+      "textPreview": "COMMUNICATIONS + OLYMPIC MOVEMENT",
+      "resolvedFontSize": 10.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10.51,
+        "typeface": "Arial",
+        "color": "#58D9EC",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "COMMUNICATIONS + OLYMPIC MOVEMENT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "COMMUNICATIONS + OLYMPIC MOVEMENT",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#58D9EC",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "COMMUNICATIONS + OLYMPIC MOVEMENT",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#58D9EC",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/14r6dwvy",
+      "id": "10",
+      "name": "operator-1-bio",
+      "bbox": [
+        168,
+        305,
+        236,
+        64
+      ],
+      "geometry": "rect",
+      "text": "USA Gymnastics Chief Communications & Marketing Officer; nearly 20 years across the Olympic movement.",
+      "textPreview": "USA Gymnastics Chief Communications & Marketing Officer; nearly 20 years across the Olympic movement.",
+      "resolvedFontSize": 13.33,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.83,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "USA Gymnastics Chief"
+          },
+          {
+            "index": 2,
+            "text": "Communications & Marketing Officer;"
+          },
+          {
+            "index": 3,
+            "text": "nearly 20 years across the Olympic"
+          },
+          {
+            "index": 4,
+            "text": "movement."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "USA Gymnastics Chief Communications & Marketing Officer; nearly 20 years across the Olympic movement.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "USA Gymnastics Chief Communications & Marketing Officer; nearly 20 years across the Olympic movement.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/g3ypkred",
+      "id": "11",
+      "name": "operator-1-accent",
+      "bbox": [
+        74,
+        373,
+        332,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#58D9EC",
+      "lineColor": "#58D9EC",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f2pobmds",
+      "id": "12",
+      "name": "operator-2-card",
+      "bbox": [
+        452,
+        225,
+        368,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 25, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 13,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/1gbm9c7e",
+      "id": "13",
+      "bbox": [
+        472,
+        250,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Amber Camp portrait",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "8a713c66-147c-4bb7-9f46-8549850f626f",
+        "contentType": "image/png",
+        "byteLength": 31535
+      }
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/psr6hgvu",
+      "id": "14",
+      "name": "operator-2-name",
+      "bbox": [
+        564,
+        245,
+        236,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Amber Camp",
+      "textPreview": "Amber Camp",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Amber Camp"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Amber Camp",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Amber Camp",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/oripobe9",
+      "id": "15",
+      "name": "operator-2-lane",
+      "bbox": [
+        564,
+        277,
+        236,
+        18
+      ],
+      "geometry": "rect",
+      "text": "YOUTH SPORT + FUNDRAISING",
+      "textPreview": "YOUTH SPORT + FUNDRAISING",
+      "resolvedFontSize": 10.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10.51,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "YOUTH SPORT + FUNDRAISING"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "YOUTH SPORT + FUNDRAISING",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "YOUTH SPORT + FUNDRAISING",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3q9of6do",
+      "id": "16",
+      "name": "operator-2-bio",
+      "bbox": [
+        564,
+        305,
+        236,
+        64
+      ],
+      "geometry": "rect",
+      "text": "Youth basketball coach with school and sports fundraising experience at Snap! Raise.",
+      "textPreview": "Youth basketball coach with school and sports fundraising experience at Snap! Raise.",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Youth basketball coach with"
+          },
+          {
+            "index": 2,
+            "text": "school and sports fundraising"
+          },
+          {
+            "index": 3,
+            "text": "experience at Snap! Raise."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Youth basketball coach with school and sports fundraising experience at Snap! Raise.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Youth basketball coach with school and sports fundraising experience at Snap! Raise.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2507m1wj",
+      "id": "17",
+      "name": "operator-2-accent",
+      "bbox": [
+        470,
+        373,
+        332,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#C8FF00",
+      "lineColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dwbqlgv6",
+      "id": "18",
+      "name": "operator-3-card",
+      "bbox": [
+        848,
+        225,
+        368,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 25, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 19,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/b6d4f6pg",
+      "id": "19",
+      "bbox": [
+        868,
+        250,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Talia Mark portrait",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "9e2a18cd-b1a3-4e32-86b2-6c63261e57b4",
+        "contentType": "image/png",
+        "byteLength": 28834
+      }
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wbah4j6t",
+      "id": "20",
+      "name": "operator-3-name",
+      "bbox": [
+        960,
+        245,
+        236,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Talia Mark",
+      "textPreview": "Talia Mark",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Talia Mark"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Talia Mark",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Talia Mark",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hcjido7e",
+      "id": "21",
+      "name": "operator-3-lane",
+      "bbox": [
+        960,
+        277,
+        236,
+        18
+      ],
+      "geometry": "rect",
+      "text": "SPORT MARKETING + GOVERNING BODIES",
+      "textPreview": "SPORT MARKETING + GOVERNING BODIES",
+      "resolvedFontSize": 10.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10.51,
+        "typeface": "Arial",
+        "color": "#9B72FF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SPORT MARKETING + GOVERNING BODIES"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SPORT MARKETING + GOVERNING BODIES",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#9B72FF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SPORT MARKETING + GOVERNING BODIES",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#9B72FF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u9sz29on",
+      "id": "22",
+      "name": "operator-3-bio",
+      "bbox": [
+        960,
+        305,
+        236,
+        64
+      ],
+      "geometry": "rect",
+      "text": "Former USA Swimming multicultural marketing director and NASCAR diversity affairs manager.",
+      "textPreview": "Former USA Swimming multicultural marketing director and NASCAR diversity affairs manager.",
+      "resolvedFontSize": 15.16,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.95,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Former USA Swimming"
+          },
+          {
+            "index": 2,
+            "text": "multicultural marketing director"
+          },
+          {
+            "index": 3,
+            "text": "and NASCAR diversity affairs"
+          },
+          {
+            "index": 4,
+            "text": "manager."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Former USA Swimming multicultural marketing director and NASCAR diversity affairs manager.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Former USA Swimming multicultural marketing director and NASCAR diversity affairs manager.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/va10bep8",
+      "id": "23",
+      "name": "operator-3-accent",
+      "bbox": [
+        866,
+        373,
+        332,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#9B72FF",
+      "lineColor": "#9B72FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4fu18365",
+      "id": "24",
+      "name": "operator-4-card",
+      "bbox": [
+        56,
+        405,
+        368,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 25, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 25,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/a1wrm9k7",
+      "id": "25",
+      "bbox": [
+        76,
+        430,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Tram Holloway portrait",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "006a5fd1-8372-4f31-b6c8-2d741700c4b4",
+        "contentType": "image/png",
+        "byteLength": 26793
+      }
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/idcj6toz",
+      "id": "26",
+      "name": "operator-4-name",
+      "bbox": [
+        168,
+        425,
+        236,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Tram Holloway",
+      "textPreview": "Tram Holloway",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Tram Holloway"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Tram Holloway",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Tram Holloway",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jel0fypk",
+      "id": "27",
+      "name": "operator-4-lane",
+      "bbox": [
+        168,
+        457,
+        236,
+        18
+      ],
+      "geometry": "rect",
+      "text": "PERFORMANCE TECHNOLOGY + CLINICS",
+      "textPreview": "PERFORMANCE TECHNOLOGY + CLINICS",
+      "resolvedFontSize": 10.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10.51,
+        "typeface": "Arial",
+        "color": "#FF9C38",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PERFORMANCE TECHNOLOGY + CLINICS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PERFORMANCE TECHNOLOGY + CLINICS",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#FF9C38",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PERFORMANCE TECHNOLOGY + CLINICS",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#FF9C38",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kjqhwz6l",
+      "id": "28",
+      "name": "operator-4-bio",
+      "bbox": [
+        168,
+        485,
+        236,
+        64
+      ],
+      "geometry": "rect",
+      "text": "HyperCharge Health CTO with nearly 30 years in human performance, wellness technology, and clinic implementation.",
+      "textPreview": "HyperCharge Health CTO with nearly 30 years in human performance, wellness technology, and clinic implementation.",
+      "resolvedFontSize": 13.33,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.83,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "HyperCharge Health CTO with nearly"
+          },
+          {
+            "index": 2,
+            "text": "30 years in human performance,"
+          },
+          {
+            "index": 3,
+            "text": "wellness technology, and clinic"
+          },
+          {
+            "index": 4,
+            "text": "implementation."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "HyperCharge Health CTO with nearly 30 years in human performance, wellness technology, and clinic implementation.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "HyperCharge Health CTO with nearly 30 years in human performance, wellness technology, and clinic implementation.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lkzi5476",
+      "id": "29",
+      "name": "operator-4-accent",
+      "bbox": [
+        74,
+        553,
+        332,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FF9C38",
+      "lineColor": "#FF9C38",
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ypkb29o",
+      "id": "30",
+      "name": "operator-5-card",
+      "bbox": [
+        452,
+        405,
+        368,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 25, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 31,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/hc7qpoz2",
+      "id": "31",
+      "bbox": [
+        472,
+        430,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Dr. Jeremy Burnham portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "5da01cae-04d9-4f2b-b5d5-cd30f105e971",
+        "contentType": "image/jpeg",
+        "byteLength": 14375
+      }
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p07mdcru",
+      "id": "32",
+      "name": "operator-5-name",
+      "bbox": [
+        564,
+        425,
+        236,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Dr. Jeremy Burnham",
+      "textPreview": "Dr. Jeremy Burnham",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Dr. Jeremy Burnham"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Dr. Jeremy Burnham",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Dr. Jeremy Burnham",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ozyl47q9",
+      "id": "33",
+      "name": "operator-5-lane",
+      "bbox": [
+        564,
+        457,
+        236,
+        18
+      ],
+      "geometry": "rect",
+      "text": "SPORTS MEDICINE + RESEARCH",
+      "textPreview": "SPORTS MEDICINE + RESEARCH",
+      "resolvedFontSize": 10.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10.51,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SPORTS MEDICINE + RESEARCH"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SPORTS MEDICINE + RESEARCH",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SPORTS MEDICINE + RESEARCH",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fa5k729s",
+      "id": "34",
+      "name": "operator-5-bio",
+      "bbox": [
+        564,
+        485,
+        236,
+        64
+      ],
+      "geometry": "rect",
+      "text": "Ochsner Baton Rouge Medical Director of Sports Medicine; dual board-certified surgeon, former LSU football player, and clinical-trials investigator.",
+      "textPreview": "Ochsner Baton Rouge Medical Director of Sports Medicine; dual board-certified surgeon, former LSU football player, and clinical-trials in...",
+      "resolvedFontSize": 13.33,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.83,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Ochsner Baton Rouge Medical Director"
+          },
+          {
+            "index": 2,
+            "text": "of Sports Medicine; dual board-certified"
+          },
+          {
+            "index": 3,
+            "text": "surgeon, former LSU football player,"
+          },
+          {
+            "index": 4,
+            "text": "and clinical-trials investigator."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Ochsner Baton Rouge Medical Director of Sports Medicine; dual board-certified surgeon, former LSU football player, and clinical-trials investigator.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Ochsner Baton Rouge Medical Director of Sports Medicine; dual board-certified surgeon, former LSU football player, and clinical-trials investigator.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e9w3yx87",
+      "id": "35",
+      "name": "operator-5-accent",
+      "bbox": [
+        470,
+        553,
+        332,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#4D8FFF",
+      "lineColor": "#4D8FFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1c729sry",
+      "id": "36",
+      "name": "operator-6-card",
+      "bbox": [
+        848,
+        405,
+        368,
+        158
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 25, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 37,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/7658jeh0",
+      "id": "37",
+      "bbox": [
+        868,
+        430,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Dr. Malkia Johnson portrait",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "303bb1f7-74d4-40a3-889a-7ad3028cd884",
+        "contentType": "image/png",
+        "byteLength": 107531
+      }
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/r65k3i9g",
+      "id": "38",
+      "name": "operator-6-name",
+      "bbox": [
+        960,
+        425,
+        236,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Dr. Malkia Johnson",
+      "textPreview": "Dr. Malkia Johnson",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Dr. Malkia Johnson"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Dr. Malkia Johnson",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Dr. Malkia Johnson",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/65w3ud8v",
+      "id": "39",
+      "name": "operator-6-lane",
+      "bbox": [
+        960,
+        457,
+        236,
+        18
+      ],
+      "geometry": "rect",
+      "text": "CAMPUS MENTAL HEALTH + CLINICAL WORKFLOW",
+      "textPreview": "CAMPUS MENTAL HEALTH + CLINICAL WORKFLOW",
+      "resolvedFontSize": 9.34,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 10.51,
+        "typeface": "Arial",
+        "color": "#F65AAF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.89,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CAMPUS MENTAL HEALTH + CLINICAL WORKFLOW"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CAMPUS MENTAL HEALTH + CLINICAL WORKFLOW",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#F65AAF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CAMPUS MENTAL HEALTH + CLINICAL WORKFLOW",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#F65AAF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6dg7el4v",
+      "id": "40",
+      "name": "operator-6-bio",
+      "bbox": [
+        960,
+        485,
+        236,
+        64
+      ],
+      "geometry": "rect",
+      "text": "UMES Counseling Services Director and East Coast lead for AuntEDNA’s Clinical Directors Council.",
+      "textPreview": "UMES Counseling Services Director and East Coast lead for AuntEDNA’s Clinical Directors Council.",
+      "resolvedFontSize": 14.54,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.91,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "UMES Counseling Services Director"
+          },
+          {
+            "index": 2,
+            "text": "and East Coast lead for AuntEDNA’s"
+          },
+          {
+            "index": 3,
+            "text": "Clinical Directors Council."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "UMES Counseling Services Director and East Coast lead for AuntEDNA’s Clinical Directors Council.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "UMES Counseling Services Director and East Coast lead for AuntEDNA’s Clinical Directors Council.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7epo7q50",
+      "id": "41",
+      "name": "operator-6-accent",
+      "bbox": [
+        866,
+        553,
+        332,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F65AAF",
+      "lineColor": "#F65AAF",
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8fypgbml",
+      "id": "42",
+      "name": "adoption-band",
+      "bbox": [
+        56,
+        598,
+        1160,
+        38
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(23, 27, 32, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 43,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tg769gn6",
+      "id": "43",
+      "name": "adoption-copy",
+      "bbox": [
+        88,
+        608,
+        1096,
+        18
+      ],
+      "geometry": "rect",
+      "text": "ADOPTION REQUIRES MORE THAN PRODUCT: STORY  •  TRUST  •  CLINICAL WORKFLOW  •  INSTITUTIONAL ACCESS",
+      "textPreview": "ADOPTION REQUIRES MORE THAN PRODUCT: STORY  •  TRUST  •  CLINICAL WORKFLOW  •  INSTITUTIONAL ACCESS",
+      "resolvedFontSize": 11.2,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 11.2,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ADOPTION REQUIRES MORE THAN PRODUCT: STORY  •  TRUST  •  CLINICAL WORKFLOW  •  INSTITUTIONAL ACCESS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ADOPTION REQUIRES MORE THAN PRODUCT: STORY  •  TRUST  •  CLINICAL WORKFLOW  •  INSTITUTIONAL ACCESS",
+          "resolvedTextStyle": {
+            "fontSize": 11.2,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ADOPTION REQUIRES MORE THAN PRODUCT: STORY  •  TRUST  •  CLINICAL WORKFLOW  •  INSTITUTIONAL ACCESS",
+              "fontSize": 11.2,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 44,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ypw7a14j",
+      "id": "44",
+      "name": "footer-rule",
+      "bbox": [
+        56,
+        676,
+        1160,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 45,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/za5o3654",
+      "id": "45",
+      "name": "footer-left",
+      "bbox": [
+        56,
+        688,
+        430,
+        14
+      ],
+      "geometry": "rect",
+      "text": "PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW",
+      "textPreview": "PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 8.51,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW",
+          "resolvedTextStyle": {
+            "fontSize": 8.51,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PULSE INTELLIGENCE LABS  /  Q2 2026 ADVISORY BOARD REVIEW",
+              "fontSize": 8.51,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 46,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kbypcbmp",
+      "id": "46",
+      "name": "footer-sources",
+      "bbox": [
+        780,
+        688,
+        400,
+        14
+      ],
+      "geometry": "rect",
+      "text": "Sources: Ochsner Health; UMES; HyperCharge Health; USA Gymnastics; council-provided backgrounds",
+      "textPreview": "Sources: Ochsner Health; UMES; HyperCharge Health; USA Gymnastics; council-provided backgrounds",
+      "resolvedFontSize": 7.8,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 7.8,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Sources: Ochsner Health; UMES; HyperCharge Health; USA Gymnastics; council-provided backgrounds"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Sources: Ochsner Health; UMES; HyperCharge Health; USA Gymnastics; council-provided backgrounds",
+          "resolvedTextStyle": {
+            "fontSize": 7.8,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Sources: Ochsner Health; UMES; HyperCharge Health; USA Gymnastics; council-provided backgrounds",
+              "fontSize": 7.8,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 47,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lc765gna",
+      "id": "47",
+      "name": "slide-number",
+      "bbox": [
+        1195,
+        687,
+        20,
+        14
+      ],
+      "geometry": "rect",
+      "text": "12",
+      "textPreview": "12",
+      "resolvedFontSize": 8.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 8.51,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "12"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "12",
+          "resolvedTextStyle": {
+            "fontSize": 8.51,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "12",
+              "fontSize": 8.51,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

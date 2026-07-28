@@ -1,0 +1,2837 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/y90nupkv",
+    "id": "y90nupkv",
+    "slide": 1,
+    "layoutId": "/ppt/slideLayouts/slideLayout1.xml",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "/ppt/slideMasters/slideMaster1.xml",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#050708",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "fontScheme": {
+      "name": "Office",
+      "majorFont": {
+        "latinTypeface": "Calibri Light",
+        "eastAsianTypeface": "Calibri Light",
+        "complexScriptTypeface": "Calibri Light"
+      },
+      "minorFont": {
+        "latinTypeface": "Calibri",
+        "eastAsianTypeface": "Calibri",
+        "complexScriptTypeface": "Calibri"
+      }
+    },
+    "typefaces": [
+      "Arial",
+      "Calibri",
+      "Calibri Light"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "/ppt/slideLayouts/slideLayout1.xml",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "/ppt/slideMasters/slideMaster1.xml",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "/ppt/slideMasters/slideMaster1.xml",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/i5kfex87",
+      "id": "55",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "contentType": "image/png",
+      "imageCrop": {
+        "left": 0,
+        "top": 0.00027,
+        "right": 0,
+        "bottom": 0.00027
+      },
+      "asset": {
+        "assetId": "/ppt/media/image.png",
+        "contentType": "image/png",
+        "byteLength": 1921336
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image.png",
+        "contentType": "image/png",
+        "byteLength": 1921336
+      }
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/547294r6",
+      "id": "2",
+      "name": "background-darkener",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(3, 4, 7, 0.83)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k3yl0zql",
+      "id": "3",
+      "name": "content-depth",
+      "bbox": [
+        0,
+        190,
+        1280,
+        530
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7qp4be9c",
+      "id": "4",
+      "name": "section-pill",
+      "bbox": [
+        56,
+        30,
+        270,
+        40
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/65g3298r",
+      "id": "5",
+      "name": "section-dot",
+      "bbox": [
+        76,
+        45,
+        8,
+        8
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ts7md4r2",
+      "id": "6",
+      "name": "section-label",
+      "bbox": [
+        98,
+        39,
+        205,
+        22
+      ],
+      "geometry": "rect",
+      "text": "CLINICAL + GTM PATHWAY",
+      "textPreview": "CLINICAL + GTM PATHWAY",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CLINICAL + GTM PATHWAY"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CLINICAL + GTM PATHWAY",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CLINICAL + GTM PATHWAY",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sryl4zqx",
+      "id": "7",
+      "name": "headline-white",
+      "bbox": [
+        56,
+        89,
+        760,
+        48
+      ],
+      "geometry": "rect",
+      "text": "AuntEDNA.ai brings clinical care + an",
+      "textPreview": "AuntEDNA.ai brings clinical care + an",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "AuntEDNA.ai brings clinical care + an"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "AuntEDNA.ai brings clinical care + an",
+          "resolvedTextStyle": {
+            "fontSize": 32,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "AuntEDNA.ai brings clinical care + an",
+              "fontSize": 32,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fu94fe98",
+      "id": "8",
+      "name": "headline-accent",
+      "bbox": [
+        675,
+        89,
+        550,
+        48
+      ],
+      "geometry": "rect",
+      "text": "active NCAA pipeline.",
+      "textPreview": "active NCAA pipeline.",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "active NCAA pipeline."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "active NCAA pipeline.",
+          "resolvedTextStyle": {
+            "fontSize": 32,
+            "typeface": "Arial",
+            "color": "#F65AAF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "active NCAA pipeline.",
+              "fontSize": 32,
+              "typeface": "Arial",
+              "color": "#F65AAF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/utg3698n",
+      "id": "9",
+      "name": "subtitle",
+      "bbox": [
+        56,
+        145,
+        1150,
+        34
+      ],
+      "geometry": "rect",
+      "text": "PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access.",
+      "textPreview": "PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access.",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access.",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access.",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wn6dc7eh",
+      "id": "10",
+      "name": "tracey-card",
+      "bbox": [
+        56,
+        205,
+        420,
+        352
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 24, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 11,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/58vy9s7y",
+      "id": "56",
+      "bbox": [
+        57,
+        206,
+        148,
+        350
+      ],
+      "geometry": "roundRect",
+      "contentType": "image/jpeg",
+      "imageCrop": {
+        "left": 0.12963,
+        "top": 0,
+        "right": 0.12963,
+        "bottom": 0
+      },
+      "imageMask": {
+        "geometry": "roundRect",
+        "adjustmentList": [
+          {
+            "name": "adj",
+            "formula": "val 8108"
+          }
+        ]
+      },
+      "asset": {
+        "assetId": "/ppt/media/image.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 137925
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 137925
+      }
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ul4vaxgb",
+      "id": "12",
+      "name": "tracey-photo-fade",
+      "bbox": [
+        135,
+        206,
+        70,
+        350
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/47mxg7qd",
+      "id": "57",
+      "bbox": [
+        184,
+        224,
+        62,
+        62
+      ],
+      "geometry": "ellipse",
+      "contentType": "image/png",
+      "imageCrop": {
+        "left": 0,
+        "top": 0.02857,
+        "right": 0,
+        "bottom": 0.02857
+      },
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "/ppt/media/image2.png",
+        "contentType": "image/png",
+        "byteLength": 283953
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image2.png",
+        "contentType": "image/png",
+        "byteLength": 283953
+      }
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4r6dg7et",
+      "id": "14",
+      "name": "tracey-name",
+      "bbox": [
+        260,
+        226,
+        190,
+        25
+      ],
+      "geometry": "rect",
+      "text": "Dr. Tracey Hathaway",
+      "textPreview": "Dr. Tracey Hathaway",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Dr. Tracey Hathaway"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Dr. Tracey Hathaway",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Dr. Tracey Hathaway",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5sfepcfe",
+      "id": "15",
+      "name": "tracey-role",
+      "bbox": [
+        260,
+        257,
+        190,
+        20
+      ],
+      "geometry": "rect",
+      "text": "CO-FOUNDER • ATHLETICS ACCESS",
+      "textPreview": "CO-FOUNDER • ATHLETICS ACCESS",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CO-FOUNDER • ATHLETICS ACCESS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CO-FOUNDER • ATHLETICS ACCESS",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#F65AAF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CO-FOUNDER • ATHLETICS ACCESS",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#F65AAF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ipovexwn",
+      "id": "16",
+      "name": "tracey-journey",
+      "bbox": [
+        184,
+        307,
+        270,
+        25
+      ],
+      "geometry": "rect",
+      "text": "ATHLETE → COACH → ATHLETIC DIRECTOR",
+      "textPreview": "ATHLETE → COACH → ATHLETIC DIRECTOR",
+      "resolvedFontSize": 19.86,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.83,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ATHLETE → COACH → ATHLETIC DIRECTOR"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ATHLETE → COACH → ATHLETIC DIRECTOR",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ATHLETE → COACH → ATHLETIC DIRECTOR",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3qxwn2x8",
+      "id": "17",
+      "name": "tracey-bullet-1-dot",
+      "bbox": [
+        184,
+        351,
+        6,
+        6
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#F65AAF",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sfqdkrep",
+      "id": "18",
+      "name": "tracey-bullet-1",
+      "bbox": [
+        199,
+        344,
+        251,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Former D1 women’s basketball player, University of Rhode Island",
+      "textPreview": "Former D1 women’s basketball player, University of Rhode Island",
+      "resolvedFontSize": 17.77,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.74,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Former D1 women’s basketball player, University of"
+          },
+          {
+            "index": 2,
+            "text": "Rhode Island"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Former D1 women’s basketball player, University of Rhode Island",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Former D1 women’s basketball player, University of Rhode Island",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dgzetcfa",
+      "id": "19",
+      "name": "tracey-bullet-2-dot",
+      "bbox": [
+        184,
+        398,
+        6,
+        6
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#F65AAF",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1cvuxc7e",
+      "id": "20",
+      "name": "tracey-bullet-2",
+      "bbox": [
+        199,
+        391,
+        251,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Two decades across coaching and collegiate athletics administration",
+      "textPreview": "Two decades across coaching and collegiate athletics administration",
+      "resolvedFontSize": 17.77,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.74,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Two decades across coaching and collegiate athletics"
+          },
+          {
+            "index": 2,
+            "text": "administration"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Two decades across coaching and collegiate athletics administration",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Two decades across coaching and collegiate athletics administration",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0bmd476t",
+      "id": "21",
+      "name": "tracey-bullet-3-dot",
+      "bbox": [
+        184,
+        445,
+        6,
+        6
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#F65AAF",
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zadcv2p8",
+      "id": "22",
+      "name": "tracey-bullet-3",
+      "bbox": [
+        199,
+        438,
+        251,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Former women’s basketball coach, athletic director and NCAA committee contributor",
+      "textPreview": "Former women’s basketball coach, athletic director and NCAA committee contributor",
+      "resolvedFontSize": 17.77,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.74,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Former women’s basketball coach, athletic director and"
+          },
+          {
+            "index": 2,
+            "text": "NCAA committee contributor"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Former women’s basketball coach, athletic director and NCAA committee contributor",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Former women’s basketball coach, athletic director and NCAA committee contributor",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e94v2hon",
+      "id": "23",
+      "name": "tracey-footnote",
+      "bbox": [
+        184,
+        505,
+        260,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Deep, active relationships across college athletics.",
+      "textPreview": "Deep, active relationships across college athletics.",
+      "resolvedFontSize": 20.73,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.86,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Deep, active relationships across college"
+          },
+          {
+            "index": 2,
+            "text": "athletics."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Deep, active relationships across college athletics.",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Deep, active relationships across college athletics.",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/90ve1w7q",
+      "id": "24",
+      "name": "jelanna-card",
+      "bbox": [
+        492,
+        205,
+        286,
+        352
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 24, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 25,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/za9wvypo",
+      "id": "58",
+      "bbox": [
+        515,
+        226,
+        84,
+        84
+      ],
+      "geometry": "ellipse",
+      "contentType": "image/jpeg",
+      "imageCrop": {
+        "left": 0,
+        "top": 0.05619,
+        "right": 0,
+        "bottom": 0.05619
+      },
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "/ppt/media/image2.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 468220
+      },
+      "fillImage": {
+        "assetId": "/ppt/media/image2.jpeg",
+        "contentType": "image/jpeg",
+        "byteLength": 468220
+      }
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nydczmpk",
+      "id": "26",
+      "name": "jelanna-name",
+      "bbox": [
+        515,
+        324,
+        238,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Jelanna Salas Olivera",
+      "textPreview": "Jelanna Salas Olivera",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Jelanna Salas Olivera"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Jelanna Salas Olivera",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Jelanna Salas Olivera",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mx4v6hoz",
+      "id": "27",
+      "name": "jelanna-role",
+      "bbox": [
+        515,
+        358,
+        240,
+        20
+      ],
+      "geometry": "rect",
+      "text": "CO-FOUNDER • ENTERPRISE EXECUTION",
+      "textPreview": "CO-FOUNDER • ENTERPRISE EXECUTION",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CO-FOUNDER • ENTERPRISE EXECUTION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CO-FOUNDER • ENTERPRISE EXECUTION",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#9B72FF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CO-FOUNDER • ENTERPRISE EXECUTION",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#9B72FF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p4bu5s76",
+      "id": "28",
+      "name": "jelanna-journey",
+      "bbox": [
+        515,
+        394,
+        240,
+        36
+      ],
+      "geometry": "rect",
+      "text": "BIG FOUR → BIG PHARMA → DIGITAL HEALTH",
+      "textPreview": "BIG FOUR → BIG PHARMA → DIGITAL HEALTH",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "BIG FOUR → BIG PHARMA →"
+          },
+          {
+            "index": 2,
+            "text": "DIGITAL HEALTH"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "BIG FOUR → BIG PHARMA → DIGITAL HEALTH",
+          "resolvedTextStyle": {
+            "fontSize": 14.51,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "BIG FOUR → BIG PHARMA → DIGITAL HEALTH",
+              "fontSize": 14.51,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/432dwn6l",
+      "id": "29",
+      "name": "jelanna-bullet-1-dot",
+      "bbox": [
+        515,
+        450,
+        6,
+        6
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#9B72FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxgjq907",
+      "id": "30",
+      "name": "jelanna-bullet-1",
+      "bbox": [
+        530,
+        443,
+        221,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Transformation consulting across EY and KPMG",
+      "textPreview": "Transformation consulting across EY and KPMG",
+      "resolvedFontSize": 18.35,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.76,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Transformation consulting across EY and"
+          },
+          {
+            "index": 2,
+            "text": "KPMG"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Transformation consulting across EY and KPMG",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Transformation consulting across EY and KPMG",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vyp0je1s",
+      "id": "31",
+      "name": "jelanna-bullet-2-dot",
+      "bbox": [
+        515,
+        486,
+        6,
+        6
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#9B72FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wzy1szid",
+      "id": "32",
+      "name": "jelanna-bullet-2",
+      "bbox": [
+        530,
+        479,
+        221,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Big Pharma experience at Eli Lilly",
+      "textPreview": "Big Pharma experience at Eli Lilly",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Big Pharma experience at Eli Lilly"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Big Pharma experience at Eli Lilly",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Big Pharma experience at Eli Lilly",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h072l4jy",
+      "id": "33",
+      "name": "jelanna-bullet-3-dot",
+      "bbox": [
+        515,
+        522,
+        6,
+        6
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#9B72FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i1gje90j",
+      "id": "34",
+      "name": "jelanna-bullet-3",
+      "bbox": [
+        530,
+        515,
+        221,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Former cheerleader with enterprise, product and healthcare fluency",
+      "textPreview": "Former cheerleader with enterprise, product and healthcare fluency",
+      "resolvedFontSize": 17.77,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.74,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Former cheerleader with enterprise, product and"
+          },
+          {
+            "index": 2,
+            "text": "healthcare fluency"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Former cheerleader with enterprise, product and healthcare fluency",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Former cheerleader with enterprise, product and healthcare fluency",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j2pkne14",
+      "id": "35",
+      "name": "leverage-card",
+      "bbox": [
+        794,
+        205,
+        430,
+        352
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 24, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/43y1gji9",
+      "id": "36",
+      "name": "leverage-label",
+      "bbox": [
+        820,
+        226,
+        250,
+        20
+      ],
+      "geometry": "rect",
+      "text": "THE SHARED ADVANTAGE",
+      "textPreview": "THE SHARED ADVANTAGE",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE SHARED ADVANTAGE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE SHARED ADVANTAGE",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE SHARED ADVANTAGE",
+              "fontSize": 12,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/54r2poju",
+      "id": "37",
+      "name": "six-years-stat",
+      "bbox": [
+        818,
+        258,
+        180,
+        58
+      ],
+      "geometry": "rect",
+      "text": "6 YEARS",
+      "textPreview": "6 YEARS",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "6 YEARS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "6 YEARS",
+          "resolvedTextStyle": {
+            "fontSize": 36,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "6 YEARS",
+              "fontSize": 36,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y5wjip0z",
+      "id": "38",
+      "name": "six-years-desc",
+      "bbox": [
+        1010,
+        276,
+        180,
+        28
+      ],
+      "geometry": "rect",
+      "text": "building with the NCAA",
+      "textPreview": "building with the NCAA",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "building with the NCAA"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "building with the NCAA",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#F65AAF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "building with the NCAA",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#F65AAF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z650ba1k",
+      "id": "39",
+      "name": "foundation-copy",
+      "bbox": [
+        820,
+        326,
+        374,
+        67
+      ],
+      "geometry": "rect",
+      "text": "Together they co-founded athLEDA, now the Alfreeda Goff Foundation—developing athletes for life after sport through NCAA-backed programming.",
+      "textPreview": "Together they co-founded athLEDA, now the Alfreeda Goff Foundation—developing athletes for life after sport through NCAA-backed programming.",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Together they co-founded athLEDA, now the"
+          },
+          {
+            "index": 2,
+            "text": "Alfreeda Goff Foundation—developing athletes for"
+          },
+          {
+            "index": 3,
+            "text": "life after sport through NCAA-backed programming."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Together they co-founded athLEDA, now the Alfreeda Goff Foundation—developing athletes for life after sport through NCAA-backed programming.",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Together they co-founded athLEDA, now the Alfreeda Goff Foundation—developing athletes for life after sport through NCAA-backed programming.",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z2xgf6to",
+      "id": "40",
+      "name": "leverage-divider",
+      "bbox": [
+        820,
+        406,
+        374,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e1oz61c3",
+      "id": "41",
+      "name": "pipeline-label",
+      "bbox": [
+        820,
+        424,
+        360,
+        22
+      ],
+      "geometry": "rect",
+      "text": "ACTIVE RELATIONSHIPS → PILOT PIPELINE",
+      "textPreview": "ACTIVE RELATIONSHIPS → PILOT PIPELINE",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ACTIVE RELATIONSHIPS → PILOT PIPELINE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ACTIVE RELATIONSHIPS → PILOT PIPELINE",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ACTIVE RELATIONSHIPS → PILOT PIPELINE",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/14fyhgbe",
+      "id": "42",
+      "name": "pipeline-schools",
+      "bbox": [
+        820,
+        456,
+        370,
+        30
+      ],
+      "geometry": "rect",
+      "text": "Hampton  •  UMES  •  Claflin  •  Clark Atlanta",
+      "textPreview": "Hampton  •  UMES  •  Claflin  •  Clark Atlanta",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Hampton  •  UMES  •  Claflin  •  Clark Atlanta"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Hampton  •  UMES  •  Claflin  •  Clark Atlanta",
+          "resolvedTextStyle": {
+            "fontSize": 16.51,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Hampton  •  UMES  •  Claflin  •  Clark Atlanta",
+              "fontSize": 16.51,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 43,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/036h8but",
+      "id": "43",
+      "name": "pipeline-copy",
+      "bbox": [
+        820,
+        496,
+        370,
+        42
+      ],
+      "geometry": "rect",
+      "text": "Their nonprofit trust, athletics network and campus access feed directly into PulseCheck’s GTM motion.",
+      "textPreview": "Their nonprofit trust, athletics network and campus access feed directly into PulseCheck’s GTM motion.",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Their nonprofit trust, athletics network and campus access"
+          },
+          {
+            "index": 2,
+            "text": "feed directly into PulseCheck’s GTM motion."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Their nonprofit trust, athletics network and campus access feed directly into PulseCheck’s GTM motion.",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Their nonprofit trust, athletics network and campus access feed directly into PulseCheck’s GTM motion.",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 44,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nqxgjqtk",
+      "id": "44",
+      "name": "proof-strip",
+      "bbox": [
+        56,
+        575,
+        1168,
+        104
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(17, 21, 24, 0.98)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 45,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mpozalcz",
+      "id": "45",
+      "name": "proof-strip-label",
+      "bbox": [
+        78,
+        590,
+        270,
+        18
+      ],
+      "geometry": "rect",
+      "text": "RESEARCH + COMMERCIALIZATION LEVERAGE",
+      "textPreview": "RESEARCH + COMMERCIALIZATION LEVERAGE",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "RESEARCH + COMMERCIALIZATION LEVERAGE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "RESEARCH + COMMERCIALIZATION LEVERAGE",
+          "resolvedTextStyle": {
+            "fontSize": 10.51,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "RESEARCH + COMMERCIALIZATION LEVERAGE",
+              "fontSize": 10.51,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 46,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9sfylgbq",
+      "id": "46",
+      "name": "phase1-value",
+      "bbox": [
+        78,
+        617,
+        110,
+        33
+      ],
+      "geometry": "rect",
+      "text": "$275K",
+      "textPreview": "$275K",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "$275K"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "$275K",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "$275K",
+              "fontSize": 25,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 47,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/or6hcvu5",
+      "id": "47",
+      "name": "phase1-copy",
+      "bbox": [
+        174,
+        615,
+        160,
+        40
+      ],
+      "geometry": "rect",
+      "text": "NSF Phase I\nfunded research",
+      "textPreview": "NSF Phase I | funded research",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NSF Phase I"
+          },
+          {
+            "index": 2,
+            "text": "funded research"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NSF Phase I",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NSF Phase I",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "funded research",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "funded research",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 48,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/buh0nqtg",
+      "id": "48",
+      "name": "proof-rule-1",
+      "bbox": [
+        358,
+        593,
+        0,
+        67
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 49,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/at8zelcb",
+      "id": "49",
+      "name": "adherence-value",
+      "bbox": [
+        388,
+        617,
+        100,
+        33
+      ],
+      "geometry": "rect",
+      "text": "80%",
+      "textPreview": "80%",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "80%"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "80%",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "80%",
+              "fontSize": 25,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 50,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8zqx4vq9",
+      "id": "50",
+      "name": "adherence-copy",
+      "bbox": [
+        480,
+        615,
+        200,
+        40
+      ],
+      "geometry": "rect",
+      "text": "adherence evidence\nacross 1,000+ athletes",
+      "textPreview": "adherence evidence | across 1,000+ athletes",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "adherence evidence"
+          },
+          {
+            "index": 2,
+            "text": "across 1,000+ athletes"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "adherence evidence",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "adherence evidence",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "across 1,000+ athletes",
+          "resolvedTextStyle": {
+            "fontSize": 13.51,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "across 1,000+ athletes",
+              "fontSize": 13.51,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 51,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t0jyd0ru",
+      "id": "51",
+      "name": "proof-rule-2",
+      "bbox": [
+        704,
+        593,
+        0,
+        67
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 52,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6x8f2583",
+      "id": "52",
+      "name": "phase2-value",
+      "bbox": [
+        734,
+        617,
+        110,
+        33
+      ],
+      "geometry": "rect",
+      "text": "$1.4M",
+      "textPreview": "$1.4M",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "$1.4M"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "$1.4M",
+          "resolvedTextStyle": {
+            "fontSize": 25,
+            "typeface": "Arial",
+            "color": "#F65AAF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "$1.4M",
+              "fontSize": 25,
+              "typeface": "Arial",
+              "color": "#F65AAF",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 53,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7yhgbq9o",
+      "id": "53",
+      "name": "phase2-copy",
+      "bbox": [
+        833,
+        610,
+        245,
+        23
+      ],
+      "geometry": "rect",
+      "text": "Phase II proposal preparation",
+      "textPreview": "Phase II proposal preparation",
+      "resolvedFontSize": 24,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Phase II proposal preparation"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Phase II proposal preparation",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Phase II proposal preparation",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 54,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kvqx0vqd",
+      "id": "54",
+      "name": "phase2-detail",
+      "bbox": [
+        833,
+        637,
+        350,
+        25
+      ],
+      "geometry": "rect",
+      "text": "PulseCheck included for commercialization, pilot subsidy + integrations",
+      "textPreview": "PulseCheck included for commercialization, pilot subsidy + integrations",
+      "resolvedFontSize": 21.43,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 24,
+        "typeface": "Calibri",
+        "color": "tx1",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.89,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PulseCheck included for commercialization, pilot subsidy + integrations"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PulseCheck included for commercialization, pilot subsidy + integrations",
+          "resolvedTextStyle": {
+            "fontSize": 12.51,
+            "typeface": "Arial",
+            "color": "#AEB3BD",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PulseCheck included for commercialization, pilot subsidy + integrations",
+              "fontSize": 12.51,
+              "typeface": "Arial",
+              "color": "#AEB3BD"
+            }
+          ],
+          "bulletCharacter": "",
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

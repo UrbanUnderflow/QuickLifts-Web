@@ -1,0 +1,5 @@
+Template fidelity check: fail
+FAIL fresh-slide-rebuild: Template-following final authoring must not create a fresh presentation. file=/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/probe_help.mjs
+FAIL mask-cover-overlay: Large new opaque shape appears to cover inherited template content. slide=1
+FAIL mask-cover-overlay: Large new opaque shape appears to cover inherited template content. slide=1
+FAIL mask-cover-overlay: Large new opaque shape appears to cover inherited template content. slide=1

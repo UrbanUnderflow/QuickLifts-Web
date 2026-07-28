@@ -1,0 +1,2135 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/sx08t1",
+    "id": "sx08t1",
+    "slide": 1,
+    "layoutId": "ef7c96c2-79ce-4a14-8ccd-197491192a91",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "aec6ec1f-b99d-4767-8e74-5cee5937dc31",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#050708",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "ef7c96c2-79ce-4a14-8ccd-197491192a91",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "aec6ec1f-b99d-4767-8e74-5cee5937dc31",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "aec6ec1f-b99d-4767-8e74-5cee5937dc31",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/zqh4zq50",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "alt": "Basketball team huddling in an arena",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "rect"
+      },
+      "asset": {
+        "assetId": "5d769089-0cbf-4143-a087-c1d26454d444",
+        "contentType": "image/png",
+        "byteLength": 1921336
+      }
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h43i5c7y",
+      "id": "2",
+      "name": "background-darkener",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(3, 4, 7, 0.74)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w3uhc7qd",
+      "id": "3",
+      "name": "bottom-depth",
+      "bbox": [
+        0,
+        238,
+        1280,
+        482
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ne1gz2pg",
+      "id": "4",
+      "name": "section-pill",
+      "bbox": [
+        62,
+        38,
+        210,
+        40
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mdsz6x8b",
+      "id": "5",
+      "name": "section-dot",
+      "bbox": [
+        80,
+        53,
+        8,
+        8
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/90jy1c7m",
+      "id": "6",
+      "name": "section-label",
+      "bbox": [
+        102,
+        47,
+        140,
+        22
+      ],
+      "geometry": "rect",
+      "text": "CORE TEAM",
+      "textPreview": "CORE TEAM",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CORE TEAM"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CORE TEAM",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CORE TEAM",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8zah87q1",
+      "id": "7",
+      "name": "headline-white",
+      "bbox": [
+        62,
+        108,
+        420,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Operators who know",
+      "textPreview": "Operators who know",
+      "resolvedFontSize": 36.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 37,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.99,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Operators who know"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Operators who know",
+          "resolvedTextStyle": {
+            "fontSize": 37,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Operators who know",
+              "fontSize": 37,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ral0bmp0",
+      "id": "8",
+      "name": "headline-lime-one",
+      "bbox": [
+        447,
+        108,
+        660,
+        44
+      ],
+      "geometry": "rect",
+      "text": "software, athletes,",
+      "textPreview": "software, athletes,",
+      "resolvedFontSize": 36.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 37,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.99,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "software, athletes,"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "software, athletes,",
+          "resolvedTextStyle": {
+            "fontSize": 37,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "software, athletes,",
+              "fontSize": 37,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/69czih8f",
+      "id": "9",
+      "name": "headline-lime-two",
+      "bbox": [
+        62,
+        153,
+        1080,
+        46
+      ],
+      "geometry": "rect",
+      "text": "clinical trust, and enterprise sales.",
+      "textPreview": "clinical trust, and enterprise sales.",
+      "resolvedFontSize": 37,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 37,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "clinical trust, and enterprise sales."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "clinical trust, and enterprise sales.",
+          "resolvedTextStyle": {
+            "fontSize": 37,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "clinical trust, and enterprise sales.",
+              "fontSize": 37,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/of6hcfa9",
+      "id": "10",
+      "name": "member-1-card",
+      "bbox": [
+        62,
+        238,
+        274,
+        284
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 11,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/m9sz2l0b",
+      "id": "11",
+      "bbox": [
+        162,
+        256,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Tremaine Grant portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "8596f451-c4f5-43ed-bf51-28fcde8cd78e",
+        "contentType": "image/jpeg",
+        "byteLength": 68043
+      }
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mdoza5s3",
+      "id": "12",
+      "name": "member-1-name",
+      "bbox": [
+        82,
+        342,
+        234,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Tremaine Grant",
+      "textPreview": "Tremaine Grant",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Tremaine Grant"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Tremaine Grant",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Tremaine Grant",
+              "fontSize": 22,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nexgja9o",
+      "id": "13",
+      "name": "member-1-role",
+      "bbox": [
+        82,
+        377,
+        234,
+        22
+      ],
+      "geometry": "rect",
+      "text": "FOUNDER & CEO",
+      "textPreview": "FOUNDER & CEO",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "FOUNDER & CEO"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "FOUNDER & CEO",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "FOUNDER & CEO",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0r6h8vax",
+      "id": "14",
+      "name": "member-1-rule",
+      "bbox": [
+        90,
+        410,
+        218,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1cfyh0ri",
+      "id": "15",
+      "name": "member-1-bio",
+      "bbox": [
+        86,
+        424,
+        226,
+        85
+      ],
+      "geometry": "rect",
+      "text": "Full-stack engineer and AI builder with a decade in clinical research. Former D1 athlete at FSU.",
+      "textPreview": "Full-stack engineer and AI builder with a decade in clinical research. Former D1 athlete at FSU.",
+      "resolvedFontSize": 14.51,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Full-stack engineer and AI builder"
+          },
+          {
+            "index": 2,
+            "text": "with a decade in clinical research."
+          },
+          {
+            "index": 3,
+            "text": "Former D1 athlete at FSU."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Full-stack engineer and AI builder with a decade in clinical research. Former D1 athlete at FSU.",
+          "resolvedTextStyle": {
+            "fontSize": 14.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Full-stack engineer and AI builder with a decade in clinical research. Former D1 athlete at FSU.",
+              "fontSize": 14.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/epoz6ls7",
+      "id": "16",
+      "name": "member-2-card",
+      "bbox": [
+        356,
+        238,
+        274,
+        284
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 17,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/wzuh8vid",
+      "id": "17",
+      "bbox": [
+        456,
+        256,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Bobby Nweke portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "d620ed16-f4b1-43ff-9326-c67d2c597d19",
+        "contentType": "image/jpeg",
+        "byteLength": 21286
+      }
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/snmh4ba1",
+      "id": "18",
+      "name": "member-2-name",
+      "bbox": [
+        376,
+        342,
+        234,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Bobby Nweke",
+      "textPreview": "Bobby Nweke",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Bobby Nweke"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Bobby Nweke",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Bobby Nweke",
+              "fontSize": 22,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dovydgrm",
+      "id": "19",
+      "name": "member-2-role",
+      "bbox": [
+        376,
+        377,
+        234,
+        22
+      ],
+      "geometry": "rect",
+      "text": "CHIEF OF STAFF",
+      "textPreview": "CHIEF OF STAFF",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CHIEF OF STAFF"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CHIEF OF STAFF",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CHIEF OF STAFF",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t8n6lsfy",
+      "id": "20",
+      "name": "member-2-rule",
+      "bbox": [
+        384,
+        410,
+        218,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/87u5snyd",
+      "id": "21",
+      "name": "member-2-bio",
+      "bbox": [
+        380,
+        424,
+        226,
+        85
+      ],
+      "geometry": "rect",
+      "text": "10 years in human performance across training, athletics, and education.",
+      "textPreview": "10 years in human performance across training, athletics, and education.",
+      "resolvedFontSize": 14.51,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "10 years in human performance"
+          },
+          {
+            "index": 2,
+            "text": "across training, athletics, and"
+          },
+          {
+            "index": 3,
+            "text": "education."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "10 years in human performance across training, athletics, and education.",
+          "resolvedTextStyle": {
+            "fontSize": 14.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "10 years in human performance across training, athletics, and education.",
+              "fontSize": 14.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/76lojix8",
+      "id": "22",
+      "name": "member-3-card",
+      "bbox": [
+        650,
+        238,
+        274,
+        284
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 23,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/h072doj2",
+      "id": "23",
+      "bbox": [
+        750,
+        256,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Lola Oluwaladun portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "bbf3db8f-9aff-4976-a2b5-d129f348b6c2",
+        "contentType": "image/jpeg",
+        "byteLength": 553234
+      }
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l436h8z2",
+      "id": "24",
+      "name": "member-3-name",
+      "bbox": [
+        670,
+        342,
+        234,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Lola Oluwaladun",
+      "textPreview": "Lola Oluwaladun",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Lola Oluwaladun"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Lola Oluwaladun",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Lola Oluwaladun",
+              "fontSize": 22,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k3u5o3yh",
+      "id": "25",
+      "name": "member-3-role",
+      "bbox": [
+        670,
+        377,
+        234,
+        22
+      ],
+      "geometry": "rect",
+      "text": "HEAD OF DESIGN",
+      "textPreview": "HEAD OF DESIGN",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#9B72FF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "HEAD OF DESIGN"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "HEAD OF DESIGN",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#9B72FF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "HEAD OF DESIGN",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#9B72FF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j2lofyhw",
+      "id": "26",
+      "name": "member-3-rule",
+      "bbox": [
+        678,
+        410,
+        218,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y1cnmtgb",
+      "id": "27",
+      "name": "member-3-bio",
+      "bbox": [
+        674,
+        424,
+        226,
+        85
+      ],
+      "geometry": "rect",
+      "text": "Owns product experience and athlete-facing UX across Pulse.",
+      "textPreview": "Owns product experience and athlete-facing UX across Pulse.",
+      "resolvedFontSize": 14.51,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Owns product experience and"
+          },
+          {
+            "index": 2,
+            "text": "athlete-facing UX across Pulse."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Owns product experience and athlete-facing UX across Pulse.",
+          "resolvedTextStyle": {
+            "fontSize": 14.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Owns product experience and athlete-facing UX across Pulse.",
+              "fontSize": 14.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5076tcf6",
+      "id": "28",
+      "name": "member-4-card",
+      "bbox": [
+        944,
+        238,
+        274,
+        284
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 29,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/rq94jy14",
+      "id": "29",
+      "bbox": [
+        1044,
+        256,
+        74,
+        74
+      ],
+      "geometry": "ellipse",
+      "alt": "Will Watkins portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "7a69f750-c073-4b9b-b74d-b406ee2f1809",
+        "contentType": "image/jpeg",
+        "byteLength": 23134
+      }
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m583u9w3",
+      "id": "30",
+      "name": "member-4-name",
+      "bbox": [
+        964,
+        342,
+        234,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Will Watkins",
+      "textPreview": "Will Watkins",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 22,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Will Watkins"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Will Watkins",
+          "resolvedTextStyle": {
+            "fontSize": 22,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Will Watkins",
+              "fontSize": 22,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/n6hknudo",
+      "id": "31",
+      "name": "member-4-role",
+      "bbox": [
+        964,
+        377,
+        234,
+        22
+      ],
+      "geometry": "rect",
+      "text": "HEAD OF SALES",
+      "textPreview": "HEAD OF SALES",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#FF9C38",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "HEAD OF SALES"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "HEAD OF SALES",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#FF9C38",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "HEAD OF SALES",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#FF9C38",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/o7qlwze9",
+      "id": "32",
+      "name": "member-4-rule",
+      "bbox": [
+        972,
+        410,
+        218,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/98z2p4vu",
+      "id": "33",
+      "name": "member-4-bio",
+      "bbox": [
+        968,
+        424,
+        226,
+        85
+      ],
+      "geometry": "rect",
+      "text": "Salesforce Global Director of Sales. Former professional player in the Boston Red Sox organization.",
+      "textPreview": "Salesforce Global Director of Sales. Former professional player in the Boston Red Sox organization.",
+      "resolvedFontSize": 14.51,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Salesforce Global Director of"
+          },
+          {
+            "index": 2,
+            "text": "Sales. Former professional player"
+          },
+          {
+            "index": 3,
+            "text": "in the Boston Red Sox"
+          },
+          {
+            "index": 4,
+            "text": "organization."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Salesforce Global Director of Sales. Former professional player in the Boston Red Sox organization.",
+          "resolvedTextStyle": {
+            "fontSize": 14.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Salesforce Global Director of Sales. Former professional player in the Boston Red Sox organization.",
+              "fontSize": 14.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/eh83qpw7",
+      "id": "34",
+      "name": "advisor-strip",
+      "bbox": [
+        62,
+        544,
+        1156,
+        133
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 22, 25, 0.96)",
+      "lineColor": "#343A40",
+      "lineWidth": 1
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zihkjuxs",
+      "id": "35",
+      "name": "advisor-heading",
+      "bbox": [
+        530,
+        558,
+        220,
+        21
+      ],
+      "geometry": "rect",
+      "text": "ADVISORS",
+      "textPreview": "ADVISORS",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ADVISORS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ADVISORS",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "ADVISORS",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/ru9o3il4",
+      "id": "36",
+      "bbox": [
+        261,
+        581,
+        48,
+        48
+      ],
+      "geometry": "ellipse",
+      "alt": "Marques Zak portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "ab72c2ef-ab66-4aa5-b27d-8772fca085ab",
+        "contentType": "image/jpeg",
+        "byteLength": 358754
+      }
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/14z2l4fi",
+      "id": "37",
+      "name": "advisor-1-name",
+      "bbox": [
+        165,
+        636,
+        240,
+        19
+      ],
+      "geometry": "rect",
+      "text": "Marques Zak",
+      "textPreview": "Marques Zak",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Marques Zak"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Marques Zak",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Marques Zak",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yds3mtwb",
+      "id": "38",
+      "name": "advisor-1-role",
+      "bbox": [
+        155,
+        655,
+        260,
+        20
+      ],
+      "geometry": "rect",
+      "text": "CMO, ACC",
+      "textPreview": "CMO, ACC",
+      "resolvedFontSize": 11.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 11.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CMO, ACC"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CMO, ACC",
+          "resolvedTextStyle": {
+            "fontSize": 11.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CMO, ACC",
+              "fontSize": 11.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/wrmp8729",
+      "id": "39",
+      "bbox": [
+        616,
+        581,
+        48,
+        48
+      ],
+      "geometry": "ellipse",
+      "alt": "Valerie Alexander portrait",
+      "contentType": "image/jpeg",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "f96851f8-1542-4ca2-9969-5862cc399317",
+        "contentType": "image/jpeg",
+        "byteLength": 20290
+      }
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j6hgrqhc",
+      "id": "40",
+      "name": "advisor-2-name",
+      "bbox": [
+        520,
+        636,
+        240,
+        19
+      ],
+      "geometry": "rect",
+      "text": "Valerie Alexander",
+      "textPreview": "Valerie Alexander",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Valerie Alexander"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Valerie Alexander",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Valerie Alexander",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i58zil0r",
+      "id": "41",
+      "name": "advisor-2-role",
+      "bbox": [
+        510,
+        655,
+        260,
+        20
+      ],
+      "geometry": "rect",
+      "text": "Entrepreneur in Residence • Former IPO Attorney",
+      "textPreview": "Entrepreneur in Residence • Former IPO Attorney",
+      "resolvedFontSize": 11.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 11.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Entrepreneur in Residence • Former IPO Attorney"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Entrepreneur in Residence • Former IPO Attorney",
+          "resolvedTextStyle": {
+            "fontSize": 11.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Entrepreneur in Residence • Former IPO Attorney",
+              "fontSize": 11.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/itsv6h4z",
+      "id": "42",
+      "bbox": [
+        971,
+        581,
+        48,
+        48
+      ],
+      "geometry": "ellipse",
+      "alt": "Erik Edwards portrait",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "imageMask": {
+        "geometry": "ellipse"
+      },
+      "asset": {
+        "assetId": "a7ea1674-12ee-4dcd-9292-ade5631790d3",
+        "contentType": "image/png",
+        "byteLength": 335600
+      }
+    },
+    {
+      "order": 43,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47qhkvix",
+      "id": "43",
+      "name": "advisor-3-name",
+      "bbox": [
+        875,
+        636,
+        240,
+        19
+      ],
+      "geometry": "rect",
+      "text": "Erik Edwards",
+      "textPreview": "Erik Edwards",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Erik Edwards"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Erik Edwards",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Erik Edwards",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 44,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v2xgn6h0",
+      "id": "44",
+      "name": "advisor-3-role",
+      "bbox": [
+        865,
+        655,
+        260,
+        20
+      ],
+      "geometry": "rect",
+      "text": "Partner, Cooley",
+      "textPreview": "Partner, Cooley",
+      "resolvedFontSize": 11.51,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 11.51,
+        "typeface": "Arial",
+        "color": "#ADB1BA",
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Partner, Cooley"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Partner, Cooley",
+          "resolvedTextStyle": {
+            "fontSize": 11.51,
+            "typeface": "Arial",
+            "color": "#ADB1BA",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Partner, Cooley",
+              "fontSize": 11.51,
+              "typeface": "Arial",
+              "color": "#ADB1BA",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

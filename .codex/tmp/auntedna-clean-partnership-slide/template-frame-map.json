@@ -1,0 +1,74 @@
+{
+  "outputSlides": [
+    {
+      "outputSlide": 1,
+      "sourceSlide": 1,
+      "narrativeRole": "strategic partnership and athletics-access proof",
+      "reuseMode": "duplicate-slide",
+      "editTargets": [
+        {
+          "action": "rewrite-and-reposition",
+          "sourceElementIds": [
+            "sh/7qp4be9c",
+            "sh/65g3298r",
+            "sh/ts7md4r2",
+            "sh/sryl4zqx",
+            "sh/fu94fe98",
+            "sh/utg3698n",
+            "sh/wn6dc7eh",
+            "sh/4r6dg7et",
+            "sh/5sfepcfe",
+            "sh/ipovexwn",
+            "sh/3qxwn2x8",
+            "sh/sfqdkrep",
+            "sh/dgzetcfa",
+            "sh/1cvuxc7e",
+            "sh/0bmd476t",
+            "sh/zadcv2p8",
+            "sh/e94v2hon",
+            "sh/90ve1w7q",
+            "sh/nydczmpk",
+            "sh/mx4v6hoz",
+            "sh/p4bu5s76",
+            "sh/432dwn6l",
+            "sh/uxgjq907",
+            "sh/vyp0je1s",
+            "sh/wzy1szid",
+            "sh/h072l4jy",
+            "sh/i1gje90j",
+            "sh/j2pkne14",
+            "sh/43y1gji9",
+            "sh/54r2poju",
+            "sh/y5wjip0z",
+            "sh/z650ba1k",
+            "sh/z2xgf6to",
+            "sh/e1oz61c3",
+            "sh/14fyhgbe",
+            "sh/036h8but",
+            "sh/nqxgjqtk",
+            "sh/mpozalcz",
+            "sh/9sfylgbq",
+            "sh/or6hcvu5",
+            "sh/buh0nqtg",
+            "sh/at8zelcb",
+            "sh/8zqx4vq9",
+            "sh/t0jyd0ru",
+            "sh/6x8f2583",
+            "sh/7yhgbq9o",
+            "sh/kvqx0vqd",
+            "im/47mxg7qd",
+            "im/za9wvypo"
+          ]
+        },
+        {
+          "action": "delete",
+          "sourceElementIds": [
+            "im/58vy9s7y",
+            "sh/ul4vaxgb"
+          ]
+        }
+      ]
+    }
+  ],
+  "omittedSourceSlides": []
+}

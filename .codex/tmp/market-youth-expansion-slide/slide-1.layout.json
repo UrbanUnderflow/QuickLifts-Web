@@ -1,0 +1,1992 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/pcbbug",
+    "id": "pcbbug",
+    "slide": 1,
+    "layoutId": "e4d5aac6-2cac-4260-b21e-3e048965a0b5",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "db828a0d-dd85-4dfe-8983-f70c0f94e2fb",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#080A0C",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "e4d5aac6-2cac-4260-b21e-3e048965a0b5",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "db828a0d-dd85-4dfe-8983-f70c0f94e2fb",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "db828a0d-dd85-4dfe-8983-f70c0f94e2fb",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t8vahsva",
+      "id": "1",
+      "name": "section-pill",
+      "bbox": [
+        50,
+        40,
+        185,
+        39
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(18, 20, 22, 0.98)",
+      "lineColor": "#252A2F",
+      "lineWidth": 1
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/654b6dwz",
+      "id": "2",
+      "name": "section-dot",
+      "bbox": [
+        68,
+        55,
+        8,
+        8
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/76dsfid4",
+      "id": "3",
+      "name": "section-label",
+      "bbox": [
+        88,
+        49,
+        125,
+        21
+      ],
+      "geometry": "rect",
+      "text": "THE MARKET",
+      "textPreview": "THE MARKET",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "THE MARKET"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "THE MARKET",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "THE MARKET",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kjmt4net",
+      "id": "4",
+      "name": "headline-white",
+      "bbox": [
+        50,
+        145,
+        345,
+        52
+      ],
+      "geometry": "rect",
+      "text": "There are over",
+      "textPreview": "There are over",
+      "resolvedFontSize": 39,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 39,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "There are over"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "There are over",
+          "resolvedTextStyle": {
+            "fontSize": 39,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "There are over",
+              "fontSize": 39,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5kvadsve",
+      "id": "5",
+      "name": "headline-lime",
+      "bbox": [
+        393,
+        145,
+        810,
+        52
+      ],
+      "geometry": "rect",
+      "text": "1,100 NCAA programs in the U.S.",
+      "textPreview": "1,100 NCAA programs in the U.S.",
+      "resolvedFontSize": 39,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 39,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1,100 NCAA programs in the U.S."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1,100 NCAA programs in the U.S.",
+          "resolvedTextStyle": {
+            "fontSize": 39,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "1,100 NCAA programs in the U.S.",
+              "fontSize": 39,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ih4b2dwn",
+      "id": "6",
+      "name": "primary-card",
+      "bbox": [
+        50,
+        260,
+        1180,
+        184
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(21, 23, 25, 0.98)",
+      "lineColor": "#C8FF00",
+      "lineWidth": 1.3
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jidsbid8",
+      "id": "7",
+      "name": "primary-label",
+      "bbox": [
+        88,
+        290,
+        460,
+        22
+      ],
+      "geometry": "rect",
+      "text": "PRIMARY FOCUS  ·  NCAA INSTITUTIONS",
+      "textPreview": "PRIMARY FOCUS  ·  NCAA INSTITUTIONS",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PRIMARY FOCUS  ·  NCAA INSTITUTIONS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PRIMARY FOCUS  ·  NCAA INSTITUTIONS",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PRIMARY FOCUS  ·  NCAA INSTITUTIONS",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wf2t03eh",
+      "id": "8",
+      "name": "stat-1-value",
+      "bbox": [
+        88,
+        326,
+        260,
+        54
+      ],
+      "geometry": "rect",
+      "text": "1,100+",
+      "textPreview": "1,100+",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1,100+"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1,100+",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "1,100+",
+              "fontSize": 38,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xgba98v2",
+      "id": "9",
+      "name": "stat-1-label",
+      "bbox": [
+        88,
+        392,
+        280,
+        25
+      ],
+      "geometry": "rect",
+      "text": "NCAA member schools",
+      "textPreview": "NCAA member schools",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NCAA member schools"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NCAA member schools",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NCAA member schools",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9wvy10r2",
+      "id": "10",
+      "name": "stat-2-value",
+      "bbox": [
+        490,
+        326,
+        260,
+        54
+      ],
+      "geometry": "rect",
+      "text": "500",
+      "textPreview": "500",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Arial",
+        "color": "#9B72FF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "500"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "500",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Arial",
+            "color": "#9B72FF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "500",
+              "fontSize": 38,
+              "typeface": "Arial",
+              "color": "#9B72FF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ovmxsvah",
+      "id": "11",
+      "name": "stat-2-label",
+      "bbox": [
+        490,
+        392,
+        280,
+        25
+      ],
+      "geometry": "rect",
+      "text": "student-athletes per department",
+      "textPreview": "student-athletes per department",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "student-athletes per department"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "student-athletes per department",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "student-athletes per department",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nutgzq9c",
+      "id": "12",
+      "name": "stat-3-value",
+      "bbox": [
+        890,
+        326,
+        260,
+        54
+      ],
+      "geometry": "rect",
+      "text": "500K+",
+      "textPreview": "500K+",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 38,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "500K+"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "500K+",
+          "resolvedTextStyle": {
+            "fontSize": 38,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "500K+",
+              "fontSize": 38,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mtkfqlsr",
+      "id": "13",
+      "name": "stat-3-label",
+      "bbox": [
+        890,
+        392,
+        280,
+        25
+      ],
+      "geometry": "rect",
+      "text": "athletes covered by the mandate",
+      "textPreview": "athletes covered by the mandate",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "athletes covered by the mandate"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "athletes covered by the mandate",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "athletes covered by the mandate",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1sbyx0r6",
+      "id": "14",
+      "name": "stat-rule-1",
+      "bbox": [
+        430,
+        318,
+        0,
+        95
+      ],
+      "geometry": "line",
+      "lineColor": "#2D3338",
+      "lineWidth": 1
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0r2xoval",
+      "id": "15",
+      "name": "stat-rule-2",
+      "bbox": [
+        830,
+        318,
+        0,
+        95
+      ],
+      "geometry": "line",
+      "lineColor": "#2D3338",
+      "lineWidth": 1
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zqtgvq90",
+      "id": "16",
+      "name": "later-label",
+      "bbox": [
+        50,
+        476,
+        300,
+        24
+      ],
+      "geometry": "rect",
+      "text": "LATER EXPANSION",
+      "textPreview": "LATER EXPANSION",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#858B96",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "LATER EXPANSION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "LATER EXPANSION",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#858B96",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "LATER EXPANSION",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#858B96",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/epkfmlsf",
+      "id": "17",
+      "name": "expansion-1-card",
+      "bbox": [
+        50,
+        516,
+        281,
+        128
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(21, 23, 25, 0.98)",
+      "lineColor": "#252A2F",
+      "lineWidth": 1
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dobytgru",
+      "id": "18",
+      "name": "expansion-1-number-bg",
+      "bbox": [
+        70,
+        541,
+        52,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(155, 114, 255, 0.13)",
+      "lineColor": "rgba(155, 114, 255, 0.35)",
+      "lineWidth": 1
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cn2xkbap",
+      "id": "19",
+      "name": "expansion-1-number",
+      "bbox": [
+        70,
+        553,
+        52,
+        26
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#9B72FF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#9B72FF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#9B72FF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47mx0bi5",
+      "id": "20",
+      "name": "expansion-1-title",
+      "bbox": [
+        138,
+        540,
+        173,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Youth athletics",
+      "textPreview": "Youth athletics",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Youth athletics"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Youth athletics",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Youth athletics",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/58fy9gzq",
+      "id": "21",
+      "name": "expansion-1-detail",
+      "bbox": [
+        138,
+        576,
+        173,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Club, school + governing-body channels",
+      "textPreview": "Club, school + governing-body channels",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Club, school +"
+          },
+          {
+            "index": 2,
+            "text": "governing-body channels"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Club, school + governing-body channels",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Club, school + governing-body channels",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/i54fyl0f",
+      "id": "22",
+      "name": "expansion-1-accent",
+      "bbox": [
+        70,
+        635,
+        241,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#9B72FF",
+      "lineColor": "#9B72FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/36dg76h0",
+      "id": "23",
+      "name": "expansion-2-card",
+      "bbox": [
+        349,
+        516,
+        281,
+        128
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(21, 23, 25, 0.98)",
+      "lineColor": "#252A2F",
+      "lineWidth": 1
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/g3mxwbi9",
+      "id": "24",
+      "name": "expansion-2-number-bg",
+      "bbox": [
+        369,
+        541,
+        52,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(77, 143, 255, 0.13)",
+      "lineColor": "rgba(77, 143, 255, 0.35)",
+      "lineWidth": 1
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h4vy5gzu",
+      "id": "25",
+      "name": "expansion-2-number",
+      "bbox": [
+        369,
+        553,
+        52,
+        26
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u14fu103",
+      "id": "26",
+      "name": "expansion-2-title",
+      "bbox": [
+        437,
+        540,
+        173,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Campus-wide licenses",
+      "textPreview": "Campus-wide licenses",
+      "resolvedFontSize": 16.04,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.89,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Campus-wide"
+          },
+          {
+            "index": 2,
+            "text": "licenses"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Campus-wide licenses",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Campus-wide licenses",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v2dg36ho",
+      "id": "27",
+      "name": "expansion-2-detail",
+      "bbox": [
+        437,
+        576,
+        173,
+        50
+      ],
+      "geometry": "rect",
+      "text": "~$400K per institution",
+      "textPreview": "~$400K per institution",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "~$400K per institution"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "~$400K per institution",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "~$400K per institution",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0z6h8vid",
+      "id": "28",
+      "name": "expansion-2-accent",
+      "bbox": [
+        369,
+        635,
+        241,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#4D8FFF",
+      "lineColor": "#4D8FFF",
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/10zyh0zy",
+      "id": "29",
+      "name": "expansion-3-card",
+      "bbox": [
+        648,
+        516,
+        281,
+        128
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(21, 23, 25, 0.98)",
+      "lineColor": "#252A2F",
+      "lineWidth": 1
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bu107u10",
+      "id": "30",
+      "name": "expansion-3-number-bg",
+      "bbox": [
+        668,
+        541,
+        52,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(246, 90, 175, 0.13)",
+      "lineColor": "rgba(246, 90, 175, 0.35)",
+      "lineWidth": 1
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/atsjy9kv",
+      "id": "31",
+      "name": "expansion-3-number",
+      "bbox": [
+        668,
+        553,
+        52,
+        26
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#F65AAF",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#F65AAF",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#F65AAF",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xwj294j6",
+      "id": "32",
+      "name": "expansion-3-title",
+      "bbox": [
+        736,
+        540,
+        173,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Clinics & sports medicine",
+      "textPreview": "Clinics & sports medicine",
+      "resolvedFontSize": 14.1,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.78,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Clinics & sports medicine"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Clinics & sports medicine",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Clinics & sports medicine",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cva10z2l",
+      "id": "33",
+      "name": "expansion-3-detail",
+      "bbox": [
+        736,
+        576,
+        173,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Access + referral network layer",
+      "textPreview": "Access + referral network layer",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Access + referral network"
+          },
+          {
+            "index": 2,
+            "text": "layer"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Access + referral network layer",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Access + referral network layer",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zy1kbe1c",
+      "id": "34",
+      "name": "expansion-3-accent",
+      "bbox": [
+        668,
+        635,
+        241,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#F65AAF",
+      "lineColor": "#F65AAF",
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yxsj29kr",
+      "id": "35",
+      "name": "expansion-4-card",
+      "bbox": [
+        947,
+        516,
+        281,
+        128
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(21, 23, 25, 0.98)",
+      "lineColor": "#252A2F",
+      "lineWidth": 1
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/l032doji",
+      "id": "36",
+      "name": "expansion-4-number-bg",
+      "bbox": [
+        967,
+        541,
+        52,
+        52
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(255, 156, 56, 0.13)",
+      "lineColor": "rgba(255, 156, 56, 0.35)",
+      "lineWidth": 1
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kzu14j2x",
+      "id": "37",
+      "name": "expansion-4-number",
+      "bbox": [
+        967,
+        553,
+        52,
+        26
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#FF9C38",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#FF9C38",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#FF9C38",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/f2h0za18",
+      "id": "38",
+      "name": "expansion-4-title",
+      "bbox": [
+        1035,
+        540,
+        173,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Pro teams & federations",
+      "textPreview": "Pro teams & federations",
+      "resolvedFontSize": 15.12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F5F5F2",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.84,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Pro teams & federations"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Pro teams & federations",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F5F5F2",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Pro teams & federations",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F5F5F2",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e18jq5kn",
+      "id": "39",
+      "name": "expansion-4-detail",
+      "bbox": [
+        1035,
+        576,
+        173,
+        50
+      ],
+      "geometry": "rect",
+      "text": "Horizon after NCAA proof",
+      "textPreview": "Horizon after NCAA proof",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#ADB2BC",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Horizon after NCAA proof"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Horizon after NCAA proof",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#ADB2BC",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Horizon after NCAA proof",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#ADB2BC",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6lcjmpsj",
+      "id": "40",
+      "name": "expansion-4-accent",
+      "bbox": [
+        967,
+        635,
+        241,
+        4
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#FF9C38",
+      "lineColor": "#FF9C38",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

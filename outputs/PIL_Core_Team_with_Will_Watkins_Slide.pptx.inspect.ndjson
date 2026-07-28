@@ -1,0 +1,49 @@
+{"kind":"deck","id":"pr/df6bj1","name":"Deck"}
+{"kind":"layout","layoutId":"aec6ec1f-b99d-4767-8e74-5cee5937dc31","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"ef7c96c2-79ce-4a14-8ccd-197491192a91","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/sx08t1","slide":1,"title":"CORE TEAM","textShapes":23}
+{"kind":"shape","id":"sh/h43i5c7y","slide":1,"name":"background-darkener","bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/w3uhc7qd","slide":1,"name":"bottom-depth","bbox":[0,238,1280,482]}
+{"kind":"shape","id":"sh/ne1gz2pg","slide":1,"name":"section-pill","bbox":[62,38,210,40]}
+{"kind":"shape","id":"sh/mdsz6x8b","slide":1,"name":"section-dot","bbox":[80,53,8,8]}
+{"kind":"textbox","id":"sh/90jy1c7m","slide":1,"name":"section-label","text":"CORE TEAM","textPreview":"CORE TEAM","textChars":9,"textLines":1,"bbox":[102,47,140,22]}
+{"kind":"textbox","id":"sh/8zah87q1","slide":1,"name":"headline-white","text":"Operators who know","textPreview":"Operators who know","textChars":18,"textLines":1,"bbox":[62,108,420,44]}
+{"kind":"textbox","id":"sh/ral0bmp0","slide":1,"name":"headline-lime-one","text":"software, athletes,","textPreview":"software, athletes,","textChars":19,"textLines":1,"bbox":[447,108,660,44]}
+{"kind":"textbox","id":"sh/69czih8f","slide":1,"name":"headline-lime-two","text":"clinical trust, and enterprise sales.","textPreview":"clinical trust, and enterprise sales.","textChars":37,"textLines":1,"bbox":[62,153,1080,46]}
+{"kind":"shape","id":"sh/of6hcfa9","slide":1,"name":"member-1-card","bbox":[62,238,274,284]}
+{"kind":"textbox","id":"sh/mdoza5s3","slide":1,"name":"member-1-name","text":"Tremaine Grant","textPreview":"Tremaine Grant","textChars":14,"textLines":1,"bbox":[82,342,234,28]}
+{"kind":"textbox","id":"sh/nexgja9o","slide":1,"name":"member-1-role","text":"FOUNDER & CEO","textPreview":"FOUNDER & CEO","textChars":13,"textLines":1,"bbox":[82,377,234,22]}
+{"kind":"shape","id":"sh/0r6h8vax","slide":1,"name":"member-1-rule","bbox":[90,410,218,0]}
+{"kind":"textbox","id":"sh/1cfyh0ri","slide":1,"name":"member-1-bio","text":"Full-stack engineer and AI builder with a decade in clinical research. Former D1 athlete at FSU.","textPreview":"Full-stack engineer and AI builder with a decade in clinical research. Former D1 athlete at FSU.","textChars":96,"textLines":1,"bbox":[86,424,226,85]}
+{"kind":"shape","id":"sh/epoz6ls7","slide":1,"name":"member-2-card","bbox":[356,238,274,284]}
+{"kind":"textbox","id":"sh/snmh4ba1","slide":1,"name":"member-2-name","text":"Bobby Nweke","textPreview":"Bobby Nweke","textChars":11,"textLines":1,"bbox":[376,342,234,28]}
+{"kind":"textbox","id":"sh/dovydgrm","slide":1,"name":"member-2-role","text":"CHIEF OF STAFF","textPreview":"CHIEF OF STAFF","textChars":14,"textLines":1,"bbox":[376,377,234,22]}
+{"kind":"shape","id":"sh/t8n6lsfy","slide":1,"name":"member-2-rule","bbox":[384,410,218,0]}
+{"kind":"textbox","id":"sh/87u5snyd","slide":1,"name":"member-2-bio","text":"10 years in human performance across training, athletics, and education.","textPreview":"10 years in human performance across training, athletics, and education.","textChars":72,"textLines":1,"bbox":[380,424,226,85]}
+{"kind":"shape","id":"sh/76lojix8","slide":1,"name":"member-3-card","bbox":[650,238,274,284]}
+{"kind":"textbox","id":"sh/l436h8z2","slide":1,"name":"member-3-name","text":"Lola Oluwaladun","textPreview":"Lola Oluwaladun","textChars":15,"textLines":1,"bbox":[670,342,234,28]}
+{"kind":"textbox","id":"sh/k3u5o3yh","slide":1,"name":"member-3-role","text":"HEAD OF DESIGN","textPreview":"HEAD OF DESIGN","textChars":14,"textLines":1,"bbox":[670,377,234,22]}
+{"kind":"shape","id":"sh/j2lofyhw","slide":1,"name":"member-3-rule","bbox":[678,410,218,0]}
+{"kind":"textbox","id":"sh/y1cnmtgb","slide":1,"name":"member-3-bio","text":"Owns product experience and athlete-facing UX across Pulse.","textPreview":"Owns product experience and athlete-facing UX across Pulse.","textChars":59,"textLines":1,"bbox":[674,424,226,85]}
+{"kind":"shape","id":"sh/5076tcf6","slide":1,"name":"member-4-card","bbox":[944,238,274,284]}
+{"kind":"textbox","id":"sh/m583u9w3","slide":1,"name":"member-4-name","text":"Will Watkins","textPreview":"Will Watkins","textChars":12,"textLines":1,"bbox":[964,342,234,28]}
+{"kind":"textbox","id":"sh/n6hknudo","slide":1,"name":"member-4-role","text":"HEAD OF SALES","textPreview":"HEAD OF SALES","textChars":13,"textLines":1,"bbox":[964,377,234,22]}
+{"kind":"shape","id":"sh/o7qlwze9","slide":1,"name":"member-4-rule","bbox":[972,410,218,0]}
+{"kind":"textbox","id":"sh/98z2p4vu","slide":1,"name":"member-4-bio","text":"Salesforce Global Director of Sales. Former professional player in the Boston Red Sox organization.","textPreview":"Salesforce Global Director of Sales. Former professional player in the Boston Red Sox organization.","textChars":99,"textLines":1,"bbox":[968,424,226,85]}
+{"kind":"shape","id":"sh/eh83qpw7","slide":1,"name":"advisor-strip","bbox":[62,544,1156,133]}
+{"kind":"textbox","id":"sh/zihkjuxs","slide":1,"name":"advisor-heading","text":"ADVISORS","textPreview":"ADVISORS","textChars":8,"textLines":1,"bbox":[530,558,220,21]}
+{"kind":"textbox","id":"sh/14z2l4fi","slide":1,"name":"advisor-1-name","text":"Marques Zak","textPreview":"Marques Zak","textChars":11,"textLines":1,"bbox":[165,636,240,19]}
+{"kind":"textbox","id":"sh/yds3mtwb","slide":1,"name":"advisor-1-role","text":"CMO, ACC","textPreview":"CMO, ACC","textChars":8,"textLines":1,"bbox":[155,655,260,20]}
+{"kind":"textbox","id":"sh/j6hgrqhc","slide":1,"name":"advisor-2-name","text":"Valerie Alexander","textPreview":"Valerie Alexander","textChars":17,"textLines":1,"bbox":[520,636,240,19]}
+{"kind":"textbox","id":"sh/i58zil0r","slide":1,"name":"advisor-2-role","text":"Entrepreneur in Residence • Former IPO Attorney","textPreview":"Entrepreneur in Residence • Former IPO Attorney","textChars":47,"textLines":1,"bbox":[510,655,260,20]}
+{"kind":"textbox","id":"sh/47qhkvix","slide":1,"name":"advisor-3-name","text":"Erik Edwards","textPreview":"Erik Edwards","textChars":12,"textLines":1,"bbox":[875,636,240,19]}
+{"kind":"textbox","id":"sh/v2xgn6h0","slide":1,"name":"advisor-3-role","text":"Partner, Cooley","textPreview":"Partner, Cooley","textChars":15,"textLines":1,"bbox":[865,655,260,20]}
+{"kind":"image","id":"im/zqh4zq50","slide":1,"name":"","geometry":"rect","alt":"Basketball team huddling in an arena","bbox":[0,0,1280,720]}
+{"kind":"image","id":"im/m9sz2l0b","slide":1,"name":"","geometry":"ellipse","alt":"Tremaine Grant portrait","bbox":[162,256,74,74]}
+{"kind":"image","id":"im/wzuh8vid","slide":1,"name":"","geometry":"ellipse","alt":"Bobby Nweke portrait","bbox":[456,256,74,74]}
+{"kind":"image","id":"im/h072doj2","slide":1,"name":"","geometry":"ellipse","alt":"Lola Oluwaladun portrait","bbox":[750,256,74,74]}
+{"kind":"image","id":"im/rq94jy14","slide":1,"name":"","geometry":"ellipse","alt":"Will Watkins portrait","bbox":[1044,256,74,74]}
+{"kind":"image","id":"im/ru9o3il4","slide":1,"name":"","geometry":"ellipse","alt":"Marques Zak portrait","bbox":[261,581,48,48]}
+{"kind":"image","id":"im/wrmp8729","slide":1,"name":"","geometry":"ellipse","alt":"Valerie Alexander portrait","bbox":[616,581,48,48]}
+{"kind":"image","id":"im/itsv6h4z","slide":1,"name":"","geometry":"ellipse","alt":"Erik Edwards portrait","bbox":[971,581,48,48]}
+{"kind":"notes","id":"nt/sx08t1","slide":1,"text":"Will Watkins joins Pulse as Head of Sales. Public sources identify Watkins as Global Director of Sales at Salesforce. The baseball background and Boston Red Sox organization experience are based on company-provided biographical information.\n\n[Sources]\n- User-provided portrait: /Users/tremainegrant/Downloads/1668718172755.jpeg\n- User-provided biographical information for Will Watkins.\n- https://www.linkedin.com/in/will-watkins-78238127\n- https://myemail.constantcontact.com/CAU-Alumni-Newsletter-Issue-7-April-2025.html?aid=2YpslLU8Fck&soid=1139227680712\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/investor/july-2026/hero-basketball-huddle.png\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/tre.jpg\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/bobbyAdvisor.jpg\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/lola.jpg\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/zak.jpg\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/Val.jpg\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/ErikEdwards.png\n[/Sources]"}

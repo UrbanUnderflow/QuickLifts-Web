@@ -1,0 +1,45 @@
+{"kind":"deck","id":"pr/1z08g2","name":"Deck"}
+{"kind":"layout","layoutId":"db828a0d-dd85-4dfe-8983-f70c0f94e2fb","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"e4d5aac6-2cac-4260-b21e-3e048965a0b5","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/pcbbug","slide":1,"title":"THE MARKET","textShapes":23}
+{"kind":"shape","id":"sh/t8vahsva","slide":1,"name":"section-pill","bbox":[50,40,185,39]}
+{"kind":"shape","id":"sh/654b6dwz","slide":1,"name":"section-dot","bbox":[68,55,8,8]}
+{"kind":"textbox","id":"sh/76dsfid4","slide":1,"name":"section-label","text":"THE MARKET","textPreview":"THE MARKET","textChars":10,"textLines":1,"bbox":[88,49,125,21]}
+{"kind":"textbox","id":"sh/kjmt4net","slide":1,"name":"headline-white","text":"There are over","textPreview":"There are over","textChars":14,"textLines":1,"bbox":[50,145,345,52]}
+{"kind":"textbox","id":"sh/5kvadsve","slide":1,"name":"headline-lime","text":"1,100 NCAA programs in the U.S.","textPreview":"1,100 NCAA programs in the U.S.","textChars":31,"textLines":1,"bbox":[393,145,810,52]}
+{"kind":"shape","id":"sh/ih4b2dwn","slide":1,"name":"primary-card","bbox":[50,260,1180,184]}
+{"kind":"textbox","id":"sh/jidsbid8","slide":1,"name":"primary-label","text":"PRIMARY FOCUS  ·  NCAA INSTITUTIONS","textPreview":"PRIMARY FOCUS  ·  NCAA INSTITUTIONS","textChars":35,"textLines":1,"bbox":[88,290,460,22]}
+{"kind":"textbox","id":"sh/wf2t03eh","slide":1,"name":"stat-1-value","text":"1,100+","textPreview":"1,100+","textChars":6,"textLines":1,"bbox":[88,326,260,54]}
+{"kind":"textbox","id":"sh/xgba98v2","slide":1,"name":"stat-1-label","text":"NCAA member schools","textPreview":"NCAA member schools","textChars":19,"textLines":1,"bbox":[88,392,280,25]}
+{"kind":"textbox","id":"sh/9wvy10r2","slide":1,"name":"stat-2-value","text":"500","textPreview":"500","textChars":3,"textLines":1,"bbox":[490,326,260,54]}
+{"kind":"textbox","id":"sh/ovmxsvah","slide":1,"name":"stat-2-label","text":"student-athletes per department","textPreview":"student-athletes per department","textChars":31,"textLines":1,"bbox":[490,392,280,25]}
+{"kind":"textbox","id":"sh/nutgzq9c","slide":1,"name":"stat-3-value","text":"500K+","textPreview":"500K+","textChars":5,"textLines":1,"bbox":[890,326,260,54]}
+{"kind":"textbox","id":"sh/mtkfqlsr","slide":1,"name":"stat-3-label","text":"athletes covered by the mandate","textPreview":"athletes covered by the mandate","textChars":31,"textLines":1,"bbox":[890,392,280,25]}
+{"kind":"shape","id":"sh/1sbyx0r6","slide":1,"name":"stat-rule-1","bbox":[430,318,0,95]}
+{"kind":"shape","id":"sh/0r2xoval","slide":1,"name":"stat-rule-2","bbox":[830,318,0,95]}
+{"kind":"textbox","id":"sh/zqtgvq90","slide":1,"name":"later-label","text":"LATER EXPANSION","textPreview":"LATER EXPANSION","textChars":15,"textLines":1,"bbox":[50,476,300,24]}
+{"kind":"shape","id":"sh/epkfmlsf","slide":1,"name":"expansion-1-card","bbox":[50,516,281,128]}
+{"kind":"shape","id":"sh/dobytgru","slide":1,"name":"expansion-1-number-bg","bbox":[70,541,52,52]}
+{"kind":"textbox","id":"sh/cn2xkbap","slide":1,"name":"expansion-1-number","text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[70,553,52,26]}
+{"kind":"textbox","id":"sh/47mx0bi5","slide":1,"name":"expansion-1-title","text":"Youth athletics","textPreview":"Youth athletics","textChars":15,"textLines":1,"bbox":[138,540,173,26]}
+{"kind":"textbox","id":"sh/58fy9gzq","slide":1,"name":"expansion-1-detail","text":"Club, school + governing-body channels","textPreview":"Club, school + governing-body channels","textChars":38,"textLines":1,"bbox":[138,576,173,50]}
+{"kind":"shape","id":"sh/i54fyl0f","slide":1,"name":"expansion-1-accent","bbox":[70,635,241,4]}
+{"kind":"shape","id":"sh/36dg76h0","slide":1,"name":"expansion-2-card","bbox":[349,516,281,128]}
+{"kind":"shape","id":"sh/g3mxwbi9","slide":1,"name":"expansion-2-number-bg","bbox":[369,541,52,52]}
+{"kind":"textbox","id":"sh/h4vy5gzu","slide":1,"name":"expansion-2-number","text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[369,553,52,26]}
+{"kind":"textbox","id":"sh/u14fu103","slide":1,"name":"expansion-2-title","text":"Campus-wide licenses","textPreview":"Campus-wide licenses","textChars":20,"textLines":1,"bbox":[437,540,173,26]}
+{"kind":"textbox","id":"sh/v2dg36ho","slide":1,"name":"expansion-2-detail","text":"~$400K per institution","textPreview":"~$400K per institution","textChars":22,"textLines":1,"bbox":[437,576,173,50]}
+{"kind":"shape","id":"sh/0z6h8vid","slide":1,"name":"expansion-2-accent","bbox":[369,635,241,4]}
+{"kind":"shape","id":"sh/10zyh0zy","slide":1,"name":"expansion-3-card","bbox":[648,516,281,128]}
+{"kind":"shape","id":"sh/bu107u10","slide":1,"name":"expansion-3-number-bg","bbox":[668,541,52,52]}
+{"kind":"textbox","id":"sh/atsjy9kv","slide":1,"name":"expansion-3-number","text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[668,553,52,26]}
+{"kind":"textbox","id":"sh/xwj294j6","slide":1,"name":"expansion-3-title","text":"Clinics & sports medicine","textPreview":"Clinics & sports medicine","textChars":25,"textLines":1,"bbox":[736,540,173,26]}
+{"kind":"textbox","id":"sh/cva10z2l","slide":1,"name":"expansion-3-detail","text":"Access + referral network layer","textPreview":"Access + referral network layer","textChars":31,"textLines":1,"bbox":[736,576,173,50]}
+{"kind":"shape","id":"sh/zy1kbe1c","slide":1,"name":"expansion-3-accent","bbox":[668,635,241,4]}
+{"kind":"shape","id":"sh/yxsj29kr","slide":1,"name":"expansion-4-card","bbox":[947,516,281,128]}
+{"kind":"shape","id":"sh/l032doji","slide":1,"name":"expansion-4-number-bg","bbox":[967,541,52,52]}
+{"kind":"textbox","id":"sh/kzu14j2x","slide":1,"name":"expansion-4-number","text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[967,553,52,26]}
+{"kind":"textbox","id":"sh/f2h0za18","slide":1,"name":"expansion-4-title","text":"Pro teams & federations","textPreview":"Pro teams & federations","textChars":23,"textLines":1,"bbox":[1035,540,173,26]}
+{"kind":"textbox","id":"sh/e18jq5kn","slide":1,"name":"expansion-4-detail","text":"Horizon after NCAA proof","textPreview":"Horizon after NCAA proof","textChars":24,"textLines":1,"bbox":[1035,576,173,50]}
+{"kind":"shape","id":"sh/6lcjmpsj","slide":1,"name":"expansion-4-accent","bbox":[967,635,241,4]}
+{"kind":"notes","id":"nt/pcbbug","slide":1,"text":"The NCAA remains the primary institutional beachhead. Youth athletics is the first adjacent expansion because the same mental-performance product, governing-body relationships, and event-based acquisition channels can extend into club, school, and national youth-sport ecosystems. Campus-wide licensing, clinics and sports medicine, and professional teams/federations remain additional later-stage channels.\n\n[Sources]\n- User-provided slide screenshot and market assumptions.\n- /var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/TemporaryItems/NSIRD_screencaptureui_fdRWdG/Screenshot 2026-07-28 at 10.54.37 AM.png\n[/Sources]"}

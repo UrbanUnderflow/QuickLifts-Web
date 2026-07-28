@@ -1,0 +1,5 @@
+Slide 1
+- Rebalanced the three-column profile/shared-advantage area into two equal founder cards followed by a full-width partnership narrative.
+- Removed the full-height Tracey action photo to match the cleaner founder-card treatment requested by the user.
+- Tightened profile copy so the slide remains skimmable at investor-deck scale.
+- Preserved the existing research and commercialization proof strip as the closing evidence layer.

@@ -1,0 +1,82 @@
+{
+  "sourcePptx": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/outputs/PIL_AuntEDNA_NCAA_Pipeline_Slide.pptx",
+  "workspace": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide",
+  "outDir": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect",
+  "generatedAt": "2026-07-28T15:10:21.981Z",
+  "slideCount": 1,
+  "slideArtifacts": [
+    {
+      "slide": 1,
+      "previewPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/source-slides/source-slide-01.png",
+      "previewRelativePath": "template-inspect/source-slides/source-slide-01.png",
+      "layoutPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/layouts/source-slide-01.layout.json",
+      "layoutRelativePath": "template-inspect/layouts/source-slide-01.layout.json"
+    }
+  ],
+  "inspectPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/template-inspect.ndjson",
+  "inspectRelativePath": "template-inspect/template-inspect.ndjson",
+  "inspectTruncated": false,
+  "inspectMetadata": {
+    "revision": "g0sugt",
+    "target": {
+      "id": "pr/52ppfx"
+    },
+    "kind": {
+      "requested": "slide,textbox,shape,image,table,chart",
+      "tokens": [
+        "slide",
+        "textbox",
+        "shape",
+        "image",
+        "table",
+        "chart"
+      ]
+    },
+    "include": {
+      "tokens": []
+    },
+    "exclude": {
+      "tokens": []
+    },
+    "notices": []
+  },
+  "extractedMedia": [
+    {
+      "entry": "ppt/media/image.png",
+      "path": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/assets/ppt/media/image.png",
+      "relativePath": "template-inspect/assets/ppt/media/image.png",
+      "bytes": 1921336
+    },
+    {
+      "entry": "ppt/media/image.jpeg",
+      "path": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/assets/ppt/media/image.jpeg",
+      "relativePath": "template-inspect/assets/ppt/media/image.jpeg",
+      "bytes": 137925
+    },
+    {
+      "entry": "ppt/media/image2.png",
+      "path": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/assets/ppt/media/image2.png",
+      "relativePath": "template-inspect/assets/ppt/media/image2.png",
+      "bytes": 283953
+    },
+    {
+      "entry": "ppt/media/image2.jpeg",
+      "path": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-inspect/assets/ppt/media/image2.jpeg",
+      "relativePath": "template-inspect/assets/ppt/media/image2.jpeg",
+      "bytes": 468220
+    }
+  ],
+  "fonts": [
+    "+mj-lt",
+    "+mn-lt",
+    "Arial",
+    "Calibri",
+    "Calibri Light"
+  ],
+  "packageParts": {
+    "mediaCount": 4,
+    "slideXmlCount": 1,
+    "chartCount": 0,
+    "tableSlideCount": 0
+  }
+}

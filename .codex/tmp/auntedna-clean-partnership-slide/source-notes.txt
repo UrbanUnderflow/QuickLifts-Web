@@ -1,0 +1,6 @@
+[Sources]
+- User-provided slide direction and screenshot, 2026-07-28.
+- Existing editable slide: PIL_AuntEDNA_NCAA_Pipeline_Slide.pptx.
+- Founder headshots and background image are inherited from the existing editable slide.
+- Organizational history, NCAA relationship, founder backgrounds, pipeline schools, and NSF/adherence figures are user-provided or inherited from the user's prior slide.
+[/Sources]

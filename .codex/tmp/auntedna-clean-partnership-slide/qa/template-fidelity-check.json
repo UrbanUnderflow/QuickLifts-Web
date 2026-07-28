@@ -1,0 +1,45 @@
+{
+  "status": "fail",
+  "checkedAt": "2026-07-28T15:16:05.301Z",
+  "workspace": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide",
+  "finalPptx": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/outputs/PIL_AuntEDNA_Clean_Strategic_Partnership_Slide.pptx",
+  "starterPptx": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter.pptx",
+  "mapPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-frame-map.json",
+  "starterLayoutDir": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-layout",
+  "finalLayoutDir": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/final-layout",
+  "editDir": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide",
+  "issueCount": 4,
+  "issues": [
+    {
+      "severity": "fail",
+      "id": "fresh-slide-rebuild",
+      "message": "Template-following final authoring must not create a fresh presentation.",
+      "file": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/probe_help.mjs"
+    },
+    {
+      "severity": "fail",
+      "id": "mask-cover-overlay",
+      "message": "Large new opaque shape appears to cover inherited template content.",
+      "slide": 1,
+      "finalLayout": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/final-layout/final-slide-01.layout.json",
+      "starterLayout": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-layout/starter-slide-01.layout.json"
+    },
+    {
+      "severity": "fail",
+      "id": "mask-cover-overlay",
+      "message": "Large new opaque shape appears to cover inherited template content.",
+      "slide": 1,
+      "finalLayout": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/final-layout/final-slide-01.layout.json",
+      "starterLayout": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-layout/starter-slide-01.layout.json"
+    },
+    {
+      "severity": "fail",
+      "id": "mask-cover-overlay",
+      "message": "Large new opaque shape appears to cover inherited template content.",
+      "slide": 1,
+      "finalLayout": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/final-layout/final-slide-01.layout.json",
+      "starterLayout": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-layout/starter-slide-01.layout.json",
+      "inheritedText": "Former women’s basketball coach, athletic director and NCAA committee contributor"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+Source: PIL_AuntEDNA_NCAA_Pipeline_Slide.pptx
+Slides inspected: 1 of 1
+
+Reusable pattern
+- Single-slide, 16:9 dark investor-deck layout.
+- Background: full-bleed basketball image under black overlays.
+- Typography: Arial/Calibri family; large white title, gray subtitle, neon-lime, pink, purple, and blue accents.
+- Structure: section pill, headline, founder profiles, partnership/access proof, and bottom research/commercialization strip.
+
+Requested adaptation
+- Preserve the headline, subtitle, background, founder headshots, and proof strip.
+- Reposition the two founder profiles into equal-width cards.
+- Convert the existing shared-advantage card into a full-width center narrative about the founders' two organizations, six years of NCAA-backed work, and athletic access feeding pilot opportunities.
+- Remove the redundant full-height Tracey action image inside her profile card to keep the composition cleaner.
+
+Inherited placeholders
+- The source contains no inherited PowerPoint title/body/footer/date/slide-number placeholders.
+
+Insertion contract
+- Output is a single duplicated source slide.
+- All requested changes are performed on inherited source objects; no parallel replacement layout is added.

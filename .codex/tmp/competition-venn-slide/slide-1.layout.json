@@ -1,0 +1,2410 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/5jcg9d",
+    "id": "5jcg9d",
+    "slide": 1,
+    "layoutId": "d635a794-6d02-456b-9151-0fee13efae7a",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "f608eb11-e3ec-4079-8e0c-3a5e58944b05",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "d635a794-6d02-456b-9151-0fee13efae7a",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "f608eb11-e3ec-4079-8e0c-3a5e58944b05",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "f608eb11-e3ec-4079-8e0c-3a5e58944b05",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ex8rm14b",
+      "id": "1",
+      "name": "eyebrow-pill",
+      "bbox": [
+        62,
+        34,
+        205,
+        39
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#111518",
+      "lineColor": "#2E353A",
+      "lineWidth": 1
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/10jqhg32",
+      "id": "2",
+      "name": "eyebrow-dot",
+      "bbox": [
+        80,
+        49,
+        8,
+        8
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#C8FF00",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0za9obmh",
+      "id": "3",
+      "name": "eyebrow",
+      "bbox": [
+        101,
+        43,
+        143,
+        21
+      ],
+      "geometry": "rect",
+      "text": "COMPETITION",
+      "textPreview": "COMPETITION",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "COMPETITION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "COMPETITION",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "COMPETITION",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/rah8b650",
+      "id": "4",
+      "name": "headline",
+      "bbox": [
+        62,
+        97,
+        1156,
+        58
+      ],
+      "geometry": "rect",
+      "text": "PulseCheck unifies what universities already buy.",
+      "textPreview": "PulseCheck unifies what universities already buy.",
+      "resolvedFontSize": 48.33,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 49,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.99,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PulseCheck unifies what universities already buy."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PulseCheck unifies what universities already buy.",
+          "resolvedTextStyle": {
+            "fontSize": 49,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PulseCheck unifies what universities already buy.",
+              "fontSize": 49,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/q98ri14f",
+      "id": "5",
+      "name": "subtitle",
+      "bbox": [
+        62,
+        166,
+        1142,
+        46
+      ],
+      "geometry": "rect",
+      "text": "WHOOP measures physiological readiness. Calm builds mindfulness. TimelyCare delivers licensed care. PulseCheck connects all three through sport-specific mental performance.",
+      "textPreview": "WHOOP measures physiological readiness. Calm builds mindfulness. TimelyCare delivers licensed care. PulseCheck connects all three through...",
+      "resolvedFontSize": 19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 19,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WHOOP measures physiological readiness. Calm builds mindfulness. TimelyCare delivers licensed care. PulseCheck connects all three"
+          },
+          {
+            "index": 2,
+            "text": "through sport-specific mental performance."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WHOOP measures physiological readiness. Calm builds mindfulness. TimelyCare delivers licensed care. PulseCheck connects all three through sport-specific mental performance.",
+          "resolvedTextStyle": {
+            "fontSize": 19,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WHOOP measures physiological readiness. Calm builds mindfulness. TimelyCare delivers licensed care. PulseCheck connects all three through sport-specific mental performance.",
+              "fontSize": 19,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dwzqdwnq",
+      "id": "6",
+      "name": "whoop-circle",
+      "bbox": [
+        86,
+        270,
+        320,
+        320
+      ],
+      "geometry": "ellipse",
+      "fillColor": "rgba(77, 143, 255, 0.13)",
+      "lineColor": "#4D8FFF",
+      "lineWidth": 2
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cvq9krm5",
+      "id": "7",
+      "name": "calm-circle",
+      "bbox": [
+        337,
+        270,
+        320,
+        320
+      ],
+      "geometry": "ellipse",
+      "fillColor": "rgba(154, 114, 255, 0.13)",
+      "lineColor": "#9A72FF",
+      "lineWidth": 2
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/b6lsnql4",
+      "id": "8",
+      "name": "timelycare-circle",
+      "bbox": [
+        211,
+        377,
+        320,
+        320
+      ],
+      "geometry": "ellipse",
+      "fillColor": "rgba(255, 154, 54, 0.13)",
+      "lineColor": "#FF9A36",
+      "lineWidth": 2
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/a5srul4j",
+      "id": "9",
+      "name": "whoop-name",
+      "bbox": [
+        132,
+        302,
+        132,
+        29
+      ],
+      "geometry": "rect",
+      "text": "WHOOP",
+      "textPreview": "WHOOP",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WHOOP"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WHOOP",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WHOOP",
+              "fontSize": 23,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/onmxovut",
+      "id": "10",
+      "name": "whoop-competency",
+      "bbox": [
+        132,
+        337,
+        214,
+        42
+      ],
+      "geometry": "rect",
+      "text": "PHYSIOLOGICAL READINESS",
+      "textPreview": "PHYSIOLOGICAL READINESS",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PHYSIOLOGICAL"
+          },
+          {
+            "index": 2,
+            "text": "READINESS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PHYSIOLOGICAL READINESS",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PHYSIOLOGICAL READINESS",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9ovyhgby",
+      "id": "11",
+      "name": "whoop-detail",
+      "bbox": [
+        132,
+        379,
+        205,
+        24
+      ],
+      "geometry": "rect",
+      "text": "Sleep • strain • recovery",
+      "textPreview": "Sleep • strain • recovery",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Sleep • strain • recovery"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Sleep • strain • recovery",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Sleep • strain • recovery",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m14fmlcn",
+      "id": "12",
+      "name": "whoop-gap",
+      "bbox": [
+        118,
+        420,
+        175,
+        55
+      ],
+      "geometry": "rect",
+      "text": "Measures load—not sport-specific mental demands.",
+      "textPreview": "Measures load—not sport-specific mental demands.",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Measures load—not"
+          },
+          {
+            "index": 2,
+            "text": "sport-specific mental"
+          },
+          {
+            "index": 3,
+            "text": "demands."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Measures load—not sport-specific mental demands.",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Measures load—not sport-specific mental demands.",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/n2dgfqt8",
+      "id": "13",
+      "name": "calm-name",
+      "bbox": [
+        515,
+        302,
+        90,
+        29
+      ],
+      "geometry": "rect",
+      "text": "Calm",
+      "textPreview": "Calm",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Arial",
+        "color": "#9A72FF",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Calm"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Calm",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Arial",
+            "color": "#9A72FF",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Calm",
+              "fontSize": 23,
+              "typeface": "Arial",
+              "color": "#9A72FF",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0zmxkbuh",
+      "id": "14",
+      "name": "calm-competency",
+      "bbox": [
+        459,
+        337,
+        176,
+        42
+      ],
+      "geometry": "rect",
+      "text": "MINDFULNESS SKILLS",
+      "textPreview": "MINDFULNESS SKILLS",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "MINDFULNESS"
+          },
+          {
+            "index": 2,
+            "text": "SKILLS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "MINDFULNESS SKILLS",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "MINDFULNESS SKILLS",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/10vydgb2",
+      "id": "15",
+      "name": "calm-detail",
+      "bbox": [
+        429,
+        379,
+        206,
+        39
+      ],
+      "geometry": "rect",
+      "text": "Breathing • meditation • sleep",
+      "textPreview": "Breathing • meditation • sleep",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "right",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Breathing • meditation • sleep"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Breathing • meditation • sleep",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "right"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Breathing • meditation • sleep",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "right"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ex4fi1cb",
+      "id": "16",
+      "name": "calm-gap",
+      "bbox": [
+        559,
+        420,
+        140,
+        55
+      ],
+      "geometry": "rect",
+      "text": "General wellness—not designed around competition.",
+      "textPreview": "General wellness—not designed around competition.",
+      "resolvedFontSize": 13.92,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.99,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "General wellness—not"
+          },
+          {
+            "index": 2,
+            "text": "designed around"
+          },
+          {
+            "index": 3,
+            "text": "competition."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "General wellness—not designed around competition.",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "General wellness—not designed around competition.",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zydgb6tw",
+      "id": "17",
+      "name": "timelycare-name",
+      "bbox": [
+        278,
+        589,
+        186,
+        29
+      ],
+      "geometry": "rect",
+      "text": "TimelyCare",
+      "textPreview": "TimelyCare",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Arial",
+        "color": "#FF9A36",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "TimelyCare"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "TimelyCare",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Arial",
+            "color": "#FF9A36",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "TimelyCare",
+              "fontSize": 23,
+              "typeface": "Arial",
+              "color": "#FF9A36",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cv2xgbul",
+      "id": "18",
+      "name": "timelycare-competency",
+      "bbox": [
+        277,
+        620,
+        188,
+        26
+      ],
+      "geometry": "rect",
+      "text": "LICENSED CARE",
+      "textPreview": "LICENSED CARE",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "LICENSED CARE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "LICENSED CARE",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "LICENSED CARE",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dwby9wb6",
+      "id": "19",
+      "name": "timelycare-detail",
+      "bbox": [
+        262,
+        650,
+        218,
+        23
+      ],
+      "geometry": "rect",
+      "text": "24/7 counseling • psychiatry",
+      "textPreview": "24/7 counseling • psychiatry",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "24/7 counseling • psychiatry"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "24/7 counseling • psychiatry",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "24/7 counseling • psychiatry",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tg3mx8zi",
+      "id": "20",
+      "name": "timelycare-proof",
+      "bbox": [
+        292,
+        675,
+        158,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Nearly 500 colleges",
+      "textPreview": "Nearly 500 colleges",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 13,
+        "typeface": "Arial",
+        "color": "#FF9A36",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Nearly 500 colleges"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Nearly 500 colleges",
+          "resolvedTextStyle": {
+            "fontSize": 13,
+            "typeface": "Arial",
+            "color": "#FF9A36",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Nearly 500 colleges",
+              "fontSize": 13,
+              "typeface": "Arial",
+              "color": "#FF9A36",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sfa5o3ix",
+      "id": "21",
+      "name": "pulsecheck-center",
+      "bbox": [
+        267,
+        445,
+        276,
+        124
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(19, 28, 9, 0.94)",
+      "lineColor": "#C8FF00",
+      "lineWidth": 2
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7e14vyhc",
+      "id": "22",
+      "name": "pulsecheck-name",
+      "bbox": [
+        292,
+        461,
+        226,
+        29
+      ],
+      "geometry": "rect",
+      "text": "PULSECHECK",
+      "textPreview": "PULSECHECK",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 23,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PULSECHECK"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PULSECHECK",
+          "resolvedTextStyle": {
+            "fontSize": 23,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PULSECHECK",
+              "fontSize": 23,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6dsnmt07",
+      "id": "23",
+      "name": "pulsecheck-category",
+      "bbox": [
+        287,
+        492,
+        236,
+        46
+      ],
+      "geometry": "rect",
+      "text": "SPORT-SPECIFIC\nMENTAL PERFORMANCE",
+      "textPreview": "SPORT-SPECIFIC | MENTAL PERFORMANCE",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 17,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "SPORT-SPECIFIC"
+          },
+          {
+            "index": 2,
+            "text": "MENTAL PERFORMANCE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "SPORT-SPECIFIC",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "SPORT-SPECIFIC",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        },
+        {
+          "index": 2,
+          "text": "MENTAL PERFORMANCE",
+          "resolvedTextStyle": {
+            "fontSize": 17,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "MENTAL PERFORMANCE",
+              "fontSize": 17,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5cjmtozm",
+      "id": "24",
+      "name": "pulsecheck-action",
+      "bbox": [
+        291,
+        541,
+        228,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Detect early • train daily • escalate",
+      "textPreview": "Detect early • train daily • escalate",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 12,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Detect early • train daily • escalate"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Detect early • train daily • escalate",
+          "resolvedTextStyle": {
+            "fontSize": 12,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Detect early • train daily • escalate",
+              "fontSize": 12,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kba5kji1",
+      "id": "25",
+      "name": "vertical-divider",
+      "bbox": [
+        724,
+        255,
+        0,
+        411
+      ],
+      "geometry": "line",
+      "lineColor": "#2E353A",
+      "lineWidth": 1
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ja14rehg",
+      "id": "26",
+      "name": "strategy-heading",
+      "bbox": [
+        766,
+        263,
+        424,
+        29
+      ],
+      "geometry": "rect",
+      "text": "WHY THE OVERLAP MATTERS",
+      "textPreview": "WHY THE OVERLAP MATTERS",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 20,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WHY THE OVERLAP MATTERS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WHY THE OVERLAP MATTERS",
+          "resolvedTextStyle": {
+            "fontSize": 20,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "WHY THE OVERLAP MATTERS",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y9s3i90v",
+      "id": "27",
+      "name": "strategy-1-number",
+      "bbox": [
+        766,
+        315,
+        42,
+        30
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "Arial",
+        "color": "#4D8FFF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "typeface": "Arial",
+            "color": "#4D8FFF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 21,
+              "typeface": "Arial",
+              "color": "#4D8FFF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p8nm5szq",
+      "id": "28",
+      "name": "strategy-1-headline",
+      "bbox": [
+        818,
+        315,
+        372,
+        25
+      ],
+      "geometry": "rect",
+      "text": "PERFORMANCE DRIVES ADOPTION",
+      "textPreview": "PERFORMANCE DRIVES ADOPTION",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PERFORMANCE DRIVES ADOPTION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PERFORMANCE DRIVES ADOPTION",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "PERFORMANCE DRIVES ADOPTION",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47u5wni5",
+      "id": "29",
+      "name": "strategy-1-body",
+      "bbox": [
+        818,
+        342,
+        372,
+        47
+      ],
+      "geometry": "rect",
+      "text": "Athletes engage to get better—not because something is wrong.",
+      "textPreview": "Athletes engage to get better—not because something is wrong.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Athletes engage to get better—not because something"
+          },
+          {
+            "index": 2,
+            "text": "is wrong."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Athletes engage to get better—not because something is wrong.",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Athletes engage to get better—not because something is wrong.",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mtojqpgn",
+      "id": "30",
+      "name": "strategy-rule-1",
+      "bbox": [
+        766,
+        394,
+        424,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#2E353A",
+      "lineWidth": 1
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nuxkjax8",
+      "id": "31",
+      "name": "strategy-2-number",
+      "bbox": [
+        766,
+        415,
+        42,
+        30
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "Arial",
+        "color": "#9A72FF",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "typeface": "Arial",
+            "color": "#9A72FF",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 21,
+              "typeface": "Arial",
+              "color": "#9A72FF",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/of61sfyt",
+      "id": "32",
+      "name": "strategy-2-headline",
+      "bbox": [
+        818,
+        415,
+        372,
+        25
+      ],
+      "geometry": "rect",
+      "text": "DAILY TRAINING CREATES A PATH TO CARE",
+      "textPreview": "DAILY TRAINING CREATES A PATH TO CARE",
+      "resolvedFontSize": 17.19,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.95,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "DAILY TRAINING CREATES A PATH TO CARE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "DAILY TRAINING CREATES A PATH TO CARE",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "DAILY TRAINING CREATES A PATH TO CARE",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9gf2lkfe",
+      "id": "33",
+      "name": "strategy-2-body",
+      "bbox": [
+        818,
+        442,
+        372,
+        47
+      ],
+      "geometry": "rect",
+      "text": "Engagement begins before an athlete needs clinical support.",
+      "textPreview": "Engagement begins before an athlete needs clinical support.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Engagement begins before an athlete needs clinical"
+          },
+          {
+            "index": 2,
+            "text": "support."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Engagement begins before an athlete needs clinical support.",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Engagement begins before an athlete needs clinical support.",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/epojm5gr",
+      "id": "34",
+      "name": "strategy-rule-2",
+      "bbox": [
+        766,
+        494,
+        424,
+        0
+      ],
+      "geometry": "line",
+      "lineColor": "#2E353A",
+      "lineWidth": 1
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zqxkfahc",
+      "id": "35",
+      "name": "strategy-3-number",
+      "bbox": [
+        766,
+        515,
+        42,
+        30
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 21,
+        "typeface": "Arial",
+        "color": "#FF9A36",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "typeface": "Arial",
+            "color": "#FF9A36",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 21,
+              "typeface": "Arial",
+              "color": "#FF9A36",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0r61ofyh",
+      "id": "36",
+      "name": "strategy-3-headline",
+      "bbox": [
+        818,
+        515,
+        372,
+        25
+      ],
+      "geometry": "rect",
+      "text": "EXISTING CONTRACTS SPEED ADOPTION",
+      "textPreview": "EXISTING CONTRACTS SPEED ADOPTION",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "EXISTING CONTRACTS SPEED ADOPTION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "EXISTING CONTRACTS SPEED ADOPTION",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "EXISTING CONTRACTS SPEED ADOPTION",
+              "fontSize": 18,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1sf2hkf2",
+      "id": "37",
+      "name": "strategy-3-body",
+      "bbox": [
+        818,
+        542,
+        372,
+        47
+      ],
+      "geometry": "rect",
+      "text": "Layer onto WHOOP and TimelyCare—or replace fragmented tools.",
+      "textPreview": "Layer onto WHOOP and TimelyCare—or replace fragmented tools.",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 15,
+        "typeface": "Arial",
+        "color": "#AAAEB8",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Layer onto WHOOP and TimelyCare—or replace"
+          },
+          {
+            "index": 2,
+            "text": "fragmented tools."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Layer onto WHOOP and TimelyCare—or replace fragmented tools.",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "typeface": "Arial",
+            "color": "#AAAEB8",
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Layer onto WHOOP and TimelyCare—or replace fragmented tools.",
+              "fontSize": 15,
+              "typeface": "Arial",
+              "color": "#AAAEB8",
+              "alignment": "left"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yl8jy9gv",
+      "id": "38",
+      "name": "deployment-band",
+      "bbox": [
+        754,
+        606,
+        449,
+        79
+      ],
+      "geometry": "roundRect",
+      "fillColor": "#12190E",
+      "lineColor": "#3C4E00",
+      "lineWidth": 1
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jmhkruxg",
+      "id": "39",
+      "name": "deployment-modes",
+      "bbox": [
+        776,
+        621,
+        405,
+        23
+      ],
+      "geometry": "rect",
+      "text": "LAND ALONGSIDE  •  INTEGRATE  •  CONSOLIDATE",
+      "textPreview": "LAND ALONGSIDE  •  INTEGRATE  •  CONSOLIDATE",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 16,
+        "typeface": "Arial",
+        "color": "#C8FF00",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 1,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "LAND ALONGSIDE  •  INTEGRATE  •  CONSOLIDATE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "LAND ALONGSIDE  •  INTEGRATE  •  CONSOLIDATE",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "typeface": "Arial",
+            "color": "#C8FF00",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "LAND ALONGSIDE  •  INTEGRATE  •  CONSOLIDATE",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#C8FF00",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3exgn61w",
+      "id": "40",
+      "name": "deployment-explanation",
+      "bbox": [
+        790,
+        652,
+        377,
+        20
+      ],
+      "geometry": "rect",
+      "text": "Existing university contracts shorten the path to adoption.",
+      "textPreview": "Existing university contracts shorten the path to adoption.",
+      "resolvedFontSize": 13.5,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 14,
+        "typeface": "Arial",
+        "color": "#F4F4F1",
+        "bold": true,
+        "alignment": "center",
+        "verticalAlignment": "top",
+        "wrap": "square",
+        "autoFit": "shrinkText",
+        "autoFitScale": 0.96,
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Existing university contracts shorten the path to adoption."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Existing university contracts shorten the path to adoption.",
+          "resolvedTextStyle": {
+            "fontSize": 14,
+            "typeface": "Arial",
+            "color": "#F4F4F1",
+            "bold": true,
+            "alignment": "center"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Existing university contracts shorten the path to adoption.",
+              "fontSize": 14,
+              "typeface": "Arial",
+              "color": "#F4F4F1",
+              "bold": true,
+              "alignment": "center"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

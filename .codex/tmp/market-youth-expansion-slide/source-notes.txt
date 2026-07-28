@@ -1,0 +1,11 @@
+Slide 1 — NCAA Market with Youth Expansion
+
+Source
+- User-provided slide screenshot and market assumptions:
+  /var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/TemporaryItems/NSIRD_screencaptureui_fdRWdG/Screenshot 2026-07-28 at 10.54.37 AM.png
+
+Change
+- Added Youth athletics as the first later-expansion pathway.
+- Rebalanced the lower row into four equal cards.
+- Preserved the NCAA institutional market as the primary focus.
+- Expanded “dptm” to “department” for readability.

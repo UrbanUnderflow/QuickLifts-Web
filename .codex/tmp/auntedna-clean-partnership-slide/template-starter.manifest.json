@@ -1,0 +1,24 @@
+{
+  "sourcePptx": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/outputs/PIL_AuntEDNA_NCAA_Pipeline_Slide.pptx",
+  "mapPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-frame-map.json",
+  "output": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter.pptx",
+  "outputBytes": 2814558,
+  "sourceSlideCount": 1,
+  "slideCount": 1,
+  "previewDir": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-preview",
+  "layoutDir": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-layout",
+  "contactSheet": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-contact-sheet.png",
+  "slides": [
+    {
+      "outputSlide": 1,
+      "sourceSlide": 1,
+      "narrativeRole": "strategic partnership and athletics-access proof",
+      "reuseMode": "duplicate-slide",
+      "editTargetCount": 2,
+      "previewPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-preview/starter-slide-01.png",
+      "previewRelativePath": "template-starter-preview/starter-slide-01.png",
+      "layoutPath": "/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/.codex/tmp/auntedna-clean-partnership-slide/template-starter-layout/starter-slide-01.layout.json",
+      "layoutRelativePath": "template-starter-layout/starter-slide-01.layout.json"
+    }
+  ]
+}

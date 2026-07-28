@@ -1,0 +1,28 @@
+Slide 1 — Council Operators with Clinical Leaders
+
+New researched members
+- Dr. Jeremy Burnham
+  - https://www.ochsner.org/doctors/jeremy-burnham/
+    Dual board certification, Ochsner leadership titles, research, prior team-physician experience, and LSU athlete background.
+  - https://www.ochsner.org/services/sports-medicine-baton-rouge/
+    Medical Director of Sports Medicine and principal-investigator roles.
+  - https://lsusports.net/sports/fb/roster/player/jeremy-burnham/
+    Former LSU football player.
+  - https://www.sportsmed.org/research/sports-medicine-research-grants/playmaker-grant-lab
+    Portrait source and AOSSM research recognition.
+
+- Dr. Malkia Johnson
+  - https://wwwcp.umes.edu/student/emse-leadership-team/
+    UMES Director of Counseling Services.
+  - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/src/pages/PIL/TheAthleticMindCouncil.tsx
+    Council/company-provided role: East Coast lead for the Clinical Directors Council.
+  - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/malkia-advisor.png
+    Portrait.
+
+Existing members
+- User-provided slide screenshot supplied existing portraits and biographies for Jill Geer, Amber Camp, Talia Mark, and Tram Holloway.
+- https://www.hyperchargehealth.com/tram-holloway
+  HyperCharge Health CTO role and human-performance background.
+
+Design source
+- /var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/TemporaryItems/NSIRD_screencaptureui_atvXn0/Screenshot 2026-07-28 at 9.56.08 AM.png

@@ -1,0 +1,57 @@
+{"kind":"deck","id":"pr/krvpmm","name":"Deck"}
+{"kind":"layout","layoutId":"/ppt/slideMasters/slideMaster1.xml","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout1.xml","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/y90nupkv","slide":1,"title":"STRATEGIC PARTNERSHIP","textShapes":32}
+{"kind":"shape","id":"sh/547294r6","slide":1,"name":"background-darkener","bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/k3yl0zql","slide":1,"name":"content-depth","bbox":[0,190,1280,530]}
+{"kind":"shape","id":"sh/7qp4be9c","slide":1,"name":"section-pill","bbox":[56,30,310,40]}
+{"kind":"shape","id":"sh/65g3298r","slide":1,"name":"section-dot","bbox":[76,45,8,8]}
+{"kind":"textbox","id":"sh/ts7md4r2","slide":1,"name":"section-label","text":"STRATEGIC PARTNERSHIP","textPreview":"STRATEGIC PARTNERSHIP","textChars":21,"textLines":1,"bbox":[98,39,235,22]}
+{"kind":"textbox","id":"sh/sryl4zqx","slide":1,"name":"headline-white","text":"AuntEDNA.ai brings clinical care + an","textPreview":"AuntEDNA.ai brings clinical care + an","textChars":37,"textLines":1,"bbox":[56,88,620,48]}
+{"kind":"textbox","id":"sh/fu94fe98","slide":1,"name":"headline-accent","text":"active NCAA pipeline.","textPreview":"active NCAA pipeline.","textChars":21,"textLines":1,"bbox":[677,88,547,48]}
+{"kind":"textbox","id":"sh/utg3698n","slide":1,"name":"subtitle","text":"PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access.","textPreview":"PulseCheck owns detection, scoring and routing. AuntEDNA adds clinical escalation, research validation and institutional access.","textChars":128,"textLines":1,"bbox":[56,145,1168,34]}
+{"kind":"shape","id":"sh/wn6dc7eh","slide":1,"name":"tracey-card","bbox":[56,202,568,224]}
+{"kind":"textbox","id":"sh/4r6dg7et","slide":1,"name":"tracey-name","text":"Dr. Tracey Hathaway","textPreview":"Dr. Tracey Hathaway","textChars":19,"textLines":1,"bbox":[176,218,390,30]}
+{"kind":"textbox","id":"sh/5sfepcfe","slide":1,"name":"tracey-role","text":"CO-FOUNDER • ATHLETICS ACCESS","textPreview":"CO-FOUNDER • ATHLETICS ACCESS","textChars":29,"textLines":1,"bbox":[176,252,380,20]}
+{"kind":"textbox","id":"sh/ipovexwn","slide":1,"name":"tracey-journey","text":"ATHLETE → COACH → ATHLETIC DIRECTOR","textPreview":"ATHLETE → COACH → ATHLETIC DIRECTOR","textChars":35,"textLines":1,"bbox":[176,279,385,24]}
+{"kind":"shape","id":"sh/3qxwn2x8","slide":1,"name":"tracey-bullet-1-dot","bbox":[84,324,6,6]}
+{"kind":"textbox","id":"sh/sfqdkrep","slide":1,"name":"tracey-bullet-1","text":"Former Division I women’s basketball player, University of Rhode Island","textPreview":"Former Division I women’s basketball player, University of Rhode Island","textChars":71,"textLines":1,"bbox":[100,318,490,24]}
+{"kind":"shape","id":"sh/dgzetcfa","slide":1,"name":"tracey-bullet-2-dot","bbox":[84,354,6,6]}
+{"kind":"textbox","id":"sh/1cvuxc7e","slide":1,"name":"tracey-bullet-2","text":"Former women’s basketball coach and athletic director","textPreview":"Former women’s basketball coach and athletic director","textChars":53,"textLines":1,"bbox":[100,348,490,24]}
+{"kind":"shape","id":"sh/0bmd476t","slide":1,"name":"tracey-bullet-3-dot","bbox":[84,384,6,6]}
+{"kind":"textbox","id":"sh/zadcv2p8","slide":1,"name":"tracey-bullet-3","text":"Doctorate in Higher Education, Worcester State University","textPreview":"Doctorate in Higher Education, Worcester State University","textChars":57,"textLines":1,"bbox":[100,378,490,24]}
+{"kind":"textbox","id":"sh/e94v2hon","slide":1,"name":"tracey-footnote","text":"Deep, active relationships across college athletics.","textPreview":"Deep, active relationships across college athletics.","textChars":52,"textLines":1,"bbox":[100,402,490,18]}
+{"kind":"shape","id":"sh/90ve1w7q","slide":1,"name":"jelanna-card","bbox":[640,202,584,224]}
+{"kind":"textbox","id":"sh/nydczmpk","slide":1,"name":"jelanna-name","text":"Jelanna Salas Olivera","textPreview":"Jelanna Salas Olivera","textChars":21,"textLines":1,"bbox":[760,218,390,30]}
+{"kind":"textbox","id":"sh/mx4v6hoz","slide":1,"name":"jelanna-role","text":"CO-FOUNDER • ENTERPRISE EXECUTION","textPreview":"CO-FOUNDER • ENTERPRISE EXECUTION","textChars":33,"textLines":1,"bbox":[760,252,390,20]}
+{"kind":"textbox","id":"sh/p4bu5s76","slide":1,"name":"jelanna-journey","text":"BIG FOUR → BIG PHARMA → DIGITAL HEALTH","textPreview":"BIG FOUR → BIG PHARMA → DIGITAL HEALTH","textChars":38,"textLines":1,"bbox":[760,279,400,24]}
+{"kind":"shape","id":"sh/432dwn6l","slide":1,"name":"jelanna-bullet-1-dot","bbox":[668,324,6,6]}
+{"kind":"textbox","id":"sh/uxgjq907","slide":1,"name":"jelanna-bullet-1","text":"Transformation consulting across EY and KPMG","textPreview":"Transformation consulting across EY and KPMG","textChars":44,"textLines":1,"bbox":[684,318,500,24]}
+{"kind":"shape","id":"sh/vyp0je1s","slide":1,"name":"jelanna-bullet-2-dot","bbox":[668,354,6,6]}
+{"kind":"textbox","id":"sh/wzy1szid","slide":1,"name":"jelanna-bullet-2","text":"Big Pharma experience at Eli Lilly","textPreview":"Big Pharma experience at Eli Lilly","textChars":34,"textLines":1,"bbox":[684,348,500,24]}
+{"kind":"shape","id":"sh/h072l4jy","slide":1,"name":"jelanna-bullet-3-dot","bbox":[668,384,6,6]}
+{"kind":"textbox","id":"sh/i1gje90j","slide":1,"name":"jelanna-bullet-3","text":"Former cheerleader with enterprise, product and healthcare fluency","textPreview":"Former cheerleader with enterprise, product and healthcare fluency","textChars":66,"textLines":1,"bbox":[684,378,500,24]}
+{"kind":"shape","id":"sh/j2pkne14","slide":1,"name":"leverage-card","bbox":[56,442,1168,116]}
+{"kind":"textbox","id":"sh/43y1gji9","slide":1,"name":"leverage-label","text":"THE ACCESS ENGINE","textPreview":"THE ACCESS ENGINE","textChars":17,"textLines":1,"bbox":[78,456,190,18]}
+{"kind":"textbox","id":"sh/54r2poju","slide":1,"name":"six-years-stat","text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[78,482,55,48]}
+{"kind":"textbox","id":"sh/y5wjip0z","slide":1,"name":"six-years-desc","text":"CO-FOUNDED\nORGANIZATIONS","textPreview":"CO-FOUNDED | ORGANIZATIONS","textChars":24,"textLines":2,"bbox":[132,486,145,40]}
+{"kind":"textbox","id":"sh/z650ba1k","slide":1,"name":"foundation-copy","text":"Together, they co-founded AuntEDNA.ai and the Alfreeda Goff Foundation—pairing clinical infrastructure with athlete development.","textPreview":"Together, they co-founded AuntEDNA.ai and the Alfreeda Goff Foundation—pairing clinical infrastructure with athlete development.","textChars":128,"textLines":1,"bbox":[292,476,435,63]}
+{"kind":"shape","id":"sh/z2xgf6to","slide":1,"name":"leverage-divider","bbox":[755,462,0,76]}
+{"kind":"textbox","id":"sh/e1oz61c3","slide":1,"name":"pipeline-label","text":"6 YEARS OF NCAA-BACKED WORK","textPreview":"6 YEARS OF NCAA-BACKED WORK","textChars":27,"textLines":1,"bbox":[785,456,350,20]}
+{"kind":"textbox","id":"sh/14fyhgbe","slide":1,"name":"pipeline-schools","text":"Athletic departments  •  coaches  •  student-athletes","textPreview":"Athletic departments  •  coaches  •  student-athletes","textChars":53,"textLines":1,"bbox":[785,483,395,25]}
+{"kind":"textbox","id":"sh/036h8but","slide":1,"name":"pipeline-copy","text":"Trusted relationships create direct access and a qualified pilot pipeline for PulseCheck.","textPreview":"Trusted relationships create direct access and a qualified pilot pipeline for PulseCheck.","textChars":89,"textLines":1,"bbox":[785,514,395,30]}
+{"kind":"shape","id":"sh/nqxgjqtk","slide":1,"name":"proof-strip","bbox":[56,574,1168,105]}
+{"kind":"textbox","id":"sh/mpozalcz","slide":1,"name":"proof-strip-label","text":"RESEARCH + COMMERCIALIZATION LEVERAGE","textPreview":"RESEARCH + COMMERCIALIZATION LEVERAGE","textChars":37,"textLines":1,"bbox":[78,588,290,18]}
+{"kind":"textbox","id":"sh/9sfylgbq","slide":1,"name":"phase1-value","text":"$275K","textPreview":"$275K","textChars":5,"textLines":1,"bbox":[78,617,110,33]}
+{"kind":"textbox","id":"sh/or6hcvu5","slide":1,"name":"phase1-copy","text":"NSF Phase I\nfunded research","textPreview":"NSF Phase I | funded research","textChars":27,"textLines":2,"bbox":[174,614,160,40]}
+{"kind":"shape","id":"sh/buh0nqtg","slide":1,"name":"proof-rule-1","bbox":[358,592,0,68]}
+{"kind":"textbox","id":"sh/at8zelcb","slide":1,"name":"adherence-value","text":"80%","textPreview":"80%","textChars":3,"textLines":1,"bbox":[388,617,100,33]}
+{"kind":"textbox","id":"sh/8zqx4vq9","slide":1,"name":"adherence-copy","text":"adherence evidence\nacross 1,000+ athletes","textPreview":"adherence evidence | across 1,000+ athletes","textChars":41,"textLines":2,"bbox":[480,614,200,40]}
+{"kind":"shape","id":"sh/t0jyd0ru","slide":1,"name":"proof-rule-2","bbox":[704,592,0,68]}
+{"kind":"textbox","id":"sh/6x8f2583","slide":1,"name":"phase2-value","text":"$1.4M","textPreview":"$1.4M","textChars":5,"textLines":1,"bbox":[734,617,110,33]}
+{"kind":"textbox","id":"sh/7yhgbq9o","slide":1,"name":"phase2-copy","text":"Phase II proposal preparation","textPreview":"Phase II proposal preparation","textChars":29,"textLines":1,"bbox":[833,610,245,23]}
+{"kind":"textbox","id":"sh/kvqx0vqd","slide":1,"name":"phase2-detail","text":"PulseCheck included for commercialization, pilot subsidy + integrations","textPreview":"PulseCheck included for commercialization, pilot subsidy + integrations","textChars":71,"textLines":1,"bbox":[833,637,350,25]}
+{"kind":"image","id":"im/i5kfex87","slide":1,"name":"","bbox":[0,0,1280,720]}
+{"kind":"image","id":"im/47mxg7qd","slide":1,"name":"","geometry":"ellipse","bbox":[82,220,74,74]}
+{"kind":"image","id":"im/za9wvypo","slide":1,"name":"","geometry":"ellipse","bbox":[666,220,74,74]}
+{"kind":"notes","id":"nt/y90nupkv","slide":1,"text":"Tracey and Jelanna bring two connected assets to PulseCheck: AuntEDNA.ai’s clinical and research infrastructure, and the Alfreeda Goff Foundation’s trusted access across college athletics. Their six years of NCAA-backed programming have built relationships with athletic departments, coaches, administrators, and student-athletes. That access strengthens implementation and feeds qualified pilot opportunities into PulseCheck’s go-to-market motion.\n\nThe NSF Phase II amount is a proposal target, not an awarded grant.\n\n[Sources]\n- Existing slide and user-provided direction, 2026-07-28.\n- https://www.uri.edu/magazine/issues/spring-2023/ensuring-student-athlete-success-on-and-beyond-the-field/\n- https://www.ncaa.org/news/2022/11/22/media-center-arise-program-opening-new-doors-ideas-for-hbcu-student-athletes.aspx\n- https://auntedna.ai/about-us-2/\n- User-provided information: six-year NCAA relationship; 80% adherence; PulseCheck inclusion in Phase II preparation.\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/dr-tracey.png\n- /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/public/jelanna.jpg\n[/Sources]"}
