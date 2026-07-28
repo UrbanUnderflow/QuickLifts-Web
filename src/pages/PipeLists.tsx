@@ -467,15 +467,7 @@ const updateLogDraftType = (current: ActivityLogDraft, type: ActivityLogType): A
   };
 };
 
-const followUpDateLabel = (nextStep: string) => {
-  const normalizedStep = nextStep.toLowerCase();
-
-  if (normalizedStep.includes('wait for response') || normalizedStep.includes('wait for results')) return 'Results posted';
-  if (normalizedStep.includes('submit application') || normalizedStep.includes('prepare application')) return 'Application due';
-  if (normalizedStep.includes('schedule meeting')) return 'Meeting date';
-
-  return 'Follow-Up';
-};
+const followUpDateLabel = (_nextStep: string) => 'Next Action Required Date';
 
 const logDisplayLabel = (log: ActivityLog) => {
   if (log.systemAction === 'item-created') return 'Item Added';

@@ -463,12 +463,14 @@ async function fetchWhoopData(accessToken, { dateKey, timezone }) {
   const window = buildDayWindow(dateKey, timezone);
   const start = new Date(window.startAt * 1000).toISOString();
   const end = new Date(window.endAt * 1000).toISOString();
+  const sleepStart = new Date((window.startAt - 24 * 60 * 60) * 1000).toISOString();
+  const sleepEnd = new Date((window.endAt + 24 * 60 * 60) * 1000).toISOString();
   const [profile, bodyMeasurement, cycles, recoveries, sleeps, workouts] = await Promise.all([
     whoopApiRequest(accessToken, '/v2/user/profile/basic').catch((error) => ({ fetchError: error?.message || String(error) })),
     whoopApiRequest(accessToken, '/v2/user/measurement/body').catch((error) => ({ fetchError: error?.message || String(error) })),
     fetchPaginatedWhoopCollection(accessToken, '/v2/cycle', { start, end, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
     fetchPaginatedWhoopCollection(accessToken, '/v2/recovery', { start, end, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
-    fetchPaginatedWhoopCollection(accessToken, '/v2/activity/sleep', { start, end, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
+    fetchPaginatedWhoopCollection(accessToken, '/v2/activity/sleep', { start: sleepStart, end: sleepEnd, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
     fetchPaginatedWhoopCollection(accessToken, '/v2/activity/workout', { start, end, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
   ]);
   return { profile, bodyMeasurement, cycles, recoveries, sleeps, workouts };

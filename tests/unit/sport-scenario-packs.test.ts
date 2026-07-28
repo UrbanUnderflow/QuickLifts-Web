@@ -302,7 +302,7 @@ test('Nerves to Excitement has a complete progressive rehearsal pack for every s
       `${pack.archetype} uses the rehearsal game`,
     );
     assert.ok(rehearsal, `${pack.archetype} has a rehearsal config`);
-    assert.equal(rehearsal.contentVersion, 3, `${pack.archetype} uses the current clear-language copy`);
+    assert.equal(rehearsal.contentVersion, 4, `${pack.archetype} uses the untimed visualization copy`);
     assert.equal(rehearsal.awarenessChoices.length, 4);
     assert.equal(rehearsal.meaningChoices.length, 3);
     assert.equal(
@@ -327,11 +327,16 @@ test('Nerves to Excitement has a complete progressive rehearsal pack for every s
       2,
       `${pack.archetype} requires two unsupported repetitions`,
     );
-    assert.ok(
-      rehearsal.rehearsalRounds.every((round: any) => round.windowSeconds >= 10),
-      `${pack.archetype} uses a real response window`,
+    assert.match(
+      rehearsal.setAction,
+      /^Picture yourself\b/,
+      `${pack.archetype} has a sport-native visualization`,
     );
-    assert.ok(rehearsal.setAction.trim(), `${pack.archetype} has a sport-native set action`);
+    assert.doesNotMatch(
+      JSON.stringify(rehearsal),
+      /adjusted your body|set your body|time ran out|before time runs out/i,
+      `${pack.archetype} does not restore physical adjustment or timeout copy`,
+    );
     assert.ok(rehearsal.reflectionChoices.length >= 4);
     assert.ok(rehearsal.closePrompt.trim());
   }

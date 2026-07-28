@@ -154,21 +154,21 @@ function nervesCueOptions(context: SportContext): string[] {
 function nervesSetAction(context: SportContext): string {
   switch (context.archetype) {
     case 'stage':
-      return 'Stand tall, open your chest, and prepare your first pose';
+      return 'Picture yourself standing tall onstage, opening your chest, setting your pose, and presenting your best look.';
     case 'race':
-      return 'Stand tall, relax your shoulders, and find your rhythm';
+      return 'Picture yourself standing tall at the start, relaxing your shoulders, and moving into your race rhythm.';
     case 'combat':
-      return 'Take your stance, check the distance, and keep your eyes up';
+      return 'Picture yourself taking your stance, seeing the distance clearly, and responding to the next opening.';
     case 'precision':
-      return 'Plant your feet, relax your shoulders, and look at the target';
+      return 'Picture yourself planting your feet, looking at the target, and completing a smooth shot.';
     case 'attempt':
-      return 'Plant your feet, brace your body, and picture your first movement';
+      return 'Picture yourself planting your feet, bracing, and completing the first movement of your attempt.';
     case 'net_racket':
-      return 'Get on the balls of your feet and face the next point';
+      return 'Picture yourself on the balls of your feet, facing the next point, and seeing the ball clearly.';
     case 'judged':
-      return 'Stand tall and move into your starting position';
+      return 'Picture yourself moving into your starting position, beginning the routine, and completing the first element.';
     case 'invasion':
-      return 'Stand ready, look up, and find the next play';
+      return 'Picture yourself standing ready, looking up, and reading the next play.';
   }
 }
 
@@ -180,7 +180,7 @@ function nervesInteraction(context: SportContext): ModuleInteraction {
   return {
     kind: 'nervesRehearsal',
     nervesRehearsal: {
-      contentVersion: 3,
+      contentVersion: 4,
       awarenessPrompt: `As you get ready ${context.beforeEvent}, what changes first in your body?`,
       awarenessChoices: [
         'My heart beats faster',
@@ -188,7 +188,7 @@ function nervesInteraction(context: SportContext): ModuleInteraction {
         'My muscles tighten',
         'My thoughts speed up',
       ],
-      awarenessFeedback: 'This is the first sign that you are feeling nervous. Noticing it early gives you time to take one breath, set your body, and choose what to tell yourself.',
+      awarenessFeedback: 'This is the first sign that you are feeling nervous. Noticing it early gives you time to take one slow breath, picture what you will do, and choose what to tell yourself.',
       meaningPrompt: `${context.pressureMoment.charAt(0).toUpperCase()}${context.pressureMoment.slice(1)}. What should you tell yourself so you stay focused on ${context.skill}?`,
       meaningChoices: [
         choice(
@@ -225,14 +225,14 @@ function nervesInteraction(context: SportContext): ModuleInteraction {
           windowSeconds: 14,
         },
       ],
-      reflectionPrompt: 'After you took one breath, adjusted your body, and said your phrase, what did you notice?',
+      reflectionPrompt: 'After you took one slow breath, pictured yourself performing, and said your phrase, what did you notice?',
       reflectionChoices: [
         'I focused on what I needed to do next.',
         'I still felt nervous, but I knew what to do next.',
-        'I moved too quickly. I want to repeat the last practice.',
+        'I rushed through the visualization. I want to repeat the last rehearsal.',
         'The phrase did not help me. I want to choose another.',
       ],
-      closePrompt: 'You noticed your nerves, took one steady breath, adjusted your body, and used a short phrase. Practice these steps so you can repeat them when you feel pressure.',
+      closePrompt: 'You noticed your nerves, took one slow breath, pictured yourself performing, and used a short phrase. Practice these steps so you can repeat them when you feel nervous.',
     },
   };
 }

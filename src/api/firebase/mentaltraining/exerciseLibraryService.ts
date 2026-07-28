@@ -1662,8 +1662,8 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
         prompts: [
           'Notice the first change in your body: a faster heartbeat, different breathing, tight muscles, or faster thoughts.',
           'Tell yourself, "My body is preparing me to perform."',
-          'Take one steady breath.',
-          'Move your body into the position your sport requires.',
+          'Take one slow breath.',
+          'Picture yourself moving into the position your sport requires and completing the next action.',
           'Repeat your short phrase and focus on the next action you can control.',
         ],
         journalRequired: false,
@@ -1684,7 +1684,7 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
     interaction: {
       kind: 'nervesRehearsal',
       nervesRehearsal: {
-        contentVersion: 3,
+        contentVersion: 4,
         awarenessPrompt: 'As you get ready to perform, what changes first in your body?',
         awarenessChoices: [
           'My heart beats faster',
@@ -1692,7 +1692,7 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
           'My muscles tighten',
           'My thoughts speed up',
         ],
-        awarenessFeedback: 'This is the first sign that you are feeling nervous. Noticing it early gives you time to take one breath, set your body, and choose what to tell yourself.',
+        awarenessFeedback: 'This is the first sign that you are feeling nervous. Noticing it early gives you time to take one slow breath, picture what you will do, and choose what to tell yourself.',
         meaningPrompt: 'You notice that you feel nervous before the performance. What should you tell yourself so you stay focused on what you need to do?',
         meaningChoices: [
           {
@@ -1711,20 +1711,20 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
         ],
         cuePrompt: 'Choose a short sentence to repeat when your heart beats faster, your breathing changes, your muscles tighten, or your thoughts speed up.',
         cueChoices: ['My heart is beating faster. I am ready.', 'I feel nervous. See and move.', 'One breath. Set and perform.'],
-        setAction: 'Stand tall, relax your shoulders, and move into your starting position',
+        setAction: 'Picture yourself moving into your starting position and completing the first action of your performance.',
         rehearsalRounds: [
           { pressureCue: 'You notice that you feel nervous as you get ready.', support: 'visible', windowSeconds: 18 },
           { pressureCue: 'The performance is close and your heartbeat gets faster.', support: 'rebuild', windowSeconds: 16 },
           { pressureCue: 'You feel nervous again during the performance.', support: 'recall', windowSeconds: 14 },
         ],
-        reflectionPrompt: 'After you took one breath, adjusted your body, and said your phrase, what did you notice?',
+        reflectionPrompt: 'After you took one slow breath, pictured yourself performing, and said your phrase, what did you notice?',
         reflectionChoices: [
           'I focused on what I needed to do next.',
           'I still felt nervous, but I knew what to do next.',
-          'I moved too quickly. I want to repeat the last practice.',
+          'I rushed through the visualization. I want to repeat the last rehearsal.',
           'The phrase did not help me. I want to choose another.',
         ],
-        closePrompt: 'You noticed your nerves, took one steady breath, adjusted your body, and used a short phrase. Practice these steps so you can repeat them when you feel pressure.',
+        closePrompt: 'You noticed your nerves, took one slow breath, pictured yourself performing, and used a short phrase. Practice these steps so you can repeat them when you feel nervous.',
       },
     },
     origin: 'Psychologist Alison Wood Brooks studied what happens when people label anxious feelings as excitement before difficult tasks. In her studies, people who said they were excited often performed better than people who tried to force themselves to feel calm.',
@@ -1733,7 +1733,7 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
       when: 'When your heartbeat, breathing, muscles, or thoughts change before or during competition',
       focus: 'Noticing nerves and choosing a short phrase that returns your attention to the next action',
       timeScale: '3 minutes',
-      skill: 'Responding to nerves with one breath, a sport-specific body position, and clear self-talk',
+      skill: 'Responding to nerves with one slow breath, sport-specific visualization, and clear self-talk',
       analogy: 'A faster heartbeat can mean your body is preparing for action. You practice what to do when you notice it.',
     },
     iconName: 'sparkles',

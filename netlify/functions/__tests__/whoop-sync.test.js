@@ -271,6 +271,44 @@ test('buildWhoopSnapshotArtifacts merges into an existing snapshot without clobb
   assert.equal(snapshot.sourceStatus.healthkit.lifecycleState, 'connected_synced');
 });
 
+test('buildWhoopSnapshotArtifacts lets WHOOP replace Oura sleep fragments', () => {
+  const syncAt = 1_782_408_000;
+  const sourceRecordDocs = buildWhoopSourceRecords({
+    userId: 'athlete-1',
+    dateKey: '2026-06-25',
+    timezone: 'UTC',
+    syncAt,
+    whoopData: buildWhoopFixture(),
+  });
+
+  const existingSnapshot = {
+    provenance: {
+      sourcesUsed: ['oura'],
+      domainWinners: { recovery: 'oura' },
+    },
+    freshness: { recovery: 'fresh' },
+    domains: {
+      recovery: { sleepDuration: 35 / 60, sleepEfficiency: 68, respiratoryRate: 16 },
+      summary: { dataSourcesUsed: ['oura'] },
+    },
+  };
+
+  const { snapshot } = buildWhoopSnapshotArtifacts({
+    userId: 'athlete-1',
+    dateKey: '2026-06-25',
+    timezone: 'UTC',
+    syncAt,
+    sourceStatusDoc: { sourceFamily: 'whoop', lifecycleState: 'connected_synced' },
+    sourceRecordDocs,
+    existingSnapshot,
+  });
+
+  assert.equal(snapshot.provenance.domainWinners.recovery, 'whoop');
+  assert.equal(snapshot.domains.recovery.sleepDuration, 7);
+  assert.equal(snapshot.domains.recovery.sleepEfficiency, 87);
+  assert.equal(snapshot.domains.recovery.respiratoryRate, 15.5);
+});
+
 test('buildDayWindow honors athlete timezone day boundaries', () => {
   const window = buildDayWindow('2026-06-25', 'America/New_York');
 
