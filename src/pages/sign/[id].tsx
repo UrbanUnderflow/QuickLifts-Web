@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { FileText, Check, AlertCircle, Download } from 'lucide-react';
+import { FileText, Check, AlertCircle, Download, ExternalLink } from 'lucide-react';
 import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { renderHtmlToPdf } from '../../utils/pdf';
@@ -34,6 +34,12 @@ interface SigningRequest {
   invalidatedAt?: Timestamp | Date;
   invalidatedReason?: string;
   previewMode?: boolean;
+  supportingDocuments?: {
+    id: string;
+    title: string;
+    documentType: string;
+    url: string;
+  }[];
 }
 
 // Signature fonts available
@@ -688,6 +694,37 @@ const SignDocument: React.FC = () => {
               From: {request.companyName || 'Pulse Intelligence Labs, Inc.'} • Sent to: {request.recipientEmail}
             </p>
           </div>
+
+          {Boolean(request.supportingDocuments?.length) && (
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-blue-300" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Supporting Documents</h2>
+                  <p className="text-zinc-400 text-sm">Review these for context before signing.</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {request.supportingDocuments?.map(document => (
+                  <a
+                    key={document.id}
+                    href={document.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 hover:border-blue-700 hover:bg-blue-950/20 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-zinc-100 truncate">{document.title}</p>
+                      <p className="text-xs text-zinc-500">{document.documentType.replace(/_/g, ' ')}</p>
+                    </div>
+                    <ExternalLink className="w-4 h-4 text-zinc-400 shrink-0" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           {!signed && (
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 mb-6">

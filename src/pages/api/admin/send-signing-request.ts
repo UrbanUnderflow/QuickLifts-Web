@@ -5,6 +5,47 @@ import admin from '../../../lib/firebase-admin';
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:8888';
 
+type SupportingDocument = {
+  id?: string;
+  title?: string;
+  documentType?: string;
+  url?: string;
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const resolveDocumentUrl = (url?: string) => {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
+};
+
+const normalizeSupportingDocuments = (documents: unknown): SupportingDocument[] => {
+  if (!Array.isArray(documents)) return [];
+
+  return documents
+    .map(document => document as SupportingDocument)
+    .filter(document => document?.title && document?.url)
+    .map(document => ({
+      id: document.id || document.url,
+      title: String(document.title),
+      documentType: String(document.documentType || 'supporting_document'),
+      url: resolveDocumentUrl(document.url),
+    }))
+    .slice(0, 8);
+};
+
+const formatDocumentType = (documentType?: string) =>
+  String(documentType || 'Supporting Document')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+
 // Resolve branding based on which company the document belongs to
 function resolveBranding(companyName: string) {
   const isTres = companyName?.toLowerCase().includes('tresproperties') ||
@@ -25,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
-  const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId } = req.body;
+  const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId, supportingDocuments: rawSupportingDocuments } = req.body;
 
   console.log('[send-signing-request] Sending to:', recipientEmail, '| doc:', documentName, '| company:', companyName);
 
@@ -34,6 +75,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const branding = resolveBranding(companyName || '');
+  const supportingDocuments = normalizeSupportingDocuments(rawSupportingDocuments);
+  const supportingDocumentsHtml = supportingDocuments.length ? `
+              <div class="supporting-documents">
+                <p class="document-label">Supporting Review Packet</p>
+                <p class="supporting-copy">
+                  These documents are included so you can review the full equity context before signing.
+                </p>
+                ${supportingDocuments.map(document => `
+                  <a class="supporting-link" href="${escapeHtml(document.url)}" target="_blank" rel="noreferrer">
+                    <span>
+                      <strong>${escapeHtml(document.title)}</strong>
+                      <small>${escapeHtml(formatDocumentType(document.documentType))}</small>
+                    </span>
+                    <span class="supporting-arrow">Open</span>
+                  </a>
+                `).join('')}
+              </div>
+  ` : '';
   const signingUrl = `${BASE_URL}/sign/${documentId}`;
   const subject = `📝 Action Required: Please Sign "${documentName}"`;
 
@@ -55,6 +114,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .document-box { background-color: #27272a; border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid ${branding.accentColor}; }
           .document-label { color: #a1a1aa; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
           .document-name { color: #ffffff; font-size: 18px; font-weight: 600; }
+          .supporting-documents { background-color: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 20px; margin: 20px 0 30px 0; }
+          .supporting-copy { color: #d4d4d8; font-size: 14px; line-height: 1.5; margin: 0 0 14px 0; }
+          .supporting-link { display: block; color: #ffffff !important; text-decoration: none; background-color: #111827; border: 1px solid #374151; border-radius: 10px; padding: 12px 14px; margin-top: 10px; }
+          .supporting-link strong { display: block; font-size: 14px; margin-bottom: 4px; }
+          .supporting-link small { display: block; color: #a1a1aa; font-size: 12px; }
+          .supporting-arrow { display: inline-block; color: ${branding.accentColor}; font-size: 12px; font-weight: 700; margin-top: 8px; text-transform: uppercase; }
           .cta-button { display: inline-block; background-color: ${branding.accentColor}; color: ${branding.accentText} !important; text-decoration: none; padding: 16px 32px; border-radius: 12px; font-weight: 600; font-size: 16px; text-align: center; margin: 10px 0 30px 0; }
           .footer { padding: 30px; text-align: center; background-color: #09090b; border-top: 1px solid #27272a; }
           .footer p { color: #71717a; font-size: 12px; margin: 0 0 8px 0; }
@@ -69,14 +134,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               <p>Document Signing Request</p>
             </div>
             <div class="content">
-              <p class="greeting">Hi ${recipientName},</p>
+              <p class="greeting">Hi ${escapeHtml(recipientName)},</p>
               <p class="message">
                 <strong>${branding.requestedBy}</strong> from ${branding.requestedByCompany} has requested your signature on the following document:
               </p>
               <div class="document-box">
                 <p class="document-label">Document</p>
-                <p class="document-name">${documentName}</p>
+                <p class="document-name">${escapeHtml(documentName)}</p>
               </div>
+              ${supportingDocumentsHtml}
               <p class="message">
                 Please use the secure link below to review, download, and sign this document. The signing process takes less than a minute.
               </p>
@@ -147,6 +213,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         emailStatus: 'sent',
         messageId: sendResult.messageId || null,
         sendCount: admin.firestore.FieldValue.increment(1),
+        supportingDocuments,
         updatedAt: now,
       }, { merge: true });
     } catch (dbError) {

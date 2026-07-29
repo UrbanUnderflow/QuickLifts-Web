@@ -5,6 +5,47 @@ import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailS
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
 
+type SupportingDocument = {
+  id?: string;
+  title?: string;
+  documentType?: string;
+  url?: string;
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const resolveDocumentUrl = (url?: string) => {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
+};
+
+const normalizeSupportingDocuments = (documents: unknown): SupportingDocument[] => {
+  if (!Array.isArray(documents)) return [];
+
+  return documents
+    .map(document => document as SupportingDocument)
+    .filter(document => document?.title && document?.url)
+    .map(document => ({
+      id: document.id || document.url,
+      title: String(document.title),
+      documentType: String(document.documentType || 'supporting_document'),
+      url: resolveDocumentUrl(document.url),
+    }))
+    .slice(0, 8);
+};
+
+const formatDocumentType = (documentType?: string) =>
+  String(documentType || 'Supporting Document')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+
 // Resolve branding based on which company the document belongs to
 function resolveBranding(companyName: string) {
   const isTres = companyName?.toLowerCase().includes('tresproperties') ||
@@ -26,13 +67,31 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
   }
 
   try {
-    const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId } = JSON.parse(event.body || "{}");
+    const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId, supportingDocuments: rawSupportingDocuments } = JSON.parse(event.body || "{}");
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
     }
 
     const branding = resolveBranding(companyName || '');
+    const supportingDocuments = normalizeSupportingDocuments(rawSupportingDocuments);
+    const supportingDocumentsHtml = supportingDocuments.length ? `
+                <div class="supporting-documents">
+                  <p class="document-label">Supporting Review Packet</p>
+                  <p class="supporting-copy">
+                    These documents are included so you can review the full equity context before signing.
+                  </p>
+                  ${supportingDocuments.map(document => `
+                    <a class="supporting-link" href="${escapeHtml(document.url)}" target="_blank" rel="noreferrer">
+                      <span>
+                        <strong>${escapeHtml(document.title)}</strong>
+                        <small>${escapeHtml(formatDocumentType(document.documentType))}</small>
+                      </span>
+                      <span class="supporting-arrow">Open</span>
+                    </a>
+                  `).join('')}
+                </div>
+    ` : '';
 
     const signingUrl = `${BASE_URL}/sign/${documentId}${previewMode ? '?preview=1' : ''}`;
     const subject = previewMode
@@ -111,6 +170,47 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
               font-size: 18px;
               font-weight: 600;
             }
+            .supporting-documents {
+              background-color: #1f2937;
+              border: 1px solid #374151;
+              border-radius: 12px;
+              padding: 20px;
+              margin: 20px 0 30px 0;
+            }
+            .supporting-copy {
+              color: #d4d4d8;
+              font-size: 14px;
+              line-height: 1.5;
+              margin: 0 0 14px 0;
+            }
+            .supporting-link {
+              display: block;
+              color: #ffffff !important;
+              text-decoration: none;
+              background-color: #111827;
+              border: 1px solid #374151;
+              border-radius: 10px;
+              padding: 12px 14px;
+              margin-top: 10px;
+            }
+            .supporting-link strong {
+              display: block;
+              font-size: 14px;
+              margin-bottom: 4px;
+            }
+            .supporting-link small {
+              display: block;
+              color: #a1a1aa;
+              font-size: 12px;
+            }
+            .supporting-arrow {
+              display: inline-block;
+              color: ${branding.accentColor};
+              font-size: 12px;
+              font-weight: 700;
+              margin-top: 8px;
+              text-transform: uppercase;
+            }
             .cta-button {
               display: inline-block;
               background-color: ${branding.accentColor};
@@ -149,7 +249,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
               </div>
               
               <div class="content">
-                <p class="greeting">Hi ${recipientName},</p>
+                <p class="greeting">Hi ${escapeHtml(recipientName)},</p>
                 
                 <p class="message">
                   ${previewMode
@@ -159,8 +259,9 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
                 
                 <div class="document-box">
                   <p class="document-label">Document</p>
-                  <p class="document-name">${documentName}</p>
+                  <p class="document-name">${escapeHtml(documentName)}</p>
                 </div>
+                ${supportingDocumentsHtml}
                 
                 <p class="message">
                   ${previewMode
@@ -243,6 +344,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
         emailStatus: "sent",
         messageId: sendResult.messageId || null,
         sendCount: FieldValue.increment(1),
+        supportingDocuments,
         updatedAt: now,
       }, { merge: true });
     } catch (dbError) {

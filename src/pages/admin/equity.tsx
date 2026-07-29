@@ -150,6 +150,13 @@ interface EquityDocument {
   isAmendment?: boolean;
 }
 
+interface SignaturePacketDocument {
+  id: string;
+  title: string;
+  documentType: string;
+  url: string;
+}
+
 type SigningRequestStatus =
   | 'pending'
   | 'sent'
@@ -192,6 +199,7 @@ interface SigningRequest {
   invalidatedAt?: Timestamp | Date;
   invalidatedReason?: string;
   previewMode?: boolean;
+  supportingDocuments?: SignaturePacketDocument[];
 }
 
 type SignerRow = {
@@ -2569,11 +2577,20 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
+    const missingPacketRequirements = getMissingSignaturePacketRequirements(signingDoc);
+    if (missingPacketRequirements.length) {
+      const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this signature request.`;
+      setSigningModalStatus({ type: 'error', text: message });
+      setMessage({ type: 'error', text: message });
+      return;
+    }
+
     setIsSending(true);
     setSigningModalStatus({ type: 'info', text: `Sending signature request${normalized.length === 1 ? '' : 's'}...` });
     try {
       const signingGroupId = `${signingDoc.id}-${Date.now()}`;
       const signingRequestIds: string[] = [];
+      const supportingDocuments = getSignaturePacketDocuments(signingDoc);
 
       // Create or reuse signing requests per signer, then send/resend emails
       for (let i = 0; i < normalized.length; i++) {
@@ -2594,6 +2611,7 @@ const EquityAdminPage: React.FC = () => {
             stakeholderId: signer.stakeholderId || null,
             signingGroupId,
             signingOrder: i + 1,
+            supportingDocuments,
           };
           const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
           requestId = docRef.id;
@@ -2603,6 +2621,7 @@ const EquityAdminPage: React.FC = () => {
             recipientEmail: signer.email,
             signerRole: signer.role,
             stakeholderId: signer.stakeholderId || null,
+            supportingDocuments,
             updatedAt: serverTimestamp(),
           });
         }
@@ -2618,6 +2637,7 @@ const EquityAdminPage: React.FC = () => {
             documentType: signingDoc.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
+            supportingDocuments,
             sendAttemptId: `${signingGroupId}-${requestId}`,
           }),
         });
@@ -2651,7 +2671,7 @@ const EquityAdminPage: React.FC = () => {
       })));
       setSigningModalStatus({
         type: 'success',
-        text: `Signature request${signingRequestIds.length === 1 ? '' : 's'} sent successfully to ${signingRequestIds.length} signer${signingRequestIds.length === 1 ? '' : 's'}.`,
+        text: `Signature request${signingRequestIds.length === 1 ? '' : 's'} sent successfully to ${signingRequestIds.length} signer${signingRequestIds.length === 1 ? '' : 's'}${supportingDocuments.length ? ` with ${supportingDocuments.length} supporting document${supportingDocuments.length === 1 ? '' : 's'}.` : '.'}`,
       });
       setMessage({ type: 'success', text: `Sent for signature to ${signingRequestIds.length} signer(s)!` });
       loadData();
@@ -2679,12 +2699,21 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
+    const missingPacketRequirements = getMissingSignaturePacketRequirements(signingDoc);
+    if (missingPacketRequirements.length) {
+      const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this preview.`;
+      setSigningModalStatus({ type: 'error', text: message });
+      setMessage({ type: 'error', text: message });
+      return;
+    }
+
     const company = getDefaultCompanySigner();
 
     setIsSending(true);
     setSigningModalStatus({ type: 'info', text: `Sending preview email to ${previewEmail}...` });
 
     try {
+      const supportingDocuments = getSignaturePacketDocuments(signingDoc);
       const previewRequestRef = await addDoc(collection(db, 'signingRequests'), {
         documentType: signingDoc.documentType,
         documentName: `${signingDoc.title} (Preview)`,
@@ -2697,6 +2726,7 @@ const EquityAdminPage: React.FC = () => {
         companyName: company.name || 'Pulse Intelligence Labs, Inc.',
         previewMode: true,
         previewSourceEquityDocumentId: signingDoc.id,
+        supportingDocuments,
       });
 
       const resp = await fetch('/.netlify/functions/send-signing-request', {
@@ -2710,6 +2740,7 @@ const EquityAdminPage: React.FC = () => {
           recipientEmail: previewEmail,
           companyName: company.name || 'Pulse Intelligence Labs, Inc.',
           previewMode: true,
+          supportingDocuments,
           sendAttemptId: `preview-${signingDoc.id}-${Date.now()}`,
         }),
       });
@@ -2872,6 +2903,63 @@ const EquityAdminPage: React.FC = () => {
     const equityDoc = equityDocuments.find(d => d.id === documentId);
     if (!equityDoc?.exhibits?.length) return [];
     return equityDocuments.filter(d => equityDoc.exhibits?.includes(d.id));
+  };
+
+  const getLatestCompletedEquityDocumentByType = (documentType: string) =>
+    getLatestRelevantDocuments(
+      equityDocuments.filter(d => d.documentType === documentType && d.status === 'completed')
+    )[0] || null;
+
+  const requiresEquityReviewPacket = (equityDoc: EquityDocument) =>
+    ['advisor_nso_agreement', 'option_agreement', 'fast_agreement'].includes(equityDoc.documentType);
+
+  const getMissingSignaturePacketRequirements = (equityDoc: EquityDocument) => {
+    if (!requiresEquityReviewPacket(equityDoc)) return [];
+
+    const missing: string[] = [];
+    if (!getLatestCompletedEquityDocumentByType('eip')) {
+      missing.push('completed Equity Incentive Plan');
+    }
+    return missing;
+  };
+
+  const getSignaturePacketDocuments = (equityDoc: EquityDocument): SignaturePacketDocument[] => {
+    const docsById = new Map<string, EquityDocument>();
+    const addDocument = (document?: EquityDocument | null) => {
+      if (document && document.id !== equityDoc.id && document.status === 'completed') {
+        docsById.set(document.id, document);
+      }
+    };
+
+    if (requiresEquityReviewPacket(equityDoc)) {
+      addDocument(getLatestCompletedEquityDocumentByType('eip'));
+
+      if (equityDoc.stakeholderId) {
+        const stakeholder = stakeholders.find(s => s.id === equityDoc.stakeholderId);
+        const linkedBoardConsent = stakeholder?.boardConsentDocId
+          ? equityDocuments.find(d => d.id === stakeholder.boardConsentDocId)
+          : null;
+        const latestBoardConsent = getLatestRelevantDocuments(
+          equityDocuments.filter(d =>
+            d.stakeholderId === equityDoc.stakeholderId &&
+            d.documentType === 'board_consent' &&
+            d.status === 'completed'
+          )
+        )[0] || null;
+
+        addDocument(linkedBoardConsent);
+        addDocument(latestBoardConsent);
+      }
+    }
+
+    getExhibitDocuments(equityDoc.id).forEach(addDocument);
+
+    return Array.from(docsById.values()).map(document => ({
+      id: document.id,
+      title: document.title,
+      documentType: document.documentType,
+      url: `${window.location.origin}/equity-doc/${document.id}`,
+    }));
   };
 
   const isLatestDocumentInFamily = (equityDoc: EquityDocument) => {
@@ -5583,6 +5671,42 @@ const EquityAdminPage: React.FC = () => {
                   </div>
                 </div>
 
+                {(() => {
+                  const packetDocuments = getSignaturePacketDocuments(signingDoc);
+                  const missingRequirements = getMissingSignaturePacketRequirements(signingDoc);
+                  if (missingRequirements.length) {
+                    return (
+                      <div className="bg-amber-900/20 rounded-xl p-4 border border-amber-800">
+                        <p className="text-sm font-medium text-amber-300 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4" />
+                          Review packet incomplete
+                        </p>
+                        <p className="mt-2 text-xs text-amber-200">
+                          Add a {missingRequirements.join(' and ')} before sending this signature request.
+                        </p>
+                      </div>
+                    );
+                  }
+                  return packetDocuments.length ? (
+                    <div className="bg-emerald-900/15 rounded-xl p-4 border border-emerald-800/70">
+                      <p className="text-sm font-medium text-emerald-300 flex items-center gap-2">
+                        <Paperclip className="w-4 h-4" />
+                        Review packet included
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {packetDocuments.map(packetDoc => (
+                          <div key={packetDoc.id} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="text-zinc-200 truncate">{packetDoc.title}</span>
+                            <span className="shrink-0 px-2 py-0.5 rounded-full border border-emerald-800 text-emerald-300 bg-emerald-950/40">
+                              {DOCUMENT_TYPES.find(t => t.id === packetDoc.documentType)?.label || packetDoc.documentType}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-zinc-300">Signers</p>
@@ -5680,7 +5804,7 @@ const EquityAdminPage: React.FC = () => {
                   <p className="text-blue-300 text-sm flex items-start gap-2">
                     <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <span>
-                      Each signer will receive an email with a secure signing link. Existing links will be re-sent.
+                      Each signer will receive an email with a secure signing link plus the EIP, board consent, and selected exhibits when available. Existing links will be re-sent.
                     </span>
                   </p>
                 </div>
