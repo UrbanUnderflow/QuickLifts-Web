@@ -1684,7 +1684,7 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
     interaction: {
       kind: 'nervesRehearsal',
       nervesRehearsal: {
-        contentVersion: 4,
+        contentVersion: 5,
         awarenessPrompt: 'As you get ready to perform, what changes first in your body?',
         awarenessChoices: [
           'My heart beats faster',
@@ -1717,14 +1717,13 @@ const BASE_SEEDED_EXERCISES: MentalExercise[] = [
           { pressureCue: 'The performance is close and your heartbeat gets faster.', support: 'rebuild', windowSeconds: 16 },
           { pressureCue: 'You feel nervous again during the performance.', support: 'recall', windowSeconds: 14 },
         ],
-        reflectionPrompt: 'After you took one slow breath, pictured yourself performing, and said your phrase, what did you notice?',
+        reflectionPrompt: 'You practiced noticing the first signs of nerves, taking one slow breath, picturing yourself performing, and repeating your phrase.',
         reflectionChoices: [
-          'I focused on what I needed to do next.',
-          'I still felt nervous, but I knew what to do next.',
-          'I rushed through the visualization. I want to repeat the last rehearsal.',
-          'The phrase did not help me. I want to choose another.',
+          'Notice how nerves first show up in my body.',
+          'Take one slow breath and picture myself performing.',
+          'Repeat my phrase and focus on what I will do next.',
         ],
-        closePrompt: 'You noticed your nerves, took one slow breath, pictured yourself performing, and used a short phrase. Practice these steps so you can repeat them when you feel nervous.',
+        closePrompt: 'Each rehearsal helps you remember the response: notice the first body change, take one slow breath, picture yourself performing, and repeat your phrase. Practice it again so the steps become easier to recall when you feel nervous.',
       },
     },
     origin: 'Psychologist Alison Wood Brooks studied what happens when people label anxious feelings as excitement before difficult tasks. In her studies, people who said they were excited often performed better than people who tried to force themselves to feel calm.',

@@ -118,6 +118,10 @@ import {
   type PulseCheckCoachServiceType,
 } from '../../api/firebase/pulsecheckCoachServices';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
+import {
+  coachAthleteMessagingService,
+  type CoachAthleteMessage,
+} from '../../api/firebase/messaging/coachAthleteService';
 import ScheduleBoard from '../../components/coach/ScheduleBoard';
 import NoraDashboardTraining from '../../components/coach/NoraDashboardTraining';
 import {
@@ -1970,12 +1974,16 @@ const InboxSection: React.FC<{
   coachId,
   isDemo,
 }) => {
-  const router = useRouter();
   const [liveRows, setLiveRows] = useState<any[]>([]);
   const [loadingLiveThreads, setLoadingLiveThreads] = useState(false);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const threads = useMemo(
     () => (isDemo ? buildInboxThreads(athletes) : buildCoachConversationThreads(liveRows, coachId, athletes)),
     [athletes, coachId, isDemo, liveRows]
+  );
+  const selectedThread = useMemo(
+    () => threads.find((thread) => thread.id === selectedThreadId) || null,
+    [selectedThreadId, threads]
   );
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
 
@@ -2012,7 +2020,23 @@ const InboxSection: React.FC<{
     );
   }, [coachId, isDemo]);
 
+  useEffect(() => {
+    if (selectedThreadId && !selectedThread) {
+      setSelectedThreadId(null);
+    }
+  }, [selectedThread, selectedThreadId]);
+
   if (loading || loadingLiveThreads) return <LoadingBlock label="Loading your inbox…" />;
+
+  if (!isDemo && selectedThread && coachId) {
+    return (
+      <CoachInboxConversationThread
+        thread={selectedThread}
+        coachId={coachId}
+        onBack={() => setSelectedThreadId(null)}
+      />
+    );
+  }
 
   if (threads.length === 0) {
     return (
@@ -2047,7 +2071,7 @@ const InboxSection: React.FC<{
               key={t.id}
               onClick={() => {
                 setReadIds((prev) => new Set(prev).add(t.id));
-                if (!isDemo) router.push(`/PulseCheck/messages/${t.id}`);
+                if (!isDemo) setSelectedThreadId(t.id);
               }}
               className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors ${
                 unread
@@ -2082,6 +2106,194 @@ const InboxSection: React.FC<{
     </div>
   );
 };
+
+const CoachInboxConversationThread: React.FC<{
+  thread: InboxThread;
+  coachId: string;
+  onBack: () => void;
+}> = ({ thread, coachId, onBack }) => {
+  const [messages, setMessages] = useState<CoachAthleteMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setLoadingMessages(true);
+    setMessages([]);
+    setErrorMessage(null);
+
+    const unsubscribe = coachAthleteMessagingService.subscribeToMessages(thread.id, (nextMessages) => {
+      setMessages(nextMessages);
+      setLoadingMessages(false);
+      if (nextMessages.length > 0) {
+        coachAthleteMessagingService.markMessagesAsRead(thread.id, coachId).catch((error) => {
+          console.warn('[CoachDashboard] failed to mark coach inbox thread read', error);
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [coachId, thread.id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length]);
+
+  const sendReply = async () => {
+    const content = draft.trim();
+    if (!content || sending) return;
+
+    setDraft('');
+    setSending(true);
+    setErrorMessage(null);
+    try {
+      await coachAthleteMessagingService.sendMessage(thread.id, coachId, 'coach', content);
+    } catch (error) {
+      console.error('[CoachDashboard] failed to send coach inbox reply', error);
+      setDraft(content);
+      setErrorMessage('Could not send that message. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="h-[calc(100vh-9rem)] min-h-[620px] rounded-2xl border border-zinc-800/70 bg-zinc-950/40 overflow-hidden flex flex-col">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/70 bg-zinc-950/70">
+        <button
+          type="button"
+          onClick={onBack}
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/70 transition-colors"
+          aria-label="Back to inbox"
+        >
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+
+        <div className="relative w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+          <span className="text-xs font-bold text-zinc-100">{thread.initials}</span>
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950" />
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-white truncate">{thread.name}</div>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-[#A78BFA]">
+            <Activity className="w-3 h-3" />
+            Athlete
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-5">
+        {loadingMessages ? (
+          <LoadingBlock label="Loading conversation..." />
+        ) : messages.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-center">
+            <div>
+              <MessageSquare className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+              <div className="text-sm font-semibold text-zinc-300">No messages yet</div>
+              <div className="text-xs text-zinc-500 mt-1">Send the first note to {thread.name}.</div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => {
+              const isMine = message.senderId === coachId;
+              const previous = index > 0 ? messages[index - 1] : null;
+              const showDate =
+                !previous || previous.timestamp.toDateString() !== message.timestamp.toDateString();
+
+              return (
+                <React.Fragment key={message.id}>
+                  {showDate && (
+                    <div className="flex justify-center py-2">
+                      <span className="text-[10px] uppercase tracking-widest font-bold px-3 py-1 rounded-full bg-zinc-800/80 text-zinc-400 border border-zinc-700/70">
+                        {formatCoachInboxMessageDate(message.timestamp)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[78%] md:max-w-[64%] ${isMine ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                      <div
+                        className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                          isMine
+                            ? 'bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-white'
+                            : 'bg-zinc-800/80 text-zinc-100 border border-zinc-700/60'
+                        }`}
+                      >
+                        {message.content}
+                      </div>
+                      <div className="text-[10px] text-zinc-600 px-1">
+                        {formatCoachInboxMessageTime(message.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-zinc-800/70 p-4 bg-zinc-950/80">
+        {errorMessage && <div className="text-xs text-red-400 mb-2">{errorMessage}</div>}
+        <div className="flex items-end gap-2 rounded-2xl border border-zinc-700/70 bg-zinc-900/70 p-2">
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendReply();
+              }
+            }}
+            placeholder={`Message ${thread.name}...`}
+            rows={1}
+            disabled={sending}
+            className="min-h-[42px] max-h-28 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-zinc-600 outline-none disabled:opacity-60"
+          />
+          <button
+            type="button"
+            onClick={sendReply}
+            disabled={!draft.trim() || sending}
+            className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${
+              draft.trim() && !sending
+                ? 'bg-[#E0FE10] text-black hover:bg-[#d0ee0f]'
+                : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+            }`}
+            aria-label="Send message"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const formatCoachInboxMessageDate = (date: Date): string => {
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return 'Today';
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+  });
+};
+
+const formatCoachInboxMessageTime = (date: Date): string =>
+  date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 
 // ---------------------------------------------------------------------------
 // Staff

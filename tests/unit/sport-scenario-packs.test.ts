@@ -302,7 +302,7 @@ test('Nerves to Excitement has a complete progressive rehearsal pack for every s
       `${pack.archetype} uses the rehearsal game`,
     );
     assert.ok(rehearsal, `${pack.archetype} has a rehearsal config`);
-    assert.equal(rehearsal.contentVersion, 4, `${pack.archetype} uses the untimed visualization copy`);
+    assert.equal(rehearsal.contentVersion, 5, `${pack.archetype} uses the learning-recap contract`);
     assert.equal(rehearsal.awarenessChoices.length, 4);
     assert.equal(rehearsal.meaningChoices.length, 3);
     assert.equal(
@@ -337,7 +337,17 @@ test('Nerves to Excitement has a complete progressive rehearsal pack for every s
       /adjusted your body|set your body|time ran out|before time runs out/i,
       `${pack.archetype} does not restore physical adjustment or timeout copy`,
     );
-    assert.ok(rehearsal.reflectionChoices.length >= 4);
+    assert.equal(rehearsal.reflectionChoices.length, 3);
+    assert.doesNotMatch(
+      rehearsal.reflectionPrompt,
+      /\?/,
+      `${pack.archetype} closes with a learning recap instead of a feelings question`,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(rehearsal),
+      /what did you notice|still felt nervous|phrase did not help/i,
+      `${pack.archetype} does not judge the effect of one rehearsal`,
+    );
     assert.ok(rehearsal.closePrompt.trim());
   }
 });
