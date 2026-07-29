@@ -110,6 +110,46 @@ const loadService = async ({ serviceId, conversation, database = db }) => {
   return service;
 };
 
+const publicServicePayload = (service) => {
+  const pricing = servicePricingBreakdown(service.amountCents);
+  return {
+    id: service.id,
+    title: service.title,
+    description: service.description || '',
+    serviceType: service.serviceType || 'one_time',
+    currency: service.currency || 'usd',
+    coachPriceCents: pricing.coachPriceCents,
+    processingFeeCents: pricing.processingFeeCents,
+    totalAmountCents: pricing.totalAmountCents,
+  };
+};
+
+const listServicesForConversation = async ({ conversation, database = db }) => {
+  const coachUserId = normalizeString(conversation?.coachUserId);
+  if (!coachUserId) return [];
+
+  const conversationTeamId = normalizeString(conversation?.data?.teamId || conversation?.data?.pulseCheckTeamId);
+  const snapshot = await database.collection(SERVICES_COLLECTION)
+    .where('coachUserId', '==', coachUserId)
+    .get();
+
+  const services = [];
+  for (const doc of snapshot.docs) {
+    const service = normalizeDynamicService(doc);
+    if (!service || service.status !== 'active') continue;
+    if (service.coachUserId !== coachUserId) continue;
+    if (service.teamId && conversationTeamId && service.teamId !== conversationTeamId) continue;
+    if (service.teamId) {
+      const teamSnap = await database.collection('pulsecheck-teams').doc(service.teamId).get();
+      const team = teamSnap.exists ? teamSnap.data() || {} : {};
+      if (team?.commercialConfig?.referralKickbackEnabled !== true) continue;
+    }
+    services.push(publicServicePayload(service));
+  }
+
+  return services.sort((left, right) => left.title.localeCompare(right.title));
+};
+
 const verifyFirebaseUser = async (event) => {
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   const match = normalizeString(authHeader).match(/^Bearer\s+(.+)$/i);
@@ -270,6 +310,7 @@ module.exports = {
   SERVICE_CATALOG,
   buyerProcessingFeeCents,
   getService,
+  listServicesForConversation,
   loadService,
   loadConversationForAthlete,
   markSubscriptionOrderActive,
