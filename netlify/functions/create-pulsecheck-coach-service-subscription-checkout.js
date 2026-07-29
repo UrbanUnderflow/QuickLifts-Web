@@ -96,20 +96,8 @@ const handler = async (event) => {
       throw error;
     }
 
-    const connectedAccountId = await resolveCoachStripeAccount(conversation.coachUserId, database);
-    if (!connectedAccountId) {
-      const error = new Error('Your coach needs to finish Stripe setup before accepting service subscriptions.');
-      error.statusCode = 409;
-      throw error;
-    }
-
     const { stripe, stripeMode } = stripeConfiguration(event);
-    const account = await stripe.accounts.retrieve(connectedAccountId);
-    if (!account.charges_enabled) {
-      const error = new Error('Your coach’s Stripe account is not ready to accept subscription payments.');
-      error.statusCode = 409;
-      throw error;
-    }
+    const connectedAccountId = await resolveCoachStripeAccount(conversation.coachUserId, database);
 
     const checkoutId = normalizeString(body.checkoutId);
     const ref = orderRef(checkoutId, database);
@@ -134,10 +122,6 @@ const handler = async (event) => {
     }
 
     const pricing = servicePricingBreakdown(service.amountCents);
-    const applicationFeePercent =
-      pricing.totalAmountCents > 0
-        ? Math.round((pricing.processingFeeCents / pricing.totalAmountCents) * 10000) / 100
-        : 0;
     const origin = siteOrigin(event);
 
     const session = await stripe.checkout.sessions.create({
@@ -161,11 +145,10 @@ const handler = async (event) => {
         },
       ],
       subscription_data: {
-        transfer_data: { destination: connectedAccountId },
-        application_fee_percent: applicationFeePercent,
         metadata: {
           platform: 'pulsecheck',
           stripe_mode: stripeMode,
+          settlement_mode: 'manual_platform_payout',
           payment_type: 'pulsecheck_coach_service_subscription',
           order_id: checkoutId,
           conversation_id: conversation.id,
@@ -200,7 +183,8 @@ const handler = async (event) => {
         || 'Athlete',
       coachUserId: conversation.coachUserId,
       coachName: normalizeString(conversation.data.coachName) || 'Coach',
-      connectedAccountId,
+      connectedAccountId: connectedAccountId || null,
+      settlementMode: 'manual_platform_payout',
       serviceId: service.id,
       serviceTitle: service.title,
       serviceDescription: service.description || '',

@@ -107,23 +107,11 @@ const handler = async (event) => {
       error.statusCode = 400;
       throw error;
     }
+    const { stripe, publishableKey, stripeMode } = stripeConfiguration(event);
     const connectedAccountId = await resolveCoachStripeAccount(
       conversation.coachUserId,
       database
     );
-    if (!connectedAccountId) {
-      const error = new Error('Your coach needs to finish Stripe setup before accepting service payments.');
-      error.statusCode = 409;
-      throw error;
-    }
-
-    const { stripe, publishableKey, stripeMode } = stripeConfiguration(event);
-    const account = await stripe.accounts.retrieve(connectedAccountId);
-    if (!account.charges_enabled) {
-      const error = new Error('Your coach’s Stripe account is not ready to accept payments.');
-      error.statusCode = 409;
-      throw error;
-    }
 
     const ref = orderRef(checkoutId, database);
     const existingSnap = await ref.get();
@@ -170,7 +158,8 @@ const handler = async (event) => {
         || 'Athlete',
       coachUserId: conversation.coachUserId,
       coachName: normalizeString(conversation.data.coachName) || 'Coach',
-      connectedAccountId,
+      connectedAccountId: connectedAccountId || null,
+      settlementMode: 'manual_platform_payout',
       serviceId: service.id,
       serviceTitle: service.title,
       serviceType: service.serviceType,
@@ -193,13 +182,12 @@ const handler = async (event) => {
         amount: pricing.totalAmountCents,
         currency: service.currency,
         payment_method_types: ['card'],
-        application_fee_amount: pricing.processingFeeCents,
-        transfer_data: { destination: connectedAccountId },
         receipt_email: normalizeString(decoded.email) || undefined,
         description: `${service.title} with ${normalizeString(conversation.data.coachName) || 'coach'}`,
         metadata: {
           platform: 'pulsecheck',
           stripe_mode: stripeMode,
+          settlement_mode: 'manual_platform_payout',
           payment_type: 'pulsecheck_coach_service',
           tax_classification: 'service_income',
           order_id: checkoutId,

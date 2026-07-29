@@ -1,5 +1,5 @@
 const Stripe = require('stripe');
-const { headers, isDevMode, getFirebaseAdminApp } = require('./config/firebase');
+const { headers, getFirebaseAdminApp } = require('./config/firebase');
 const {
   markOrderPaid,
   normalizeString,
@@ -13,12 +13,32 @@ const jsonHeaders = {
   'Cache-Control': 'private, no-store',
 };
 
-const stripeClient = (event) => {
-  const key = isDevMode(event)
+const stripeModeFromEvent = (event) => {
+  const explicitMode =
+    event.headers?.['x-pulsecheck-stripe-mode']
+    || event.headers?.['X-PulseCheck-Stripe-Mode'];
+  const normalizedMode = normalizeString(explicitMode).toLowerCase();
+  if (normalizedMode === 'test' || normalizedMode === 'live') return normalizedMode;
+  const referer = event.headers?.referer || event.headers?.origin || '';
+  return referer.includes('localhost') || referer.includes('127.0.0.1')
+    ? 'test'
+    : 'live';
+};
+
+const stripeClient = (event, order = {}) => {
+  const orderMode = normalizeString(order.stripeMode).toLowerCase();
+  const stripeMode = orderMode === 'test' || orderMode === 'live'
+    ? orderMode
+    : stripeModeFromEvent(event);
+  const key = stripeMode === 'test'
     ? process.env.STRIPE_TEST_SECRET_KEY
     : process.env.STRIPE_SECRET_KEY;
   if (!key) {
-    const error = new Error('Stripe checkout is not configured for this environment.');
+    const error = new Error(
+      stripeMode === 'test'
+        ? 'Stripe test checkout is not configured. Add STRIPE_TEST_SECRET_KEY or use live Stripe mode.'
+        : 'Stripe live checkout is not configured. Add STRIPE_SECRET_KEY.'
+    );
     error.statusCode = 503;
     throw error;
   }
@@ -61,7 +81,7 @@ const handler = async (event) => {
       error.statusCode = 409;
       throw error;
     }
-    const paymentIntent = await stripeClient(event).paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await stripeClient(event, order).paymentIntents.retrieve(paymentIntentId);
     if (paymentIntent.status !== 'succeeded') {
       const error = new Error('Stripe has not confirmed this payment yet.');
       error.statusCode = 409;
