@@ -239,6 +239,10 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
   const defaults = getDefaultPulseCheckTeamCommercialConfig();
   const commercialModel = normalizeString(typeof candidate.commercialModel === 'string' ? candidate.commercialModel : defaults.commercialModel);
   const teamPlanStatus = normalizeString(typeof candidate.teamPlanStatus === 'string' ? candidate.teamPlanStatus : defaults.teamPlanStatus);
+  const referralKickbackEnabled =
+    typeof candidate.referralKickbackEnabled === 'boolean'
+      ? candidate.referralKickbackEnabled
+      : defaults.referralKickbackEnabled;
 
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
@@ -247,10 +251,7 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
     experienceAudience: normalizeExperienceAudience(
       candidate.experienceAudience ?? defaults.experienceAudience
     ),
-    referralKickbackEnabled:
-      typeof candidate.referralKickbackEnabled === 'boolean'
-        ? candidate.referralKickbackEnabled
-        : defaults.referralKickbackEnabled,
+    referralKickbackEnabled,
     referralRevenueSharePct: normalizeReferralRevenueSharePct(
       candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct
     ),
@@ -268,10 +269,7 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
     coachReferralRevenueSharePct: normalizeReferralRevenueSharePct(
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
     ),
-    additionalServicesEnabled:
-      typeof candidate.additionalServicesEnabled === 'boolean'
-        ? candidate.additionalServicesEnabled
-        : defaults.additionalServicesEnabled,
+    additionalServicesEnabled: referralKickbackEnabled,
     coachReferralRecipientUserId: normalizeString(
       typeof candidate.coachReferralRecipientUserId === 'string'
         ? candidate.coachReferralRecipientUserId

@@ -4153,7 +4153,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   Enable referral kickback for athlete-paid conversions
                                                 </div>
                                                 <div className="pcp-checkbox-copy">
-                                                  Invited athletes keep team attribution when they subscribe later, and the configured revenue share can route back to this team.
+                                                  Invited athletes keep team attribution when they subscribe later, the configured revenue share can route back to this team, and the revenue recipient can manage coach additional services.
                                                 </div>
                                               </div>
                                             </label>
@@ -4238,28 +4238,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 </div>
                                                 <div className="pcp-checkbox-copy">
                                                   Coaches who use this team's coach referral link can carry attribution so the referring coach can receive a configured share of that coach's athlete-paid subscriptions.
-                                                </div>
-                                              </div>
-                                            </label>
-
-                                            <label className="pcp-checkbox-row">
-                                              <input
-                                                type="checkbox"
-                                                checked={teamCommercialDraft.additionalServicesEnabled || false}
-                                                onChange={(event) =>
-                                                  handleExistingTeamCommercialFieldChange(
-                                                    team.id,
-                                                    'additionalServicesEnabled',
-                                                    event.target.checked
-                                                  )
-                                                }
-                                              />
-                                              <div>
-                                                <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
-                                                  Enable coach additional services
-                                                </div>
-                                                <div className="pcp-checkbox-copy">
-                                                  Shows the coach Services tab so they can sell one-time booked services or ongoing subscription services.
                                                 </div>
                                               </div>
                                             </label>
@@ -5431,26 +5409,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
                           <div className="pcp-checkbox-copy">
                             Coach referral links can attach the referring coach to future athlete-paid subscriptions under the referred coach.
-                          </div>
-                        </div>
-                      </label>
-                      <label className="pcp-checkbox-row">
-                        <input
-                          type="checkbox"
-                          checked={teamForm.commercialConfig.additionalServicesEnabled}
-                          onChange={(event) =>
-                            handleTeamCommercialFieldChange(
-                              'additionalServicesEnabled',
-                              event.target.checked
-                            )
-                          }
-                        />
-                        <div>
-                          <div className="pcp-preview-title" style={{ fontSize: '12px', marginBottom: 4 }}>
-                            Enable coach additional services
-                          </div>
-                          <div className="pcp-checkbox-copy">
-                            Off by default. Turn this on when the coach should sell add-on services from the dashboard.
                           </div>
                         </div>
                       </label>

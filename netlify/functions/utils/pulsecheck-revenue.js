@@ -76,11 +76,14 @@ const normalizeCommercialConfig = (value) => {
   const commercialModel = normalizeString(candidate.commercialModel || defaults.commercialModel);
   const teamPlanStatus = normalizeString(candidate.teamPlanStatus || defaults.teamPlanStatus);
   const revenueRecipientRole = normalizeString(candidate.revenueRecipientRole || defaults.revenueRecipientRole);
+  const referralKickbackEnabled = normalizeBoolean(
+    candidate.referralKickbackEnabled ?? defaults.referralKickbackEnabled
+  );
 
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
-    referralKickbackEnabled: normalizeBoolean(candidate.referralKickbackEnabled ?? defaults.referralKickbackEnabled),
+    referralKickbackEnabled,
     referralRevenueSharePct: normalizeRevenueSharePct(
       candidate.referralRevenueSharePct ?? defaults.referralRevenueSharePct
     ),
@@ -96,9 +99,7 @@ const normalizeCommercialConfig = (value) => {
     coachReferralRevenueSharePct: normalizeRevenueSharePct(
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
     ),
-    additionalServicesEnabled: normalizeBoolean(
-      candidate.additionalServicesEnabled ?? defaults.additionalServicesEnabled
-    ),
+    additionalServicesEnabled: referralKickbackEnabled,
     coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId ?? defaults.coachReferralRecipientUserId),
     coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail ?? defaults.coachReferralRecipientEmail),
     coachReferralSourceTeamId: normalizeString(candidate.coachReferralSourceTeamId ?? defaults.coachReferralSourceTeamId),

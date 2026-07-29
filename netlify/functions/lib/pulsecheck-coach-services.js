@@ -105,7 +105,7 @@ const loadService = async ({ serviceId, conversation, database = db }) => {
   if (service.teamId) {
     const teamSnap = await database.collection('pulsecheck-teams').doc(service.teamId).get();
     const team = teamSnap.exists ? teamSnap.data() || {} : {};
-    if (team?.commercialConfig?.additionalServicesEnabled !== true) return null;
+    if (team?.commercialConfig?.referralKickbackEnabled !== true) return null;
   }
   return service;
 };

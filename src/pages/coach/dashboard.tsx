@@ -606,7 +606,6 @@ type ViewKey =
   | 'inbox'
   | 'roster'
   | 'referrals'
-  | 'services'
   | 'staff'
   | 'nora'
   | 'schedule'
@@ -620,7 +619,6 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'inbox', label: 'Inbox', icon: Inbox },
   { key: 'roster', label: 'Team Roster', icon: Users },
   { key: 'referrals', label: 'Referral Links', icon: Link2 },
-  { key: 'services', label: 'Services', icon: ClipboardList },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'nora', label: 'Train Nora', icon: Brain },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
@@ -759,8 +757,6 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           return can('coaching');
         case 'referrals':
           return can('coaching') || can('administrative');
-        case 'services':
-          return additionalServicesEnabled && (can('coaching') || can('administrative'));
         case 'alerts':
           return can('coaching') || can('athletic_trainer');
         case 'staff':
@@ -1010,14 +1006,6 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       canRevoke={can('admin')}
                     />
                   )}
-                  {view === 'services' && additionalServicesEnabled && (
-                    <CoachServicesSection
-                      coachId={coachId || ''}
-                      teamId={additionalServicesTeamId}
-                      organizationId={additionalServicesOrganizationId}
-                      isDemo={isDemo}
-                    />
-                  )}
                   {view === 'staff' && (
                     <StaffSection
                       isDemo={isDemo}
@@ -1035,7 +1023,17 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection athletes={athletes} isDemo={isDemo} revenueSharePct={revenueSharePct} />
                   )}
-                  {view === 'settings' && <SettingsSection coachName={coachName} email={coachEmail} />}
+                  {view === 'settings' && (
+                    <SettingsSection
+                      coachName={coachName}
+                      email={coachEmail}
+                      coachId={coachId || ''}
+                      servicesEnabled={additionalServicesEnabled}
+                      servicesTeamId={additionalServicesTeamId}
+                      servicesOrganizationId={additionalServicesOrganizationId}
+                      isDemo={isDemo}
+                    />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -1193,9 +1191,9 @@ const CoachDashboard: React.FC = () => {
     };
   }, [currentUser?.id, trainingMode]);
 
-  // Earnings is available for Stripe-connected service sellers and for coaches
-  // who receive a team's subscription revenue share. Additional Services is a
-  // separate commercial-config switch on the coach's team.
+  // Earnings and Additional Services are available to the coach who receives a
+  // team's athlete-subscription kickback. That single provisioning switch owns
+  // both the referral revenue path and the add-on service sales path.
   useEffect(() => {
     if (trainingMode !== false) return;
     let cancelled = false;
@@ -1210,13 +1208,6 @@ const CoachDashboard: React.FC = () => {
           if (membership.role === 'athlete') continue;
           const team = await pulseCheckProvisioningService.getTeam(membership.teamId);
           const cfg = team?.commercialConfig;
-          if (cfg?.additionalServicesEnabled && !servicesAccess.enabled) {
-            servicesAccess = {
-              enabled: true,
-              teamId: team?.id || membership.teamId,
-              organizationId: team?.organizationId || membership.organizationId || '',
-            };
-          }
           const isConfiguredRecipient = cfg?.revenueRecipientUserId === currentUser.id;
           const isLegacyCoachRecipient =
             !cfg?.revenueRecipientUserId && team?.legacyCoachId === currentUser.id;
@@ -1230,6 +1221,13 @@ const CoachDashboard: React.FC = () => {
             && (isConfiguredRecipient || isLegacyCoachRecipient || isDefaultTeamAdminRecipient)
           ) {
             if (!cancelled) setEarnings({ enabled: true, sharePct: cfg.referralRevenueSharePct || 0 });
+            if (!servicesAccess.enabled) {
+              servicesAccess = {
+                enabled: true,
+                teamId: team?.id || membership.teamId,
+                organizationId: team?.organizationId || membership.organizationId || '',
+              };
+            }
             earningsResolved = true;
           }
         }
@@ -8001,7 +7999,23 @@ const LocalFirebaseEnvironmentPanel: React.FC = () => {
   );
 };
 
-const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coachName, email }) => (
+const SettingsSection: React.FC<{
+  coachName: string;
+  email?: string;
+  coachId: string;
+  servicesEnabled?: boolean;
+  servicesTeamId?: string;
+  servicesOrganizationId?: string;
+  isDemo?: boolean;
+}> = ({
+  coachName,
+  email,
+  coachId,
+  servicesEnabled = false,
+  servicesTeamId = '',
+  servicesOrganizationId = '',
+  isDemo = false,
+}) => (
   <div className="space-y-4">
     <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Settings</div>
     <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -8015,6 +8029,22 @@ const SettingsSection: React.FC<{ coachName: string; email?: string }> = ({ coac
       </div>
     </div>
     <AccountSignInMethods compact />
+    {servicesEnabled && (
+      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-950/10 p-4">
+        <div className="mb-4 flex flex-col gap-1">
+          <div className="text-sm font-bold text-white">Additional Services</div>
+          <div className="text-xs text-zinc-500">
+            Add one-time services or ongoing subscription services athletes can buy from their coach conversation.
+          </div>
+        </div>
+        <CoachServicesSection
+          coachId={coachId}
+          teamId={servicesTeamId}
+          organizationId={servicesOrganizationId}
+          isDemo={isDemo}
+        />
+      </div>
+    )}
     <LocalFirebaseEnvironmentPanel />
   </div>
 );
