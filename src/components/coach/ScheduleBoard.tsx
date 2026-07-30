@@ -505,8 +505,8 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
       <div className="flex items-center gap-2 flex-wrap">
         <button
           onClick={() => {
-            if (!composerOpen) resetComposer();
-            setComposerOpen((o) => !o);
+            resetComposer();
+            setComposerOpen(true);
           }}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
         >
@@ -542,28 +542,48 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
         </div>
       )}
 
-      {/* Manual composer */}
+      {/* Manual composer modal */}
       <AnimatePresence>
         {composerOpen && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm"
+            onClick={() => {
+              resetComposer();
+              setComposerOpen(false);
+            }}
           >
-            <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-4 space-y-3">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="w-full max-w-3xl rounded-2xl bg-zinc-950 border border-zinc-700/60 shadow-2xl shadow-black/50 p-5 space-y-4"
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label={editingEventId ? 'Update schedule item' : 'Add a schedule item'}
+            >
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-white">
-                  {editingEventId ? 'Update schedule item' : 'Add a schedule item'}
+                <div>
+                  <div className="text-base font-semibold text-white">
+                    {editingEventId ? 'Update schedule item' : 'Add a schedule item'}
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-0.5">
+                    Add practices, meetings, lifts, travel, and team events to the coach calendar.
+                  </div>
                 </div>
                 <button
                   onClick={() => {
                     resetComposer();
                     setComposerOpen(false);
                   }}
-                  className="text-xs text-zinc-500 hover:text-zinc-200"
+                  className="p-2 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80"
+                  aria-label="Close schedule item modal"
                 >
-                  Cancel
+                  <X className="w-4 h-4" />
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -616,6 +636,15 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
               </div>
               <div className="flex justify-end">
                 <button
+                  onClick={() => {
+                    resetComposer();
+                    setComposerOpen(false);
+                  }}
+                  className="mr-2 px-4 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-200 text-sm font-semibold hover:bg-zinc-700/60"
+                >
+                  Cancel
+                </button>
+                <button
                   onClick={saveDraft}
                   disabled={!draft.title.trim()}
                   className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40"
@@ -623,7 +652,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
                   {editingEventId ? 'Save updates' : 'Save event'}
                 </button>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

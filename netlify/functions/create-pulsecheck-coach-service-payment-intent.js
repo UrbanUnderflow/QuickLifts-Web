@@ -188,7 +188,9 @@ const handler = async (event) => {
       paymentIntent = await stripe.paymentIntents.create({
         amount: pricing.totalAmountCents,
         currency: service.currency,
-        payment_method_types: ['card'],
+        automatic_payment_methods: {
+          enabled: true,
+        },
         receipt_email: normalizeString(decoded.email) || undefined,
         description: `${service.title} with ${normalizeString(conversation.data.coachName) || 'coach'}`,
         metadata: {
