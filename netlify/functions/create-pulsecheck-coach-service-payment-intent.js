@@ -71,6 +71,50 @@ const stripeConfiguration = async (event) => {
 
 const validCheckoutId = (value) => /^[A-Za-z0-9_-]{16,80}$/.test(normalizeString(value));
 
+async function resolveAthleteStripeCustomer({
+  stripe,
+  database,
+  athleteUserId,
+  email,
+  name,
+  stripeMode,
+}) {
+  const userRef = database.collection('users').doc(athleteUserId);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() || {} : {};
+  const existingCustomerId = normalizeString(userData.stripeCustomerIds?.[stripeMode]);
+  let customerId = existingCustomerId;
+
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: normalizeString(email) || undefined,
+      name: normalizeString(name) || undefined,
+      metadata: {
+        platform: 'pulsecheck',
+        pulsecheck_user_id: athleteUserId,
+        stripe_mode: stripeMode,
+      },
+    });
+    customerId = customer.id;
+    await userRef.set({
+      stripeCustomerIds: {
+        [stripeMode]: customerId,
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }
+
+  const ephemeralKey = await stripe.ephemeralKeys.create(
+    { customer: customerId },
+    { apiVersion: '2023-10-16' }
+  );
+
+  return {
+    customerId,
+    ephemeralKeySecret: ephemeralKey.secret,
+  };
+}
+
 const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: jsonHeaders, body: '' };
@@ -119,6 +163,17 @@ const handler = async (event) => {
       conversation.coachUserId,
       database
     );
+    const stripeCustomer = await resolveAthleteStripeCustomer({
+      stripe,
+      database,
+      athleteUserId,
+      email: normalizeString(decoded.email),
+      name:
+        normalizeString(conversation.data.athleteName)
+        || normalizeString(decoded.name)
+        || 'Athlete',
+      stripeMode,
+    });
 
     const ref = orderRef(checkoutId, database);
     const existingSnap = await ref.get();
@@ -144,6 +199,9 @@ const handler = async (event) => {
             paymentIntentId: paymentIntent.id,
             clientSecret: paymentIntent.client_secret,
             publishableKey,
+            customerId: stripeCustomer.customerId,
+            customerEphemeralKeySecret: stripeCustomer.ephemeralKeySecret,
+            paymentMethodTypes: paymentIntent.payment_method_types || [],
             amountCents: existing.totalAmountCents || existing.amountCents || service.amountCents,
             coachPriceCents: existing.coachPriceCents || existing.amountCents || service.amountCents,
             processingFeeCents: existing.processingFeeCents || 0,
@@ -188,9 +246,8 @@ const handler = async (event) => {
       paymentIntent = await stripe.paymentIntents.create({
         amount: pricing.totalAmountCents,
         currency: service.currency,
-        automatic_payment_methods: {
-          enabled: true,
-        },
+        customer: stripeCustomer.customerId,
+        payment_method_types: ['card', 'link'],
         receipt_email: normalizeString(decoded.email) || undefined,
         description: `${service.title} with ${normalizeString(conversation.data.coachName) || 'coach'}`,
         metadata: {
@@ -225,6 +282,7 @@ const handler = async (event) => {
     await ref.set({
       paymentIntentId: paymentIntent.id,
       paymentStatus: paymentIntent.status,
+      stripeCustomerId: stripeCustomer.customerId,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
@@ -237,6 +295,9 @@ const handler = async (event) => {
         paymentIntentId: paymentIntent.id,
         clientSecret: paymentIntent.client_secret,
         publishableKey,
+        customerId: stripeCustomer.customerId,
+        customerEphemeralKeySecret: stripeCustomer.ephemeralKeySecret,
+        paymentMethodTypes: paymentIntent.payment_method_types || [],
         amountCents: pricing.totalAmountCents,
         coachPriceCents: pricing.coachPriceCents,
         processingFeeCents: pricing.processingFeeCents,
