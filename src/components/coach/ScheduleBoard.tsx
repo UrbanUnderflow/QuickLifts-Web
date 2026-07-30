@@ -18,6 +18,10 @@ import {
   RefreshCw,
   FileText,
   Plug,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Lock,
 } from 'lucide-react';
 import {
   coachScheduleService,
@@ -25,6 +29,11 @@ import {
   ScheduleEventType,
 } from '../../api/firebase/coach/coachScheduleService';
 import { noraVaultService, NoraVaultEntry } from '../../api/firebase/coach/noraVaultService';
+import {
+  CoachAthleteConversation,
+  CoachServiceBooking,
+  coachAthleteMessagingService,
+} from '../../api/firebase/messaging/coachAthleteService';
 
 // ---------------------------------------------------------------------------
 // Nora orb — self-contained CSS/motion approximation of the PIL Nora orb.
@@ -167,6 +176,29 @@ const SCHEDULE_INTEGRATIONS = [
 
 type LiveEvent = ScheduleEvent & { live?: boolean };
 
+type CalendarBooking = {
+  id: string;
+  conversationId: string;
+  coachId?: string;
+  athleteId?: string;
+  athleteName: string;
+  serviceTitle: string;
+  date: string;
+  time?: string;
+  scheduledAt?: Date;
+  priceCents?: number;
+  status?: string;
+};
+
+type CalendarEvent = LiveEvent & {
+  booking?: boolean;
+  bookingId?: string;
+  conversationId?: string;
+  athleteId?: string;
+  athleteName?: string;
+  priceCents?: number;
+};
+
 // ---------------------------------------------------------------------------
 // Schedule board
 // ---------------------------------------------------------------------------
@@ -174,9 +206,16 @@ type LiveEvent = ScheduleEvent & { live?: boolean };
 type Phase = 'idle' | 'fetching' | 'writing' | 'done';
 
 const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coachId }) => {
-  const [events, setEvents] = useState<LiveEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [bookings, setBookings] = useState<CalendarBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const [selectedDate, setSelectedDate] = useState(todayStr());
 
   // Import / animation state
   const [urlInput, setUrlInput] = useState('');
@@ -186,8 +225,9 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
 
   // Manual composer
   const [composerOpen, setComposerOpen] = useState(false);
-  const [draft, setDraft] = useState<{ title: string; date: string; time: string; type: ScheduleEventType; location: string; opponent: string }>({
-    title: '', date: todayStr(), time: '', type: 'practice', location: '', opponent: '',
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ title: string; date: string; time: string; type: ScheduleEventType; location: string; opponent: string; notes: string }>({
+    title: '', date: todayStr(), time: '', type: 'practice', location: '', opponent: '', notes: '',
   });
 
   // Documents (files dropped here land in Nora's vault, tagged Schedule)
@@ -203,11 +243,13 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
     }
     setLoading(true);
     try {
-      const [evts, vault] = await Promise.all([
+      const [evts, vault, conversations] = await Promise.all([
         coachScheduleService.getEvents(coachId),
         noraVaultService.getEntries(coachId).catch(() => [] as NoraVaultEntry[]),
+        coachAthleteMessagingService.getConversationsForUser(coachId, 'coach').catch(() => [] as CoachAthleteConversation[]),
       ]);
       setEvents(evts);
+      setBookings(extractCalendarBookings(conversations, coachId));
       setDocs(vault.filter((e) => (e.type === 'file' || e.type === 'image') && e.category === 'Schedule'));
     } catch (err) {
       console.error('[schedule] load failed', err);
@@ -284,25 +326,57 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
     }
   };
 
+  const resetComposer = () => {
+    setEditingEventId(null);
+    setDraft({ title: '', date: todayStr(), time: '', type: 'practice', location: '', opponent: '', notes: '' });
+  };
+
   // --- Manual add -----------------------------------------------------------
   const saveDraft = async () => {
     if (!coachId || !draft.title.trim() || !draft.date) return;
     try {
-      const created = await coachScheduleService.addEvent(coachId, {
+      const payload = {
         title: draft.title,
         date: draft.date,
         time: draft.time.trim() || undefined,
         type: draft.type,
         location: draft.location.trim() || undefined,
         opponent: draft.opponent.trim() || undefined,
+        notes: draft.notes.trim() || undefined,
         source: 'manual',
-      });
-      setEvents((prev) => sortEvents([...prev, created]));
-      setDraft({ title: '', date: todayStr(), time: '', type: 'practice', location: '', opponent: '' });
+      } as const;
+
+      if (editingEventId) {
+        const updated = await coachScheduleService.updateEvent(editingEventId, payload);
+        setEvents((prev) => sortEvents(prev.map((event) => (
+          event.id === editingEventId
+            ? { ...event, ...payload, updatedAt: updated.updatedAt || new Date() }
+            : event
+        ))));
+      } else {
+        const created = await coachScheduleService.addEvent(coachId, payload);
+        setEvents((prev) => sortEvents([...prev, created]));
+      }
+      resetComposer();
       setComposerOpen(false);
     } catch (err: any) {
       setError(err?.message || 'Couldn’t save that event.');
     }
+  };
+
+  const editEvent = (event: CalendarEvent) => {
+    if (event.live || event.booking) return;
+    setEditingEventId(event.id);
+    setDraft({
+      title: event.title || '',
+      date: event.date || todayStr(),
+      time: event.time || '',
+      type: event.type || 'event',
+      location: event.location || '',
+      opponent: event.opponent || '',
+      notes: event.notes || '',
+    });
+    setComposerOpen(true);
   };
 
   const removeEvent = async (e: LiveEvent) => {
@@ -360,7 +434,26 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
     }
   };
 
-  const grouped = useMemo(() => groupByDate(events), [events]);
+  const bookingEvents = useMemo(
+    () => bookings.map((booking) => bookingToEvent(booking, coachId || '')),
+    [bookings, coachId]
+  );
+  const calendarEvents = useMemo(() => sortEvents([...events, ...bookingEvents]), [events, bookingEvents]);
+  const grouped = useMemo(() => groupByDate(calendarEvents), [calendarEvents]);
+  const selectedItems = useMemo(
+    () => calendarEvents.filter((event) => event.date === selectedDate),
+    [calendarEvents, selectedDate]
+  );
+  const calendarDays = useMemo(() => buildCalendarDays(visibleMonth), [visibleMonth]);
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    calendarEvents.forEach((event) => {
+      if (!event.date) return;
+      if (!map.has(event.date)) map.set(event.date, []);
+      map.get(event.date)!.push(event);
+    });
+    return map;
+  }, [calendarEvents]);
   const busy = phase === 'fetching' || phase === 'writing';
 
   return (
@@ -411,7 +504,10 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
       {/* Secondary actions */}
       <div className="flex items-center gap-2 flex-wrap">
         <button
-          onClick={() => setComposerOpen((o) => !o)}
+          onClick={() => {
+            if (!composerOpen) resetComposer();
+            setComposerOpen((o) => !o);
+          }}
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
         >
           <Plus className="w-4 h-4" /> Add event
@@ -456,6 +552,20 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
             className="overflow-hidden"
           >
             <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-white">
+                  {editingEventId ? 'Update schedule item' : 'Add a schedule item'}
+                </div>
+                <button
+                  onClick={() => {
+                    resetComposer();
+                    setComposerOpen(false);
+                  }}
+                  className="text-xs text-zinc-500 hover:text-zinc-200"
+                >
+                  Cancel
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input
                   value={draft.title}
@@ -496,6 +606,13 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
                   placeholder="Opponent (optional)"
                   className="bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
                 />
+                <textarea
+                  value={draft.notes}
+                  onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                  placeholder="Notes (optional)"
+                  rows={3}
+                  className="sm:col-span-2 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
+                />
               </div>
               <div className="flex justify-end">
                 <button
@@ -503,7 +620,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
                   disabled={!draft.title.trim()}
                   className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40"
                 >
-                  Save event
+                  {editingEventId ? 'Save updates' : 'Save event'}
                 </button>
               </div>
             </div>
@@ -630,19 +747,127 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
         )}
       </AnimatePresence>
 
+      {/* Month calendar */}
+      <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/35 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <CalendarDays className="w-4 h-4 text-[#E0FE10]" />
+              Calendar
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Bookings appear automatically. Add practices, meetings, and team events here.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
+              className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:text-white"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="min-w-[130px] text-center text-sm font-semibold text-zinc-200">
+              {formatMonthLabel(visibleMonth)}
+            </div>
+            <button
+              onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
+              className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:text-white"
+              aria-label="Next month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            <div key={day} className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1.5">
+          {calendarDays.map((day) => {
+            const dayEvents = eventsByDate.get(day.key) || [];
+            const inMonth = day.date.getMonth() === visibleMonth.getMonth();
+            const isToday = day.key === todayStr();
+            const isSelected = day.key === selectedDate;
+            return (
+              <button
+                key={day.key}
+                onClick={() => setSelectedDate(day.key)}
+                className={`min-h-[92px] rounded-xl border p-2 text-left transition ${
+                  isSelected
+                    ? 'border-[#E0FE10]/70 bg-[#E0FE10]/10'
+                    : isToday
+                    ? 'border-teal-400/45 bg-teal-500/10'
+                    : 'border-zinc-800/70 bg-zinc-950/45 hover:border-zinc-700/70'
+                } ${inMonth ? 'opacity-100' : 'opacity-45'}`}
+              >
+                <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-teal-200' : 'text-zinc-400'}`}>
+                  {day.date.getDate()}
+                </div>
+                <div className="space-y-1">
+                  {dayEvents.slice(0, 3).map((event) => (
+                    <CalendarChip key={event.id} event={event} />
+                  ))}
+                  {dayEvents.length > 3 && (
+                    <div className="text-[10px] text-zinc-500">+{dayEvents.length - 3} more</div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-zinc-800/70 bg-black/20 p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {formatHeading(selectedDate)}
+            </div>
+            <button
+              onClick={() => {
+                setDraft((d) => ({ ...d, date: selectedDate }));
+                setEditingEventId(null);
+                setComposerOpen(true);
+              }}
+              className="text-xs font-semibold text-[#E0FE10] hover:text-white"
+            >
+              Add item this day
+            </button>
+          </div>
+          {selectedItems.length === 0 ? (
+            <div className="text-sm text-zinc-500 py-3">Nothing booked or scheduled for this day.</div>
+          ) : (
+            <div className="space-y-2">
+              {selectedItems.map((event) => (
+                <EventRow
+                  key={`selected-${event.id}`}
+                  event={event}
+                  past={event.date < todayStr()}
+                  onEdit={() => editEvent(event)}
+                  onDelete={() => removeEvent(event)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Schedule list */}
       <div>
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
-          On the calendar {events.length > 0 && <span className="text-zinc-600">({events.filter((e) => !e.live).length || events.length})</span>}
+          On the calendar {calendarEvents.length > 0 && <span className="text-zinc-600">({calendarEvents.filter((e) => !e.live).length || calendarEvents.length})</span>}
         </div>
         {loading ? (
           <div className="flex items-center gap-3 text-zinc-500 text-sm py-10 justify-center">
             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#E0FE10]" />
             Loading the schedule…
           </div>
-        ) : events.length === 0 ? (
+        ) : calendarEvents.length === 0 ? (
           <div className="text-sm text-zinc-500 rounded-xl border border-zinc-800/60 bg-zinc-800/20 p-8 text-center">
-            Nothing scheduled yet. Paste a schedule link above and watch Nora fill it in — or add an event by hand.
+            Nothing scheduled yet. Paste a schedule link above and watch Nora fill it in, or add an event by hand.
           </div>
         ) : (
           <div className="space-y-5">
@@ -656,7 +881,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
                   <div className="space-y-2">
                     <AnimatePresence initial={false}>
                       {items.map((e) => (
-                        <EventRow key={e.id} event={e} past={past} onDelete={() => removeEvent(e)} />
+                        <EventRow key={e.id} event={e} past={past} onEdit={() => editEvent(e)} onDelete={() => removeEvent(e)} />
                       ))}
                     </AnimatePresence>
                   </div>
@@ -674,9 +899,15 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
 // Event row
 // ---------------------------------------------------------------------------
 
-const EventRow: React.FC<{ event: LiveEvent; past: boolean; onDelete: () => void }> = ({ event, past, onDelete }) => {
+const EventRow: React.FC<{ event: CalendarEvent; past: boolean; onEdit?: () => void; onDelete: () => void }> = ({
+  event,
+  past,
+  onEdit,
+  onDelete,
+}) => {
   const meta = TYPE_META[event.type] || TYPE_META.event;
   const Icon = meta.icon;
+  const isBooking = Boolean(event.booking);
   return (
     <motion.div
       layout
@@ -685,7 +916,9 @@ const EventRow: React.FC<{ event: LiveEvent; past: boolean; onDelete: () => void
       exit={{ opacity: 0, x: 14 }}
       transition={{ duration: 0.28, ease: 'easeOut' }}
       className={`relative flex items-start gap-3 p-3 rounded-xl border transition-colors group ${
-        event.live
+        isBooking
+          ? 'bg-teal-500/5 border-teal-500/30'
+          : event.live
           ? 'bg-purple-500/5 border-purple-500/30'
           : 'bg-zinc-800/40 border-zinc-700/30 hover:bg-zinc-800/60'
       }`}
@@ -708,9 +941,17 @@ const EventRow: React.FC<{ event: LiveEvent; past: boolean; onDelete: () => void
           <span className="text-sm font-medium text-white">
             {event.live ? <Typewriter text={event.title} /> : event.title}
           </span>
+          {isBooking && (
+            <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full border bg-teal-500/15 text-teal-200 border-teal-500/30">
+              <Lock className="w-2.5 h-2.5" /> Booking
+            </span>
+          )}
           <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${meta.chip}`}>{meta.label}</span>
         </div>
         <div className="flex items-center gap-3 mt-1 text-[11px] text-zinc-500 flex-wrap">
+          {event.athleteName && (
+            <span className="text-teal-300">{event.athleteName}</span>
+          )}
           {event.time && (
             <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {event.time}</span>
           )}
@@ -721,9 +962,19 @@ const EventRow: React.FC<{ event: LiveEvent; past: boolean; onDelete: () => void
             <span className="text-zinc-400">{event.opponent}</span>
           )}
           {event.notes && <span className="text-zinc-600">· {event.notes}</span>}
+          {isBooking && <span className="text-zinc-600">Manage booking from the conversation.</span>}
         </div>
       </div>
-      {!event.live && (
+      {!event.live && !isBooking && (
+        <button
+          onClick={onEdit}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-zinc-500 hover:text-[#E0FE10] hover:bg-[#E0FE10]/10 flex-shrink-0"
+          aria-label="Edit event"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
+      {!event.live && !isBooking && (
         <button
           onClick={onDelete}
           className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
@@ -740,12 +991,130 @@ const EventRow: React.FC<{ event: LiveEvent; past: boolean; onDelete: () => void
 // helpers
 // ---------------------------------------------------------------------------
 
-const sortEvents = (list: LiveEvent[]): LiveEvent[] =>
+const CalendarChip: React.FC<{ event: CalendarEvent }> = ({ event }) => {
+  const booking = Boolean(event.booking);
+  return (
+    <div
+      className={`truncate rounded-md px-1.5 py-1 text-[10px] font-semibold ${
+        booking
+          ? 'bg-teal-500/15 text-teal-200 border border-teal-500/20'
+          : event.live
+          ? 'bg-purple-500/15 text-purple-200 border border-purple-500/20'
+          : 'bg-zinc-800/80 text-zinc-300 border border-zinc-700/50'
+      }`}
+      title={event.title}
+    >
+      {event.time ? `${event.time} · ` : ''}{event.title}
+    </div>
+  );
+};
+
+const localDateString = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const parseBookingDate = (booking: CoachServiceBooking): Date | undefined => {
+  if (booking.scheduledAt instanceof Date && !Number.isNaN(booking.scheduledAt.getTime())) return booking.scheduledAt;
+  if (typeof booking.scheduledAtMs === 'number') return new Date(booking.scheduledAtMs);
+  if (booking.scheduledDate) {
+    const date = parseLocalDate(booking.scheduledDate);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  }
+  return undefined;
+};
+
+const formatBookingTime = (booking: CoachServiceBooking, date?: Date): string | undefined => {
+  if (booking.scheduledTime) return booking.scheduledTime;
+  if (!date) return undefined;
+  return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+};
+
+const bookingKey = (conversation: CoachAthleteConversation, booking: CoachServiceBooking, index: number): string =>
+  booking.orderId || booking.id || `${conversation.id}-${booking.serviceId || booking.serviceTitle || 'booking'}-${booking.scheduledAtMs || index}`;
+
+const extractCalendarBookings = (
+  conversations: CoachAthleteConversation[],
+  coachId: string
+): CalendarBooking[] => {
+  const seen = new Set<string>();
+  const output: CalendarBooking[] = [];
+  conversations.forEach((conversation) => {
+    const rawBookings = [
+      ...(Array.isArray(conversation.activeBookings) ? conversation.activeBookings : []),
+      ...(conversation.activeBooking ? [conversation.activeBooking] : []),
+    ];
+    rawBookings.forEach((booking, index) => {
+      if (!booking) return;
+      if (booking.coachId && booking.coachId !== coachId) return;
+      const status = String(booking.status || 'active').toLowerCase();
+      if (['refunded', 'cancelled', 'canceled', 'inactive'].includes(status)) return;
+      const scheduledAt = parseBookingDate(booking);
+      const date = scheduledAt ? localDateString(scheduledAt) : booking.scheduledDate;
+      if (!date) return;
+      const id = bookingKey(conversation, booking, index);
+      if (seen.has(id)) return;
+      seen.add(id);
+      output.push({
+        id,
+        conversationId: conversation.id,
+        coachId: booking.coachId || conversation.coachId,
+        athleteId: booking.athleteId || conversation.athleteId,
+        athleteName: booking.athleteName || conversation.athleteName || 'Athlete',
+        serviceTitle: booking.serviceTitle || booking.serviceName || booking.title || 'Booked service',
+        date,
+        time: formatBookingTime(booking, scheduledAt),
+        scheduledAt,
+        priceCents: booking.priceCents,
+        status,
+      });
+    });
+  });
+  return output.sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
+};
+
+const bookingToEvent = (booking: CalendarBooking, coachId: string): CalendarEvent => ({
+  id: `booking-${booking.id}`,
+  coachId,
+  title: booking.serviceTitle,
+  date: booking.date,
+  time: booking.time,
+  type: 'meeting',
+  source: 'booking',
+  booking: true,
+  bookingId: booking.id,
+  conversationId: booking.conversationId,
+  athleteId: booking.athleteId,
+  athleteName: booking.athleteName,
+  priceCents: booking.priceCents,
+  notes: booking.status ? `Status: ${booking.status}` : undefined,
+});
+
+const addMonths = (date: Date, amount: number): Date => {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  next.setDate(1);
+  return next;
+};
+
+const formatMonthLabel = (date: Date): string =>
+  date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+const buildCalendarDays = (month: Date): { key: string; date: Date }[] => {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return { key: localDateString(date), date };
+  });
+};
+
+const sortEvents = (list: CalendarEvent[]): CalendarEvent[] =>
   [...list].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''));
 
-const groupByDate = (list: LiveEvent[]): { date: string; items: LiveEvent[] }[] => {
+const groupByDate = (list: CalendarEvent[]): { date: string; items: CalendarEvent[] }[] => {
   const sorted = sortEvents(list);
-  const map = new Map<string, LiveEvent[]>();
+  const map = new Map<string, CalendarEvent[]>();
   sorted.forEach((e) => {
     const key = e.date || 'undated';
     if (!map.has(key)) map.set(key, []);

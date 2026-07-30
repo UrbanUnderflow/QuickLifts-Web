@@ -8,6 +8,49 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+function resolvePulseCheckPushTarget(userData = {}) {
+  const pulseCheckToken = typeof userData.pulseCheckFcmToken === 'string'
+    ? userData.pulseCheckFcmToken.trim()
+    : '';
+  const sourceApp = typeof userData.pushTokenSourceApp === 'string'
+    ? userData.pushTokenSourceApp.trim().toLowerCase()
+    : '';
+
+  if (pulseCheckToken && sourceApp === 'pulsecheck') {
+    return {
+      token: pulseCheckToken,
+      field: 'pulseCheckFcmToken',
+      reason: 'pulsecheck_token',
+    };
+  }
+
+  if (pulseCheckToken) {
+    return {
+      token: pulseCheckToken,
+      field: 'pulseCheckFcmToken',
+      reason: sourceApp ? 'source_app_mismatch' : 'missing_source_app',
+    };
+  }
+
+  return {
+    token: '',
+    field: '',
+    reason: 'missing_token',
+  };
+}
+
+function timestampToISOString(value) {
+  if (value && typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
 /**
  * Send push notification when a new coach-athlete message is created
  */
@@ -46,22 +89,29 @@ exports.sendCoachAthleteMessageNotification = functions.firestore
         return;
       }
       
-      const userData = userDoc.data();
-      const fcmToken = userData.fcmToken;
+      const userData = userDoc.data() || {};
+      const pushTarget = resolvePulseCheckPushTarget(userData);
+      const fcmToken = pushTarget.token;
       
       if (!fcmToken) {
-        console.log(`No FCM token found for user: ${recipientId}`);
+        console.log(`No PulseCheck FCM token found for user: ${recipientId}`);
         return;
       }
+
+      console.log(`Resolved ${pushTarget.field} for ${recipientId} (${pushTarget.reason}).`);
       
       // Prepare notification payload
       const notificationTitle = isFromCoach ? 
         `Message from ${senderName}` : 
         `Message from ${senderName}`;
       
-      const notificationBody = messageData.content.length > 100 ? 
-        `${messageData.content.substring(0, 100)}...` : 
-        messageData.content;
+      const rawContent = typeof messageData.content === 'string'
+        ? messageData.content.trim()
+        : '';
+      const messagePreview = rawContent || 'Sent a message';
+      const notificationBody = messagePreview.length > 100
+        ? `${messagePreview.substring(0, 100)}...`
+        : messagePreview;
       
       const payload = {
         token: fcmToken,
@@ -70,16 +120,26 @@ exports.sendCoachAthleteMessageNotification = functions.firestore
           body: notificationBody,
         },
         data: {
-          type: 'coach_athlete_message',
-          conversationId: messageData.conversationId,
-          senderId: messageData.senderId,
-          senderType: messageData.senderType,
-          messageId: messageId,
-          timestamp: messageData.timestamp.toDate().toISOString()
+          type: 'COACH_MESSAGE',
+          conversationId: String(messageData.conversationId || ''),
+          senderId: String(messageData.senderId || ''),
+          senderType: String(messageData.senderType || ''),
+          coachId: String(conversationData.coachId || ''),
+          athleteId: String(conversationData.athleteId || ''),
+          message: notificationBody,
+          messageId: String(messageId || ''),
+          timestamp: timestampToISOString(messageData.timestamp)
         },
         apns: {
+          headers: {
+            'apns-priority': '10'
+          },
           payload: {
             aps: {
+              alert: {
+                title: notificationTitle,
+                body: notificationBody
+              },
               badge: 1,
               sound: 'default',
               category: 'MESSAGE_CATEGORY'

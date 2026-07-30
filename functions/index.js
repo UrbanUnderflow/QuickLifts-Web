@@ -113,6 +113,9 @@ exports.processEmailQueue = require("./mentalCurriculumNotifications").processEm
 exports.scheduledDailyReflection = require("./dailyReflectionNotifications").scheduledDailyReflection;
 exports.sendTestReflectionNotification = require("./dailyReflectionNotifications").sendTestReflectionNotification;
 
+// Export PulseCheck coach-athlete message notifications
+exports.sendCoachAthleteMessageNotification = require("./coachAthleteMessageNotifications").sendCoachAthleteMessageNotification;
+
 // Macra: scheduled daily insight (rich context, sport-aware, FWP-coupled)
 exports.scheduledMacraDailyInsight = require("./macraDailyInsight").scheduledMacraDailyInsight;
 

@@ -1,6 +1,7 @@
 const { admin, headers, getFirebaseAdminApp } = require('./config/firebase');
 const {
   CONVERSATIONS_COLLECTION,
+  ORDERS_COLLECTION,
   normalizeString,
   orderRef,
   serializeBooking,
@@ -89,6 +90,54 @@ const handler = async (event) => {
         scheduledAt: scheduledTimestamp,
         bookedAt,
       });
+      const bookedOrdersSnap = await transaction.get(
+        database.collection(ORDERS_COLLECTION)
+          .where('conversationId', '==', conversationId)
+          .where('status', '==', 'booked')
+      );
+      const ledgerBookings = bookedOrdersSnap.docs
+        .filter((doc) => doc.id !== orderSnap.id)
+        .map((doc) => {
+          const bookedOrder = doc.data() || {};
+          if (!bookedOrder.scheduledAt || !bookedOrder.bookedAt) return null;
+          return serializeBooking({
+            orderId: doc.id,
+            order: bookedOrder,
+            scheduledAt: bookedOrder.scheduledAt,
+            bookedAt: bookedOrder.bookedAt,
+          });
+        })
+        .filter(Boolean);
+      const existingBookings = Array.isArray(conversation.activeBookings)
+        ? conversation.activeBookings
+        : [];
+      const legacyBooking = conversation.activeBooking && typeof conversation.activeBooking === 'object'
+        ? conversation.activeBooking
+        : null;
+      const mergedBookings = [
+        ...ledgerBookings,
+        ...existingBookings,
+        ...(legacyBooking ? [legacyBooking] : []),
+        booking,
+      ]
+        .filter((item) => item && typeof item === 'object')
+        .filter((item, index, list) => {
+          const itemOrderId = normalizeString(item.orderId || item.id);
+          if (!itemOrderId) return index === list.findIndex((candidate) => candidate === item);
+          return index === list.findIndex((candidate) => normalizeString(candidate.orderId || candidate.id) === itemOrderId);
+        })
+        .sort((left, right) => {
+          const leftDate = left.scheduledAt?.toDate?.() || new Date(left.scheduledAt);
+          const rightDate = right.scheduledAt?.toDate?.() || new Date(right.scheduledAt);
+          const leftTime = Number.isNaN(leftDate.getTime()) ? 0 : leftDate.getTime();
+          const rightTime = Number.isNaN(rightDate.getTime()) ? 0 : rightDate.getTime();
+          return leftTime - rightTime;
+        });
+      const now = Date.now();
+      const nextBooking = mergedBookings.find((item) => {
+        const date = item.scheduledAt?.toDate?.() || new Date(item.scheduledAt);
+        return !Number.isNaN(date.getTime()) && date.getTime() >= now;
+      }) || mergedBookings[0] || booking;
       transaction.set(ref, {
         status: 'booked',
         scheduledAt: scheduledTimestamp,
@@ -96,7 +145,8 @@ const handler = async (event) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       transaction.set(conversationRef, {
-        activeBooking: booking,
+        activeBooking: nextBooking,
+        activeBookings: mergedBookings,
         lastMessage: `${order.serviceTitle} booked for ${scheduledAt.toISOString()}`,
         lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
         lastMessageSenderId: userId,

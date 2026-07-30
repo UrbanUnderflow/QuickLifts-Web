@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   setDoc,
+  updateDoc,
   getDocs,
   deleteDoc,
   writeBatch,
@@ -39,7 +40,7 @@ export type ScheduleEventType =
   | 'travel'
   | 'event';
 
-export type ScheduleEventSource = 'manual' | 'link' | 'file';
+export type ScheduleEventSource = 'manual' | 'link' | 'file' | 'booking';
 
 export interface ScheduleEvent {
   id: string;
@@ -123,6 +124,21 @@ const buildPayload = (
     updatedAt: serverTimestamp(),
   });
 
+const buildUpdatePayload = (draft: Partial<ScheduleEventDraft>): Record<string, any> =>
+  clean({
+    title: draft.title !== undefined ? (draft.title || '').trim() || 'Untitled event' : undefined,
+    date: draft.date,
+    endDate: draft.endDate,
+    time: draft.time,
+    location: draft.location,
+    opponent: draft.opponent,
+    type: draft.type !== undefined ? normalizeType(draft.type) : undefined,
+    notes: draft.notes,
+    source: draft.source,
+    sourceUrl: draft.sourceUrl,
+    updatedAt: serverTimestamp(),
+  });
+
 class CoachScheduleService {
   /** Load all schedule events for a coach, soonest first. */
   async getEvents(coachId: string): Promise<ScheduleEvent[]> {
@@ -159,6 +175,14 @@ class CoachScheduleService {
     const payload = buildPayload(coachId, draft, docRef.id);
     await setDoc(docRef, payload);
     return { ...(payload as any), createdAt: new Date(), updatedAt: new Date() };
+  }
+
+  /** Update a coach-owned schedule event. Paid booking events are managed by the booking flow. */
+  async updateEvent(eventId: string, draft: Partial<ScheduleEventDraft>): Promise<ScheduleEvent> {
+    if (!eventId) throw new Error('Missing event id.');
+    const payload = buildUpdatePayload(draft);
+    await updateDoc(doc(db, COLLECTION, eventId), payload);
+    return { id: eventId, ...(payload as any), updatedAt: new Date() } as ScheduleEvent;
   }
 
   /**

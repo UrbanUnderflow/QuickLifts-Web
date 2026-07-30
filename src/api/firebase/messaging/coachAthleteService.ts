@@ -27,6 +27,29 @@ export interface CoachAthleteMessage {
   mediaUrl?: string;
 }
 
+export interface CoachServiceBooking {
+  id?: string;
+  orderId?: string;
+  serviceId?: string;
+  serviceTitle?: string;
+  serviceName?: string;
+  title?: string;
+  coachId?: string;
+  athleteId?: string;
+  athleteName?: string;
+  coachName?: string;
+  scheduledAt?: Date;
+  scheduledAtMs?: number;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  priceCents?: number;
+  price?: number;
+  currency?: string;
+  status?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface CoachAthleteConversation {
   id: string;
   coachId: string;
@@ -37,9 +60,54 @@ export interface CoachAthleteConversation {
   lastMessageTimestamp: Date;
   lastMessageSenderId: string;
   unreadCount: { [userId: string]: number };
+  activeBooking?: CoachServiceBooking;
+  activeBookings?: CoachServiceBooking[];
   createdAt: Date;
   updatedAt: Date;
 }
+
+const optionalDate = (value: any): Date | undefined => {
+  if (value == null) return undefined;
+  if (typeof value === 'string' && Number.isNaN(Number(value))) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+  return convertFirestoreTimestamp(value);
+};
+
+const normalizeBooking = (booking: any): CoachServiceBooking | undefined => {
+  if (!booking || typeof booking !== 'object') return undefined;
+  return {
+    ...booking,
+    scheduledAt: optionalDate(booking.scheduledAt),
+    createdAt: optionalDate(booking.createdAt),
+    updatedAt: optionalDate(booking.updatedAt),
+  };
+};
+
+const mapConversationDoc = (docSnap: any): CoachAthleteConversation => {
+  const data = docSnap.data();
+  const activeBooking = normalizeBooking(data.activeBooking);
+  const activeBookings = Array.isArray(data.activeBookings)
+    ? data.activeBookings.map(normalizeBooking).filter(Boolean) as CoachServiceBooking[]
+    : undefined;
+
+  return {
+    id: docSnap.id,
+    coachId: data.coachId,
+    athleteId: data.athleteId,
+    coachName: data.coachName,
+    athleteName: data.athleteName,
+    lastMessage: data.lastMessage || '',
+    lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
+    lastMessageSenderId: data.lastMessageSenderId || '',
+    unreadCount: data.unreadCount || {},
+    activeBooking,
+    activeBookings,
+    createdAt: convertFirestoreTimestamp(data.createdAt),
+    updatedAt: convertFirestoreTimestamp(data.updatedAt)
+  };
+};
 
 class CoachAthleteMessagingService {
   private conversationsCollection = 'coach-athlete-conversations';
@@ -66,21 +134,7 @@ class CoachAthleteMessagingService {
       const existingSnapshot = await getDocs(existingQuery);
       
       if (!existingSnapshot.empty) {
-        const doc = existingSnapshot.docs[0];
-        const data = doc.data();
-        return {
-          id: doc.id,
-          coachId: data.coachId,
-          athleteId: data.athleteId,
-          coachName: data.coachName,
-          athleteName: data.athleteName,
-          lastMessage: data.lastMessage || '',
-          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
-          lastMessageSenderId: data.lastMessageSenderId || '',
-          unreadCount: data.unreadCount || {},
-          createdAt: convertFirestoreTimestamp(data.createdAt),
-          updatedAt: convertFirestoreTimestamp(data.updatedAt)
-        };
+        return mapConversationDoc(existingSnapshot.docs[0]);
       }
 
       // Create new conversation
@@ -239,22 +293,7 @@ class CoachAthleteMessagingService {
       
       const snapshot = await getDocs(conversationsQuery);
       
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          coachId: data.coachId,
-          athleteId: data.athleteId,
-          coachName: data.coachName,
-          athleteName: data.athleteName,
-          lastMessage: data.lastMessage || '',
-          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
-          lastMessageSenderId: data.lastMessageSenderId || '',
-          unreadCount: data.unreadCount || {},
-          createdAt: convertFirestoreTimestamp(data.createdAt),
-          updatedAt: convertFirestoreTimestamp(data.updatedAt)
-        };
-      });
+      return snapshot.docs.map(mapConversationDoc);
     } catch (error) {
       console.error('[CoachAthleteMessagingService] Error getting conversations:', error);
       throw error;
@@ -289,38 +328,12 @@ class CoachAthleteMessagingService {
       
       // Map coach conversations
       coachSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        conversations.push({
-          id: doc.id,
-          coachId: data.coachId,
-          athleteId: data.athleteId,
-          coachName: data.coachName,
-          athleteName: data.athleteName,
-          lastMessage: data.lastMessage || '',
-          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
-          lastMessageSenderId: data.lastMessageSenderId || '',
-          unreadCount: data.unreadCount || {},
-          createdAt: convertFirestoreTimestamp(data.createdAt),
-          updatedAt: convertFirestoreTimestamp(data.updatedAt)
-        });
+        conversations.push(mapConversationDoc(doc));
       });
       
       // Map athlete conversations
       athleteSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        conversations.push({
-          id: doc.id,
-          coachId: data.coachId,
-          athleteId: data.athleteId,
-          coachName: data.coachName,
-          athleteName: data.athleteName,
-          lastMessage: data.lastMessage || '',
-          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
-          lastMessageSenderId: data.lastMessageSenderId || '',
-          unreadCount: data.unreadCount || {},
-          createdAt: convertFirestoreTimestamp(data.createdAt),
-          updatedAt: convertFirestoreTimestamp(data.updatedAt)
-        });
+        conversations.push(mapConversationDoc(doc));
       });
       
       // Sort by most recent
@@ -424,22 +437,7 @@ class CoachAthleteMessagingService {
     );
     
     return onSnapshot(conversationsQuery, (snapshot) => {
-      const conversations = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          coachId: data.coachId,
-          athleteId: data.athleteId,
-          coachName: data.coachName,
-          athleteName: data.athleteName,
-          lastMessage: data.lastMessage || '',
-          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
-          lastMessageSenderId: data.lastMessageSenderId || '',
-          unreadCount: data.unreadCount || {},
-          createdAt: convertFirestoreTimestamp(data.createdAt),
-          updatedAt: convertFirestoreTimestamp(data.updatedAt)
-        };
-      });
+      const conversations = snapshot.docs.map(mapConversationDoc);
       
       callback(conversations);
     });

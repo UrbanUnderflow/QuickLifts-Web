@@ -277,10 +277,41 @@ async function handleCoachServiceRefund(charge, stripeClient = stripe) {
       charge.refunded
       && conversationRef
       && conversationSnap?.exists
-      && normalizeCoachServiceString(conversationSnap.data()?.activeBooking?.orderId) === orderId
     ) {
+      const conversation = conversationSnap.data() || {};
+      const activeBookings = Array.isArray(conversation.activeBookings)
+        ? conversation.activeBookings
+        : [];
+      const legacyBooking = conversation.activeBooking && typeof conversation.activeBooking === 'object'
+        ? conversation.activeBooking
+        : null;
+      const mergedBookings = [
+        ...activeBookings,
+        ...(legacyBooking ? [legacyBooking] : []),
+      ].filter((booking, index, list) => {
+        const bookingOrderId = normalizeCoachServiceString(booking?.orderId || booking?.id);
+        if (!bookingOrderId) return index === list.findIndex((candidate) => candidate === booking);
+        return index === list.findIndex((candidate) => normalizeCoachServiceString(candidate?.orderId || candidate?.id) === bookingOrderId);
+      });
+      const filteredBookings = mergedBookings.filter(
+        (booking) => normalizeCoachServiceString(booking?.orderId || booking?.id) !== orderId
+      );
+      if (filteredBookings.length === mergedBookings.length) return;
+      const now = Date.now();
+      const sortedBookings = filteredBookings.sort((left, right) => {
+        const leftDate = left?.scheduledAt?.toDate?.() || new Date(left?.scheduledAt);
+        const rightDate = right?.scheduledAt?.toDate?.() || new Date(right?.scheduledAt);
+        const leftTime = Number.isNaN(leftDate.getTime()) ? 0 : leftDate.getTime();
+        const rightTime = Number.isNaN(rightDate.getTime()) ? 0 : rightDate.getTime();
+        return leftTime - rightTime;
+      });
+      const nextBooking = sortedBookings.find((booking) => {
+        const date = booking?.scheduledAt?.toDate?.() || new Date(booking?.scheduledAt);
+        return !Number.isNaN(date.getTime()) && date.getTime() >= now;
+      }) || sortedBookings[0];
       transaction.update(conversationRef, {
-        activeBooking: admin.firestore.FieldValue.delete(),
+        activeBooking: nextBooking || admin.firestore.FieldValue.delete(),
+        activeBookings: sortedBookings,
         lastMessage: `${normalizeCoachServiceString(order.serviceTitle) || 'Coach service'} refunded`,
         lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
