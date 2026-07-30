@@ -258,6 +258,10 @@ type PipelineItem = {
   hardwareCost: string;
   lossReason: string;
   expansionPath: string;
+  imageUrl: string;
+  imageName: string;
+  imageContentType: string;
+  imageSize: number;
   attachments: LeadAttachment[];
   weeklyLogs: ActivityLog[];
   createdAt: string;
@@ -855,6 +859,10 @@ const isInvestorUpdateContactList = (list: Pick<PipeList, 'templateKey' | 'name'
 const isContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
   list.templateKey === 'contacts' || isInvestorUpdateContactList(list);
 const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) => (isContactList(list) ? 'contact' : 'opportunity');
+const itemPrimaryDate = (
+  list: Pick<PipeList, 'templateKey' | 'name'>,
+  item: Pick<PipelineItem, 'dueDate' | 'expectedCloseDate' | 'pilotEnd'>,
+) => (isContactList(list) ? item.dueDate : item.expectedCloseDate || item.dueDate || item.pilotEnd);
 
 const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
@@ -1153,6 +1161,10 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   hardwareCost: '',
   lossReason: '',
   expansionPath: '',
+  imageUrl: '',
+  imageName: '',
+  imageContentType: '',
+  imageSize: 0,
   attachments: [],
 });
 
@@ -2059,6 +2071,10 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     hardwareCost: item.hardwareCost || '',
     lossReason: item.lossReason || '',
     expansionPath: item.expansionPath || '',
+    imageUrl: item.imageUrl || '',
+    imageName: item.imageName || '',
+    imageContentType: item.imageContentType || '',
+    imageSize: Number.isFinite(item.imageSize) ? Number(item.imageSize) : 0,
     attachments: Array.isArray(item.attachments)
       ? item.attachments
           .map((attachment) => normalizeAttachment(attachment))
@@ -2634,6 +2650,8 @@ const PipelinePage: NextPage = () => {
   const [attachmentLinkUrl, setAttachmentLinkUrl] = useState('');
   const [attachmentMessage, setAttachmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [leadImageMessage, setLeadImageMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [uploadingLeadImage, setUploadingLeadImage] = useState(false);
   const [leadShareMessage, setLeadShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [leadShareUrl, setLeadShareUrl] = useState('');
   const [leadMoveMessage, setLeadMoveMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -3643,7 +3661,7 @@ const PipelinePage: NextPage = () => {
     const search = query.trim().toLowerCase();
 
     const dueTime = (item: PipelineItem) => {
-      const dateValue = item.expectedCloseDate || item.dueDate || item.pilotEnd;
+      const dateValue = itemPrimaryDate(activeList, item);
       if (!dateValue) return Number.POSITIVE_INFINITY;
 
       const parsed = new Date(`${dateValue}T12:00:00`).getTime();
@@ -3680,7 +3698,7 @@ const PipelinePage: NextPage = () => {
 
         return left.title.localeCompare(right.title);
       });
-  }, [activeListItems, isInvestorUpdateContactsList, query, stageFilter]);
+  }, [activeList, activeListItems, isInvestorUpdateContactsList, query, stageFilter]);
 
   const countsByStage = useMemo(
     () =>
@@ -3704,7 +3722,7 @@ const PipelinePage: NextPage = () => {
     ['opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
   ).length;
   const dueSoonItems = activeListItems.filter((item) => {
-    const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
+    const dueDate = itemPrimaryDate(activeList, item);
     if (!dueDate) return false;
     const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
     const now = new Date().getTime();
@@ -3721,11 +3739,11 @@ const PipelinePage: NextPage = () => {
     const logs = allRows.flatMap(({ item }) => item.weeklyLogs);
     const metricLogs = logs.filter(logHasMetrics);
     const expectedDates = openRows
-      .map(({ item }) => item.expectedCloseDate || item.dueDate || item.pilotEnd)
+      .map(({ list, item }) => itemPrimaryDate(list, item))
       .filter(Boolean)
       .sort();
-    const dueSoonRows = openRows.filter(({ item }) => {
-      const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
+    const dueSoonRows = openRows.filter(({ list, item }) => {
+      const dueDate = itemPrimaryDate(list, item);
       if (!dueDate) return false;
       const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
       const now = new Date().getTime();
@@ -4050,6 +4068,7 @@ const PipelinePage: NextPage = () => {
     setDraft(defaultDraft(activeList.stages[0]?.id));
     setContactEmailInput('');
     setContactEmailError('');
+    setLeadImageMessage(null);
     setEditingItemId(null);
     setIsEditorOpen(false);
   };
@@ -5541,6 +5560,7 @@ Research rules:
       [isContactListActive ? 'Relationship Context' : 'Decision Maker', item.decisionMaker],
       ['Next Step', item.nextStep],
       ['Source URL', item.sourceUrl],
+      ['Image URL', item.imageUrl],
     ];
     const timelineRows: Array<[string, string | number | undefined]> = isContactListActive
       ? [
@@ -5652,6 +5672,78 @@ Research rules:
 
   const safeAttachmentFileName = (value: string) =>
     value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
+
+  const handleUploadLeadImage = async (files: FileList | null) => {
+    if (!canModify) return;
+    const file = Array.from(files || [])[0];
+    if (!file) return;
+    if (!editingItemId) {
+      setLeadImageMessage({ type: 'error', text: 'Open a saved lead before uploading an image.' });
+      return;
+    }
+    if (!user) {
+      setLeadImageMessage({ type: 'error', text: 'Sign in before uploading a lead image.' });
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setLeadImageMessage({ type: 'error', text: 'Upload an image file.' });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setLeadImageMessage({ type: 'error', text: 'Keep lead images under 8 MB.' });
+      return;
+    }
+
+    setUploadingLeadImage(true);
+    setLeadImageMessage(null);
+
+    try {
+      const ownerUid = shareDoc?.ownerUid || user.uid;
+      const cleanFileName = safeAttachmentFileName(file.name);
+      const imageRef = storageRef(
+        simpBudgetStorage,
+        `pipelists-images/${ownerUid}/${activeList.id}/${editingItemId}/${Date.now()}-${cleanFileName}`,
+      );
+
+      await uploadBytes(imageRef, file, {
+        contentType: file.type,
+        customMetadata: {
+          listId: activeList.id,
+          itemId: editingItemId,
+          uploadedBy: user.email || user.uid,
+        },
+      });
+
+      const url = await getDownloadURL(imageRef);
+      setDraft((current) => ({
+        ...current,
+        imageUrl: url,
+        imageName: file.name,
+        imageContentType: file.type,
+        imageSize: file.size,
+      }));
+      setLeadImageMessage({ type: 'success', text: 'Lead image uploaded. Save to keep it on this lead.' });
+    } catch (error) {
+      console.error('[PipeLists] Lead image upload failed:', error);
+      setLeadImageMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to upload lead image.'),
+      });
+    } finally {
+      setUploadingLeadImage(false);
+    }
+  };
+
+  const handleRemoveLeadImage = () => {
+    setDraft((current) => ({
+      ...current,
+      imageUrl: '',
+      imageName: '',
+      imageContentType: '',
+      imageSize: 0,
+    }));
+    setLeadImageMessage({ type: 'info', text: 'Lead image removed from the draft. Save to apply.' });
+  };
 
   const handleUploadLeadAttachments = async (item: PipelineItem, files: FileList | null) => {
     if (!canModify) return;
@@ -5976,6 +6068,10 @@ Research rules:
         hardwareCost: nextItem.hardwareCost,
         lossReason: nextItem.lossReason,
         expansionPath: nextItem.expansionPath,
+        imageUrl: nextItem.imageUrl,
+        imageName: nextItem.imageName,
+        imageContentType: nextItem.imageContentType,
+        imageSize: nextItem.imageSize,
         attachments: nextItem.attachments,
       });
       setEditingItemId(nextItem.id);
@@ -6109,6 +6205,10 @@ Research rules:
         hardwareCost: nextItem.hardwareCost,
         lossReason: nextItem.lossReason,
         expansionPath: nextItem.expansionPath,
+        imageUrl: nextItem.imageUrl,
+        imageName: nextItem.imageName,
+        imageContentType: nextItem.imageContentType,
+        imageSize: nextItem.imageSize,
         attachments: nextItem.attachments,
       });
       setEditingItemId(nextItem.id);
@@ -6661,6 +6761,7 @@ Research rules:
         'Loss Reason',
         'Notes',
         'Source URL',
+        'Image URL',
         'Attachments',
       ],
       ...activeListItems.map((item) => {
@@ -6691,6 +6792,7 @@ Research rules:
           item.lossReason,
           item.notes,
           item.sourceUrl,
+          item.imageUrl,
           item.attachments.map((attachment) => `${attachment.name}: ${attachment.url}`).join('\n'),
         ];
       }),
@@ -7572,6 +7674,61 @@ Research rules:
           />
         </label>
       </div>
+
+      <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            {draft.imageUrl ? (
+              <img
+                src={draft.imageUrl}
+                alt={draft.imageName || `${draft.title || 'Lead'} image`}
+                className="h-16 w-16 shrink-0 rounded-md border border-stone-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-stone-300 bg-[#FAFAF7] text-stone-400">
+                <UploadCloud className="h-5 w-5" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-950">Lead image</p>
+              <p className="mt-1 truncate text-xs text-stone-400">
+                {draft.imageName || 'Upload a thumbnail for this lead.'}
+                {draft.imageSize > 0 ? ` · ${formatFileSize(draft.imageSize)}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <label
+              htmlFor="pipe-lead-image-upload"
+              className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+            >
+              <UploadCloud className="h-4 w-4" />
+              {uploadingLeadImage ? 'Uploading...' : draft.imageUrl ? 'Replace image' : 'Upload image'}
+              <input
+                id="pipe-lead-image-upload"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={uploadingLeadImage}
+                onChange={async (event) => {
+                  await handleUploadLeadImage(event.target.files);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+            {draft.imageUrl && (
+              <button
+                type="button"
+                onClick={handleRemoveLeadImage}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:border-rose-200 hover:text-rose-600"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+        <MessageBanner message={leadImageMessage} />
+      </section>
 
       <label className="block" htmlFor="pipe-contact-emails">
         <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Contact Email</span>
@@ -8650,7 +8807,7 @@ Research rules:
                         const itemValueText = itemAmountDisplay(activeList, item);
                         const tableValueText = isContactListActive ? item.contactEmails[0] || '' : itemValueText;
                         const hasItemValue = Boolean(tableValueText);
-                        const dueDate = item.expectedCloseDate || item.dueDate || item.pilotEnd;
+                        const dueDate = itemPrimaryDate(activeList, item);
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
 
                         return (
@@ -8678,17 +8835,26 @@ Research rules:
                                   : 'lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
                             }`}
                           >
-                            <div className="min-w-0">
-                              <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                                {item.owner && <span>{item.owner}</span>}
-                                {item.segment && <span>{item.segment}</span>}
-                                {dueDate && (
-                                  <span className="inline-flex items-center gap-1 lg:hidden">
-                                    <Calendar className="h-3 w-3" />
-                                    {dueDate}
-                                  </span>
-                                )}
+                            <div className="flex min-w-0 items-center gap-3">
+                              {item.imageUrl && (
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.imageName || `${item.title} image`}
+                                  className="h-12 w-12 shrink-0 rounded-md border border-stone-200 object-cover"
+                                />
+                              )}
+                              <div className="min-w-0">
+                                <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  {item.owner && <span>{item.owner}</span>}
+                                  {item.segment && <span>{item.segment}</span>}
+                                  {dueDate && (
+                                    <span className="inline-flex items-center gap-1 lg:hidden">
+                                      <Calendar className="h-3 w-3" />
+                                      {dueDate}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
@@ -11270,6 +11436,21 @@ Research rules:
               </div>
             ) : (
               <div className="space-y-5 px-5 py-5">
+                {selectedDetailItem.imageUrl && (
+                  <a
+                    href={selectedDetailItem.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block overflow-hidden rounded-lg border border-stone-200 bg-[#FAFAF7]"
+                  >
+                    <img
+                      src={selectedDetailItem.imageUrl}
+                      alt={selectedDetailItem.imageName || `${selectedDetailItem.title} image`}
+                      className="max-h-72 w-full object-cover"
+                    />
+                  </a>
+                )}
+
                 {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
                   ...(isContactListActive
                     ? [
@@ -11297,8 +11478,8 @@ Research rules:
                         },
                       ]),
                   {
-                    label: isContactListActive ? 'Next Follow-Up' : 'Next Date',
-                    value: selectedDetailItem.expectedCloseDate || selectedDetailItem.dueDate || selectedDetailItem.pilotEnd,
+                    label: isContactListActive ? 'Follow-Up Date' : 'Next Date',
+                    value: itemPrimaryDate(activeList, selectedDetailItem),
                   },
                 ])}
 
