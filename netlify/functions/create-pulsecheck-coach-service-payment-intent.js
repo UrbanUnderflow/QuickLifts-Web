@@ -1,5 +1,6 @@
 const Stripe = require('stripe');
 const { admin, headers, getFirebaseAdminApp } = require('./config/firebase');
+const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
   loadService,
   loadConversationForAthlete,
@@ -33,11 +34,17 @@ const stripeTestMode = (event) => {
   return referer.includes('localhost') || referer.includes('127.0.0.1');
 };
 
-const stripeConfiguration = (event) => {
+const stripeConfiguration = async (event) => {
   const testMode = stripeTestMode(event);
-  const secretKey = testMode
-    ? process.env.STRIPE_TEST_SECRET_KEY
-    : process.env.STRIPE_SECRET_KEY;
+  const secretName = testMode ? 'STRIPE_TEST_SECRET_KEY' : 'STRIPE_SECRET_KEY';
+  const secretKey = await getSecretWithEnvFallback(secretName).catch((error) => {
+    const message = testMode
+      ? 'Stripe test checkout is not configured. Add STRIPE_TEST_SECRET_KEY to Google Secret Manager or use live Stripe mode.'
+      : 'Stripe live checkout is not configured. Add STRIPE_SECRET_KEY to Google Secret Manager.';
+    const wrapped = new Error(`${message} ${error.message || ''}`.trim());
+    wrapped.statusCode = 503;
+    throw wrapped;
+  });
   const publishableKey = testMode
     ? process.env.NEXT_PUBLIC_TEST_STRIPE_PUBLISHABLE_KEY
       || process.env.STRIPE_TEST_PUBLISHABLE_KEY
@@ -49,8 +56,8 @@ const stripeConfiguration = (event) => {
   if (!secretKey) {
     const error = new Error(
       testMode
-        ? 'Stripe test checkout is not configured. Add STRIPE_TEST_SECRET_KEY or use live Stripe mode.'
-        : 'Stripe live checkout is not configured. Add STRIPE_SECRET_KEY.'
+        ? 'Stripe test checkout is not configured. Add STRIPE_TEST_SECRET_KEY to Google Secret Manager or use live Stripe mode.'
+        : 'Stripe live checkout is not configured. Add STRIPE_SECRET_KEY to Google Secret Manager.'
     );
     error.statusCode = 503;
     throw error;
@@ -107,7 +114,7 @@ const handler = async (event) => {
       error.statusCode = 400;
       throw error;
     }
-    const { stripe, publishableKey, stripeMode } = stripeConfiguration(event);
+    const { stripe, publishableKey, stripeMode } = await stripeConfiguration(event);
     const connectedAccountId = await resolveCoachStripeAccount(
       conversation.coachUserId,
       database
