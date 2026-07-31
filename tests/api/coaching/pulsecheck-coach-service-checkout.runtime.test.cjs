@@ -39,7 +39,7 @@ function stripeFactory({ chargesEnabled = true } = {}) {
             id: 'pi_service_1',
             client_secret: 'pi_service_1_secret_test',
             status: 'requires_payment_method',
-            payment_method_types: params.payment_method_types,
+            payment_method_types: ['card'],
           };
         },
         async retrieve(id) {
@@ -47,7 +47,7 @@ function stripeFactory({ chargesEnabled = true } = {}) {
             id,
             client_secret: `${id}_secret_test`,
             status: 'requires_payment_method',
-            payment_method_types: ['card', 'link'],
+            payment_method_types: ['card'],
           };
         },
       },
@@ -134,7 +134,7 @@ const env = {
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_live_test',
 };
 
-test('service checkout fixes the price server-side and requests card plus Link', async () => {
+test('service checkout fixes the price server-side and enables dynamic payment methods', async () => {
   const firebase = firebaseSeed();
   const Stripe = stripeFactory();
 
@@ -155,14 +155,19 @@ test('service checkout fixes the price server-side and requests card plus Link',
     assert.equal(body.publishableKey, 'pk_live_test');
     assert.equal(body.customerId, 'cus_service_1');
     assert.equal(body.customerEphemeralKeySecret, 'ek_service_1_secret_test');
-    assert.deepEqual(body.paymentMethodTypes, ['card', 'link']);
+    assert.deepEqual(body.paymentMethodTypes, ['card']);
+    assert.deepEqual(Stripe.ephemeralKeysCreated, [{
+      params: { customer: 'cus_service_1' },
+      options: { apiVersion: '2020-08-27' },
+    }]);
 
     assert.equal(Stripe.created.length, 1);
     const paymentIntent = Stripe.created[0];
     assert.equal(paymentIntent.amount, 5335);
     assert.equal(paymentIntent.currency, 'usd');
     assert.equal(paymentIntent.customer, 'cus_service_1');
-    assert.deepEqual(paymentIntent.payment_method_types, ['card', 'link']);
+    assert.deepEqual(paymentIntent.automatic_payment_methods, { enabled: true });
+    assert.equal(paymentIntent.payment_method_types, undefined);
     assert.equal(paymentIntent.application_fee_amount, undefined);
     assert.equal(paymentIntent.transfer_data, undefined);
     assert.equal(paymentIntent.metadata.payment_type, 'pulsecheck_coach_service');

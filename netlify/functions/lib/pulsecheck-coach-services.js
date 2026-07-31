@@ -1,5 +1,4 @@
-const { admin, db } = require('../config/firebase');
-const { getFirebaseAdminApp } = require('../config/firebase');
+const { admin, db, getFirebaseAdminApp } = require('../config/firebase');
 
 const ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
 const CONVERSATIONS_COLLECTION = 'coach-athlete-conversations';
@@ -150,22 +149,33 @@ const listServicesForConversation = async ({ conversation, database = db }) => {
   return services.sort((left, right) => left.title.localeCompare(right.title));
 };
 
-const verifyFirebaseUser = async (event) => {
+const verifyFirebaseUser = async (
+  event,
+  {
+    authErrorMessage = 'Sign in is required to purchase a coach service.',
+  } = {}
+) => {
+  const safeAuthErrorMessage =
+    normalizeString(authErrorMessage)
+    || 'Sign in is required to continue.';
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
   const match = normalizeString(authHeader).match(/^Bearer\s+(.+)$/i);
   if (!match) {
-    const error = new Error('Sign in is required to purchase a coach service.');
+    const error = new Error(safeAuthErrorMessage);
     error.statusCode = 401;
     throw error;
   }
 
   try {
-    const decoded = await getFirebaseAdminApp(event).auth().verifyIdToken(match[1]);
+    const app = getFirebaseAdminApp(event);
+    const decoded = await app.auth().verifyIdToken(match[1]);
     const userId = normalizeString(decoded?.uid);
     if (!userId) throw new Error('The sign-in token did not include a user id.');
-    return { userId, decoded };
-  } catch (error) {
-    if (!error.statusCode) error.statusCode = 401;
+    return { userId, decoded, app };
+  } catch (cause) {
+    const error = new Error(safeAuthErrorMessage);
+    error.statusCode = 401;
+    error.cause = cause;
     throw error;
   }
 };

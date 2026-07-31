@@ -93,6 +93,7 @@ import {
 import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
 import type {
   PulseCheckInviteLink,
+  PulseCheckTeamCommercialConfig,
   PulseCheckTeamMembership,
   PulseCheckYouthTrack,
   StaffPermission,
@@ -663,6 +664,39 @@ interface CoachDashboardShellProps {
   viewerCapabilities?: StaffPermission[];
 }
 
+type CoachDashboardTeamContext = {
+  organizationId: string;
+  teamId: string;
+  organizationName: string;
+  teamName: string;
+  commercialConfig: Pick<
+    PulseCheckTeamCommercialConfig,
+    | 'youthTrack'
+    | 'referralKickbackEnabled'
+    | 'referralRevenueSharePct'
+    | 'parentAssessmentReferralKickbackEnabled'
+    | 'parentAssessmentReferralRevenueSharePct'
+    | 'coachReferralKickbackEnabled'
+    | 'coachReferralRevenueSharePct'
+  >;
+};
+
+const DEMO_COACH_TEAM_CONTEXT: CoachDashboardTeamContext = {
+  organizationId: 'demo-organization',
+  teamId: 'demo-team',
+  organizationName: 'Demo Organization',
+  teamName: 'Demo Team',
+  commercialConfig: {
+    youthTrack: 'junior',
+    referralKickbackEnabled: true,
+    referralRevenueSharePct: 20,
+    parentAssessmentReferralKickbackEnabled: true,
+    parentAssessmentReferralRevenueSharePct: 20,
+    coachReferralKickbackEnabled: true,
+    coachReferralRevenueSharePct: 10,
+  },
+};
+
 export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   athletes,
   alerts = [],
@@ -690,6 +724,84 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       isDemo || viewerCapabilities.includes('admin') || viewerCapabilities.includes(capability),
     [isDemo, viewerCapabilities]
   );
+  const [teamContext, setTeamContext] = useState<CoachDashboardTeamContext | null>(
+    isDemo ? DEMO_COACH_TEAM_CONTEXT : null
+  );
+  const [teamContextLoading, setTeamContextLoading] = useState(!isDemo);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTeamContext = async () => {
+      if (isDemo) {
+        setTeamContext(DEMO_COACH_TEAM_CONTEXT);
+        setTeamContextLoading(false);
+        return;
+      }
+      if (!coachId) {
+        setTeamContext(null);
+        setTeamContextLoading(false);
+        return;
+      }
+
+      setTeamContextLoading(true);
+      try {
+        let memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
+        let own = memberships.find((membership) => membership.role !== 'athlete');
+
+        if (!own) {
+          const operatingContext = await coachService.resolveOperatingContext(coachId);
+          memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
+          own =
+            memberships.find(
+              (membership) =>
+                membership.role !== 'athlete' &&
+                membership.teamId === operatingContext.teamId
+            ) || memberships.find((membership) => membership.role !== 'athlete');
+        }
+
+        if (!own) {
+          throw new Error('No coach team membership was found.');
+        }
+
+        const [team, organization] = await Promise.all([
+          pulseCheckProvisioningService.getTeam(own.teamId),
+          pulseCheckProvisioningService.getOrganization(own.organizationId),
+        ]);
+        if (!team) {
+          throw new Error('The coach team could not be loaded.');
+        }
+
+        if (!cancelled) {
+          setTeamContext({
+            organizationId: own.organizationId,
+            teamId: own.teamId,
+            organizationName: organization?.displayName || 'your organization',
+            teamName: team.displayName || 'your team',
+            commercialConfig: team.commercialConfig,
+          });
+        }
+      } catch (error) {
+        console.error('[CoachDashboard] failed to resolve dashboard team context', error);
+        if (!cancelled) setTeamContext(null);
+      } finally {
+        if (!cancelled) setTeamContextLoading(false);
+      }
+    };
+
+    void loadTeamContext();
+    return () => {
+      cancelled = true;
+    };
+  }, [coachId, isDemo]);
+
+  const referralLinksEnabled =
+    isDemo ||
+    Boolean(
+      teamContext?.commercialConfig.referralKickbackEnabled ||
+        teamContext?.commercialConfig.parentAssessmentReferralKickbackEnabled ||
+        teamContext?.commercialConfig.coachReferralKickbackEnabled
+    );
   // athletic_trainer is the medical peek — Tier 3 escalation detail.
   const canSeeTier3 = can('athletic_trainer');
   const [view, setView] = useState<ViewKey>('home');
@@ -756,7 +868,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         case 'reports':
           return can('coaching');
         case 'referrals':
-          return can('coaching') || can('administrative');
+          return referralLinksEnabled && (can('coaching') || can('administrative'));
         case 'alerts':
           return can('coaching') || can('athletic_trainer');
         case 'staff':
@@ -774,7 +886,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           return true;
       }
     },
-    [additionalServicesEnabled, can, earningsEnabled]
+    [can, earningsEnabled, referralLinksEnabled]
   );
 
   const navItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
@@ -985,6 +1097,8 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         coachId={coachId}
                         coachName={coachName}
                         coachEmail={coachEmail}
+                        teamContext={teamContext}
+                        teamContextLoading={teamContextLoading}
                         canInvite={canManageAthleteInvites}
                         canRevoke={can('admin')}
                       />
@@ -1001,7 +1115,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       coachId={coachId}
                       coachName={coachName}
                       coachEmail={coachEmail}
-                      athleteReferralRevenueSharePct={revenueSharePct}
+                      teamContext={teamContext}
                       canInvite={canManageAthleteInvites}
                       canRevoke={can('admin')}
                     />
@@ -2779,9 +2893,17 @@ const StaffSection: React.FC<{
       let emailSent = false;
       if (link?.activationUrl) {
         try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (!idToken) {
+            throw new Error('Sign in again to send this invite.');
+          }
           const resp = await fetch('/.netlify/functions/send-pulsecheck-team-invite-email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+              ...getFirebaseModeRequestHeaders(),
+            },
             body: JSON.stringify({
               toEmail: e,
               activationUrl: link.activationUrl,
@@ -4366,7 +4488,7 @@ const ReferralLinksSection: React.FC<{
   coachId?: string;
   coachName?: string;
   coachEmail?: string;
-  athleteReferralRevenueSharePct?: number;
+  teamContext: CoachDashboardTeamContext | null;
   canInvite?: boolean;
   canRevoke?: boolean;
 }> = ({
@@ -4374,11 +4496,20 @@ const ReferralLinksSection: React.FC<{
   coachId,
   coachName,
   coachEmail,
-  athleteReferralRevenueSharePct = 0,
+  teamContext,
   canInvite = false,
   canRevoke = false,
-}) => (
-  <div className="space-y-5">
+}) => {
+  const showAthleteReferrals =
+    isDemo || teamContext?.commercialConfig.referralKickbackEnabled === true;
+  const showParentAssessmentReferrals =
+    isDemo ||
+    teamContext?.commercialConfig.parentAssessmentReferralKickbackEnabled === true;
+  const showCoachReferrals =
+    isDemo || teamContext?.commercialConfig.coachReferralKickbackEnabled === true;
+
+  return (
+    <div className="space-y-5">
     <div className="rounded-2xl border border-[#E0FE10]/20 bg-gradient-to-br from-[#E0FE10]/8 to-green-500/5 p-5">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 flex-none items-center justify-center rounded-xl bg-[#E0FE10]/15">
@@ -4393,7 +4524,8 @@ const ReferralLinksSection: React.FC<{
       </div>
     </div>
 
-    <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
+    {showAthleteReferrals && (
+      <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-white">Athlete team invite</div>
@@ -4410,17 +4542,19 @@ const ReferralLinksSection: React.FC<{
         coachId={coachId}
         coachName={coachName}
         coachEmail={coachEmail}
+        teamContext={teamContext}
+        teamContextLoading={false}
         canInvite={canInvite}
         canRevoke={canRevoke}
       />
       <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
-        {(isDemo ? 20 : athleteReferralRevenueSharePct) > 0
-          ? `Kickback active: ${isDemo ? 20 : athleteReferralRevenueSharePct}% of athlete-paid subscriptions from athletes who join through this invite can route back to you.`
-          : 'Kickback inactive until it is enabled in Team Commercial Config.'}
+        {`Kickback active: ${teamContext?.commercialConfig.referralRevenueSharePct || 0}% of athlete-paid subscriptions from athletes who join through this invite can route back to you.`}
       </div>
-    </div>
+      </div>
+    )}
 
-    <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
+    {showParentAssessmentReferrals && (
+      <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-white">Parent readiness assessment</div>
@@ -4436,11 +4570,14 @@ const ReferralLinksSection: React.FC<{
         isDemo={isDemo}
         coachId={coachId}
         coachEmail={coachEmail}
+        teamContext={teamContext}
         canInvite={canInvite}
       />
-    </div>
+      </div>
+    )}
 
-    <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
+    {showCoachReferrals && (
+      <div className="space-y-4 rounded-2xl border border-zinc-700/30 bg-zinc-900/30 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-white">Coach referral</div>
@@ -4456,82 +4593,25 @@ const ReferralLinksSection: React.FC<{
         isDemo={isDemo}
         coachId={coachId}
         coachEmail={coachEmail}
+        teamContext={teamContext}
         canInvite={canInvite}
       />
+      </div>
+    )}
     </div>
-  </div>
-);
+  );
+};
 
 const ParentAssessmentReferralLinkSection: React.FC<{
   isDemo?: boolean;
   coachId?: string;
   coachEmail?: string;
+  teamContext: CoachDashboardTeamContext | null;
   canInvite?: boolean;
-}> = ({ isDemo, coachId, coachEmail, canInvite = false }) => {
-  const [team, setTeam] = useState<{
-    organizationId: string;
-    teamId: string;
-    teamName: string;
-    parentAssessmentReferralKickbackEnabled: boolean;
-    parentAssessmentReferralRevenueSharePct: number;
-  } | null>(
-    isDemo
-      ? {
-          organizationId: 'demo-organization',
-          teamId: 'demo-team',
-          teamName: 'Demo Team',
-          parentAssessmentReferralKickbackEnabled: true,
-          parentAssessmentReferralRevenueSharePct: 20,
-        }
-      : null
-  );
-  const [loading, setLoading] = useState(!isDemo);
+}> = ({ isDemo, coachId, coachEmail, teamContext, canInvite = false }) => {
+  const team = teamContext;
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTeam = async () => {
-      if (isDemo || !coachId) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-        const own = memberships.find((membership) => membership.role !== 'athlete');
-        if (!own) {
-          if (!cancelled) setTeam(null);
-          return;
-        }
-
-        const resolvedTeam = await pulseCheckProvisioningService.getTeam(own.teamId);
-        if (!cancelled) {
-          setTeam({
-            organizationId: own.organizationId,
-            teamId: own.teamId,
-            teamName: resolvedTeam?.displayName || 'your team',
-            parentAssessmentReferralKickbackEnabled:
-              resolvedTeam?.commercialConfig?.parentAssessmentReferralKickbackEnabled || false,
-            parentAssessmentReferralRevenueSharePct:
-              resolvedTeam?.commercialConfig?.parentAssessmentReferralRevenueSharePct || 0,
-          });
-        }
-      } catch (error) {
-        console.error('[CoachDashboard] failed to resolve parent assessment referral context', error);
-        if (!cancelled) setTeam(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadTeam();
-    return () => {
-      cancelled = true;
-    };
-  }, [coachId, isDemo]);
 
   const referralUrl = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
@@ -4572,13 +4652,13 @@ const ParentAssessmentReferralLinkSection: React.FC<{
       <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
         <div className="min-w-0 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
           <div className="text-xs font-medium text-zinc-300">
-            {loading ? 'Resolving team...' : team?.teamName || 'Parent assessment link'}
+            {team?.teamName || 'Parent assessment link'}
           </div>
           <div className="mt-1 truncate text-[11px] text-zinc-600">{referralUrl}</div>
         </div>
         <button
           onClick={copyReferralLink}
-          disabled={!canInvite || loading}
+          disabled={!canInvite || !team}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
@@ -4587,9 +4667,7 @@ const ParentAssessmentReferralLinkSection: React.FC<{
       </div>
 
       <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
-        {team?.parentAssessmentReferralKickbackEnabled
-          ? `Kickback active: ${team.parentAssessmentReferralRevenueSharePct}% of parent assessment purchases can route to the configured revenue recipient.`
-          : 'Kickback inactive until it is enabled in Team Commercial Config.'}
+        {`Kickback active: ${team?.commercialConfig.parentAssessmentReferralRevenueSharePct || 0}% of parent assessment purchases can route to the configured revenue recipient.`}
       </div>
     </div>
   );
@@ -4599,72 +4677,12 @@ const CoachReferralLinkSection: React.FC<{
   isDemo?: boolean;
   coachId?: string;
   coachEmail?: string;
+  teamContext: CoachDashboardTeamContext | null;
   canInvite?: boolean;
-}> = ({ isDemo, coachId, coachEmail, canInvite = false }) => {
-  const [team, setTeam] = useState<{
-    organizationId: string;
-    teamId: string;
-    teamName: string;
-    coachReferralKickbackEnabled: boolean;
-    coachReferralRevenueSharePct: number;
-  } | null>(
-    isDemo
-      ? {
-          organizationId: 'demo-organization',
-          teamId: 'demo-team',
-          teamName: 'Demo Team',
-          coachReferralKickbackEnabled: true,
-          coachReferralRevenueSharePct: 10,
-        }
-      : null
-  );
-  const [loading, setLoading] = useState(!isDemo);
+}> = ({ isDemo, coachId, coachEmail, teamContext, canInvite = false }) => {
+  const team = teamContext;
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTeam = async () => {
-      if (isDemo || !coachId) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-        const own = memberships.find((membership) => membership.role !== 'athlete');
-        if (!own) {
-          if (!cancelled) setTeam(null);
-          return;
-        }
-
-        const resolvedTeam = await pulseCheckProvisioningService.getTeam(own.teamId);
-        if (!cancelled) {
-          setTeam({
-            organizationId: own.organizationId,
-            teamId: own.teamId,
-            teamName: resolvedTeam?.displayName || 'your team',
-            coachReferralKickbackEnabled:
-              resolvedTeam?.commercialConfig?.coachReferralKickbackEnabled || false,
-            coachReferralRevenueSharePct:
-              resolvedTeam?.commercialConfig?.coachReferralRevenueSharePct || 0,
-          });
-        }
-      } catch (error) {
-        console.error('[CoachDashboard] failed to resolve coach referral context', error);
-        if (!cancelled) setTeam(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    void loadTeam();
-    return () => {
-      cancelled = true;
-    };
-  }, [coachId, isDemo]);
 
   const referralUrl = useMemo(() => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
@@ -4704,13 +4722,13 @@ const CoachReferralLinkSection: React.FC<{
       <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
         <div className="min-w-0 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
           <div className="text-xs font-medium text-zinc-300">
-            {loading ? 'Resolving team...' : team?.teamName || 'Coach referral link'}
+            {team?.teamName || 'Coach referral link'}
           </div>
           <div className="mt-1 truncate text-[11px] text-zinc-600">{referralUrl}</div>
         </div>
         <button
           onClick={copyReferralLink}
-          disabled={!canInvite || loading}
+          disabled={!canInvite || !team}
           className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
@@ -4719,9 +4737,7 @@ const CoachReferralLinkSection: React.FC<{
       </div>
 
       <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
-        {team?.coachReferralKickbackEnabled
-          ? `Kickback active: ${team.coachReferralRevenueSharePct}% of athlete-paid subscriptions under referred coaches can route back to you.`
-          : 'Kickback inactive until it is enabled in Team Commercial Config.'}
+        {`Kickback active: ${team?.commercialConfig.coachReferralRevenueSharePct || 0}% of athlete-paid subscriptions under referred coaches can route back to you.`}
       </div>
     </div>
   );
@@ -4732,11 +4748,23 @@ const AthleteInviteSection: React.FC<{
   coachId?: string;
   coachName?: string;
   coachEmail?: string;
+  teamContext: CoachDashboardTeamContext | null;
+  teamContextLoading: boolean;
   // Inviting athletes is allowed for Admin, Coach, and Manager capabilities.
   canInvite?: boolean;
   // Revoking a pending invite is admin-only.
   canRevoke?: boolean;
-}> = ({ isDemo, coachId, coachName = '', coachEmail, canInvite = false, canRevoke = false }) => {
+}> = ({
+  isDemo,
+  coachId,
+  coachName = '',
+  coachEmail,
+  teamContext,
+  teamContextLoading,
+  canInvite = false,
+  canRevoke = false,
+}) => {
+  const team = teamContext;
   const [invites, setInvites] = useState<AthleteInviteRow[]>(isDemo ? DEMO_ATHLETE_INVITES : []);
   const [loadingInvites, setLoadingInvites] = useState(!isDemo);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -4763,15 +4791,8 @@ const AthleteInviteSection: React.FC<{
   const [invPhotoFile, setInvPhotoFile] = useState<File | null>(null);
   const [invPhotoPreview, setInvPhotoPreview] = useState<string | null>(null);
   const [savingInvite, setSavingInvite] = useState(false);
-  const [team, setTeam] = useState<{
-    organizationId: string;
-    teamId: string;
-    organizationName: string;
-    teamName: string;
-    defaultYouthTrack: PulseCheckYouthTrack;
-  } | null>(null);
 
-  const teamYouthTrack = team?.defaultYouthTrack || 'junior';
+  const teamYouthTrack = team?.commercialConfig.youthTrack || 'junior';
   const inviteTrackResolution = useMemo(
     () =>
       resolvePulseCheckAthleteInviteTrack({
@@ -4782,45 +4803,22 @@ const AthleteInviteSection: React.FC<{
     [age, teamYouthTrack, trackSelection]
   );
 
-  // Live: resolve the coach's active team, then pull active athlete invite links.
+  // The dashboard resolves one active team context, then this section pulls its
+  // active athlete invite links.
   const loadInvites = useCallback(async () => {
     if (isDemo || !coachId) {
       setLoadingInvites(false);
       return;
     }
+    if (!team) {
+      setInvites([]);
+      setLoadingInvites(teamContextLoading);
+      return;
+    }
     setLoadingInvites(true);
     try {
-      const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-      const own = memberships.find((m) => m.role !== 'athlete');
-      if (!own) {
-        setInvites([]);
-        return;
-      }
-      const { teamId, organizationId } = own;
-      let teamName = 'your team';
-      let organizationName = 'your organization';
-      let defaultYouthTrack: PulseCheckYouthTrack = 'junior';
-      try {
-        const [t, org] = await Promise.all([
-          pulseCheckProvisioningService.getTeam(teamId),
-          pulseCheckProvisioningService.getOrganization(organizationId),
-        ]);
-        teamName = t?.displayName || teamName;
-        organizationName = org?.displayName || organizationName;
-        defaultYouthTrack = t?.commercialConfig?.youthTrack || defaultYouthTrack;
-      } catch {
-        /* names are cosmetic */
-      }
-      setTeam({
-        organizationId,
-        teamId,
-        organizationName,
-        teamName,
-        defaultYouthTrack,
-      });
-
       const links = await pulseCheckProvisioningService
-        .listTeamInviteLinks(teamId)
+        .listTeamInviteLinks(team.teamId)
         .catch(() => [] as PulseCheckInviteLink[]);
       const rows = links
         .filter(
@@ -4842,7 +4840,7 @@ const AthleteInviteSection: React.FC<{
     } finally {
       setLoadingInvites(false);
     }
-  }, [coachId, isDemo]);
+  }, [coachId, isDemo, team, teamContextLoading]);
 
   useEffect(() => {
     void loadInvites();
@@ -4961,10 +4959,18 @@ const AthleteInviteSection: React.FC<{
       let emailSent = false;
       if (link?.activationUrl) {
         try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (!idToken) {
+            throw new Error('Sign in again to send this invite.');
+          }
           // Athlete-specific, app-first email template (distinct from staff invite).
           const resp = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+              ...getFirebaseModeRequestHeaders(),
+            },
             body: JSON.stringify({
               toEmail: e,
               activationUrl: link.activationUrl,
@@ -5102,10 +5108,18 @@ const AthleteInviteSection: React.FC<{
     setResendingId(row.id);
     try {
       let emailSent = false;
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Sign in again to send this invite.');
+      }
       // Athlete-specific, app-first email template (distinct from staff invite).
       const resp = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
         body: JSON.stringify({
           toEmail: e,
           activationUrl: row.activationUrl,
@@ -5245,14 +5259,15 @@ const AthleteInviteSection: React.FC<{
           <div className="flex items-center gap-2">
             <button
               onClick={copyLink}
-              disabled={busy}
+              disabled={busy || teamContextLoading || !team}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40 disabled:opacity-40"
             >
               <Link2 className="w-4 h-4" /> Copy link
             </button>
             <button
               onClick={openInvite}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
+              disabled={teamContextLoading || !team}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Plus className="w-4 h-4" /> Invite athlete
             </button>

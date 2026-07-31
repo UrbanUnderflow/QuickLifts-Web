@@ -2,6 +2,10 @@ import type { Handler } from '@netlify/functions';
 import { sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 import { renderAthleteInviteEmail } from '../../src/lib/emails/pulsecheckAthleteInviteEmail';
 
+const {
+  authorizePulseCheckInviteEmail,
+} = require('./lib/pulsecheck-invite-email-auth');
+
 /**
  * send-pulsecheck-athlete-invite-email
  *
@@ -30,7 +34,7 @@ export const handler: Handler = async (event) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-PulseCheck-Firebase-Mode, X-PulseCheck-Dev-Firebase, X-PulseCheck-Firebase-Project-Id',
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -96,6 +100,13 @@ export const handler: Handler = async (event) => {
   }
 
   try {
+    await authorizePulseCheckInviteEmail(event, {
+      activationUrl,
+      toEmail,
+      expectedRecipientRole: 'athlete',
+      allowedCapabilities: ['coaching', 'administrative'],
+    });
+
     const { subject, html } = renderAthleteInviteEmail({
       recipientName,
       organizationName,
@@ -140,6 +151,13 @@ export const handler: Handler = async (event) => {
     return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ success: true, messageId: result.messageId }) };
   } catch (error: any) {
     console.error('[send-pulsecheck-athlete-invite-email] Error:', error);
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ success: false, error: error.message || 'Internal error' }) };
+    return {
+      statusCode: Number(error?.statusCode) || 500,
+      headers: corsHeaders,
+      body: JSON.stringify({
+        success: false,
+        error: error.message || 'Internal error',
+      }),
+    };
   }
 };

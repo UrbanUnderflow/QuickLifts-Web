@@ -6,6 +6,10 @@ const test = require('node:test');
 const repoRoot = path.resolve(__dirname, '../../..');
 const functionPath = path.join(repoRoot, 'netlify/functions/get-pulsecheck-coach-earnings.js');
 const configPath = path.join(repoRoot, 'netlify/functions/config/firebase.js');
+const coachServicesPath = path.join(
+  repoRoot,
+  'netlify/functions/lib/pulsecheck-coach-services.js'
+);
 
 const snapshot = (id, value) => ({
   id,
@@ -92,21 +96,26 @@ const createDb = ({
 const loadHandler = ({ db = createDb() } = {}) => {
   delete require.cache[functionPath];
   delete require.cache[configPath];
+  delete require.cache[coachServicesPath];
+
+  const firebaseApp = {
+    auth: () => ({
+      verifyIdToken: async (token) => {
+        assert.equal(token, 'coach-token');
+        return { uid: 'coach-calvin' };
+      },
+    }),
+    firestore: () => db,
+  };
 
   require.cache[configPath] = {
     id: configPath,
     filename: configPath,
     loaded: true,
     exports: {
-      admin: {
-        auth: () => ({
-          verifyIdToken: async (token) => {
-            assert.equal(token, 'coach-token');
-            return { uid: 'coach-calvin' };
-          },
-        }),
-      },
+      admin: {},
       db,
+      getFirebaseAdminApp: () => firebaseApp,
       headers: {
         'Access-Control-Allow-Origin': '*',
       },
@@ -301,10 +310,10 @@ test('Apple subscribers use recorded RevenueCat revenue and return every renewal
     const member = payload.earnings.members[0];
     assert.equal(member.plan, 'PulseCheck Monthly');
     assert.equal(member.subscriptionAmountCents, 2499);
-    assert.equal(member.estimatedMonthlyShareCents, 875);
+    assert.equal(member.estimatedMonthlyShareCents, 743);
     assert.equal(member.payments.length, 3);
     assert.equal(member.lifetimePaidCents, 7497);
-    assert.equal(member.lifetimeShareCents, 2625);
+    assert.equal(member.lifetimeShareCents, 2229);
     assert.deepEqual(
       member.payments.map((payment) => payment.amountPaidCents),
       [2499, 2499, 2499]

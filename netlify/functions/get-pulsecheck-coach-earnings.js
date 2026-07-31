@@ -1,5 +1,6 @@
 const Stripe = require('stripe');
-const { admin, db, headers } = require('./config/firebase');
+const { db, headers } = require('./config/firebase');
+const { verifyFirebaseUser } = require('./lib/pulsecheck-coach-services');
 const { normalizeCommercialConfig } = require('./utils/pulsecheck-revenue');
 const {
   PAYOUT_REQUESTS_COLLECTION,
@@ -83,25 +84,10 @@ const planSnapshot = (rawPlanType) => {
 const calculateShareCents = (amountCents, sharePct) =>
   Math.round((Number(amountCents) || 0) * ((Number(sharePct) || 0) / 100));
 
-const verifyCoach = async (event) => {
-  const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
-  const match = normalizeString(authHeader).match(/^Bearer\s+(.+)$/i);
-  if (!match) {
-    const error = new Error('Sign in is required to view coach earnings.');
-    error.statusCode = 401;
-    throw error;
-  }
-
-  try {
-    const decoded = await admin.auth().verifyIdToken(match[1]);
-    const userId = normalizeString(decoded?.uid);
-    if (!userId) throw new Error('The sign-in token did not include a user id.');
-    return userId;
-  } catch (error) {
-    if (!error.statusCode) error.statusCode = 401;
-    throw error;
-  }
-};
+const verifyCoach = (event) =>
+  verifyFirebaseUser(event, {
+    authErrorMessage: 'Sign in is required to view coach earnings.',
+  });
 
 const teamAllowsCoachEarnings = ({ team, membership, userId }) => {
   const config = normalizeCommercialConfig(team?.commercialConfig);
@@ -404,11 +390,16 @@ const invoiceRows = ({ invoices, sharePct }) =>
     })
     .sort((left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || '')));
 
-const loadMemberEarnings = async ({ athleteMembership, sharePct, teamId }) => {
+const loadMemberEarnings = async ({
+  athleteMembership,
+  sharePct,
+  teamId,
+  database = db,
+}) => {
   const athleteUserId = normalizeString(athleteMembership.userId);
   const [userSnap, subscriptionSnap] = await Promise.all([
-    db.collection(USERS_COLLECTION).doc(athleteUserId).get(),
-    db.collection(SUBSCRIPTIONS_COLLECTION).doc(athleteUserId).get(),
+    database.collection(USERS_COLLECTION).doc(athleteUserId).get(),
+    database.collection(SUBSCRIPTIONS_COLLECTION).doc(athleteUserId).get(),
   ]);
   const user = userSnap.exists ? userSnap.data() || {} : {};
   const subscriptionRecord = subscriptionSnap.exists ? subscriptionSnap.data() || {} : {};
@@ -577,13 +568,13 @@ const isoTimestamp = (value) => {
   return millis ? new Date(millis).toISOString() : null;
 };
 
-const loadCoachServiceEarnings = async (coachUserId) => {
+const loadCoachServiceEarnings = async (coachUserId, database = db) => {
   const [snapshot, assessmentSnapshot] = await Promise.all([
-    db
+    database
       .collection(COACH_SERVICE_ORDERS_COLLECTION)
       .where('coachUserId', '==', coachUserId)
       .get(),
-    db
+    database
       .collection(ASSESSMENT_PURCHASES_COLLECTION)
       .where('revenueRecipientUserId', '==', coachUserId)
       .get(),
@@ -690,8 +681,12 @@ const loadCoachServiceEarnings = async (coachUserId) => {
   };
 };
 
-const loadCoachPayoutSummary = async ({ coachUserId, earnedCents }) => {
-  const stateSnapshot = await db
+const loadCoachPayoutSummary = async ({
+  coachUserId,
+  earnedCents,
+  database = db,
+}) => {
+  const stateSnapshot = await database
     .collection(PAYOUT_STATES_COLLECTION)
     .doc(coachUserId)
     .get();
@@ -700,7 +695,7 @@ const loadCoachPayoutSummary = async ({ coachUserId, earnedCents }) => {
   let activeRequest = null;
 
   if (activeRequestId) {
-    const requestSnapshot = await db
+    const requestSnapshot = await database
       .collection(PAYOUT_REQUESTS_COLLECTION)
       .doc(activeRequestId)
       .get();
@@ -719,8 +714,8 @@ const loadCoachPayoutSummary = async ({ coachUserId, earnedCents }) => {
   });
 };
 
-const loadCoachEarnings = async (coachUserId) => {
-  const staffSnapshot = await db
+const loadCoachEarnings = async (coachUserId, database = db) => {
+  const staffSnapshot = await database
     .collection(TEAM_MEMBERSHIPS_COLLECTION)
     .where('userId', '==', coachUserId)
     .get();
@@ -730,7 +725,7 @@ const loadCoachEarnings = async (coachUserId) => {
 
   const eligibleTeams = [];
   for (const membership of staffMemberships) {
-    const teamSnap = await db.collection(TEAMS_COLLECTION).doc(membership.teamId).get();
+    const teamSnap = await database.collection(TEAMS_COLLECTION).doc(membership.teamId).get();
     if (!teamSnap.exists) continue;
     const team = { id: teamSnap.id, ...(teamSnap.data() || {}) };
     const commercialConfig = teamAllowsCoachEarnings({ team, membership, userId: coachUserId });
@@ -743,7 +738,7 @@ const loadCoachEarnings = async (coachUserId) => {
     if (!commercialConfig.referralKickbackEnabled || commercialConfig.referralRevenueSharePct <= 0) {
       continue;
     }
-    const membersSnapshot = await db
+    const membersSnapshot = await database
       .collection(TEAM_MEMBERSHIPS_COLLECTION)
       .where('teamId', '==', team.id)
       .get();
@@ -762,8 +757,12 @@ const loadCoachEarnings = async (coachUserId) => {
   }
 
   const [members, serviceEarnings] = await Promise.all([
-    Promise.all([...athleteScopes.values()].map((scope) => loadMemberEarnings(scope))),
-    loadCoachServiceEarnings(coachUserId),
+    Promise.all(
+      [...athleteScopes.values()].map((scope) =>
+        loadMemberEarnings({ ...scope, database })
+      )
+    ),
+    loadCoachServiceEarnings(coachUserId, database),
   ]);
   members.sort(
     (left, right) =>
@@ -791,6 +790,7 @@ const loadCoachEarnings = async (coachUserId) => {
   const payout = await loadCoachPayoutSummary({
     coachUserId,
     earnedCents: lifetimeShareCents,
+    database,
   });
 
   return {
@@ -825,8 +825,11 @@ const handler = async (event) => {
   }
 
   try {
-    const coachUserId = await verifyCoach(event);
-    const earnings = await loadCoachEarnings(coachUserId);
+    const { userId: coachUserId, app } = await verifyCoach(event);
+    const earnings = await loadCoachEarnings(
+      coachUserId,
+      app.firestore()
+    );
     return {
       statusCode: 200,
       headers: jsonHeaders,
@@ -855,4 +858,5 @@ module.exports = {
   loadCoachEarnings,
   loadCoachPayoutSummary,
   teamAllowsCoachEarnings,
+  verifyCoach,
 };

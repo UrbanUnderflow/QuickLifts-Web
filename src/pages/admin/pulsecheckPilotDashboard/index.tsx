@@ -28,7 +28,10 @@ import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import SignInModal from '../../../components/SignInModal';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
-import { auth } from '../../../api/firebase/config';
+import {
+  auth,
+  getFirebaseModeRequestHeaders,
+} from '../../../api/firebase/config';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import type {
@@ -650,9 +653,17 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     const adminUser = auth.currentUser;
     setSendingInviteKey(draft.contextKey);
     try {
+      if (!adminUser) {
+        throw new Error('Sign in again to send this invite.');
+      }
+      const idToken = await adminUser.getIdToken();
       const response = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
         body: JSON.stringify({
           toEmail: draft.recipientEmail,
           activationUrl: draft.activationUrl,

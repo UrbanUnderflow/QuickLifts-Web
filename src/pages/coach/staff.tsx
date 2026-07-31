@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
-import { db } from '../../api/firebase/config';
+import {
+  auth,
+  db,
+  getFirebaseModeRequestHeaders,
+} from '../../api/firebase/config';
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import CoachLayout from '../../components/CoachLayout';
@@ -247,9 +251,18 @@ const StaffPage: React.FC = () => {
         targetEmail: inviteEmail,
         reusable: false,
       });
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        throw new Error('Sign in again to send this invite.');
+      }
+      const idToken = await firebaseUser.getIdToken();
       const res = await fetch('/.netlify/functions/send-pulsecheck-team-invite-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
         body: JSON.stringify({
           toEmail: inviteEmail,
           activationUrl,

@@ -661,7 +661,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn()
         && request.resource.data.coachId == request.auth.uid;
-      allow update, delete: if isSignedIn()
+      allow update: if isSignedIn()
+        && resource.data.coachId == request.auth.uid
+        && request.resource.data.coachId == request.auth.uid;
+      allow delete: if isSignedIn()
         && resource.data.coachId == request.auth.uid;
     }
 

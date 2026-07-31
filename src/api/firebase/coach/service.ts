@@ -776,6 +776,15 @@ class CoachService {
   }
 
   /**
+   * Resolve the team the coach dashboard operates against. Legacy coach
+   * accounts receive their deterministic team bridge before dashboard actions
+   * such as athlete invites are enabled.
+   */
+  async resolveOperatingContext(coachId: string): Promise<{ organizationId: string; teamId: string }> {
+    return this.ensureCoachOperatingContext(coachId);
+  }
+
+  /**
    * Get a coach profile by user ID
    */
   async getCoachProfile(userId: string): Promise<CoachModel | null> {

@@ -1,4 +1,5 @@
-const { admin, db, headers } = require('./config/firebase');
+const { headers } = require('./config/firebase');
+const { verifyFirebaseUser } = require('./lib/pulsecheck-coach-services');
 const {
   PAYOUT_METHODS,
   PAYOUT_REQUESTS_COLLECTION,
@@ -29,26 +30,10 @@ const json = (statusCode, body) => ({
   body: JSON.stringify(body),
 });
 
-const bearerToken = (event) => normalizeString(
-  event.headers?.authorization || event.headers?.Authorization
-).replace(/^Bearer\s+/i, '');
-
-const verifyCoach = async (event) => {
-  const token = bearerToken(event);
-  if (!token) {
-    const error = new Error('Sign in is required to request a payout.');
-    error.statusCode = 401;
-    throw error;
-  }
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    if (!normalizeString(decoded?.uid)) throw new Error('The sign-in token did not include a user id.');
-    return decoded;
-  } catch (error) {
-    error.statusCode = error.statusCode || 401;
-    throw error;
-  }
-};
+const verifyCoach = (event) =>
+  verifyFirebaseUser(event, {
+    authErrorMessage: 'Sign in is required to request a payout.',
+  });
 
 const renderPayoutRequestEmail = ({
   amountCents,
@@ -101,8 +86,12 @@ const handler = async (event) => {
   }
 
   try {
-    const decoded = await verifyCoach(event);
-    const coachUserId = normalizeString(decoded.uid);
+    const {
+      userId: coachUserId,
+      decoded,
+      app,
+    } = await verifyCoach(event);
+    const database = app.firestore();
     const body = JSON.parse(event.body || '{}');
     const paymentMethod = normalizeString(body.paymentMethod).toLowerCase();
     const paymentDestination = normalizeString(body.paymentDestination);
@@ -121,20 +110,20 @@ const handler = async (event) => {
     }
 
     const [earnings, coachSnapshot] = await Promise.all([
-      loadCoachEarnings(coachUserId),
-      db.collection('users').doc(coachUserId).get(),
+      loadCoachEarnings(coachUserId, database),
+      database.collection('users').doc(coachUserId).get(),
     ]);
     const totalEarnedCents = Math.max(0, Number(earnings.lifetimeShareCents) || 0);
     const coach = coachSnapshot.exists ? coachSnapshot.data() || {} : {};
     const coachName = normalizeString(coach.displayName || coach.username) || 'PulseCheck coach';
     const coachEmail = normalizeString(coach.email || decoded.email);
-    const requestRef = db.collection(PAYOUT_REQUESTS_COLLECTION).doc();
-    const stateRef = db.collection(PAYOUT_STATES_COLLECTION).doc(coachUserId);
+    const requestRef = database.collection(PAYOUT_REQUESTS_COLLECTION).doc();
+    const stateRef = database.collection(PAYOUT_STATES_COLLECTION).doc(coachUserId);
     const requestedAt = new Date();
     let requestData;
     let stateAfter;
 
-    await db.runTransaction(async (transaction) => {
+    await database.runTransaction(async (transaction) => {
       const stateSnapshot = await transaction.get(stateRef);
       const state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
       const activeRequestId = normalizeString(state.activeRequestId);
@@ -142,7 +131,7 @@ const handler = async (event) => {
 
       if (activeRequestId) {
         const activeSnapshot = await transaction.get(
-          db.collection(PAYOUT_REQUESTS_COLLECTION).doc(activeRequestId)
+          database.collection(PAYOUT_REQUESTS_COLLECTION).doc(activeRequestId)
         );
         if (activeSnapshot.exists) {
           activeRequest = { id: activeSnapshot.id, ...(activeSnapshot.data() || {}) };

@@ -106,7 +106,7 @@ async function resolveAthleteStripeCustomer({
 
   const ephemeralKey = await stripe.ephemeralKeys.create(
     { customer: customerId },
-    { apiVersion: '2023-10-16' }
+    { apiVersion: '2020-08-27' }
   );
 
   return {
@@ -247,7 +247,9 @@ const handler = async (event) => {
         amount: pricing.totalAmountCents,
         currency: service.currency,
         customer: stripeCustomer.customerId,
-        payment_method_types: ['card', 'link'],
+        automatic_payment_methods: {
+          enabled: true,
+        },
         receipt_email: normalizeString(decoded.email) || undefined,
         description: `${service.title} with ${normalizeString(conversation.data.coachName) || 'coach'}`,
         metadata: {

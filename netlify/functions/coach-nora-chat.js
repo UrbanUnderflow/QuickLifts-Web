@@ -22,16 +22,307 @@
 // Response:
 //   { reply: string, savedNote: { id, title, category } | null }
 
-const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
+const { admin, headers } = require('./config/firebase');
+const { verifyFirebaseUser } = require('./lib/pulsecheck-coach-services');
 
 const VAULT_COLLECTION = 'coach-nora-vault';
 const ESCALATIONS_COLLECTION = 'escalation-records';
+const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const TEAMS_COLLECTION = 'pulsecheck-teams';
+const LEGACY_COACHES_COLLECTION = 'coaches';
+const LEGACY_COACH_ATHLETES_COLLECTION = 'coachAthletes';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+
+const KNOWN_STAFF_CAPABILITIES = new Set([
+  'admin',
+  'administrative',
+  'coaching',
+  'athletic_trainer',
+]);
+const INACTIVE_MEMBERSHIP_STATUSES = new Set([
+  'inactive',
+  'removed',
+  'revoked',
+  'declined',
+  'expired',
+  'pending',
+  'invited',
+  'suspended',
+  'disabled',
+]);
+const INACTIVE_TEAM_STATUSES = new Set([
+  'paused',
+  'archived',
+  'deleted',
+  'inactive',
+]);
+const INACTIVE_LEGACY_LINK_STATUSES = new Set([
+  'inactive',
+  'removed',
+  'revoked',
+  'declined',
+  'expired',
+  'disconnected',
+  'suspended',
+  'disabled',
+]);
 
 const truncate = (value, max) => {
   const str = String(value || '').trim();
   return str.length > max ? `${str.slice(0, max)}…` : str;
 };
+
+const normalizeString = (value) => (
+  typeof value === 'string' ? value.trim() : ''
+);
+
+const snapshotExists = (snapshot) => (
+  typeof snapshot?.exists === 'function'
+    ? snapshot.exists()
+    : snapshot?.exists === true
+);
+
+function isActiveMembership(data) {
+  const status = normalizeString(data?.status).toLowerCase();
+  return !INACTIVE_MEMBERSHIP_STATUSES.has(status) && data?.revokedAt == null;
+}
+
+function isActiveTeam(data) {
+  const status = normalizeString(data?.status).toLowerCase();
+  return !INACTIVE_TEAM_STATUSES.has(status)
+    && data?.deletedAt == null
+    && data?.archivedAt == null;
+}
+
+function isActiveLegacyLink(data) {
+  const status = normalizeString(data?.status).toLowerCase();
+  return !INACTIVE_LEGACY_LINK_STATUSES.has(status)
+    && data?.disconnectedAt == null
+    && data?.revokedAt == null;
+}
+
+function legacyCapabilitiesForRole(role) {
+  switch (role) {
+    case 'team-admin':
+      return new Set(['admin']);
+    case 'coach':
+      return new Set(['coaching']);
+    case 'performance-staff':
+    case 'clinician':
+      return new Set(['athletic_trainer']);
+    case 'support-staff':
+      return new Set(['administrative']);
+    default:
+      return new Set();
+  }
+}
+
+function resolveStaffCapabilities(data, role) {
+  const fallback = legacyCapabilitiesForRole(role);
+  if (!Object.prototype.hasOwnProperty.call(data || {}, 'staffCapabilities')) {
+    return fallback;
+  }
+
+  const rawCapabilities = data.staffCapabilities;
+  if (!Array.isArray(rawCapabilities)) {
+    return role === 'team-admin' ? new Set(['admin']) : new Set();
+  }
+  if (rawCapabilities.length === 0) {
+    return fallback;
+  }
+
+  const capabilities = new Set();
+  for (const value of rawCapabilities) {
+    const capability = normalizeString(value);
+    if (!KNOWN_STAFF_CAPABILITIES.has(capability)) {
+      return role === 'team-admin' ? new Set(['admin']) : new Set();
+    }
+    capabilities.add(capability);
+  }
+  if (role === 'team-admin') capabilities.add('admin');
+  return capabilities;
+}
+
+function resolveRosterVisibility(data, capabilities) {
+  if (capabilities.size === 0) return 'none';
+  if (Object.prototype.hasOwnProperty.call(data || {}, 'rosterVisibilityScope')) {
+    const scope = normalizeString(data.rosterVisibilityScope).toLowerCase();
+    return scope === 'team' || scope === 'assigned' || scope === 'none'
+      ? scope
+      : 'none';
+  }
+  return capabilities.has('admin')
+    || capabilities.has('coaching')
+    || capabilities.has('athletic_trainer')
+    ? 'team'
+    : 'none';
+}
+
+function isValidLegacyCoachProfile(snapshot, coachId) {
+  if (!snapshotExists(snapshot)) return false;
+  const data = snapshot.data?.() || {};
+  const profileUserId = normalizeString(data.userId);
+  const status = normalizeString(data.status).toLowerCase();
+  return (!profileUserId || profileUserId === coachId)
+    && !INACTIVE_MEMBERSHIP_STATUSES.has(status)
+    && data.deletedAt == null
+    && data.revokedAt == null;
+}
+
+async function loadActiveTeamIds(db, teamIds) {
+  const activeTeamIds = new Set();
+  await Promise.all(
+    [...teamIds].map(async (teamId) => {
+      const snapshot = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
+      if (snapshotExists(snapshot) && isActiveTeam(snapshot.data?.() || {})) {
+        activeTeamIds.add(teamId);
+      }
+    })
+  );
+  return activeTeamIds;
+}
+
+async function loadTeamAthleteIds(db, teamId) {
+  const snapshot = await db
+    .collection(TEAM_MEMBERSHIPS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .get();
+  const athleteIds = new Set();
+  for (const document of snapshot.docs || []) {
+    const data = document.data?.() || {};
+    const athleteId = normalizeString(data.userId);
+    if (
+      normalizeString(data.role).toLowerCase() === 'athlete'
+      && athleteId
+      && isActiveMembership(data)
+    ) {
+      athleteIds.add(athleteId);
+    }
+  }
+  return athleteIds;
+}
+
+async function resolveNoraCoachAccess(db, coachId) {
+  const [membershipSnapshot, legacyCoachSnapshot] = await Promise.all([
+    db
+      .collection(TEAM_MEMBERSHIPS_COLLECTION)
+      .where('userId', '==', coachId)
+      .get(),
+    db.collection(LEGACY_COACHES_COLLECTION).doc(coachId).get(),
+  ]);
+
+  const candidateMemberships = [];
+  for (const document of membershipSnapshot.docs || []) {
+    const data = document.data?.() || {};
+    const role = normalizeString(data.role).toLowerCase();
+    const teamId = normalizeString(data.teamId);
+    if (
+      normalizeString(data.userId) !== coachId
+      || role === 'athlete'
+      || !teamId
+      || !isActiveMembership(data)
+    ) {
+      continue;
+    }
+
+    const capabilities = resolveStaffCapabilities(data, role);
+    const canUseNora = capabilities.has('admin')
+      || capabilities.has('coaching')
+      || capabilities.has('administrative');
+    if (!canUseNora) continue;
+    candidateMemberships.push({ data, teamId, capabilities });
+  }
+
+  const activeTeamIds = await loadActiveTeamIds(
+    db,
+    new Set(candidateMemberships.map((membership) => membership.teamId))
+  );
+  const teamPolicies = new Map();
+  for (const membership of candidateMemberships) {
+    if (!activeTeamIds.has(membership.teamId)) continue;
+
+    const existingPolicy = teamPolicies.get(membership.teamId) || {
+      entireTeam: false,
+      assignedAthleteIds: new Set(),
+    };
+    const canReadRoster = membership.capabilities.has('admin')
+      || membership.capabilities.has('coaching')
+      || membership.capabilities.has('athletic_trainer');
+    const rosterVisibility = canReadRoster
+      ? resolveRosterVisibility(membership.data, membership.capabilities)
+      : 'none';
+
+    if (rosterVisibility === 'team') {
+      existingPolicy.entireTeam = true;
+      existingPolicy.assignedAthleteIds.clear();
+    } else if (rosterVisibility === 'assigned' && !existingPolicy.entireTeam) {
+      for (const value of Array.isArray(membership.data.allowedAthleteIds)
+        ? membership.data.allowedAthleteIds
+        : []) {
+        const athleteId = normalizeString(value);
+        if (athleteId) existingPolicy.assignedAthleteIds.add(athleteId);
+      }
+    }
+    teamPolicies.set(membership.teamId, existingPolicy);
+  }
+
+  const allowedAthleteIds = new Set();
+  await Promise.all(
+    [...teamPolicies.entries()].map(async ([teamId, policy]) => {
+      if (!policy.entireTeam && policy.assignedAthleteIds.size === 0) return;
+      const teamAthleteIds = await loadTeamAthleteIds(db, teamId);
+      for (const athleteId of teamAthleteIds) {
+        if (policy.entireTeam || policy.assignedAthleteIds.has(athleteId)) {
+          allowedAthleteIds.add(athleteId);
+        }
+      }
+    })
+  );
+
+  const legacyCoachProfileExists = isValidLegacyCoachProfile(
+    legacyCoachSnapshot,
+    coachId
+  );
+  if (legacyCoachProfileExists) {
+    const legacyLinks = await db
+      .collection(LEGACY_COACH_ATHLETES_COLLECTION)
+      .where('coachId', '==', coachId)
+      .get();
+    for (const document of legacyLinks.docs || []) {
+      const data = document.data?.() || {};
+      const athleteId = normalizeString(data.athleteUserId)
+        || normalizeString(data.athleteId);
+      if (
+        normalizeString(data.coachId) === coachId
+        && athleteId
+        && isActiveLegacyLink(data)
+      ) {
+        allowedAthleteIds.add(athleteId);
+      }
+    }
+  }
+
+  return {
+    authorized: teamPolicies.size > 0 || legacyCoachProfileExists,
+    allowedAthleteIds,
+  };
+}
+
+function scopeAthletes(athletes, allowedAthleteIds) {
+  if (!Array.isArray(athletes) || allowedAthleteIds.size === 0) return [];
+  const seen = new Set();
+  const scoped = [];
+  for (const athlete of athletes) {
+    const athleteId = normalizeString(athlete?.id);
+    if (!athleteId || seen.has(athleteId) || !allowedAthleteIds.has(athleteId)) {
+      continue;
+    }
+    seen.add(athleteId);
+    scoped.push({ ...athlete, id: athleteId });
+    if (scoped.length === 30) break;
+  }
+  return scoped;
+}
 
 // Build a compact, text-only snapshot of the coach's vault for grounding.
 async function loadVaultContext(db, coachId) {
@@ -197,13 +488,17 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  let db;
+  let authenticatedCoach;
   try {
-    initializeFirebaseAdmin({ headers: event.headers || {} });
-    db = admin.firestore();
-  } catch (err) {
-    console.error('[coach-nora-chat] Firebase init error', err);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Firebase initialization failed' }) };
+    authenticatedCoach = await verifyFirebaseUser(event, {
+      authErrorMessage: 'Sign in is required to chat with Nora.',
+    });
+  } catch (error) {
+    return {
+      statusCode: Number(error.statusCode) || 401,
+      headers,
+      body: JSON.stringify({ error: error.message || 'Sign in is required to chat with Nora.' }),
+    };
   }
 
   let body;
@@ -213,17 +508,37 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON in request body' }) };
   }
 
-  const { coachId, message, history, athletes, coachName } = body;
-  if (!coachId || !message || !String(message).trim()) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing coachId or message' }) };
+  const claimedCoachId = String(body.coachId || '').trim();
+  if (claimedCoachId && claimedCoachId !== authenticatedCoach.userId) {
+    return {
+      statusCode: 403,
+      headers,
+      body: JSON.stringify({ error: 'This coach account cannot access the requested Nora workspace.' }),
+    };
+  }
+
+  const coachId = authenticatedCoach.userId;
+  const { message, history, athletes, coachName } = body;
+  if (!message || !String(message).trim()) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing message' }) };
   }
 
   try {
+    const db = authenticatedCoach.app.firestore();
+    const access = await resolveNoraCoachAccess(db, coachId);
+    if (!access.authorized) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'This account does not have active coach access to Nora.' }),
+      };
+    }
+    const scopedAthletes = scopeAthletes(athletes, access.allowedAthleteIds);
     const [vaultLines, escalationLines] = await Promise.all([
       loadVaultContext(db, coachId),
-      loadEscalationContext(db, athletes),
+      loadEscalationContext(db, scopedAthletes),
     ]);
-    const athleteLines = buildAthleteDigest(athletes);
+    const athleteLines = buildAthleteDigest(scopedAthletes);
 
     const systemPrompt = buildSystemPrompt({ coachName, vaultLines, athleteLines, escalationLines });
     const result = await callOpenAi({ systemPrompt, history, message });

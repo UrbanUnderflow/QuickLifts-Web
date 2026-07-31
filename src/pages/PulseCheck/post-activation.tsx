@@ -18,6 +18,10 @@ import { deriveMembershipAccessFromCapabilities } from '../../api/firebase/pulse
 import { STAFF_PERMISSIONS } from '../../lib/staffPermissions';
 import { normalizePhoneToE164, isValidE164 } from '../../utils/phone';
 import { userService } from '../../api/firebase/user';
+import {
+  auth,
+  getFirebaseModeRequestHeaders,
+} from '../../api/firebase/config';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { useDispatch } from 'react-redux';
 import { showToast } from '../../redux/toastSlice';
@@ -476,9 +480,18 @@ export default function PulseCheckPostActivationPage() {
       let emailSent = false;
       if (targetEmail && createdInvite?.activationUrl) {
         try {
+          const firebaseUser = auth.currentUser;
+          if (!firebaseUser) {
+            throw new Error('Sign in again to send this invite.');
+          }
+          const idToken = await firebaseUser.getIdToken();
           const resp = await fetch('/.netlify/functions/send-pulsecheck-team-invite-email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+              ...getFirebaseModeRequestHeaders(),
+            },
             body: JSON.stringify({
               toEmail: targetEmail,
               activationUrl: createdInvite.activationUrl,
