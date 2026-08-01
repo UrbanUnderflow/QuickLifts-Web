@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { GetServerSideProps } from 'next';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import {
@@ -597,5 +598,12 @@ const StaffPage: React.FC = () => {
     </CoachLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=staff',
+    permanent: false,
+  },
+});
 
 export default StaffPage;

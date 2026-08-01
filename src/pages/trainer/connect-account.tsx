@@ -8,6 +8,7 @@ import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user';
 import { StripeOnboardingStatus } from '../../api/firebase/user/types';
 import { SubscriptionType } from '../../api/firebase/user/types';
+import { auth } from '../../api/firebase/config';
 
 const ConnectAccountPage = () => {
   const [loading, setLoading] = useState(false);
@@ -114,8 +115,20 @@ const ConnectAccountPage = () => {
       console.log('[ConnectAccount] Starting onboarding process for user:', currentUser.id);
       
       // Call the existing Netlify function to create Connect account
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Sign in again to connect payments.');
+      }
       const response = await fetch(
-        `/.netlify/functions/create-connected-account?userId=${currentUser.id}`
+        '/.netlify/functions/create-connected-account',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: currentUser.id }),
+        }
       );
       
       console.log('[ConnectAccount] Create account response status:', response.status);

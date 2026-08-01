@@ -5,8 +5,12 @@ const {
   PAYOUT_STATES_COLLECTION,
   normalizeEmail,
   normalizeString,
+  payoutStateId,
   serializePayoutRequest,
 } = require('./utils/pulsecheck-coach-payouts');
+const { loadCoachEarnings } = require('./get-pulsecheck-coach-earnings');
+
+const ATHLETE_APP_REVENUE_EVENTS_COLLECTION = 'pulsecheck-athlete-app-revenue-events';
 
 const jsonHeaders = {
   ...headers,
@@ -99,6 +103,31 @@ const completePayout = async ({ body, decoded }) => {
   const requestRef = db.collection(PAYOUT_REQUESTS_COLLECTION).doc(requestId);
   let completedRequest;
   let alreadyComplete = false;
+  let balanceAdjustment = null;
+  const preliminarySnapshot = await requestRef.get();
+  if (!preliminarySnapshot.exists) {
+    return json(404, { success: false, message: 'Payout request not found.' });
+  }
+  const preliminaryRequest = preliminarySnapshot.data() || {};
+  const preliminaryCoachUserId = normalizeString(preliminaryRequest.coachUserId);
+  const preliminaryTeamId = normalizeString(preliminaryRequest.teamId);
+  let nonAthleteAppEarnedCents = 0;
+  if (
+    normalizeString(preliminaryRequest.status).toLowerCase() === 'requested'
+    && preliminaryCoachUserId
+    && preliminaryTeamId
+  ) {
+    const currentEarnings = await loadCoachEarnings(
+      preliminaryCoachUserId,
+      preliminaryTeamId,
+      db
+    );
+    nonAthleteAppEarnedCents = Math.max(
+      0,
+      (Number(currentEarnings.payoutEligibleCents) || 0)
+      - (Number(currentEarnings.athleteAppSubscriptionEarnings?.lifetimeNetCents) || 0)
+    );
+  }
 
   await db.runTransaction(async (transaction) => {
     const requestSnapshot = await transaction.get(requestRef);
@@ -122,14 +151,19 @@ const completePayout = async ({ body, decoded }) => {
     }
 
     const coachUserId = normalizeString(request.coachUserId);
+    const teamId = normalizeString(request.teamId);
+    const organizationId = normalizeString(request.organizationId);
     const amountCents = Math.max(0, Number(request.amountCents) || 0);
-    if (!coachUserId || amountCents <= 0) {
-      const error = new Error('This payout request is missing its coach or amount.');
+    const stateDocumentId = payoutStateId(coachUserId, teamId);
+    if (!coachUserId || !teamId || !stateDocumentId || amountCents <= 0) {
+      const error = new Error(
+        'This payout request needs a verified coach, team, and amount.'
+      );
       error.statusCode = 409;
       throw error;
     }
 
-    const stateRef = db.collection(PAYOUT_STATES_COLLECTION).doc(coachUserId);
+    const stateRef = db.collection(PAYOUT_STATES_COLLECTION).doc(stateDocumentId);
     const stateSnapshot = await transaction.get(stateRef);
     const state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
     const activeRequestId = normalizeString(state.activeRequestId);
@@ -137,6 +171,60 @@ const completePayout = async ({ body, decoded }) => {
       const error = new Error('A newer payout request is active for this coach.');
       error.statusCode = 409;
       throw error;
+    }
+
+    const athleteAppLedgerSnapshot = await transaction.get(
+      db.collection(ATHLETE_APP_REVENUE_EVENTS_COLLECTION)
+        .where('revenueRecipientUserId', '==', coachUserId)
+    );
+    const currentAthleteAppNetCents = athleteAppLedgerSnapshot.docs.reduce((sum, entry) => {
+      const event = entry.data() || {};
+      const eventStatus = normalizeString(event.status).toLowerCase();
+      if (
+        normalizeString(event.revenueRecipientUserId) !== coachUserId
+        || normalizeString(event.teamId) !== teamId
+        || (organizationId && normalizeString(event.organizationId) !== organizationId)
+        || normalizeString(event.provider).toLowerCase() !== 'stripe'
+        || normalizeString(event.source) !== 'pulsecheck-coach-athlete-offer'
+        || normalizeString(event.type) !== 'athlete_app_subscription_invoice'
+        || !['paid', 'partially_refunded', 'refunded', 'disputed', 'dispute_lost'].includes(eventStatus)
+      ) {
+        return sum;
+      }
+      return sum + Math.max(0, Number(event.coachNetCents) || 0);
+    }, 0);
+    const currentEarnedCents = nonAthleteAppEarnedCents + currentAthleteAppNetCents;
+    const previouslyPaidCents = Math.max(0, Number(state.paidCents) || 0);
+    const currentlyAvailableCents = Math.max(0, currentEarnedCents - previouslyPaidCents);
+    if (amountCents > currentlyAvailableCents) {
+      const adjustedAt = new Date();
+      const adjustedStatus = currentlyAvailableCents > 0 ? 'requested' : 'canceled';
+      const requestUpdate = {
+        status: adjustedStatus,
+        amountCents: currentlyAvailableCents,
+        earnedThroughCents: currentEarnedCents,
+        balanceAdjusted: true,
+        balanceAdjustedAt: adjustedAt,
+        balanceAdjustmentReason: 'earnings_changed_before_payout',
+        updatedAt: adjustedAt,
+      };
+      transaction.update(requestRef, requestUpdate);
+      transaction.set(stateRef, {
+        coachUserId,
+        teamId,
+        organizationId: organizationId || null,
+        paidCents: previouslyPaidCents,
+        requestedCents: currentlyAvailableCents,
+        activeRequestId: currentlyAvailableCents > 0 ? requestId : null,
+        totalEarnedCentsAtLastRequest: currentEarnedCents,
+        updatedAt: adjustedAt,
+      }, { merge: true });
+      balanceAdjustment = {
+        previousAmountCents: amountCents,
+        amountCents: currentlyAvailableCents,
+        request: { id: requestId, ...request, ...requestUpdate },
+      };
+      return;
     }
 
     const paidAt = new Date();
@@ -157,6 +245,8 @@ const completePayout = async ({ body, decoded }) => {
     transaction.update(requestRef, requestUpdate);
     transaction.set(stateRef, {
       coachUserId,
+      teamId,
+      organizationId: organizationId || null,
       paidCents,
       requestedCents: 0,
       activeRequestId: null,
@@ -171,6 +261,22 @@ const completePayout = async ({ body, decoded }) => {
       ...requestUpdate,
     };
   });
+
+  if (balanceAdjustment) {
+    return json(409, {
+      success: false,
+      balanceChanged: true,
+      message: balanceAdjustment.amountCents > 0
+        ? 'The available balance changed after this request. Review the adjusted amount before completing payment.'
+        : 'The requested earnings are no longer available because a payment was refunded or disputed.',
+      previousAmountCents: balanceAdjustment.previousAmountCents,
+      amountCents: balanceAdjustment.amountCents,
+      request: serializePayoutRequest(
+        balanceAdjustment.request.id,
+        balanceAdjustment.request
+      ),
+    });
+  }
 
   return json(200, {
     success: true,

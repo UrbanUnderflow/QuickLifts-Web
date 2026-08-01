@@ -89,6 +89,8 @@ export const handler: Handler = async (event) => {
     introText,
     detailText,
     buttonLabel,
+    purchaseRequired,
+    monthlyPriceCents,
   } = body;
 
   if (!toEmail || !activationUrl) {
@@ -119,6 +121,8 @@ export const handler: Handler = async (event) => {
       introText,
       detailText,
       buttonLabel,
+      purchaseRequired: purchaseRequired === true,
+      monthlyPriceCents,
     });
 
     const result = await sendBrevoTransactionalEmail({

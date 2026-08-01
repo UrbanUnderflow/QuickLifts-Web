@@ -1,6 +1,19 @@
 const Stripe = require('stripe');
 const { admin } = require('./config/firebase');
 const {
+  resolveServerStripeMode,
+  verifyFirebaseUser,
+} = require('./lib/pulsecheck-coach-services');
+const {
+  ATHLETE_APP_CHECKOUT_SOURCE,
+  ENTITLEMENTS_COLLECTION,
+  entitlementId,
+  isActiveEntitlement,
+  isAthleteAppMetadata,
+  normalizeString: normalizeOfferString,
+  reconcileAthleteAppSubscription,
+} = require('./lib/pulsecheck-athlete-app-offers');
+const {
   TEAM_REVENUE_EVENTS_COLLECTION,
   readPulseCheckAttributionFromMetadata,
   upsertPulseCheckRevenueEvent,
@@ -84,6 +97,169 @@ const mapPriceIdToPlanType = (priceId) => {
   }
 };
 
+const stripeForServerMode = () => {
+  const mode = resolveServerStripeMode();
+  const key = mode === 'test'
+    ? process.env.STRIPE_TEST_SECRET_KEY
+    : process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    const error = new Error('Stripe verification is not configured.');
+    error.statusCode = 503;
+    throw error;
+  }
+  return { stripe: new Stripe(key), mode };
+};
+
+const isActiveMembership = (membership = {}) => {
+  const status = normalizeString(membership.status).toLowerCase();
+  return (!status || status === 'active') && membership.revokedAt == null;
+};
+
+const ensurePaidInviteMembership = async ({ event, database, userId, teamId, inviteToken, forceDevFirebase }) => {
+  const membershipId = `${teamId}_${userId}`;
+  const membershipRef = database.collection('pulsecheck-team-memberships').doc(membershipId);
+  const membershipSnapshot = await membershipRef.get();
+  const membership = membershipSnapshot.exists ? membershipSnapshot.data() || {} : {};
+  const membershipMatches = membershipSnapshot.exists
+    && normalizeString(membership.userId) === userId
+    && normalizeString(membership.teamId) === teamId
+    && normalizeString(membership.role).toLowerCase() === 'athlete'
+    && membership.archivedAt == null
+    && membership.deletedAt == null
+    && isActiveMembership(membership);
+  if (membershipMatches) return true;
+
+  const baseUrl = normalizeString(process.env.SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+  const authorization = event.headers?.authorization || event.headers?.Authorization || '';
+  const response = await fetch(`${baseUrl}/api/pulsecheck/team-invite/redeem`, {
+    method: 'POST',
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token: inviteToken, forceDevFirebase: forceDevFirebase === true }),
+  });
+  if (response.ok) return true;
+
+  const retrySnapshot = await membershipRef.get();
+  const retryMembership = retrySnapshot.exists ? retrySnapshot.data() || {} : {};
+  if (
+    retrySnapshot.exists
+    && normalizeString(retryMembership.userId) === userId
+    && normalizeString(retryMembership.teamId) === teamId
+    && normalizeString(retryMembership.role).toLowerCase() === 'athlete'
+    && retryMembership.archivedAt == null
+    && retryMembership.deletedAt == null
+    && isActiveMembership(retryMembership)
+  ) return true;
+  const body = await response.text().catch(() => '');
+  const error = new Error(`Team access could not be activated${body ? `: ${body.slice(0, 160)}` : '.'}`);
+  error.statusCode = 502;
+  throw error;
+};
+
+const verifyAthleteAppOfferResult = async ({ event, session, body, authenticated }) => {
+  const metadata = {
+    ...(session.subscription?.metadata || {}),
+    ...(session.metadata || {}),
+  };
+  const userId = normalizeOfferString(metadata.userId);
+  const teamId = normalizeOfferString(metadata.pulsecheckTeamId);
+  const inviteToken = normalizeOfferString(metadata.pulsecheckInviteToken);
+  const offerId = normalizeOfferString(metadata.pulsecheckOfferId) || teamId;
+  const sessionFirebaseMode = normalizeOfferString(metadata.pulsecheckFirebaseMode).toLowerCase()
+    || 'prod';
+  const authenticatedAppName = normalizeOfferString(authenticated?.app?.name);
+  const authenticatedFirebaseMode = authenticatedAppName === 'pulsecheck-dev-admin'
+    ? 'dev'
+    : 'prod';
+  if (
+    !authenticated
+    || authenticated.userId !== userId
+    || normalizeOfferString(body.userId) !== userId
+    || normalizeOfferString(body.inviteToken) !== inviteToken
+    || normalizeOfferString(session.client_reference_id) !== userId
+    || !teamId
+    || !inviteToken
+    || !['dev', 'prod'].includes(sessionFirebaseMode)
+    || authenticatedFirebaseMode !== sessionFirebaseMode
+  ) {
+    return {
+      statusCode: 403,
+      body: JSON.stringify({ message: 'This payment session does not match the signed-in athlete invite.' }),
+    };
+  }
+  const database = authenticated.app.firestore();
+  const expandedSubscription = session.subscription && typeof session.subscription === 'object'
+    ? session.subscription
+    : null;
+  const subscriptionStatus = normalizeOfferString(expandedSubscription?.status).toLowerCase();
+  const currentPeriodEnd = Math.floor(Number(expandedSubscription?.current_period_end) || 0);
+  if (
+    expandedSubscription
+    && ['active', 'trialing'].includes(subscriptionStatus)
+    && currentPeriodEnd > Math.floor(Date.now() / 1000)
+  ) {
+    await reconcileAthleteAppSubscription({
+      database,
+      admin,
+      subscription: expandedSubscription,
+      source: 'verify-subscription-recovery',
+    });
+  }
+  const entitlementDocumentId = entitlementId(teamId, userId);
+  const entitlementSnapshot = await database
+    .collection(ENTITLEMENTS_COLLECTION)
+    .doc(entitlementDocumentId)
+    .get();
+  const entitlement = entitlementSnapshot.exists ? entitlementSnapshot.data() || {} : null;
+  if (!isActiveEntitlement(entitlement, { userId, teamId, offerId })) {
+    return {
+      statusCode: 202,
+      body: JSON.stringify({
+        success: false,
+        pending: true,
+        message: 'Payment is confirmed. Team access is still being activated.',
+      }),
+    };
+  }
+  try {
+    await ensurePaidInviteMembership({
+      event,
+      database,
+      userId,
+      teamId,
+      inviteToken,
+      forceDevFirebase: sessionFirebaseMode === 'dev',
+    });
+  } catch (error) {
+    if (Number(error?.statusCode) === 502) {
+      return {
+        statusCode: 202,
+        body: JSON.stringify({
+          success: false,
+          pending: true,
+          message: 'Payment is confirmed. Team access is still being activated.',
+        }),
+      };
+    }
+    throw error;
+  }
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      success: true,
+      pending: false,
+      webhookConfirmed: true,
+      teamAccessActive: true,
+      message: 'Subscription and team access are active.',
+      user: { id: userId },
+      teamId,
+      inviteToken,
+    }),
+  };
+};
+
 const handler = async (event) => {
   console.log(`[VerifySubscription] Received ${event.httpMethod} request.`);
   
@@ -113,11 +289,21 @@ const handler = async (event) => {
   console.log(`[VerifySubscription] Processing request for session: ${sessionId}, user: ${userId}`);
 
   try {
-    // Initialize Stripe
-    const isLocalhost = isLocalhostRequest(event);
-    const stripe = isLocalhost ? 
-      new Stripe(process.env.STRIPE_TEST_SECRET_KEY) :
-      new Stripe(process.env.STRIPE_SECRET_KEY);
+    const requestedCoachOfferVerification = normalizeString(body.source) === ATHLETE_APP_CHECKOUT_SOURCE;
+    let authenticated = null;
+    if (requestedCoachOfferVerification) {
+      authenticated = await verifyFirebaseUser(event, {
+        authErrorMessage: 'Sign in with the account used for this purchase.',
+      });
+      if (authenticated.userId !== normalizeString(userId)) {
+        return { statusCode: 403, body: JSON.stringify({ message: 'The signed-in account does not match this purchase.' }) };
+      }
+    }
+
+    // Initialize Stripe from server configuration. Request origins never choose the account mode.
+    const configuredStripe = stripeForServerMode();
+    const stripe = configuredStripe.stripe;
+    const isLocalhost = configuredStripe.mode === 'test';
     
     console.log(`[VerifySubscription] Using ${isLocalhost ? 'TEST' : 'LIVE'} Stripe mode`);
 
@@ -128,6 +314,16 @@ const handler = async (event) => {
     });
     console.log('[VerifySubscription] Stripe session retrieved.');
 
+    const isCoachOfferSession = isAthleteAppMetadata({
+      ...(session.subscription?.metadata || {}),
+      ...(session.metadata || {}),
+    });
+    if (isCoachOfferSession && !authenticated) {
+      authenticated = await verifyFirebaseUser(event, {
+        authErrorMessage: 'Sign in with the account used for this purchase.',
+      });
+    }
+
     // 2. Validate the session
     console.log('[VerifySubscription] Validating session...');
     const paymentStatusAllowed =
@@ -136,6 +332,10 @@ const handler = async (event) => {
     if (session.status !== 'complete' || !paymentStatusAllowed) {
       console.error(`[VerifySubscription] Session not complete/paid. Status: ${session.status}, PaymentStatus: ${session.payment_status}`);
       return { statusCode: 400, body: JSON.stringify({ message: 'Payment session not complete or not paid.' }) };
+    }
+
+    if (isCoachOfferSession) {
+      return verifyAthleteAppOfferResult({ event, session, body, authenticated });
     }
 
     // 3. Verify the user ID
@@ -425,7 +625,7 @@ const handler = async (event) => {
   } catch (error) {
     console.error('[VerifySubscription] Error:', error);
     return {
-      statusCode: 500,
+      statusCode: Number(error?.statusCode) || 500,
       body: JSON.stringify({ message: error.message || 'An unexpected error occurred.' }),
     };
   }

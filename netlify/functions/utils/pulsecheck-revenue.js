@@ -58,6 +58,11 @@ const getDefaultCommercialConfig = () => ({
   coachReferralKickbackEnabled: false,
   coachReferralRevenueSharePct: 0,
   additionalServicesEnabled: false,
+  athleteAppSubscriptionEnabled: false,
+  athleteAppSubscriptionMonthlyPriceCents: 0,
+  athleteAppSubscriptionCurrency: 'usd',
+  athleteAppSubscriptionOfferVersion: 0,
+  athleteAppSubscriptionRevenueRecipientUserId: '',
   coachReferralRecipientUserId: '',
   coachReferralRecipientEmail: '',
   coachReferralSourceTeamId: '',
@@ -100,6 +105,22 @@ const normalizeCommercialConfig = (value) => {
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
     ),
     additionalServicesEnabled: referralKickbackEnabled,
+    athleteAppSubscriptionEnabled: normalizeBoolean(
+      candidate.athleteAppSubscriptionEnabled ?? defaults.athleteAppSubscriptionEnabled
+    ),
+    athleteAppSubscriptionMonthlyPriceCents: Math.max(
+      0,
+      Math.round(Number(candidate.athleteAppSubscriptionMonthlyPriceCents) || 0)
+    ),
+    athleteAppSubscriptionCurrency: 'usd',
+    athleteAppSubscriptionOfferVersion: Math.max(
+      0,
+      Math.round(Number(candidate.athleteAppSubscriptionOfferVersion) || 0)
+    ),
+    athleteAppSubscriptionRevenueRecipientUserId: normalizeString(
+      candidate.athleteAppSubscriptionRevenueRecipientUserId
+        ?? defaults.athleteAppSubscriptionRevenueRecipientUserId
+    ),
     coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId ?? defaults.coachReferralRecipientUserId),
     coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail ?? defaults.coachReferralRecipientEmail),
     coachReferralSourceTeamId: normalizeString(candidate.coachReferralSourceTeamId ?? defaults.coachReferralSourceTeamId),

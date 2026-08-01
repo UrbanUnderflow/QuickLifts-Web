@@ -17,6 +17,7 @@ type PilotInviteNextStepsProps = {
   organizationId: string;
   teamId: string;
   targetEmail: string;
+  inviteToken: string;
   config: PulseCheckPilotInviteConfig;
 };
 
@@ -106,12 +107,16 @@ const PilotInviteNextStepsPage = ({
   organizationId,
   teamId,
   targetEmail,
+  inviteToken,
   config,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const webAthleteOnboardingHref = useMemo(() => {
     if (!organizationId || !teamId) return '/PulseCheck';
     return `/PulseCheck/athlete-onboarding?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
   }, [organizationId, teamId]);
+  const nativeAppHref = `pulsecheck://open${
+    inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : ''
+  }`;
 
   const primaryInstructions = mode === 'new-account' ? config.newAthleteInstructions : config.existingAthleteInstructions;
   const steps = splitInstructionLines(primaryInstructions);
@@ -223,6 +228,13 @@ const PilotInviteNextStepsPage = ({
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
+                <a
+                  href={nativeAppHref}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  <Smartphone className="h-4 w-4" />
+                  Open PulseCheck App
+                </a>
                 {mode === 'new-account' ? (
                   <Link
                     href={webAthleteOnboardingHref}
@@ -259,6 +271,7 @@ export const getServerSideProps: GetServerSideProps<PilotInviteNextStepsProps> =
   const teamId = normalizeString(query.teamId);
   const pilotId = normalizeString(query.pilotId);
   const targetEmail = normalizeString(query.targetEmail);
+  const inviteToken = normalizeString(query.inviteToken);
   const admin = (await import('../../lib/firebase-admin')).default;
 
   const fallback = buildFallbackConfig(pilotId, organizationId, teamId, organizationName, teamName, pilotName);
@@ -278,7 +291,11 @@ export const getServerSideProps: GetServerSideProps<PilotInviteNextStepsProps> =
       // Fallback handled below.
     }
 
-    return getFirestoreDocFallback(collectionName, documentId, forceDevFirebase);
+    return getFirestoreDocFallback(
+      collectionName,
+      documentId,
+      forceDevFirebase
+    ).catch(() => null);
   };
 
   const [organizationConfigData, teamConfigData, pilotConfigData] = await Promise.all([
@@ -305,6 +322,7 @@ export const getServerSideProps: GetServerSideProps<PilotInviteNextStepsProps> =
       organizationId,
       teamId,
       targetEmail,
+      inviteToken,
       config,
     },
   };

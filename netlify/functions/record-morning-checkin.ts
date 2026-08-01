@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import * as admin from 'firebase-admin';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { resolveUnambiguousAthleteScope } from './utils/pulsecheckAthleteScope';
 import { openConversationFromTrigger } from '../../src/api/firebase/noraConversation/orchestrator';
 import type { ConversationBranch, TranslationDomain } from '../../src/api/firebase/adaptiveFramingLayer/types';
 
@@ -304,24 +305,35 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // Resolve teamId for orchestrator.  Tolerate missing membership doc
-  // (very-fresh athletes might not have one) by falling back to ''.
+  // Resolve the exact team and organization scope for coach visibility.
+  // Very-fresh athletes may not have a membership yet; their personal
+  // check-in still persists but remains outside every coach workspace.
   let teamId = '';
+  let organizationId = '';
+  let scopeWarning: string | null = null;
   let timezone = body.timezone || 'America/New_York';
   try {
-    const memSnap = await db
-      .collection('pulsecheck-team-memberships')
-      .where('userId', '==', auth.uid)
-      .where('role', '==', 'athlete')
-      .limit(1)
-      .get();
-    if (!memSnap.empty) {
-      const data = memSnap.docs[0].data();
-      teamId = (data.teamId as string | undefined) || '';
-      if (!body.timezone && data.timezone) timezone = String(data.timezone);
+    const resolution = await resolveUnambiguousAthleteScope(db, auth.uid);
+    scopeWarning = resolution.warning;
+    if (resolution.scope) {
+      teamId = resolution.scope.teamId;
+      organizationId = resolution.scope.organizationId;
+      if (!body.timezone && resolution.scope.timezone) {
+        timezone = resolution.scope.timezone;
+      }
+    } else {
+      console.warn('Morning check-in saved without coach team scope.', {
+        athleteUserId: auth.uid,
+        scopeWarning,
+        validScopeCount: resolution.validScopeCount,
+      });
     }
-  } catch {
-    /* tolerate */
+  } catch (error) {
+    scopeWarning = 'scope_resolution_failed';
+    console.warn('Morning check-in team scope resolution failed.', {
+      athleteUserId: auth.uid,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const dayKey = formatYmdInTz(new Date(), timezone);
@@ -341,7 +353,6 @@ export const handler: Handler = async (event) => {
     const checkInWrite: Record<string, unknown> = {
       id: checkinDocId,
       athleteUserId: auth.uid,
-      teamId,
       dayKey,
       level,
       levelLabel: body.levelLabel || level,
@@ -352,6 +363,13 @@ export const handler: Handler = async (event) => {
       createdAt: previous?.createdAt || now,
       updatedAt: now,
     };
+    if (teamId && organizationId) {
+      checkInWrite.teamId = teamId;
+      checkInWrite.organizationId = organizationId;
+    } else {
+      checkInWrite.teamId = admin.firestore.FieldValue.delete();
+      checkInWrite.organizationId = admin.firestore.FieldValue.delete();
+    }
     if (replaceExisting) {
       checkInWrite.revisionCount = admin.firestore.FieldValue.increment(1);
       checkInWrite.signalValidation = admin.firestore.FieldValue.delete();
@@ -418,6 +436,7 @@ export const handler: Handler = async (event) => {
       noraResponse: openerText,
       noraProbe: probeText,
       probeVariant,
+      scopeWarning,
     }),
   };
 };

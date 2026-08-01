@@ -2,12 +2,19 @@ const Stripe = require('stripe');
 const { admin, headers, getFirebaseAdminApp } = require('./config/firebase');
 const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
+  assertOrderMatchesConversation,
+  assertPaymentIntentMatchesOrder,
   loadService,
   loadConversationForAthlete,
   normalizeString,
   orderRef,
+  orderScopeFields,
   resolveCoachStripeAccount,
+  resolveServerStripeMode,
+  sealOrder,
   servicePricingBreakdown,
+  validCheckoutId,
+  verifyOrderIntegrity,
   verifyFirebaseUser,
 } = require('./lib/pulsecheck-coach-services');
 
@@ -22,20 +29,8 @@ const STRIPE_PUBLISHABLE_KEY_LIVE =
 const STRIPE_PUBLISHABLE_KEY_TEST =
   'pk_test_51Sd8YLIkArZc741WNSWroMed1dRRfjfA2bQBniDTFsiEiVKtbxGU5IhpR5u2HimyiR9OHqgvxgHFFrMjqxFl7YUC00WpY2G0dn';
 
-const stripeTestMode = (event) => {
-  const explicitMode =
-    event.headers?.['x-pulsecheck-stripe-mode']
-    || event.headers?.['X-PulseCheck-Stripe-Mode'];
-  const normalizedMode = normalizeString(explicitMode).toLowerCase();
-  if (normalizedMode === 'test') return true;
-  if (normalizedMode === 'live') return false;
-
-  const referer = event.headers?.referer || event.headers?.origin || '';
-  return referer.includes('localhost') || referer.includes('127.0.0.1');
-};
-
-const stripeConfiguration = async (event) => {
-  const testMode = stripeTestMode(event);
+const stripeConfiguration = async () => {
+  const testMode = resolveServerStripeMode() === 'test';
   const secretName = testMode ? 'STRIPE_TEST_SECRET_KEY' : 'STRIPE_SECRET_KEY';
   const secretKey = await getSecretWithEnvFallback(secretName).catch((error) => {
     const message = testMode
@@ -69,8 +64,6 @@ const stripeConfiguration = async (event) => {
   };
 };
 
-const validCheckoutId = (value) => /^[A-Za-z0-9_-]{16,80}$/.test(normalizeString(value));
-
 async function resolveAthleteStripeCustomer({
   stripe,
   database,
@@ -78,12 +71,38 @@ async function resolveAthleteStripeCustomer({
   email,
   name,
   stripeMode,
+  preferredCustomerId,
 }) {
   const userRef = database.collection('users').doc(athleteUserId);
   const userSnap = await userRef.get();
   const userData = userSnap.exists ? userSnap.data() || {} : {};
-  const existingCustomerId = normalizeString(userData.stripeCustomerIds?.[stripeMode]);
-  let customerId = existingCustomerId;
+  const candidateCustomerIds = [
+    normalizeString(preferredCustomerId),
+    normalizeString(userData.stripeCustomerIds?.[stripeMode]),
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+  let customerId = '';
+
+  for (const candidateCustomerId of candidateCustomerIds) {
+    try {
+      const customer = await stripe.customers.retrieve(candidateCustomerId);
+      const metadata = customer?.metadata || {};
+      const liveModeMatches = typeof customer?.livemode !== 'boolean'
+        || customer.livemode === (stripeMode === 'live');
+      if (
+        customer?.deleted !== true
+        && normalizeString(customer?.id) === candidateCustomerId
+        && normalizeString(metadata.platform) === 'pulsecheck'
+        && normalizeString(metadata.pulsecheck_user_id) === athleteUserId
+        && normalizeString(metadata.stripe_mode) === stripeMode
+        && liveModeMatches
+      ) {
+        customerId = candidateCustomerId;
+        break;
+      }
+    } catch (error) {
+      // Missing or cross-mode customer IDs are replaced with a canonical customer.
+    }
+  }
 
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -96,6 +115,9 @@ async function resolveAthleteStripeCustomer({
       },
     });
     customerId = customer.id;
+  }
+
+  if (normalizeString(userData.stripeCustomerIds?.[stripeMode]) !== customerId) {
     await userRef.set({
       stripeCustomerIds: {
         [stripeMode]: customerId,
@@ -158,11 +180,114 @@ const handler = async (event) => {
       error.statusCode = 400;
       throw error;
     }
-    const { stripe, publishableKey, stripeMode } = await stripeConfiguration(event);
+    const { stripe, publishableKey, stripeMode } = await stripeConfiguration();
     const connectedAccountId = await resolveCoachStripeAccount(
       conversation.coachUserId,
       database
     );
+    const pricing = servicePricingBreakdown(service.amountCents);
+    const ref = orderRef(checkoutId, database);
+    let existingOrder = null;
+    const reservation = {
+      orderId: checkoutId,
+      ...orderScopeFields(conversation),
+      athleteEmail: normalizeString(decoded.email),
+      athleteName:
+        normalizeString(conversation.data.athleteName)
+        || normalizeString(decoded.name)
+        || 'Athlete',
+      coachName: normalizeString(conversation.data.coachName) || 'Coach',
+      connectedAccountId: connectedAccountId || null,
+      settlementMode: 'manual_platform_payout',
+      serviceId: service.id,
+      serviceTitle: service.title,
+      serviceDescription: service.description || '',
+      serviceType: service.serviceType,
+      amountCents: pricing.totalAmountCents,
+      coachPriceCents: pricing.coachPriceCents,
+      processingFeeCents: pricing.processingFeeCents,
+      platformFeeCents: pricing.platformFeeCents,
+      estimatedStripeFeeCents: pricing.estimatedStripeFeeCents,
+      coachNetCents: pricing.coachNetCents,
+      currency: service.currency,
+      status: 'payment_creating',
+      stripeMode,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await database.runTransaction(async (transaction) => {
+      const existingSnap = await transaction.get(ref);
+      if (existingSnap.exists) {
+        existingOrder = existingSnap.data() || {};
+        return;
+      }
+      transaction.set(ref, reservation, { merge: false });
+    });
+
+    if (existingOrder) {
+      if (!verifyOrderIntegrity(existingOrder)) {
+        const error = new Error('This checkout id is already in use.');
+        error.statusCode = 409;
+        throw error;
+      }
+      assertOrderMatchesConversation(existingOrder, conversation);
+      if (
+        normalizeString(existingOrder.serviceId) !== service.id
+        || normalizeString(existingOrder.serviceType) !== service.serviceType
+        || normalizeString(existingOrder.stripeMode) !== stripeMode
+        || normalizeString(existingOrder.currency) !== service.currency
+        || Number(existingOrder.coachPriceCents) !== pricing.coachPriceCents
+        || Number(existingOrder.amountCents) !== pricing.totalAmountCents
+      ) {
+        const error = new Error('This checkout id is already in use.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const existingPaymentIntentId = normalizeString(
+        existingOrder.paymentIntentId
+      );
+      if (!existingPaymentIntentId) {
+        const error = new Error('This checkout id is already in use.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const paymentIntent = await stripe.paymentIntents.retrieve(
+        existingPaymentIntentId
+      );
+      assertPaymentIntentMatchesOrder(paymentIntent, existingOrder);
+      const stripeCustomer = await resolveAthleteStripeCustomer({
+        stripe,
+        database,
+        athleteUserId,
+        email: normalizeString(decoded.email),
+        name:
+          normalizeString(conversation.data.athleteName)
+          || normalizeString(decoded.name)
+          || 'Athlete',
+        stripeMode,
+        preferredCustomerId: existingOrder.stripeCustomerId,
+      });
+      return {
+        statusCode: 200,
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          success: true,
+          orderId: checkoutId,
+          paymentIntentId: paymentIntent.id,
+          clientSecret: paymentIntent.client_secret,
+          publishableKey,
+          customerId: stripeCustomer.customerId,
+          customerEphemeralKeySecret: stripeCustomer.ephemeralKeySecret,
+          paymentMethodTypes: paymentIntent.payment_method_types || [],
+          amountCents: Number(existingOrder.amountCents),
+          coachPriceCents: Number(existingOrder.coachPriceCents),
+          processingFeeCents: Number(existingOrder.processingFeeCents),
+          currency: normalizeString(existingOrder.currency),
+          stripeMode,
+        }),
+      };
+    }
+
     const stripeCustomer = await resolveAthleteStripeCustomer({
       stripe,
       database,
@@ -174,72 +299,6 @@ const handler = async (event) => {
         || 'Athlete',
       stripeMode,
     });
-
-    const ref = orderRef(checkoutId, database);
-    const existingSnap = await ref.get();
-    if (existingSnap.exists) {
-      const existing = existingSnap.data() || {};
-      if (
-        normalizeString(existing.athleteUserId) !== athleteUserId
-        || normalizeString(existing.conversationId) !== conversation.id
-        || normalizeString(existing.serviceId) !== service.id
-      ) {
-        const error = new Error('This checkout id is already in use.');
-        error.statusCode = 409;
-        throw error;
-      }
-      if (normalizeString(existing.paymentIntentId)) {
-        const paymentIntent = await stripe.paymentIntents.retrieve(existing.paymentIntentId);
-        return {
-          statusCode: 200,
-          headers: jsonHeaders,
-          body: JSON.stringify({
-            success: true,
-            orderId: checkoutId,
-            paymentIntentId: paymentIntent.id,
-            clientSecret: paymentIntent.client_secret,
-            publishableKey,
-            customerId: stripeCustomer.customerId,
-            customerEphemeralKeySecret: stripeCustomer.ephemeralKeySecret,
-            paymentMethodTypes: paymentIntent.payment_method_types || [],
-            amountCents: existing.totalAmountCents || existing.amountCents || service.amountCents,
-            coachPriceCents: existing.coachPriceCents || existing.amountCents || service.amountCents,
-            processingFeeCents: existing.processingFeeCents || 0,
-            currency: service.currency,
-          }),
-        };
-      }
-    }
-
-    const pricing = servicePricingBreakdown(service.amountCents);
-    await ref.set({
-      orderId: checkoutId,
-      conversationId: conversation.id,
-      athleteUserId,
-      athleteEmail: normalizeString(decoded.email),
-      athleteName:
-        normalizeString(conversation.data.athleteName)
-        || normalizeString(decoded.name)
-        || 'Athlete',
-      coachUserId: conversation.coachUserId,
-      coachName: normalizeString(conversation.data.coachName) || 'Coach',
-      connectedAccountId: connectedAccountId || null,
-      settlementMode: 'manual_platform_payout',
-      serviceId: service.id,
-      serviceTitle: service.title,
-      serviceType: service.serviceType,
-      amountCents: pricing.totalAmountCents,
-      coachPriceCents: pricing.coachPriceCents,
-      processingFeeCents: pricing.processingFeeCents,
-      platformFeeCents: pricing.platformFeeCents,
-      estimatedStripeFeeCents: pricing.estimatedStripeFeeCents,
-      coachNetCents: pricing.coachNetCents,
-      currency: service.currency,
-      status: 'payment_pending',
-      stripeMode,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: false });
 
     let paymentIntent;
     try {
@@ -260,6 +319,8 @@ const handler = async (event) => {
           tax_classification: 'service_income',
           order_id: checkoutId,
           conversation_id: conversation.id,
+          organization_id: conversation.scope.organizationId,
+          team_id: conversation.scope.teamId,
           service_id: service.id,
           service_title: service.title,
           athlete_user_id: athleteUserId,
@@ -281,12 +342,31 @@ const handler = async (event) => {
       throw error;
     }
 
-    await ref.set({
+    const finalOrder = sealOrder({
+      ...reservation,
+      status: 'payment_pending',
       paymentIntentId: paymentIntent.id,
       paymentStatus: paymentIntent.status,
       stripeCustomerId: stripeCustomer.customerId,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    });
+    await database.runTransaction(async (transaction) => {
+      const reservedSnap = await transaction.get(ref);
+      const reservedOrder = reservedSnap.exists ? reservedSnap.data() || {} : {};
+      if (
+        !reservedSnap.exists
+        || normalizeString(reservedOrder.status) !== 'payment_creating'
+        || normalizeString(reservedOrder.orderId) !== checkoutId
+        || normalizeString(reservedOrder.athleteUserId) !== athleteUserId
+        || normalizeString(reservedOrder.conversationId) !== conversation.id
+        || verifyOrderIntegrity(reservedOrder)
+      ) {
+        const error = new Error('This checkout id changed while payment was being created.');
+        error.statusCode = 409;
+        throw error;
+      }
+      transaction.set(ref, finalOrder, { merge: false });
+    });
 
     return {
       statusCode: 200,

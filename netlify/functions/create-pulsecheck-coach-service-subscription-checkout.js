@@ -2,15 +2,21 @@ const Stripe = require('stripe');
 const { admin, headers, getFirebaseAdminApp } = require('./config/firebase');
 const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
+  assertOrderMatchesConversation,
+  assertSubscriptionSessionMatchesOrder,
   loadConversationForAthlete,
   loadService,
   normalizeString,
   orderRef,
+  orderScopeFields,
   resolveCoachStripeAccount,
+  resolveServerStripeMode,
+  sealOrder,
   servicePricingBreakdown,
+  validCheckoutId,
+  verifyOrderIntegrity,
   verifyFirebaseUser,
 } = require('./lib/pulsecheck-coach-services');
-const { validCheckoutId } = require('./create-pulsecheck-coach-service-payment-intent');
 
 const jsonHeaders = {
   ...headers,
@@ -18,20 +24,8 @@ const jsonHeaders = {
   'Cache-Control': 'private, no-store',
 };
 
-const stripeTestMode = (event) => {
-  const explicitMode =
-    event.headers?.['x-pulsecheck-stripe-mode']
-    || event.headers?.['X-PulseCheck-Stripe-Mode'];
-  const normalizedMode = normalizeString(explicitMode).toLowerCase();
-  if (normalizedMode === 'test') return true;
-  if (normalizedMode === 'live') return false;
-
-  const referer = event.headers?.referer || event.headers?.origin || '';
-  return referer.includes('localhost') || referer.includes('127.0.0.1');
-};
-
-const stripeConfiguration = async (event) => {
-  const testMode = stripeTestMode(event);
+const stripeConfiguration = async () => {
+  const testMode = resolveServerStripeMode() === 'test';
   const secretName = testMode ? 'STRIPE_TEST_SECRET_KEY' : 'STRIPE_SECRET_KEY';
   const secretKey = await getSecretWithEnvFallback(secretName).catch((error) => {
     const message = testMode
@@ -57,13 +51,12 @@ const stripeConfiguration = async (event) => {
   };
 };
 
-const siteOrigin = (event) => {
-  const origin = event.headers?.origin || event.headers?.referer || '';
-  if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-    return 'http://localhost:3000';
-  }
-  return process.env.SITE_URL || 'https://fitwithpulse.ai';
-};
+const siteOrigin = () => (
+  resolveServerStripeMode() === 'test'
+    && normalizeString(process.env.PULSECHECK_SERVICE_CHECKOUT_ORIGIN)
+    ? normalizeString(process.env.PULSECHECK_SERVICE_CHECKOUT_ORIGIN)
+    : normalizeString(process.env.SITE_URL) || 'https://fitwithpulse.ai'
+);
 
 const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -74,6 +67,16 @@ const handler = async (event) => {
       statusCode: 405,
       headers: jsonHeaders,
       body: JSON.stringify({ message: 'Method Not Allowed' }),
+    };
+  }
+  if (process.env.PULSECHECK_RECURRING_COACH_SERVICES_ENABLED !== 'true') {
+    return {
+      statusCode: 409,
+      headers: jsonHeaders,
+      body: JSON.stringify({
+        message:
+          'Recurring coach services are unavailable during this release. Choose a one-time service.',
+      }),
     };
   }
 
@@ -103,92 +106,21 @@ const handler = async (event) => {
       throw error;
     }
 
-    const { stripe, stripeMode } = await stripeConfiguration(event);
+    const { stripe, stripeMode } = await stripeConfiguration();
     const connectedAccountId = await resolveCoachStripeAccount(conversation.coachUserId, database);
 
     const checkoutId = normalizeString(body.checkoutId);
     const ref = orderRef(checkoutId, database);
-    const existingSnap = await ref.get();
-    if (existingSnap.exists) {
-      const existing = existingSnap.data() || {};
-      if (normalizeString(existing.stripeSessionUrl)) {
-        return {
-          statusCode: 200,
-          headers: jsonHeaders,
-          body: JSON.stringify({
-            success: true,
-            orderId: checkoutId,
-            url: existing.stripeSessionUrl,
-            amountCents: existing.amountCents,
-            coachPriceCents: existing.coachPriceCents,
-            processingFeeCents: existing.processingFeeCents,
-            currency: existing.currency || service.currency,
-          }),
-        };
-      }
-    }
-
     const pricing = servicePricingBreakdown(service.amountCents);
-    const origin = siteOrigin(event);
-
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      client_reference_id: athleteUserId,
-      customer_email: normalizeString(decoded.email) || undefined,
-      success_url: `${origin}/PulseCheck/service-purchase/success?orderId=${encodeURIComponent(checkoutId)}`,
-      cancel_url: `${origin}/coach/dashboard?serviceCheckout=cancelled`,
-      line_items: [
-        {
-          price_data: {
-            currency: service.currency,
-            recurring: { interval: 'month' },
-            product_data: {
-              name: service.title,
-              description: service.description || undefined,
-            },
-            unit_amount: pricing.totalAmountCents,
-          },
-          quantity: 1,
-        },
-      ],
-      subscription_data: {
-        metadata: {
-          platform: 'pulsecheck',
-          stripe_mode: stripeMode,
-          settlement_mode: 'manual_platform_payout',
-          payment_type: 'pulsecheck_coach_service_subscription',
-          order_id: checkoutId,
-          conversation_id: conversation.id,
-          service_id: service.id,
-          coach_user_id: conversation.coachUserId,
-          athlete_user_id: athleteUserId,
-        },
-      },
-      metadata: {
-        platform: 'pulsecheck',
-        stripe_mode: stripeMode,
-        payment_type: 'pulsecheck_coach_service_subscription',
-        order_id: checkoutId,
-        conversation_id: conversation.id,
-        service_id: service.id,
-        service_title: service.title,
-        coach_user_id: conversation.coachUserId,
-        athlete_user_id: athleteUserId,
-      },
-    }, {
-      idempotencyKey: `pulsecheck-coach-service-subscription:${athleteUserId}:${checkoutId}`,
-    });
-
-    await ref.set({
+    const origin = siteOrigin();
+    const reservation = {
       orderId: checkoutId,
-      conversationId: conversation.id,
-      athleteUserId,
+      ...orderScopeFields(conversation),
       athleteEmail: normalizeString(decoded.email),
       athleteName:
         normalizeString(conversation.data.athleteName)
         || normalizeString(decoded.name)
         || 'Athlete',
-      coachUserId: conversation.coachUserId,
       coachName: normalizeString(conversation.data.coachName) || 'Coach',
       connectedAccountId: connectedAccountId || null,
       settlementMode: 'manual_platform_payout',
@@ -203,13 +135,157 @@ const handler = async (event) => {
       estimatedStripeFeeCents: pricing.estimatedStripeFeeCents,
       coachNetCents: pricing.coachNetCents,
       currency: service.currency,
-      stripeSessionId: session.id,
-      stripeSessionUrl: session.url,
       stripeMode,
-      status: 'subscription_checkout_created',
+      status: 'subscription_checkout_creating',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: false });
+    };
+    let existingOrder = null;
+    await database.runTransaction(async (transaction) => {
+      const existingSnap = await transaction.get(ref);
+      if (existingSnap.exists) {
+        existingOrder = existingSnap.data() || {};
+        return;
+      }
+      transaction.set(ref, reservation, { merge: false });
+    });
+
+    if (existingOrder) {
+      if (!verifyOrderIntegrity(existingOrder)) {
+        const error = new Error('This checkout id is already in use.');
+        error.statusCode = 409;
+        throw error;
+      }
+      assertOrderMatchesConversation(existingOrder, conversation);
+      if (
+        normalizeString(existingOrder.serviceId) !== service.id
+        || normalizeString(existingOrder.serviceType) !== 'subscription'
+        || normalizeString(existingOrder.stripeMode) !== stripeMode
+        || normalizeString(existingOrder.currency) !== service.currency
+        || Number(existingOrder.coachPriceCents) !== pricing.coachPriceCents
+        || Number(existingOrder.amountCents) !== pricing.totalAmountCents
+      ) {
+        const error = new Error('This checkout id is already in use.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const existingSessionId = normalizeString(existingOrder.stripeSessionId);
+      if (!existingSessionId) {
+        const error = new Error('This checkout id is already in use.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const existingSession = await stripe.checkout.sessions.retrieve(
+        existingSessionId
+      );
+      assertSubscriptionSessionMatchesOrder(existingSession, existingOrder);
+      if (!normalizeString(existingSession.url)) {
+        const error = new Error('This subscription checkout has expired.');
+        error.statusCode = 409;
+        throw error;
+      }
+      return {
+        statusCode: 200,
+        headers: jsonHeaders,
+        body: JSON.stringify({
+          success: true,
+          orderId: checkoutId,
+          url: existingSession.url,
+          amountCents: Number(existingOrder.amountCents),
+          coachPriceCents: Number(existingOrder.coachPriceCents),
+          processingFeeCents: Number(existingOrder.processingFeeCents),
+          currency: normalizeString(existingOrder.currency),
+        }),
+      };
+    }
+
+    const paymentMetadata = {
+      platform: 'pulsecheck',
+      stripe_mode: stripeMode,
+      settlement_mode: 'manual_platform_payout',
+      payment_type: 'pulsecheck_coach_service_subscription',
+      order_id: checkoutId,
+      conversation_id: conversation.id,
+      organization_id: conversation.scope.organizationId,
+      team_id: conversation.scope.teamId,
+      service_id: service.id,
+      service_title: service.title,
+      coach_user_id: conversation.coachUserId,
+      athlete_user_id: athleteUserId,
+      amount_cents: String(pricing.totalAmountCents),
+      coach_price_cents: String(pricing.coachPriceCents),
+      processing_fee_cents: String(pricing.processingFeeCents),
+      platform_fee_cents: String(pricing.platformFeeCents),
+    };
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        client_reference_id: athleteUserId,
+        customer_email: normalizeString(decoded.email) || undefined,
+        success_url: `${origin}/PulseCheck/service-purchase/success?orderId=${encodeURIComponent(checkoutId)}`,
+        cancel_url: `${origin}/coach/dashboard?serviceCheckout=cancelled`,
+        line_items: [
+          {
+            price_data: {
+              currency: service.currency,
+              recurring: { interval: 'month' },
+              product_data: {
+                name: service.title,
+                description: service.description || undefined,
+              },
+              unit_amount: pricing.totalAmountCents,
+            },
+            quantity: 1,
+          },
+        ],
+        subscription_data: {
+          metadata: paymentMetadata,
+        },
+        metadata: paymentMetadata,
+      }, {
+        idempotencyKey: `pulsecheck-coach-service-subscription:${athleteUserId}:${checkoutId}`,
+      });
+    } catch (error) {
+      await ref.set({
+        status: 'subscription_checkout_failed',
+        failureMessage: normalizeString(error.message),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      throw error;
+    }
+
+    const stripeCustomerId =
+      typeof session.customer === 'string'
+        ? normalizeString(session.customer)
+        : normalizeString(session.customer?.id);
+    const finalOrder = sealOrder({
+      ...reservation,
+      stripeSessionId: session.id,
+      stripeSessionUrl: session.url,
+      stripeCustomerId: stripeCustomerId || null,
+      status: 'subscription_checkout_created',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await database.runTransaction(async (transaction) => {
+      const reservedSnap = await transaction.get(ref);
+      const reservedOrder = reservedSnap.exists ? reservedSnap.data() || {} : {};
+      if (
+        !reservedSnap.exists
+        || normalizeString(reservedOrder.status) !== 'subscription_checkout_creating'
+        || normalizeString(reservedOrder.orderId) !== checkoutId
+        || normalizeString(reservedOrder.athleteUserId) !== athleteUserId
+        || normalizeString(reservedOrder.conversationId) !== conversation.id
+        || verifyOrderIntegrity(reservedOrder)
+      ) {
+        const error = new Error(
+          'This checkout id changed while subscription checkout was being created.'
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+      transaction.set(ref, finalOrder, { merge: false });
+    });
 
     return {
       statusCode: 200,

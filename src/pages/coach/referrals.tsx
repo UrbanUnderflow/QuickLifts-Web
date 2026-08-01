@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import type { GetServerSideProps } from 'next';
 import { motion } from 'framer-motion';
 import { FaCopy, FaExternalLinkAlt, FaLink } from 'react-icons/fa';
 import CoachLayout from '../../components/CoachLayout';
@@ -121,5 +122,12 @@ const ReferralsPage: React.FC = () => {
     </CoachLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=referrals',
+    permanent: false,
+  },
+});
 
 export default ReferralsPage;

@@ -1,20 +1,28 @@
 const Stripe = require('stripe');
 const { db, headers } = require('./config/firebase');
-const { verifyFirebaseUser } = require('./lib/pulsecheck-coach-services');
+const {
+  resolveServerStripeMode,
+  verifyFirebaseUser,
+  verifyOrderIntegrity,
+} = require('./lib/pulsecheck-coach-services');
 const { normalizeCommercialConfig } = require('./utils/pulsecheck-revenue');
 const {
   PAYOUT_REQUESTS_COLLECTION,
   PAYOUT_STATES_COLLECTION,
   buildPayoutSummary,
   calculateRevenueBreakdown,
+  payoutStateId,
 } = require('./utils/pulsecheck-coach-payouts');
 
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const USERS_COLLECTION = 'users';
 const SUBSCRIPTIONS_COLLECTION = 'subscriptions';
 const COACH_SERVICE_ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
 const ASSESSMENT_PURCHASES_COLLECTION = 'pulsecheck-assessment-purchases';
+const ATHLETE_APP_OFFERS_COLLECTION = 'pulsecheck-athlete-app-offers';
+const ATHLETE_APP_REVENUE_EVENTS_COLLECTION = 'pulsecheck-athlete-app-revenue-events';
 const configuredAppleCommissionPct = Number(process.env.PULSECHECK_APPLE_COMMISSION_PCT);
 const APPLE_COMMISSION_PCT = Number.isFinite(configuredAppleCommissionPct)
   ? Math.min(100, Math.max(0, configuredAppleCommissionPct))
@@ -29,6 +37,28 @@ const jsonHeaders = {
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
 const normalizeStatus = (value) => normalizeString(value).toLowerCase();
 const isActiveStatus = (value) => ['active', 'trialing'].includes(normalizeStatus(value));
+const isSafeDocumentId = (value) => (
+  Boolean(value)
+  && value.length <= 256
+  && value !== '.'
+  && value !== '..'
+  && !value.includes('/')
+);
+const isActiveMembership = (membership) => {
+  const status = normalizeStatus(membership?.status);
+  return (!status || status === 'active') && membership?.revokedAt == null;
+};
+const isActiveContainer = (container) => (
+  normalizeStatus(container?.status) === 'active'
+  && container?.archivedAt == null
+  && container?.deletedAt == null
+);
+
+const permissionError = (message, statusCode = 403) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
 
 const timestampMillis = (value) => {
   if (!value) return 0;
@@ -83,19 +113,33 @@ const planSnapshot = (rawPlanType) => {
 
 const calculateShareCents = (amountCents, sharePct) =>
   Math.round((Number(amountCents) || 0) * ((Number(sharePct) || 0) / 100));
+const calculatePayoutEligibleCents = ({
+  referralShareCents,
+  serviceNetCents,
+  athleteAppSubscriptionNetCents = 0,
+}) => (
+  Math.max(0, Number(referralShareCents) || 0)
+  + Math.max(0, Number(serviceNetCents) || 0)
+  + Math.max(0, Number(athleteAppSubscriptionNetCents) || 0)
+);
 
 const verifyCoach = (event) =>
   verifyFirebaseUser(event, {
     authErrorMessage: 'Sign in is required to view coach earnings.',
   });
 
-const teamAllowsCoachEarnings = ({ team, membership, userId }) => {
+const teamAllowsCoachEarnings = ({ team, membership, userId, athleteAppOffer = null }) => {
   const config = normalizeCommercialConfig(team?.commercialConfig);
   const hasAthleteReferralEarnings = config.referralKickbackEnabled && config.referralRevenueSharePct > 0;
   const hasParentAssessmentEarnings =
     config.parentAssessmentReferralKickbackEnabled && config.parentAssessmentReferralRevenueSharePct > 0;
+  const hasAthleteAppSubscriptionEarnings = Boolean(
+    athleteAppOffer
+    && normalizeString(athleteAppOffer.teamId) === normalizeString(team?.id)
+    && normalizeString(athleteAppOffer.revenueRecipientUserId) === userId
+  );
 
-  if (!hasAthleteReferralEarnings && !hasParentAssessmentEarnings) {
+  if (!hasAthleteReferralEarnings && !hasParentAssessmentEarnings && !hasAthleteAppSubscriptionEarnings) {
     return null;
   }
 
@@ -107,7 +151,8 @@ const teamAllowsCoachEarnings = ({ team, membership, userId }) => {
     && config.revenueRecipientRole === 'team-admin'
     && membership?.role === 'team-admin';
 
-  if (!isRecipient && !isLegacyRecipient && !isDefaultTeamAdmin) {
+  const isAthleteAppRecipient = hasAthleteAppSubscriptionEarnings;
+  if (!isRecipient && !isLegacyRecipient && !isDefaultTeamAdmin && !isAthleteAppRecipient) {
     return null;
   }
 
@@ -115,12 +160,13 @@ const teamAllowsCoachEarnings = ({ team, membership, userId }) => {
 };
 
 const stripeClients = () => {
-  const keys = [
-    process.env.STRIPE_SECRET_KEY,
-    process.env.STRIPE_TEST_SECRET_KEY,
-  ].map(normalizeString).filter((key, index, all) => key && all.indexOf(key) === index);
-
-  return keys.map((key) => new Stripe(key));
+  const stripeMode = resolveServerStripeMode();
+  const key = normalizeString(
+    stripeMode === 'test'
+      ? process.env.STRIPE_TEST_SECRET_KEY
+      : process.env.STRIPE_SECRET_KEY
+  );
+  return key ? [new Stripe(key)] : [];
 };
 
 const runAgainstStripeAccounts = async (operation) => {
@@ -167,6 +213,85 @@ const loadAllPaidInvoices = async (subscriptionId) => {
 
     return invoices;
   });
+};
+
+const loadAssessmentCheckoutPayment = async (sessionId) =>
+  runAgainstStripeAccounts(async (client) => {
+    const session = await client.checkout.sessions.retrieve(sessionId, {
+      expand: ['payment_intent.latest_charge'],
+    });
+    const paymentIntent = typeof session.payment_intent === 'string'
+      ? await client.paymentIntents.retrieve(session.payment_intent, {
+          expand: ['latest_charge'],
+        })
+      : session.payment_intent;
+    return { session, paymentIntent };
+  });
+
+const assessmentStripePaymentTruth = ({
+  entryId,
+  purchase,
+  session,
+  paymentIntent,
+  teamId,
+  organizationId,
+  expectedStripeMode,
+}) => {
+  const metadata = session?.metadata || {};
+  const paymentIntentId = normalizeString(paymentIntent?.id);
+  const storedPaymentIntentId = normalizeString(purchase?.stripePaymentIntentId);
+  const latestCharge = paymentIntent?.latest_charge
+    || paymentIntent?.charges?.data?.[0]
+    || null;
+  const amountCents = Number(session?.amount_total);
+  const amountReceivedCents = Number(paymentIntent?.amount_received);
+  const chargeAmountCents = Number(latestCharge?.amount);
+  const chargeCapturedCents = Number(latestCharge?.amount_captured);
+  const storedSessionId = normalizeString(purchase?.stripeSessionId);
+  const sessionId = normalizeString(session?.id);
+  const expectedLiveMode = expectedStripeMode === 'live';
+
+  if (
+    !sessionId
+    || sessionId !== entryId
+    || storedSessionId !== entryId
+    || normalizeStatus(session?.mode) !== 'payment'
+    || normalizeStatus(session?.status) !== 'complete'
+    || normalizeStatus(session?.payment_status) !== 'paid'
+    || normalizeStatus(metadata.payment_type) !== 'pulsecheck_assessment'
+    || normalizeStatus(metadata.assessmentId) !== 'parent'
+    || normalizeStatus(metadata.referralType) !== 'parent-assessment'
+    || normalizeString(metadata.teamId) !== teamId
+    || normalizeString(metadata.organizationId) !== organizationId
+    || typeof session?.livemode !== 'boolean'
+    || session.livemode !== expectedLiveMode
+    || typeof paymentIntent?.livemode !== 'boolean'
+    || paymentIntent.livemode !== expectedLiveMode
+    || !paymentIntentId
+    || (storedPaymentIntentId && storedPaymentIntentId !== paymentIntentId)
+    || normalizeStatus(paymentIntent?.status) !== 'succeeded'
+    || !Number.isSafeInteger(amountCents)
+    || amountCents <= 0
+    || amountReceivedCents !== amountCents
+    || !latestCharge
+    || latestCharge.paid !== true
+    || latestCharge.refunded === true
+    || latestCharge.disputed === true
+    || Number(latestCharge.amount_refunded || 0) !== 0
+    || (Number.isFinite(chargeAmountCents) && chargeAmountCents !== amountCents)
+    || (Number.isFinite(chargeCapturedCents) && chargeCapturedCents !== amountCents)
+  ) {
+    return null;
+  }
+
+  return {
+    amountCents,
+    currency: normalizeStatus(session.currency || paymentIntent.currency) || 'usd',
+    paymentIntentId,
+    paidAt: Number(session.created) > 0
+      ? new Date(Number(session.created) * 1000).toISOString()
+      : null,
+  };
 };
 
 const revenueCatConfigs = () => {
@@ -226,6 +351,15 @@ const loadRevenueCatPages = async ({ apiKey, firstUrl }) => {
   return items;
 };
 
+const revenueCatProfileMatchesAthlete = (profile, athleteUserId) => {
+  const subscriber = profile?.subscriber || {};
+  const canonicalIds = [
+    subscriber.original_app_user_id,
+    ...(Array.isArray(subscriber.aliases) ? subscriber.aliases : []),
+  ].map(normalizeString).filter(Boolean);
+  return canonicalIds.includes(normalizeString(athleteUserId));
+};
+
 const loadRevenueCatPaymentHistory = async ({ customerIds, sharePct }) => {
   const configs = revenueCatConfigs();
   if (configs.length === 0) {
@@ -238,6 +372,13 @@ const loadRevenueCatPaymentHistory = async ({ customerIds, sharePct }) => {
       try {
         const encodedProjectId = encodeURIComponent(config.projectId);
         const encodedCustomerId = encodeURIComponent(customerId);
+        const customerProfile = await fetchRevenueCatJson({
+          apiKey: config.apiKey,
+          url: `https://api.revenuecat.com/v1/subscribers/${encodedCustomerId}`,
+        });
+        if (!revenueCatProfileMatchesAthlete(customerProfile, customerId)) {
+          continue;
+        }
         const subscriptions = await loadRevenueCatPages({
           apiKey: config.apiKey,
           firstUrl:
@@ -357,9 +498,48 @@ const loadRevenueCatPaymentHistory = async ({ customerIds, sharePct }) => {
   throw lastError || new Error('RevenueCat transaction history could not be loaded.');
 };
 
-const invoiceRows = ({ invoices, sharePct }) =>
+const stripeSubscriptionMatchesAthlete = ({
+  subscription,
+  subscriptionId,
+  athleteUserId,
+  expectedStripeMode,
+}) => {
+  const metadataUserId = normalizeString(
+    subscription?.metadata?.userId
+    || subscription?.metadata?.pulsecheck_user_id
+  );
+  return normalizeString(subscription?.id) === subscriptionId
+    && typeof subscription?.livemode === 'boolean'
+    && subscription.livemode === (expectedStripeMode === 'live')
+    && (!metadataUserId || metadataUserId === athleteUserId);
+};
+
+const revenueCatCustomerIdsForAthlete = (athleteUserId) => (
+  normalizeString(athleteUserId) ? [normalizeString(athleteUserId)] : []
+);
+
+const invoiceRows = ({
+  invoices,
+  sharePct,
+  stripeSubscriptionId = '',
+  expectedStripeMode = resolveServerStripeMode(),
+}) =>
   invoices
-    .filter((invoice) => normalizeStatus(invoice.status) === 'paid' && Number(invoice.amount_paid) > 0)
+    .filter((invoice) => {
+      const invoiceSubscriptionId = normalizeString(
+        typeof invoice.subscription === 'string'
+          ? invoice.subscription
+          : invoice.subscription?.id
+      );
+      return normalizeStatus(invoice.status) === 'paid'
+        && Number(invoice.amount_paid) > 0
+        && typeof invoice.livemode === 'boolean'
+        && invoice.livemode === (expectedStripeMode === 'live')
+        && (
+          !stripeSubscriptionId
+          || invoiceSubscriptionId === stripeSubscriptionId
+        );
+    })
     .map((invoice) => {
       const line = invoice.lines?.data?.find((entry) => Number(entry.amount) > 0) || invoice.lines?.data?.[0] || {};
       const amountPaidCents = Number(invoice.amount_paid) || 0;
@@ -394,6 +574,7 @@ const loadMemberEarnings = async ({
   athleteMembership,
   sharePct,
   teamId,
+  stripeMode = resolveServerStripeMode(),
   database = db,
 }) => {
   const athleteUserId = normalizeString(athleteMembership.userId);
@@ -409,22 +590,20 @@ const loadMemberEarnings = async ({
       )
     : [];
   const latestPlan = plans[0] || {};
+  const isCoachPricedAthleteAppPlan =
+    normalizeStatus(latestPlan.source) === 'pulsecheck-coach-athlete-offer';
   const rawPlanType =
     latestPlan.type
     || subscriptionRecord.planType
     || subscriptionRecord.subscriptionType
-    || user.subscriptionType
     || '';
   const fallbackPlan = planSnapshot(rawPlanType);
   const stripeSubscriptionId = normalizeString(
-    subscriptionRecord.stripeSubscriptionId || user.stripeSubscriptionId
+    subscriptionRecord.stripeSubscriptionId
   );
-  const platform = normalizeStatus(subscriptionRecord.platform || user.subscriptionPlatform);
+  const platform = normalizeStatus(subscriptionRecord.platform);
   const hasRevenueCatIdentity = Boolean(
-    normalizeString(subscriptionRecord.rcAppUserId)
-    || (Array.isArray(subscriptionRecord.rcAliases) && subscriptionRecord.rcAliases.length > 0)
-    || normalizeString(user.revenuecat?.appUserId)
-    || (Array.isArray(user.revenueCatAppUserIds) && user.revenueCatAppUserIds.length > 0)
+    normalizeString(subscriptionRecord.rcAppUserId) === athleteUserId
   );
   const isAppleSubscription =
     platform === 'ios'
@@ -438,22 +617,9 @@ const loadMemberEarnings = async ({
   let invoiceHistoryMessage = '';
 
   if (isAppleSubscription) {
-    const revenueCatCustomerIds = [
-      subscriptionRecord.rcAppUserId,
-      ...(Array.isArray(subscriptionRecord.rcAliases) ? subscriptionRecord.rcAliases : []),
-      ...(Array.isArray(subscriptionRecord.revenueCatAppUserIds) ? subscriptionRecord.revenueCatAppUserIds : []),
-      ...(Array.isArray(subscriptionRecord.accountAliases) ? subscriptionRecord.accountAliases : []),
-      user.revenuecat?.appUserId,
-      ...(Array.isArray(user.revenuecat?.aliases) ? user.revenuecat.aliases : []),
-      ...(Array.isArray(user.revenueCatAppUserIds) ? user.revenueCatAppUserIds : []),
-      ...(Array.isArray(user.accountAliases) ? user.accountAliases : []),
-      athleteUserId,
-      user.username,
-      user.email,
-    ];
     try {
       revenueCatHistory = await loadRevenueCatPaymentHistory({
-        customerIds: [...new Set(revenueCatCustomerIds.map(normalizeString).filter(Boolean))],
+        customerIds: revenueCatCustomerIdsForAthlete(athleteUserId),
         sharePct,
       });
     } catch (error) {
@@ -466,9 +632,20 @@ const loadMemberEarnings = async ({
       loadAllPaidInvoices(stripeSubscriptionId),
     ]);
     if (subscriptionResult.status === 'fulfilled') {
-      stripeSubscription = subscriptionResult.value;
+      const candidateSubscription = subscriptionResult.value;
+      if (stripeSubscriptionMatchesAthlete({
+        subscription: candidateSubscription,
+        subscriptionId: stripeSubscriptionId,
+        athleteUserId,
+        expectedStripeMode: stripeMode,
+      })) {
+        stripeSubscription = candidateSubscription;
+      } else {
+        invoiceHistoryAvailable = false;
+        invoiceHistoryMessage = 'Stripe payment history is not linked to this member.';
+      }
     }
-    if (invoiceResult.status === 'fulfilled') {
+    if (invoiceResult.status === 'fulfilled' && stripeSubscription) {
       paidInvoices = invoiceResult.value;
     } else {
       invoiceHistoryAvailable = false;
@@ -513,7 +690,14 @@ const loadMemberEarnings = async ({
       : expirationMs
         ? expirationMs > Date.now()
         : fallbackActiveType;
-  const payments = revenueCatHistory?.payments || invoiceRows({ invoices: paidInvoices, sharePct });
+  const payments = isCoachPricedAthleteAppPlan
+    ? []
+    : revenueCatHistory?.payments || invoiceRows({
+        invoices: paidInvoices,
+        sharePct,
+        stripeSubscriptionId,
+        expectedStripeMode: stripeMode,
+      });
   const subscriptionSource = isAppleSubscription
     ? 'apple_app_store'
     : stripeSubscriptionId
@@ -527,7 +711,7 @@ const loadMemberEarnings = async ({
   const monthlyRevenue = calculateRevenueBreakdown({
     amountCents: resolvedPlan.monthlyRevenueCents,
     platformFeePct: isAppleSubscription ? APPLE_COMMISSION_PCT : 0,
-    sharePct,
+    sharePct: isCoachPricedAthleteAppPlan ? 0 : sharePct,
   });
 
   return {
@@ -553,7 +737,7 @@ const loadMemberEarnings = async ({
       ? monthlyRevenue.coachShareCents
       : 0,
     currentPeriodEnd: expirationMs ? new Date(expirationMs).toISOString() : null,
-    sharePct,
+    sharePct: isCoachPricedAthleteAppPlan ? 0 : sharePct,
     invoiceHistoryAvailable,
     invoiceHistoryMessage,
     payments,
@@ -568,7 +752,14 @@ const isoTimestamp = (value) => {
   return millis ? new Date(millis).toISOString() : null;
 };
 
-const loadCoachServiceEarnings = async (coachUserId, database = db) => {
+const loadCoachServiceEarnings = async ({
+  coachUserId,
+  teamId,
+  organizationId,
+  commercialConfig,
+  stripeMode = resolveServerStripeMode(),
+  database = db,
+}) => {
   const [snapshot, assessmentSnapshot] = await Promise.all([
     database
       .collection(COACH_SERVICE_ORDERS_COLLECTION)
@@ -585,7 +776,15 @@ const loadCoachServiceEarnings = async (coachUserId, database = db) => {
       const order = entry.data() || {};
       const status = normalizeStatus(order.status);
       const isEarned = status === 'paid' || status === 'booked';
-      if (!isEarned) return null;
+      if (
+        !isEarned
+        || order.paymentAuthorized !== true
+        || !verifyOrderIntegrity(order)
+        || normalizeString(order.orderId) !== entry.id
+        || normalizeString(order.coachUserId) !== coachUserId
+        || normalizeString(order.organizationId) !== organizationId
+        || normalizeString(order.teamId) !== teamId
+      ) return null;
       const amountCents = Math.max(0, Number(order.amountCents) || 0);
       const platformFeeCents = Math.max(0, Number(order.platformFeeCents) || 0);
       const coachNetCents = Math.max(
@@ -603,6 +802,8 @@ const loadCoachServiceEarnings = async (coachUserId, database = db) => {
         athleteName: normalizeString(order.athleteName) || 'Athlete',
         serviceId: normalizeString(order.serviceId),
         serviceTitle: normalizeString(order.serviceTitle) || 'Coach service',
+        teamId,
+        organizationId,
         status,
         amountCents,
         platformFeeCents,
@@ -615,33 +816,71 @@ const loadCoachServiceEarnings = async (coachUserId, database = db) => {
     })
     .filter(Boolean);
 
-  const assessmentTransactions = assessmentSnapshot.docs
-    .map((entry) => {
+  const assessmentTransactions = (await Promise.all(
+    assessmentSnapshot.docs.map(async (entry) => {
       const purchase = entry.data() || {};
       const status = normalizeStatus(purchase.status);
-      if (status !== 'paid' && status !== 'completed') return null;
-      const amountCents = Math.max(0, Number(purchase.amountCents) || 0);
-      const coachNetCents = Math.max(0, Number(purchase.coachShareCents) || 0);
+      if (
+        (status !== 'paid' && status !== 'completed')
+        || normalizeString(purchase.revenueRecipientUserId) !== coachUserId
+        || normalizeString(purchase.teamId) !== teamId
+        || normalizeString(purchase.organizationId) !== organizationId
+        || commercialConfig?.parentAssessmentReferralKickbackEnabled !== true
+      ) return null;
+      let stripeTruth;
+      try {
+        const stripePayment = await loadAssessmentCheckoutPayment(entry.id);
+        stripeTruth = assessmentStripePaymentTruth({
+          entryId: entry.id,
+          purchase,
+          ...stripePayment,
+          teamId,
+          organizationId,
+          expectedStripeMode: stripeMode,
+        });
+      } catch (error) {
+        console.warn(
+          '[PulseCheckCoachEarnings] Excluding an assessment purchase that Stripe could not verify:',
+          entry.id
+        );
+        return null;
+      }
+      if (!stripeTruth) return null;
+      const amountCents = stripeTruth.amountCents;
+      const coachNetCents = Math.round(
+        amountCents
+        * (
+          Math.max(
+            0,
+            Math.min(
+              100,
+              Number(commercialConfig.parentAssessmentReferralRevenueSharePct) || 0
+            )
+          ) / 100
+        )
+      );
       return {
         id: entry.id,
         orderId: entry.id,
-        paymentIntentId: normalizeString(purchase.stripePaymentIntentId) || null,
+        paymentIntentId: stripeTruth.paymentIntentId,
         conversationId: null,
         athleteUserId: null,
         athleteName: 'Parent assessment buyer',
         serviceId: normalizeString(purchase.assessmentId) || 'parent',
         serviceTitle: normalizeString(purchase.assessmentProductName) || 'Parent Readiness Assessment',
+        teamId,
+        organizationId,
         status,
         amountCents,
         platformFeeCents: Math.max(0, amountCents - coachNetCents),
         coachNetCents,
-        currency: normalizeStatus(purchase.currency) || 'usd',
-        paidAt: isoTimestamp(purchase.paidAt),
+        currency: stripeTruth.currency,
+        paidAt: stripeTruth.paidAt,
         scheduledAt: null,
         bookedAt: null,
       };
     })
-    .filter(Boolean);
+  )).filter(Boolean);
 
   const transactions = [...serviceTransactions, ...assessmentTransactions]
     .sort((left, right) =>
@@ -681,16 +920,122 @@ const loadCoachServiceEarnings = async (coachUserId, database = db) => {
   };
 };
 
+const loadAthleteAppSubscriptionEarnings = async ({
+  coachUserId,
+  teamId,
+  organizationId,
+  database = db,
+}) => {
+  const snapshot = await database
+    .collection(ATHLETE_APP_REVENUE_EVENTS_COLLECTION)
+    .where('revenueRecipientUserId', '==', coachUserId)
+    .get();
+  const transactions = snapshot.docs
+    .map((entry) => {
+      const event = entry.data() || {};
+      if (
+        normalizeString(event.revenueRecipientUserId) !== coachUserId
+        || normalizeString(event.teamId) !== teamId
+        || normalizeString(event.organizationId) !== organizationId
+        || normalizeStatus(event.provider) !== 'stripe'
+        || normalizeStatus(event.source) !== 'pulsecheck-coach-athlete-offer'
+        || normalizeStatus(event.type) !== 'athlete_app_subscription_invoice'
+      ) return null;
+      const status = normalizeStatus(event.status);
+      if (!['paid', 'partially_refunded', 'refunded', 'disputed', 'dispute_lost'].includes(status)) return null;
+      const paidAt = isoTimestamp(event.paidAtEpochSeconds || event.paidAt);
+      return {
+        id: entry.id,
+        invoiceId: normalizeString(event.stripeInvoiceId) || entry.id,
+        subscriptionId: normalizeString(event.stripeSubscriptionId) || null,
+        athleteUserId: normalizeString(event.userId) || null,
+        teamId,
+        organizationId,
+        offerId: normalizeString(event.offerId) || teamId,
+        status,
+        paidAt,
+        amountPaidCents: Math.max(0, Number(event.amountPaidCents) || 0),
+        grossRevenueCents: Math.max(
+          0,
+          Number(event.remainingGrossRevenueCents ?? event.grossRevenueCents) || 0
+        ),
+        refundedCents: Math.max(0, Number(event.refundedCents) || 0),
+        platformShareCents: Math.max(
+          0,
+          Number(event.platformShareCentsAfterRefund ?? event.platformShareCents) || 0
+        ),
+        stripeProcessingFeeCents: Math.max(0, Number(event.stripeProcessingFeeCents) || 0),
+        coachNetCents: Math.max(0, Number(event.coachNetCents) || 0),
+        platformNetCents: Math.max(0, Number(event.platformNetCents) || 0),
+        currency: normalizeStatus(event.currency) || 'usd',
+        billingReason: normalizeString(event.billingReason) || null,
+        source: 'pulsecheck-coach-athlete-offer',
+        sourceLabel: 'Coach-priced PulseCheck subscription',
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || '')));
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonthTransactions = transactions.filter((transaction) =>
+    String(transaction.paidAt || '').startsWith(currentMonthKey)
+  );
+  const subscriberIds = new Set(
+    transactions.map((transaction) => transaction.athleteUserId).filter(Boolean)
+  );
+  return {
+    transactionCount: transactions.length,
+    subscriberCount: subscriberIds.size,
+    currentMonthGrossCents: currentMonthTransactions.reduce(
+      (sum, transaction) => sum + transaction.grossRevenueCents,
+      0
+    ),
+    currentMonthNetCents: currentMonthTransactions.reduce(
+      (sum, transaction) => sum + transaction.coachNetCents,
+      0
+    ),
+    lifetimeGrossCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.grossRevenueCents,
+      0
+    ),
+    lifetimePlatformShareCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.platformShareCents,
+      0
+    ),
+    lifetimeStripeProcessingFeeCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.stripeProcessingFeeCents,
+      0
+    ),
+    lifetimeNetCents: transactions.reduce(
+      (sum, transaction) => sum + transaction.coachNetCents,
+      0
+    ),
+    estimatedMonthlyNetCents: transactions[0]?.coachNetCents || 0,
+    transactions,
+  };
+};
+
 const loadCoachPayoutSummary = async ({
   coachUserId,
+  teamId,
   earnedCents,
   database = db,
 }) => {
-  const stateSnapshot = await database
-    .collection(PAYOUT_STATES_COLLECTION)
-    .doc(coachUserId)
-    .get();
-  const state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
+  const stateDocumentId = payoutStateId(coachUserId, teamId);
+  const [stateSnapshot, legacyStateSnapshot] = await Promise.all([
+    database.collection(PAYOUT_STATES_COLLECTION).doc(stateDocumentId).get(),
+    database.collection(PAYOUT_STATES_COLLECTION).doc(coachUserId).get(),
+  ]);
+  let state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
+  if (!stateSnapshot.exists && legacyStateSnapshot.exists) {
+    const legacyState = legacyStateSnapshot.data() || {};
+    const legacyTeamId = normalizeString(legacyState.teamId);
+    const legacyTeamIds = Array.isArray(legacyState.teamIds)
+      ? legacyState.teamIds.map(normalizeString).filter(Boolean)
+      : [];
+    const legacyMatchesTeam = legacyTeamId === teamId
+      || (legacyTeamIds.length === 1 && legacyTeamIds[0] === teamId);
+    if (legacyMatchesTeam) state = legacyState;
+  }
   const activeRequestId = normalizeString(state.activeRequestId);
   let activeRequest = null;
 
@@ -714,24 +1059,65 @@ const loadCoachPayoutSummary = async ({
   });
 };
 
-const loadCoachEarnings = async (coachUserId, database = db) => {
-  const staffSnapshot = await database
-    .collection(TEAM_MEMBERSHIPS_COLLECTION)
-    .where('userId', '==', coachUserId)
-    .get();
-  const staffMemberships = staffSnapshot.docs
-    .map((entry) => ({ id: entry.id, ...(entry.data() || {}) }))
-    .filter((membership) => membership.role !== 'athlete');
-
-  const eligibleTeams = [];
-  for (const membership of staffMemberships) {
-    const teamSnap = await database.collection(TEAMS_COLLECTION).doc(membership.teamId).get();
-    if (!teamSnap.exists) continue;
-    const team = { id: teamSnap.id, ...(teamSnap.data() || {}) };
-    const commercialConfig = teamAllowsCoachEarnings({ team, membership, userId: coachUserId });
-    if (!commercialConfig) continue;
-    eligibleTeams.push({ team, membership, commercialConfig });
+const loadCoachEarnings = async (coachUserId, teamId, database = db) => {
+  const normalizedCoachUserId = normalizeString(coachUserId);
+  const normalizedTeamId = normalizeString(teamId);
+  if (!normalizedCoachUserId || !isSafeDocumentId(normalizedTeamId)) {
+    throw permissionError('A valid team is required to view coach earnings.', 400);
   }
+
+  const membershipId = `${normalizedTeamId}_${normalizedCoachUserId}`;
+  const [membershipSnapshot, teamSnapshot, athleteAppOfferSnapshot] = await Promise.all([
+    database.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(membershipId).get(),
+    database.collection(TEAMS_COLLECTION).doc(normalizedTeamId).get(),
+    database.collection(ATHLETE_APP_OFFERS_COLLECTION).doc(normalizedTeamId).get(),
+  ]);
+  if (!membershipSnapshot.exists || !teamSnapshot.exists) {
+    throw permissionError('You do not have earnings access for this team.');
+  }
+  const membership = {
+    id: membershipSnapshot.id,
+    ...(membershipSnapshot.data() || {}),
+  };
+  const team = { id: teamSnapshot.id, ...(teamSnapshot.data() || {}) };
+  const athleteAppOffer = athleteAppOfferSnapshot.exists
+    ? { id: athleteAppOfferSnapshot.id, ...(athleteAppOfferSnapshot.data() || {}) }
+    : null;
+  const organizationId = normalizeString(team.organizationId);
+  if (!organizationId) {
+    throw permissionError('You do not have earnings access for this team.');
+  }
+  const organizationSnapshot = await database
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(organizationId)
+    .get();
+  const organization = organizationSnapshot.exists
+    ? organizationSnapshot.data() || {}
+    : {};
+  if (
+    membership.id !== membershipId
+    || normalizeString(membership.userId) !== normalizedCoachUserId
+    || normalizeString(membership.teamId) !== normalizedTeamId
+    || normalizeString(membership.organizationId) !== organizationId
+    || normalizeStatus(membership.role) === 'athlete'
+    || !isActiveMembership(membership)
+    || team.id !== normalizedTeamId
+    || !isActiveContainer(team)
+    || !organizationSnapshot.exists
+    || !isActiveContainer(organization)
+  ) {
+    throw permissionError('You do not have earnings access for this team.');
+  }
+  const commercialConfig = teamAllowsCoachEarnings({
+    team,
+    membership,
+    userId: normalizedCoachUserId,
+    athleteAppOffer,
+  });
+  if (!commercialConfig) {
+    throw permissionError('You do not have earnings access for this team.');
+  }
+  const eligibleTeams = [{ team, membership, commercialConfig }];
 
   const athleteScopes = new Map();
   for (const { team, commercialConfig } of eligibleTeams) {
@@ -744,7 +1130,15 @@ const loadCoachEarnings = async (coachUserId, database = db) => {
       .get();
     membersSnapshot.docs.forEach((entry) => {
       const membership = { id: entry.id, ...(entry.data() || {}) };
-      if (membership.role !== 'athlete' || !normalizeString(membership.userId)) return;
+      const athleteUserId = normalizeString(membership.userId);
+      if (
+        membership.id !== `${team.id}_${athleteUserId}`
+        || membership.role !== 'athlete'
+        || !athleteUserId
+        || normalizeString(membership.teamId) !== team.id
+        || normalizeString(membership.organizationId) !== organizationId
+        || !isActiveMembership(membership)
+      ) return;
       const existing = athleteScopes.get(membership.userId);
       if (!existing || commercialConfig.referralRevenueSharePct > existing.sharePct) {
         athleteScopes.set(membership.userId, {
@@ -756,13 +1150,26 @@ const loadCoachEarnings = async (coachUserId, database = db) => {
     });
   }
 
-  const [members, serviceEarnings] = await Promise.all([
+  const [members, serviceEarnings, athleteAppSubscriptionEarnings] = await Promise.all([
     Promise.all(
       [...athleteScopes.values()].map((scope) =>
         loadMemberEarnings({ ...scope, database })
       )
     ),
-    loadCoachServiceEarnings(coachUserId, database),
+    loadCoachServiceEarnings({
+      coachUserId: normalizedCoachUserId,
+      teamId: normalizedTeamId,
+      organizationId,
+      commercialConfig: eligibleTeams[0].commercialConfig,
+      stripeMode: resolveServerStripeMode(),
+      database,
+    }),
+    loadAthleteAppSubscriptionEarnings({
+      coachUserId: normalizedCoachUserId,
+      teamId: normalizedTeamId,
+      organizationId,
+      database,
+    }),
   ]);
   members.sort(
     (left, right) =>
@@ -775,7 +1182,7 @@ const loadCoachEarnings = async (coachUserId, database = db) => {
     ({ commercialConfig }) => commercialConfig.referralRevenueSharePct
   );
   const currentMonthKey = new Date().toISOString().slice(0, 7);
-  const currentMonthShareCents = members.reduce(
+  const referralCurrentMonthShareCents = members.reduce(
     (sum, member) =>
       sum
       + member.payments
@@ -783,19 +1190,32 @@ const loadCoachEarnings = async (coachUserId, database = db) => {
         .reduce((paymentSum, payment) => paymentSum + payment.coachShareCents, 0),
     0
   );
-  const lifetimeShareCents = members.reduce(
+  const referralLifetimeShareCents = members.reduce(
     (sum, member) => sum + member.lifetimeShareCents,
     0
   );
+  const currentMonthShareCents = referralCurrentMonthShareCents
+    + athleteAppSubscriptionEarnings.currentMonthNetCents;
+  const lifetimeShareCents = referralLifetimeShareCents
+    + athleteAppSubscriptionEarnings.lifetimeNetCents;
+  const payoutEligibleCents = calculatePayoutEligibleCents({
+    referralShareCents: referralLifetimeShareCents,
+    serviceNetCents: serviceEarnings.lifetimeNetCents,
+    athleteAppSubscriptionNetCents: athleteAppSubscriptionEarnings.lifetimeNetCents,
+  });
   const payout = await loadCoachPayoutSummary({
-    coachUserId,
-    earnedCents: lifetimeShareCents,
+    coachUserId: normalizedCoachUserId,
+    teamId: normalizedTeamId,
+    organizationId,
+    earnedCents: payoutEligibleCents,
     database,
   });
 
   return {
-    coachUserId,
-    teamIds: eligibleTeams.map(({ team }) => team.id),
+    coachUserId: normalizedCoachUserId,
+    teamId: normalizedTeamId,
+    organizationId,
+    teamIds: [normalizedTeamId],
     sharePct: shareRates[0] || 0,
     shareRates: [...new Set(shareRates)],
     teamMemberCount: members.length,
@@ -803,12 +1223,14 @@ const loadCoachEarnings = async (coachUserId, database = db) => {
     estimatedMonthlyShareCents: members.reduce(
       (sum, member) => sum + member.estimatedMonthlyShareCents,
       0
-    ),
+    ) + athleteAppSubscriptionEarnings.estimatedMonthlyNetCents,
     currentMonthShareCents,
     lifetimeShareCents,
+    payoutEligibleCents,
     payout,
     members,
     serviceEarnings,
+    athleteAppSubscriptionEarnings,
   };
 };
 
@@ -825,9 +1247,18 @@ const handler = async (event) => {
   }
 
   try {
+    const teamId = normalizeString(event.queryStringParameters?.teamId);
+    if (!isSafeDocumentId(teamId)) {
+      return {
+        statusCode: 400,
+        headers: jsonHeaders,
+        body: JSON.stringify({ message: 'A valid team is required to view coach earnings.' }),
+      };
+    }
     const { userId: coachUserId, app } = await verifyCoach(event);
     const earnings = await loadCoachEarnings(
       coachUserId,
+      teamId,
       app.firestore()
     );
     return {
@@ -852,11 +1283,20 @@ const handler = async (event) => {
 
 module.exports = {
   handler,
+  calculatePayoutEligibleCents,
   calculateShareCents,
+  assessmentStripePaymentTruth,
   invoiceRows,
+  loadAthleteAppSubscriptionEarnings,
   loadCoachServiceEarnings,
   loadCoachEarnings,
   loadCoachPayoutSummary,
+  isActiveContainer,
+  isActiveMembership,
+  isSafeDocumentId,
+  revenueCatCustomerIdsForAthlete,
+  revenueCatProfileMatchesAthlete,
+  stripeSubscriptionMatchesAthlete,
   teamAllowsCoachEarnings,
   verifyCoach,
 };

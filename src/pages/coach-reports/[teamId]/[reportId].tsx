@@ -5,8 +5,7 @@ import { useRouter } from 'next/router';
 import { AlertTriangle, ArrowLeft, BookOpenCheck, CalendarDays, Lock, RefreshCw } from 'lucide-react';
 
 import CoachReportView from '../../../components/coach-reports/CoachReportView';
-import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
-import type { PulseCheckTeamMembershipRole } from '../../../api/firebase/pulsecheckProvisioning/types';
+import { resolveAuthorizedCoachReportTeam } from '../../../api/firebase/pulsecheckCoachReportAccess';
 import {
   pulsecheckCoachReportService,
   StoredCoachReport,
@@ -25,12 +24,6 @@ interface PageState {
   teamName: string;
   message: string;
 }
-
-const COACH_REPORT_ACCESS_ROLES = new Set<PulseCheckTeamMembershipRole>([
-  'team-admin',
-  'coach',
-  'performance-staff',
-]);
 
 const COACH_VISIBLE_STATUSES = new Set<StoredCoachReport['reviewStatus']>([
   'published',
@@ -125,12 +118,8 @@ const CoachReportPage: React.FC = () => {
       setState({ status: 'loading', report: null, teamName: '', message: 'Getting the report ready.' });
 
       try {
-        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
-        const membership = memberships.find(
-          (entry) => entry.teamId === teamId && COACH_REPORT_ACCESS_ROLES.has(entry.role)
-        );
-
-        if (!membership) {
+        const access = await resolveAuthorizedCoachReportTeam(currentUser.id, teamId);
+        if (!access) {
           if (!cancelled) {
             setState({
               status: 'no_access',
@@ -142,17 +131,14 @@ const CoachReportPage: React.FC = () => {
           return;
         }
 
-        const [team, report] = await Promise.all([
-          pulseCheckProvisioningService.getTeam(teamId).catch(() => null),
-          pulsecheckCoachReportService.getReport(teamId, reportId),
-        ]);
+        const report = await pulsecheckCoachReportService.getCoachView(access.team.id, reportId);
 
-        if (!report) {
+        if (!report || report.teamId !== access.team.id) {
           if (!cancelled) {
             setState({
               status: 'not_found',
               report: null,
-              teamName: team?.displayName || '',
+              teamName: access.teamName,
               message: 'We could not find that report link. Check the latest email from Pulse, or open the report from coach home.',
             });
           }
@@ -164,7 +150,7 @@ const CoachReportPage: React.FC = () => {
             setState({
               status: 'not_ready',
               report,
-              teamName: team?.displayName || '',
+              teamName: access.teamName,
               message: 'This read is still being reviewed. We will send the coach-ready link when the Pulse team signs off.',
             });
           }
@@ -175,7 +161,7 @@ const CoachReportPage: React.FC = () => {
           setState({
             status: 'ready',
             report,
-            teamName: team?.displayName || '',
+            teamName: access.teamName,
             message: '',
           });
         }

@@ -5,6 +5,10 @@ import { CoachModel } from '../types/Coach';
 import { auth, db } from '../api/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 import { pulseCheckProvisioningService } from '../api/firebase/pulsecheckProvisioning/service';
+import {
+  isActivePulseCheckTeamMembership,
+  type PulseCheckTeamMembership,
+} from '../api/firebase/pulsecheckProvisioning/types';
 
 interface Props {
   children: React.ReactNode;
@@ -42,7 +46,37 @@ const CoachProtectedRoute: React.FC<Props> = ({
       const hasPulseCheckStaffAccess = async () => {
         try {
           const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
-          return memberships.some((m) => m.role && m.role !== 'athlete');
+          const staffRoles = new Set<PulseCheckTeamMembership['role']>([
+            'team-admin',
+            'coach',
+            'performance-staff',
+            'support-staff',
+          ]);
+          const candidates = memberships.filter(
+            (membership) =>
+              membership.userId === currentUser.id &&
+              Boolean(membership.teamId) &&
+              Boolean(membership.organizationId) &&
+              staffRoles.has(membership.role) &&
+              isActivePulseCheckTeamMembership(membership)
+          );
+          const validated = await Promise.all(
+            candidates.map(async (membership) => {
+              const [team, organization] = await Promise.all([
+                pulseCheckProvisioningService.getTeam(membership.teamId),
+                pulseCheckProvisioningService.getOrganization(membership.organizationId),
+              ]);
+              return Boolean(
+                team &&
+                  organization &&
+                  team.id === membership.teamId &&
+                  team.organizationId === membership.organizationId &&
+                  team.status === 'active' &&
+                  organization.status === 'active'
+              );
+            })
+          );
+          return validated.some(Boolean);
         } catch (membershipError) {
           console.error('Error checking PulseCheck staff access:', membershipError);
           return false;
@@ -70,7 +104,23 @@ const CoachProtectedRoute: React.FC<Props> = ({
           }
         }
 
-        const coachData = new CoachModel(coachDoc.id, coachDoc.data() as any);
+        const rawCoachData = coachDoc.data() as Record<string, any>;
+        const legacyCoachIsActive =
+          (!rawCoachData.status || rawCoachData.status === 'active') &&
+          !rawCoachData.revokedAt &&
+          rawCoachData.disabled !== true &&
+          rawCoachData.isActive !== false &&
+          (!rawCoachData.userId || rawCoachData.userId === currentUser.id);
+        if (!legacyCoachIsActive) {
+          if (await hasPulseCheckStaffAccess()) {
+            setLoading(false);
+            return;
+          }
+          router.push('/');
+          return;
+        }
+
+        const coachData = new CoachModel(coachDoc.id, rawCoachData as any);
         setCoachProfile(coachData);
 
         // Check subscription requirements

@@ -2,9 +2,11 @@ const Stripe = require('stripe');
 const { headers, getFirebaseAdminApp } = require('./config/firebase');
 const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
+  assertPaymentIntentCanFulfillOrder,
+  assertPaymentIntentMatchesOrder,
+  loadValidatedOrderForAthlete,
   markOrderPaid,
   normalizeString,
-  orderRef,
   verifyFirebaseUser,
 } = require('./lib/pulsecheck-coach-services');
 
@@ -14,23 +16,14 @@ const jsonHeaders = {
   'Cache-Control': 'private, no-store',
 };
 
-const stripeModeFromEvent = (event) => {
-  const explicitMode =
-    event.headers?.['x-pulsecheck-stripe-mode']
-    || event.headers?.['X-PulseCheck-Stripe-Mode'];
-  const normalizedMode = normalizeString(explicitMode).toLowerCase();
-  if (normalizedMode === 'test' || normalizedMode === 'live') return normalizedMode;
-  const referer = event.headers?.referer || event.headers?.origin || '';
-  return referer.includes('localhost') || referer.includes('127.0.0.1')
-    ? 'test'
-    : 'live';
-};
-
-const stripeClient = async (event, order = {}) => {
+const stripeClient = async (order = {}) => {
   const orderMode = normalizeString(order.stripeMode).toLowerCase();
-  const stripeMode = orderMode === 'test' || orderMode === 'live'
-    ? orderMode
-    : stripeModeFromEvent(event);
+  if (orderMode !== 'test' && orderMode !== 'live') {
+    const error = new Error('This service order has an invalid Stripe mode.');
+    error.statusCode = 409;
+    throw error;
+  }
+  const stripeMode = orderMode;
   const secretName = stripeMode === 'test' ? 'STRIPE_TEST_SECRET_KEY' : 'STRIPE_SECRET_KEY';
   const key = await getSecretWithEnvFallback(secretName).catch((error) => {
     const message = stripeMode === 'test'
@@ -68,19 +61,11 @@ const handler = async (event) => {
     const database = getFirebaseAdminApp(event).firestore();
     const { userId } = await verifyFirebaseUser(event);
     const { orderId } = JSON.parse(event.body || '{}');
-    const ref = orderRef(orderId, database);
-    const orderSnap = await ref.get();
-    if (!orderSnap.exists) {
-      const error = new Error('This service order could not be found.');
-      error.statusCode = 404;
-      throw error;
-    }
-    const order = orderSnap.data() || {};
-    if (normalizeString(order.athleteUserId) !== userId) {
-      const error = new Error('This service order belongs to another account.');
-      error.statusCode = 403;
-      throw error;
-    }
+    const { order } = await loadValidatedOrderForAthlete({
+      orderId,
+      athleteUserId: userId,
+      database,
+    });
 
     const paymentIntentId = normalizeString(order.paymentIntentId);
     if (!paymentIntentId) {
@@ -88,21 +73,22 @@ const handler = async (event) => {
       error.statusCode = 409;
       throw error;
     }
-    const stripe = await stripeClient(event, order);
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (paymentIntent.status !== 'succeeded') {
+    const stripe = await stripeClient(order);
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      paymentIntentId,
+      { expand: ['latest_charge'] }
+    );
+    if (normalizeString(paymentIntent.status).toLowerCase() !== 'succeeded') {
       const error = new Error('Stripe has not confirmed this payment yet.');
       error.statusCode = 409;
       throw error;
     }
-    if (
-      normalizeString(paymentIntent.metadata?.order_id) !== normalizeString(orderId)
-      || normalizeString(paymentIntent.metadata?.athlete_user_id) !== userId
-    ) {
-      const error = new Error('Stripe payment details do not match this service order.');
-      error.statusCode = 409;
-      throw error;
-    }
+    assertPaymentIntentMatchesOrder(
+      paymentIntent,
+      order,
+      { requireSucceeded: true }
+    );
+    assertPaymentIntentCanFulfillOrder(paymentIntent);
 
     await markOrderPaid({
       paymentIntent,
@@ -127,4 +113,4 @@ const handler = async (event) => {
   }
 };
 
-module.exports = { handler };
+module.exports = { handler, stripeClient };

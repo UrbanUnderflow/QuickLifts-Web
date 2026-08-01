@@ -12,7 +12,11 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { db, auth } from '../config';
+import {
+  auth,
+  db,
+  getFirebaseModeRequestHeaders,
+} from '../config';
 
 /**
  * Coach Team Schedule
@@ -45,6 +49,8 @@ export type ScheduleEventSource = 'manual' | 'link' | 'file' | 'booking';
 export interface ScheduleEvent {
   id: string;
   coachId: string;
+  teamId: string;
+  organizationId: string;
   /** Short label — "vs. Florida", "Team meeting", "Lift". */
   title: string;
   /** YYYY-MM-DD. */
@@ -68,7 +74,7 @@ export interface ScheduleEvent {
 /** What the scraper / composer hands us before we stamp ids + ownership. */
 export type ScheduleEventDraft = Omit<
   ScheduleEvent,
-  'id' | 'coachId' | 'createdAt' | 'updatedAt' | 'source'
+  'id' | 'coachId' | 'teamId' | 'organizationId' | 'createdAt' | 'updatedAt' | 'source'
 > & { source?: ScheduleEventSource };
 
 const COLLECTION = 'coach-team-schedule';
@@ -104,12 +110,16 @@ const clean = (obj: Record<string, any>): Record<string, any> => {
 
 const buildPayload = (
   coachId: string,
+  teamId: string,
+  organizationId: string,
   draft: ScheduleEventDraft,
   id: string
 ): Record<string, any> =>
   clean({
     id,
     coachId,
+    teamId,
+    organizationId,
     title: (draft.title || '').trim() || 'Untitled event',
     date: draft.date,
     endDate: draft.endDate,
@@ -141,8 +151,12 @@ const buildUpdatePayload = (draft: Partial<ScheduleEventDraft>): Record<string, 
 
 class CoachScheduleService {
   /** Load all schedule events for a coach, soonest first. */
-  async getEvents(coachId: string): Promise<ScheduleEvent[]> {
-    if (!coachId) return [];
+  async getEvents(
+    coachId: string,
+    teamId: string,
+    organizationId: string
+  ): Promise<ScheduleEvent[]> {
+    if (!coachId || !teamId || !organizationId) return [];
     const map = (d: any): ScheduleEvent => {
       const data = d.data() as any;
       return {
@@ -156,23 +170,48 @@ class CoachScheduleService {
       const q = query(
         collection(db, COLLECTION),
         where('coachId', '==', coachId),
+        where('teamId', '==', teamId),
         orderBy('date', 'asc')
       );
       const snap = await getDocs(q);
-      return snap.docs.map(map);
+      return snap.docs
+        .map(map)
+        .filter(
+          (event) =>
+            event.coachId === coachId &&
+            event.teamId === teamId &&
+            event.organizationId === organizationId
+        );
     } catch (err) {
       // Fallback for environments missing the composite index.
       console.warn('[coachSchedule] ordered query failed, falling back', err);
-      const q = query(collection(db, COLLECTION), where('coachId', '==', coachId));
+      const q = query(
+        collection(db, COLLECTION),
+        where('coachId', '==', coachId),
+        where('teamId', '==', teamId)
+      );
       const snap = await getDocs(q);
-      return snap.docs.map(map).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      return snap.docs
+        .map(map)
+        .filter(
+          (event) =>
+            event.coachId === coachId &&
+            event.teamId === teamId &&
+            event.organizationId === organizationId
+        )
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
     }
   }
 
   /** Add a single event. */
-  async addEvent(coachId: string, draft: ScheduleEventDraft): Promise<ScheduleEvent> {
+  async addEvent(
+    coachId: string,
+    teamId: string,
+    organizationId: string,
+    draft: ScheduleEventDraft
+  ): Promise<ScheduleEvent> {
     const docRef = doc(collection(db, COLLECTION));
-    const payload = buildPayload(coachId, draft, docRef.id);
+    const payload = buildPayload(coachId, teamId, organizationId, draft, docRef.id);
     await setDoc(docRef, payload);
     return { ...(payload as any), createdAt: new Date(), updatedAt: new Date() };
   }
@@ -189,13 +228,18 @@ class CoachScheduleService {
    * Add many events at once (used by link import). Batched so a 30-event
    * meet schedule lands in a single round-trip.
    */
-  async addEvents(coachId: string, drafts: ScheduleEventDraft[]): Promise<ScheduleEvent[]> {
+  async addEvents(
+    coachId: string,
+    teamId: string,
+    organizationId: string,
+    drafts: ScheduleEventDraft[]
+  ): Promise<ScheduleEvent[]> {
     if (!drafts.length) return [];
     const batch = writeBatch(db);
     const created: ScheduleEvent[] = [];
     drafts.forEach((draft) => {
       const docRef = doc(collection(db, COLLECTION));
-      const payload = buildPayload(coachId, draft, docRef.id);
+      const payload = buildPayload(coachId, teamId, organizationId, draft, docRef.id);
       batch.set(docRef, payload);
       created.push({ ...(payload as any), createdAt: new Date(), updatedAt: new Date() });
     });
@@ -221,12 +265,29 @@ class CoachScheduleService {
    *
    * Overridden in demo mode to return canned events with no network call.
    */
-  async scrapeUrl(url: string): Promise<{ sourceTitle: string; events: ScheduleEventDraft[] }> {
+  async scrapeUrl(
+    url: string,
+    teamId: string,
+    organizationId: string
+  ): Promise<{ sourceTitle: string; events: ScheduleEventDraft[] }> {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) {
+      throw new Error('Please sign in again to import a schedule.');
+    }
+    if (!teamId || !organizationId) {
+      throw new Error('Choose an active team before importing a schedule.');
+    }
+    const firebaseModeHeaders = getFirebaseModeRequestHeaders();
+
     // 1) Fetch + clean the page text.
     const pageRes = await fetch('/api/coach/schedule-scrape', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
+      headers: {
+        'Content-Type': 'application/json',
+        authorization: `Bearer ${idToken}`,
+        ...firebaseModeHeaders,
+      },
+      body: JSON.stringify({ url, teamId, organizationId }),
     });
     const page = await pageRes.json().catch(() => ({}));
     if (!pageRes.ok) {
@@ -242,30 +303,20 @@ class CoachScheduleService {
     //    timeout — the gateway killed it with a 504 ("Inactivity Timeout").
     //    We kick the extraction onto a background worker (15-min ceiling) and
     //    poll for the result. See netlify/functions/coach-schedule-import*.ts.
-    const idToken = await auth.currentUser?.getIdToken();
-    if (!idToken) throw new Error('Please sign in again to import a schedule.');
-
-    const aiRequest = {
-      model: 'gpt-4o-mini',
-      temperature: 0.1,
-      max_tokens: 4000,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SCHEDULE_EXTRACTION_PROMPT },
-        {
-          role: 'user',
-          content: `Page title: ${title || '(none)'}\nURL: ${url}\n\nPAGE TEXT:\n${text}`,
-        },
-      ],
-    };
-
     const startRes = await fetch('/api/coach/schedule-import', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${idToken}`,
+        ...firebaseModeHeaders,
       },
-      body: JSON.stringify(aiRequest),
+      body: JSON.stringify({
+        teamId,
+        organizationId,
+        sourceURL: url,
+        sourceTitle: title || '',
+        pageText: text,
+      }),
     });
     const startJson = await startRes.json().catch(() => ({} as any));
     const jobId: string | undefined = startJson?.jobId;
@@ -284,7 +335,12 @@ class CoachScheduleService {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       const statusRes = await fetch(
         `/api/coach/schedule-import-status?jobId=${encodeURIComponent(jobId)}`,
-        { headers: { authorization: `Bearer ${idToken}` } }
+        {
+          headers: {
+            authorization: `Bearer ${idToken}`,
+            ...firebaseModeHeaders,
+          },
+        }
       );
       const statusJson = await statusRes.json().catch(() => ({} as any));
       if (!statusRes.ok) continue; // transient — keep polling until attempts run out
@@ -332,31 +388,5 @@ class CoachScheduleService {
     };
   }
 }
-
-const SCHEDULE_EXTRACTION_PROMPT = `You extract a sports/team schedule from the text of a web page.
-
-Return STRICT JSON only, no markdown, in this exact shape:
-{
-  "sourceTitle": "<a short name for this schedule, e.g. 'Men's Track & Field 2026'>",
-  "events": [
-    {
-      "title": "<short label — for competitions use 'vs. <Opponent>' or the meet name>",
-      "date": "<YYYY-MM-DD>",
-      "endDate": "<YYYY-MM-DD, only if the event spans multiple days, else omit>",
-      "time": "<e.g. '3:30 PM', 'All Day', or 'TBA' — omit if unknown>",
-      "location": "<city/venue if shown, else omit>",
-      "opponent": "<opponent or host for competitions, else omit>",
-      "type": "competition | practice | meeting | lift | travel | event",
-      "notes": "<anything useful like 'Home', 'Away', 'Conference', else omit>"
-    }
-  ]
-}
-
-Rules:
-- Only include real scheduled events you can see in the text. Never invent events, dates, or opponents.
-- Resolve dates to full YYYY-MM-DD. If the page shows a year context, use it; otherwise infer the season's year from surrounding text. If a date is genuinely ambiguous, omit that event.
-- Most items on an athletics schedule page are competitions; classify accordingly.
-- Keep titles tight. Prefer 'vs. Florida State' over a long sentence.
-- If you find no events, return an empty "events" array.`;
 
 export const coachScheduleService = new CoachScheduleService();

@@ -22,9 +22,9 @@ import { db, auth } from '../config';
  * athlete-facing Nora assistant can pull it into context and answer
  * questions like "what time is the team meeting?".
  *
- * Scope: entries are owned by a single coach (coachId). The athlete's
- * Nora resolves the athlete's linked coach(es) and reads that coach's
- * vault. Text content (`content`) is what Nora actually reasons over;
+ * Scope: every entry is owned by one coach inside one explicit team. The
+ * athlete's Nora resolves the athlete's active team before reading that
+ * team's vault. Text content (`content`) is what Nora actually reasons over;
  * uploaded files keep a `downloadUrl` + optional `content` summary the
  * coach types in so Nora has something textual to ground on.
  */
@@ -34,6 +34,7 @@ export type NoraVaultEntryType = 'note' | 'file' | 'image' | 'link';
 export interface NoraVaultEntry {
   id: string;
   coachId: string;
+  teamId: string;
   type: NoraVaultEntryType;
   title: string;
   /** The text Nora reasons over — note body, link description, or a coach-written summary of a file. */
@@ -65,13 +66,14 @@ const toDate = (value: any): Date | undefined => {
 class NoraVaultService {
   private storage = getStorage();
 
-  /** Load all vault entries for a coach, newest first. */
-  async getEntries(coachId: string): Promise<NoraVaultEntry[]> {
-    if (!coachId) return [];
+  /** Load all vault entries for one coach/team workspace, newest first. */
+  async getEntries(coachId: string, teamId: string): Promise<NoraVaultEntry[]> {
+    if (!coachId || !teamId) return [];
     try {
       const q = query(
         collection(db, COLLECTION),
         where('coachId', '==', coachId),
+        where('teamId', '==', teamId),
         orderBy('createdAt', 'desc')
       );
       const snap = await getDocs(q);
@@ -87,7 +89,11 @@ class NoraVaultService {
     } catch (err) {
       // Fallback for environments missing the composite index — query without orderBy.
       console.warn('[noraVault] ordered query failed, falling back', err);
-      const q = query(collection(db, COLLECTION), where('coachId', '==', coachId));
+      const q = query(
+        collection(db, COLLECTION),
+        where('coachId', '==', coachId),
+        where('teamId', '==', teamId)
+      );
       const snap = await getDocs(q);
       return snap.docs
         .map((d) => {
@@ -106,12 +112,15 @@ class NoraVaultService {
   /** Create a text note or link entry. */
   async addNote(
     coachId: string,
+    teamId: string,
     entry: { title: string; content: string; category?: string; type?: 'note' | 'link'; url?: string }
   ): Promise<NoraVaultEntry> {
+    if (!coachId || !teamId) throw new Error('Choose an active team before training Nora.');
     const docRef = doc(collection(db, COLLECTION));
     const payload: Record<string, any> = {
       id: docRef.id,
       coachId,
+      teamId,
       type: entry.type || 'note',
       title: entry.title.trim() || 'Untitled note',
       content: entry.content.trim(),
@@ -130,15 +139,17 @@ class NoraVaultService {
    */
   async addFile(
     coachId: string,
+    teamId: string,
     file: File,
     opts?: { title?: string; summary?: string; category?: string; onProgress?: (pct: number) => void }
   ): Promise<NoraVaultEntry> {
     const user = auth.currentUser;
     if (!user) throw new Error('You must be signed in to upload to the Nora vault.');
+    if (!coachId || !teamId) throw new Error('Choose an active team before uploading to Nora.');
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileName = `${Date.now()}_${safeName}`;
-    const storagePath = `coach-nora-vault/${coachId}/${fileName}`;
+    const storagePath = `coach-nora-vault/${coachId}/${teamId}/${fileName}`;
     const storageRef = ref(this.storage, storagePath);
 
     const uploadTask = uploadBytesResumable(storageRef, file);
@@ -155,6 +166,7 @@ class NoraVaultService {
     const payload: Record<string, any> = {
       id: docRef.id,
       coachId,
+      teamId,
       type: isImage ? 'image' : 'file',
       title: opts?.title?.trim() || file.name,
       content: opts?.summary?.trim() || '',
@@ -172,7 +184,15 @@ class NoraVaultService {
   }
 
   /** Remove an entry (and its underlying file, if any). */
-  async deleteEntry(entry: NoraVaultEntry): Promise<void> {
+  async deleteEntry(coachId: string, teamId: string, entry: NoraVaultEntry): Promise<void> {
+    if (
+      !coachId
+      || !teamId
+      || entry.coachId !== coachId
+      || entry.teamId !== teamId
+    ) {
+      throw new Error('This vault entry does not belong to the active team.');
+    }
     if (entry.storagePath) {
       try {
         await deleteObject(ref(this.storage, entry.storagePath));

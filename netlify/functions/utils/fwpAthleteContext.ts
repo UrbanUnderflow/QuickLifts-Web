@@ -23,6 +23,7 @@ import { db } from '../config/firebase';
 
 const MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const SCHEDULE_COLLECTION = 'coach-team-schedule';
 const VAULT_COLLECTION = 'coach-nora-vault';
 const HEALTH_RECORDS_COLLECTION = 'health-context-source-records';
@@ -39,6 +40,32 @@ const truncate = (value: unknown, max: number): string => {
 // "Men's Physique" (config) ⟷ "Men’s Physique" (user doc).
 const normalizeSport = (value: string): string =>
   value.toLowerCase().replace(/[’‘]/g, "'").trim();
+
+const normalizeScopeString = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+const isActiveScopeRecord = (data: any): boolean => {
+  const status = normalizeScopeString(data?.status).toLowerCase();
+  return (!status || status === 'active')
+    && data?.revokedAt == null
+    && data?.deletedAt == null
+    && data?.archivedAt == null;
+};
+
+const canStaffUseNora = (data: any): boolean => {
+  const role = normalizeScopeString(data?.role).toLowerCase();
+  if (role === 'athlete') return false;
+  if (role === 'team-admin') return true;
+  if (Object.prototype.hasOwnProperty.call(data || {}, 'staffCapabilities')) {
+    if (!Array.isArray(data.staffCapabilities)) return false;
+    if (data.staffCapabilities.length > 0) {
+      return data.staffCapabilities.includes('admin')
+        || data.staffCapabilities.includes('coaching')
+        || data.staffCapabilities.includes('administrative');
+    }
+  }
+  return role === 'coach' || role === 'support-staff';
+};
 
 // ---------------------------------------------------------------------------
 // Output shape — a flat, prompt-friendly context object. Everything optional.
@@ -95,16 +122,32 @@ async function loadTeam(teamId: string): Promise<any | null> {
   }
 }
 
-async function loadTeamCoachIds(teamId: string): Promise<string[]> {
+async function loadOrganization(organizationId: string): Promise<any | null> {
+  try {
+    const doc = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).get();
+    return doc.exists ? { id: doc.id, ...doc.data() } : null;
+  } catch (err) {
+    console.warn('[fwpAthleteContext] organization load failed', err);
+    return null;
+  }
+}
+
+async function loadTeamCoachIds(teamId: string, organizationId: string): Promise<string[]> {
   try {
     const snap = await db
       .collection(MEMBERSHIPS_COLLECTION)
       .where('teamId', '==', teamId)
-      .where('role', '==', 'coach')
       .get();
     return snap.docs
-      .map((d: any) => d.data()?.userId)
-      .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+      .map((document: any) => document.data() || {})
+      .filter((membership: any) =>
+        normalizeScopeString(membership.teamId) === teamId
+        && normalizeScopeString(membership.organizationId) === organizationId
+        && Boolean(normalizeScopeString(membership.userId))
+        && isActiveScopeRecord(membership)
+        && canStaffUseNora(membership)
+      )
+      .map((membership: any) => normalizeScopeString(membership.userId));
   } catch (err) {
     console.warn('[fwpAthleteContext] coach lookup failed', err);
     return [];
@@ -152,19 +195,31 @@ const resolveNuance = (entry: any, division: string | null): Record<string, unkn
 };
 
 // Pull the team's schedule (via its coaches) and derive the next competition.
-async function loadSchedule(coachIds: string[]): Promise<{
+async function loadSchedule(coachIds: string[], teamId: string): Promise<{
   nextCompetition: FwpAthleteContext['nextCompetition'];
   upcomingEvents: FwpAthleteContext['upcomingEvents'];
 }> {
   const empty = { nextCompetition: null, upcomingEvents: [] as FwpAthleteContext['upcomingEvents'] };
-  if (!coachIds.length) return empty;
+  if (!coachIds.length || !teamId) return empty;
   try {
     const todayMidnight = new Date();
     todayMidnight.setHours(0, 0, 0, 0);
     const events: any[] = [];
     for (const coachId of coachIds) {
-      const snap = await db.collection(SCHEDULE_COLLECTION).where('coachId', '==', coachId).get();
-      snap.docs.forEach((d: any) => events.push(d.data()));
+      const snap = await db
+        .collection(SCHEDULE_COLLECTION)
+        .where('coachId', '==', coachId)
+        .where('teamId', '==', teamId)
+        .get();
+      snap.docs.forEach((document: any) => {
+        const event = document.data() || {};
+        if (
+          normalizeScopeString(event.coachId) === coachId
+          && normalizeScopeString(event.teamId) === teamId
+        ) {
+          events.push(event);
+        }
+      });
     }
     const future = events
       .filter((e) => typeof e?.date === 'string')
@@ -197,14 +252,24 @@ async function loadSchedule(coachIds: string[]): Promise<{
   }
 }
 
-async function loadCoachGuidance(coachIds: string[]): Promise<string[]> {
-  if (!coachIds.length) return [];
+async function loadCoachGuidance(coachIds: string[], teamId: string): Promise<string[]> {
+  if (!coachIds.length || !teamId) return [];
   const lines: string[] = [];
   for (const coachId of coachIds) {
     try {
-      const snap = await db.collection(VAULT_COLLECTION).where('coachId', '==', coachId).get();
+      const snap = await db
+        .collection(VAULT_COLLECTION)
+        .where('coachId', '==', coachId)
+        .where('teamId', '==', teamId)
+        .get();
       snap.docs.forEach((d: any) => {
         const e = d.data() || {};
+        if (
+          normalizeScopeString(e.coachId) !== coachId
+          || normalizeScopeString(e.teamId) !== teamId
+        ) {
+          return;
+        }
         const body = e.content || (e.type === 'file' || e.type === 'image' ? `(file: ${e.fileName || e.title})` : '');
         if (!body) return;
         const label = e.category ? `[${e.category}] ` : '';
@@ -284,24 +349,43 @@ async function loadHealth(userId: string): Promise<FwpAthleteContext['health']> 
  */
 export async function buildFwpAthleteContext(userId: string, sportHint?: string): Promise<FwpAthleteContext> {
   const memberships = await loadMemberships(userId);
-  const athleteMembership =
-    memberships.find((m) => m.role === 'athlete') || memberships.find((m) => !!m.teamId) || memberships[0] || null;
+  const athleteMemberships = memberships.filter((membership) =>
+    normalizeScopeString(membership.userId) === userId
+    && normalizeScopeString(membership.role).toLowerCase() === 'athlete'
+    && Boolean(normalizeScopeString(membership.teamId))
+    && Boolean(normalizeScopeString(membership.organizationId))
+    && isActiveScopeRecord(membership)
+  );
 
   let team: FwpAthleteContext['team'] = null;
   let coachIds: string[] = [];
-  if (athleteMembership?.teamId) {
-    const [teamDoc, ids] = await Promise.all([
-      loadTeam(athleteMembership.teamId),
-      loadTeamCoachIds(athleteMembership.teamId),
+  let selectedTeamId = '';
+  for (const athleteMembership of athleteMemberships) {
+    const teamId = normalizeScopeString(athleteMembership.teamId);
+    const organizationId = normalizeScopeString(athleteMembership.organizationId);
+    const [teamDoc, organizationDoc] = await Promise.all([
+      loadTeam(teamId),
+      loadOrganization(organizationId),
     ]);
-    coachIds = ids;
-    if (teamDoc) {
+    if (
+      teamDoc
+      && organizationDoc
+      && normalizeScopeString(teamDoc.id) === teamId
+      && normalizeScopeString(teamDoc.organizationId) === organizationId
+      && normalizeScopeString(teamDoc.status).toLowerCase() === 'active'
+      && normalizeScopeString(organizationDoc.status).toLowerCase() === 'active'
+      && isActiveScopeRecord(teamDoc)
+      && isActiveScopeRecord(organizationDoc)
+    ) {
+      selectedTeamId = teamId;
+      coachIds = await loadTeamCoachIds(teamId, organizationId);
       team = {
         id: teamDoc.id,
         name: teamDoc.displayName,
         sport: teamDoc.sportOrProgram,
         sportId: teamDoc.sportId,
       };
+      break;
     }
   }
 
@@ -309,13 +393,13 @@ export async function buildFwpAthleteContext(userId: string, sportHint?: string)
 
   const [sportMatch, schedule, coachGuidance, health] = await Promise.all([
     sport ? loadSportEntry(sport) : Promise.resolve(null),
-    loadSchedule(coachIds),
-    loadCoachGuidance(coachIds),
+    loadSchedule(coachIds, selectedTeamId),
+    loadCoachGuidance(coachIds, selectedTeamId),
     loadHealth(userId),
   ]);
 
   return {
-    hasPulseCheck: memberships.length > 0,
+    hasPulseCheck: Boolean(team),
     team,
     sport,
     trainingNuance: sportMatch ? resolveNuance(sportMatch.entry, sportMatch.division) : null,

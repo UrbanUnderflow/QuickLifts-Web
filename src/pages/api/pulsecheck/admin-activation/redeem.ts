@@ -49,6 +49,11 @@ const normalizeReferralRevenueSharePct = (value: unknown) => {
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
 };
+const normalizeNonNegativeInteger = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed));
+};
 const normalizeTimestampLike = (
   value: unknown
 ): PulseCheckTeamCommercialConfig['teamPlanActivatedAt'] => {
@@ -94,6 +99,23 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
       typeof candidate.additionalServicesEnabled === 'boolean'
         ? candidate.additionalServicesEnabled
         : defaults.additionalServicesEnabled,
+    athleteAppSubscriptionEnabled:
+      typeof candidate.athleteAppSubscriptionEnabled === 'boolean'
+        ? candidate.athleteAppSubscriptionEnabled
+        : defaults.athleteAppSubscriptionEnabled,
+    athleteAppSubscriptionMonthlyPriceCents: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionMonthlyPriceCents
+        ?? defaults.athleteAppSubscriptionMonthlyPriceCents
+    ),
+    athleteAppSubscriptionCurrency: 'usd',
+    athleteAppSubscriptionOfferVersion: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionOfferVersion
+        ?? defaults.athleteAppSubscriptionOfferVersion
+    ),
+    athleteAppSubscriptionRevenueRecipientUserId: normalizeString(
+      candidate.athleteAppSubscriptionRevenueRecipientUserId
+        ?? defaults.athleteAppSubscriptionRevenueRecipientUserId
+    ),
     coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId ?? defaults.coachReferralRecipientUserId),
     coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail ?? defaults.coachReferralRecipientEmail),
     coachReferralSourceTeamId: normalizeString(candidate.coachReferralSourceTeamId ?? defaults.coachReferralSourceTeamId),

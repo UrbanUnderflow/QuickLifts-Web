@@ -6,7 +6,12 @@
 // - Includes escalation classification for safety monitoring
 // - Saves/updates conversation document in Firestore (conversations)
 
-const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
+const {
+  initializeFirebaseAdmin,
+  getFirebaseAdminApp,
+  admin,
+  headers,
+} = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
 const {
   hasLossOfFunctionConcern,
@@ -32,6 +37,35 @@ const VALID_PROTOCOL_CLASSES = new Set(['regulation', 'priming', 'recovery', 'no
 const VALID_CONFIDENCE = new Set(['high', 'medium', 'low']);
 const VALID_READINESS = new Set(['green', 'yellow', 'red']);
 const MUTABLE_ASSIGNMENT_STATUSES = new Set(['assigned']);
+
+function getRequestHeader(event, headerName) {
+  const target = String(headerName || '').toLowerCase();
+  const entries = Object.entries(event?.headers || {});
+  const match = entries.find(([key]) => String(key).toLowerCase() === target);
+  return String(match?.[1] || '').trim();
+}
+
+async function verifyPulseCheckCaller(firebaseApp, event) {
+  const authorization = getRequestHeader(event, 'authorization');
+  const match = authorization.match(/^Bearer\s+([^\s]+)$/i);
+  if (!match) {
+    const error = new Error('Sign in is required to chat with Nora.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  try {
+    const decoded = await firebaseApp.auth().verifyIdToken(match[1]);
+    const userId = String(decoded?.uid || '').trim();
+    if (!userId) throw new Error('Firebase token is missing a user id.');
+    return { decoded, userId };
+  } catch (cause) {
+    const error = new Error('Your sign-in session is invalid or expired.');
+    error.statusCode = 401;
+    error.cause = cause;
+    throw error;
+  }
+}
 
 // Escalation Tier enum values
 const EscalationTier = {
@@ -1026,23 +1060,181 @@ async function getAthleteMentalProgress(db, userId) {
  * We pull the text content and render it so Nora can answer team-logistics questions
  * ("what time is the team meeting?"). Returns '' when there is nothing to inject.
  */
-async function getCoachVaultContext(db, userData) {
+const normalizeScopeString = (value) => (
+  typeof value === 'string' ? value.trim() : ''
+);
+
+const scopeSnapshotExists = (snapshot) => (
+  typeof snapshot?.exists === 'function'
+    ? snapshot.exists()
+    : snapshot?.exists === true
+);
+
+const isActiveScopeRecord = (data) => {
+  const status = normalizeScopeString(data?.status).toLowerCase();
+  return (!status || status === 'active')
+    && data?.revokedAt == null
+    && data?.deletedAt == null
+    && data?.archivedAt == null;
+};
+
+const canStaffUseNora = (data) => {
+  const role = normalizeScopeString(data?.role).toLowerCase();
+  if (role === 'athlete') return false;
+  if (role === 'team-admin') return true;
+  if (Object.prototype.hasOwnProperty.call(data || {}, 'staffCapabilities')) {
+    if (!Array.isArray(data.staffCapabilities)) return false;
+    if (data.staffCapabilities.length > 0) {
+      return data.staffCapabilities.includes('admin')
+        || data.staffCapabilities.includes('coaching')
+        || data.staffCapabilities.includes('administrative');
+    }
+  }
+  return role === 'coach' || role === 'support-staff';
+};
+
+async function resolveAthleteVaultScopes(db, userId, userData) {
+  const membershipSnapshot = await db
+    .collection('pulsecheck-team-memberships')
+    .where('userId', '==', userId)
+    .get();
+  const candidateMemberships = (membershipSnapshot.docs || [])
+    .map((document) => document.data?.() || {})
+    .filter((membership) =>
+      normalizeScopeString(membership.userId) === userId
+      && normalizeScopeString(membership.role).toLowerCase() === 'athlete'
+      && normalizeScopeString(membership.teamId)
+      && normalizeScopeString(membership.organizationId)
+      && isActiveScopeRecord(membership)
+    );
+
+  const modernScopes = [];
+  for (const athleteMembership of candidateMemberships) {
+    const teamId = normalizeScopeString(athleteMembership.teamId);
+    const organizationId = normalizeScopeString(athleteMembership.organizationId);
+    const [teamSnapshot, organizationSnapshot, teamMembershipSnapshot] = await Promise.all([
+      db.collection('pulsecheck-teams').doc(teamId).get(),
+      db.collection('pulsecheck-organizations').doc(organizationId).get(),
+      db
+        .collection('pulsecheck-team-memberships')
+        .where('teamId', '==', teamId)
+        .get(),
+    ]);
+    const team = teamSnapshot.data?.() || {};
+    const organization = organizationSnapshot.data?.() || {};
+    if (
+      !scopeSnapshotExists(teamSnapshot)
+      || !scopeSnapshotExists(organizationSnapshot)
+      || normalizeScopeString(team.organizationId) !== organizationId
+      || normalizeScopeString(team.status).toLowerCase() !== 'active'
+      || normalizeScopeString(organization.status).toLowerCase() !== 'active'
+      || !isActiveScopeRecord(team)
+      || !isActiveScopeRecord(organization)
+    ) {
+      continue;
+    }
+
+    const coachIds = new Set();
+    for (const document of teamMembershipSnapshot.docs || []) {
+      const staff = document.data?.() || {};
+      const coachId = normalizeScopeString(staff.userId);
+      if (
+        coachId
+        && normalizeScopeString(staff.teamId) === teamId
+        && normalizeScopeString(staff.organizationId) === organizationId
+        && isActiveScopeRecord(staff)
+        && canStaffUseNora(staff)
+      ) {
+        coachIds.add(coachId);
+      }
+    }
+    if (coachIds.size > 0) {
+      modernScopes.push({ teamId, organizationId, coachIds });
+    }
+  }
+
+  const connectedCoaches = Array.isArray(userData?.connectedCoaches)
+    ? userData.connectedCoaches
+    : [];
+  const connectedCoachIds = [...new Set(
+    connectedCoaches
+      .map((coach) => (
+        coach && typeof coach === 'object'
+          ? normalizeScopeString(coach.coachId)
+          : normalizeScopeString(coach)
+      ))
+      .filter(Boolean)
+  )].slice(0, 10);
+  const legacyScopes = [];
+  for (const coachId of connectedCoachIds) {
+    const [coachSnapshot, linkSnapshot] = await Promise.all([
+      db.collection('coaches').doc(coachId).get(),
+      db
+        .collection('coachAthletes')
+        .where('coachId', '==', coachId)
+        .get(),
+    ]);
+    const coach = coachSnapshot.data?.() || {};
+    const validCoach = scopeSnapshotExists(coachSnapshot)
+      && (!normalizeScopeString(coach.userId) || normalizeScopeString(coach.userId) === coachId)
+      && (!normalizeScopeString(coach.userType) || normalizeScopeString(coach.userType) === 'coach')
+      && isActiveScopeRecord(coach);
+    const validLink = (linkSnapshot.docs || []).some((document) => {
+      const link = document.data?.() || {};
+      return normalizeScopeString(link.coachId) === coachId
+        && (
+          normalizeScopeString(link.athleteUserId) === userId
+          || normalizeScopeString(link.athleteId) === userId
+        )
+        && isActiveScopeRecord(link)
+        && link.disconnectedAt == null;
+    });
+    if (validCoach && validLink) {
+      legacyScopes.push({ coachId, teamId: `legacy:${coachId}` });
+    }
+  }
+
+  return { modernScopes, legacyScopes };
+}
+
+async function getCoachVaultContext(db, userId, userData) {
   try {
-    const connectedCoaches = Array.isArray(userData?.connectedCoaches) ? userData.connectedCoaches : [];
-    const coachIds = connectedCoaches
-      .map((c) => (c && typeof c === 'object' ? c.coachId : (typeof c === 'string' ? c : null)))
-      .filter(Boolean);
-    if (!coachIds.length) return '';
+    const { modernScopes, legacyScopes } = await resolveAthleteVaultScopes(
+      db,
+      userId,
+      userData
+    );
+    if (modernScopes.length === 0 && legacyScopes.length === 0) return '';
 
-    // Firestore `in` filters cap at 10 values; athletes almost always have one coach.
-    const scopedCoachIds = coachIds.slice(0, 10);
-    const snap = await db
-      .collection('coach-nora-vault')
-      .where('coachId', 'in', scopedCoachIds)
-      .get();
-    if (snap.empty) return '';
+    const documents = [];
+    for (const scope of modernScopes) {
+      const snapshot = await db
+        .collection('coach-nora-vault')
+        .where('teamId', '==', scope.teamId)
+        .get();
+      for (const document of snapshot.docs || []) {
+        const entry = document.data?.() || {};
+        if (
+          normalizeScopeString(entry.teamId) === scope.teamId
+          && scope.coachIds.has(normalizeScopeString(entry.coachId))
+        ) {
+          documents.push(document);
+        }
+      }
+    }
+    for (const scope of legacyScopes) {
+      const snapshot = await db
+        .collection('coach-nora-vault')
+        .where('coachId', '==', scope.coachId)
+        .get();
+      for (const document of snapshot.docs || []) {
+        const entry = document.data?.() || {};
+        const entryTeamId = normalizeScopeString(entry.teamId);
+        if (!entryTeamId || entryTeamId === scope.teamId) documents.push(document);
+      }
+    }
 
-    const entries = snap.docs
+    const entries = documents
       .map((doc) => doc.data() || {})
       .map((data) => {
         const content = typeof data.content === 'string' ? data.content.trim() : '';
@@ -1339,10 +1531,13 @@ exports.handler = async (event, context) => {
   try {
     // Initialize Firebase Admin
     let db;
+    let firebaseApp;
     try {
-      initializeFirebaseAdmin({ headers: event.headers || {} });
-      // Get fresh db reference after initialization
-      db = admin.firestore();
+      const firebaseRequest = { headers: event.headers || {} };
+      initializeFirebaseAdmin(firebaseRequest);
+      firebaseApp = getFirebaseAdminApp(firebaseRequest);
+      // Keep authentication and Firestore on the same request-selected project.
+      db = firebaseApp.firestore();
     } catch (firebaseInitError) {
       console.error('[pulsecheck-chat] Firebase initialization error:', firebaseInitError);
       return { 
@@ -1367,8 +1562,8 @@ exports.handler = async (event, context) => {
         body: JSON.stringify({ error: 'Invalid JSON in request body' }) 
       };
     }
-    const { 
-      userId, 
+    const {
+      userId: claimedUserId,
       message, 
       conversationId, 
       skipEscalation = false,
@@ -1380,8 +1575,28 @@ exports.handler = async (event, context) => {
       coachDirective // Optional: iOS can send a bounded coaching directive for this turn
     } = body;
 
-    if (!userId || !message) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing userId or message' }) };
+    let verifiedCaller;
+    try {
+      verifiedCaller = await verifyPulseCheckCaller(firebaseApp, event);
+    } catch (authError) {
+      return {
+        statusCode: authError.statusCode || 401,
+        headers,
+        body: JSON.stringify({ error: authError.message || 'Sign in is required to chat with Nora.' }),
+      };
+    }
+    const userId = verifiedCaller.userId;
+    const normalizedClaimedUserId = String(claimedUserId || '').trim();
+    if (normalizedClaimedUserId && normalizedClaimedUserId !== userId) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'You cannot chat on behalf of another user.' }),
+      };
+    }
+
+    if (!message) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing message' }) };
     }
 
     // Always load user doc for preferences (even if iOS provides userContext)
@@ -1426,7 +1641,16 @@ exports.handler = async (event, context) => {
     if (conversationId) {
       convoRef = db.collection('conversations').doc(conversationId);
       const doc = await convoRef.get();
-      if (doc.exists) convo = doc.data();
+      if (doc.exists) {
+        convo = doc.data();
+        if (String(convo?.userId || '').trim() !== userId) {
+          return {
+            statusCode: 403,
+            headers,
+            body: JSON.stringify({ error: 'That conversation does not belong to this account.' }),
+          };
+        }
+      }
     }
 
     if (!convo) {
@@ -1692,7 +1916,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       : '';
 
     // Coach knowledge vault — team logistics the athlete's coach shared via "Train Nora".
-    const vaultContextSection = await getCoachVaultContext(db, userDataForPrefs);
+    const vaultContextSection = await getCoachVaultContext(db, userId, userDataForPrefs);
 
     let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${vaultContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nFollow the athlete's lead and stay with the topic they chose. Keep active assignments and curriculum in the background unless the athlete asks about them.\nTreat thanks, acknowledgments, and conversational closure as complete turns. Reply briefly and warmly without adding a question or new topic.\nInstead, acknowledge their answer and advance the topic when they are continuing the conversation.`;
     
@@ -3008,6 +3232,8 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 }
 
 exports.runtimeHelpers = {
+  getRequestHeader,
+  verifyPulseCheckCaller,
   classifyResponseContext,
   isConversationAcknowledgment,
   getTodaysNoraAssignment,
@@ -3015,4 +3241,6 @@ exports.runtimeHelpers = {
   deriveConversationSignalAnalysis,
   refreshSnapshotFromConversationSignal,
   recoverSnapshotFromSavedConversation,
+  resolveAthleteVaultScopes,
+  getCoachVaultContext,
 };

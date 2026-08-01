@@ -7,6 +7,16 @@
 
 const Stripe = require('stripe');
 const { admin, db, headers } = require('./config/firebase');
+const {
+  resolveServerStripeMode,
+  verifyFirebaseUser,
+} = require('./lib/pulsecheck-coach-services');
+const {
+  ATHLETE_APP_CHECKOUT_SOURCE,
+  ATHLETE_APP_PAYMENT_TYPE,
+  PLATFORM_SHARE_PERCENT,
+  loadCoachPricedInviteCheckout,
+} = require('./lib/pulsecheck-athlete-app-offers');
 
 // Helper to determine if the request is from localhost
 const isLocalhostRequest = (event) => {
@@ -25,6 +35,19 @@ const getStripeInstance = (event) => {
   return new Stripe(process.env.STRIPE_SECRET_KEY);
 };
 
+const getServerStripeInstance = () => {
+  const mode = resolveServerStripeMode();
+  const key = mode === 'test'
+    ? process.env.STRIPE_TEST_SECRET_KEY
+    : process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    const error = new Error('Stripe checkout is not configured.');
+    error.statusCode = 503;
+    throw error;
+  }
+  return { stripe: new Stripe(key), mode };
+};
+
 const USERS_COLLECTION = 'users';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
@@ -35,6 +58,10 @@ const TEST_ATHLETE_MONTHLY_PRICE_ID = 'price_1TfOBPIkArZc741WGAWleQke';
 const TEST_ATHLETE_ANNUAL_PRICE_ID = 'price_1TfOBPIkArZc741WwYxdNa8Q';
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const isDevFirebaseApp = (authenticatedApp) => (
+  normalizeString(authenticatedApp?.name) === 'pulsecheck-dev-admin'
+);
 
 const normalizeFirebaseIdToken = (value) => {
   const token = normalizeString(value);
@@ -76,6 +103,7 @@ const verifyCheckoutFirebaseToken = async ({ firebaseIdToken, requestedUserId })
     return {
       userId: normalizedRequestedUserId || tokenUserId,
       verified: true,
+      email: normalizeString(decodedToken.email).toLowerCase(),
     };
   } catch (error) {
     if (!error.statusCode) error.statusCode = 401;
@@ -184,6 +212,233 @@ const subscriptionCancelUrl = ({ baseUrl, fallback, appCancelUrl, userId, source
     source,
     appReturnUrl: appCancelUrl,
   });
+};
+
+const coachOfferCheckoutLockId = (teamId, userId) => `${normalizeString(teamId)}_${normalizeString(userId)}`;
+
+const reserveCoachOfferCheckout = async ({
+  database,
+  userId,
+  teamId,
+  inviteToken,
+  offerVersion,
+  redemptionMode,
+  stripeClient,
+}) => {
+  const lockId = coachOfferCheckoutLockId(teamId, userId);
+  const lockRef = database.collection('pulsecheck-athlete-app-checkout-locks').doc(lockId);
+  const singleUseInvite = normalizeString(redemptionMode).toLowerCase() !== 'general';
+  const inviteLockId = singleUseInvite ? normalizeString(inviteToken) : '';
+  const inviteLockRef = inviteLockId
+    ? database.collection('pulsecheck-athlete-app-invite-checkout-locks').doc(inviteLockId)
+    : null;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  const checkoutPendingError = (message) => {
+    const error = new Error(message || 'Your secure checkout is already being prepared.');
+    error.statusCode = 409;
+    error.checkoutPending = true;
+    return error;
+  };
+
+  const sessionMatchesScope = (session) => {
+    const metadata = session?.metadata || {};
+    return normalizeString(session?.client_reference_id) === userId
+      && normalizeString(metadata.pulsecheckTeamId) === teamId
+      && normalizeString(metadata.pulsecheckInviteToken) === inviteToken
+      && Number(metadata.pulsecheckOfferVersion) === Number(offerVersion);
+  };
+
+  const retrieveSession = async (sessionId) => {
+    if (!sessionId) return null;
+    try {
+      return await stripeClient.checkout.sessions.retrieve(sessionId);
+    } catch (error) {
+      if (error?.code === 'resource_missing' || Number(error?.statusCode) === 404) {
+        return null;
+      }
+      const lookupError = checkoutPendingError(
+        'The existing secure checkout could not be verified yet. Try again in a moment.'
+      );
+      lookupError.statusCode = 503;
+      lookupError.cause = error;
+      throw lookupError;
+    }
+  };
+
+  const inspectExistingLock = async (ref, label) => {
+    if (!ref) return { current: {}, session: null };
+    const snapshot = await ref.get();
+    const current = snapshot.exists ? snapshot.data() || {} : {};
+    const sessionId = normalizeString(current.stripeSessionId);
+    const session = await retrieveSession(sessionId);
+    if (session?.status === 'open' && normalizeString(session.url)) {
+      if (normalizeString(current.userId) === userId && sessionMatchesScope(session)) {
+        return { current, session };
+      }
+      throw checkoutPendingError(
+        label === 'invite'
+          ? 'This single-use athlete invite already has a checkout in progress.'
+          : 'An existing checkout must be completed or expire before starting another one.'
+      );
+    }
+    if (session?.status === 'complete') {
+      throw checkoutPendingError(
+        label === 'invite'
+          ? 'This single-use athlete invite has already completed checkout.'
+          : 'Your completed checkout is still being confirmed.'
+      );
+    }
+    if (
+      normalizeString(current.status) === 'creating'
+      && Number(current.leaseExpiresAtEpochSeconds) > nowSec
+    ) {
+      throw checkoutPendingError(
+        label === 'invite'
+          ? 'This single-use athlete invite already has a checkout in progress.'
+          : 'Your secure checkout is already being prepared.'
+      );
+    }
+    if (sessionId) {
+      await ref.set({
+        status: 'stale',
+        leaseExpiresAtEpochSeconds: 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    return { current, session: null };
+  };
+
+  const [userLockInspection, inviteLockInspection] = await Promise.all([
+    inspectExistingLock(lockRef, 'user'),
+    inspectExistingLock(inviteLockRef, 'invite'),
+  ]);
+  const existingSession = userLockInspection.session || inviteLockInspection.session;
+  if (existingSession) {
+    return {
+      lockId,
+      lockRef,
+      inviteLockId,
+      inviteLockRef,
+      session: existingSession,
+      attempt: Number(userLockInspection.current.attempt) || 1,
+    };
+  }
+
+  const reservation = await database.runTransaction(async (transaction) => {
+    const [userSnapshot, inviteSnapshot] = await Promise.all([
+      transaction.get(lockRef),
+      inviteLockRef ? transaction.get(inviteLockRef) : Promise.resolve(null),
+    ]);
+    const userLock = userSnapshot.exists ? userSnapshot.data() || {} : {};
+    const inviteLock = inviteSnapshot?.exists ? inviteSnapshot.data() || {} : {};
+    let reuseSessionId = '';
+    for (const [label, current] of [['user', userLock], ['invite', inviteLock]]) {
+      if (!current || Object.keys(current).length === 0) continue;
+      const sameScope = normalizeString(current.userId) === userId
+        && normalizeString(current.teamId) === teamId
+        && normalizeString(current.inviteToken) === inviteToken
+        && Number(current.offerVersion) === Number(offerVersion);
+      if (
+        normalizeString(current.status) === 'creating'
+        && Number(current.leaseExpiresAtEpochSeconds) > nowSec
+      ) {
+        throw checkoutPendingError(
+          label === 'invite'
+            ? 'This single-use athlete invite already has a checkout in progress.'
+            : 'Your secure checkout is already being prepared.'
+        );
+      }
+      if (normalizeString(current.status) === 'open' && normalizeString(current.stripeSessionId)) {
+        if (!sameScope) {
+          throw checkoutPendingError(
+            label === 'invite'
+              ? 'This single-use athlete invite already has a checkout in progress.'
+              : 'An existing checkout must be completed or expire before starting another one.'
+          );
+        }
+        const candidateSessionId = normalizeString(current.stripeSessionId);
+        if (reuseSessionId && reuseSessionId !== candidateSessionId) {
+          throw checkoutPendingError('Conflicting checkout reservations are still being resolved.');
+        }
+        reuseSessionId = candidateSessionId;
+      }
+    }
+    if (reuseSessionId) {
+      return {
+        reuseSessionId,
+        attempt: Math.max(1, Number(userLock.attempt) || 1),
+      };
+    }
+    const attempt = Math.max(0, Math.round(Number(userLock.attempt) || 0)) + 1;
+    const reservationRecord = {
+      userId,
+      teamId,
+      inviteToken,
+      offerVersion,
+      attempt,
+      status: 'creating',
+      stripeSessionId: null,
+      leaseExpiresAtEpochSeconds: nowSec + 90,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    transaction.set(lockRef, {
+      ...reservationRecord,
+      lockId,
+      createdAt: userLock.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    if (inviteLockRef) {
+      transaction.set(inviteLockRef, {
+        ...reservationRecord,
+        lockId: inviteLockId,
+        createdAt: inviteLock.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    return { reuseSessionId: '', attempt };
+  });
+
+  if (reservation.reuseSessionId) {
+    const session = await retrieveSession(reservation.reuseSessionId);
+    if (session?.status === 'open' && normalizeString(session.url) && sessionMatchesScope(session)) {
+      return {
+        lockId,
+        lockRef,
+        inviteLockId,
+        inviteLockRef,
+        session,
+        attempt: reservation.attempt,
+      };
+    }
+    const stalePatch = {
+      status: session?.status === 'complete' ? 'completed' : 'stale',
+      leaseExpiresAtEpochSeconds: 0,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await Promise.all(
+      [lockRef, inviteLockRef].filter(Boolean).map((ref) => ref.set(stalePatch, { merge: true }))
+    );
+    if (session?.status === 'complete') {
+      throw checkoutPendingError('Your completed checkout is still being confirmed.');
+    }
+    return reserveCoachOfferCheckout({
+      database,
+      userId,
+      teamId,
+      inviteToken,
+      offerVersion,
+      redemptionMode,
+      stripeClient,
+    });
+  }
+
+  return {
+    lockId,
+    lockRef,
+    inviteLockId,
+    inviteLockRef,
+    session: null,
+    attempt: reservation.attempt,
+  };
 };
 
 const normalizeBoolean = (value) => {
@@ -336,11 +591,9 @@ const handler = async (event) => {
     };
   }
 
-  // Initialize Stripe with the appropriate key based on origin
-  const stripe = getStripeInstance(event);
-
   // Support server-side redirect flow for better mobile behavior
   if (event.httpMethod === 'GET') {
+    const stripe = getStripeInstance(event);
     const qp = event.queryStringParameters || {};
     let userId = normalizeString(qp.userId);
     const email = normalizeString(qp.email);
@@ -349,6 +602,13 @@ const handler = async (event) => {
     const inviteToken = normalizeString(qp.inviteToken);
     const plan = normalizeCheckoutPlan(qp.plan);
     const source = normalizeString(qp.source);
+    if (source === ATHLETE_APP_CHECKOUT_SOURCE) {
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ message: 'Use the signed-in checkout request to continue.' }),
+      };
+    }
     const appReturnUrl = normalizeAppReturnUrl(qp.appReturnUrl);
     const appCancelUrl = normalizeAppReturnUrl(qp.appCancelUrl);
     const firebaseIdToken = firebaseIdTokenFromRequest(event, qp.firebaseIdToken || qp.authToken);
@@ -536,18 +796,49 @@ const handler = async (event) => {
   });
   const normalizedPlan = normalizeCheckoutPlan(plan);
   const normalizedSource = normalizeString(source);
+  const isCoachOfferCheckout = normalizedSource === ATHLETE_APP_CHECKOUT_SOURCE;
   const normalizedAppReturnUrl = normalizeAppReturnUrl(appReturnUrl);
   const normalizedAppCancelUrl = normalizeAppReturnUrl(appCancelUrl);
   const firebaseIdToken = firebaseIdTokenFromRequest(event, bodyFirebaseIdToken || authToken);
   let checkoutAuthVerified = false;
+  let checkoutAuthEmail = '';
+  let checkoutAuthEmailVerified = false;
+  let coachOfferDatabase = null;
+  let coachOfferDevFirebase = false;
+
+  if (isCoachOfferCheckout && !firebaseIdToken) {
+    return {
+      statusCode: 401,
+      headers,
+      body: JSON.stringify({ message: 'Sign in before starting the team subscription checkout.' }),
+    };
+  }
 
   try {
-    const authResult = await verifyCheckoutFirebaseToken({
-      firebaseIdToken,
-      requestedUserId: userId,
-    });
-    userId = authResult.userId;
-    checkoutAuthVerified = authResult.verified;
+    if (isCoachOfferCheckout) {
+      const authenticated = await verifyFirebaseUser(event, {
+        authErrorMessage: 'Sign in before starting the team subscription checkout.',
+      });
+      if (userId && userId !== authenticated.userId) {
+        const mismatchError = new Error('Firebase token user does not match requested user.');
+        mismatchError.statusCode = 403;
+        throw mismatchError;
+      }
+      userId = authenticated.userId;
+      checkoutAuthVerified = true;
+      checkoutAuthEmail = normalizeString(authenticated.decoded?.email).toLowerCase();
+      checkoutAuthEmailVerified = authenticated.decoded?.email_verified === true;
+      coachOfferDatabase = authenticated.app.firestore();
+      coachOfferDevFirebase = isDevFirebaseApp(authenticated.app);
+    } else {
+      const authResult = await verifyCheckoutFirebaseToken({
+        firebaseIdToken,
+        requestedUserId: userId,
+      });
+      userId = authResult.userId;
+      checkoutAuthVerified = authResult.verified;
+      checkoutAuthEmail = normalizeString(authResult.email).toLowerCase();
+    }
   } catch (authError) {
     console.warn('[AthleteCheckout] Invalid checkout auth token:', authError);
     return {
@@ -558,6 +849,160 @@ const handler = async (event) => {
         error: authError?.message,
       }),
     };
+  }
+
+  if (isCoachOfferCheckout && !checkoutAuthVerified) {
+    return {
+      statusCode: 401,
+      headers,
+      body: JSON.stringify({ message: 'Sign in before starting the team subscription checkout.' }),
+    };
+  }
+
+  if (isCoachOfferCheckout) {
+    try {
+      const serverStripe = getServerStripeInstance();
+      const database = coachOfferDatabase;
+      if (!database) {
+        const databaseError = new Error('The authenticated team database is unavailable.');
+        databaseError.statusCode = 503;
+        throw databaseError;
+      }
+      const checkout = await loadCoachPricedInviteCheckout({
+        database,
+        userId,
+        authenticatedEmail: checkoutAuthEmail,
+        authenticatedEmailVerified: checkoutAuthEmailVerified,
+        inviteToken,
+        requestedTeamId: teamId,
+        stripeMode: serverStripe.mode,
+      });
+      const baseUrl = normalizeString(process.env.SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+      const offerId = normalizeString(checkout.offer.offerId || checkout.offer.id || checkout.teamId);
+      const offerVersion = Math.max(0, Number(checkout.offer.version) || 0);
+      const reservation = await reserveCoachOfferCheckout({
+        database,
+        userId,
+        teamId: checkout.teamId,
+        inviteToken: checkout.inviteToken,
+        offerVersion,
+        redemptionMode: checkout.invite?.redemptionMode,
+        stripeClient: serverStripe.stripe,
+      });
+      if (reservation.session) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            sessionId: reservation.session.id,
+            url: reservation.session.url,
+            checkoutUrl: reservation.session.url,
+            reused: true,
+          }),
+        };
+      }
+      const metadata = {
+        payment_type: ATHLETE_APP_PAYMENT_TYPE,
+        pulsecheckAthleteAppOffer: 'true',
+        userId,
+        userType: 'athlete',
+        pulsecheckOrganizationId: checkout.organizationId,
+        pulsecheckTeamId: checkout.teamId,
+        pulsecheckInviteToken: checkout.inviteToken,
+        pulsecheckOfferId: offerId,
+        pulsecheckOfferVersion: String(offerVersion),
+        pulsecheckCheckoutLockId: reservation.lockId,
+        pulsecheckInviteCheckoutLockId: reservation.inviteLockId || '',
+        pulsecheckRevenueRecipientUserId: checkout.revenueRecipientUserId || '',
+        pulsecheckPlatformSharePercent: String(PLATFORM_SHARE_PERCENT),
+        pulsecheckStripeFeePolicy: 'coach-pays-actual-stripe-processing-fee',
+        pulsecheckFirebaseMode: coachOfferDevFirebase ? 'dev' : 'prod',
+        checkoutSource: ATHLETE_APP_CHECKOUT_SOURCE,
+        checkoutPlan: 'monthly',
+        checkoutAuthVerified: 'true',
+      };
+      const devFirebaseSuffix = coachOfferDevFirebase ? '&devFirebase=1' : '';
+      const successUrl = `${baseUrl}/PulseCheck/athlete-subscription-complete?session_id={CHECKOUT_SESSION_ID}&invite=${encodeURIComponent(checkout.inviteToken)}${devFirebaseSuffix}`;
+      const cancelUrl = `${baseUrl}/PulseCheck/athlete-offer/${encodeURIComponent(checkout.inviteToken)}?checkout=cancelled${devFirebaseSuffix}`;
+      let session;
+      try {
+        session = await serverStripe.stripe.checkout.sessions.create({
+          line_items: [{ price: checkout.priceId, quantity: 1 }],
+          mode: 'subscription',
+          client_reference_id: userId,
+          ...(checkout.email ? { customer_email: checkout.email } : {}),
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          metadata,
+          subscription_data: { metadata },
+        }, {
+          idempotencyKey: `pc-athlete-offer:${serverStripe.mode}:${reservation.lockId}:${offerVersion}:${reservation.attempt}`,
+        });
+      } catch (error) {
+        const failedPatch = {
+          status: 'failed',
+          leaseExpiresAtEpochSeconds: 0,
+          lastError: normalizeString(error?.message).slice(0, 300) || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        await Promise.all(
+          [reservation.lockRef, reservation.inviteLockRef]
+            .filter(Boolean)
+            .map((ref) => ref.set(failedPatch, { merge: true }))
+        );
+        throw error;
+      }
+      const openPatch = {
+        status: 'open',
+        stripeSessionId: session.id,
+        leaseExpiresAtEpochSeconds: 0,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      await Promise.all(
+        [reservation.lockRef, reservation.inviteLockRef]
+          .filter(Boolean)
+          .map((ref) => ref.set(openPatch, { merge: true }))
+      );
+      await database.collection('pulsecheck-athlete-app-checkouts').doc(session.id).set({
+        sessionId: session.id,
+        status: 'created',
+        userId,
+        organizationId: checkout.organizationId,
+        teamId: checkout.teamId,
+        inviteToken: checkout.inviteToken,
+        offerId,
+        offerVersion,
+        checkoutLockId: reservation.lockId,
+        inviteCheckoutLockId: reservation.inviteLockId || null,
+        stripeMode: serverStripe.mode,
+        firebaseMode: coachOfferDevFirebase ? 'dev' : 'prod',
+        stripePriceId: checkout.priceId,
+        source: ATHLETE_APP_CHECKOUT_SOURCE,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          sessionId: session.id,
+          url: session.url,
+          checkoutUrl: session.url,
+        }),
+      };
+    } catch (error) {
+      const statusCode = Number(error?.statusCode) || 500;
+      if (statusCode >= 500) console.error('[AthleteCheckout] Coach offer checkout failed:', error);
+      return {
+        statusCode,
+        headers,
+        body: JSON.stringify({
+          message: error?.message || 'The team subscription checkout could not be started.',
+          alreadyActive: error?.alreadyActive === true,
+          checkoutPending: error?.checkoutPending === true,
+        }),
+      };
+    }
   }
 
   if (!resolvedPriceId || !userId) {
@@ -574,6 +1019,10 @@ const handler = async (event) => {
       }) 
     };
   }
+
+  // The legacy checkout flow intentionally retains its origin-selected Stripe
+  // behavior. Coach-priced team offers above always use the server-selected mode.
+  const stripe = getStripeInstance(event);
 
   // Validate that this is an athlete price ID
   // Accept both legacy Pulse (athlete) and PulseCheck price envs (if set).

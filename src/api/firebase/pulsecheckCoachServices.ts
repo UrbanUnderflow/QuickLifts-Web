@@ -103,6 +103,41 @@ export const pulseCheckCoachServices = {
     });
   },
 
+  async listForCoachTeam(
+    coachUserId: string,
+    teamId: string,
+    organizationId: string
+  ): Promise<PulseCheckCoachService[]> {
+    const normalizedCoachId = normalizeString(coachUserId);
+    const normalizedTeamId = normalizeString(teamId);
+    const normalizedOrganizationId = normalizeString(organizationId);
+    if (!normalizedCoachId || !normalizedTeamId || !normalizedOrganizationId) return [];
+    const snapshot = await getDocs(
+      query(
+        collection(db, PULSECHECK_COACH_SERVICES_COLLECTION),
+        where('coachUserId', '==', normalizedCoachId),
+        where('teamId', '==', normalizedTeamId)
+      )
+    );
+    return snapshot.docs
+      .map(mapDoc)
+      .filter(
+        (service) =>
+          service.coachUserId === normalizedCoachId &&
+          service.teamId === normalizedTeamId &&
+          service.organizationId === normalizedOrganizationId
+      )
+      .sort((left, right) => {
+        const leftMs = typeof (left.createdAt as { toMillis?: () => number })?.toMillis === 'function'
+          ? (left.createdAt as { toMillis: () => number }).toMillis()
+          : 0;
+        const rightMs = typeof (right.createdAt as { toMillis?: () => number })?.toMillis === 'function'
+          ? (right.createdAt as { toMillis: () => number }).toMillis()
+          : 0;
+        return rightMs - leftMs;
+      });
+  },
+
   async create(input: Omit<PulseCheckCoachService, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const docRef = await addDoc(collection(db, PULSECHECK_COACH_SERVICES_COLLECTION), {
       coachUserId: normalizeString(input.coachUserId),

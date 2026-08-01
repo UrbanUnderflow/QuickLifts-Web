@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import type { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
@@ -304,5 +305,12 @@ const InboxPage: React.FC = () => {
     </CoachLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=inbox',
+    permanent: false,
+  },
+});
 
 export default InboxPage;

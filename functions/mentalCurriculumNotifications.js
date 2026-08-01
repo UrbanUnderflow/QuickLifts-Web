@@ -141,33 +141,6 @@ async function getUserDisplayName(userId) {
   return 'Athlete';
 }
 
-async function resolveCompletionCoachId(completion) {
-  if (completion.dailyAssignmentId) {
-    try {
-      const assignmentDoc = await db.collection('pulsecheck-daily-assignments').doc(completion.dailyAssignmentId).get();
-      if (assignmentDoc.exists) {
-        const assignmentData = assignmentDoc.data();
-        if (assignmentData?.coachId) {
-          return assignmentData.coachId;
-        }
-      }
-    } catch (error) {
-      console.error('Error resolving coach from Nora daily assignment:', error);
-    }
-  }
-
-  try {
-    const progressDoc = await db.collection('athlete-mental-progress').doc(completion.userId).get();
-    if (progressDoc.exists) {
-      return progressDoc.data()?.coachId || null;
-    }
-  } catch (error) {
-    console.error('Error resolving coach from athlete progress:', error);
-  }
-
-  return null;
-}
-
 async function upsertCoachNotification(notificationId, payload) {
   const basePayload = {
     read: false,
@@ -178,6 +151,314 @@ async function upsertCoachNotification(notificationId, payload) {
   };
 
   await db.collection('coach-notifications').doc(notificationId).set(basePayload, { merge: true });
+}
+
+function cleanOptionalString(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function isActivePulseCheckRecord(data) {
+  if (!data || data.revokedAt) {
+    return false;
+  }
+
+  const status = cleanOptionalString(data.status)?.toLowerCase();
+  return !status || status === 'active';
+}
+
+function isActivePulseCheckContainer(data) {
+  return isActivePulseCheckRecord(data)
+    && cleanOptionalString(data.status)?.toLowerCase() === 'active'
+    && !data.archivedAt
+    && !data.deletedAt;
+}
+
+function staffMembershipCanCoachAthlete(membership, athleteId) {
+  const role = cleanOptionalString(membership?.role)?.toLowerCase();
+  const capabilities = Array.isArray(membership?.staffCapabilities)
+    ? membership.staffCapabilities
+      .map((value) => cleanOptionalString(value)?.toLowerCase())
+      .filter(Boolean)
+    : [];
+  const hasCoachingCapability = role === 'team-admin'
+    || capabilities.includes('admin')
+    || capabilities.includes('coaching')
+    || (role === 'coach' && capabilities.length === 0);
+  const rosterVisibility = cleanOptionalString(
+    membership?.rosterVisibilityScope
+  )?.toLowerCase();
+  const canSeeAthlete = !rosterVisibility
+    || rosterVisibility === 'team'
+    || (
+      rosterVisibility === 'assigned'
+      && Array.isArray(membership.allowedAthleteIds)
+      && membership.allowedAthleteIds.includes(athleteId)
+    );
+  return role !== 'athlete' && hasCoachingCapability && canSeeAthlete;
+}
+
+function selfAssignmentMatchesRecommendation(assignment, recommendation) {
+  const athleteId = cleanOptionalString(assignment?.athleteId);
+  const coachId = cleanOptionalString(assignment?.coachId);
+  const recommendationId = cleanOptionalString(assignment?.recommendationId);
+  const exerciseId = cleanOptionalString(assignment?.exerciseId);
+  const teamId = cleanOptionalString(assignment?.teamId);
+  const organizationId = cleanOptionalString(assignment?.organizationId);
+  const recommendationStatus = cleanOptionalString(
+    recommendation?.status
+  )?.toLowerCase();
+  return assignment?.source === 'athlete_self_assign'
+    && Boolean(
+      athleteId
+      && coachId
+      && recommendationId
+      && exerciseId
+      && teamId
+      && organizationId
+    )
+    && cleanOptionalString(recommendation?.athleteId) === athleteId
+    && cleanOptionalString(recommendation?.coachId) === coachId
+    && cleanOptionalString(recommendation?.exerciseId) === exerciseId
+    && teamId === cleanOptionalString(recommendation?.teamId)
+    && organizationId === cleanOptionalString(recommendation?.organizationId)
+    && ['pending', 'accepted'].includes(recommendationStatus);
+}
+
+function activeTeamScopeMatchesSelfAssignment({
+  athleteId,
+  coachId,
+  teamId,
+  organizationId,
+  team,
+  organization,
+  athleteMembership,
+  coachMembership,
+}) {
+  return Boolean(teamId && organizationId)
+    && isActivePulseCheckContainer(team)
+    && cleanOptionalString(team.organizationId) === organizationId
+    && isActivePulseCheckContainer(organization)
+    && isActivePulseCheckRecord(athleteMembership)
+    && cleanOptionalString(athleteMembership.userId) === athleteId
+    && cleanOptionalString(athleteMembership.teamId) === teamId
+    && cleanOptionalString(athleteMembership.organizationId) === organizationId
+    && cleanOptionalString(athleteMembership.role)?.toLowerCase() === 'athlete'
+    && isActivePulseCheckRecord(coachMembership)
+    && cleanOptionalString(coachMembership.userId) === coachId
+    && cleanOptionalString(coachMembership.teamId) === teamId
+    && cleanOptionalString(coachMembership.organizationId) === organizationId
+    && staffMembershipCanCoachAthlete(coachMembership, athleteId);
+}
+
+async function validateActiveCoachAthleteRelationship({
+  athleteId,
+  coachId,
+  teamId,
+  organizationId,
+}) {
+  if (!athleteId || !coachId || !teamId || !organizationId) {
+    return null;
+  }
+  const [
+    teamSnapshot,
+    organizationSnapshot,
+    athleteMembershipSnapshot,
+    coachMembershipSnapshot,
+  ] = await Promise.all([
+    db.collection('pulsecheck-teams').doc(teamId).get(),
+    db.collection('pulsecheck-organizations').doc(organizationId).get(),
+    db.collection('pulsecheck-team-memberships').doc(`${teamId}_${athleteId}`).get(),
+    db.collection('pulsecheck-team-memberships').doc(`${teamId}_${coachId}`).get(),
+  ]);
+  if (
+    !teamSnapshot.exists
+    || !organizationSnapshot.exists
+    || !athleteMembershipSnapshot.exists
+    || !coachMembershipSnapshot.exists
+    || !activeTeamScopeMatchesSelfAssignment({
+      athleteId,
+      coachId,
+      teamId,
+      organizationId,
+      team: teamSnapshot.data(),
+      organization: organizationSnapshot.data(),
+      athleteMembership: athleteMembershipSnapshot.data(),
+      coachMembership: coachMembershipSnapshot.data(),
+    })
+  ) {
+    return null;
+  }
+  return { athleteId, coachId, teamId, organizationId };
+}
+
+function completionMatchesScopedAssignment(completion, assignment, pathAthleteId) {
+  const athleteId = cleanOptionalString(completion?.userId);
+  return Boolean(
+    athleteId
+    && athleteId === cleanOptionalString(pathAthleteId)
+    && cleanOptionalString(completion?.dailyAssignmentId)
+    && cleanOptionalString(assignment?.athleteId) === athleteId
+    && cleanOptionalString(assignment?.coachId)
+    && cleanOptionalString(assignment?.teamId)
+    && cleanOptionalString(assignment?.organizationId)
+  );
+}
+
+async function resolveCompletionCoachScope(completion, pathAthleteId) {
+  const dailyAssignmentId = cleanOptionalString(completion?.dailyAssignmentId);
+  if (!dailyAssignmentId) {
+    return null;
+  }
+  try {
+    const assignmentSnapshot = await db
+      .collection('pulsecheck-daily-assignments')
+      .doc(dailyAssignmentId)
+      .get();
+    if (
+      !assignmentSnapshot.exists
+      || !completionMatchesScopedAssignment(
+        completion,
+        assignmentSnapshot.data(),
+        pathAthleteId
+      )
+    ) {
+      return null;
+    }
+    const assignment = assignmentSnapshot.data();
+    return validateActiveCoachAthleteRelationship({
+      athleteId: cleanOptionalString(assignment.athleteId),
+      coachId: cleanOptionalString(assignment.coachId),
+      teamId: cleanOptionalString(assignment.teamId),
+      organizationId: cleanOptionalString(assignment.organizationId),
+    });
+  } catch (error) {
+    console.error('Error resolving active coach scope from Nora daily assignment:', error);
+    return null;
+  }
+}
+
+async function validateScopedSelfAssignment(assignmentId, assignment) {
+  if (assignment.source !== 'athlete_self_assign') {
+    return null;
+  }
+
+  const athleteId = cleanOptionalString(assignment.athleteId);
+  const coachId = cleanOptionalString(assignment.coachId);
+  const recommendationId = cleanOptionalString(assignment.recommendationId);
+  const exerciseId = cleanOptionalString(assignment.exerciseId);
+  if (!athleteId || !coachId || !recommendationId || !exerciseId) {
+    console.error(`Self-assignment ${assignmentId} is missing its trusted recommendation fields`);
+    return null;
+  }
+
+  const recommendationSnapshot = await db
+    .collection('mental-recommendations')
+    .doc(recommendationId)
+    .get();
+  if (!recommendationSnapshot.exists) {
+    console.error(`Self-assignment ${assignmentId} references a missing recommendation`);
+    return null;
+  }
+
+  const recommendation = recommendationSnapshot.data();
+  const assignmentTeamId = cleanOptionalString(assignment.teamId);
+  const assignmentOrganizationId = cleanOptionalString(assignment.organizationId);
+  if (!assignmentTeamId || !assignmentOrganizationId) {
+    console.error(`Self-assignment ${assignmentId} uses the retired unscoped recommendation path`);
+    return null;
+  }
+  if (!selfAssignmentMatchesRecommendation(assignment, recommendation)) {
+    console.error(`Self-assignment ${assignmentId} does not match its recommendation`);
+    return null;
+  }
+
+  const [
+    teamSnapshot,
+    organizationSnapshot,
+    athleteMembership,
+    coachMembership,
+  ] = await Promise.all([
+    db.collection('pulsecheck-teams').doc(assignmentTeamId).get(),
+    db.collection('pulsecheck-organizations').doc(assignmentOrganizationId).get(),
+    db.collection('pulsecheck-team-memberships').doc(`${assignmentTeamId}_${athleteId}`).get(),
+    db.collection('pulsecheck-team-memberships').doc(`${assignmentTeamId}_${coachId}`).get(),
+  ]);
+  const team = teamSnapshot.data();
+  const organization = organizationSnapshot.data();
+  const athleteMembershipData = athleteMembership.data();
+  const coachMembershipData = coachMembership.data();
+  if (!teamSnapshot.exists
+    || !organizationSnapshot.exists
+    || !athleteMembership.exists
+    || !coachMembership.exists
+    || !activeTeamScopeMatchesSelfAssignment({
+      athleteId,
+      coachId,
+      teamId: assignmentTeamId,
+      organizationId: assignmentOrganizationId,
+      team,
+      organization,
+      athleteMembership: athleteMembershipData,
+      coachMembership: coachMembershipData,
+    })) {
+    console.error(`Self-assignment ${assignmentId} no longer has an active team relationship`);
+    return null;
+  }
+
+  return {
+    athleteId,
+    coachId,
+    recommendationId,
+    exerciseId,
+    teamId: assignmentTeamId,
+    organizationId: assignmentOrganizationId,
+  };
+}
+
+async function createSelfAssignmentCoachNotification(
+  assignmentId,
+  assignment,
+  exerciseName,
+  validatedScope
+) {
+  const scope = validatedScope
+    || await validateScopedSelfAssignment(assignmentId, assignment);
+  if (!scope) {
+    return false;
+  }
+
+  const notification = {
+    type: 'athlete_self_assignment',
+    coachId: scope.coachId,
+    athleteId: scope.athleteId,
+    exerciseId: scope.exerciseId,
+    exerciseName,
+    assignmentId,
+    recommendationId: scope.recommendationId,
+    read: false,
+    archived: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  if (scope.teamId) {
+    notification.teamId = scope.teamId;
+  }
+  if (scope.organizationId) {
+    notification.organizationId = scope.organizationId;
+  }
+
+  const notificationReference = db
+    .collection('coach-notifications')
+    .doc(`athlete-self-assignment-${assignmentId}`);
+  try {
+    await notificationReference.create(notification);
+    return true;
+  } catch (error) {
+    if (error?.code === 6 || error?.code === 'already-exists') {
+      return true;
+    }
+    throw error;
+  }
 }
 
 // ============================================================================
@@ -207,6 +488,21 @@ exports.onCurriculumAssignmentCreated = onDocumentCreated(
       return null;
     }
 
+    let validatedSelfAssignmentScope = null;
+    if (assignmentData.source === 'athlete_self_assign') {
+      validatedSelfAssignmentScope = await validateScopedSelfAssignment(
+        assignmentId,
+        assignmentData
+      );
+      if (!validatedSelfAssignmentScope) {
+        console.log(
+          `Skipping all notifications for self-assignment ${assignmentId}: `
+          + 'the recommendation has no exact active team scope'
+        );
+        return null;
+      }
+    }
+
     console.log(`New curriculum assignment ${assignmentId} created for athlete ${athleteId}`);
 
     // Get exercise name
@@ -222,6 +518,15 @@ exports.onCurriculumAssignmentCreated = onDocumentCreated(
       }
     } catch (error) {
       console.error('Error fetching exercise:', error);
+    }
+
+    if (validatedSelfAssignmentScope) {
+      await createSelfAssignmentCoachNotification(
+        assignmentId,
+        assignmentData,
+        exerciseName,
+        validatedSelfAssignmentScope
+      );
     }
 
     // Get coach name
@@ -288,6 +593,17 @@ exports.onCurriculumAssignmentUpdated = onDocumentUpdated(
     const statusChanged = before.status !== after.status;
     
     if (!statusChanged) {
+      return null;
+    }
+
+    if (
+      after.source === 'athlete_self_assign'
+      && !await validateScopedSelfAssignment(assignmentId, after)
+    ) {
+      console.log(
+        `Skipping status notifications for self-assignment ${assignmentId}: `
+        + 'the recommendation has no exact active team scope'
+      );
       return null;
     }
 
@@ -408,6 +724,17 @@ exports.scheduledDailyReminder = onSchedule(
         const assignmentId = doc.id;
         const { athleteId, exerciseId, reminderEnabled, startDate, targetDays } = assignment;
 
+        if (
+          assignment.source === 'athlete_self_assign'
+          && !await validateScopedSelfAssignment(assignmentId, assignment)
+        ) {
+          console.log(
+            `Skipping reminders for self-assignment ${assignmentId}: `
+            + 'the recommendation has no exact active team scope'
+          );
+          continue;
+        }
+
         // Skip if reminders are disabled
         if (!reminderEnabled) {
           continue;
@@ -473,6 +800,17 @@ exports.scheduledCheckpoints = onSchedule(
         const assignment = doc.data();
         const assignmentId = doc.id;
         const { athleteId, coachId, startDate, completionRate, targetDays, extendedCount } = assignment;
+
+        if (
+          assignment.source === 'athlete_self_assign'
+          && !await validateScopedSelfAssignment(assignmentId, assignment)
+        ) {
+          console.log(
+            `Skipping checkpoints for self-assignment ${assignmentId}: `
+            + 'the recommendation has no exact active team scope'
+          );
+          continue;
+        }
 
         const dayNumber = getDayNumber(startDate);
         const exerciseName = assignment.exercise?.name || 'the exercise';
@@ -659,14 +997,27 @@ exports.onNoraAutoAssignmentCreated = onDocumentCreated(
     }
 
     const assignmentId = event.params.assignmentId;
-    const { coachId, athleteId } = assignment;
+    const coachId = cleanOptionalString(assignment.coachId);
+    const athleteId = cleanOptionalString(assignment.athleteId);
+    const teamId = cleanOptionalString(assignment.teamId);
+    const organizationId = cleanOptionalString(assignment.organizationId);
 
-    if (!coachId || !athleteId) {
-      console.log(`Skipping Nora auto-assignment ${assignmentId}: missing coachId or athleteId`);
+    if (!coachId || !athleteId || !teamId || !organizationId) {
+      console.log(`Skipping Nora auto-assignment ${assignmentId}: missing active team scope`);
       return null;
     }
 
     try {
+      const activeScope = await validateActiveCoachAthleteRelationship({
+        coachId,
+        athleteId,
+        teamId,
+        organizationId,
+      });
+      if (!activeScope) {
+        console.log(`Skipping Nora auto-assignment ${assignmentId}: coach/athlete relationship is inactive`);
+        return null;
+      }
       const athleteName = await getUserDisplayName(athleteId);
       const assignmentLabel = buildNoraAssignmentLabel(assignment);
       const pushTitle =
@@ -681,6 +1032,8 @@ exports.onNoraAutoAssignmentCreated = onDocumentCreated(
         category: 'athlete',
         coachId,
         athleteId,
+        teamId,
+        organizationId,
         title: pushTitle,
         message: pushBody,
         actionRequired: assignment.actionType !== 'defer',
@@ -690,6 +1043,8 @@ exports.onNoraAutoAssignmentCreated = onDocumentCreated(
         metadata: {
           sourceDate: assignment.sourceDate || formatDate(Date.now()),
           actionType: assignment.actionType || 'sim',
+          teamId,
+          organizationId,
         },
       });
 
@@ -702,6 +1057,8 @@ exports.onNoraAutoAssignmentCreated = onDocumentCreated(
           athleteId,
           sourceDate: assignment.sourceDate || formatDate(Date.now()),
           actionType: assignment.actionType || 'sim',
+          teamId,
+          organizationId,
           target: 'coach_mental_training',
           webUrl: 'https://fitwithpulse.ai/coach/mentalGames?tab=assignments',
         },
@@ -747,13 +1104,22 @@ exports.onPulseCheckSessionSummaryCreated = onDocumentUpdated(
     }
 
     try {
-      const coachId = await resolveCompletionCoachId(after);
-      if (!coachId) {
-        console.log('Skipping session summary coach notification: no coachId resolved');
+      const activeScope = await resolveCompletionCoachScope(
+        after,
+        event.params.userId
+      );
+      if (!activeScope) {
+        console.log('Skipping session summary coach notification: no active scoped coach relationship');
         return null;
       }
+      const {
+        coachId,
+        athleteId,
+        teamId,
+        organizationId,
+      } = activeScope;
 
-      const athleteName = await getUserDisplayName(after.userId);
+      const athleteName = await getUserDisplayName(athleteId);
       const summary = after.sessionSummary || {};
       const title = summary.programChanged
         ? 'Pulse Check updated the next rep'
@@ -765,7 +1131,9 @@ exports.onPulseCheckSessionSummaryCreated = onDocumentUpdated(
         type: 'pulsecheck_session_update',
         category: 'athlete',
         coachId,
-        athleteId: after.userId,
+        athleteId,
+        teamId,
+        organizationId,
         title,
         message: body,
         actionRequired: Boolean(summary.programChanged),
@@ -777,6 +1145,8 @@ exports.onPulseCheckSessionSummaryCreated = onDocumentUpdated(
           completedActionLabel: summary.completedActionLabel || '',
           nextActionLabel: summary.nextActionLabel || '',
           programChanged: Boolean(summary.programChanged),
+          teamId,
+          organizationId,
         },
       });
 
@@ -785,9 +1155,11 @@ exports.onPulseCheckSessionSummaryCreated = onDocumentUpdated(
         title,
         body,
         {
-          athleteId: after.userId,
+          athleteId,
           completionId: event.params.completionId,
           dailyAssignmentId: after.dailyAssignmentId || '',
+          teamId,
+          organizationId,
           target: 'coach_mental_training',
           webUrl: 'https://fitwithpulse.ai/coach/mentalGames',
         },
@@ -905,3 +1277,10 @@ exports.processEmailQueue = onSchedule(
     }
   }
 );
+
+exports.__selfAssignmentTestUtils = {
+  activeTeamScopeMatchesSelfAssignment,
+  completionMatchesScopedAssignment,
+  isActivePulseCheckRecord,
+  selfAssignmentMatchesRecommendation,
+};

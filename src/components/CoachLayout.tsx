@@ -57,14 +57,16 @@ const CoachLayout: React.FC<Props> = ({
   const canSeeEarnings = !!(coachProfile?.earningsAccess === true || coachProfile?.userType === 'partner');
 
   const navItems = [
-    { href: '/coach/dashboard', label: 'Dashboard' },
-    { href: '/coach/mental-training', label: 'Mental Training' },
-    { href: '/coach/referrals', label: 'Invites' },
-    ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-    { href: '/coach/staff', label: 'Staff' },
-    { href: '/coach/inbox', label: 'Inbox' },
+    { href: '/coach/dashboard', label: 'Dashboard', dashboardView: 'home' },
+    { href: '/coach/dashboard?view=nora', label: 'Train Nora', dashboardView: 'nora' },
+    { href: '/coach/dashboard?view=referrals', label: 'Invites', dashboardView: 'referrals' },
+    ...(canSeeEarnings
+      ? [{ href: '/coach/dashboard?view=earnings', label: 'Earnings', dashboardView: 'earnings' }]
+      : []),
+    { href: '/coach/dashboard?view=staff', label: 'Staff', dashboardView: 'staff' },
+    { href: '/coach/dashboard?view=inbox', label: 'Inbox', dashboardView: 'inbox' },
     { href: '/coach/notifications', label: 'Notifications', badgeCount: unreadNotificationCount },
-    { href: '/coach/profile', label: 'Profile' }
+    { href: '/coach/dashboard?view=settings', label: 'Profile', dashboardView: 'settings' }
   ];
 
   useEffect(() => {
@@ -159,7 +161,12 @@ const CoachLayout: React.FC<Props> = ({
                   {/* Navigation Tabs */}
                   <nav className="flex items-center gap-1 overflow-x-auto scrollbar-hide -mx-2 px-2">
                     {navItems.map((item, index) => {
-                      const isActive = router.pathname === item.href;
+                      const currentDashboardView =
+                        typeof router.query.view === 'string' ? router.query.view : 'home';
+                      const isActive = item.dashboardView
+                        ? router.pathname === '/coach/dashboard'
+                          && currentDashboardView === item.dashboardView
+                        : router.pathname === item.href;
                       return (
                         <motion.div
                           key={item.href}

@@ -49,7 +49,16 @@ test('CoachReportView has a coach-surface-only prop contract', () => {
 test('hosted coach report route renders only the coach surface', () => {
   const source = fs.readFileSync(hostedReportRoutePath, 'utf8');
 
-  assert.match(source, /pulsecheckCoachReportService\.getReport\(teamId,\s*reportId\)/, 'hosted route should load the scoped stored report');
+  assert.match(
+    source,
+    /pulsecheckCoachReportService\.getCoachView\(access\.team\.id,\s*reportId\)/,
+    'hosted route should load the sanitized coach projection for the authorized team'
+  );
+  assert.doesNotMatch(
+    source,
+    /pulsecheckCoachReportService\.getReport/,
+    'hosted route must not load the reviewer report'
+  );
   assert.match(source, /hydrateCoachSurfaceMeta/, 'hosted route should adapt only the coach-facing report data');
   assert.match(source, /<CoachReportView\s+report=\{coachSurface\}\s+sport=\{sport\}/, 'hosted route should render the coach surface through CoachReportView');
 

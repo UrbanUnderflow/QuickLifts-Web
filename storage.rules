@@ -26,18 +26,151 @@ service firebase.storage {
       return isAdminByClaim() || isAdminByFirestore();
     }
 
+    function pcMembership(teamId) {
+      return firestore.get(
+        /databases/(default)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid)
+      ).data;
+    }
+
+    function pcTeam(teamId) {
+      return firestore.get(
+        /databases/(default)/documents/pulsecheck-teams/$(teamId)
+      ).data;
+    }
+
+    function pcOrganization(organizationId) {
+      return firestore.get(
+        /databases/(default)/documents/pulsecheck-organizations/$(organizationId)
+      ).data;
+    }
+
+    function pcHasActiveTeamMembership(teamId) {
+      let membership = pcMembership(teamId);
+      let team = pcTeam(teamId);
+      let organization = pcOrganization(team.organizationId);
+      return isAuthenticated()
+        && membership != null
+        && team != null
+        && organization != null
+        && membership.userId == request.auth.uid
+        && membership.teamId == teamId
+        && membership.organizationId == team.organizationId
+        && (!('status' in membership) || membership.status == 'active')
+        && (!('revokedAt' in membership) || membership.revokedAt == null)
+        && team.status == 'active'
+        && (!('archivedAt' in team) || team.archivedAt == null)
+        && (!('deletedAt' in team) || team.deletedAt == null)
+        && organization.status == 'active'
+        && (!('archivedAt' in organization) || organization.archivedAt == null)
+        && (!('deletedAt' in organization) || organization.deletedAt == null);
+    }
+
+    function pcMembershipHasCapability(teamId, capability) {
+      let membership = pcMembership(teamId);
+      return membership.role == 'team-admin'
+        || (
+          membership.staffCapabilities is list
+          && capability in membership.staffCapabilities
+        )
+        || (
+          (
+            !('staffCapabilities' in membership)
+            || (
+              membership.staffCapabilities is list
+              && membership.staffCapabilities.size() == 0
+            )
+          )
+          && (
+            (capability == 'coaching' && membership.role == 'coach')
+            || (capability == 'administrative' && membership.role == 'support-staff')
+          )
+        );
+    }
+
+    function pcCanUseNora(teamId) {
+      return pcHasActiveTeamMembership(teamId)
+        && pcMembership(teamId).role != 'athlete'
+        && (
+          pcMembershipHasCapability(teamId, 'admin')
+          || pcMembershipHasCapability(teamId, 'coaching')
+          || pcMembershipHasCapability(teamId, 'administrative')
+        );
+    }
+
+    function pcHasValidLegacyCoachProfile(coachId, teamId) {
+      let coach = firestore.get(
+        /databases/(default)/documents/coaches/$(coachId)
+      ).data;
+      return isAuthenticated()
+        && request.auth.uid == coachId
+        && teamId == 'legacy:' + coachId
+        && coach != null
+        && (!('userId' in coach) || coach.userId == coachId)
+        && (!('userType' in coach) || coach.userType == 'coach')
+        && (!('status' in coach) || coach.status == 'active')
+        && (!('deletedAt' in coach) || coach.deletedAt == null)
+        && (!('revokedAt' in coach) || coach.revokedAt == null);
+    }
+
+    function pcIsLegacyEncodedFolder(teamId) {
+      return pcTeam(teamId) == null
+        && !teamId.matches('legacy:.*');
+    }
+
     // Press kit assets should be public to view/download, but uploads must be restricted.
     match /press_assets/{allPaths=**} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Train Nora knowledge vault uploads. Files live under the owning coach's
-    // uid; only that coach may write. Any signed-in user may read (e.g. a
-    // linked athlete's Nora pulling shared context).
-    match /coach-nora-vault/{coachId}/{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == coachId;
+    // Team-scoped Nora uploads. Owners may read/delete old encoded folder names
+    // for cleanup, but all new writes require the raw active team id (or the
+    // exact synthetic legacy workspace) and a 25 MB ceiling.
+    match /coach-nora-vault/{coachId}/{teamId}/{fileName} {
+      allow read: if isAuthenticated()
+        && (
+          (
+            request.auth.uid == coachId
+            && (
+              pcCanUseNora(teamId)
+              || pcHasValidLegacyCoachProfile(coachId, teamId)
+              || pcIsLegacyEncodedFolder(teamId)
+            )
+          )
+          || pcCanUseNora(teamId)
+        );
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == coachId
+        && request.resource.size <= 25 * 1024 * 1024
+        && (
+          pcCanUseNora(teamId)
+          || pcHasValidLegacyCoachProfile(coachId, teamId)
+        );
+      allow delete: if isAuthenticated()
+        && request.auth.uid == coachId
+        && (
+          pcCanUseNora(teamId)
+          || pcHasValidLegacyCoachProfile(coachId, teamId)
+          || pcIsLegacyEncodedFolder(teamId)
+        );
+    }
+
+    // Original web uploads were one segment below the coach. They cannot be
+    // recreated, but the owner can still download or remove them.
+    match /coach-nora-vault/{coachId}/{legacyFileName} {
+      allow read, delete: if isAuthenticated() && request.auth.uid == coachId;
+      allow create, update: if false;
+    }
+
+    // Profile photos are private owner assets. Downloads and uploads require
+    // the matching uid; new content must be an image no larger than 10 MB.
+    match /profile-images/{userId}/{fileName} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
     // App sound-effect assets generated from /admin/ai-voice. Public

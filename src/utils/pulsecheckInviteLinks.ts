@@ -47,6 +47,17 @@ export const buildPulseCheckTeamInviteWebUrl = (token: string, siteOrigin?: stri
   return `${normalizedOrigin}/PulseCheck/team-invite/${encodeURIComponent(normalizedToken)}`;
 };
 
+export const buildPulseCheckAthleteOfferWebUrl = (
+  token: string,
+  siteOrigin?: string | null,
+  forceDevFirebase = false
+) => {
+  const normalizedToken = String(token || '').trim();
+  const normalizedOrigin = String(siteOrigin || PULSE_WEB_ORIGIN).trim().replace(/\/+$/, '') || PULSE_WEB_ORIGIN;
+  const query = forceDevFirebase ? '?devFirebase=1' : '';
+  return `${normalizedOrigin}/PulseCheck/athlete-offer/${encodeURIComponent(normalizedToken)}${query}`;
+};
+
 export const buildPulseCheckTeamInviteOneLink = ({
   token,
   fallbackPath,

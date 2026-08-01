@@ -11,7 +11,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { db, getFirebaseModeRequestHeaders } from './config';
+import { auth, db, getFirebaseModeRequestHeaders } from './config';
 import {
   enforceCoachActionSpecificity,
   enforceLanguagePosture,
@@ -38,6 +38,7 @@ export type {
 
 export const SPORTS_INTELLIGENCE_REPORTS_ROOT_COLLECTION = 'teams';
 export const SPORTS_INTELLIGENCE_REPORTS_SUBCOLLECTION = 'coachReports';
+export const SPORTS_INTELLIGENCE_COACH_VIEWS_SUBCOLLECTION = 'coachReportViews';
 export const SPORTS_INTELLIGENCE_EMAIL_FUNCTION_PATH = '/.netlify/functions/send-sports-intelligence-report-email';
 
 export type SportsIntelligenceConfidenceTier =
@@ -318,6 +319,15 @@ const reportDocRef = (teamId: string, reportId: string) =>
     reportId
   );
 
+const coachViewDocRef = (teamId: string, reportId: string) =>
+  doc(
+    db,
+    SPORTS_INTELLIGENCE_REPORTS_ROOT_COLLECTION,
+    teamId,
+    SPORTS_INTELLIGENCE_COACH_VIEWS_SUBCOLLECTION,
+    reportId
+  );
+
 const stripUndefinedDeep = <T>(value: T): T => {
   if (Array.isArray(value)) {
     return value
@@ -544,6 +554,17 @@ export const getReport = async (teamId: string, reportId: string): Promise<Store
   return fromReportSnapshot(snapshot);
 };
 
+export const getCoachView = async (
+  teamId: string,
+  reportId: string
+): Promise<StoredCoachReport | null> => {
+  const scopedTeamId = normalizeRequiredId(teamId, 'teamId');
+  const normalizedReportId = normalizeRequiredId(reportId, 'reportId');
+  const snapshot = await getDoc(coachViewDocRef(scopedTeamId, normalizedReportId));
+  if (!snapshot.exists()) return null;
+  return fromReportSnapshot(snapshot);
+};
+
 export const listDrafts = async (filter: ListCoachReportDraftsFilter): Promise<StoredCoachReport[]> => {
   const scopedTeamId = normalizeRequiredId(filter.teamId || '', 'teamId');
   const constraints = [
@@ -586,10 +607,15 @@ const sendPublishedReportEmail = async (
   options: PublishCoachReportOptions
 ) => {
   const fetchImpl = options.fetchImpl || fetch;
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('[SportsIntelligenceReports] Sign in is required to send report email.');
+  }
   const response = await fetchImpl(options.emailEndpoint || SPORTS_INTELLIGENCE_EMAIL_FUNCTION_PATH, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
       ...getFirebaseModeRequestHeaders(),
     },
     body: JSON.stringify({ teamId, reportId }),
@@ -671,6 +697,7 @@ export const pulsecheckCoachReportService = {
   publish,
   listDrafts,
   getReport,
+  getCoachView,
   listSentForTeam,
   getFirstReportForTeam,
 };

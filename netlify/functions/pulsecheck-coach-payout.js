@@ -8,6 +8,7 @@ const {
   buildPayoutSummary,
   escapeHtml,
   normalizeString,
+  payoutStateId,
   payoutMethodLabel,
   resolveSiteUrl,
   serializePayoutRequest,
@@ -59,7 +60,7 @@ const renderPayoutRequestEmail = ({
           <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#d7ff00">PulseCheck payout request</div>
           <h1 style="margin:12px 0 8px;font-size:26px">${amount} requested</h1>
           <p style="margin:0 0 20px;color:#b7bcc5;line-height:1.6">
-            ${safeName}${safeEmail ? ` (${safeEmail})` : ''} requested the available coach referral balance.
+            ${safeName}${safeEmail ? ` (${safeEmail})` : ''} requested the selected team’s available coach earnings.
           </p>
           <div style="background:#111317;border-radius:12px;padding:16px;margin-bottom:22px">
             <div style="margin-bottom:8px"><strong>Payment method:</strong> ${safeMethod}</div>
@@ -93,9 +94,16 @@ const handler = async (event) => {
     } = await verifyCoach(event);
     const database = app.firestore();
     const body = JSON.parse(event.body || '{}');
+    const teamId = normalizeString(body.teamId);
     const paymentMethod = normalizeString(body.paymentMethod).toLowerCase();
     const paymentDestination = normalizeString(body.paymentDestination);
 
+    if (!teamId) {
+      return json(400, {
+        success: false,
+        message: 'Choose a team before requesting a payout.',
+      });
+    }
     if (!PAYOUT_METHODS.has(paymentMethod)) {
       return json(400, {
         success: false,
@@ -110,22 +118,56 @@ const handler = async (event) => {
     }
 
     const [earnings, coachSnapshot] = await Promise.all([
-      loadCoachEarnings(coachUserId, database),
+      loadCoachEarnings(coachUserId, teamId, database),
       database.collection('users').doc(coachUserId).get(),
     ]);
-    const totalEarnedCents = Math.max(0, Number(earnings.lifetimeShareCents) || 0);
+    const totalEarnedCents = Math.max(
+      0,
+      Number(earnings.payoutEligibleCents) || 0
+    );
     const coach = coachSnapshot.exists ? coachSnapshot.data() || {} : {};
     const coachName = normalizeString(coach.displayName || coach.username) || 'PulseCheck coach';
     const coachEmail = normalizeString(coach.email || decoded.email);
     const requestRef = database.collection(PAYOUT_REQUESTS_COLLECTION).doc();
-    const stateRef = database.collection(PAYOUT_STATES_COLLECTION).doc(coachUserId);
+    const stateDocumentId = payoutStateId(coachUserId, teamId);
+    if (!stateDocumentId) {
+      return json(400, {
+        success: false,
+        message: 'The selected payout team is invalid.',
+      });
+    }
+    const stateRef = database.collection(PAYOUT_STATES_COLLECTION).doc(stateDocumentId);
+    const legacyStateRef = database.collection(PAYOUT_STATES_COLLECTION).doc(coachUserId);
     const requestedAt = new Date();
     let requestData;
     let stateAfter;
 
     await database.runTransaction(async (transaction) => {
-      const stateSnapshot = await transaction.get(stateRef);
-      const state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
+      const [stateSnapshot, legacyStateSnapshot] = await Promise.all([
+        transaction.get(stateRef),
+        transaction.get(legacyStateRef),
+      ]);
+      let state = stateSnapshot.exists ? stateSnapshot.data() || {} : {};
+      if (!stateSnapshot.exists && legacyStateSnapshot.exists) {
+        const legacyState = legacyStateSnapshot.data() || {};
+        const legacyTeamId = normalizeString(legacyState.teamId);
+        const legacyTeamIds = Array.isArray(legacyState.teamIds)
+          ? legacyState.teamIds.map(normalizeString).filter(Boolean)
+          : [];
+        const legacyHasBalance = Math.max(0, Number(legacyState.paidCents) || 0) > 0
+          || Math.max(0, Number(legacyState.requestedCents) || 0) > 0
+          || Boolean(normalizeString(legacyState.activeRequestId));
+        const legacyMatchesTeam = legacyTeamId === teamId
+          || (legacyTeamIds.length === 1 && legacyTeamIds[0] === teamId);
+        if (legacyHasBalance && !legacyMatchesTeam) {
+          const error = new Error(
+            'Your earlier payout balance needs a one-time team assignment before another payout can be requested.'
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+        if (legacyMatchesTeam) state = legacyState;
+      }
       const activeRequestId = normalizeString(state.activeRequestId);
       let activeRequest = null;
 
@@ -167,6 +209,66 @@ const handler = async (event) => {
           coachShareCents: Math.max(0, Number(payment.coachShareCents) || 0),
           currency: normalizeString(payment.currency).toLowerCase() || 'usd',
         })));
+      const serviceTransactionSnapshot = (
+        Array.isArray(earnings.serviceEarnings?.transactions)
+          ? earnings.serviceEarnings.transactions
+          : []
+      ).map((transactionEntry) => ({
+        athleteUserId: normalizeString(transactionEntry.athleteUserId) || null,
+        athleteName: normalizeString(transactionEntry.athleteName) || 'Athlete',
+        paymentId:
+          normalizeString(transactionEntry.paymentIntentId)
+          || normalizeString(transactionEntry.id)
+          || null,
+        paidAt: transactionEntry.paidAt || transactionEntry.bookedAt || null,
+        amountPaidCents: Math.max(0, Number(transactionEntry.amountCents) || 0),
+        source: 'coach_service',
+        sourceLabel: normalizeString(transactionEntry.serviceTitle) || 'Coach service',
+        platformFeePct: 0,
+        platformFeeCents: Math.max(
+          0,
+          Number(transactionEntry.platformFeeCents) || 0
+        ),
+        netRevenueCents: Math.max(
+          0,
+          Number(transactionEntry.coachNetCents) || 0
+        ),
+        coachShareCents: Math.max(
+          0,
+          Number(transactionEntry.coachNetCents) || 0
+        ),
+        currency: normalizeString(transactionEntry.currency).toLowerCase() || 'usd',
+      }));
+      transactionSnapshot.push(...serviceTransactionSnapshot);
+      const athleteAppTransactionSnapshot = (
+        Array.isArray(earnings.athleteAppSubscriptionEarnings?.transactions)
+          ? earnings.athleteAppSubscriptionEarnings.transactions
+          : []
+      ).map((transactionEntry) => ({
+        athleteUserId: normalizeString(transactionEntry.athleteUserId) || null,
+        athleteName: 'Team athlete',
+        paymentId:
+          normalizeString(transactionEntry.invoiceId)
+          || normalizeString(transactionEntry.id)
+          || null,
+        paidAt: transactionEntry.paidAt || null,
+        amountPaidCents: Math.max(0, Number(transactionEntry.amountPaidCents) || 0),
+        source: 'pulsecheck_coach_athlete_offer',
+        sourceLabel: 'Coach-priced PulseCheck subscription',
+        platformFeePct: 50,
+        platformFeeCents: Math.max(
+          0,
+          Number(transactionEntry.platformShareCents) || 0
+        ),
+        stripeProcessingFeeCents: Math.max(
+          0,
+          Number(transactionEntry.stripeProcessingFeeCents) || 0
+        ),
+        netRevenueCents: Math.max(0, Number(transactionEntry.coachNetCents) || 0),
+        coachShareCents: Math.max(0, Number(transactionEntry.coachNetCents) || 0),
+        currency: normalizeString(transactionEntry.currency).toLowerCase() || 'usd',
+      }));
+      transactionSnapshot.push(...athleteAppTransactionSnapshot);
 
       requestData = {
         coachUserId,
@@ -178,6 +280,8 @@ const handler = async (event) => {
         paymentMethod,
         paymentDestination,
         teamIds: Array.isArray(earnings.teamIds) ? earnings.teamIds : [],
+        teamId,
+        organizationId: earnings.organizationId || null,
         shareRates: Array.isArray(earnings.shareRates) ? earnings.shareRates : [],
         earnedThroughCents: totalEarnedCents,
         transactionCount: transactionSnapshot.length,
@@ -189,6 +293,8 @@ const handler = async (event) => {
       };
       stateAfter = {
         coachUserId,
+        teamId,
+        organizationId: earnings.organizationId || null,
         paidCents,
         requestedCents: amountCents,
         activeRequestId: requestRef.id,

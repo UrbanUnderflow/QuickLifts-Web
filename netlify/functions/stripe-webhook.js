@@ -1,4 +1,4 @@
-const { admin } = require('./config/firebase');
+const { admin, getFirebaseAdminApp } = require('./config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
@@ -30,6 +30,18 @@ const {
   normalizeString: normalizeCoachServiceString,
   orderRef: coachServiceOrderRef,
 } = require('./lib/pulsecheck-coach-services');
+const {
+  ATHLETE_APP_CHECKOUT_SOURCE,
+  athleteAppInvoiceCoversCurrentPeriod,
+  athleteAppInvoicePeriodEnd,
+  isAthleteAppMetadata,
+  isAthleteAppSubscription,
+  reconcileAthleteAppSubscription,
+  recordAthleteAppDisputeClosed,
+  recordAthleteAppDisputeCreated,
+  recordAthleteAppRefund,
+  recordPaidAthleteAppInvoice,
+} = require('./lib/pulsecheck-athlete-app-offers');
 
 // Subscription type mappings
 const SubscriptionType = {
@@ -47,6 +59,35 @@ const SubscriptionPlatform = {
 };
 
 const db = admin.firestore();
+
+const athleteAppFirebaseMode = (metadata = {}) => {
+  const configuredMode = normalizeCoachServiceString(
+    metadata.pulsecheckFirebaseMode
+  ).toLowerCase();
+  if (!configuredMode) return 'prod';
+  if (configuredMode === 'dev' || configuredMode === 'prod') return configuredMode;
+  const error = new Error('Athlete app subscription Firebase mode is invalid.');
+  error.statusCode = 500;
+  throw error;
+};
+
+const athleteAppDatabase = (metadata = {}) => {
+  const firebaseMode = athleteAppFirebaseMode(metadata);
+  const app = getFirebaseAdminApp({
+    headers: { 'x-pulsecheck-firebase-mode': firebaseMode },
+  });
+  return {
+    database: app.firestore(),
+    firebaseMode,
+  };
+};
+
+const stripeClientForLivemode = (livemode) => {
+  if (livemode === false) {
+    return require('stripe')(process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY);
+  }
+  return stripe;
+};
 
 async function syncPulseCheckRevenueFromAthleteSubscription(subscription, userId) {
   const pulseCheckAttribution = readPulseCheckAttributionFromMetadata(subscription?.metadata || {});
@@ -187,6 +228,9 @@ exports.handler = async (event) => {
       case 'invoice.paid':
         await handleInvoicePaid(stripeEvent.data.object);
         break;
+      case 'invoice.payment_failed':
+        await handleAthleteAppInvoicePaymentFailed(stripeEvent.data.object);
+        break;
       case 'account.updated':
         await handleAccountUpdated(stripeEvent.data.object);
         break;
@@ -200,12 +244,18 @@ exports.handler = async (event) => {
         await handleCoachServicePaymentFailure(stripeEvent.data.object);
         break;
       case 'charge.refunded':
-        await handleCoachServiceRefund(
-          stripeEvent.data.object,
-          stripeEvent.livemode
-            ? stripe
-            : require('stripe')(process.env.STRIPE_TEST_SECRET_KEY || process.env.STRIPE_SECRET_KEY)
-        );
+        if (!await handleAthleteAppChargeRefunded(stripeEvent.data.object)) {
+          await handleCoachServiceRefund(
+            stripeEvent.data.object,
+            stripeClientForLivemode(stripeEvent.livemode)
+          );
+        }
+        break;
+      case 'charge.dispute.created':
+        await handleAthleteAppDisputeCreated(stripeEvent.data.object);
+        break;
+      case 'charge.dispute.closed':
+        await handleAthleteAppDisputeClosed(stripeEvent.data.object);
         break;
       // Handle other event types as needed
       default:
@@ -325,6 +375,17 @@ async function handleSubscriptionCreated(subscription) {
   console.log(`[Webhook] Processing subscription created: ${subscription.id}`);
 
   try {
+    if (isAthleteAppSubscription(subscription)) {
+      const { database } = athleteAppDatabase(subscription.metadata || {});
+      await reconcileAthleteAppSubscription({
+        database,
+        admin,
+        subscription,
+        source: 'customer.subscription.created',
+      });
+      return;
+    }
+
     // Coaching subscription → reconcile onto the training doc. The
     // checkout.session.completed handler already set the room active;
     // this keeps paymentStatus correct if events arrive out of order.
@@ -471,6 +532,17 @@ async function handleSubscriptionUpdated(subscription) {
   console.log(`[Webhook] Processing subscription updated: ${subscription.id}`);
 
   try {
+    if (isAthleteAppSubscription(subscription)) {
+      const { database } = athleteAppDatabase(subscription.metadata || {});
+      await reconcileAthleteAppSubscription({
+        database,
+        admin,
+        subscription,
+        source: 'customer.subscription.updated',
+      });
+      return;
+    }
+
     // Coaching subscriptions route to the training doc, not the user's
     // platform subscription record.
     if (await handleCoachingSubscriptionChange(subscription)) return;
@@ -597,6 +669,18 @@ async function handleSubscriptionDeleted(subscription) {
   console.log(`[Webhook] Processing subscription deleted: ${subscription.id}`);
 
   try {
+    if (isAthleteAppSubscription(subscription)) {
+      const { database } = athleteAppDatabase(subscription.metadata || {});
+      await reconcileAthleteAppSubscription({
+        database,
+        admin,
+        subscription,
+        source: 'customer.subscription.deleted',
+        forcedStatus: 'canceled',
+      });
+      return;
+    }
+
     // Coaching subscription canceled → lock the member out of the room.
     if (await handleCoachingSubscriptionChange(subscription)) return;
 
@@ -767,11 +851,37 @@ async function persistMacraWebOfferPaidInvoice({ invoice, subscription, userId, 
 async function handleInvoicePaid(invoice) {
   console.log(`[Webhook] Processing invoice.paid event: ${invoice.id}`);
 
+  let processingAthleteAppInvoice = false;
   try {
     const subscriptionId = getStripeObjectId(invoice.subscription);
     if (!subscriptionId) return;
 
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const stripeClient = stripeClientForLivemode(invoice.livemode);
+    const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
+    if (isAthleteAppSubscription(subscription)) {
+      processingAthleteAppInvoice = true;
+      const { database } = athleteAppDatabase(subscription.metadata || {});
+      await reconcileAthleteAppSubscription({
+        database,
+        admin,
+        subscription,
+        source: 'invoice.paid',
+        forcedStatus: 'active',
+        accessClear: {
+          reason: 'newer_paid_invoice',
+          stripeInvoiceId: invoice.id,
+          currentPeriodEndEpochSeconds: athleteAppInvoicePeriodEnd({ invoice, subscription }),
+        },
+      });
+      await recordPaidAthleteAppInvoice({
+        database,
+        admin,
+        stripeClient,
+        invoice,
+        subscription,
+      });
+      return;
+    }
     const invoiceMetadata = {
       ...(invoice.subscription_details?.metadata || {}),
       ...(invoice.metadata || {}),
@@ -830,8 +940,180 @@ async function handleInvoicePaid(invoice) {
       eventName,
     });
   } catch (error) {
+    if (processingAthleteAppInvoice) throw error;
     console.warn('[Webhook] invoice.paid Macra web offer tracking skipped:', error?.message || error);
   }
+}
+
+async function handleAthleteAppInvoicePaymentFailed(invoice) {
+  const subscriptionId = getStripeObjectId(invoice?.subscription);
+  if (!subscriptionId) return false;
+  const stripeClient = stripeClientForLivemode(invoice?.livemode);
+  const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
+  if (!isAthleteAppSubscription(subscription)) return false;
+  const { database } = athleteAppDatabase(subscription.metadata || {});
+  await reconcileAthleteAppSubscription({
+    database,
+    admin,
+    subscription,
+    source: 'invoice.payment_failed',
+    forcedStatus: 'past_due',
+  });
+  return true;
+}
+
+async function resolveAthleteAppChargeContext(charge) {
+  const stripeClient = stripeClientForLivemode(charge?.livemode);
+  const invoiceId = getStripeObjectId(charge?.invoice);
+  if (!invoiceId) return null;
+  const invoice = await stripeClient.invoices.retrieve(invoiceId, { expand: ['subscription'] });
+  let subscription = invoice?.subscription;
+  if (typeof subscription === 'string') {
+    subscription = await stripeClient.subscriptions.retrieve(subscription);
+  }
+  if (!isAthleteAppSubscription(subscription)) return null;
+  const { database, firebaseMode } = athleteAppDatabase(subscription.metadata || {});
+  return { stripeClient, invoice, subscription, database, firebaseMode };
+}
+
+async function handleAthleteAppChargeRefunded(charge) {
+  const context = await resolveAthleteAppChargeContext(charge);
+  if (!context) return false;
+  const result = await recordAthleteAppRefund({
+    database: context.database,
+    admin,
+    charge,
+    invoice: context.invoice,
+    subscription: context.subscription,
+  });
+  const subscriptionStatus = normalizeCoachServiceString(context.subscription?.status).toLowerCase();
+  const subscriptionInactive = !['active', 'trialing'].includes(subscriptionStatus);
+  const coversCurrentPeriod = athleteAppInvoiceCoversCurrentPeriod({
+    invoice: context.invoice,
+    subscription: context.subscription,
+    ledger: result?.ledger,
+  });
+  if (result?.fullyRefunded && (subscriptionInactive || coversCurrentPeriod)) {
+    await reconcileAthleteAppSubscription({
+      database: context.database,
+      admin,
+      subscription: context.subscription,
+      source: 'charge.refunded',
+      forcedStatus: 'refunded',
+      accessBlock: {
+        reason: 'refunded',
+        stripeInvoiceId: context.invoice.id,
+        currentPeriodEndEpochSeconds: athleteAppInvoicePeriodEnd({
+          invoice: context.invoice,
+          subscription: context.subscription,
+          ledger: result?.ledger,
+        }),
+      },
+    });
+  }
+  return true;
+}
+
+async function resolveAthleteAppDisputeContext(dispute) {
+  const stripeClient = stripeClientForLivemode(dispute?.livemode);
+  const charge = typeof dispute?.charge === 'string'
+    ? await stripeClient.charges.retrieve(dispute.charge)
+    : dispute?.charge;
+  const context = await resolveAthleteAppChargeContext(charge);
+  return context ? { ...context, charge } : null;
+}
+
+async function handleAthleteAppDisputeCreated(dispute) {
+  const context = await resolveAthleteAppDisputeContext(dispute);
+  if (!context) return false;
+  const result = await recordAthleteAppDisputeCreated({
+    database: context.database,
+    admin,
+    dispute,
+    invoice: context.invoice,
+    subscription: context.subscription,
+  });
+  if (result?.alreadyClosed) return true;
+  const subscriptionStatus = normalizeCoachServiceString(context.subscription?.status).toLowerCase();
+  const subscriptionInactive = !['active', 'trialing'].includes(subscriptionStatus);
+  const coversCurrentPeriod = athleteAppInvoiceCoversCurrentPeriod({
+    invoice: context.invoice,
+    subscription: context.subscription,
+    ledger: result?.ledger,
+  });
+  if (subscriptionInactive || coversCurrentPeriod) {
+    await reconcileAthleteAppSubscription({
+      database: context.database,
+      admin,
+      subscription: context.subscription,
+      source: 'charge.dispute.created',
+      forcedStatus: 'disputed',
+      accessBlock: {
+        reason: 'disputed',
+        stripeInvoiceId: context.invoice.id,
+        disputeId: dispute?.id,
+        currentPeriodEndEpochSeconds: athleteAppInvoicePeriodEnd({
+          invoice: context.invoice,
+          subscription: context.subscription,
+          ledger: result?.ledger,
+        }),
+      },
+    });
+  }
+  return true;
+}
+
+async function handleAthleteAppDisputeClosed(dispute) {
+  const context = await resolveAthleteAppDisputeContext(dispute);
+  if (!context) return false;
+  const result = await recordAthleteAppDisputeClosed({
+    database: context.database,
+    admin,
+    dispute,
+    invoice: context.invoice,
+    subscription: context.subscription,
+  });
+  const coversCurrentPeriod = athleteAppInvoiceCoversCurrentPeriod({
+    invoice: context.invoice,
+    subscription: context.subscription,
+    ledger: result?.ledger,
+  });
+  if (coversCurrentPeriod) {
+    await reconcileAthleteAppSubscription({
+      database: context.database,
+      admin,
+      subscription: context.subscription,
+      source: 'charge.dispute.closed',
+      ...(result?.won
+        ? {
+            accessClear: {
+              reason: 'dispute_won',
+              stripeInvoiceId: context.invoice.id,
+              disputeId: dispute?.id,
+              currentPeriodEndEpochSeconds: athleteAppInvoicePeriodEnd({
+                invoice: context.invoice,
+                subscription: context.subscription,
+                ledger: result?.ledger,
+              }),
+              allowSameInvoice: true,
+            },
+          }
+        : {
+            forcedStatus: 'dispute_lost',
+            accessBlock: {
+              reason: 'dispute_lost',
+              stripeInvoiceId: context.invoice.id,
+              disputeId: dispute?.id,
+              currentPeriodEndEpochSeconds: athleteAppInvoicePeriodEnd({
+                invoice: context.invoice,
+                subscription: context.subscription,
+                ledger: result?.ledger,
+              }),
+            },
+          }),
+    });
+  }
+  return true;
 }
 
 // Grants access to a paid 1-on-1 coaching room once checkout completes.
@@ -1004,7 +1286,52 @@ async function handleCheckoutSessionCompleted(session) {
 
     // Extract necessary information from the session
     const { metadata, customer_email, customer, client_reference_id } = session;
-    const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
+    if (isAthleteAppMetadata(metadata || {})) {
+      const { database, firebaseMode } = athleteAppDatabase(metadata || {});
+      const checkoutCompletion = {
+        status: 'completed',
+        firebaseMode,
+        stripeSubscriptionId: getStripeObjectId(session.subscription),
+        stripeCustomerId: getStripeObjectId(session.customer),
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const checkoutLockId = normalizeCoachServiceString(metadata?.pulsecheckCheckoutLockId);
+      const inviteCheckoutLockId = normalizeCoachServiceString(
+        metadata?.pulsecheckInviteCheckoutLockId
+      );
+      await Promise.all([
+        database.collection('pulsecheck-athlete-app-checkouts').doc(session.id)
+          .set(checkoutCompletion, { merge: true }),
+        ...(checkoutLockId && !checkoutLockId.includes('/')
+          ? [database.collection('pulsecheck-athlete-app-checkout-locks').doc(checkoutLockId)
+              .set(checkoutCompletion, { merge: true })]
+          : []),
+        ...(inviteCheckoutLockId && !inviteCheckoutLockId.includes('/')
+          ? [database.collection('pulsecheck-athlete-app-invite-checkout-locks').doc(inviteCheckoutLockId)
+              .set(checkoutCompletion, { merge: true })]
+          : []),
+      ]);
+      const subscriptionId = getStripeObjectId(session.subscription);
+      if (subscriptionId) {
+        const stripeClient = stripeClientForLivemode(session.livemode);
+        const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
+        const subscriptionRouting = athleteAppDatabase(subscription.metadata || {});
+        if (subscriptionRouting.firebaseMode !== firebaseMode) {
+          throw new Error('Athlete app checkout and subscription Firebase modes do not match.');
+        }
+        await reconcileAthleteAppSubscription({
+          database: subscriptionRouting.database,
+          admin,
+          subscription,
+          source: 'checkout.session.completed',
+        });
+      }
+      return;
+    }
+
+    const eventStripeClient = stripeClientForLivemode(session.livemode);
+    const lineItems = await eventStripeClient.checkout.sessions.listLineItems(session.id);
 
     if (!lineItems || !lineItems.data || lineItems.data.length === 0) {
       console.error('No line items found in the checkout session');

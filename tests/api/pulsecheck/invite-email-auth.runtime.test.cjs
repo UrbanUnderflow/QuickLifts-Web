@@ -28,6 +28,7 @@ const loadInviteAuth = ({
     inviteType: 'team-access',
     status: 'active',
     teamId: 'team-1',
+    organizationId: 'org-1',
     teamMembershipRole: 'athlete',
     targetEmail: 'athlete@example.com',
     activationUrl:
@@ -36,11 +37,14 @@ const loadInviteAuth = ({
   memberships = [{
     userId: 'coach-1',
     teamId: 'team-1',
+    organizationId: 'org-1',
     role: 'coach',
     status: 'active',
     staffCapabilities: ['coaching'],
   }],
   isPlatformAdmin = false,
+  team = { organizationId: 'org-1', status: 'active' },
+  organization = { status: 'active' },
 } = {}) => {
   for (const modulePath of [
     configPath,
@@ -65,6 +69,12 @@ const loadInviteAuth = ({
                   isPlatformAdmin ? { email: documentId } : null
                 );
               }
+              if (collectionName === 'pulsecheck-teams') {
+                return snapshot(documentId, documentId === 'team-1' ? team : null);
+              }
+              if (collectionName === 'pulsecheck-organizations') {
+                return snapshot(documentId, documentId === 'org-1' ? organization : null);
+              }
               return snapshot(documentId, null);
             },
           };
@@ -78,8 +88,8 @@ const loadInviteAuth = ({
                 ? memberships.filter((membership) => membership.userId === value)
                 : [];
               return {
-                docs: rows.map((membership, index) =>
-                  snapshot(`membership-${index}`, membership)
+                docs: rows.map((membership) =>
+                  snapshot(`${membership.teamId}_${membership.userId}`, membership)
                 ),
               };
             },
@@ -132,6 +142,41 @@ test('invite token parser supports OneLink and direct team-invite URLs', () => {
     ),
     'invite-1'
   );
+  assert.equal(
+    inviteTokenFromUrl(
+      'https://fitwithpulse.ai/PulseCheck/athlete-offer/invite-1'
+    ),
+    'invite-1'
+  );
+});
+
+test('active coach can email the trusted web-only athlete offer URL', async () => {
+  const { authorizePulseCheckInviteEmail } = loadInviteAuth();
+
+  const result = await authorizePulseCheckInviteEmail(event, {
+    activationUrl:
+      'https://fitwithpulse.ai/PulseCheck/athlete-offer/invite-1',
+    toEmail: 'athlete@example.com',
+    expectedRecipientRole: 'athlete',
+    allowedCapabilities: ['coaching', 'administrative'],
+  });
+
+  assert.equal(result.inviteId, 'invite-1');
+});
+
+test('athlete offer URL rejects an untrusted host', async () => {
+  const { authorizePulseCheckInviteEmail } = loadInviteAuth();
+
+  await assert.rejects(
+    authorizePulseCheckInviteEmail(event, {
+      activationUrl:
+        'https://example.com/PulseCheck/athlete-offer/invite-1',
+      toEmail: 'athlete@example.com',
+      expectedRecipientRole: 'athlete',
+      allowedCapabilities: ['coaching', 'administrative'],
+    }),
+    (error) => error.statusCode === 403
+  );
 });
 
 test('invite email authorization requires Firebase sign-in', async () => {
@@ -173,6 +218,7 @@ test('coach capability cannot send a staff invite reserved for team admins', asy
     inviteType: 'team-access',
     status: 'active',
     teamId: 'team-1',
+    organizationId: 'org-1',
     teamMembershipRole: 'coach',
     targetEmail: 'staff@example.com',
     activationUrl:
@@ -198,6 +244,7 @@ test('team admin can send a verified staff invite', async () => {
     inviteType: 'team-access',
     status: 'active',
     teamId: 'team-1',
+    organizationId: 'org-1',
     teamMembershipRole: 'coach',
     targetEmail: 'staff@example.com',
     activationUrl:
@@ -208,6 +255,7 @@ test('team admin can send a verified staff invite', async () => {
     memberships: [{
       userId: 'coach-1',
       teamId: 'team-1',
+      organizationId: 'org-1',
       role: 'team-admin',
       status: 'active',
       staffCapabilities: ['admin'],
@@ -234,6 +282,50 @@ test('recipient or link tampering is rejected before email delivery', async () =
       toEmail: 'another@example.com',
       expectedRecipientRole: 'athlete',
       allowedCapabilities: ['coaching', 'administrative'],
+    }),
+    (error) => error.statusCode === 403
+  );
+});
+
+test('unknown membership status and wrong organization fail closed', async () => {
+  const unknownStatus = loadInviteAuth({
+    memberships: [{
+      userId: 'coach-1',
+      teamId: 'team-1',
+      organizationId: 'org-1',
+      role: 'coach',
+      status: 'mystery-enabled',
+      staffCapabilities: ['coaching'],
+    }],
+  });
+  await assert.rejects(
+    unknownStatus.authorizePulseCheckInviteEmail(event, {
+      activationUrl:
+        'https://pulsecheckapp.onelink.me/uT14?inviteToken=invite-1',
+      toEmail: 'athlete@example.com',
+      expectedRecipientRole: 'athlete',
+      allowedCapabilities: ['coaching'],
+    }),
+    (error) => error.statusCode === 403
+  );
+
+  const wrongOrganization = loadInviteAuth({
+    memberships: [{
+      userId: 'coach-1',
+      teamId: 'team-1',
+      organizationId: 'org-other',
+      role: 'coach',
+      status: 'active',
+      staffCapabilities: ['coaching'],
+    }],
+  });
+  await assert.rejects(
+    wrongOrganization.authorizePulseCheckInviteEmail(event, {
+      activationUrl:
+        'https://pulsecheckapp.onelink.me/uT14?inviteToken=invite-1',
+      toEmail: 'athlete@example.com',
+      expectedRecipientRole: 'athlete',
+      allowedCapabilities: ['coaching'],
     }),
     (error) => error.statusCode === 403
   );

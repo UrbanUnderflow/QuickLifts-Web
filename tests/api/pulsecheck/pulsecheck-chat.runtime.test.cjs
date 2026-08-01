@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web';
@@ -118,6 +119,26 @@ test('classifies acknowledgments as conversational closure before turn-taking', 
   }
 });
 
+test('web athlete chat callers attach Firebase bearer tokens and canonical user ids', () => {
+  const pageSource = fs.readFileSync(
+    path.join(repoRoot, 'src/pages/PulseCheckChat.tsx'),
+    'utf8'
+  );
+  const componentSource = fs.readFileSync(
+    path.join(repoRoot, 'src/components/pulsecheck/Chat.tsx'),
+    'utf8'
+  );
+
+  assert.match(pageSource, /firebaseUser\.uid !== currentUser\.id/);
+  assert.match(pageSource, /Authorization: `Bearer \$\{idToken\}`/);
+  assert.match(componentSource, /firebaseUser\.uid !== expectedUserId/);
+  assert.match(componentSource, /Authorization: `Bearer \$\{await firebaseUser\.getIdToken\(\)\}`/);
+  assert.equal(
+    (componentSource.match(/headers: await pulseCheckChatHeaders\(currentUser\.id\)/g) || []).length,
+    2
+  );
+});
+
 test('keeps substantive short messages in normal conversation', () => {
   const { classifyResponseContext, isConversationAcknowledgment } = loadRuntimeHelpers();
 
@@ -126,6 +147,76 @@ test('keeps substantive short messages in normal conversation', () => {
     classifyResponseContext('Okay, I want to discuss confidence').context,
     'quickExchange'
   );
+});
+
+function loadAuthBoundaryHandler({ decoded = { uid: 'athlete-1' }, verifyError = null } = {}) {
+  delete require.cache[chatPath];
+  delete require.cache[configPath];
+  delete require.cache[submitPath];
+
+  let firestoreReads = 0;
+  const app = {
+    auth: () => ({
+      verifyIdToken: async () => {
+        if (verifyError) throw verifyError;
+        return decoded;
+      },
+    }),
+    firestore: () => ({
+      collection() {
+        firestoreReads += 1;
+        throw new Error('Auth boundary test must return before Firestore access.');
+      },
+    }),
+  };
+  require.cache[configPath] = {
+    id: configPath,
+    filename: configPath,
+    loaded: true,
+    exports: {
+      initializeFirebaseAdmin: () => {},
+      getFirebaseAdminApp: () => app,
+      admin: {},
+      headers: {},
+    },
+  };
+  require.cache[submitPath] = {
+    id: submitPath,
+    filename: submitPath,
+    loaded: true,
+    exports: { runtimeHelpers: {} },
+  };
+
+  return {
+    handler: require(chatPath).handler,
+    firestoreReads: () => firestoreReads,
+  };
+}
+
+test('rejects anonymous athlete chat before reading private context', async () => {
+  const runtime = loadAuthBoundaryHandler();
+  const response = await runtime.handler({
+    httpMethod: 'POST',
+    headers: {},
+    body: JSON.stringify({ userId: 'athlete-1', message: 'Hello Nora' }),
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.match(JSON.parse(response.body).error, /sign in/i);
+  assert.equal(runtime.firestoreReads(), 0);
+});
+
+test('rejects a valid caller claiming another athlete identity', async () => {
+  const runtime = loadAuthBoundaryHandler({ decoded: { uid: 'athlete-1' } });
+  const response = await runtime.handler({
+    httpMethod: 'POST',
+    headers: { Authorization: 'Bearer valid-athlete-token' },
+    body: JSON.stringify({ userId: 'athlete-2', message: 'Show me their context' }),
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.match(JSON.parse(response.body).error, /another user/i);
+  assert.equal(runtime.firestoreReads(), 0);
 });
 
 function createEscalationFlowDb({
@@ -575,6 +666,10 @@ test('downgrades benign performance stress escalation requests before record cre
     loaded: true,
     exports: {
       initializeFirebaseAdmin: () => {},
+      getFirebaseAdminApp: () => ({
+        auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }),
+        firestore: () => db,
+      }),
       admin: {
         firestore: () => db,
       },
@@ -688,6 +783,10 @@ test('elevates loss-of-function language into a true care escalation', async () 
     loaded: true,
     exports: {
       initializeFirebaseAdmin: () => {},
+      getFirebaseAdminApp: () => ({
+        auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }),
+        firestore: () => db,
+      }),
       admin: {
         firestore: () => db,
       },
@@ -805,6 +904,10 @@ test('dedupes same-conversation escalation records within the merge window', asy
     loaded: true,
     exports: {
       initializeFirebaseAdmin: () => {},
+      getFirebaseAdminApp: () => ({
+        auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }),
+        firestore: () => db,
+      }),
       admin: {
         firestore: () => db,
       },

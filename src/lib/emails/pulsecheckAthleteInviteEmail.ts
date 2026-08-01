@@ -30,6 +30,8 @@ export function buildAthleteInviteEmailDraft(opts: {
   pilotName?: string;
   senderName?: string;
   inviteSource?: AthleteInviteEmailSource;
+  purchaseRequired?: boolean;
+  monthlyPriceCents?: number;
 }) {
   const name = (opts.recipientName || '').trim() || 'there';
   const organizationName = (opts.organizationName || 'your team').trim();
@@ -38,10 +40,24 @@ export function buildAthleteInviteEmailDraft(opts: {
   const senderName = (opts.senderName || 'your coach').trim();
   const inviteSource: AthleteInviteEmailSource = opts.inviteSource === 'admin' ? 'admin' : 'coach';
   const targetName = teamName || organizationName;
+  const monthlyPriceCents = Math.max(0, Math.round(Number(opts.monthlyPriceCents) || 0));
+  const monthlyPrice = `$${(monthlyPriceCents / 100).toFixed(
+    monthlyPriceCents % 100 === 0 ? 0 : 2
+  )}`;
 
   const subject = teamName
     ? `You're invited to join ${teamName} on PulseCheck`
     : `You're invited to join ${organizationName} on PulseCheck`;
+
+  if (opts.purchaseRequired) {
+    return {
+      subject,
+      introText: `Hey ${name}, ${senderName} invited you to join ${targetName} on PulseCheck.`,
+      detailText: `Open your invitation, create or sign in to your PulseCheck account, then complete the secure ${monthlyPrice} monthly subscription checkout.`,
+      buttonLabel: 'VIEW SUBSCRIPTION',
+      preheader: `Open your PulseCheck invitation and subscribe for ${monthlyPrice} per month to activate team access.`,
+    };
+  }
 
   if (inviteSource === 'admin') {
     return {
@@ -77,6 +93,8 @@ export function renderAthleteInviteEmail(opts: {
   introText?: string;
   detailText?: string;
   buttonLabel?: string;
+  purchaseRequired?: boolean;
+  monthlyPriceCents?: number;
 }) {
   const activationUrl = opts.activationUrl;
   const draft = buildAthleteInviteEmailDraft(opts);
@@ -130,7 +148,9 @@ export function renderAthleteInviteEmail(opts: {
                           ${escapeHtml(buttonLabel)}
                         </a>
                         <p style="margin:20px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:12px;line-height:1.6;color:#52525B;">
-                          Already have the PulseCheck app? Open it and sign in with this email.
+                          ${opts.purchaseRequired
+                            ? 'Your invitation opens account setup and secure checkout. App download instructions appear after payment.'
+                            : 'Already have the PulseCheck app? Open it and sign in with this email.'}
                         </p>
                         <p style="margin:16px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:12px;line-height:1.6;color:#52525B;">
                           If the button doesn't work, copy and paste this link into your browser:<br/>

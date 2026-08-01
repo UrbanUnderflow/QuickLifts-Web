@@ -15,6 +15,8 @@ interface CoachAthleteMessagingModalProps {
   athleteName: string;
   coachId: string;
   coachName: string;
+  teamId?: string;
+  organizationId?: string;
 }
 
 const CoachAthleteMessagingModal: React.FC<CoachAthleteMessagingModalProps> = ({
@@ -23,7 +25,9 @@ const CoachAthleteMessagingModal: React.FC<CoachAthleteMessagingModalProps> = ({
   athleteId,
   athleteName,
   coachId,
-  coachName
+  coachName,
+  teamId,
+  organizationId,
 }) => {
   const [conversation, setConversation] = useState<CoachAthleteConversation | null>(null);
   const [messages, setMessages] = useState<CoachAthleteMessage[]>([]);
@@ -37,7 +41,7 @@ const CoachAthleteMessagingModal: React.FC<CoachAthleteMessagingModalProps> = ({
     if (isOpen && athleteId && coachId) {
       initializeConversation();
     }
-  }, [isOpen, athleteId, coachId]);
+  }, [isOpen, athleteId, coachId, organizationId, teamId]);
 
   useEffect(() => {
     // Auto-scroll to bottom when messages change
@@ -80,7 +84,8 @@ const CoachAthleteMessagingModal: React.FC<CoachAthleteMessagingModalProps> = ({
         coachId,
         athleteId,
         coachName,
-        athleteName
+        athleteName,
+        teamId && organizationId ? { teamId, organizationId } : undefined
       );
       
       setConversation(conv);

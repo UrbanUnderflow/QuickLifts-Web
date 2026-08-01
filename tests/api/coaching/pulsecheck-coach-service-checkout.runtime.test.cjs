@@ -18,13 +18,19 @@ const SERVICE_LIB_PATH = path.join(
   'netlify/functions/lib/pulsecheck-coach-services.js'
 );
 
-function stripeFactory({ chargesEnabled = true } = {}) {
+function stripeFactory({
+  chargesEnabled = true,
+  customerRecords = {},
+} = {}) {
   const created = [];
   const idempotency = [];
   const customersCreated = [];
+  const customersRetrieved = [];
   const ephemeralKeysCreated = [];
 
-  function Stripe() {
+  const keys = [];
+  function Stripe(key) {
+    keys.push(key);
     return {
       accounts: {
         async retrieve(accountId) {
@@ -52,6 +58,13 @@ function stripeFactory({ chargesEnabled = true } = {}) {
         },
       },
       customers: {
+        async retrieve(customerId) {
+          customersRetrieved.push(customerId);
+          if (!customerRecords[customerId]) {
+            throw new Error('No such customer');
+          }
+          return customerRecords[customerId];
+        },
         async create(params) {
           customersCreated.push(params);
           return { id: 'cus_service_1' };
@@ -68,11 +81,21 @@ function stripeFactory({ chargesEnabled = true } = {}) {
   Stripe.created = created;
   Stripe.idempotency = idempotency;
   Stripe.customersCreated = customersCreated;
+  Stripe.customersRetrieved = customersRetrieved;
   Stripe.ephemeralKeysCreated = ephemeralKeysCreated;
+  Stripe.keys = keys;
   return Stripe;
 }
 
-function firebaseSeed({ athleteId = 'mock-user', connectedAccount = 'acct_coach_1' } = {}) {
+function firebaseSeed({
+  athleteId = 'mock-user',
+  connectedAccount = 'acct_coach_1',
+  conversationOverrides = {},
+  athleteMembershipOverrides = {},
+  coachMembershipOverrides = {},
+  teamOverrides = {},
+  athleteUserData = null,
+} = {}) {
   return createFirestoreAdminMock({
     collections: {
       'coach-athlete-conversations': [
@@ -83,6 +106,53 @@ function firebaseSeed({ athleteId = 'mock-user', connectedAccount = 'acct_coach_
             coachId: 'coach_1',
             athleteName: 'Alex Athlete',
             coachName: 'Coach Calvin',
+            organizationId: 'organization_1',
+            teamId: 'team_1',
+            participantIds: ['coach_1', athleteId],
+            ...conversationOverrides,
+          },
+        },
+      ],
+      'pulsecheck-organizations': [
+        {
+          id: 'organization_1',
+          data: { status: 'active' },
+        },
+      ],
+      'pulsecheck-teams': [
+        {
+          id: 'team_1',
+          data: {
+            organizationId: 'organization_1',
+            status: 'active',
+            commercialConfig: {
+              additionalServicesEnabled: true,
+            },
+            ...teamOverrides,
+          },
+        },
+      ],
+      'pulsecheck-team-memberships': [
+        {
+          id: `team_1_${athleteId}`,
+          data: {
+            organizationId: 'organization_1',
+            teamId: 'team_1',
+            userId: athleteId,
+            role: 'athlete',
+            status: 'active',
+            ...athleteMembershipOverrides,
+          },
+        },
+        {
+          id: 'team_1_coach_1',
+          data: {
+            organizationId: 'organization_1',
+            teamId: 'team_1',
+            userId: 'coach_1',
+            role: 'coach',
+            status: 'active',
+            ...coachMembershipOverrides,
           },
         },
       ],
@@ -93,6 +163,9 @@ function firebaseSeed({ athleteId = 'mock-user', connectedAccount = 'acct_coach_
             ? { creator: { stripeAccountId: connectedAccount } }
             : {},
         },
+        ...(athleteUserData
+          ? [{ id: athleteId, data: athleteUserData }]
+          : []),
       ],
       stripeConnect: [],
       'pulsecheck-coach-service-orders': [],
@@ -186,6 +259,11 @@ test('service checkout fixes the price server-side and enables dynamic payment m
     assert.equal(savedOrder.coachNetCents, 5000);
     assert.equal(savedOrder.paymentIntentId, 'pi_service_1');
     assert.equal(savedOrder.stripeCustomerId, 'cus_service_1');
+    assert.equal(savedOrder.organizationId, 'organization_1');
+    assert.equal(savedOrder.teamId, 'team_1');
+    assert.deepEqual(savedOrder.participantIds, ['coach_1', 'mock-user']);
+    assert.equal(savedOrder.serverOrderVersion, 1);
+    assert.match(savedOrder.orderIntegritySeal, /^[A-Za-z0-9_-]+$/);
 
     const savedAthlete = firebase.getDocument('users/mock-user');
     assert.equal(savedAthlete.stripeCustomerIds.live, 'cus_service_1');
@@ -243,5 +321,148 @@ test('service checkout rejects service ids outside the server catalog', async ()
 
     assert.equal(response.statusCode, 400);
     assert.equal(Stripe.created.length, 0);
+  });
+});
+
+test('service checkout fails closed when the conversation has no explicit team scope', async () => {
+  const firebase = firebaseSeed({
+    conversationOverrides: {
+      organizationId: '',
+      teamId: '',
+      participantIds: [],
+    },
+  });
+  const Stripe = stripeFactory();
+
+  await withPatchedEnv(env, async () => {
+    const fn = loadHandler(firebase, Stripe);
+    const response = await fn.handler(event({
+      conversationId: 'conversation_1',
+      serviceId: 'one-on-one-video',
+      checkoutId: 'checkout_service_0005',
+    }));
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(Stripe.created.length, 0);
+  });
+});
+
+test('service checkout rejects revoked athlete or coach team access', async () => {
+  for (const firebase of [
+    firebaseSeed({ athleteMembershipOverrides: { status: 'revoked' } }),
+    firebaseSeed({ coachMembershipOverrides: { revokedAt: 'server-timestamp' } }),
+  ]) {
+    const Stripe = stripeFactory();
+    await withPatchedEnv(env, async () => {
+      const fn = loadHandler(firebase, Stripe);
+      const response = await fn.handler(event({
+        conversationId: 'conversation_1',
+        serviceId: 'one-on-one-video',
+        checkoutId: 'checkout_service_0006',
+      }));
+      assert.equal(response.statusCode, 403);
+      assert.equal(Stripe.created.length, 0);
+    });
+  }
+});
+
+test('caller headers cannot force Stripe test mode', async () => {
+  const firebase = firebaseSeed();
+  const Stripe = stripeFactory();
+
+  await withPatchedEnv({
+    ...env,
+    STRIPE_TEST_SECRET_KEY: 'sk_test_should_not_be_used',
+    PULSECHECK_STRIPE_MODE: null,
+    CONTEXT: 'production',
+    NETLIFY_DEV: null,
+  }, async () => {
+    const fn = loadHandler(firebase, Stripe);
+    const request = event({
+      conversationId: 'conversation_1',
+      serviceId: 'one-on-one-video',
+      checkoutId: 'checkout_service_0007',
+    });
+    request.headers['x-pulsecheck-stripe-mode'] = 'test';
+    request.headers.origin = 'http://localhost:3000';
+    const response = await fn.handler(request);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(JSON.parse(response.body).stripeMode, 'live');
+    assert.equal(Stripe.keys[0], 'sk_live_test');
+  });
+});
+
+test('service checkout replaces a stored Stripe customer owned by another user', async () => {
+  const firebase = firebaseSeed({
+    athleteUserData: {
+      stripeCustomerIds: { live: 'cus_wrong_owner' },
+    },
+  });
+  const Stripe = stripeFactory({
+    customerRecords: {
+      cus_wrong_owner: {
+        id: 'cus_wrong_owner',
+        livemode: true,
+        metadata: {
+          platform: 'pulsecheck',
+          pulsecheck_user_id: 'another-user',
+          stripe_mode: 'live',
+        },
+      },
+    },
+  });
+
+  await withPatchedEnv(env, async () => {
+    const fn = loadHandler(firebase, Stripe);
+    const response = await fn.handler(event({
+      conversationId: 'conversation_1',
+      serviceId: 'one-on-one-video',
+      checkoutId: 'checkout_service_0008',
+    }));
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(Stripe.customersRetrieved, ['cus_wrong_owner']);
+    assert.equal(JSON.parse(response.body).customerId, 'cus_service_1');
+    assert.equal(Stripe.ephemeralKeysCreated[0].params.customer, 'cus_service_1');
+    assert.equal(
+      firebase.getDocument('users/mock-user').stripeCustomerIds.live,
+      'cus_service_1'
+    );
+  });
+});
+
+test('service checkout replaces a stored Stripe customer from another mode', async () => {
+  const firebase = firebaseSeed({
+    athleteUserData: {
+      stripeCustomerIds: { live: 'cus_wrong_mode' },
+    },
+  });
+  const Stripe = stripeFactory({
+    customerRecords: {
+      cus_wrong_mode: {
+        id: 'cus_wrong_mode',
+        livemode: false,
+        metadata: {
+          platform: 'pulsecheck',
+          pulsecheck_user_id: 'mock-user',
+          stripe_mode: 'test',
+        },
+      },
+    },
+  });
+
+  await withPatchedEnv(env, async () => {
+    const fn = loadHandler(firebase, Stripe);
+    const response = await fn.handler(event({
+      conversationId: 'conversation_1',
+      serviceId: 'one-on-one-video',
+      checkoutId: 'checkout_service_0009',
+    }));
+
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(Stripe.customersRetrieved, ['cus_wrong_mode']);
+    assert.equal(JSON.parse(response.body).customerId, 'cus_service_1');
+    assert.equal(Stripe.ephemeralKeysCreated[0].params.customer, 'cus_service_1');
   });
 });

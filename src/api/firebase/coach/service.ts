@@ -1,5 +1,5 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, deleteDoc, orderBy, limit, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config';
+import { doc, documentId, getDoc, setDoc, collection, query, where, getDocs, deleteDoc, orderBy, limit, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, getFirebaseModeRequestHeaders } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { privacyService } from '../privacy/service';
@@ -10,6 +10,7 @@ import type {
   PulseCheckTeamMembershipRole,
   PulseCheckYouthTrack,
 } from '../pulsecheckProvisioning/types';
+import { isActivePulseCheckTeamMembership } from '../pulsecheckProvisioning/types';
 import {
   CurriculumAssignmentStatus,
   PulseCheckDailyAssignmentStatus,
@@ -20,6 +21,16 @@ import {
   type CurriculumAssignment,
   type PulseCheckDailyAssignment,
 } from '../mentaltraining/types';
+import {
+  buildWorkspaceReadinessDailyDetails,
+  type AthleteReadinessDailyDetail,
+} from './readinessWorkspace';
+import {
+  normalizePulseCheckWorkspaceScope,
+  type PulseCheckWorkspaceScope,
+} from '../pulsecheckWorkspaceScope';
+
+export type { AthleteReadinessDailyDetail } from './readinessWorkspace';
 
 export interface DailySentimentRecord {
   id: string;
@@ -30,23 +41,6 @@ export interface DailySentimentRecord {
   lastAnalyzedAt: Date;
   createdAt: Date;
   updatedAt: Date;
-}
-
-export interface AthleteReadinessDailyDetail {
-  date: string; // YYYY-MM-DD
-  checkInCompleted: boolean;
-  checkInCount: number;
-  noraChatCount: number;
-  noraMessageCount: number;
-  noraSentimentScore: number | null;
-  moduleAssignedCount: number;
-  moduleCompletedCount: number;
-  moduleDurationSeconds: number;
-  coherenceMorningLevel: string | null;
-  coherenceEveningLevel: string | null;
-  coherenceCompletedTraining: boolean;
-  coherenceEligibleTaskCount: number;
-  coherenceCompletedTaskCount: number;
 }
 
 export interface ConversationMessage {
@@ -107,9 +101,6 @@ export interface CoachAthleteCurriculumSnapshot {
   lastUpdatedAt?: Date;
 }
 
-const PULSECHECK_ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
-const PULSECHECK_TEAMS_COLLECTION = 'pulsecheck-teams';
-const PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PULSECHECK_MORNING_CHECKINS_COLLECTION = 'pulsecheck-morning-checkins';
 const PULSECHECK_NORA_CONVERSATIONS_COLLECTION = 'pulsecheck-nora-conversations';
@@ -588,7 +579,11 @@ const membershipPriority = (membership: PulseCheckTeamMembership) => {
 
 const choosePrimaryOperatingMembership = (memberships: PulseCheckTeamMembership[]) =>
   [...memberships]
-    .filter((membership) => COACH_ACCESS_ROLES.has(membership.role))
+    .filter(
+      (membership) =>
+        COACH_ACCESS_ROLES.has(membership.role) &&
+        isActivePulseCheckTeamMembership(membership)
+    )
     .sort((left, right) => {
       const roleDelta = membershipPriority(left) - membershipPriority(right);
       if (roleDelta !== 0) return roleDelta;
@@ -631,13 +626,21 @@ const defaultPulseCheckAthleteOnboarding = () => ({
 class CoachService {
   private async listCoachTeamMemberships(coachId: string): Promise<PulseCheckTeamMembership[]> {
     const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-    return memberships.filter((membership) => COACH_ACCESS_ROLES.has(membership.role));
+    return memberships.filter(
+      (membership) =>
+        COACH_ACCESS_ROLES.has(membership.role) &&
+        isActivePulseCheckTeamMembership(membership)
+    );
   }
 
   private async listPulseCheckAthleteConnectionsForCoach(
-    coachId: string
+    coachId: string,
+    teamId?: string
   ): Promise<Array<{ athleteMembership: PulseCheckTeamMembership; coachMembership: PulseCheckTeamMembership; linkedAt: Date | null }>> {
-    const coachMemberships = await this.listCoachTeamMemberships(coachId);
+    const normalizedTeamId = String(teamId || '').trim();
+    const coachMemberships = (await this.listCoachTeamMemberships(coachId)).filter(
+      (membership) => !normalizedTeamId || membership.teamId === normalizedTeamId
+    );
     if (coachMemberships.length === 0) return [];
 
     const byAthleteId = new Map<string, { athleteMembership: PulseCheckTeamMembership; coachMembership: PulseCheckTeamMembership; linkedAt: Date | null }>();
@@ -651,7 +654,10 @@ class CoachService {
 
     for (const { coachMembership, members } of teamMembershipsByTeam) {
       const athleteMembers = members.filter(
-        (membership) => membership.role === 'athlete' && canCoachMembershipSeeAthlete(coachMembership, membership)
+        (membership) =>
+          membership.role === 'athlete' &&
+          isActivePulseCheckTeamMembership(membership) &&
+          canCoachMembershipSeeAthlete(coachMembership, membership)
       );
 
       for (const athleteMembership of athleteMembers) {
@@ -677,100 +683,76 @@ class CoachService {
   private async ensureCoachOperatingContext(coachId: string): Promise<{ organizationId: string; teamId: string }> {
     const existingMembership = choosePrimaryOperatingMembership(await this.listCoachTeamMemberships(coachId));
     if (existingMembership) {
-      return {
-        organizationId: existingMembership.organizationId,
-        teamId: existingMembership.teamId,
-      };
+      const [team, organization] = await Promise.all([
+        pulseCheckProvisioningService.getTeam(existingMembership.teamId),
+        pulseCheckProvisioningService.getOrganization(existingMembership.organizationId),
+      ]);
+      if (
+        team?.status === 'active'
+        && organization?.status === 'active'
+        && team.organizationId === existingMembership.organizationId
+      ) {
+        return {
+          organizationId: existingMembership.organizationId,
+          teamId: existingMembership.teamId,
+        };
+      }
     }
 
-    const organizationId = `legacy-coach-org-${coachId}`;
-    const teamId = `legacy-coach-team-${coachId}`;
-    const now = serverTimestamp();
+    const authenticatedUser = auth.currentUser;
+    if (!authenticatedUser || authenticatedUser.uid !== coachId) {
+      throw new Error('Sign in again before resolving the coach team.');
+    }
+    const idToken = await authenticatedUser.getIdToken();
+    const response = await fetch(
+      '/.netlify/functions/resolve-pulsecheck-coach-operating-context',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({ coachId }),
+      }
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success !== true) {
+      throw new Error(
+        payload?.message || payload?.error || 'The coach team could not be resolved.'
+      );
+    }
 
-    const [userSnap, coachSnap] = await Promise.all([
-      getDoc(doc(db, 'users', coachId)),
-      getDoc(doc(db, 'coaches', coachId)),
+    const organizationId = String(payload?.context?.organizationId || '').trim();
+    const teamId = String(payload?.context?.teamId || '').trim();
+    if (!organizationId || !teamId) {
+      throw new Error('The coach team resolver returned incomplete context.');
+    }
+
+    // Never trust the bridge response by itself. Re-read the exact membership
+    // through the signed-in client before the dashboard enables invite actions.
+    const persistedMemberships = await this.listCoachTeamMemberships(coachId);
+    const persistedMembership = persistedMemberships.find(
+      (membership) =>
+        membership.id === `${teamId}_${coachId}`
+        && membership.userId === coachId
+        && membership.teamId === teamId
+        && membership.organizationId === organizationId
+    );
+    if (!persistedMembership) {
+      throw new Error('The coach team membership could not be verified after provisioning.');
+    }
+    const [persistedTeam, persistedOrganization] = await Promise.all([
+      pulseCheckProvisioningService.getTeam(teamId),
+      pulseCheckProvisioningService.getOrganization(organizationId),
     ]);
-
-    const userData = userSnap.exists() ? (userSnap.data() as Record<string, any>) : {};
-    const coachData = coachSnap.exists() ? (coachSnap.data() as Record<string, any>) : {};
-    const coachName =
-      String(userData.displayName || userData.username || coachData.username || userData.email || coachId).trim() || 'Coach';
-    const coachEmail = String(userData.email || coachData.email || '').trim().toLowerCase();
-
-    await Promise.all([
-      setDoc(
-        doc(db, PULSECHECK_ORGANIZATIONS_COLLECTION, organizationId),
-        {
-          displayName: `${coachName} Coaching`,
-          legalName: `${coachName} Coaching`,
-          organizationType: 'coach-led',
-          status: 'active',
-          legacySource: 'legacy-coach-roster',
-          legacyCoachId: coachId,
-          primaryCustomerAdminName: coachName,
-          primaryCustomerAdminEmail: coachEmail,
-          defaultStudyPosture: 'operational',
-          defaultClinicianBridgeMode: 'none',
-          notes: `Auto-created from coach-service bridge for ${coachName}.`,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      ),
-      setDoc(
-        doc(db, PULSECHECK_TEAMS_COLLECTION, teamId),
-        {
-          organizationId,
-          displayName: `${coachName} Team`,
-          teamType: 'coach-led',
-          sportOrProgram: 'Coach-led organization',
-          status: 'active',
-          legacySource: 'legacy-coach-roster',
-          legacyCoachId: coachId,
-          defaultAdminName: coachName,
-          defaultAdminEmail: coachEmail,
-          defaultInvitePolicy: 'admin-staff-and-coaches',
-          notes: `Auto-created from coach-service bridge for ${coachName}.`,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      ),
-      setDoc(
-        doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${organizationId}_${coachId}`),
-        {
-          organizationId,
-          userId: coachId,
-          email: coachEmail,
-          role: 'org-admin',
-          status: 'active',
-          grantedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      ),
-      setDoc(
-        doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${coachId}`),
-        {
-          organizationId,
-          teamId,
-          userId: coachId,
-          email: coachEmail,
-          role: 'team-admin',
-          title: 'Coach',
-          permissionSetId: 'pulsecheck-team-admin-v1',
-          rosterVisibilityScope: 'team',
-          allowedAthleteIds: [],
-          onboardingStatus: 'pending-profile',
-          grantedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      ),
-    ]);
+    if (
+      persistedTeam?.status !== 'active'
+      || persistedOrganization?.status !== 'active'
+      || persistedTeam.organizationId !== organizationId
+    ) {
+      throw new Error('The coach team context is inactive after provisioning.');
+    }
 
     return { organizationId, teamId };
   }
@@ -873,7 +855,9 @@ class CoachService {
   async getConnectedCoaches(athleteUserId: string): Promise<Array<{ id: string; data: CoachFirestoreData }>> {
     try {
       const athleteMemberships = (await pulseCheckProvisioningService.listUserTeamMemberships(athleteUserId)).filter(
-        (membership) => membership.role === 'athlete'
+        (membership) =>
+          membership.role === 'athlete' &&
+          isActivePulseCheckTeamMembership(membership)
       );
       const activeCoachIds = new Set<string>();
 
@@ -883,6 +867,7 @@ class CoachService {
           .filter(
             (membership) =>
               DIRECT_COACH_ROLES.has(membership.role) &&
+              isActivePulseCheckTeamMembership(membership) &&
               membership.userId !== athleteUserId &&
               canCoachMembershipSeeAthlete(membership, athleteMembership)
           )
@@ -999,9 +984,26 @@ class CoachService {
    * Get detailed athlete data for coach dashboard
    */
   async getConnectedAthletes(coachId: string): Promise<any[]> {
+    return this.getConnectedAthletesForScope(coachId);
+  }
+
+  /**
+   * Get detailed athlete data for one explicit team. This is the dashboard-safe
+   * entry point: the coach must hold a staff membership on `teamId`, and athletes
+   * from the coach's other teams are never folded into the result.
+   */
+  async getConnectedAthletesForTeam(coachId: string, teamId: string): Promise<any[]> {
+    const normalizedCoachId = String(coachId || '').trim();
+    const normalizedTeamId = String(teamId || '').trim();
+    if (!normalizedCoachId || !normalizedTeamId) return [];
+    return this.getConnectedAthletesForScope(normalizedCoachId, normalizedTeamId);
+  }
+
+  private async getConnectedAthletesForScope(coachId: string, teamId?: string): Promise<any[]> {
     try {
-      console.log(`[CoachService] Fetching connected athletes for coach: ${coachId}`);
-      const connections = await this.listPulseCheckAthleteConnectionsForCoach(coachId);
+      const scopeLabel = teamId ? ` on team ${teamId}` : '';
+      console.log(`[CoachService] Fetching connected athletes for coach: ${coachId}${scopeLabel}`);
+      const connections = await this.listPulseCheckAthleteConnectionsForCoach(coachId, teamId);
       console.log(`[CoachService] Found ${connections.length} PulseCheck athlete memberships for coach`);
       const teamIds = Array.from(new Set(connections.map((connection) => connection.athleteMembership.teamId)));
       const teamEntries = await Promise.all(
@@ -1348,6 +1350,88 @@ class CoachService {
         completedCount: 0,
         totalCount: 0,
       };
+    }
+  }
+
+  /**
+   * Canonical coach-dashboard readiness feed. Unlike the athlete detail fallback
+   * below, this path is fail-closed to one coach, team, and organization and only
+   * consumes the evidence families shared with the universal app.
+   */
+  async getCoachReadinessDailyDetailsForWorkspace(
+    athleteUserId: string,
+    coachId: string,
+    scope: PulseCheckWorkspaceScope,
+    days: number = 14
+  ): Promise<AthleteReadinessDailyDetail[]> {
+    try {
+      const normalizedAthleteID = String(athleteUserId || '').trim();
+      const normalizedCoachID = String(coachId || '').trim();
+      const workspace = normalizePulseCheckWorkspaceScope(scope);
+      if (!normalizedAthleteID || !normalizedCoachID || !workspace) return [];
+
+      const windowDays = Math.max(1, Math.min(60, Math.round(days || 14)));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateKeys = Array.from({ length: windowDays }, (_, index) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() - (windowDays - 1 - index));
+        return ymd(date);
+      });
+      const checkInDocumentIDs = dateKeys.map(
+        (dateKey) => `${normalizedAthleteID}_${dateKey}`
+      );
+      const checkInDocumentIDChunks = Array.from(
+        { length: Math.ceil(checkInDocumentIDs.length / 30) },
+        (_, index) => checkInDocumentIDs.slice(index * 30, index * 30 + 30)
+      );
+
+      const [checkInSnapshots, assignmentSnapshot] = await Promise.all([
+        Promise.all(
+          checkInDocumentIDChunks.map((documentIDs) =>
+            getDocs(
+              query(
+                collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION),
+                where(documentId(), 'in', documentIDs),
+                where('teamId', '==', workspace.teamId),
+                where('organizationId', '==', workspace.organizationId)
+              )
+            )
+          )
+        ),
+        getDocs(
+          query(
+            collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION),
+            where('coachId', '==', normalizedCoachID),
+            where('teamId', '==', workspace.teamId),
+            where('organizationId', '==', workspace.organizationId),
+            where('athleteId', '==', normalizedAthleteID)
+          )
+        ),
+      ]);
+
+      return buildWorkspaceReadinessDailyDetails({
+        athleteUserId: normalizedAthleteID,
+        coachId: normalizedCoachID,
+        scope: workspace,
+        dateKeys,
+        checkIns: checkInSnapshots.flatMap((querySnapshot) =>
+          querySnapshot.docs.map((snapshot) => ({
+            id: snapshot.id,
+            data: snapshot.data() as Record<string, unknown>,
+          }))
+        ),
+        assignments: assignmentSnapshot.docs.map((snapshot) => ({
+          id: snapshot.id,
+          data: snapshot.data() as Record<string, unknown>,
+        })),
+      });
+    } catch (error) {
+      console.error(
+        '[CoachService] Error fetching scoped coach readiness details:',
+        error
+      );
+      return [];
     }
   }
 

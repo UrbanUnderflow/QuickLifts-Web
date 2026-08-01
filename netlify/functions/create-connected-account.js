@@ -1,14 +1,149 @@
 // Docs on event and context https://docs.netlify.com/functions/build/#code-your-function-2
 
 const Stripe = require('stripe');
-const { db } = require('./config/firebase');
+const { verifyFirebaseUser } = require('./lib/pulsecheck-coach-services');
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-async function updateOnboardingLink(userId, link, expiration) {
+const normalizeString = (value) => (
+  typeof value === 'string' ? value.trim() : ''
+);
+
+const isActiveRecord = (data = {}) => (
+  (!normalizeString(data.status) || normalizeString(data.status) === 'active')
+  && data.revokedAt == null
+  && data.archivedAt == null
+  && data.deletedAt == null
+);
+
+const sellerEligibilityFromRecords = ({
+  userId,
+  userData = {},
+  coachData = null,
+  subscriptionData = null,
+  teamScopes = [],
+}) => {
+  const legacyCoachEligible = Boolean(
+    coachData
+    && isActiveRecord(coachData)
+    && (
+      !normalizeString(coachData.userId)
+      || normalizeString(coachData.userId) === userId
+    )
+  );
+  const creatorTypes = Array.isArray(userData.creator?.type)
+    ? userData.creator.type.map((value) => normalizeString(value).toLowerCase())
+    : [];
+  const subscriptionStatus = normalizeString(
+    subscriptionData?.status || subscriptionData?.subscriptionStatus
+  ).toLowerCase();
+  const trainerEligible = (
+    userData.creator?.isTrainer === true
+    || creatorTypes.includes('personal trainer')
+  ) && ['active', 'trialing'].includes(subscriptionStatus);
+
+  const teamEligible = teamScopes.some(({ membership, team, organization }) => {
+    if (
+      !membership
+      || !team
+      || !organization
+      || !isActiveRecord(membership)
+      || !isActiveRecord(team)
+      || normalizeString(team.status) !== 'active'
+      || !isActiveRecord(organization)
+      || normalizeString(organization.status) !== 'active'
+      || normalizeString(membership.userId) !== userId
+      || normalizeString(membership.role) === 'athlete'
+      || normalizeString(membership.teamId) !== normalizeString(team.id)
+      || normalizeString(membership.organizationId)
+        !== normalizeString(team.organizationId)
+      || normalizeString(team.organizationId)
+        !== normalizeString(organization.id)
+    ) {
+      return false;
+    }
+    const commercialConfig = team.commercialConfig || {};
+    const revenueRecipientUserId = normalizeString(
+      commercialConfig.revenueRecipientUserId
+    );
+    const role = normalizeString(membership.role);
+    const isRevenueRecipient = revenueRecipientUserId === userId
+      || (
+        !revenueRecipientUserId
+        && normalizeString(team.legacyCoachId) === userId
+      )
+      || (
+        !revenueRecipientUserId
+        && (
+          !normalizeString(commercialConfig.revenueRecipientRole)
+          || normalizeString(commercialConfig.revenueRecipientRole) === 'team-admin'
+        )
+        && role === 'team-admin'
+      );
+    const payoutsEnabled = commercialConfig.additionalServicesEnabled === true
+      || commercialConfig.referralKickbackEnabled === true
+      || commercialConfig.parentAssessmentReferralKickbackEnabled === true
+      || commercialConfig.coachReferralKickbackEnabled === true;
+    return payoutsEnabled && isRevenueRecipient;
+  });
+
+  return legacyCoachEligible || trainerEligible || teamEligible;
+};
+
+const requireEligibleSeller = async (database, userId, userData) => {
+  const [coachSnapshot, subscriptionSnapshot, membershipsSnapshot] = await Promise.all([
+    database.collection('coaches').doc(userId).get(),
+    database.collection('subscriptions').doc(userId).get(),
+    database.collection('pulsecheck-team-memberships')
+      .where('userId', '==', userId)
+      .get(),
+  ]);
+  const memberships = membershipsSnapshot.docs
+    .map((document) => ({ id: document.id, ...(document.data() || {}) }))
+    .filter((membership) => (
+      membership.id === `${normalizeString(membership.teamId)}_${userId}`
+    ));
+  const teamScopes = await Promise.all(memberships.map(async (membership) => {
+    const teamId = normalizeString(membership.teamId);
+    const organizationId = normalizeString(membership.organizationId);
+    if (!teamId || !organizationId) {
+      return { membership, team: null, organization: null };
+    }
+    const [teamSnapshot, organizationSnapshot] = await Promise.all([
+      database.collection('pulsecheck-teams').doc(teamId).get(),
+      database.collection('pulsecheck-organizations').doc(organizationId).get(),
+    ]);
+    return {
+      membership,
+      team: teamSnapshot.exists
+        ? { id: teamSnapshot.id, ...(teamSnapshot.data() || {}) }
+        : null,
+      organization: organizationSnapshot.exists
+        ? { id: organizationSnapshot.id, ...(organizationSnapshot.data() || {}) }
+        : null,
+    };
+  }));
+  if (!sellerEligibilityFromRecords({
+    userId,
+    userData,
+    coachData: coachSnapshot.exists ? coachSnapshot.data() || {} : null,
+    subscriptionData: subscriptionSnapshot.exists
+      ? subscriptionSnapshot.data() || {}
+      : null,
+    teamScopes,
+  })) {
+    const error = new Error(
+      'An active coach, trainer, or team payout role is required to connect payments.'
+    );
+    error.statusCode = 403;
+    throw error;
+  }
+};
+
+async function updateOnboardingLink(database, userId, link, expiration) {
   try {
-    const userRef = db.collection("users").doc(userId);
+    const userRef = database.collection("users").doc(userId);
     
     // Use set with merge to handle null creator objects
     await userRef.set({
@@ -26,9 +161,14 @@ async function updateOnboardingLink(userId, link, expiration) {
   }
 }
 
-async function createOrUpdateStripeConnect(userId, stripeAccountId, email) {
+async function createOrUpdateStripeConnect(
+  database,
+  userId,
+  stripeAccountId,
+  email
+) {
   try {
-    const stripeConnectRef = db.collection("stripeConnect").doc(userId);
+    const stripeConnectRef = database.collection("stripeConnect").doc(userId);
     const stripeConnectDoc = await stripeConnectRef.get();
 
     if (stripeConnectDoc.exists) {
@@ -56,23 +196,36 @@ async function createOrUpdateStripeConnect(userId, stripeAccountId, email) {
 }
 
 const handler = async (event) => {
-  console.log(`[CreateConnectedAccount] Received ${event.httpMethod} request:`, {
-    queryParams: event.queryStringParameters,
-    body: event.body ? '(has body data)' : '(no body data)'
-  });
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, body: '' };
+  }
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({
+        success: false,
+        error: 'Method Not Allowed',
+      }),
+    };
+  }
   
   try {
-    const userId = event.queryStringParameters?.userId;
-    console.log('[CreateConnectedAccount] Processing for userId:', userId);
-    
-    if (!userId) {
-      return { 
-        statusCode: 400, 
-        body: JSON.stringify({
-          success: false,
-          error: 'Missing userId parameter'
-        })
-      };
+    const {
+      userId,
+      decoded,
+      app,
+    } = await verifyFirebaseUser(event, {
+      authErrorMessage: 'Sign in is required to connect payments.',
+    });
+    const database = app.firestore();
+    const body = JSON.parse(event.body || '{}');
+    const requestedUserId = normalizeString(body.userId);
+    if (requestedUserId && requestedUserId !== userId) {
+      const error = new Error(
+        'Payment onboarding can only be started for the signed-in account.'
+      );
+      error.statusCode = 403;
+      throw error;
     }
 
     // Validate Stripe key exists
@@ -89,7 +242,7 @@ const handler = async (event) => {
     }
 
     // Get user document to check if they already have a Stripe account
-    const userDoc = await db.collection("users").doc(userId).get();
+    const userDoc = await database.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       console.error(`[CreateConnectedAccount] User document not found for userId: ${userId}`);
       return {
@@ -102,6 +255,23 @@ const handler = async (event) => {
     }
 
     const userData = userDoc.data();
+    if (
+      normalizeString(userData.id) && normalizeString(userData.id) !== userId
+    ) {
+      const error = new Error('The signed-in user record is invalid.');
+      error.statusCode = 403;
+      throw error;
+    }
+    if (
+      normalizeString(decoded.email)
+      && normalizeString(userData.email).toLowerCase()
+        !== normalizeString(decoded.email).toLowerCase()
+    ) {
+      const error = new Error('The signed-in email does not match this account.');
+      error.statusCode = 403;
+      throw error;
+    }
+    await requireEligibleSeller(database, userId, userData);
     
     // CRITICAL: Validate email exists
     if (!userData.email) {
@@ -126,8 +296,20 @@ const handler = async (event) => {
     
     // If user already has a Stripe account, create a new onboarding link for it
     if (userData.creator?.stripeAccountId) {
-      console.log('[CreateConnectedAccount] User already has Stripe account, creating new onboarding link');
       try {
+        const existingAccount = await stripe.accounts.retrieve(
+          userData.creator.stripeAccountId
+        );
+        if (
+          normalizeString(existingAccount?.metadata?.platform) !== 'pulse'
+          || normalizeString(existingAccount?.metadata?.user_id) !== userId
+        ) {
+          const error = new Error(
+            'The saved payment account does not belong to this Pulse account.'
+          );
+          error.statusCode = 409;
+          throw error;
+        }
         const accountLink = await stripe.accountLinks.create({
           account: userData.creator.stripeAccountId,
           refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/connect-account`,
@@ -135,7 +317,12 @@ const handler = async (event) => {
           type: "account_onboarding",
         });
 
-        await updateOnboardingLink(userId, accountLink.url, accountLink.expires_at);
+        await updateOnboardingLink(
+          database,
+          userId,
+          accountLink.url,
+          accountLink.expires_at
+        );
 
         return {
           statusCode: 200,
@@ -145,9 +332,15 @@ const handler = async (event) => {
           })
         };
       } catch (error) {
-        console.error('[CreateConnectedAccount] Error creating account link for existing account:', error);
+        const statusCode = Number(error.statusCode) || 500;
+        if (statusCode >= 500) {
+          console.error(
+            '[CreateConnectedAccount] Error creating account link for existing account:',
+            error
+          );
+        }
         return {
-          statusCode: 500,
+          statusCode,
           body: JSON.stringify({
             success: false,
             error: error.message
@@ -163,9 +356,9 @@ const handler = async (event) => {
     try {
       // Search for existing Connect accounts with this email
       const existingAccounts = await stripe.accounts.list({ limit: 100 });
-      const userAccounts = existingAccounts.data.filter(acc => 
-        acc.email === userData.email || 
-        (acc.business_profile && acc.business_profile.support_email === userData.email)
+      const userAccounts = existingAccounts.data.filter((candidate) =>
+        normalizeString(candidate?.metadata?.platform) === 'pulse'
+        && normalizeString(candidate?.metadata?.user_id) === userId
       );
       
       if (userAccounts.length > 0) {
@@ -318,7 +511,7 @@ const handler = async (event) => {
       };
       
       // Use set with merge to handle null creator objects
-      await db.collection("users").doc(userId).set({
+      await database.collection("users").doc(userId).set({
         creator: creatorData
       }, { merge: true });
       
@@ -333,7 +526,12 @@ const handler = async (event) => {
 
     // Create or update StripeConnect document (less critical, can fail without breaking the flow)
     try {
-      await createOrUpdateStripeConnect(userId, account.id, userData.email);
+      await createOrUpdateStripeConnect(
+        database,
+        userId,
+        account.id,
+        userData.email
+      );
       console.log('[CreateConnectedAccount] StripeConnect document updated successfully');
     } catch (stripeConnectError) {
       console.warn('[CreateConnectedAccount] StripeConnect document update failed (non-critical):', stripeConnectError);
@@ -350,13 +548,16 @@ const handler = async (event) => {
       })
     };
   } catch (error) {
-    console.error('[CreateConnectedAccount] Error:', {
-      message: error.message,
-      type: error.type,
-      code: error.code,
-      stack: error.stack,
-      raw: error
-    });
+    const statusCode = Number(error.statusCode) || 500;
+    if (statusCode >= 500) {
+      console.error('[CreateConnectedAccount] Error:', {
+        message: error.message,
+        type: error.type,
+        code: error.code,
+        stack: error.stack,
+        raw: error
+      });
+    }
     
     // Provide more helpful error messages based on error type
     let userMessage = error.message || 'An unexpected error occurred';
@@ -375,7 +576,7 @@ const handler = async (event) => {
     }
     
     return { 
-      statusCode: 500, 
+      statusCode,
       body: JSON.stringify({
         success: false,
         error: userMessage,
@@ -386,4 +587,8 @@ const handler = async (event) => {
   }
 };
 
-module.exports = { handler };
+module.exports = {
+  handler,
+  requireEligibleSeller,
+  sellerEligibilityFromRecords,
+};

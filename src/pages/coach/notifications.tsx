@@ -6,7 +6,6 @@ import { useUser, useUserLoading } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
 import {
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -44,6 +43,39 @@ type CoachNotificationDoc = {
   webUrl?: string;
   target?: string;
   metadata?: Record<string, any>;
+};
+
+const COACH_NOTIFICATION_ORIGIN = 'https://fitwithpulse.ai';
+const SAFE_REPORT_PATH = /^\/coach-reports\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_-]{1,128}$/;
+const SAFE_COACH_PATHS = new Set([
+  '/coach/dashboard',
+  '/coach/notifications',
+  '/coach/sports-intelligence-reports',
+]);
+
+export const resolveCoachNotificationTarget = (rawValue?: string) => {
+  const value = String(rawValue || '').trim();
+  if (!value || value.startsWith('//') || value.includes('\\')) return null;
+
+  try {
+    const parsed = new URL(value, COACH_NOTIFICATION_ORIGIN);
+    if (parsed.origin !== COACH_NOTIFICATION_ORIGIN) return null;
+
+    if (
+      parsed.pathname === '/coach/mentalGames'
+      || parsed.pathname === '/coach/mental-training'
+    ) {
+      return '/coach/dashboard?view=nora';
+    }
+    if (parsed.pathname === '/coach/staff') return '/coach/dashboard?view=staff';
+    if (parsed.pathname === '/coach/inbox') return '/coach/dashboard?view=inbox';
+    if (!SAFE_COACH_PATHS.has(parsed.pathname) && !SAFE_REPORT_PATH.test(parsed.pathname)) {
+      return null;
+    }
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
 };
 
 const relativeTimestamp = (timestamp?: number) => {
@@ -199,8 +231,7 @@ const CoachNotifications: React.FC = () => {
         updatedAt: Date.now(),
       });
     } catch (error) {
-      console.error('Failed to archive coach notification, deleting instead:', error);
-      await deleteDoc(doc(db, 'coach-notifications', id));
+      console.error('Failed to archive coach notification:', error);
     }
   };
 
@@ -213,15 +244,8 @@ const CoachNotifications: React.FC = () => {
       console.error('Failed to mark notification read before navigation:', error);
     }
 
-    if (!notification.webUrl) return;
-
-    if (notification.webUrl.startsWith('http')) {
-      const normalized = notification.webUrl.replace('https://fitwithpulse.ai', '');
-      await router.push(normalized || '/coach/mentalGames');
-      return;
-    }
-
-    await router.push(notification.webUrl);
+    const target = resolveCoachNotificationTarget(notification.webUrl);
+    if (target) await router.push(target);
   };
 
   if (loading || userLoading) {

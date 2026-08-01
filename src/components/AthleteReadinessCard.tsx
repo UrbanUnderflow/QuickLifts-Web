@@ -269,7 +269,12 @@ const deriveThemes = (id: string, status: StatusKey): string[] => {
 // `demo` synthesizes device/modules/themes/tiers + per-day detail for the
 // walkthrough. When false (live), the card shows only real signals — mood,
 // check-ins, real escalation tier, real device wear — and never fakes the rest.
-const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> = ({ athlete, demo }) => {
+const AthleteReadinessCard: React.FC<{
+  athlete: AthleteData;
+  demo?: boolean;
+  teamId?: string;
+  organizationId?: string;
+}> = ({ athlete, demo, teamId, organizationId }) => {
   const [history, setHistory] = useState<DailySentimentRecord[] | null>(null);
   const [readinessDetails, setReadinessDetails] = useState<AthleteReadinessDailyDetail[] | null>(demo ? [] : null);
   const [messagingOpen, setMessagingOpen] = useState(false);
@@ -297,15 +302,33 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
     }
 
     setReadinessDetails(null);
+    const coachID = String(currentUser?.id || '').trim();
+    const normalizedTeamID = String(teamId || '').trim();
+    const normalizedOrganizationID = String(organizationId || '').trim();
+    if (!coachID || !normalizedTeamID || !normalizedOrganizationID) {
+      setReadinessDetails([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     coachService
-      .getAthleteReadinessDailyDetails(athlete.id, 14)
+      .getCoachReadinessDailyDetailsForWorkspace(
+        athlete.id,
+        coachID,
+        {
+          teamId: normalizedTeamID,
+          organizationId: normalizedOrganizationID,
+        },
+        14
+      )
       .then((details) => !cancelled && setReadinessDetails(details))
       .catch(() => !cancelled && setReadinessDetails([]));
 
     return () => {
       cancelled = true;
     };
-  }, [athlete.id, demo]);
+  }, [athlete.id, currentUser?.id, demo, organizationId, teamId]);
 
   const status = deriveStatus(athlete);
   const meta = STATUS[status];
@@ -329,7 +352,7 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
       // Device per-day: real from the device monitor's dailyPresence on live
       // (index aligned oldest→today), synth in demo. Topics stay demo-only synth
       // here; live topics are fetched lazily on hover.
-      const checkInCompleted = demo ? signalHas : detail?.checkInCompleted ?? signalHas;
+      const checkInCompleted = demo ? signalHas : detail?.checkInCompleted === true;
       const noraChatCount = demo && signalHas ? (h % 3 === 0 ? 2 : 1) : detail?.noraChatCount ?? 0;
       const noraMessageCount = demo && signalHas ? 2 + (h % 5) : detail?.noraMessageCount ?? 0;
       const noraSentimentScore = demo && signalHas ? rec?.sentimentScore ?? 0 : detail?.noraSentimentScore ?? null;
@@ -1092,6 +1115,8 @@ const AthleteReadinessCard: React.FC<{ athlete: AthleteData; demo?: boolean }> =
           athleteName={athlete.displayName}
           coachId={currentUser.id}
           coachName={currentUser.displayName || currentUser.username || 'Coach'}
+          teamId={teamId}
+          organizationId={organizationId}
         />
       )}
     </>

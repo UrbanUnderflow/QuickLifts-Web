@@ -6,4 +6,13 @@
  * to avoid "Page not found" issues when navigating via client-side tabs.
  */
 
+import type { GetServerSideProps } from 'next';
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=nora',
+    permanent: false,
+  },
+});
+
 export { default } from './mentalGames';

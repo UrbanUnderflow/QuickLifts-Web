@@ -11,13 +11,23 @@ test('coach dashboard resolves legacy revenue recipients and securely loads live
 
   assert.match(
     dashboardSource,
-    /team\?\.legacyCoachId === currentUser\.id/,
+    /context\.legacyCoachId === currentUser\.id/,
     'a legacy roster coach should inherit an unset revenue recipient'
   );
   assert.match(
     dashboardSource,
     /get-pulsecheck-coach-earnings/,
     'the live earnings tab should use the protected server-side earnings route'
+  );
+  assert.match(
+    dashboardSource,
+    /get-pulsecheck-coach-earnings[\s\S]*teamId=\$\{encodeURIComponent\(teamId\)\}/,
+    'earnings requests should carry the explicitly selected dashboard team'
+  );
+  assert.match(
+    dashboardSource,
+    /body: JSON\.stringify\(\{\s*teamId,/,
+    'payout requests should revalidate the explicitly selected team'
   );
   assert.doesNotMatch(
     dashboardSource,
@@ -41,7 +51,7 @@ test('commercial config save fills a safe recipient or requires an explicit sele
 
   assert.match(
     provisioningSource,
-    /draft\.referralKickbackEnabled && !draft\.revenueRecipientUserId/,
+    /\(draft\.referralKickbackEnabled \|\| draft\.parentAssessmentReferralKickbackEnabled \|\| draft\.coachReferralKickbackEnabled\) &&\s*!draft\.revenueRecipientUserId/,
     'enabled referral revenue should never save silently without a recipient'
   );
   assert.match(

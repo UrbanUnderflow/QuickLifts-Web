@@ -19,8 +19,16 @@ test('hosted coach reports pass through AuthWrapper while keeping page-level mem
   assert.match(hostedReportRoute, /useUserLoading/, 'hosted report page must own the unauthenticated loading/sign-in state');
   assert.match(hostedReportRoute, /status:\s*'sign_in'/, 'hosted report page must not spin forever when the user is signed out');
   assert.match(hostedReportRoute, /\?signin=1/, 'hosted report page should open the sign-in modal without losing the permalink');
-  assert.match(hostedReportRoute, /listUserTeamMemberships/, 'hosted report page must still check team membership');
-  assert.match(hostedReportRoute, /team-admin|coach|performance-staff/, 'hosted report page must scope access to approved team roles');
+  assert.match(
+    hostedReportRoute,
+    /resolveAuthorizedCoachReportTeam\(currentUser\.id,\s*teamId\)/,
+    'hosted report page must resolve exact active team authorization'
+  );
+  assert.match(
+    hostedReportRoute,
+    /pulsecheckCoachReportService\.getCoachView\(access\.team\.id,\s*reportId\)/,
+    'hosted report page must read the coach-safe projection for the authorized team'
+  );
 });
 
 test('admin entry points expose the reviewer screen and Slice 1 doctrine', () => {

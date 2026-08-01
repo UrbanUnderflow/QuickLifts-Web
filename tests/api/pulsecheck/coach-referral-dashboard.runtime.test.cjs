@@ -39,10 +39,14 @@ test('coach referral navigation and cards follow the team commercial switches', 
 test('athlete invites use the dashboard team context and bridge legacy coaches', () => {
   const dashboardSource = read('src/pages/coach/dashboard.tsx');
   const coachServiceSource = read('src/api/firebase/coach/service.ts');
+  const athleteInviteSection = dashboardSource.slice(
+    dashboardSource.indexOf('const AthleteInviteSection'),
+    dashboardSource.indexOf('const RosterSection')
+  );
 
   assert.match(
     dashboardSource,
-    /coachService\.resolveOperatingContext\(coachId\)/,
+    /coachService\.resolveOperatingContext\(currentUser\.id\)/,
     'the dashboard should resolve a missing legacy operating context before enabling team actions'
   );
   assert.match(
@@ -51,8 +55,33 @@ test('athlete invites use the dashboard team context and bridge legacy coaches',
     'athlete invites should consume the shared dashboard team context'
   );
   assert.match(
+    dashboardSource,
+    /createManagedAthleteInvite[\s\S]*manage-pulsecheck-athlete-invite/,
+    'athlete invite creation should use the authenticated server mutation route'
+  );
+  assert.match(
+    dashboardSource,
+    /JSON\.stringify\(\{ action: 'create', mode: 'general', \.\.\.input \}\)/,
+    'the coach dashboard should only request the reusable team invite'
+  );
+  assert.match(
+    athleteInviteSection,
+    /const copyLink = \(\) => shareTeamLink\(false\);[\s\S]*const inviteAthlete = \(\) => shareTeamLink\(true\);/,
+    'copy and invite actions should resolve the same reusable team link'
+  );
+  assert.doesNotMatch(
+    athleteInviteSection,
+    /single-use|pending personal|inviteOpen|recipientName/,
+    'the coach surface should not create or display personal athlete invites'
+  );
+  assert.match(
     coachServiceSource,
-    /async resolveOperatingContext\(coachId: string\)[\s\S]*return this\.ensureCoachOperatingContext\(coachId\)/,
-    'the public dashboard resolver should reuse the existing legacy bridge'
+    /resolve-pulsecheck-coach-operating-context/,
+    'the public dashboard resolver should use the authenticated server bridge'
+  );
+  assert.match(
+    coachServiceSource,
+    /persistedMemberships[\s\S]*membership\.id === `\$\{teamId\}_\$\{coachId\}`/,
+    'the browser should re-read the canonical membership before enabling invite context'
   );
 });

@@ -3,11 +3,15 @@ const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/se
 
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
+const PLATFORM_ADMINS_COLLECTION = 'admin';
 const SPORT_CONFIG_COLLECTION = 'company-config';
 const SPORT_CONFIG_DOCUMENT = 'pulsecheck-sports';
 const REPORTS_ROOT_COLLECTION = 'teams';
 const REPORTS_SUBCOLLECTION = 'coachReports';
+const COACH_REPORT_VIEWS_SUBCOLLECTION = 'coachReportViews';
 const ALLOWED_RECIPIENT_ROLES = ['team-admin', 'coach', 'performance-staff'];
+const SAFE_FIRESTORE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -46,6 +50,133 @@ function normalizeString(value) {
 
 function normalizeEmail(value) {
   return normalizeString(value).toLowerCase();
+}
+
+function isSafeFirestoreId(value) {
+  return SAFE_FIRESTORE_ID.test(normalizeString(value));
+}
+
+function isActiveMembership(membership) {
+  const status = normalizeString(membership?.status).toLowerCase();
+  return (status === '' || status === 'active') && !membership?.revokedAt;
+}
+
+function canPublishCoachReport(membership) {
+  const role = normalizeString(membership?.role).toLowerCase();
+  if (!ALLOWED_RECIPIENT_ROLES.includes(role)) return false;
+  if (role === 'team-admin') return true;
+
+  if (
+    Object.prototype.hasOwnProperty.call(membership || {}, 'staffCapabilities')
+    && Array.isArray(membership.staffCapabilities)
+    && membership.staffCapabilities.length > 0
+  ) {
+    return (
+      membership.staffCapabilities.includes('admin')
+      || membership.staffCapabilities.includes('coaching')
+    );
+  }
+  return role === 'coach' || role === 'performance-staff';
+}
+
+async function authenticateCaller(event, adminApp) {
+  const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
+  const match = normalizeString(authHeader).match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    const error = new Error('Sign in is required to send a Sports Intelligence report.');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  try {
+    const decoded = await adminApp.auth().verifyIdToken(match[1]);
+    const userId = normalizeString(decoded?.uid);
+    if (!userId) throw new Error('The sign-in token did not include a user id.');
+    return { decoded, userId };
+  } catch (cause) {
+    const error = new Error('The sign-in token could not be verified.');
+    error.statusCode = 401;
+    error.cause = cause;
+    throw error;
+  }
+}
+
+async function isPlatformAdmin(db, decoded) {
+  if (
+    decoded?.admin === true
+    || decoded?.isAdmin === true
+    || normalizeString(decoded?.role).toLowerCase() === 'admin'
+  ) {
+    return true;
+  }
+  const email = normalizeEmail(decoded?.email);
+  if (!email) return false;
+  const snapshot = await db.collection(PLATFORM_ADMINS_COLLECTION).doc(email).get();
+  return snapshot.exists;
+}
+
+async function authorizeReportPublisher({ db, decoded, userId, teamId }) {
+  const [teamSnapshot, platformAdmin] = await Promise.all([
+    db.collection(TEAMS_COLLECTION).doc(teamId).get(),
+    isPlatformAdmin(db, decoded),
+  ]);
+  if (!teamSnapshot.exists) {
+    const error = new Error('The requested team is not available.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const team = teamSnapshot.data() || {};
+  const organizationId = normalizeString(team.organizationId);
+  if (
+    normalizeString(team.status).toLowerCase() !== 'active'
+    || !isSafeFirestoreId(organizationId)
+  ) {
+    const error = new Error('The requested team is not active.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const organizationSnapshot = await db
+    .collection(ORGANIZATIONS_COLLECTION)
+    .doc(organizationId)
+    .get();
+  const organization = organizationSnapshot.exists
+    ? organizationSnapshot.data() || {}
+    : {};
+  if (
+    !organizationSnapshot.exists
+    || normalizeString(organization.status).toLowerCase() !== 'active'
+  ) {
+    const error = new Error('The requested organization is not active.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (platformAdmin) {
+    return { organizationId, platformAdmin: true };
+  }
+
+  const membershipSnapshot = await db
+    .collection(TEAM_MEMBERSHIPS_COLLECTION)
+    .where('userId', '==', userId)
+    .get();
+  const authorized = (membershipSnapshot.docs || []).some((document) => {
+    const membership = document.data() || {};
+    return (
+      normalizeString(membership.teamId) === teamId
+      && normalizeString(membership.organizationId) === organizationId
+      && canPublishCoachReport(membership)
+      && isActiveMembership(membership)
+    );
+  });
+  if (!authorized) {
+    const error = new Error('This account cannot publish reports for the requested team.');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  return { organizationId, platformAdmin: false };
 }
 
 function escapeHtml(value) {
@@ -403,6 +534,77 @@ async function markReportSent(reportRef, sentTo) {
   );
 }
 
+function buildCoachReportProjection(report, teamId, organizationId) {
+  const surface = report.coachSurface || {};
+  const meta = surface.meta || {};
+  const safeCoachSurface = {
+    meta: {
+      reportId: normalizeString(meta.reportId || report.id),
+      teamId,
+      organizationId,
+      teamName: normalizeString(meta.teamName || report.teamName),
+      sportId: normalizeString(meta.sportId || report.sportId),
+      sportName: normalizeString(meta.sportName || report.sportName),
+      reportType: normalizeString(meta.reportType || report.reportType) || 'weekly',
+      weekStart: normalizeString(meta.weekStart || report.weekStart),
+      weekLabel: normalizeString(meta.weekLabel || report.weekLabel),
+      generatedAt: meta.generatedAt || report.generatedAt || '',
+      reviewedBy: normalizeString(meta.reviewedBy),
+      reviewerName: normalizeString(meta.reviewerName),
+      reviewStatus: 'sent',
+      source: normalizeString(meta.source || report.source),
+      primarySportColor: normalizeString(meta.primarySportColor),
+      primarySportColorSoft: normalizeString(meta.primarySportColorSoft),
+    },
+    topLine: {
+      whatChanged: normalizeString(surface.topLine?.whatChanged),
+      who: normalizeString(surface.topLine?.who),
+      firstAction: normalizeString(surface.topLine?.firstAction),
+      secondaryThread: normalizeString(surface.topLine?.secondaryThread),
+    },
+    dimensionState: surface.dimensionState || {},
+    watchlist: Array.isArray(surface.watchlist) ? surface.watchlist : [],
+    coachActions: Array.isArray(surface.coachActions) ? surface.coachActions : [],
+    gameDayLookFors: Array.isArray(surface.gameDayLookFors) ? surface.gameDayLookFors : [],
+    adherence: surface.adherence || {},
+    closer: normalizeString(surface.closer),
+  };
+
+  return {
+    teamId,
+    organizationId,
+    sportId: normalizeString(report.sportId || surface.meta?.sportId),
+    weekStart: normalizeString(report.weekStart || surface.meta?.weekStart),
+    reportType: normalizeString(report.reportType || surface.meta?.reportType) || 'weekly',
+    source: normalizeString(report.source),
+    reviewStatus: 'sent',
+    deliveryStatus: 'sent',
+    coachSurface: safeCoachSurface,
+    createdAt: report.createdAt || admin.firestore.FieldValue.serverTimestamp(),
+    publishedAt: report.publishedAt || admin.firestore.FieldValue.serverTimestamp(),
+    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
+async function writeCoachReportProjection(
+  db,
+  teamId,
+  reportId,
+  organizationId,
+  report
+) {
+  const projectionRef = db
+    .collection(REPORTS_ROOT_COLLECTION)
+    .doc(teamId)
+    .collection(COACH_REPORT_VIEWS_SUBCOLLECTION)
+    .doc(reportId);
+  await projectionRef.set(
+    buildCoachReportProjection(report, teamId, organizationId),
+    { merge: false }
+  );
+}
+
 exports.handler = async function handler(event) {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
@@ -413,9 +615,10 @@ exports.handler = async function handler(event) {
   }
 
   try {
-    initializeFirebaseAdmin({ headers: event.headers || {} });
-    const adminApp = getFirebaseAdminApp({ headers: event.headers || {} });
+    initializeFirebaseAdmin(event);
+    const adminApp = getFirebaseAdminApp(event);
     const db = admin.firestore(adminApp);
+    const authenticated = await authenticateCaller(event, adminApp);
     const body = JSON.parse(event.body || '{}');
     const teamId = normalizeString(body.teamId);
     const reportId = normalizeString(body.reportId);
@@ -424,6 +627,22 @@ exports.handler = async function handler(event) {
     if (!teamId || !reportId) {
       return json(400, { success: false, error: 'teamId and reportId are required.' });
     }
+    if (!isSafeFirestoreId(teamId) || !isSafeFirestoreId(reportId)) {
+      return json(400, { success: false, error: 'teamId and reportId must be valid document ids.' });
+    }
+
+    const authorization = await authorizeReportPublisher({
+      db,
+      decoded: authenticated.decoded,
+      userId: authenticated.userId,
+      teamId,
+    });
+    if (extraRecipientEmails.length > 0 && !authorization.platformAdmin) {
+      return json(403, {
+        success: false,
+        error: 'Only a Pulse administrator can add report recipients.',
+      });
+    }
 
     const { reportRef, report } = await getReportDoc(db, teamId, reportId);
     if (!report) {
@@ -431,7 +650,13 @@ exports.handler = async function handler(event) {
     }
 
     const reportTeamId = normalizeString(report.teamId || report.coachSurface?.meta?.teamId);
-    if (reportTeamId && reportTeamId !== teamId) {
+    const reportOrganizationId = normalizeString(
+      report.organizationId || report.coachSurface?.meta?.organizationId
+    );
+    if (
+      reportTeamId !== teamId
+      || (reportOrganizationId && reportOrganizationId !== authorization.organizationId)
+    ) {
       return json(403, { success: false, error: 'Report teamId does not match requested teamId.' });
     }
 
@@ -554,6 +779,13 @@ exports.handler = async function handler(event) {
     }
 
     await markReportSent(reportRef, sentTo);
+    await writeCoachReportProjection(
+      db,
+      teamId,
+      reportId,
+      authorization.organizationId,
+      report
+    );
 
     return json(200, {
       success: true,
@@ -568,8 +800,12 @@ exports.handler = async function handler(event) {
       })),
     });
   } catch (error) {
-    console.error('[send-sports-intelligence-report-email] Unexpected error:', error);
-    return json(500, {
+    const statusCode = Number(error?.statusCode);
+    const responseStatus = Number.isInteger(statusCode) ? statusCode : 500;
+    if (responseStatus >= 500) {
+      console.error('[send-sports-intelligence-report-email] Unexpected error:', error);
+    }
+    return json(responseStatus, {
       success: false,
       error: error?.message || 'Internal server error while sending Sports Intelligence report email.',
     });
@@ -580,6 +816,7 @@ exports._private = {
   ALLOWED_RECIPIENT_ROLES,
   UNIVERSAL_COACH_LANGUAGE_BANLIST,
   buildCoachTopLine,
+  buildCoachReportProjection,
   buildEmailCopy,
   buildReportUrl,
   buildSubject,

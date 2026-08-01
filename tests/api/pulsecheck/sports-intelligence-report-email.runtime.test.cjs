@@ -6,6 +6,7 @@ const repoRoot = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web';
 const functionPath = path.join(repoRoot, 'netlify/functions/send-sports-intelligence-report-email.js');
 const configPath = path.join(repoRoot, 'netlify/functions/config/firebase.js');
 const brevoHelperPath = path.join(repoRoot, 'netlify/functions/utils/sendBrevoTransactionalEmail.js');
+const backfillPath = path.join(repoRoot, 'scripts/backfillPulseCheckCoachReportViews.cjs');
 
 const deepMerge = (target, patch) => {
   for (const [key, value] of Object.entries(patch || {})) {
@@ -87,9 +88,20 @@ function createReportFixture(overrides = {}) {
   );
 }
 
-function createDb({ report = createReportFixture(), memberships = [], sports = [] } = {}) {
+function createDb({
+  report = createReportFixture(),
+  memberships = [],
+  sports = [],
+  team = {
+    organizationId: 'org-umes',
+    status: 'active',
+    implementationMetadata: {},
+  },
+  organization = { status: 'active' },
+} = {}) {
   const writes = {
     reportSets: [],
+    coachViewSets: [],
   };
   const reportStore = JSON.parse(JSON.stringify(report));
 
@@ -128,6 +140,18 @@ function createDb({ report = createReportFixture(), memberships = [], sports = [
             assert.equal(teamId, 'team-umes-basketball');
             return {
               collection(subcollectionName) {
+                if (subcollectionName === 'coachReportViews') {
+                  return {
+                    doc(reportId) {
+                      assert.equal(reportId, 'report-week-1');
+                      return {
+                        async set(data, options) {
+                          writes.coachViewSets.push({ data, options });
+                        },
+                      };
+                    },
+                  };
+                }
                 assert.equal(subcollectionName, 'coachReports');
                 return {
                   doc(reportId) {
@@ -135,6 +159,50 @@ function createDb({ report = createReportFixture(), memberships = [], sports = [
                     return reportRef;
                   },
                 };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-teams') {
+        return {
+          doc(teamId) {
+            assert.equal(teamId, 'team-umes-basketball');
+            return {
+              async get() {
+                return {
+                  exists: Boolean(team),
+                  data: () => team,
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-organizations') {
+        return {
+          doc(organizationId) {
+            assert.equal(organizationId, 'org-umes');
+            return {
+              async get() {
+                return {
+                  exists: Boolean(organization),
+                  data: () => organization,
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'admin') {
+        return {
+          doc() {
+            return {
+              async get() {
+                return { exists: false, data: () => null };
               },
             };
           },
@@ -199,7 +267,7 @@ function createDb({ report = createReportFixture(), memberships = [], sports = [
   };
 }
 
-function loadHandler({ db, sendCalls }) {
+function loadHandler({ db, sendCalls, decoded = { uid: 'coach-admin' } }) {
   delete require.cache[functionPath];
   delete require.cache[configPath];
   delete require.cache[brevoHelperPath];
@@ -215,7 +283,14 @@ function loadHandler({ db, sendCalls }) {
     loaded: true,
     exports: {
       initializeFirebaseAdmin: () => {},
-      getFirebaseAdminApp: () => ({}),
+      getFirebaseAdminApp: () => ({
+        auth: () => ({
+          verifyIdToken: async (token) => {
+            if (token !== 'valid-token') throw new Error('invalid token');
+            return decoded;
+          },
+        }),
+      }),
       admin: {
         firestore: firestoreFn,
       },
@@ -247,6 +322,7 @@ test('sends published Sports Intelligence reports to active coach recipients and
         id: 'm-admin',
         data: {
           teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
           userId: 'coach-admin',
           email: 'Coach@UMES.edu',
           role: 'team-admin',
@@ -257,6 +333,7 @@ test('sends published Sports Intelligence reports to active coach recipients and
         id: 'm-duplicate',
         data: {
           teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
           userId: 'coach-admin-copy',
           email: ' coach@umes.edu ',
           role: 'coach',
@@ -267,6 +344,7 @@ test('sends published Sports Intelligence reports to active coach recipients and
         id: 'm-staff',
         data: {
           teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
           userId: 'perf-1',
           email: 'performance@umes.edu',
           role: 'performance-staff',
@@ -277,6 +355,7 @@ test('sends published Sports Intelligence reports to active coach recipients and
         id: 'm-inactive',
         data: {
           teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
           userId: 'inactive-1',
           email: 'inactive@umes.edu',
           role: 'coach',
@@ -287,6 +366,7 @@ test('sends published Sports Intelligence reports to active coach recipients and
         id: 'm-athlete',
         data: {
           teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
           userId: 'athlete-1',
           email: 'athlete@umes.edu',
           role: 'athlete',
@@ -309,7 +389,7 @@ test('sends published Sports Intelligence reports to active coach recipients and
 
   const response = await handler({
     httpMethod: 'POST',
-    headers: {},
+    headers: { authorization: 'Bearer valid-token' },
     body: JSON.stringify({ teamId: 'team-umes-basketball', reportId: 'report-week-1' }),
   });
 
@@ -332,6 +412,10 @@ test('sends published Sports Intelligence reports to active coach recipients and
   assert.equal(db.reportStore.sentAt, 'server-timestamp');
   assert.equal(db.reportStore.sentTo.length, 2);
   assert.equal(db.reportStore.emailDelivery.sentCount, 2);
+  assert.equal(db.writes.coachViewSets.length, 1);
+  assert.equal(db.writes.coachViewSets[0].data.teamId, 'team-umes-basketball');
+  assert.equal(db.writes.coachViewSets[0].data.reviewStatus, 'sent');
+  assert.equal(db.writes.coachViewSets[0].data.reviewerOnly, undefined);
 });
 
 test('blocks delivery when coach-facing copy fails the language posture audit', async () => {
@@ -349,6 +433,7 @@ test('blocks delivery when coach-facing copy fails the language posture audit', 
         id: 'm-admin',
         data: {
           teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
           userId: 'coach-admin',
           email: 'coach@umes.edu',
           role: 'team-admin',
@@ -361,7 +446,7 @@ test('blocks delivery when coach-facing copy fails the language posture audit', 
 
   const response = await handler({
     httpMethod: 'POST',
-    headers: {},
+    headers: { authorization: 'Bearer valid-token' },
     body: JSON.stringify({ teamId: 'team-umes-basketball', reportId: 'report-week-1' }),
   });
 
@@ -389,4 +474,173 @@ test('rejects non-POST requests before touching Firestore or Brevo', async () =>
   assert.equal(response.statusCode, 405);
   assert.equal(sendCalls.length, 0);
   assert.equal(db.writes.reportSets.length, 0);
+});
+
+test('rejects anonymous report delivery before reading the report', async () => {
+  const sendCalls = [];
+  const db = createDb();
+  const handler = loadHandler({ db, sendCalls });
+
+  const response = await handler({
+    httpMethod: 'POST',
+    headers: {},
+    body: JSON.stringify({ teamId: 'team-umes-basketball', reportId: 'report-week-1' }),
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.equal(sendCalls.length, 0);
+  assert.equal(db.writes.reportSets.length, 0);
+});
+
+test('rejects revoked team publishers and does not send report email', async () => {
+  const sendCalls = [];
+  const db = createDb({
+    memberships: [
+      {
+        id: 'm-revoked',
+        data: {
+          teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
+          userId: 'coach-admin',
+          email: 'coach@umes.edu',
+          role: 'team-admin',
+          status: 'active',
+          revokedAt: 'revoked',
+        },
+      },
+    ],
+  });
+  const handler = loadHandler({ db, sendCalls });
+
+  const response = await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer valid-token' },
+    body: JSON.stringify({ teamId: 'team-umes-basketball', reportId: 'report-week-1' }),
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(sendCalls.length, 0);
+});
+
+test('rejects unknown membership statuses instead of treating them as active', async () => {
+  const sendCalls = [];
+  const db = createDb({
+    memberships: [
+      {
+        id: 'm-unknown',
+        data: {
+          teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
+          userId: 'coach-admin',
+          role: 'coach',
+          status: 'mystery-status',
+        },
+      },
+    ],
+  });
+  const handler = loadHandler({ db, sendCalls });
+
+  const response = await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer valid-token' },
+    body: JSON.stringify({ teamId: 'team-umes-basketball', reportId: 'report-week-1' }),
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(sendCalls.length, 0);
+});
+
+test('rejects staff whose explicit capabilities do not include coaching', async () => {
+  const sendCalls = [];
+  const db = createDb({
+    memberships: [
+      {
+        id: 'm-manager',
+        data: {
+          teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
+          userId: 'coach-admin',
+          role: 'coach',
+          status: 'active',
+          staffCapabilities: ['administrative'],
+        },
+      },
+    ],
+  });
+  const handler = loadHandler({ db, sendCalls });
+
+  const response = await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer valid-token' },
+    body: JSON.stringify({ teamId: 'team-umes-basketball', reportId: 'report-week-1' }),
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.equal(sendCalls.length, 0);
+});
+
+test('allows custom report recipients only for platform administrators', async () => {
+  const sendCalls = [];
+  const db = createDb({
+    memberships: [
+      {
+        id: 'm-admin',
+        data: {
+          teamId: 'team-umes-basketball',
+          organizationId: 'org-umes',
+          userId: 'coach-admin',
+          email: 'coach@umes.edu',
+          role: 'team-admin',
+          status: 'active',
+        },
+      },
+    ],
+  });
+  const teamHandler = loadHandler({ db, sendCalls });
+
+  const denied = await teamHandler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer valid-token' },
+    body: JSON.stringify({
+      teamId: 'team-umes-basketball',
+      reportId: 'report-week-1',
+      extraRecipientEmails: ['outside@example.com'],
+    }),
+  });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(sendCalls.length, 0);
+
+  const platformHandler = loadHandler({
+    db,
+    sendCalls,
+    decoded: { uid: 'pulse-admin', admin: true },
+  });
+  const allowed = await platformHandler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer valid-token' },
+    body: JSON.stringify({
+      teamId: 'team-umes-basketball',
+      reportId: 'report-week-1',
+      extraRecipientEmails: ['outside@example.com'],
+    }),
+  });
+  assert.equal(allowed.statusCode, 200);
+  assert.ok(sendCalls.some((call) => call.toEmail === 'outside@example.com'));
+});
+
+test('coach report backfill projection excludes every reviewer-only field', () => {
+  const { buildCoachReportProjection } = require(backfillPath);
+  const projection = buildCoachReportProjection(
+    createReportFixture(),
+    'team-umes-basketball',
+    'org-umes',
+    'report-week-1',
+    'server-timestamp'
+  );
+
+  assert.equal(projection.reviewerOnly, undefined);
+  assert.equal(projection.sentTo, undefined);
+  assert.equal(projection.coachSurface.reviewerOnly, undefined);
+  assert.equal(projection.teamId, 'team-umes-basketball');
+  assert.equal(projection.organizationId, 'org-umes');
 });

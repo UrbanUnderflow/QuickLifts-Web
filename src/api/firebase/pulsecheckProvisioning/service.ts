@@ -1,6 +1,11 @@
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../config';
-import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
+import {
+  buildPulseCheckAthleteOfferWebUrl,
+  buildPulseCheckTeamInviteOneLink,
+  resolvePulseCheckInvitePreviewImage,
+} from '../../../utils/pulsecheckInviteLinks';
+import { isPulseCheckCoachPricedAthleteOfferActive } from '../../../utils/pulsecheckCommercialization';
 import { SubscriptionPlatform, SubscriptionType } from '../user';
 import {
   derivePulseCheckTeamPlanBypass,
@@ -234,6 +239,11 @@ const normalizeReferralRevenueSharePct = (value: unknown) => {
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
 };
+const normalizeNonNegativeInteger = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed));
+};
 const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercialConfig => {
   const candidate = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const defaults = getDefaultPulseCheckTeamCommercialConfig();
@@ -270,6 +280,23 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
     ),
     additionalServicesEnabled: referralKickbackEnabled,
+    athleteAppSubscriptionEnabled:
+      typeof candidate.athleteAppSubscriptionEnabled === 'boolean'
+        ? candidate.athleteAppSubscriptionEnabled
+        : defaults.athleteAppSubscriptionEnabled,
+    athleteAppSubscriptionMonthlyPriceCents: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionMonthlyPriceCents ??
+        defaults.athleteAppSubscriptionMonthlyPriceCents
+    ),
+    athleteAppSubscriptionCurrency: 'usd',
+    athleteAppSubscriptionOfferVersion: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionOfferVersion ?? defaults.athleteAppSubscriptionOfferVersion
+    ),
+    athleteAppSubscriptionRevenueRecipientUserId: normalizeString(
+      typeof candidate.athleteAppSubscriptionRevenueRecipientUserId === 'string'
+        ? candidate.athleteAppSubscriptionRevenueRecipientUserId
+        : defaults.athleteAppSubscriptionRevenueRecipientUserId
+    ),
     coachReferralRecipientUserId: normalizeString(
       typeof candidate.coachReferralRecipientUserId === 'string'
         ? candidate.coachReferralRecipientUserId
@@ -1097,6 +1124,8 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   legacyConnectionId: data.legacyConnectionId || '',
   legacyLinkedAt: data.legacyLinkedAt || null,
   role: (data.role as PulseCheckTeamMembershipRole) || 'coach',
+  status: data.status || undefined,
+  revokedAt: data.revokedAt || null,
   title: data.title || '',
   permissionSetId: data.permissionSetId || '',
   staffCapabilities: normalizeStaffCapabilities(data.staffCapabilities),
@@ -3230,16 +3259,26 @@ export const pulseCheckProvisioningService = {
         inviteToken: token,
       });
 
-      activationUrl = buildPulseCheckTeamInviteOneLink({
-        token,
-        fallbackPath,
-        role: input.teamMembershipRole,
-        pilotName: normalizeString(input.pilotName),
-        teamName: resolvedTeamName,
-        organizationName: resolvedOrganizationName,
-        cohortName: normalizeString(input.cohortName),
-        imageUrl: previewImageUrl,
-      });
+      const requiresAthleteWebCheckout =
+        normalizedRole === 'athlete' &&
+        commercialSnapshot.teamPlanBypassesPaywall !== true &&
+        isPulseCheckCoachPricedAthleteOfferActive(commercialSnapshot);
+      activationUrl = requiresAthleteWebCheckout
+        ? buildPulseCheckAthleteOfferWebUrl(
+            token,
+            baseUrl,
+            shouldStampDevFirebaseLinks()
+          )
+        : buildPulseCheckTeamInviteOneLink({
+            token,
+            fallbackPath,
+            role: input.teamMembershipRole,
+            pilotName: normalizeString(input.pilotName),
+            teamName: resolvedTeamName,
+            organizationName: resolvedOrganizationName,
+            cohortName: normalizeString(input.cohortName),
+            imageUrl: previewImageUrl,
+          });
     } catch (error) {
       console.warn('[pulsecheckProvisioningService] Failed to resolve invite preview metadata, falling back to direct URL.', error);
     }

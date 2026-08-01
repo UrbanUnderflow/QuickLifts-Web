@@ -36,26 +36,19 @@ const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PILOTS_COLLECTION = 'pulsecheck-pilots';
 const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
+const ATHLETE_APP_ENTITLEMENTS_COLLECTION = 'pulsecheck-athlete-app-entitlements';
+const SUBSCRIPTIONS_COLLECTION = 'subscriptions';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
 const normalizeInviteRedemptionMode = (value: unknown): PulseCheckInviteLinkRedemptionMode =>
   value === 'general' ? 'general' : 'single-use';
 const isInviteLinkUsable = (status: unknown, redemptionMode: unknown) => {
-  if (normalizeInviteRedemptionMode(redemptionMode) === 'general') {
-    return true;
-  }
-
   const normalizedStatus = normalizeString(status);
-  if (normalizedStatus === 'revoked') {
-    return false;
+  if (normalizeInviteRedemptionMode(redemptionMode) === 'general') {
+    return normalizedStatus === 'active' || normalizedStatus === 'redeemed';
   }
-
-  if (normalizedStatus === 'redeemed' && normalizeInviteRedemptionMode(redemptionMode) !== 'general') {
-    return false;
-  }
-
-  return true;
+  return normalizedStatus === 'active';
 };
 const SubscriptionType = {
   unsubscribed: 'Unsubscribed',
@@ -76,6 +69,23 @@ const normalizeReferralRevenueSharePct = (value: unknown) => {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
+};
+const normalizeNonNegativeInteger = (value: unknown) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed));
+};
+const epochSeconds = (value: unknown): number => {
+  if (!value) return 0;
+  if (typeof value === 'number') return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+  if (value instanceof Date) return Math.floor(value.getTime() / 1000);
+  if (typeof value === 'object') {
+    const candidate = value as { seconds?: unknown; toMillis?: () => number };
+    if (typeof candidate.seconds === 'number') return Math.floor(candidate.seconds);
+    if (typeof candidate.toMillis === 'function') return Math.floor(candidate.toMillis() / 1000);
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? 0 : Math.floor(parsed.getTime() / 1000);
 };
 const normalizeTimestampLike = (
   value: unknown
@@ -122,6 +132,23 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
       typeof candidate.additionalServicesEnabled === 'boolean'
         ? candidate.additionalServicesEnabled
         : defaults.additionalServicesEnabled,
+    athleteAppSubscriptionEnabled:
+      typeof candidate.athleteAppSubscriptionEnabled === 'boolean'
+        ? candidate.athleteAppSubscriptionEnabled
+        : defaults.athleteAppSubscriptionEnabled,
+    athleteAppSubscriptionMonthlyPriceCents: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionMonthlyPriceCents
+        ?? defaults.athleteAppSubscriptionMonthlyPriceCents
+    ),
+    athleteAppSubscriptionCurrency: 'usd',
+    athleteAppSubscriptionOfferVersion: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionOfferVersion
+        ?? defaults.athleteAppSubscriptionOfferVersion
+    ),
+    athleteAppSubscriptionRevenueRecipientUserId: normalizeString(
+      candidate.athleteAppSubscriptionRevenueRecipientUserId
+        ?? defaults.athleteAppSubscriptionRevenueRecipientUserId
+    ),
     coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId ?? defaults.coachReferralRecipientUserId),
     coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail ?? defaults.coachReferralRecipientEmail),
     coachReferralSourceTeamId: normalizeString(candidate.coachReferralSourceTeamId ?? defaults.coachReferralSourceTeamId),
@@ -354,14 +381,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if ((invite.inviteType || '') !== 'team-access') {
         throw new Error('Invite type is invalid for this route.');
       }
-      const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
-      if (!isInviteLinkUsable(invite.status, redemptionMode)) {
+      const inviteExpiresAt = epochSeconds(invite.expiresAt || invite.expirationDate);
+      if (
+        invite.revokedAt != null
+        || invite.archivedAt != null
+        || invite.deletedAt != null
+        || (inviteExpiresAt > 0 && inviteExpiresAt <= Math.floor(Date.now() / 1000))
+      ) {
         throw new Error('Invite is no longer active.');
       }
+      const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
+      const alreadyRedeemedByThisUser =
+        redemptionMode === 'single-use'
+        && normalizeString(invite.status) === 'redeemed'
+        && normalizeString(invite.redeemedByUserId) === userId;
 
       const targetEmail = normalizeEmail(invite.targetEmail);
       if (targetEmail && targetEmail !== userEmail) {
         throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
+      }
+      if (targetEmail && decoded.email_verified !== true) {
+        throw new Error('Verify the invited email address before accepting this invite.');
       }
 
       const organizationId = normalizeString(invite.organizationId);
@@ -398,6 +438,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
         .doc(`${organizationId}_${userId}`);
       const teamMembershipRef = firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
+      const subscriptionRef = firestore.collection(SUBSCRIPTIONS_COLLECTION).doc(userId);
+      const athleteAppEntitlementRef = firestore
+        .collection(ATHLETE_APP_ENTITLEMENTS_COLLECTION)
+        .doc(`${teamId}_${userId}`);
       const pilotRef = pilotId ? firestore.collection(PILOTS_COLLECTION).doc(pilotId) : null;
       const pilotEnrollmentRef = pilotId
         ? firestore.collection(PILOT_ENROLLMENTS_COLLECTION).doc(buildPilotEnrollmentId(pilotId, userId))
@@ -407,9 +451,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transaction.get(organizationRef),
         transaction.get(teamRef),
       ]);
-      const userSnap = await transaction.get(userRef);
-      const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
+      const [userSnap, existingTeamMembershipSnap, subscriptionSnap, athleteAppEntitlementSnap] = await Promise.all([
+        transaction.get(userRef),
+        transaction.get(teamMembershipRef),
+        transaction.get(subscriptionRef),
+        transaction.get(athleteAppEntitlementRef),
+      ]);
       const hadExistingTeamMembership = existingTeamMembershipSnap.exists;
+      const existingTeamMembership = existingTeamMembershipSnap.exists
+        ? existingTeamMembershipSnap.data() || {}
+        : {};
+      const hasActiveMatchingTeamMembership =
+        existingTeamMembershipSnap.exists
+        && normalizeString(existingTeamMembership.userId) === userId
+        && normalizeString(existingTeamMembership.organizationId) === organizationId
+        && normalizeString(existingTeamMembership.teamId) === teamId
+        && normalizeString(existingTeamMembership.role) === teamMembershipRole
+        && normalizeString(existingTeamMembership.status) === 'active'
+        && existingTeamMembership.revokedAt == null
+        && existingTeamMembership.archivedAt == null
+        && existingTeamMembership.deletedAt == null;
+      const isIdempotentSingleUseReplay = alreadyRedeemedByThisUser
+        && hasActiveMatchingTeamMembership;
+      if (!isInviteLinkUsable(invite.status, redemptionMode) && !isIdempotentSingleUseReplay) {
+        throw new Error('Invite is no longer active.');
+      }
       const pilotSnap = pilotRef ? await transaction.get(pilotRef) : null;
       const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await transaction.get(pilotEnrollmentRef) : null;
       const hadExistingPilotEnrollment = Boolean(existingPilotEnrollmentSnap?.exists);
@@ -420,13 +486,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!teamSnap.exists) {
         throw new Error('Team not found.');
       }
+      const organizationData = organizationSnap.data() || {};
+      const teamData = teamSnap.data() || {};
+      const organizationIsActive =
+        normalizeString(organizationData.status) === 'active'
+        && organizationData.archivedAt == null
+        && organizationData.deletedAt == null
+        && organizationData.revokedAt == null;
+      const teamIsActive =
+        normalizeString(teamData.status) === 'active'
+        && teamData.archivedAt == null
+        && teamData.deletedAt == null
+        && teamData.revokedAt == null
+        && normalizeString(teamData.organizationId) === organizationId;
+      if (!organizationIsActive || !teamIsActive) {
+        throw new Error('Invite team is inactive.');
+      }
       if (pilotId && !pilotSnap?.exists) {
         throw new Error('Pilot not found.');
       }
 
-      const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
-      const teamName = normalizeString(teamSnap.data()?.displayName) || 'Team';
-      const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
+      const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
+      const teamName = normalizeString(teamData.displayName) || 'Team';
+      const teamCommercialConfig = normalizeTeamCommercialConfig(teamData.commercialConfig);
       const nextTeamCommercialConfig =
         teamMembershipRole === 'team-admin'
           ? resolveTeamAdminCommercialConfig(teamCommercialConfig, userId)
@@ -439,7 +521,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         inviteToken: token,
         commercialConfig: nextTeamCommercialConfig,
       });
-      const existingTeamMembership = existingTeamMembershipSnap.exists ? existingTeamMembershipSnap.data() || {} : {};
+      if (isIdempotentSingleUseReplay) {
+        return {
+          organizationId,
+          organizationName,
+          teamId,
+          teamName,
+          pilotId,
+          cohortId,
+          teamMembershipId: teamMembershipRef.id,
+          teamMembershipRole,
+          invitedTitle,
+          commercialSnapshot,
+          teamPlanBypassesPaywall: commercialSnapshot.teamPlanBypassesPaywall,
+          _isNewJoin: false,
+          _recipientName: normalizeString(invite.recipientName),
+          _coachName: normalizeString(invite.createdByName),
+          _coachEmail: normalizeString(invite.createdByEmail),
+          _notifyCoachOnAccept: invite.notifyCoachOnAccept === true,
+        };
+      }
+      if (
+        teamMembershipRole === 'athlete'
+        && nextTeamCommercialConfig.athleteAppSubscriptionEnabled
+        && !commercialSnapshot.teamPlanBypassesPaywall
+      ) {
+        const subscriptionData = subscriptionSnap.exists ? subscriptionSnap.data() || {} : {};
+        const plans = Array.isArray(subscriptionData.plans) ? subscriptionData.plans : [];
+        const nowEpochSeconds = Math.floor(Date.now() / 1000);
+        const hasActivePulseCheckPlan = plans.some((plan: Record<string, unknown>) => (
+          normalizeString(plan?.type).startsWith('pulsecheck-')
+          && epochSeconds(plan?.expiration) > nowEpochSeconds
+        ));
+        const entitlement = athleteAppEntitlementSnap.exists
+          ? athleteAppEntitlementSnap.data() || {}
+          : {};
+        const hasMatchingCoachOfferEntitlement =
+          entitlement.active === true
+          && normalizeString(entitlement.status) === 'active'
+          && normalizeString(entitlement.userId) === userId
+          && normalizeString(entitlement.teamId) === teamId
+          && normalizeString(entitlement.organizationId) === organizationId
+          && normalizeString(entitlement.offerId) === teamId
+          && epochSeconds(
+            entitlement.currentPeriodEndEpochSeconds || entitlement.currentPeriodEnd
+          ) > nowEpochSeconds;
+        if (!hasActivePulseCheckPlan && !hasMatchingCoachOfferEntitlement) {
+          throw new Error('Active PulseCheck app access is required before joining this team.');
+        }
+      }
       const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists ? existingPilotEnrollmentSnap.data() || {} : {};
       const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
       const pilotRequiredConsents = normalizeRequiredConsentDocuments(
@@ -501,6 +631,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId,
           email: userEmail,
           role: teamMembershipRole,
+          status: 'active',
           title: invitedTitle || null,
           permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
           rosterVisibilityScope: derivedStaffAccess
@@ -610,7 +741,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         redemptionMode === 'general'
           ? !hadExistingTeamMembership ||
             (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment)
-          : true;
+          : !hadExistingTeamMembership;
 
       if (redemptionMode === 'general') {
         const grantedNewScopeAccess = isNewJoin;
@@ -714,10 +845,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const statusCode =
       message === 'Invite not found.'
         ? 404
-        : message === 'Invite is no longer active.' || message === 'Invite type is invalid for this route.'
+          : message === 'Invite is no longer active.' || message === 'Invite type is invalid for this route.'
           ? 409
+          : message === 'Invite team is inactive.'
+            ? 403
           : message.startsWith('This invite is restricted to')
             ? 403
+            : message.startsWith('Verify the invited email address')
+              ? 403
+            : message.startsWith('Active PulseCheck app access is required')
+              ? 402
             : 400;
 
     console.error('[pulsecheck-team-invite/redeem] Failed to redeem invite:', error);

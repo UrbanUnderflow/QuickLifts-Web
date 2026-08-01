@@ -1,17 +1,52 @@
 const Stripe = require('stripe');
 const { admin } = require('./config/firebase');
+const {
+  normalizeString,
+  resolveServerStripeMode,
+  verifyFirebaseUser,
+} = require('./lib/pulsecheck-coach-services');
 
-const db = admin.firestore();
+const ACTIVE_ACCESS_STATUSES = new Set(['active', 'trialing']);
+const OWNERSHIP_METADATA_KEYS = [
+  'userId',
+  'user_id',
+  'firebaseUid',
+  'firebase_uid',
+  'firebaseUserId',
+  'athleteUserId',
+  'subscriberUserId',
+  'client_reference',
+  'client_reference_id',
+  'clientReference',
+  'clientReferenceId',
+];
 
-function isLocalhostRequest(event) {
-  const referer = event.headers?.referer || event.headers?.origin || '';
-  return referer.includes('localhost') || referer.includes('127.0.0.1');
+function jsonResponse(statusCode, body) {
+  return { statusCode, body: JSON.stringify(body) };
 }
 
-async function getStripeClient(event) {
-  const key = isLocalhostRequest(event) ? process.env.STRIPE_TEST_SECRET_KEY : process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error('Missing Stripe secret key');
-  return new Stripe(key);
+function errorResponse(error) {
+  const statusCode = Number(error?.statusCode) || 500;
+  return jsonResponse(statusCode, {
+    message: statusCode >= 500
+      ? (error?.message || 'Server error')
+      : error.message,
+  });
+}
+
+function permissionError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function getStripeClient() {
+  const mode = resolveServerStripeMode();
+  const key = mode === 'test'
+    ? process.env.STRIPE_TEST_SECRET_KEY
+    : process.env.STRIPE_SECRET_KEY;
+  if (!key) throw permissionError('Stripe subscription sync is not configured.', 503);
+  return { stripe: new Stripe(key), mode };
 }
 
 function mapPriceIdToPlanType(priceId) {
@@ -25,112 +60,339 @@ function mapPriceIdToPlanType(priceId) {
     [TEST_MONTHLY_PRICE_ID]: 'pulsecheck-monthly',
     [TEST_ANNUAL_PRICE_ID]: 'pulsecheck-annual',
   };
-  return map[priceId] || undefined;
+  return map[normalizeString(priceId)];
+}
+
+function stripeObjectId(value) {
+  return typeof value === 'string'
+    ? normalizeString(value)
+    : normalizeString(value?.id);
+}
+
+function addString(target, value) {
+  const normalized = normalizeString(value);
+  if (normalized) target.add(normalized);
+}
+
+function addModeSpecificIds(target, value, stripeMode) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  addString(target, value[stripeMode]);
+}
+
+function addSubscriptionRecordBindings({
+  record,
+  customerIds,
+  subscriptionIds,
+  stripeMode,
+}) {
+  addString(customerIds, record?.stripeCustomerId);
+  addModeSpecificIds(customerIds, record?.stripeCustomerIds, stripeMode);
+  addString(subscriptionIds, record?.stripeSubscriptionId);
+  if (Array.isArray(record?.stripeSubscriptionIds)) {
+    record.stripeSubscriptionIds.forEach((id) => addString(subscriptionIds, id));
+  } else {
+    addModeSpecificIds(subscriptionIds, record?.stripeSubscriptionIds, stripeMode);
+  }
+}
+
+async function loadAuthenticatedBillingBindings({ database, userId, stripeMode }) {
+  const userRef = database.collection('users').doc(userId);
+  const directSubscriptionRef = database.collection('subscriptions').doc(userId);
+  const [userSnap, directSubscriptionSnap, queriedSubscriptions] = await Promise.all([
+    userRef.get(),
+    directSubscriptionRef.get(),
+    database.collection('subscriptions').where('userId', '==', userId).get(),
+  ]);
+
+  const userData = userSnap.exists ? userSnap.data() || {} : {};
+  const customerIds = new Set();
+  const subscriptionIds = new Set();
+  const trustedCustomerIds = new Set();
+  const trustedSubscriptionIds = new Set();
+  addSubscriptionRecordBindings({
+    record: userData,
+    customerIds,
+    subscriptionIds,
+    stripeMode,
+  });
+
+  const subscriptionRecords = new Map();
+  if (directSubscriptionSnap.exists) {
+    subscriptionRecords.set(directSubscriptionSnap.id, directSubscriptionSnap.data() || {});
+  }
+  for (const doc of queriedSubscriptions.docs || []) {
+    subscriptionRecords.set(doc.id, doc.data() || {});
+  }
+
+  for (const [recordId, record] of subscriptionRecords) {
+    const recordUserId = normalizeString(record?.userId);
+    if (recordUserId && recordUserId !== userId) {
+      if (recordId === userId) {
+        throw permissionError('The stored subscription belongs to a different user.', 409);
+      }
+      continue;
+    }
+    addSubscriptionRecordBindings({
+      record,
+      customerIds,
+      subscriptionIds,
+      stripeMode,
+    });
+    addSubscriptionRecordBindings({
+      record,
+      customerIds: trustedCustomerIds,
+      subscriptionIds: trustedSubscriptionIds,
+      stripeMode,
+    });
+  }
+
+  return {
+    customerIds,
+    subscriptionIds,
+    trustedCustomerIds,
+    trustedSubscriptionIds,
+    userData,
+  };
+}
+
+function ownershipMarkers(value) {
+  if (!value || typeof value !== 'object') return [];
+  const containers = [value, value.metadata];
+  const markers = [];
+  for (const container of containers) {
+    if (!container || typeof container !== 'object') continue;
+    for (const key of OWNERSHIP_METADATA_KEYS) {
+      const marker = normalizeString(container[key]);
+      if (marker) markers.push(marker);
+    }
+  }
+  return markers;
+}
+
+function ownershipMetadataStatus(value, userId) {
+  const markers = ownershipMarkers(value);
+  return {
+    present: markers.length > 0,
+    valid: markers.length === 0 || markers.every((marker) => marker === userId),
+  };
+}
+
+async function loadCandidateSubscriptions({ stripe, customerIds, subscriptionIds }) {
+  const candidates = new Map();
+
+  for (const subscriptionId of subscriptionIds) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      if (subscription?.id) candidates.set(subscription.id, subscription);
+    } catch (error) {
+      if (error?.code !== 'resource_missing') throw error;
+    }
+  }
+
+  for (const customerId of customerIds) {
+    const result = await stripe.subscriptions.list({ customer: customerId, limit: 100 });
+    for (const subscription of result?.data || []) {
+      if (subscription?.id) candidates.set(subscription.id, subscription);
+    }
+  }
+
+  return Array.from(candidates.values());
+}
+
+async function getVerifiedCustomer({ stripe, customerId, customerCache, userId }) {
+  if (!customerId) return null;
+  if (!customerCache.has(customerId)) {
+    customerCache.set(customerId, await stripe.customers.retrieve(customerId));
+  }
+  const customer = customerCache.get(customerId);
+  const metadataStatus = ownershipMetadataStatus(customer, userId);
+  if (
+    !customer
+    || customer.deleted === true
+    || normalizeString(customer.id) !== customerId
+    || !metadataStatus.valid
+  ) {
+    return null;
+  }
+  return { customer, metadataStatus };
+}
+
+async function selectActiveOwnedSubscription({
+  stripe,
+  candidates,
+  customerIds,
+  subscriptionIds,
+  trustedCustomerIds,
+  trustedSubscriptionIds,
+  userId,
+  nowSec,
+}) {
+  const customerCache = new Map();
+  let selected = null;
+
+  for (const subscription of candidates) {
+    const subscriptionId = normalizeString(subscription?.id);
+    const customerId = stripeObjectId(subscription?.customer);
+    const isServerBound = subscriptionIds.has(subscriptionId) || customerIds.has(customerId);
+    if (!subscriptionId || !customerId || !isServerBound) continue;
+    const subscriptionMetadata = ownershipMetadataStatus(subscription, userId);
+    if (!subscriptionMetadata.valid) continue;
+
+    const verifiedCustomer = await getVerifiedCustomer({
+      stripe,
+      customerId,
+      customerCache,
+      userId,
+    });
+    if (!verifiedCustomer) continue;
+
+    const hasTrustedFirestoreBinding = (
+      trustedSubscriptionIds.has(subscriptionId)
+      || trustedCustomerIds.has(customerId)
+    );
+    if (
+      !hasTrustedFirestoreBinding
+      && !subscriptionMetadata.present
+      && !verifiedCustomer.metadataStatus.present
+    ) continue;
+
+    const status = normalizeString(subscription.status).toLowerCase();
+    const expiration = Number(subscription.current_period_end) || 0;
+    if (!ACTIVE_ACCESS_STATUSES.has(status) || expiration <= nowSec) continue;
+
+    const priceId = normalizeString(subscription.items?.data?.[0]?.price?.id);
+    const planType = mapPriceIdToPlanType(priceId);
+    if (!planType) continue;
+
+    if (!selected || expiration > selected.expiration) {
+      selected = {
+        subscription,
+        subscriptionId,
+        customerId,
+        status,
+        expiration,
+        priceId,
+        planType,
+      };
+    }
+  }
+
+  return selected;
 }
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
+    return jsonResponse(405, { message: 'Method Not Allowed' });
   }
+
   let body;
   try {
     body = JSON.parse(event.body || '{}');
-  } catch (e) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Invalid JSON' }) };
-  }
-
-  const { userId, stripeCustomerId: bodyCustomerId } = body;
-  if (!userId && !bodyCustomerId) {
-    return { statusCode: 400, body: JSON.stringify({ message: 'Provide userId or stripeCustomerId' }) };
+  } catch (_error) {
+    return jsonResponse(400, { message: 'Invalid JSON' });
   }
 
   try {
-    const stripe = await getStripeClient(event);
-
-    // Resolve stripeCustomerId
-    let stripeCustomerId = bodyCustomerId;
-    let username = null;
-    let userEmail = null;
-    if (userId && !stripeCustomerId) {
-      const userSnap = await db.collection('users').doc(userId).get();
-      if (userSnap.exists) {
-        const ud = userSnap.data();
-        stripeCustomerId = ud?.stripeCustomerId || null;
-        username = ud?.username || null;
-        userEmail = ud?.email || null;
-      }
+    const authenticated = await verifyFirebaseUser(event, {
+      authErrorMessage: 'Sign in is required to sync your Stripe subscription.',
+    });
+    const userId = normalizeString(authenticated.userId);
+    const requestedUserId = normalizeString(body?.userId);
+    if (requestedUserId && requestedUserId !== userId) {
+      throw permissionError('You can only sync your own Stripe subscription.', 403);
     }
 
-    if (!stripeCustomerId) {
-      return { statusCode: 200, body: JSON.stringify({ message: 'No stripeCustomerId on user', userId }) };
+    const database = authenticated.app.firestore();
+    const { stripe, mode: stripeMode } = getStripeClient();
+    const {
+      customerIds,
+      subscriptionIds,
+      trustedCustomerIds,
+      trustedSubscriptionIds,
+      userData,
+    } = await loadAuthenticatedBillingBindings({
+      database,
+      userId,
+      stripeMode,
+    });
+
+    if (customerIds.size === 0 && subscriptionIds.size === 0) {
+      return jsonResponse(200, {
+        message: 'No server-linked Stripe subscription found',
+        userId,
+      });
     }
 
-    // List subscriptions for customer
-    const subsRes = await stripe.subscriptions.list({ customer: stripeCustomerId, limit: 100 });
-    const subs = subsRes.data || [];
-    if (subs.length === 0) {
-      return { statusCode: 200, body: JSON.stringify({ message: 'No Stripe subscriptions found', userId, stripeCustomerId }) };
-    }
-
-    // Compute latest current_period_end and status
-    let latestEnd = null;
-    let latestStatus = 'inactive';
-    let planType;
-    for (const s of subs) {
-      const end = s.current_period_end ? new Date(s.current_period_end * 1000) : null;
-      if (end && (!latestEnd || end > latestEnd)) {
-        latestEnd = end;
-        latestStatus = s.status || latestStatus;
-        planType = mapPriceIdToPlanType(s.items?.data?.[0]?.price?.id);
-      }
-    }
-
-    const subRef = db.collection('subscriptions').doc(userId || subs[0].customer);
+    const candidates = await loadCandidateSubscriptions({
+      stripe,
+      customerIds,
+      subscriptionIds,
+    });
     const nowSec = Math.floor(Date.now() / 1000);
-    const expSec = latestEnd ? Math.floor(latestEnd.getTime() / 1000) : null;
+    const selected = await selectActiveOwnedSubscription({
+      stripe,
+      candidates,
+      customerIds,
+      subscriptionIds,
+      trustedCustomerIds,
+      trustedSubscriptionIds,
+      userId,
+      nowSec,
+    });
 
-    // Upsert base document with denormalized fields
+    if (!selected) {
+      return jsonResponse(200, {
+        message: 'No active server-linked Stripe subscription found',
+        userId,
+      });
+    }
+
+    const subRef = database.collection('subscriptions').doc(userId);
     await subRef.set({
-      userId: userId || null,
-      username,
-      userEmail,
+      userId,
+      username: userData?.username || null,
+      userEmail: userData?.email || null,
       platform: 'web',
       source: 'stripe-sync',
-      stripeCustomerId,
-      updatedAt: admin.firestore.Timestamp.fromMillis(nowSec * 1000),
+      stripeCustomerId: selected.customerId,
+      stripeSubscriptionId: selected.subscriptionId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // Append-only plans entry if we have an expiration and planType
-    if (expSec && planType) {
-      const snap = await subRef.get();
-      const data = snap.data() || {};
-      const plans = Array.isArray(data.plans) ? data.plans : [];
-      // Find latest plan of same type
-      const sameType = plans.filter(p => p && p.type === planType);
-      const latestSame = sameType.reduce((acc, p) => {
-        const e = typeof p.expiration === 'number' ? p.expiration : 0;
-        return !acc || e > acc ? e : acc;
+    const snap = await subRef.get();
+    const data = snap.data() || {};
+    const plans = Array.isArray(data.plans) ? data.plans : [];
+    const latestSame = plans
+      .filter((plan) => plan && plan.type === selected.planType)
+      .reduce((latest, plan) => {
+        const expiration = typeof plan.expiration === 'number' ? plan.expiration : 0;
+        return Math.max(latest, expiration);
       }, 0);
-      if (Math.abs(latestSame - expSec) >= 1) {
-        // Different expiration – append new entry
-        await subRef.update({
-          plans: admin.firestore.FieldValue.arrayUnion({
-            type: planType,
-            expiration: expSec,
-            createdAt: nowSec,
-            updatedAt: nowSec,
-            platform: 'web',
-            productId: subs[0]?.items?.data?.[0]?.price?.id || null,
-          })
-        });
-      }
+
+    if (Math.abs(latestSame - selected.expiration) >= 1) {
+      await subRef.update({
+        plans: admin.firestore.FieldValue.arrayUnion({
+          type: selected.planType,
+          expiration: selected.expiration,
+          createdAt: nowSec,
+          updatedAt: nowSec,
+          platform: 'web',
+          productId: selected.priceId,
+        }),
+      });
     }
 
-    return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestEnd, latestStatus, planType }) };
+    return jsonResponse(200, {
+      message: 'Synced',
+      latestEnd: new Date(selected.expiration * 1000).toISOString(),
+      latestStatus: selected.status,
+      planType: selected.planType,
+    });
   } catch (error) {
-    console.error('[SyncStripe] Error:', error);
-    return { statusCode: 500, body: JSON.stringify({ message: error.message || 'Server error' }) };
+    if ((Number(error?.statusCode) || 500) >= 500) {
+      console.error('[SyncStripe] Error:', error);
+    }
+    return errorResponse(error);
   }
 };
-

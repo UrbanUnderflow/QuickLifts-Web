@@ -205,7 +205,13 @@ type CalendarEvent = LiveEvent & {
 
 type Phase = 'idle' | 'fetching' | 'writing' | 'done';
 
-const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coachId }) => {
+const ScheduleBoard: React.FC<{
+  coachId?: string;
+  teamId?: string;
+  organizationId?: string;
+  athleteIds?: string[];
+  isDemo?: boolean;
+}> = ({ coachId, teamId, organizationId, athleteIds = [] }) => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [bookings, setBookings] = useState<CalendarBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -235,43 +241,69 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
   const [uploading, setUploading] = useState<{ name: string; pct: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const allowedAthleteIds = useMemo(() => new Set(athleteIds.filter(Boolean)), [athleteIds]);
 
   const refresh = useCallback(async () => {
-    if (!coachId) {
+    setEvents([]);
+    setBookings([]);
+    setDocs([]);
+    if (!coachId || !teamId || !organizationId) {
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
       const [evts, vault, conversations] = await Promise.all([
-        coachScheduleService.getEvents(coachId),
-        noraVaultService.getEntries(coachId).catch(() => [] as NoraVaultEntry[]),
-        coachAthleteMessagingService.getConversationsForUser(coachId, 'coach').catch(() => [] as CoachAthleteConversation[]),
+        coachScheduleService.getEvents(coachId, teamId, organizationId),
+        noraVaultService.getEntries(coachId, teamId).catch(() => [] as NoraVaultEntry[]),
+        coachAthleteMessagingService.getConversationsForUser(
+          coachId,
+          'coach',
+          { teamId, organizationId, athleteIds }
+        ).catch(() => [] as CoachAthleteConversation[]),
       ]);
       setEvents(evts);
-      setBookings(extractCalendarBookings(conversations, coachId));
+      setBookings(
+        extractCalendarBookings(
+          conversations,
+          coachId,
+          allowedAthleteIds,
+          teamId,
+          organizationId
+        )
+      );
       setDocs(vault.filter((e) => (e.type === 'file' || e.type === 'image') && e.category === 'Schedule'));
     } catch (err) {
       console.error('[schedule] load failed', err);
     } finally {
       setLoading(false);
     }
-  }, [coachId]);
+  }, [allowedAthleteIds, coachId, organizationId, teamId]);
 
   useEffect(() => {
+    setComposerOpen(false);
+    setEditingEventId(null);
+    setError(null);
+    setUrlInput('');
+    setPhase('idle');
     refresh();
   }, [refresh]);
 
   // --- Link import + Nora writing animation ---------------------------------
   const runImport = async (rawUrl: string) => {
     const url = rawUrl.trim();
-    if (!url || !coachId || phase !== 'idle') return;
+    if (!url || !coachId || !teamId || !organizationId || phase !== 'idle') return;
     setError(null);
     setPhase('fetching');
     setWrittenCount(0);
     setImportMeta({ sourceTitle: '', host: hostOf(url), total: 0 });
     try {
-      const { sourceTitle, events: drafts } = await coachScheduleService.scrapeUrl(url);
+      const { sourceTitle, events: drafts } =
+        await coachScheduleService.scrapeUrl(
+          url,
+          teamId,
+          organizationId
+        );
       if (!drafts.length) {
         setError('Nora couldn’t find any events on that page. Try a direct schedule link.');
         setPhase('idle');
@@ -290,6 +322,8 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
           ...d,
           id: `live-${i}-${d.date}`,
           coachId,
+          teamId,
+          organizationId,
           source: 'link',
           sourceUrl: url,
           live: true,
@@ -305,7 +339,12 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
       // Persist for real (no-op-ish in demo, where addEvents is mocked).
       let saved: ScheduleEvent[];
       try {
-        saved = await coachScheduleService.addEvents(coachId, drafts.map((d) => ({ ...d, source: 'link', sourceUrl: url })));
+        saved = await coachScheduleService.addEvents(
+          coachId,
+          teamId,
+          organizationId,
+          drafts.map((d) => ({ ...d, source: 'link', sourceUrl: url }))
+        );
       } catch (err) {
         console.error('[schedule] persist failed, keeping animated set', err);
         saved = revealed.map((e) => ({ ...e, live: false }));
@@ -333,7 +372,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
 
   // --- Manual add -----------------------------------------------------------
   const saveDraft = async () => {
-    if (!coachId || !draft.title.trim() || !draft.date) return;
+    if (!coachId || !teamId || !organizationId || !draft.title.trim() || !draft.date) return;
     try {
       const payload = {
         title: draft.title,
@@ -354,7 +393,12 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
             : event
         ))));
       } else {
-        const created = await coachScheduleService.addEvent(coachId, payload);
+        const created = await coachScheduleService.addEvent(
+          coachId,
+          teamId,
+          organizationId,
+          payload
+        );
         setEvents((prev) => sortEvents([...prev, created]));
       }
       resetComposer();
@@ -380,7 +424,15 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
   };
 
   const removeEvent = async (e: LiveEvent) => {
-    if (e.live) return;
+    if (
+      e.live ||
+      !coachId ||
+      !teamId ||
+      !organizationId ||
+      e.coachId !== coachId ||
+      e.teamId !== teamId ||
+      e.organizationId !== organizationId
+    ) return;
     try {
       await coachScheduleService.deleteEvent(e.id);
       setEvents((prev) => prev.filter((x) => x.id !== e.id));
@@ -391,7 +443,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
 
   // --- File / URL drop ------------------------------------------------------
   const handleFiles = async (files: FileList | File[]) => {
-    if (!coachId) return;
+    if (!coachId || !teamId) return;
     setError(null);
     for (const file of Array.from(files)) {
       if (file.size > 25 * 1024 * 1024) {
@@ -400,7 +452,7 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
       }
       try {
         setUploading({ name: file.name, pct: 0 });
-        await noraVaultService.addFile(coachId, file, {
+        await noraVaultService.addFile(coachId, teamId, file, {
           category: 'Schedule',
           onProgress: (pct) => setUploading({ name: file.name, pct }),
         });
@@ -427,7 +479,8 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
 
   const removeDoc = async (doc: NoraVaultEntry) => {
     try {
-      await noraVaultService.deleteEntry(doc);
+      if (!coachId || !teamId) return;
+      await noraVaultService.deleteEntry(coachId, teamId, doc);
       setDocs((prev) => prev.filter((d) => d.id !== doc.id));
     } catch (err) {
       console.error('[schedule] doc delete failed', err);
@@ -435,8 +488,16 @@ const ScheduleBoard: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coach
   };
 
   const bookingEvents = useMemo(
-    () => bookings.map((booking) => bookingToEvent(booking, coachId || '')),
-    [bookings, coachId]
+    () =>
+      bookings.map((booking) =>
+        bookingToEvent(
+          booking,
+          coachId || '',
+          teamId || '',
+          organizationId || ''
+        )
+      ),
+    [bookings, coachId, organizationId, teamId]
   );
   const calendarEvents = useMemo(() => sortEvents([...events, ...bookingEvents]), [events, bookingEvents]);
   const grouped = useMemo(() => groupByDate(calendarEvents), [calendarEvents]);
@@ -1062,11 +1123,20 @@ const bookingKey = (conversation: CoachAthleteConversation, booking: CoachServic
 
 const extractCalendarBookings = (
   conversations: CoachAthleteConversation[],
-  coachId: string
+  coachId: string,
+  allowedAthleteIds: Set<string>,
+  teamId: string,
+  organizationId: string
 ): CalendarBooking[] => {
   const seen = new Set<string>();
   const output: CalendarBooking[] = [];
   conversations.forEach((conversation) => {
+    if (
+      conversation.coachId !== coachId ||
+      !allowedAthleteIds.has(conversation.athleteId) ||
+      (conversation.teamId && conversation.teamId !== teamId) ||
+      (conversation.organizationId && conversation.organizationId !== organizationId)
+    ) return;
     const rawBookings = [
       ...(Array.isArray(conversation.activeBookings) ? conversation.activeBookings : []),
       ...(conversation.activeBooking ? [conversation.activeBooking] : []),
@@ -1074,6 +1144,10 @@ const extractCalendarBookings = (
     rawBookings.forEach((booking, index) => {
       if (!booking) return;
       if (booking.coachId && booking.coachId !== coachId) return;
+      const athleteId = booking.athleteId || conversation.athleteId;
+      if (!athleteId || !allowedAthleteIds.has(athleteId)) return;
+      if (booking.teamId && booking.teamId !== teamId) return;
+      if (booking.organizationId && booking.organizationId !== organizationId) return;
       const status = String(booking.status || 'active').toLowerCase();
       if (['refunded', 'cancelled', 'canceled', 'inactive'].includes(status)) return;
       const scheduledAt = parseBookingDate(booking);
@@ -1086,7 +1160,7 @@ const extractCalendarBookings = (
         id,
         conversationId: conversation.id,
         coachId: booking.coachId || conversation.coachId,
-        athleteId: booking.athleteId || conversation.athleteId,
+        athleteId,
         athleteName: booking.athleteName || conversation.athleteName || 'Athlete',
         serviceTitle: booking.serviceTitle || booking.serviceName || booking.title || 'Booked service',
         date,
@@ -1100,9 +1174,16 @@ const extractCalendarBookings = (
   return output.sort((a, b) => a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || ''));
 };
 
-const bookingToEvent = (booking: CalendarBooking, coachId: string): CalendarEvent => ({
+const bookingToEvent = (
+  booking: CalendarBooking,
+  coachId: string,
+  teamId: string,
+  organizationId: string
+): CalendarEvent => ({
   id: `booking-${booking.id}`,
   coachId,
+  teamId,
+  organizationId,
   title: booking.serviceTitle,
   date: booking.date,
   time: booking.time,

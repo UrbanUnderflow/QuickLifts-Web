@@ -29,6 +29,10 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from './config';
+import {
+  normalizePulseCheckWorkspaceScope,
+  type PulseCheckWorkspaceScope,
+} from './pulsecheckWorkspaceScope';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Enums and identifiers
@@ -121,6 +125,8 @@ export interface HealthContextSourceProvenance {
 export interface HealthContextSourceRecord<TPayload = Record<string, unknown>> {
   id: string;
   athleteUserId: string;
+  teamId?: string;
+  organizationId?: string;
   sourceFamily: HealthContextSourceFamily;
   sourceType: HealthContextSourceType;
   recordType: HealthContextRecordType;
@@ -267,22 +273,42 @@ export const listHealthContextSourceRecordsForWindow = async (
   athleteUserId: string,
   windowStart: number,
   windowEnd: number,
-  options: { sourceFamily?: HealthContextSourceFamily; domain?: HealthContextDomain; max?: number } = {},
+  options: {
+    sourceFamily?: HealthContextSourceFamily;
+    domain?: HealthContextDomain;
+    max?: number;
+    workspace?: PulseCheckWorkspaceScope;
+  } = {},
 ): Promise<HealthContextSourceRecord[]> => {
   const scopedAthleteId = requireString(athleteUserId, 'athleteUserId');
+  const workspace = options.workspace
+    ? normalizePulseCheckWorkspaceScope(options.workspace)
+    : null;
+  if (options.workspace && !workspace) {
+    throw new Error(
+      '[HealthContextSourceRecord] teamId and organizationId are required together.'
+    );
+  }
   const constraints: Parameters<typeof query>[1][] = [
     where('athleteUserId', '==', scopedAthleteId),
     where('observedAt', '>=', windowStart),
     where('observedAt', '<=', windowEnd),
     where('status', '==', 'active'),
   ];
+  if (workspace) {
+    constraints.push(where('teamId', '==', workspace.teamId));
+    constraints.push(where('organizationId', '==', workspace.organizationId));
+  }
   if (options.sourceFamily) {
     constraints.push(where('sourceFamily', '==', options.sourceFamily));
   }
   if (options.domain) {
     constraints.push(where('domain', '==', options.domain));
   }
-  constraints.push(orderBy('observedAt', 'desc'));
+  // The scoped coach-readiness index orders the range field ascending (the
+  // native dashboard does not require newest-first ordering). Keep the legacy
+  // unscoped reader descending for its existing callers.
+  constraints.push(orderBy('observedAt', workspace ? 'asc' : 'desc'));
   if (options.max && Number.isFinite(options.max)) {
     constraints.push(limit(Math.max(1, Math.min(Math.floor(options.max), 200))));
   }

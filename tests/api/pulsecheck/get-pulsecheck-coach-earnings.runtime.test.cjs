@@ -27,23 +27,27 @@ const createDb = ({
 } = {}) => {
   const memberships = [
     {
-      id: 'staff-1',
+      id: 'building-bodies_coach-calvin',
       userId: 'coach-calvin',
       teamId: 'building-bodies',
       organizationId: 'org-1',
       role: 'coach',
+      status: 'active',
     },
     {
-      id: 'athlete-1-membership',
+      id: 'building-bodies_athlete-1',
       userId: 'athlete-1',
       teamId: 'building-bodies',
       organizationId: 'org-1',
       role: 'athlete',
+      status: 'active',
       email: 'athlete@example.com',
     },
   ];
   const documents = {
     'pulsecheck-teams/building-bodies': {
+      organizationId: 'org-1',
+      status: 'active',
       legacyCoachId: 'coach-calvin',
       commercialConfig: {
         referralKickbackEnabled: true,
@@ -52,6 +56,10 @@ const createDb = ({
         revenueRecipientUserId: '',
       },
     },
+    'pulsecheck-organizations/org-1': {
+      status: 'active',
+    },
+    'pulsecheck-team-memberships/building-bodies_coach-calvin': memberships[0],
     'users/athlete-1': {
       displayName: 'Subscribed Athlete',
       email: 'athlete@example.com',
@@ -133,6 +141,8 @@ const loadHandler = ({ db = createDb() } = {}) => {
               return {
                 id: subscriptionId,
                 status: 'active',
+                livemode: true,
+                metadata: { userId: 'athlete-1' },
                 current_period_end: 2_000_000_000,
                 items: {
                   data: [{
@@ -156,6 +166,8 @@ const loadHandler = ({ db = createDb() } = {}) => {
                   {
                     id: 'in_june',
                     status: 'paid',
+                    subscription: 'sub_athlete_1',
+                    livemode: true,
                     amount_paid: 1299,
                     currency: 'usd',
                     created: 1_780_000_000,
@@ -170,6 +182,8 @@ const loadHandler = ({ db = createDb() } = {}) => {
                   {
                     id: 'in_july',
                     status: 'paid',
+                    subscription: 'sub_athlete_1',
+                    livemode: true,
                     amount_paid: 1299,
                     currency: 'usd',
                     created: 1_782_678_400,
@@ -208,6 +222,7 @@ test('coach earnings returns roster members and 20 percent of every paid invoice
     const response = await handler({
       httpMethod: 'GET',
       headers: { authorization: 'Bearer coach-token' },
+      queryStringParameters: { teamId: 'building-bodies' },
     });
 
     assert.equal(response.statusCode, 200);
@@ -231,7 +246,11 @@ test('coach earnings returns roster members and 20 percent of every paid invoice
 
 test('coach earnings requires a signed-in Firebase user', async () => {
   const handler = loadHandler();
-  const response = await handler({ httpMethod: 'GET', headers: {} });
+  const response = await handler({
+    httpMethod: 'GET',
+    headers: {},
+    queryStringParameters: { teamId: 'building-bodies' },
+  });
   assert.equal(response.statusCode, 401);
 });
 
@@ -251,7 +270,15 @@ test('Apple subscribers use recorded RevenueCat revenue and return every renewal
 
   global.fetch = async (url, options) => {
     assert.equal(options.headers.Authorization, 'Bearer rc-secret');
-    if (url.includes('/customers/revenuecat-athlete/subscriptions')) {
+    if (url.includes('/v1/subscribers/athlete-1')) {
+      return jsonResponse({
+        subscriber: {
+          original_app_user_id: 'athlete-1',
+          aliases: [],
+        },
+      });
+    }
+    if (url.includes('/customers/athlete-1/subscriptions')) {
       return jsonResponse({
         items: [{
           id: 'rc-subscription-1',
@@ -297,12 +324,13 @@ test('Apple subscribers use recorded RevenueCat revenue and return every renewal
         sharePct: 35,
         platform: 'ios',
         stripeSubscriptionId: null,
-        rcAppUserId: 'revenuecat-athlete',
+        rcAppUserId: 'athlete-1',
       }),
     });
     const response = await handler({
       httpMethod: 'GET',
       headers: { authorization: 'Bearer coach-token' },
+      queryStringParameters: { teamId: 'building-bodies' },
     });
 
     assert.equal(response.statusCode, 200);

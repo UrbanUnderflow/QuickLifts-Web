@@ -47,6 +47,17 @@ export type PulseCheckTeamMembershipRole =
   | 'support-staff'
   | 'clinician'
   | 'athlete';
+export type PulseCheckTeamMembershipStatus =
+  | 'active'
+  | 'inactive'
+  | 'revoked'
+  | 'removed'
+  | 'pending'
+  | 'invited'
+  | 'declined'
+  | 'expired'
+  | 'suspended'
+  | 'disabled';
 // Coach-facing staff capability model (Coach Dashboard → Staff tab). These
 // checkboxes are the authoritative grant; the legacy role / operatingRole /
 // rosterVisibilityScope are derived from them (see staffCapabilities.ts) so
@@ -113,6 +124,11 @@ export interface PulseCheckTeamCommercialConfig {
   coachReferralKickbackEnabled: boolean;
   coachReferralRevenueSharePct: number;
   additionalServicesEnabled: boolean;
+  athleteAppSubscriptionEnabled: boolean;
+  athleteAppSubscriptionMonthlyPriceCents: number;
+  athleteAppSubscriptionCurrency: 'usd';
+  athleteAppSubscriptionOfferVersion: number;
+  athleteAppSubscriptionRevenueRecipientUserId: string;
   coachReferralRecipientUserId?: string;
   coachReferralRecipientEmail?: string;
   coachReferralSourceTeamId?: string;
@@ -144,6 +160,11 @@ export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommer
   coachReferralKickbackEnabled: false,
   coachReferralRevenueSharePct: 0,
   additionalServicesEnabled: false,
+  athleteAppSubscriptionEnabled: false,
+  athleteAppSubscriptionMonthlyPriceCents: 0,
+  athleteAppSubscriptionCurrency: 'usd',
+  athleteAppSubscriptionOfferVersion: 0,
+  athleteAppSubscriptionRevenueRecipientUserId: '',
   coachReferralRecipientUserId: '',
   coachReferralRecipientEmail: '',
   coachReferralSourceTeamId: '',
@@ -883,6 +904,12 @@ export interface PulseCheckTeamMembership {
   legacyConnectionId?: string;
   legacyLinkedAt?: Timestamp | null;
   role: PulseCheckTeamMembershipRole;
+  /**
+   * Older membership documents predate this field and are treated as active.
+   * Any explicit value other than `active`, or a non-null revokedAt, is denied.
+   */
+  status?: PulseCheckTeamMembershipStatus;
+  revokedAt?: Timestamp | null;
   title?: string;
   permissionSetId?: string;
   // Authoritative coach-granted capabilities for staff members. role /
@@ -911,6 +938,14 @@ export interface PulseCheckTeamMembership {
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
+
+export const isActivePulseCheckTeamMembership = (
+  membership?: Pick<PulseCheckTeamMembership, 'status' | 'revokedAt'> | null
+): boolean => {
+  if (!membership || membership.revokedAt != null) return false;
+  const status = String(membership.status || '').trim().toLowerCase();
+  return status === '' || status === 'active';
+};
 
 export interface PulseCheckLegacyCoachRosterAthlete {
   legacyConnectionId: string;

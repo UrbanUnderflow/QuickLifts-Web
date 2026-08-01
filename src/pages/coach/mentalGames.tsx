@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import type { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
@@ -2600,5 +2601,12 @@ const CoachMentalTraining: React.FC = () => {
     </CoachLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=nora',
+    permanent: false,
+  },
+});
 
 export default CoachMentalTraining;

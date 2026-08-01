@@ -3,10 +3,21 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
-import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
-import { AlertTriangle, ArrowRight, CheckCircle2, Download, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, Smartphone, UserPlus, Users } from 'lucide-react';
+import {
+  browserPopupRedirectResolver,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  OAuthProvider,
+  onAuthStateChanged,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type User as FirebaseAuthUser,
+} from 'firebase/auth';
+import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Download, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, Smartphone, UserPlus, Users } from 'lucide-react';
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
-import { auth } from '../../../api/firebase/config';
+import { auth, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import {
   derivePulseCheckTeamPlanBypass,
@@ -20,8 +31,12 @@ import type {
 import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from '../../../api/firebase/auth/username';
 import { SubscriptionPlatform, SubscriptionType, UserLevel, userService } from '../../../api/firebase/user';
 import { resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
+import {
+  formatPulseCheckMonthlyPrice,
+  isPulseCheckCoachPricedAthleteOfferActive,
+} from '../../../utils/pulsecheckCommercialization';
 
-const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393';
+const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/app/pulsecheck-mindset-coaching/id6747253393';
 // Placeholder until PulseCheck-Android is published — the listing goes live at this URL automatically.
 const PULSECHECK_ANDROID_PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck';
 
@@ -72,20 +87,36 @@ const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
   athlete: 'Athlete',
 };
 const resolveInviteStatus = (status: unknown, redemptionMode: unknown) => {
-  if (redemptionMode === 'general') {
-    return 'active';
-  }
-
   const normalizedStatus = String(status || '').trim();
-  if (normalizedStatus === 'revoked') {
-    return 'revoked';
+  if (redemptionMode === 'general') {
+    return normalizedStatus === 'active' || normalizedStatus === 'redeemed'
+      ? 'active'
+      : normalizedStatus || 'inactive';
   }
 
-  if (normalizedStatus === 'redeemed' && redemptionMode !== 'general') {
-    return 'redeemed';
-  }
+  return normalizedStatus === 'active' ? 'active' : normalizedStatus || 'inactive';
+};
 
-  return 'active';
+const inviteTimestampToEpochSeconds = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof value === 'number') {
+    return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value);
+  }
+  if (value instanceof Date) return Math.floor(value.getTime() / 1000);
+  if (typeof value === 'object') {
+    const timestamp = value as {
+      seconds?: unknown;
+      _seconds?: unknown;
+      toMillis?: () => number;
+    };
+    if (typeof timestamp.seconds === 'number') return Math.floor(timestamp.seconds);
+    if (typeof timestamp._seconds === 'number') return Math.floor(timestamp._seconds);
+    if (typeof timestamp.toMillis === 'function') {
+      return Math.floor(timestamp.toMillis() / 1000);
+    }
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? 0 : Math.floor(parsed.getTime() / 1000);
 };
 
 const nextHrefByRole = (role: PulseCheckTeamMembershipRole, organizationId: string, teamId: string) => {
@@ -151,6 +182,26 @@ const normalizeInviteCommercialSnapshot = (
       typeof candidate.additionalServicesEnabled === 'boolean'
         ? candidate.additionalServicesEnabled
         : defaults.additionalServicesEnabled,
+    athleteAppSubscriptionEnabled:
+      typeof candidate.athleteAppSubscriptionEnabled === 'boolean'
+        ? candidate.athleteAppSubscriptionEnabled
+        : defaults.athleteAppSubscriptionEnabled,
+    athleteAppSubscriptionMonthlyPriceCents: Number.isFinite(
+      Number(candidate.athleteAppSubscriptionMonthlyPriceCents)
+    )
+      ? Math.max(0, Math.round(Number(candidate.athleteAppSubscriptionMonthlyPriceCents)))
+      : defaults.athleteAppSubscriptionMonthlyPriceCents,
+    athleteAppSubscriptionCurrency: 'usd',
+    athleteAppSubscriptionOfferVersion: Number.isFinite(
+      Number(candidate.athleteAppSubscriptionOfferVersion)
+    )
+      ? Math.max(0, Math.round(Number(candidate.athleteAppSubscriptionOfferVersion)))
+      : defaults.athleteAppSubscriptionOfferVersion,
+    athleteAppSubscriptionRevenueRecipientUserId: String(
+      candidate.athleteAppSubscriptionRevenueRecipientUserId ||
+        defaults.athleteAppSubscriptionRevenueRecipientUserId ||
+        ''
+    ),
     coachReferralRecipientUserId: String(candidate.coachReferralRecipientUserId || defaults.coachReferralRecipientUserId || ''),
     coachReferralRecipientEmail: String(candidate.coachReferralRecipientEmail || defaults.coachReferralRecipientEmail || ''),
     coachReferralSourceTeamId: String(candidate.coachReferralSourceTeamId || defaults.coachReferralSourceTeamId || ''),
@@ -192,6 +243,10 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     password: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [activeProvider, setActiveProvider] = useState<'google' | 'apple' | null>(null);
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [verificationEmailSent, setVerificationEmailSent] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [redeemedState, setRedeemedState] = useState<{
     organizationName: string;
@@ -217,6 +272,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   }, []);
 
   useEffect(() => {
+    const appleDeviceSignature = `${window.navigator.userAgent} ${window.navigator.platform}`;
+    setAppleAuthAvailable(/Macintosh|Mac OS X|iPhone|iPad|iPod/i.test(appleDeviceSignature));
+  }, []);
+
+  useEffect(() => {
     if (!router.isReady) return;
     setShowWebOnboarding(router.query.web === '1');
   }, [router.isReady, router.query.web]);
@@ -234,12 +294,25 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const isStaffInvite = invite.teamMembershipRole !== 'athlete';
   const staffRoleTitle = invite.invitedTitle?.trim() || roleLabel[invite.teamMembershipRole];
   const teamPlanBypassesPaywall = invite.commercialSnapshot?.teamPlanBypassesPaywall === true;
+  const requiresAthleteCheckout =
+    invite.teamMembershipRole === 'athlete' &&
+    !teamPlanBypassesPaywall &&
+    isPulseCheckCoachPricedAthleteOfferActive(invite.commercialSnapshot);
+  const requiresTargetEmailVerification =
+    requiresAthleteCheckout && Boolean(normalizedTargetEmail);
+  const athleteMonthlyPrice = formatPulseCheckMonthlyPrice(
+    invite.commercialSnapshot?.athleteAppSubscriptionMonthlyPriceCents,
+    invite.commercialSnapshot?.athleteAppSubscriptionCurrency
+  );
   const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
-  const shouldShowDownloadFirst = shouldPreferAppDownload && !showWebOnboarding && !redeemedState;
+  const shouldShowDownloadFirst =
+    shouldPreferAppDownload && !requiresAthleteCheckout && !showWebOnboarding && !redeemedState;
   const inviteScopeLabel = invite.pilotName || invite.teamName;
-  const inviteHeadline = shouldPreferAppDownload
-    ? `Download the PulseCheck app to join ${inviteScopeLabel}.`
-    : `Join ${invite.teamName}`;
+  const inviteHeadline = requiresAthleteCheckout
+    ? `Join ${invite.teamName} on PulseCheck.`
+    : shouldPreferAppDownload
+      ? `Download the PulseCheck app to join ${inviteScopeLabel}.`
+      : `Join ${invite.teamName}`;
 
   const updateWebOnboardingPreference = (nextValue: boolean) => {
     setShowWebOnboarding(nextValue);
@@ -409,6 +482,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         teamPlanBypassesPaywall,
         referralKickbackEnabled: invite.commercialSnapshot?.referralKickbackEnabled || false,
         referralRevenueSharePct: invite.commercialSnapshot?.referralRevenueSharePct || 0,
+        athleteAppSubscriptionEnabled: requiresAthleteCheckout,
+        athleteAppSubscriptionMonthlyPriceCents:
+          invite.commercialSnapshot?.athleteAppSubscriptionMonthlyPriceCents || 0,
+        athleteAppSubscriptionOfferVersion:
+          invite.commercialSnapshot?.athleteAppSubscriptionOfferVersion || 0,
         capturedAt: Math.floor(Date.now() / 1000),
       },
       createdAt: new Date(),
@@ -446,6 +524,95 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       });
       throw error;
     }
+  };
+
+  const startAthleteSubscriptionCheckout = async (
+    completionMode: AthleteCompletionMode = 'existing-account'
+  ) => {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('Sign in before starting checkout.');
+    }
+
+    setAthleteCompletionMode(completionMode);
+    setStartingCheckout(true);
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/.netlify/functions/create-athlete-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({
+          inviteToken: invite.token,
+          teamId: invite.teamId,
+          source: 'pulsecheck-coach-athlete-offer',
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (payload?.alreadyActive === true) {
+        await completeRedeem(completionMode);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(payload?.message || payload?.error || 'Checkout could not be started.');
+      }
+
+      const checkoutUrl = String(payload?.url || payload?.checkoutUrl || '').trim();
+      if (!checkoutUrl) {
+        throw new Error('Stripe did not return a checkout link.');
+      }
+      window.location.assign(checkoutUrl);
+    } finally {
+      setStartingCheckout(false);
+    }
+  };
+
+  const ensureCheckoutEmailIsVerified = async (user: FirebaseAuthUser) => {
+    if (!requiresAthleteCheckout || !normalizedTargetEmail) return true;
+
+    await user.reload();
+    await user.getIdToken(true);
+    if (user.emailVerified) {
+      setVerificationEmailSent(false);
+      return true;
+    }
+
+    if (!verificationEmailSent) {
+      try {
+        await sendEmailVerification(user, {
+          url: invite.pageUrl,
+          handleCodeInApp: false,
+        });
+      } catch (error) {
+        const code =
+          typeof error === 'object' && error && 'code' in error
+            ? String((error as { code?: string }).code)
+            : '';
+        if (code === 'auth/unauthorized-continue-uri') {
+          await sendEmailVerification(user);
+        } else if (code !== 'auth/too-many-requests') {
+          throw error;
+        }
+      }
+      setVerificationEmailSent(true);
+    }
+
+    setMessage({
+      type: 'success',
+      text: `Check ${user.email || invite.targetEmail} for a verification email. After you verify it, come back and continue to Stripe.`,
+    });
+    return false;
+  };
+
+  const continueToVerifiedAthleteCheckout = async (
+    user: FirebaseAuthUser,
+    completionMode: AthleteCompletionMode
+  ) => {
+    if (!(await ensureCheckoutEmailIsVerified(user))) return;
+    await startAthleteSubscriptionCheckout(completionMode);
   };
 
   const handleSubmitFollowUp = async (event: React.FormEvent) => {
@@ -532,7 +699,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
       await claimUsername(credential.user.uid, finalUsername);
       await createTeamInviteUser(credential.user, finalUsername);
-      await completeRedeem('new-account');
+      if (requiresAthleteCheckout) {
+        await continueToVerifiedAthleteCheckout(credential.user, 'new-account');
+      } else {
+        await completeRedeem('new-account');
+      }
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to create account:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -570,8 +741,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     setMessage(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email, signInForm.password);
-      await completeRedeem('existing-account');
+      const credential = await signInWithEmailAndPassword(auth, email, signInForm.password);
+      if (requiresAthleteCheckout) {
+        await continueToVerifiedAthleteCheckout(credential.user, 'existing-account');
+      } else {
+        await completeRedeem('existing-account');
+      }
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to sign in:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -590,13 +765,107 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     }
   };
 
+  const handleSocialAuth = async (provider: 'google' | 'apple') => {
+    if (
+      submitting ||
+      !requiresAthleteCheckout ||
+      (provider === 'apple' && !appleAuthAvailable)
+    ) return;
+
+    setSubmitting(true);
+    setActiveProvider(provider);
+    setMessage(null);
+
+    try {
+      const authProvider =
+        provider === 'google'
+          ? (() => {
+              const googleProvider = new GoogleAuthProvider();
+              googleProvider.addScope('email');
+              googleProvider.addScope('profile');
+              return googleProvider;
+            })()
+          : (() => {
+              const appleProvider = new OAuthProvider('apple.com');
+              appleProvider.addScope('email');
+              appleProvider.addScope('name');
+              return appleProvider;
+            })();
+      const result = await signInWithPopup(
+        auth,
+        authProvider,
+        browserPopupRedirectResolver
+      );
+      const user = result.user;
+      const email = (user.email || '').trim().toLowerCase();
+
+      if (!email) {
+        await signOut(auth);
+        throw new Error(
+          'That account did not share an email address. Use email and password instead.'
+        );
+      }
+      if (normalizedTargetEmail && email !== normalizedTargetEmail) {
+        await signOut(auth);
+        throw new Error(
+          `This invite was sent to ${invite.targetEmail}. Choose the matching Google or Apple account.`
+        );
+      }
+
+      const existingUser = await userService.fetchUserFromFirestore(user.uid).catch(() => null);
+      let completionMode: AthleteCompletionMode = 'existing-account';
+      if (!existingUser) {
+        const baseUsername = normalizeUsername(generateUsernameFromEmail(email));
+        let finalUsername = baseUsername;
+        if (!(await isUsernameAvailable(finalUsername))) {
+          for (let suffix = 2; suffix < 1000; suffix += 1) {
+            const candidate = normalizeUsername(`${baseUsername}${suffix}`);
+            if (await isUsernameAvailable(candidate)) {
+              finalUsername = candidate;
+              break;
+            }
+          }
+        }
+        await claimUsername(user.uid, finalUsername);
+        await createTeamInviteUser(user, finalUsername);
+        completionMode = 'new-account';
+      }
+
+      await continueToVerifiedAthleteCheckout(user, completionMode);
+    } catch (error) {
+      console.error('[pulsecheck-team-invite] Social sign-in failed:', error);
+      const code =
+        typeof error === 'object' && error && 'code' in error
+          ? String((error as { code?: string }).code)
+          : '';
+      const messageText =
+        code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'
+          ? 'Sign-in was cancelled.'
+          : code === 'auth/popup-blocked'
+            ? 'Enable popups for this site and try again.'
+            : code === 'auth/account-exists-with-different-credential'
+              ? 'An account already exists with that email using a different sign-in method.'
+              : error instanceof Error
+                ? error.message
+                : 'Social sign-in could not be completed.';
+      setMessage({ type: 'error', text: messageText });
+    } finally {
+      setActiveProvider(null);
+      setSubmitting(false);
+    }
+  };
+
   const handleRedeemSignedInUser = async () => {
     if (!authUser || submitting) return;
 
     setSubmitting(true);
     setMessage(null);
     try {
-      await completeRedeem('existing-account');
+      if (requiresAthleteCheckout) {
+        await continueToVerifiedAthleteCheckout(authUser, 'existing-account');
+      } else {
+        await completeRedeem('existing-account');
+      }
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to redeem for signed-in user:', error);
       setMessage({
@@ -611,6 +880,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const handleSignOut = async () => {
     try {
       await signOut(auth);
+      setVerificationEmailSent(false);
       setMessage(null);
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to sign out:', error);
@@ -633,8 +903,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       pilotName: invite.pilotName,
       cohortName: invite.cohortName,
       targetEmail: invite.targetEmail,
+      inviteToken: invite.token,
       mode: athleteCompletionMode,
     });
+    if (router.query.devFirebase === '1') {
+      params.set('devFirebase', '1');
+    }
 
     return `/PulseCheck/pilot-invite-next-steps?${params.toString()}`;
   }, [
@@ -649,6 +923,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     invite.teamId,
     invite.teamMembershipRole,
     invite.teamName,
+    invite.token,
+    router.query.devFirebase,
   ]);
 
   useEffect(() => {
@@ -746,7 +1022,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   {redeemedState.organizationName} attached your{' '}
                   {roleLabel[redeemedState.teamMembershipRole].toLowerCase()} access to{' '}
                   <span className="font-medium text-white">{redeemedState.teamName}</span>. Taking you into your
-                  workspace now — use Continue if nothing happens.
+                  workspace now. Use Continue if nothing happens.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -773,8 +1049,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <h2 className="mt-2 text-3xl font-semibold text-white">Confirm your team access</h2>
                 <p className="mt-3 text-sm leading-7 text-zinc-300">
                   Accepting adds you to <span className="font-medium text-white">{invite.teamName}</span> as{' '}
-                  <span className="font-medium text-white">{staffRoleTitle}</span> and opens your team workspace —
-                  no separate athlete setup.
+                  <span className="font-medium text-white">{staffRoleTitle}</span> and opens your team workspace.
                 </p>
               </div>
 
@@ -1024,7 +1299,13 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Team Invite</p>
                 <h1 className="text-3xl font-semibold text-white">{inviteHeadline}</h1>
                 <p className="max-w-2xl text-sm leading-7 text-zinc-300">
-                  {shouldPreferAppDownload ? (
+                  {requiresAthleteCheckout ? (
+                    <>
+                      Create or sign in to your PulseCheck account, then subscribe for{' '}
+                      <span className="font-medium text-white">{athleteMonthlyPrice} per month</span>. Your purchase opens access for{' '}
+                      <span className="font-medium text-white">{invite.teamName}</span>.
+                    </>
+                  ) : shouldPreferAppDownload ? (
                     <>
                       PulseCheck helps athletes build readiness, mindset, and performance habits with guided check-ins and coaching.
                       Download the app to join <span className="font-medium text-white">{invite.teamName}</span> inside{' '}
@@ -1087,19 +1368,29 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       className={`rounded-2xl border p-4 text-sm leading-7 ${
                         teamPlanBypassesPaywall
                           ? 'border-green-500/20 bg-green-500/[0.08] text-green-100'
-                          : 'border-amber-500/20 bg-amber-500/[0.08] text-amber-100'
+                          : requiresAthleteCheckout
+                            ? 'border-[#7C3AED]/25 bg-[#7C3AED]/[0.08] text-violet-100'
+                            : 'border-amber-500/20 bg-amber-500/[0.08] text-amber-100'
                       }`}
                     >
                       {teamPlanBypassesPaywall
-                        ? 'This team has an active team plan. Athlete access is sponsored through the team, so there is no separate athlete checkout after redemption.'
-                        : 'This team uses athlete-paid access. If you subscribe later, your team and invite attribution will stay attached to the subscription so the configured referral share can flow back to this team setup.'}
+                        ? 'This team has an active team plan. The team sponsors your PulseCheck access.'
+                        : requiresAthleteCheckout
+                          ? `${invite.teamName} offers PulseCheck for ${athleteMonthlyPrice} per month. Sign in first, then complete the secure Stripe checkout to activate your team access.`
+                          : 'Your team and invite attribution stay attached to your PulseCheck account.'}
                     </div>
                   ) : null}
 
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
-                    <p className="font-medium text-white">What happens on redemption</p>
+                    <p className="font-medium text-white">
+                      {requiresAthleteCheckout ? 'What happens after payment' : 'What happens on redemption'}
+                    </p>
                     <p className="mt-2 leading-7">
-                      Your team membership is created
+                      {requiresAthleteCheckout
+                        ? 'Stripe confirms your subscription, then PulseCheck activates your team membership and app access.'
+                        : 'Your team membership is created'}
+                      {!requiresAthleteCheckout && (
+                        <>
                       {isGeneralInvite
                         ? isStaffInvite
                           ? ' and this general invite stays active for additional team members.'
@@ -1108,6 +1399,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       {invite.cohortId && !isStaffInvite
                         ? ' Because this link is cohort-linked, the athlete is attached directly to that pilot scope and the next-steps page explains whether onboarding is needed.'
                         : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
+                        </>
+                      )}
                     </p>
                   </div>
                 </>
@@ -1258,10 +1551,23 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               <div className="space-y-6">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Signed In</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">Finish access setup</h2>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">
+                    {requiresAthleteCheckout ? 'Start your PulseCheck subscription' : 'Finish access setup'}
+                  </h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
                     You are currently signed in as <span className="font-medium text-white">{authUser.email}</span>.
                   </p>
+                  {requiresAthleteCheckout ? (
+                    <p className="mt-3 text-sm leading-7 text-zinc-400">
+                      Your subscription is {athleteMonthlyPrice} per month. Stripe will show the renewal details before you pay.
+                    </p>
+                  ) : null}
+                  {requiresTargetEmailVerification && verificationEmailSent ? (
+                    <div className="mt-4 rounded-2xl border border-violet-300/20 bg-violet-300/[0.06] p-4 text-sm leading-7 text-violet-100">
+                      Open the verification email sent to <span className="font-medium">{authUser.email}</span>.
+                      Come back here after you verify it, then use the button below.
+                    </div>
+                  ) : null}
                 </div>
 
                 {!authEmailMatchesInvite ? (
@@ -1285,11 +1591,27 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <button
                       type="button"
                       onClick={handleRedeemSignedInUser}
-                      disabled={submitting}
+                      disabled={submitting || startingCheckout}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                      {submitting ? 'Joining...' : 'Accept Invite'}
+                      {submitting || startingCheckout ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : requiresTargetEmailVerification && verificationEmailSent ? (
+                        <MailPlus className="h-4 w-4" />
+                      ) : requiresAthleteCheckout ? (
+                        <CreditCard className="h-4 w-4" />
+                      ) : (
+                        <ShieldCheck className="h-4 w-4" />
+                      )}
+                      {submitting || startingCheckout
+                        ? requiresAthleteCheckout
+                          ? 'Opening Stripe...'
+                          : 'Joining...'
+                        : requiresAthleteCheckout
+                          ? requiresTargetEmailVerification && verificationEmailSent
+                            ? 'I verified my email. Continue to Stripe'
+                            : `Continue to Stripe, ${athleteMonthlyPrice}/month`
+                          : 'Accept Invite'}
                     </button>
                     <button
                       type="button"
@@ -1306,9 +1628,13 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               <div className="space-y-6">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Account Required</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">Create or access your Pulse account</h2>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">
+                    {requiresAthleteCheckout ? 'Connect your purchase to your account' : 'Create or access your Pulse account'}
+                  </h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Use the invited email when one is specified, then accept the invite from this page. Existing Pulse athletes will be attached directly to the pilot. New athletes will get a mobile setup walkthrough after redemption.
+                    {requiresAthleteCheckout
+                      ? `Use the account you will use in the PulseCheck app. After you sign in, Stripe will open for the ${athleteMonthlyPrice} monthly subscription.`
+                      : 'Use the invited email when one is specified, then accept the invite from this page. Existing Pulse athletes will be attached directly to the pilot. New athletes will get a mobile setup walkthrough after redemption.'}
                   </p>
                 </div>
 
@@ -1345,6 +1671,56 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <p className="mt-2 text-xs text-zinc-400">Use this if you already have an account.</p>
                   </button>
                 </div>
+
+                {requiresAthleteCheckout ? (
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleSocialAuth('google')}
+                      disabled={submitting || startingCheckout}
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {activeProvider === 'google' ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <img
+                          src="/google-logo.svg"
+                          alt=""
+                          aria-hidden="true"
+                          className="h-5 w-5"
+                        />
+                      )}
+                      Continue with Google
+                    </button>
+                    {appleAuthAvailable ? (
+                      <button
+                        type="button"
+                        onClick={() => void handleSocialAuth('apple')}
+                        disabled={submitting || startingCheckout}
+                        className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {activeProvider === 'apple' ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <img
+                            src="/apple-logo.svg"
+                            alt=""
+                            aria-hidden="true"
+                            className="h-5 w-5"
+                          />
+                        )}
+                        Continue with Apple
+                      </button>
+                    ) : null}
+                    <div className="flex items-center gap-3">
+                      <span className="h-px flex-1 bg-zinc-800" />
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Or use email
+                      </span>
+                      <span className="h-px flex-1 bg-zinc-800" />
+                    </div>
+                  </div>
+                ) : null}
 
                 {mode === 'create-account' ? (
                   <form className="space-y-4" onSubmit={handleCreateAccount}>
@@ -1391,11 +1767,19 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
                     <button
                       type="submit"
-                      disabled={submitting}
+                      disabled={submitting || startingCheckout}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                      {submitting ? 'Creating Account...' : 'Create Account and Join'}
+                      {submitting || startingCheckout
+                        ? startingCheckout
+                          ? 'Opening Stripe...'
+                          : 'Creating Account...'
+                        : requiresAthleteCheckout
+                          ? requiresTargetEmailVerification
+                            ? 'Create Account and Verify Email'
+                            : 'Create Account and Continue to Stripe'
+                          : 'Create Account and Join'}
                     </button>
                   </form>
                 ) : (
@@ -1423,11 +1807,19 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
                     <button
                       type="submit"
-                      disabled={submitting}
+                      disabled={submitting || startingCheckout}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                      {submitting ? 'Signing In...' : 'Sign In and Join'}
+                      {submitting || startingCheckout
+                        ? startingCheckout
+                          ? 'Opening Stripe...'
+                          : 'Signing In...'
+                        : requiresAthleteCheckout
+                          ? requiresTargetEmailVerification
+                            ? 'Sign In and Verify Email'
+                            : 'Sign In and Continue to Stripe'
+                          : 'Sign In and Join'}
                     </button>
                   </form>
                 )}
@@ -1477,16 +1869,23 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   );
 };
 
-export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async ({ params, query, res }) => {
+export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async ({
+  params,
+  query,
+  res,
+  resolvedUrl,
+}) => {
   const token = typeof params?.token === 'string' ? params.token : '';
   const forceDevFirebase = query.devFirebase === '1';
   if (!token) return { notFound: true };
 
   try {
-    const admin = (await import('../../../lib/firebase-admin')).default;
+    const firebaseAdmin = await import('../../../lib/firebase-admin');
+    const admin = firebaseAdmin.default;
+    const adminApp = firebaseAdmin.getFirebaseAdminApp(forceDevFirebase);
+    const firestore = admin.firestore(adminApp);
 
-    let invite = await admin
-      .firestore()
+    let invite = await firestore
       .collection('pulsecheck-invite-links')
       .doc(token)
       .get()
@@ -1494,7 +1893,11 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       .catch(() => null);
 
     if (!invite) {
-      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token, forceDevFirebase);
+      invite = await getFirestoreDocFallback(
+        'pulsecheck-invite-links',
+        token,
+        forceDevFirebase
+      ).catch(() => null);
     }
     // Friendly landing instead of a cold 404 when the invite can't be opened.
     const unavailable = (reason: string) => ({
@@ -1502,25 +1905,44 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
     });
     if (!invite) return unavailable('not-found');
     const redemptionMode = invite.redemptionMode === 'general' ? 'general' : 'single-use';
-    const effectiveStatus = resolveInviteStatus(invite.status, redemptionMode);
+    const isAthleteOfferRoute = resolvedUrl.startsWith('/PulseCheck/athlete-offer/');
+    const isRedeemedAthleteOfferReplay =
+      isAthleteOfferRoute &&
+      redemptionMode === 'single-use' &&
+      String(invite.status || '').trim() === 'redeemed' &&
+      String(invite.teamMembershipRole || '').trim() === 'athlete';
+    const effectiveStatus = isRedeemedAthleteOfferReplay
+      ? 'active'
+      : resolveInviteStatus(invite.status, redemptionMode);
     if (effectiveStatus !== 'active') return unavailable(effectiveStatus || 'default');
+    if (invite.revokedAt != null) return unavailable('revoked');
+    const expiresAt = inviteTimestampToEpochSeconds(invite.expiresAt || invite.expirationDate);
+    if (expiresAt && expiresAt <= Math.floor(Date.now() / 1000)) {
+      return unavailable('expired');
+    }
     if (invite.inviteType !== 'team-access') return unavailable('default');
 
     let organizationName = 'PulseCheck Organization';
     let teamName = 'Team';
     let organizationImageUrl = '';
     let teamImageUrl = '';
+    let liveTeamCommercialConfig: Record<string, unknown> = {};
     const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
-    const pageUrl = `${siteOrigin}/PulseCheck/team-invite/${encodeURIComponent(token)}${forceDevFirebase ? '?devFirebase=1' : ''}`;
+    const pageRoute = isAthleteOfferRoute ? 'athlete-offer' : 'team-invite';
+    const pageUrl = `${siteOrigin}/PulseCheck/${pageRoute}/${encodeURIComponent(token)}${forceDevFirebase ? '?devFirebase=1' : ''}`;
 
     try {
       const [organizationSnap, teamSnap] = await Promise.all([
-        admin.firestore().collection('pulsecheck-organizations').doc(String(invite.organizationId || '')).get(),
-        admin.firestore().collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
+        firestore.collection('pulsecheck-organizations').doc(String(invite.organizationId || '')).get(),
+        firestore.collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
       ]);
 
       organizationName = organizationSnap.data()?.displayName || organizationName;
       teamName = teamSnap.data()?.displayName || teamName;
+      liveTeamCommercialConfig =
+        teamSnap.data()?.commercialConfig && typeof teamSnap.data()?.commercialConfig === 'object'
+          ? (teamSnap.data()?.commercialConfig as Record<string, unknown>)
+          : {};
       organizationImageUrl = String(organizationSnap.data()?.invitePreviewImageUrl || '');
       teamImageUrl = String(teamSnap.data()?.invitePreviewImageUrl || '');
     } catch {
@@ -1531,6 +1953,10 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
 
       organizationName = String(organizationDoc?.displayName || organizationName);
       teamName = String(teamDoc?.displayName || teamName);
+      liveTeamCommercialConfig =
+        teamDoc?.commercialConfig && typeof teamDoc.commercialConfig === 'object'
+          ? (teamDoc.commercialConfig as Record<string, unknown>)
+          : {};
       organizationImageUrl = String(organizationDoc?.invitePreviewImageUrl || '');
       teamImageUrl = String(teamDoc?.invitePreviewImageUrl || '');
     }
@@ -1571,7 +1997,68 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           previewImageUrl,
           pageUrl,
           commercialSnapshot: normalizeInviteCommercialSnapshot(
-            invite.commercialSnapshot,
+            {
+              ...(invite.commercialSnapshot && typeof invite.commercialSnapshot === 'object'
+                ? invite.commercialSnapshot
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'commercialModel'
+              )
+                ? { commercialModel: liveTeamCommercialConfig.commercialModel }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'teamPlanStatus'
+              )
+                ? { teamPlanStatus: liveTeamCommercialConfig.teamPlanStatus }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'athleteAppSubscriptionEnabled'
+              )
+                ? {
+                    athleteAppSubscriptionEnabled:
+                      liveTeamCommercialConfig.athleteAppSubscriptionEnabled,
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'athleteAppSubscriptionMonthlyPriceCents'
+              )
+                ? {
+                    athleteAppSubscriptionMonthlyPriceCents:
+                      liveTeamCommercialConfig.athleteAppSubscriptionMonthlyPriceCents,
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'athleteAppSubscriptionCurrency'
+              )
+                ? {
+                    athleteAppSubscriptionCurrency:
+                      liveTeamCommercialConfig.athleteAppSubscriptionCurrency,
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'athleteAppSubscriptionOfferVersion'
+              )
+                ? {
+                    athleteAppSubscriptionOfferVersion:
+                      liveTeamCommercialConfig.athleteAppSubscriptionOfferVersion,
+                  }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                liveTeamCommercialConfig,
+                'athleteAppSubscriptionRevenueRecipientUserId'
+              )
+                ? {
+                    athleteAppSubscriptionRevenueRecipientUserId:
+                      liveTeamCommercialConfig.athleteAppSubscriptionRevenueRecipientUserId,
+                  }
+                : {}),
+            },
             String(invite.organizationId || ''),
             String(invite.teamId || ''),
             token

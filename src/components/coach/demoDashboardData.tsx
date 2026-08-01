@@ -17,6 +17,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export const DEMO_COACH_ID = 'demo-coach';
+const DEMO_TEAM_ID = 'demo-team';
 
 const firstNames = ['Tremaine', 'Alex', 'Jordan', 'Sam', 'Taylor', 'Riley', 'Casey', 'Morgan', 'Jamie', 'Devon', 'Avery', 'Cameron', 'Drew', 'Quinn', 'Reese', 'Skyler'];
 const lastNames = ['Grant', 'Morgan', 'King', 'Lee', 'Brooks', 'Chen', 'Rivera', 'Thompson', 'Okafor', 'Washington', 'Rodriguez', 'Williams', 'Johnson', 'Martinez', 'Davis', 'Patel'];
@@ -174,6 +175,7 @@ const seedVault: NoraVaultEntry[] = [
   {
     id: 'seed-1',
     coachId: DEMO_COACH_ID,
+    teamId: DEMO_TEAM_ID,
     type: 'note',
     title: 'Practice & meeting schedule',
     category: 'Schedule',
@@ -184,6 +186,7 @@ const seedVault: NoraVaultEntry[] = [
   {
     id: 'seed-2',
     coachId: DEMO_COACH_ID,
+    teamId: DEMO_TEAM_ID,
     type: 'note',
     title: 'Pre-game routine',
     category: 'Playbook',
@@ -194,6 +197,7 @@ const seedVault: NoraVaultEntry[] = [
   {
     id: 'seed-3',
     coachId: DEMO_COACH_ID,
+    teamId: DEMO_TEAM_ID,
     type: 'file',
     title: 'Team handbook 2026.pdf',
     category: 'Policies',
@@ -210,6 +214,8 @@ const seedSchedule: ScheduleEvent[] = [
   {
     id: 'sched-seed-1',
     coachId: DEMO_COACH_ID,
+    teamId: 'demo-team',
+    organizationId: 'demo-organization',
     title: 'Team meeting',
     date: '2026-06-08',
     time: '7:00 AM',
@@ -221,6 +227,8 @@ const seedSchedule: ScheduleEvent[] = [
   {
     id: 'sched-seed-2',
     coachId: DEMO_COACH_ID,
+    teamId: 'demo-team',
+    organizationId: 'demo-organization',
     title: 'Practice',
     date: '2026-06-09',
     time: '3:30 PM',
@@ -335,10 +343,11 @@ export function useDemoDashboardMocks(active: boolean): boolean {
 
     // Vault: in-memory, no Firebase.
     noraVaultService.getEntries = (async () => [...vault]) as any;
-    noraVaultService.addNote = (async (_coachId: string, entry: any) => {
+    noraVaultService.addNote = (async (_coachId: string, _teamId: string, entry: any) => {
       const created: NoraVaultEntry = {
         id: `local-${vault.length + 1}-${entry.title}`,
         coachId: DEMO_COACH_ID,
+        teamId: DEMO_TEAM_ID,
         type: entry.type || 'note',
         title: entry.title?.trim() || 'Untitled note',
         content: entry.content?.trim() || '',
@@ -349,12 +358,13 @@ export function useDemoDashboardMocks(active: boolean): boolean {
       vault = [created, ...vault];
       return created;
     }) as any;
-    noraVaultService.addFile = (async (_coachId: string, file: File, opts?: any) => {
+    noraVaultService.addFile = (async (_coachId: string, _teamId: string, file: File, opts?: any) => {
       opts?.onProgress?.(100);
       const isImage = file.type.startsWith('image/');
       const created: NoraVaultEntry = {
         id: `local-file-${vault.length + 1}`,
         coachId: DEMO_COACH_ID,
+        teamId: DEMO_TEAM_ID,
         type: isImage ? 'image' : 'file',
         title: opts?.title?.trim() || file.name,
         content: opts?.summary?.trim() || '',
@@ -367,26 +377,42 @@ export function useDemoDashboardMocks(active: boolean): boolean {
       vault = [created, ...vault];
       return created;
     }) as any;
-    noraVaultService.deleteEntry = (async (entry: NoraVaultEntry) => {
+    noraVaultService.deleteEntry = (async (_coachId: string, _teamId: string, entry: NoraVaultEntry) => {
       vault = vault.filter((e) => e.id !== entry.id);
     }) as any;
 
     // Schedule: in-memory, no Firebase.
-    const buildEvent = (draft: ScheduleEventDraft): ScheduleEvent => ({
+    const buildEvent = (
+      draft: ScheduleEventDraft,
+      teamId = 'demo-team',
+      organizationId = 'demo-organization'
+    ): ScheduleEvent => ({
       ...draft,
       id: `sched-local-${++schedCounter}`,
       coachId: DEMO_COACH_ID,
+      teamId,
+      organizationId,
       source: draft.source || 'manual',
       createdAt: new Date(),
     });
     coachScheduleService.getEvents = (async () => [...schedule]) as any;
-    coachScheduleService.addEvent = (async (_coachId: string, draft: ScheduleEventDraft) => {
-      const created = buildEvent(draft);
+    coachScheduleService.addEvent = (async (
+      _coachId: string,
+      teamId: string,
+      organizationId: string,
+      draft: ScheduleEventDraft
+    ) => {
+      const created = buildEvent(draft, teamId, organizationId);
       schedule = [...schedule, created];
       return created;
     }) as any;
-    coachScheduleService.addEvents = (async (_coachId: string, drafts: ScheduleEventDraft[]) => {
-      const created = drafts.map(buildEvent);
+    coachScheduleService.addEvents = (async (
+      _coachId: string,
+      teamId: string,
+      organizationId: string,
+      drafts: ScheduleEventDraft[]
+    ) => {
+      const created = drafts.map((draft) => buildEvent(draft, teamId, organizationId));
       schedule = [...schedule, ...created];
       return created;
     }) as any;

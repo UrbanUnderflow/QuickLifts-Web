@@ -1,6 +1,10 @@
 import { Handler } from '@netlify/functions';
-import { admin } from './config/firebase';
+import { admin, getFirebaseAdminApp } from './config/firebase';
 import { makeIncidentId } from './utils/safeErrorResponse';
+import {
+  buildScheduleExtractionRequest,
+  normalizeScheduleImportSource,
+} from './utils/coachScheduleImportContract';
 
 /**
  * Coach Schedule Import — background worker
@@ -38,7 +42,16 @@ export const handler: Handler = async (event) => {
 
   const jobId = body.jobId;
   const workerToken = event.headers['x-pulsecheck-internal-worker'] || event.headers['X-PulseCheck-Internal-Worker'];
-  if (!jobId || !workerToken) {
+  if (
+    typeof jobId !== 'string'
+    || !jobId
+    || jobId.length > 240
+    || jobId.includes('/')
+    || /[\u0000-\u001f\u007f]/.test(jobId)
+    || typeof workerToken !== 'string'
+    || !workerToken
+    || workerToken.length > 240
+  ) {
     return { statusCode: 400, body: 'Missing job credentials' };
   }
 
@@ -47,7 +60,8 @@ export const handler: Handler = async (event) => {
     return { statusCode: 500, body: 'Missing OpenAI provider key' };
   }
 
-  const jobRef = admin.firestore().collection(JOB_COLLECTION).doc(jobId);
+  const database = getFirebaseAdminApp(event).firestore();
+  const jobRef = database.collection(JOB_COLLECTION).doc(jobId);
 
   try {
     const jobDoc = await jobRef.get();
@@ -60,6 +74,8 @@ export const handler: Handler = async (event) => {
     if (job.status === 'succeeded') {
       return { statusCode: 200, body: 'Already complete' };
     }
+    const source = normalizeScheduleImportSource(job.source || {});
+    const request = buildScheduleExtractionRequest(source);
 
     await jobRef.update({
       status: 'running',
@@ -73,7 +89,7 @@ export const handler: Handler = async (event) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${providerApiKey}`
       },
-      body: JSON.stringify(job.request)
+      body: JSON.stringify(request)
     });
 
     const responseText = await response.text();

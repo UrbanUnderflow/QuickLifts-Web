@@ -1,12 +1,18 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from './config';
 import { pulseCheckProvisioningService } from './pulsecheckProvisioning/service';
-import type { PulseCheckTeam, PulseCheckTeamMembership, PulseCheckTeamMembershipRole } from './pulsecheckProvisioning/types';
+import type {
+  PulseCheckOrganization,
+  PulseCheckTeam,
+  PulseCheckTeamMembership,
+  PulseCheckTeamMembershipRole,
+} from './pulsecheckProvisioning/types';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
 
-const COACH_REPORTS_COLLECTION = 'coachReports';
+const COACH_REPORTS_COLLECTION = 'coachReportViews';
 const COACH_VISIBLE_REPORT_STATUSES = new Set(['published', 'sent', 'delivered']);
 const COACH_REPORT_ACCESS_ROLES = new Set<PulseCheckTeamMembershipRole>(['team-admin', 'coach', 'performance-staff']);
+const SAFE_FIRESTORE_ID = /^[A-Za-z0-9_-]{1,128}$/;
 
 export interface CoachReportAdherenceSummary {
   categoriesReady?: number;
@@ -37,6 +43,36 @@ export interface CoachReportListItem {
 }
 
 type CoachReportDocData = Record<string, any>;
+
+export interface AuthorizedCoachReportTeam {
+  membership: PulseCheckTeamMembership;
+  organization: PulseCheckOrganization;
+  team: PulseCheckTeam;
+  teamName: string;
+}
+
+const normalizeSafeId = (value: string) => {
+  const normalized = String(value || '').trim();
+  return SAFE_FIRESTORE_ID.test(normalized) ? normalized : '';
+};
+
+export const isActiveCoachReportMembership = (membership?: PulseCheckTeamMembership | null) => {
+  if (!membership || membership.revokedAt) return false;
+  const status = String(membership.status || '').trim().toLowerCase();
+  return status === '' || status === 'active';
+};
+
+export const canAccessCoachReports = (membership?: PulseCheckTeamMembership | null) => {
+  if (!membership || !COACH_REPORT_ACCESS_ROLES.has(membership.role)) return false;
+  if (membership.role === 'team-admin') return true;
+  if (Array.isArray(membership.staffCapabilities) && membership.staffCapabilities.length > 0) {
+    return (
+      membership.staffCapabilities.includes('admin')
+      || membership.staffCapabilities.includes('coaching')
+    );
+  }
+  return membership.role === 'coach' || membership.role === 'performance-staff';
+};
 
 const parseReportDate = (value: unknown): Date | undefined => {
   if (value == null) return undefined;
@@ -132,6 +168,45 @@ export const normalizeCoachReportAdherence = (data?: CoachReportDocData | null):
 const resolveTeamName = (team?: PulseCheckTeam | null, membership?: PulseCheckTeamMembership) =>
   String(team?.displayName || membership?.teamId || 'Team').trim();
 
+export const resolveAuthorizedCoachReportTeam = async (
+  coachUserId: string,
+  requestedTeamId: string
+): Promise<AuthorizedCoachReportTeam | null> => {
+  const userId = String(coachUserId || '').trim();
+  const teamId = normalizeSafeId(requestedTeamId);
+  if (!userId || !teamId) return null;
+
+  const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(userId);
+  const eligibleMemberships = memberships.filter(
+    (membership) =>
+      membership.userId === userId
+      && membership.teamId === teamId
+      && canAccessCoachReports(membership)
+      && isActiveCoachReportMembership(membership)
+  );
+  if (eligibleMemberships.length === 0) return null;
+
+  const team = await pulseCheckProvisioningService.getTeam(teamId);
+  if (!team || team.status !== 'active' || normalizeSafeId(team.organizationId) === '') return null;
+
+  const membership = eligibleMemberships.find(
+    (entry) => entry.organizationId === team.organizationId
+  );
+  if (!membership) return null;
+
+  const organization = await pulseCheckProvisioningService.getOrganization(team.organizationId);
+  if (!organization || organization.status !== 'active' || organization.id !== team.organizationId) {
+    return null;
+  }
+
+  return {
+    membership,
+    organization,
+    team,
+    teamName: resolveTeamName(team, membership),
+  };
+};
+
 const normalizeReportListItem = (
   reportId: string,
   teamId: string,
@@ -165,22 +240,25 @@ const normalizeReportListItem = (
 };
 
 export const listCoachSportsIntelligenceTeams = async (coachUserId: string) => {
-  const memberships = (await pulseCheckProvisioningService.listUserTeamMemberships(coachUserId)).filter((membership) =>
-    COACH_REPORT_ACCESS_ROLES.has(membership.role)
+  const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachUserId);
+  const teamIds = Array.from(
+    new Set(
+      memberships
+        .filter(
+          (membership) =>
+            membership.userId === coachUserId
+            && canAccessCoachReports(membership)
+            && isActiveCoachReportMembership(membership)
+        )
+        .map((membership) => normalizeSafeId(membership.teamId))
+        .filter(Boolean)
+    )
   );
 
-  const teams = await Promise.all(
-    memberships.map(async (membership) => ({
-      membership,
-      team: await pulseCheckProvisioningService.getTeam(membership.teamId),
-    }))
+  const resolved = await Promise.all(
+    teamIds.map((teamId) => resolveAuthorizedCoachReportTeam(coachUserId, teamId))
   );
-
-  return teams.map(({ membership, team }) => ({
-    membership,
-    team,
-    teamName: resolveTeamName(team, membership),
-  }));
+  return resolved.filter((entry): entry is AuthorizedCoachReportTeam => Boolean(entry));
 };
 
 export const listSentSportsIntelligenceReportsForTeam = async (
@@ -189,7 +267,8 @@ export const listSentSportsIntelligenceReportsForTeam = async (
 ): Promise<CoachReportListItem[]> => {
   const reportsQuery = query(
     collection(db, 'teams', teamId, COACH_REPORTS_COLLECTION),
-    where('teamId', '==', teamId)
+    where('teamId', '==', teamId),
+    where('reviewStatus', 'in', ['published', 'sent'])
   );
   const snapshot = await getDocs(reportsQuery);
 
@@ -217,6 +296,15 @@ export const listSentSportsIntelligenceReportsForCoach = async (coachUserId: str
       const rightTime = (right.sentAt || right.publishedAt || right.generatedAt)?.getTime() || 0;
       return rightTime - leftTime;
     });
+};
+
+export const listSentSportsIntelligenceReportsForAuthorizedTeam = async (
+  coachUserId: string,
+  teamId: string
+): Promise<CoachReportListItem[]> => {
+  const access = await resolveAuthorizedCoachReportTeam(coachUserId, teamId);
+  if (!access) return [];
+  return listSentSportsIntelligenceReportsForTeam(access.team.id, access.teamName);
 };
 
 export const getLatestSportsIntelligenceReportForCoach = async (

@@ -33,7 +33,6 @@ import {
   ArrowLeft,
   ArrowRight,
   ChevronRight,
-  ChevronLeft,
   Wind,
   Activity,
   Heart,
@@ -50,6 +49,7 @@ import {
   Copy,
   Pencil,
   Database,
+  CreditCard,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
@@ -99,9 +99,18 @@ import type {
   StaffPermission,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import {
-  type PulseCheckAthleteTrackSelection,
-  resolvePulseCheckAthleteInviteTrack,
-} from '../../utils/pulsecheckAthleteTrack';
+  getDefaultPulseCheckTeamCommercialConfig,
+  isActivePulseCheckTeamMembership,
+} from '../../api/firebase/pulsecheckProvisioning/types';
+import {
+  formatPulseCheckMonthlyPrice,
+  isPulseCheckCoachPricedAthleteOfferActive,
+  isPulseCheckSponsoredTeamPlanActive,
+  MAX_PULSECHECK_ATHLETE_APP_PRICE_CENTS,
+  MIN_PULSECHECK_ATHLETE_APP_PRICE_CENTS,
+  resolvePulseCheckReferralVisibility,
+} from '../../utils/pulsecheckCommercialization';
+import { buildPulseCheckAthleteOfferWebUrl } from '../../utils/pulsecheckInviteLinks';
 import {
   calculatePulseCheckCoherence,
   calculatePulseCheckTeamCoherence,
@@ -109,7 +118,7 @@ import {
   type PulseCheckTeamCoherenceSnapshot,
 } from '../../utils/pulsecheckCoherence';
 import {
-  listSentSportsIntelligenceReportsForCoach,
+  listSentSportsIntelligenceReportsForTeam,
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
 import {
@@ -563,12 +572,24 @@ const buildInboxThreads = (athletes: CoachAthlete[]): InboxThread[] =>
 const buildCoachConversationThreads = (
   rows: any[],
   coachId?: string,
-  athletes: CoachAthlete[] = []
+  athletes: CoachAthlete[] = [],
+  teamId?: string,
+  organizationId?: string
 ): InboxThread[] => {
   const athleteById = new Map(athletes.map((athlete) => [athlete.id, athlete]));
 
   return rows
-    .filter((row) => typeof row?.lastMessage === 'string' && row.lastMessage.trim().length > 0)
+    .filter(
+      (row) =>
+        Boolean(coachId) &&
+        row?.coachId === coachId &&
+        typeof row?.athleteId === 'string' &&
+        athleteById.has(row.athleteId) &&
+        row.teamId === teamId &&
+        row.organizationId === organizationId &&
+        typeof row?.lastMessage === 'string' &&
+        row.lastMessage.trim().length > 0
+    )
     .map((row) => {
       const athlete = athleteById.get(row.athleteId);
       const name = row.athleteName || athlete?.displayName || 'Athlete';
@@ -628,6 +649,9 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
 
+const isViewKey = (value: unknown): value is ViewKey =>
+  typeof value === 'string' && NAV.some((item) => item.key === value);
+
 const todayLabel = () =>
   new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -652,16 +676,27 @@ interface CoachDashboardShellProps {
   /** Persist edits made in the profile modal. Omitted in demo (edits stay local). */
   onSaveProfile?: (next: { name: string; email: string; title: string; bio: string; avatarUrl: string }) => Promise<void>;
   isDemo?: boolean;
-  /** Earnings tab is shown when referral kickback is enabled and the current
-   *  user is the configured or safely inferred revenue recipient. */
+  /** Earnings tab is shown when the current user owns at least one active
+   *  team earnings stream. */
   earningsEnabled?: boolean;
+  athleteAppEarningsEnabled?: boolean;
   revenueSharePct?: number;
   additionalServicesEnabled?: boolean;
   additionalServicesTeamId?: string;
   additionalServicesOrganizationId?: string;
   /** The signed-in coach's own staff capabilities — gates which tabs/details are
-   *  shown. Defaults to a full set (demo + safe fallback show everything). */
+   *  shown. Live callers resolve these from the selected team membership. */
   viewerCapabilities?: StaffPermission[];
+  /** Team access is resolved once by the page so every dashboard surface uses
+   *  the same selected team as roster/readiness and capability gating. */
+  teamContexts?: CoachDashboardTeamContext[];
+  selectedTeamId?: string;
+  teamContextLoading?: boolean;
+  onSelectTeam?: (teamId: string) => void;
+  onTeamCommercialConfigChanged?: (
+    teamId: string,
+    commercialConfig: PulseCheckTeamCommercialConfig
+  ) => void;
 }
 
 type CoachDashboardTeamContext = {
@@ -669,16 +704,13 @@ type CoachDashboardTeamContext = {
   teamId: string;
   organizationName: string;
   teamName: string;
-  commercialConfig: Pick<
-    PulseCheckTeamCommercialConfig,
-    | 'youthTrack'
-    | 'referralKickbackEnabled'
-    | 'referralRevenueSharePct'
-    | 'parentAssessmentReferralKickbackEnabled'
-    | 'parentAssessmentReferralRevenueSharePct'
-    | 'coachReferralKickbackEnabled'
-    | 'coachReferralRevenueSharePct'
-  >;
+  legacyCoachId?: string;
+  commercialConfig: PulseCheckTeamCommercialConfig;
+};
+
+type CoachDashboardResolvedTeamAccess = {
+  membership: PulseCheckTeamMembership;
+  context: CoachDashboardTeamContext;
 };
 
 const DEMO_COACH_TEAM_CONTEXT: CoachDashboardTeamContext = {
@@ -687,6 +719,7 @@ const DEMO_COACH_TEAM_CONTEXT: CoachDashboardTeamContext = {
   organizationName: 'Demo Organization',
   teamName: 'Demo Team',
   commercialConfig: {
+    ...getDefaultPulseCheckTeamCommercialConfig(),
     youthTrack: 'junior',
     referralKickbackEnabled: true,
     referralRevenueSharePct: 20,
@@ -710,11 +743,17 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   onSaveProfile,
   isDemo = false,
   earningsEnabled = false,
+  athleteAppEarningsEnabled = false,
   revenueSharePct = 0,
   additionalServicesEnabled = false,
   additionalServicesTeamId = '',
   additionalServicesOrganizationId = '',
-  viewerCapabilities = ['admin', 'administrative', 'coaching', 'athletic_trainer'],
+  viewerCapabilities = [],
+  teamContexts,
+  selectedTeamId,
+  teamContextLoading = false,
+  onSelectTeam,
+  onTeamCommercialConfigChanged,
 }) => {
   const router = useRouter();
   // Demo always shows everything; live gates off the coach's own capabilities.
@@ -724,84 +763,13 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       isDemo || viewerCapabilities.includes('admin') || viewerCapabilities.includes(capability),
     [isDemo, viewerCapabilities]
   );
-  const [teamContext, setTeamContext] = useState<CoachDashboardTeamContext | null>(
-    isDemo ? DEMO_COACH_TEAM_CONTEXT : null
-  );
-  const [teamContextLoading, setTeamContextLoading] = useState(!isDemo);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTeamContext = async () => {
-      if (isDemo) {
-        setTeamContext(DEMO_COACH_TEAM_CONTEXT);
-        setTeamContextLoading(false);
-        return;
-      }
-      if (!coachId) {
-        setTeamContext(null);
-        setTeamContextLoading(false);
-        return;
-      }
-
-      setTeamContextLoading(true);
-      try {
-        let memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-        let own = memberships.find((membership) => membership.role !== 'athlete');
-
-        if (!own) {
-          const operatingContext = await coachService.resolveOperatingContext(coachId);
-          memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-          own =
-            memberships.find(
-              (membership) =>
-                membership.role !== 'athlete' &&
-                membership.teamId === operatingContext.teamId
-            ) || memberships.find((membership) => membership.role !== 'athlete');
-        }
-
-        if (!own) {
-          throw new Error('No coach team membership was found.');
-        }
-
-        const [team, organization] = await Promise.all([
-          pulseCheckProvisioningService.getTeam(own.teamId),
-          pulseCheckProvisioningService.getOrganization(own.organizationId),
-        ]);
-        if (!team) {
-          throw new Error('The coach team could not be loaded.');
-        }
-
-        if (!cancelled) {
-          setTeamContext({
-            organizationId: own.organizationId,
-            teamId: own.teamId,
-            organizationName: organization?.displayName || 'your organization',
-            teamName: team.displayName || 'your team',
-            commercialConfig: team.commercialConfig,
-          });
-        }
-      } catch (error) {
-        console.error('[CoachDashboard] failed to resolve dashboard team context', error);
-        if (!cancelled) setTeamContext(null);
-      } finally {
-        if (!cancelled) setTeamContextLoading(false);
-      }
-    };
-
-    void loadTeamContext();
-    return () => {
-      cancelled = true;
-    };
-  }, [coachId, isDemo]);
+  const resolvedTeamContexts = isDemo ? [DEMO_COACH_TEAM_CONTEXT] : teamContexts || [];
+  const activeTeamId = isDemo ? DEMO_COACH_TEAM_CONTEXT.teamId : selectedTeamId || '';
+  const teamContext =
+    resolvedTeamContexts.find((context) => context.teamId === activeTeamId) || null;
 
   const referralLinksEnabled =
-    isDemo ||
-    Boolean(
-      teamContext?.commercialConfig.referralKickbackEnabled ||
-        teamContext?.commercialConfig.parentAssessmentReferralKickbackEnabled ||
-        teamContext?.commercialConfig.coachReferralKickbackEnabled
-    );
+    isDemo || resolvePulseCheckReferralVisibility(teamContext?.commercialConfig).any;
   // athletic_trainer is the medical peek — Tier 3 escalation detail.
   const canSeeTier3 = can('athletic_trainer');
   const [view, setView] = useState<ViewKey>('home');
@@ -840,6 +808,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     },
     [isDemo, onSaveProfile]
   );
+
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const selectedAthlete = useMemo(
     () => athletes.find((a) => a.id === selectedAthleteId) ?? null,
@@ -892,13 +861,44 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const navItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
   const canManageAthleteInvites = can('admin') || can('coaching') || can('administrative');
 
-  // If the active tab becomes disallowed (capabilities narrowed after load), land
-  // the coach on the first tab they can actually see.
+  const selectView = useCallback(
+    (nextView: ViewKey) => {
+      if (!navAllowed(nextView)) return;
+      setView(nextView);
+      if (!router.isReady || router.query.view === nextView) return;
+      void router.replace(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, view: nextView },
+        },
+        undefined,
+        { shallow: true }
+      );
+    },
+    [navAllowed, router]
+  );
+
+  // Keep dashboard tabs deep-linkable while refusing unknown or unauthorized
+  // views. Capability changes always replace the URL with the first safe tab.
   useEffect(() => {
-    if (navItems.length > 0 && !navItems.some((item) => item.key === view)) {
-      setView(navItems[0].key);
+    if (!router.isReady || navItems.length === 0) return;
+    const rawView = Array.isArray(router.query.view) ? router.query.view[0] : router.query.view;
+    const nextView =
+      isViewKey(rawView) && navItems.some((item) => item.key === rawView)
+        ? rawView
+        : navItems[0].key;
+    setView((current) => (current === nextView ? current : nextView));
+    if (rawView !== nextView) {
+      void router.replace(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, view: nextView },
+        },
+        undefined,
+        { shallow: true }
+      );
     }
-  }, [navItems, view]);
+  }, [navItems, router.isReady, router.pathname, router.query]);
 
   const NavList = ({ onPick }: { onPick?: () => void }) => (
     <nav className="flex-1 space-y-0.5">
@@ -916,7 +916,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             key={item.key}
             data-nav={item.key}
             onClick={() => {
-              setView(item.key);
+              selectView(item.key);
               onPick?.();
             }}
             className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${
@@ -1058,7 +1058,34 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="text-[10px] text-zinc-500">{todayLabel()}</div>
+              <div className="flex items-center gap-3">
+                {!isDemo && (
+                  <label className="flex items-center gap-2 text-[10px] text-zinc-500">
+                    <span className="hidden sm:inline uppercase tracking-wider">Team</span>
+                    <select
+                      aria-label="Active team"
+                      value={activeTeamId}
+                      disabled={teamContextLoading || resolvedTeamContexts.length === 0}
+                      onChange={(event) => {
+                        setSelectedAthleteId(null);
+                        onSelectTeam?.(event.target.value);
+                      }}
+                      className="max-w-[190px] rounded-lg border border-zinc-700/60 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-200 outline-none transition focus:border-[#E0FE10]/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {teamContextLoading && <option value="">Loading teams…</option>}
+                      {!teamContextLoading && resolvedTeamContexts.length === 0 && (
+                        <option value="">No active team</option>
+                      )}
+                      {resolvedTeamContexts.map((context) => (
+                        <option key={context.teamId} value={context.teamId}>
+                          {context.teamName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <div className="hidden text-[10px] text-zinc-500 sm:block">{todayLabel()}</div>
+              </div>
             </div>
 
             {/* Content */}
@@ -1076,6 +1103,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       athletes={athletes}
                       loading={loadingAthletes}
                       isDemo={isDemo}
+                      coachId={coachId}
+                      teamId={teamContext?.teamId}
+                      organizationId={teamContext?.organizationId}
                       onSelectAthlete={setSelectedAthleteId}
                     />
                   )}
@@ -1087,6 +1117,8 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       athletes={athletes}
                       loading={loadingAthletes}
                       coachId={coachId}
+                      teamId={teamContext?.teamId}
+                      organizationId={teamContext?.organizationId}
                       isDemo={isDemo}
                     />
                   )}
@@ -1096,11 +1128,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         isDemo={isDemo}
                         coachId={coachId}
                         coachName={coachName}
-                        coachEmail={coachEmail}
                         teamContext={teamContext}
                         teamContextLoading={teamContextLoading}
                         canInvite={canManageAthleteInvites}
-                        canRevoke={can('admin')}
                       />
                       <RosterSection
                         athletes={athletes}
@@ -1117,7 +1147,6 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       coachEmail={coachEmail}
                       teamContext={teamContext}
                       canInvite={canManageAthleteInvites}
-                      canRevoke={can('admin')}
                     />
                   )}
                   {view === 'staff' && (
@@ -1126,16 +1155,42 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       coachName={coachName}
                       coachId={coachId}
                       coachEmail={coachEmail}
+                      teamContext={teamContext}
                       canInvite={can('admin')}
                     />
                   )}
                   {view === 'nora' && (
-                    <TrainNoraSection coachId={coachId} coachName={coachName} athletes={athletes} />
+                    <TrainNoraSection
+                      coachId={coachId}
+                      teamId={teamContext?.teamId}
+                      coachName={coachName}
+                      athletes={athletes}
+                    />
                   )}
-                  {view === 'schedule' && <ScheduleSection coachId={coachId} isDemo={isDemo} />}
-                  {view === 'reports' && <ReportsSection coachId={coachId} isDemo={isDemo} />}
+                  {view === 'schedule' && (
+                    <ScheduleSection
+                      coachId={coachId}
+                      teamId={teamContext?.teamId}
+                      organizationId={teamContext?.organizationId}
+                      athleteIds={athletes.map((athlete) => athlete.id)}
+                      isDemo={isDemo}
+                    />
+                  )}
+                  {view === 'reports' && (
+                    <ReportsSection
+                      teamId={teamContext?.teamId}
+                      teamName={teamContext?.teamName}
+                      isDemo={isDemo}
+                    />
+                  )}
                   {view === 'earnings' && earningsEnabled && (
-                    <EarningsSection athletes={athletes} isDemo={isDemo} revenueSharePct={revenueSharePct} />
+                    <EarningsSection
+                      athletes={athletes}
+                      teamId={teamContext?.teamId}
+                      isDemo={isDemo}
+                      athleteAppEarningsEnabled={athleteAppEarningsEnabled}
+                      revenueSharePct={revenueSharePct}
+                    />
                   )}
                   {view === 'settings' && (
                     <SettingsSection
@@ -1145,6 +1200,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       servicesEnabled={additionalServicesEnabled}
                       servicesTeamId={additionalServicesTeamId}
                       servicesOrganizationId={additionalServicesOrganizationId}
+                      teamContext={teamContext}
+                      canManageCommercialization={can('admin') || can('coaching')}
+                      onCommercialConfigChanged={onTeamCommercialConfigChanged}
                       isDemo={isDemo}
                     />
                   )}
@@ -1169,12 +1227,23 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           onSave={handleSaveProfile}
         />
 
-        <NoraChatFab coachId={coachId} coachName={coachName} athletes={athletes} />
+        <NoraChatFab
+          coachId={coachId}
+          teamId={teamContext?.teamId}
+          coachName={coachName}
+          athletes={athletes}
+        />
       </div>
   );
 };
 
 const COACH_TRAINING_STATUS_KEY = 'pulsecheck_coach_guided_training_status';
+const DASHBOARD_STAFF_ROLES = new Set<PulseCheckTeamMembership['role']>([
+  'team-admin',
+  'coach',
+  'performance-staff',
+  'support-staff',
+]);
 
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
@@ -1188,8 +1257,13 @@ const CoachDashboard: React.FC = () => {
   const [athletes, setAthletes] = useState<CoachAthlete[]>([]);
   const [alerts, setAlerts] = useState<AthleteAlert[]>([]);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
-  const [earnings, setEarnings] = useState<{ enabled: boolean; sharePct: number }>({
+  const [earnings, setEarnings] = useState<{
+    enabled: boolean;
+    athleteAppEnabled: boolean;
+    sharePct: number;
+  }>({
     enabled: false,
+    athleteAppEnabled: false,
     sharePct: 0,
   });
   const [additionalServices, setAdditionalServices] = useState<{
@@ -1201,17 +1275,23 @@ const CoachDashboard: React.FC = () => {
     teamId: '',
     organizationId: '',
   });
-  // The signed-in coach's own staff capabilities for their active team. Drives
-  // feature gating (Reports/insights, Tier-3 detail, Schedule/Train Nora). Starts
-  // as all-three so the first paint isn't briefly locked, then narrows once the
-  // membership resolves. Falls back to a full set if capabilities can't be read,
-  // so we never lock an existing coach out of their own dashboard.
-  const [viewerCapabilities, setViewerCapabilities] = useState<StaffPermission[]>([
-    'admin',
-    'administrative',
-    'coaching',
-    'athletic_trainer',
-  ]);
+  const [teamAccesses, setTeamAccesses] = useState<CoachDashboardResolvedTeamAccess[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState('');
+  const [teamAccessLoading, setTeamAccessLoading] = useState(true);
+  const selectedTeamAccess = useMemo(
+    () => teamAccesses.find((access) => access.context.teamId === selectedTeamId) || null,
+    [selectedTeamId, teamAccesses]
+  );
+  const viewerCapabilities = useMemo<StaffPermission[]>(() => {
+    const membership = selectedTeamAccess?.membership;
+    if (!membership) return [];
+    const normalized = normalizeStaffCapabilities(membership.staffCapabilities);
+    const resolved = normalized.length ? normalized : capabilitiesFromLegacyRole(membership.role);
+    if (membership.role === 'team-admin' && !resolved.includes('admin')) {
+      return ['admin', ...resolved];
+    }
+    return resolved;
+  }, [selectedTeamAccess]);
 
   // Decide whether to run the guided training: forced via ?training=1 / ?tour=1,
   // or automatically on a coach's first visit (no stored completion).
@@ -1246,22 +1326,181 @@ const CoachDashboard: React.FC = () => {
     setTrainingMode(false);
   }, [currentUser?.id]);
 
+  // Resolve every active team the signed-in staff member can operate, then keep a
+  // single explicit selection. Team and organization records must both be active;
+  // any resolution failure leaves the dashboard with no capabilities or roster.
+  useEffect(() => {
+    if (trainingMode !== false) return;
+    let cancelled = false;
+
+    const loadTeamAccess = async () => {
+      setTeamAccessLoading(true);
+      setTeamAccesses([]);
+      setSelectedTeamId('');
+      setAthletes([]);
+      setAlerts([]);
+      setEarnings({ enabled: false, athleteAppEnabled: false, sharePct: 0 });
+      setAdditionalServices({ enabled: false, teamId: '', organizationId: '' });
+
+      if (!currentUser?.id) {
+        if (!cancelled) setTeamAccessLoading(false);
+        return;
+      }
+
+      try {
+        let memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+        let staffMemberships = memberships.filter(
+          (membership) =>
+            membership.userId === currentUser.id &&
+            Boolean(membership.teamId) &&
+            Boolean(membership.organizationId) &&
+            isActivePulseCheckTeamMembership(membership) &&
+            DASHBOARD_STAFF_ROLES.has(membership.role)
+        );
+
+        // Preserve the established one-time legacy bridge, but never grant access
+        // from the bridge alone: the newly persisted membership is re-read and
+        // validated below before any dashboard data can load.
+        if (staffMemberships.length === 0) {
+          await coachService.resolveOperatingContext(currentUser.id);
+          memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+          staffMemberships = memberships.filter(
+            (membership) =>
+              membership.userId === currentUser.id &&
+              Boolean(membership.teamId) &&
+              Boolean(membership.organizationId) &&
+              isActivePulseCheckTeamMembership(membership) &&
+              DASHBOARD_STAFF_ROLES.has(membership.role)
+          );
+        }
+
+        const resolved = await Promise.all(
+          staffMemberships.map(async (membership) => {
+            const [team, organization] = await Promise.all([
+              pulseCheckProvisioningService.getTeam(membership.teamId),
+              pulseCheckProvisioningService.getOrganization(membership.organizationId),
+            ]);
+            if (
+              !team ||
+              !organization ||
+              team.status !== 'active' ||
+              organization.status !== 'active' ||
+              team.id !== membership.teamId ||
+              team.organizationId !== membership.organizationId
+            ) {
+              return null;
+            }
+            return {
+              membership,
+              context: {
+                organizationId: membership.organizationId,
+                teamId: membership.teamId,
+                organizationName: organization.displayName || 'your organization',
+                teamName: team.displayName || 'your team',
+                legacyCoachId: team.legacyCoachId,
+                commercialConfig: team.commercialConfig,
+              },
+            } satisfies CoachDashboardResolvedTeamAccess;
+          })
+        );
+
+        const uniqueByTeam = new Map<string, CoachDashboardResolvedTeamAccess>();
+        resolved.forEach((access) => {
+          if (access && !uniqueByTeam.has(access.context.teamId)) {
+            uniqueByTeam.set(access.context.teamId, access);
+          }
+        });
+        const activeAccesses = Array.from(uniqueByTeam.values()).sort((left, right) => {
+          const teamNameOrder = left.context.teamName.localeCompare(
+            right.context.teamName,
+            undefined,
+            { sensitivity: 'base' }
+          );
+          if (teamNameOrder !== 0) return teamNameOrder;
+          return left.context.teamId.localeCompare(
+            right.context.teamId,
+            undefined,
+            { sensitivity: 'base' }
+          );
+        });
+        if (activeAccesses.length === 0) {
+          throw new Error('No active coach team membership was found.');
+        }
+
+        const requestedTeamId =
+          typeof router.query.teamId === 'string' ? router.query.teamId.trim() : '';
+        const initialTeam =
+          activeAccesses.find((access) => access.context.teamId === requestedTeamId) ||
+          activeAccesses[0];
+
+        if (!cancelled) {
+          setTeamAccesses(activeAccesses);
+          setSelectedTeamId(initialTeam.context.teamId);
+          if (requestedTeamId !== initialTeam.context.teamId) {
+            void router.replace(
+              {
+                pathname: router.pathname,
+                query: { ...router.query, teamId: initialTeam.context.teamId },
+              },
+              undefined,
+              { shallow: true, scroll: false }
+            );
+          }
+        }
+      } catch (error) {
+        console.error('[CoachDashboard] failed to resolve active team access', error);
+        if (!cancelled) {
+          setTeamAccesses([]);
+          setSelectedTeamId('');
+        }
+      } finally {
+        if (!cancelled) setTeamAccessLoading(false);
+      }
+    };
+
+    void loadTeamAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, router.query.teamId, trainingMode]);
+
   useEffect(() => {
     if (trainingMode !== false) return; // hold real data until training resolves/finishes
     let cancelled = false;
     const load = async () => {
-      if (!currentUser?.id) return;
+      if (!currentUser?.id || !selectedTeamAccess) {
+        if (!cancelled) {
+          setAthletes([]);
+          setAlerts([]);
+          setLoadingAthletes(false);
+        }
+        return;
+      }
       setLoadingAthletes(true);
+      setAthletes([]);
+      setAlerts([]);
       try {
-        const list = (await coachService.getConnectedAthletes(currentUser.id)) as CoachAthlete[];
+        const list = (await coachService.getConnectedAthletesForTeam(
+          currentUser.id,
+          selectedTeamAccess.context.teamId
+        )) as CoachAthlete[];
         // Real-data enrichment: active escalation tier + device wear. Both are
         // single batch queries; best-effort so a failure never blocks the board.
         let enriched = list;
         try {
-          const [escalations, deviceResult] = await Promise.all([
+          const [coachEscalations, deviceResult] = await Promise.all([
             escalationRecordsService.getActiveForCoach(currentUser.id).catch(() => []),
-            loadAthleteDeviceStatuses(list.map((athlete) => athlete.id)).catch(() => null),
+            loadAthleteDeviceStatuses(
+              list.map((athlete) => athlete.id),
+              14,
+              {
+                teamId: selectedTeamAccess.context.teamId,
+                organizationId: selectedTeamAccess.context.organizationId,
+              }
+            ).catch(() => null),
           ]);
+          const selectedAthleteIds = new Set(list.map((athlete) => athlete.id));
+          const escalations = coachEscalations.filter((record) => selectedAthleteIds.has(record.userId));
           const tierByAthlete = new Map<string, number>();
           for (const r of escalations) {
             const prev = tierByAthlete.get(r.userId) ?? 0;
@@ -1303,7 +1542,7 @@ const CoachDashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, trainingMode]);
+  }, [currentUser?.id, selectedTeamAccess, trainingMode]);
 
   // Earnings and Additional Services are available to the coach who receives a
   // team's athlete-subscription kickback. That single provisioning switch owns
@@ -1312,47 +1551,47 @@ const CoachDashboard: React.FC = () => {
     if (trainingMode !== false) return;
     let cancelled = false;
     const loadEarnings = async () => {
-      if (!currentUser?.id) return;
-      const hasServicePayouts = Boolean(currentUser.creator?.stripeAccountId);
-      let servicesAccess = { enabled: false, teamId: '', organizationId: '' };
-      try {
-        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
-        let earningsResolved = false;
-        for (const membership of memberships) {
-          if (membership.role === 'athlete') continue;
-          const team = await pulseCheckProvisioningService.getTeam(membership.teamId);
-          const cfg = team?.commercialConfig;
-          const isConfiguredRecipient = cfg?.revenueRecipientUserId === currentUser.id;
-          const isLegacyCoachRecipient =
-            !cfg?.revenueRecipientUserId && team?.legacyCoachId === currentUser.id;
-          const isDefaultTeamAdminRecipient =
-            !cfg?.revenueRecipientUserId
-            && cfg?.revenueRecipientRole === 'team-admin'
-            && membership.role === 'team-admin';
-
-          if (
-            cfg?.referralKickbackEnabled
-            && (isConfiguredRecipient || isLegacyCoachRecipient || isDefaultTeamAdminRecipient)
-          ) {
-            if (!cancelled) setEarnings({ enabled: true, sharePct: cfg.referralRevenueSharePct || 0 });
-            if (!servicesAccess.enabled) {
-              servicesAccess = {
-                enabled: true,
-                teamId: team?.id || membership.teamId,
-                organizationId: team?.organizationId || membership.organizationId || '',
-              };
-            }
-            earningsResolved = true;
-          }
-        }
+      if (!currentUser?.id || !selectedTeamAccess) {
         if (!cancelled) {
-          if (!earningsResolved) setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
-          setAdditionalServices(servicesAccess);
+          setEarnings({ enabled: false, athleteAppEnabled: false, sharePct: 0 });
+          setAdditionalServices({ enabled: false, teamId: '', organizationId: '' });
+        }
+        return;
+      }
+      const hasServicePayouts = Boolean(currentUser.creator?.stripeAccountId);
+      try {
+        const { membership, context } = selectedTeamAccess;
+        const cfg = context.commercialConfig;
+        const isConfiguredRecipient = cfg.revenueRecipientUserId === currentUser.id;
+        const isLegacyCoachRecipient =
+          !cfg.revenueRecipientUserId && context.legacyCoachId === currentUser.id;
+        const isDefaultTeamAdminRecipient =
+          !cfg.revenueRecipientUserId &&
+          cfg.revenueRecipientRole === 'team-admin' &&
+          membership.role === 'team-admin';
+        const isRevenueRecipient =
+          isConfiguredRecipient || isLegacyCoachRecipient || isDefaultTeamAdminRecipient;
+        const referralEarningsEnabled = cfg.referralKickbackEnabled && isRevenueRecipient;
+        const athleteAppEarningsEnabled =
+          isPulseCheckCoachPricedAthleteOfferActive(cfg) &&
+          cfg.athleteAppSubscriptionRevenueRecipientUserId === currentUser.id;
+
+        if (!cancelled) {
+          setEarnings({
+            enabled: referralEarningsEnabled || athleteAppEarningsEnabled || hasServicePayouts,
+            athleteAppEnabled: athleteAppEarningsEnabled,
+            sharePct: referralEarningsEnabled ? cfg.referralRevenueSharePct || 0 : 0,
+          });
+          setAdditionalServices({
+            enabled: Boolean(isRevenueRecipient && (cfg.additionalServicesEnabled || cfg.referralKickbackEnabled)),
+            teamId: isRevenueRecipient ? context.teamId : '',
+            organizationId: isRevenueRecipient ? context.organizationId : '',
+          });
         }
       } catch (err) {
         console.error('[CoachDashboard] failed to resolve earnings eligibility', err);
         if (!cancelled) {
-          setEarnings({ enabled: hasServicePayouts, sharePct: 0 });
+          setEarnings({ enabled: false, athleteAppEnabled: false, sharePct: 0 });
           setAdditionalServices({ enabled: false, teamId: '', organizationId: '' });
         }
       }
@@ -1361,40 +1600,12 @@ const CoachDashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, currentUser?.creator?.stripeAccountId, trainingMode]);
-
-  // Resolve the coach's own capabilities from their team membership. Prefer the
-  // persisted staffCapabilities; fall back to the legacy role mapping; if nothing
-  // resolves, keep the permissive default so existing coaches aren't locked out.
-  useEffect(() => {
-    if (trainingMode !== false) return;
-    let cancelled = false;
-    const loadCapabilities = async () => {
-      if (!currentUser?.id) return;
-      try {
-        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
-        const own = memberships.find((m) => m.role !== 'athlete');
-        if (!own) return; // no staff membership → keep permissive default
-        const resolved = own.staffCapabilities?.length
-          ? normalizeStaffCapabilities(own.staffCapabilities)
-          : capabilitiesFromLegacyRole(own.role);
-        // The team-admin role is the org-admin / founder seat — always full access,
-        // even on legacy memberships stamped before the admin/manager split (where
-        // staffCapabilities may only contain 'administrative').
-        const caps =
-          own.role === 'team-admin' && !resolved.includes('admin')
-            ? (['admin', ...resolved] as StaffPermission[])
-            : resolved;
-        if (!cancelled && caps.length) setViewerCapabilities(caps);
-      } catch (err) {
-        console.error('[CoachDashboard] failed to resolve viewer capabilities', err);
-      }
-    };
-    loadCapabilities();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.id, trainingMode]);
+  }, [
+    currentUser?.creator?.stripeAccountId,
+    currentUser?.id,
+    selectedTeamAccess,
+    trainingMode,
+  ]);
 
   const coachName = currentUser?.displayName || currentUser?.username || 'Coach';
 
@@ -1435,6 +1646,25 @@ const CoachDashboard: React.FC = () => {
       }
     },
     [currentUser, dispatch]
+  );
+
+  const handleTeamCommercialConfigChanged = useCallback(
+    (teamId: string, commercialConfig: PulseCheckTeamCommercialConfig) => {
+      setTeamAccesses((current) =>
+        current.map((access) =>
+          access.context.teamId === teamId
+            ? {
+                ...access,
+                context: {
+                  ...access.context,
+                  commercialConfig,
+                },
+              }
+            : access
+        )
+      );
+    },
+    []
   );
 
   return (
@@ -1488,11 +1718,31 @@ const CoachDashboard: React.FC = () => {
           coachAvatarUrl={currentUser?.profileImage?.profileImageURL}
           onSaveProfile={handleSaveProfile}
           earningsEnabled={earnings.enabled}
+          athleteAppEarningsEnabled={earnings.athleteAppEnabled}
           revenueSharePct={earnings.sharePct}
           additionalServicesEnabled={additionalServices.enabled}
           additionalServicesTeamId={additionalServices.teamId}
           additionalServicesOrganizationId={additionalServices.organizationId}
           viewerCapabilities={viewerCapabilities}
+          teamContexts={teamAccesses.map((access) => access.context)}
+          selectedTeamId={selectedTeamId}
+          teamContextLoading={teamAccessLoading}
+          onSelectTeam={(teamId) => {
+            if (teamAccesses.some((access) => access.context.teamId === teamId)) {
+              setSelectedTeamId(teamId);
+              if (router.query.teamId !== teamId) {
+                void router.replace(
+                  {
+                    pathname: router.pathname,
+                    query: { ...router.query, teamId },
+                  },
+                  undefined,
+                  { shallow: true, scroll: false }
+                );
+              }
+            }
+          }}
+          onTeamCommercialConfigChanged={handleTeamCommercialConfigChanged}
         />
       )}
     </CoachProtectedRoute>
@@ -1507,8 +1757,19 @@ const HomeSection: React.FC<{
   athletes: CoachAthlete[];
   loading: boolean;
   isDemo?: boolean;
+  coachId?: string;
+  teamId?: string;
+  organizationId?: string;
   onSelectAthlete: (id: string) => void;
-}> = ({ athletes, loading, isDemo, onSelectAthlete }) => {
+}> = ({
+  athletes,
+  loading,
+  isDemo,
+  coachId,
+  teamId,
+  organizationId,
+  onSelectAthlete,
+}) => {
   const [liveAdherence, setLiveAdherence] = useState<TeamAdherenceBreakdown | null>(null);
   const [liveCoherence, setLiveCoherence] = useState<PulseCheckTeamCoherenceSnapshot | null>(null);
 
@@ -1542,13 +1803,31 @@ const HomeSection: React.FC<{
         cancelled = true;
       };
     }
+    const normalizedCoachID = String(coachId || '').trim();
+    const normalizedTeamID = String(teamId || '').trim();
+    const normalizedOrganizationID = String(organizationId || '').trim();
+    if (!normalizedCoachID || !normalizedTeamID || !normalizedOrganizationID) {
+      setLiveAdherence(averageTeamAdherence([]));
+      setLiveCoherence(calculatePulseCheckTeamCoherence([]));
+      return () => {
+        cancelled = true;
+      };
+    }
 
     setLiveAdherence(null);
     setLiveCoherence(null);
     Promise.all(
       athletes.map(async (athlete) => {
         const details = await coachService
-          .getAthleteReadinessDailyDetails(athlete.id, 14, athlete.youthTrack || 'pro')
+          .getCoachReadinessDailyDetailsForWorkspace(
+            athlete.id,
+            normalizedCoachID,
+            {
+              teamId: normalizedTeamID,
+              organizationId: normalizedOrganizationID,
+            },
+            14
+          )
           .catch((): AthleteReadinessDailyDetail[] => []);
         return {
           adherence: deriveAthleteAdherenceBreakdown(athlete, details, 14),
@@ -1572,7 +1851,7 @@ const HomeSection: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [athletes, isDemo]);
+  }, [athletes, coachId, isDemo, organizationId, teamId]);
 
   const adherence = useMemo(() => {
     const total = athletes.length || 1;
@@ -1661,6 +1940,8 @@ const HomeSection: React.FC<{
             >
               <AthleteReadinessCard
                 demo={isDemo}
+                teamId={teamId}
+                organizationId={organizationId}
                 athlete={{
                   id: a.id,
                   displayName: a.displayName,
@@ -2079,19 +2360,32 @@ const InboxSection: React.FC<{
   athletes: CoachAthlete[];
   loading: boolean;
   coachId?: string;
+  teamId?: string;
+  organizationId?: string;
   isDemo?: boolean;
 }> = ({
   athletes,
   loading,
   coachId,
+  teamId,
+  organizationId,
   isDemo,
 }) => {
   const [liveRows, setLiveRows] = useState<any[]>([]);
   const [loadingLiveThreads, setLoadingLiveThreads] = useState(false);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const threads = useMemo(
-    () => (isDemo ? buildInboxThreads(athletes) : buildCoachConversationThreads(liveRows, coachId, athletes)),
-    [athletes, coachId, isDemo, liveRows]
+    () =>
+      isDemo
+        ? buildInboxThreads(athletes)
+        : buildCoachConversationThreads(
+            liveRows,
+            coachId,
+            athletes,
+            teamId,
+            organizationId
+          ),
+    [athletes, coachId, isDemo, liveRows, organizationId, teamId]
   );
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId) || null,
@@ -2100,13 +2394,14 @@ const InboxSection: React.FC<{
   const [readIds, setReadIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
+    setLiveRows([]);
+    setSelectedThreadId(null);
+    setReadIds(new Set());
     if (isDemo) {
-      setLiveRows([]);
       setLoadingLiveThreads(false);
       return;
     }
-    if (!coachId) {
-      setLiveRows([]);
+    if (!coachId || !teamId || !organizationId) {
       setLoadingLiveThreads(false);
       return;
     }
@@ -2115,6 +2410,8 @@ const InboxSection: React.FC<{
     const conversationsQuery = query(
       collection(db, 'coach-athlete-conversations'),
       where('coachId', '==', coachId),
+      where('teamId', '==', teamId),
+      where('organizationId', '==', organizationId),
       orderBy('lastMessageTimestamp', 'desc')
     );
 
@@ -2130,7 +2427,7 @@ const InboxSection: React.FC<{
         setLoadingLiveThreads(false);
       }
     );
-  }, [coachId, isDemo]);
+  }, [coachId, isDemo, organizationId, teamId]);
 
   useEffect(() => {
     if (selectedThreadId && !selectedThread) {
@@ -2551,10 +2848,18 @@ const StaffSection: React.FC<{
   coachName: string;
   coachId?: string;
   coachEmail?: string;
+  teamContext?: CoachDashboardTeamContext | null;
   // Inviting/assigning staff is admin-only. Non-admins can view the roster but
   // never see the invite controls.
   canInvite?: boolean;
-}> = ({ isDemo, coachName, coachId, coachEmail, canInvite = true }) => {
+}> = ({
+  isDemo,
+  coachName,
+  coachId,
+  coachEmail,
+  teamContext,
+  canInvite = true,
+}) => {
   const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -2587,38 +2892,39 @@ const StaffSection: React.FC<{
     teamName: string;
   } | null>(null);
 
-  // Live load: resolve the coach's active team, then pull real members + pending
-  // invites. Demo never touches Firestore.
+  // Live load is bound to the dashboard's already-validated selected team.
+  // Demo never touches Firestore.
   const loadStaff = useCallback(async () => {
-    if (isDemo || !coachId) return;
+    if (isDemo) return;
+    if (!coachId || !teamContext) {
+      setTeam(null);
+      setStaff([]);
+      return;
+    }
     try {
-      const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(coachId);
-      const own = memberships.find((m) => m.role !== 'athlete');
-      if (!own) {
-        setStaff([]);
-        return;
-      }
-      const { teamId, organizationId } = own;
-      let teamName = 'your team';
-      let organizationName = 'your organization';
-      try {
-        const [t, org] = await Promise.all([
-          pulseCheckProvisioningService.getTeam(teamId),
-          pulseCheckProvisioningService.getOrganization(organizationId),
-        ]);
-        teamName = t?.displayName || teamName;
-        organizationName = org?.displayName || organizationName;
-      } catch {
-        /* names are cosmetic; fall back to generic labels */
-      }
+      const {
+        teamId,
+        organizationId,
+        teamName,
+        organizationName,
+      } = teamContext;
       setTeam({ organizationId, teamId, organizationName, teamName });
+      setEditing(null);
+      setEditingInvite(null);
+      setInviteOpen(false);
 
       const [teamMembers, inviteLinks] = await Promise.all([
         pulseCheckProvisioningService.listTeamMemberships(teamId).catch(() => [] as PulseCheckTeamMembership[]),
         pulseCheckProvisioningService.listTeamInviteLinks(teamId).catch(() => [] as PulseCheckInviteLink[]),
       ]);
 
-      const activeMemberships = teamMembers.filter((m) => m.role !== 'athlete');
+      const activeMemberships = teamMembers.filter(
+        (membership) =>
+          membership.role !== 'athlete' &&
+          membership.teamId === teamId &&
+          membership.organizationId === organizationId &&
+          isActivePulseCheckTeamMembership(membership)
+      );
       // Resolve member identities (display name + photo) from their user docs;
       // on failure fall back to membership-only display.
       let usersById = new Map<string, UserModel>();
@@ -2633,7 +2939,14 @@ const StaffSection: React.FC<{
       const memberEmails = new Set(activeRows.map((r) => r.email.toLowerCase()).filter(Boolean));
       const seenInviteEmails = new Set<string>();
       const pendingRows = inviteLinks
-        .filter((l) => l.inviteType === 'team-access' && (l.targetEmail || '').length > 0 && l.status === 'active')
+        .filter(
+          (link) =>
+            link.inviteType === 'team-access' &&
+            link.teamId === teamId &&
+            link.organizationId === organizationId &&
+            (link.targetEmail || '').length > 0 &&
+            link.status === 'active'
+        )
         .map(staffRowFromInvite)
         .filter((r) => {
           const key = r.email.toLowerCase();
@@ -2646,7 +2959,7 @@ const StaffSection: React.FC<{
     } catch (err) {
       console.error('[CoachDashboard] failed to load staff', err);
     }
-  }, [coachId, isDemo]);
+  }, [coachId, isDemo, teamContext]);
 
   useEffect(() => {
     void loadStaff();
@@ -2788,7 +3101,7 @@ const StaffSection: React.FC<{
       return;
     }
     if (!team || !coachId) {
-      setToast('Still resolving your team — try again in a moment.');
+      setToast('Still resolving your team. Try again in a moment.');
       return;
     }
     setBusy(true);
@@ -2860,7 +3173,7 @@ const StaffSection: React.FC<{
     }
 
     if (!team || !coachId) {
-      setToast('Still resolving your team — try again in a moment.');
+      setToast('Still resolving your team. Try again in a moment.');
       return;
     }
     setBusy(true);
@@ -4451,37 +4764,41 @@ const AthleteProfileDrawer: React.FC<{
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Athletes — invite control + pending invites (rendered above the roster table).
-// Athletes onboard via a team-access invite link with role 'athlete'; this is
-// the coach-facing entry point on the dashboard. Gated to Admin/Coach/Manager.
+// Athletes onboard through one reusable team link. The server reuses the same
+// token while rebuilding its destination from the team's current commercial
+// settings, so enabling checkout can never leave a stale direct-app link here.
 // ---------------------------------------------------------------------------
-type AthleteInviteRow = {
-  id: string;
-  name: string;
-  email: string;
-  activationUrl: string;
-  // Invite token — used to record the email-send result on resend.
+type ManagedAthleteInvite = {
   token: string;
-  // Pre-filled avatar shown on the invite + carried into their profile on join.
-  avatarUrl?: string;
-  athleteAge?: number;
-  athleteTrackOverride?: PulseCheckYouthTrack;
+  activationUrl: string;
 };
 
-const DEMO_ATHLETE_INVITES: AthleteInviteRow[] = [
-  {
-    id: 'demo-ath-1',
-    name: 'Jordan Lee',
-    email: 'jordan.lee@school.edu',
-    activationUrl: 'https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete-1',
-    token: 'demo-athlete-1',
-    athleteAge: 17,
-    athleteTrackOverride: 'junior',
-  },
-];
+const createManagedAthleteInvite = async (input: {
+  teamId: string;
+  senderName?: string;
+}): Promise<ManagedAthleteInvite> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('Sign in again to create an athlete invite.');
+  }
 
-const pulseCheckTrackLabel = (track: PulseCheckYouthTrack): string =>
-  track === 'pro' ? 'Pro' : track === 'rookie' ? 'Rookie' : 'Junior';
+  const response = await fetch('/.netlify/functions/manage-pulsecheck-athlete-invite', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      ...getFirebaseModeRequestHeaders(),
+    },
+    body: JSON.stringify({ action: 'create', mode: 'general', ...input }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.invite) {
+    throw new Error(
+      String(payload?.error || 'The athlete invite could not be created.')
+    );
+  }
+  return payload.invite as ManagedAthleteInvite;
+};
 
 const ReferralLinksSection: React.FC<{
   isDemo?: boolean;
@@ -4490,7 +4807,6 @@ const ReferralLinksSection: React.FC<{
   coachEmail?: string;
   teamContext: CoachDashboardTeamContext | null;
   canInvite?: boolean;
-  canRevoke?: boolean;
 }> = ({
   isDemo,
   coachId,
@@ -4498,15 +4814,18 @@ const ReferralLinksSection: React.FC<{
   coachEmail,
   teamContext,
   canInvite = false,
-  canRevoke = false,
 }) => {
-  const showAthleteReferrals =
-    isDemo || teamContext?.commercialConfig.referralKickbackEnabled === true;
-  const showParentAssessmentReferrals =
-    isDemo ||
-    teamContext?.commercialConfig.parentAssessmentReferralKickbackEnabled === true;
-  const showCoachReferrals =
-    isDemo || teamContext?.commercialConfig.coachReferralKickbackEnabled === true;
+  const visibility = resolvePulseCheckReferralVisibility(teamContext?.commercialConfig);
+  const showAthleteReferrals = isDemo || visibility.athlete;
+  const showParentAssessmentReferrals = isDemo || visibility.parent;
+  const showCoachReferrals = isDemo || visibility.coach;
+  const coachPricedOfferActive = isPulseCheckCoachPricedAthleteOfferActive(
+    teamContext?.commercialConfig
+  );
+  const sponsoredTeamPlanActive = Boolean(
+    teamContext?.commercialConfig.commercialModel === 'team-plan' &&
+      teamContext?.commercialConfig.teamPlanStatus === 'active'
+  );
 
   return (
     <div className="space-y-5">
@@ -4541,14 +4860,19 @@ const ReferralLinksSection: React.FC<{
         isDemo={isDemo}
         coachId={coachId}
         coachName={coachName}
-        coachEmail={coachEmail}
         teamContext={teamContext}
         teamContextLoading={false}
         canInvite={canInvite}
-        canRevoke={canRevoke}
       />
       <div className="rounded-xl border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5 text-xs leading-5 text-zinc-500">
-        {`Kickback active: ${teamContext?.commercialConfig.referralRevenueSharePct || 0}% of athlete-paid subscriptions from athletes who join through this invite can route back to you.`}
+        {coachPricedOfferActive
+          ? `${formatPulseCheckMonthlyPrice(
+              teamContext?.commercialConfig.athleteAppSubscriptionMonthlyPriceCents,
+              teamContext?.commercialConfig.athleteAppSubscriptionCurrency
+            )} per month. Athletes create an account, complete Stripe checkout, then receive app access for this team.`
+          : sponsoredTeamPlanActive
+            ? 'The team plan sponsors PulseCheck access for athletes who join with this invite.'
+            : `Kickback active: ${teamContext?.commercialConfig.referralRevenueSharePct || 0}% of athlete-paid subscriptions from athletes who join through this invite can route back to you.`}
       </div>
       </div>
     )}
@@ -4628,7 +4952,7 @@ const ParentAssessmentReferralLinkSection: React.FC<{
 
   const copyReferralLink = async () => {
     if (!team && !isDemo) {
-      setToast('Still resolving your team — try again in a moment.');
+      setToast('Still resolving your team. Try again in a moment.');
       return;
     }
 
@@ -4698,7 +5022,7 @@ const CoachReferralLinkSection: React.FC<{
 
   const copyReferralLink = async () => {
     if (!team && !isDemo) {
-      setToast('Still resolving your team — try again in a moment.');
+      setToast('Still resolving your team. Try again in a moment.');
       return;
     }
 
@@ -4747,513 +5071,133 @@ const AthleteInviteSection: React.FC<{
   isDemo?: boolean;
   coachId?: string;
   coachName?: string;
-  coachEmail?: string;
   teamContext: CoachDashboardTeamContext | null;
   teamContextLoading: boolean;
   // Inviting athletes is allowed for Admin, Coach, and Manager capabilities.
   canInvite?: boolean;
-  // Revoking a pending invite is admin-only.
-  canRevoke?: boolean;
 }> = ({
   isDemo,
   coachId,
   coachName = '',
-  coachEmail,
   teamContext,
   teamContextLoading,
   canInvite = false,
-  canRevoke = false,
 }) => {
   const team = teamContext;
-  const [invites, setInvites] = useState<AthleteInviteRow[]>(isDemo ? DEMO_ATHLETE_INVITES : []);
-  const [loadingInvites, setLoadingInvites] = useState(!isDemo);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [age, setAge] = useState('');
-  const [trackSelection, setTrackSelection] =
-    useState<PulseCheckAthleteTrackSelection>('age-based');
-  // Opt-in: email this coach when the athlete accepts. hello@fitwithpulse.ai is
-  // always notified regardless; this just CCs the inviting coach.
-  const [notifyOnAccept, setNotifyOnAccept] = useState(false);
+  const requiresWebCheckout =
+    !isPulseCheckSponsoredTeamPlanActive(team?.commercialConfig)
+    && isPulseCheckCoachPricedAthleteOfferActive(team?.commercialConfig);
+  const resolveShareUrl = useCallback(
+    (token: string, activationUrl?: string) => {
+      if (!requiresWebCheckout) {
+        return activationUrl || '';
+      }
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+      return buildPulseCheckAthleteOfferWebUrl(
+        token,
+        origin,
+        isUsingDevFirebase()
+      );
+    },
+    [requiresWebCheckout]
+  );
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState('https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete');
-  const [busy, setBusy] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [resendingId, setResendingId] = useState<string | null>(null);
-  // Edit-invite modal: tweak a pending athlete's name + pre-filled profile photo.
-  const [editingInvite, setEditingInvite] = useState<AthleteInviteRow | null>(null);
-  const [invName, setInvName] = useState('');
-  const [invAge, setInvAge] = useState('');
-  const [invTrackSelection, setInvTrackSelection] =
-    useState<PulseCheckAthleteTrackSelection>('team-default');
-  const [invPhotoFile, setInvPhotoFile] = useState<File | null>(null);
-  const [invPhotoPreview, setInvPhotoPreview] = useState<string | null>(null);
-  const [savingInvite, setSavingInvite] = useState(false);
-
-  const teamYouthTrack = team?.commercialConfig.youthTrack || 'junior';
-  const inviteTrackResolution = useMemo(
-    () =>
-      resolvePulseCheckAthleteInviteTrack({
-        athleteAge: age,
-        selection: trackSelection,
-        teamYouthTrack,
-      }),
-    [age, teamYouthTrack, trackSelection]
+  const [inviteLink, setInviteLink] = useState(
+    isDemo ? 'https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete' : ''
   );
+  const [busy, setBusy] = useState(false);
 
-  // The dashboard resolves one active team context, then this section pulls its
-  // active athlete invite links.
-  const loadInvites = useCallback(async () => {
-    if (isDemo || !coachId) {
-      setLoadingInvites(false);
-      return;
-    }
-    if (!team) {
-      setInvites([]);
-      setLoadingInvites(teamContextLoading);
-      return;
-    }
-    setLoadingInvites(true);
-    try {
-      const links = await pulseCheckProvisioningService
-        .listTeamInviteLinks(team.teamId)
-        .catch(() => [] as PulseCheckInviteLink[]);
-      const rows = links
-        .filter(
-          (l) => l.inviteType === 'team-access' && l.teamMembershipRole === 'athlete' && l.status === 'active'
-        )
-        .map((l) => ({
-          id: l.id,
-          name: (l.recipientName || '').trim() || (l.targetEmail || '').split('@')[0] || 'Invited athlete',
-          email: l.targetEmail || '',
-          activationUrl: l.activationUrl,
-          token: l.token,
-          avatarUrl: (l.prefilledProfileImageUrl || '').trim() || undefined,
-          athleteAge: l.athleteAge,
-          athleteTrackOverride: l.athleteTrackOverride,
-        }));
-      setInvites(rows);
-    } catch (err) {
-      console.error('[CoachDashboard] failed to load athlete invites', err);
-    } finally {
-      setLoadingInvites(false);
-    }
-  }, [coachId, isDemo, team, teamContextLoading]);
-
-  useEffect(() => {
-    void loadInvites();
-  }, [loadInvites]);
-
-  const openInvite = () => {
-    setName('');
-    setEmail('');
-    setAge('');
-    setTrackSelection('age-based');
-    setNotifyOnAccept(false);
-    setCopied(false);
-    setInviteOpen(true);
-  };
-
-  // Create + copy a reusable athlete link (anyone who redeems joins as an athlete).
-  const copyLink = async () => {
-    if (isDemo) {
+  // Both coach actions resolve the same reusable token. Calling the server each
+  // time is intentional: it refreshes the destination from the live commercial
+  // config without minting a new personal invite.
+  const copyShareUrl = async (shareUrl: string) => {
+    if (navigator.clipboard?.writeText) {
       try {
-        navigator.clipboard?.writeText(inviteLink);
-      } catch {}
-      setCopied(true);
-      setToast('Athlete invite link copied.');
-      return;
-    }
-    if (!team || !coachId) {
-      setToast('Still resolving your team — try again in a moment.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
-        organizationId: team.organizationId,
-        teamId: team.teamId,
-        teamMembershipRole: 'athlete',
-        redemptionMode: 'general',
-        createdByUserId: coachId,
-        createdByEmail: coachEmail || '',
-      });
-      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
-      const link = links.find((candidate) => candidate.id === inviteId);
-      if (link?.activationUrl) {
-        setInviteLink(link.activationUrl);
-        try {
-          navigator.clipboard?.writeText(link.activationUrl);
-        } catch {}
-        setCopied(true);
-        setToast('Athlete invite link copied — share it with your team.');
-        await loadInvites();
-      } else {
-        setToast('Created the link but could not read it back. Refresh and try again.');
+        await navigator.clipboard.writeText(shareUrl);
+        return;
+      } catch {
+        // Safari can drop clipboard permission while the link request is in
+        // flight. The selection fallback below still copies the same URL.
       }
-    } catch (err) {
-      console.error('[CoachDashboard] failed to create shareable athlete link', err);
-      setToast('Could not create the link. Try again.');
+    }
+
+    const copyTarget = document.createElement('textarea');
+    copyTarget.value = shareUrl;
+    copyTarget.setAttribute('readonly', '');
+    copyTarget.style.position = 'fixed';
+    copyTarget.style.opacity = '0';
+    document.body.appendChild(copyTarget);
+    copyTarget.select();
+    try {
+      if (!document.execCommand('copy')) {
+        throw new Error('The browser did not allow clipboard access.');
+      }
     } finally {
-      setBusy(false);
+      copyTarget.remove();
     }
   };
 
-  // Email a single-use athlete invite (mirrors the staff send + email flow).
-  const sendInvite = async () => {
-    const e = email.trim();
-    const n = name.trim();
-    if (!n) {
-      setToast("Add the athlete's name first.");
-      return;
-    }
-    if (!e) return;
-    if (age.trim() && inviteTrackResolution.athleteAge === null) {
-      setToast('Enter a whole-number age between 1 and 120.');
-      return;
-    }
-
-    if (isDemo) {
-      setInvites((prev) => [
-        {
-          id: `demo-${prev.length + 1}-${e}`,
-          name: n,
-          email: e,
-          activationUrl: inviteLink,
-          token: `demo-${e}`,
-          athleteAge: inviteTrackResolution.athleteAge || undefined,
-          athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
-        },
-        ...prev,
-      ]);
-      setToast(`Invite sent to ${n}.`);
-      setInviteOpen(false);
-      return;
-    }
-    if (!team || !coachId) {
-      setToast('Still resolving your team — try again in a moment.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
-        organizationId: team.organizationId,
-        teamId: team.teamId,
-        teamMembershipRole: 'athlete',
-        redemptionMode: 'single-use',
-        targetEmail: e,
-        recipientName: n,
-        athleteAge: inviteTrackResolution.athleteAge || undefined,
-        athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
-        createdByUserId: coachId,
-        createdByEmail: coachEmail || '',
-        createdByName: coachName,
-        notifyCoachOnAccept: notifyOnAccept,
-      });
-
-      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
-      const link = links.find((l) => l.id === inviteId);
-
-      let emailSent = false;
-      if (link?.activationUrl) {
-        try {
-          const idToken = await auth.currentUser?.getIdToken();
-          if (!idToken) {
-            throw new Error('Sign in again to send this invite.');
-          }
-          // Athlete-specific, app-first email template (distinct from staff invite).
-          const resp = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idToken}`,
-              ...getFirebaseModeRequestHeaders(),
-            },
-            body: JSON.stringify({
-              toEmail: e,
-              activationUrl: link.activationUrl,
-              recipientName: n,
-              organizationName: team.organizationName,
-              teamName: team.teamName,
-              senderName: coachName,
-            }),
-          });
-          const result = await resp.json().catch(() => ({ success: false }));
-          emailSent = resp.ok && result?.success === true;
-          await pulseCheckProvisioningService.recordAdminActivationEmailResult({
-            token: link.token,
-            success: emailSent,
-            messageId: result?.messageId,
-            sentByUserId: coachId,
-            sentByEmail: coachEmail || '',
-            targetEmail: e,
-            organizationId: team.organizationId,
-            teamId: team.teamId,
-            errorMessage: emailSent ? '' : String(result?.error || 'Send failed'),
-          });
-        } catch (mailErr) {
-          console.error('[CoachDashboard] athlete invite email failed', mailErr);
-        }
-      }
-
-      setToast(
-        emailSent
-          ? `Invite sent to ${e}.`
-          : `Invite created for ${e} — email didn't send, share the link instead.`
-      );
-      setInviteOpen(false);
-      await loadInvites();
-    } catch (err) {
-      console.error('[CoachDashboard] failed to send athlete invite', err);
-      setToast('Could not send the invite. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const copyPersonalInviteLink = async () => {
-    const n = name.trim();
-    if (!n) {
-      setToast("Add the athlete's name first.");
-      return;
-    }
-    if (age.trim() && inviteTrackResolution.athleteAge === null) {
-      setToast('Enter a whole-number age between 1 and 120.');
-      return;
-    }
-
-    if (isDemo) {
-      try {
-        navigator.clipboard?.writeText(inviteLink);
-      } catch {}
-      setInvites((prev) => [
-        {
-          id: `demo-personal-${prev.length + 1}`,
-          name: n,
-          email: '',
-          activationUrl: inviteLink,
-          token: `demo-personal-${prev.length + 1}`,
-          athleteAge: inviteTrackResolution.athleteAge || undefined,
-          athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
-        },
-        ...prev,
-      ]);
-      setCopied(true);
-      setToast(`Copied ${n}'s invite link.`);
-      setInviteOpen(false);
-      return;
-    }
+  const shareTeamLink = async (preferNativeShare: boolean) => {
     if (!team || !coachId) {
       setToast('Still resolving your team. Try again in a moment.');
       return;
     }
-
     setBusy(true);
     try {
-      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
-        organizationId: team.organizationId,
-        teamId: team.teamId,
-        teamMembershipRole: 'athlete',
-        redemptionMode: 'single-use',
-        recipientName: n,
-        athleteAge: inviteTrackResolution.athleteAge || undefined,
-        athleteTrackOverride: inviteTrackResolution.trackOverride || undefined,
-        createdByUserId: coachId,
-        createdByEmail: coachEmail || '',
-        createdByName: coachName,
-        notifyCoachOnAccept: notifyOnAccept,
-      });
-      const links = await pulseCheckProvisioningService.listTeamInviteLinks(team.teamId);
-      const link = links.find((candidate) => candidate.id === inviteId);
-      if (!link?.activationUrl) {
-        setToast('Created the invite, but the link could not be loaded. Refresh and try again.');
-        return;
+      let shareUrl = inviteLink;
+      if (!isDemo) {
+        const invite = await createManagedAthleteInvite({
+          teamId: team.teamId,
+          senderName: coachName,
+        });
+        shareUrl = resolveShareUrl(invite.token, invite.activationUrl);
+      }
+      if (!shareUrl) {
+        throw new Error('The reusable team invite did not return a share URL.');
       }
 
-      setInviteLink(link.activationUrl);
-      try {
-        navigator.clipboard?.writeText(link.activationUrl);
-      } catch {}
+      setInviteLink(shareUrl);
+      if (preferNativeShare && typeof navigator.share === 'function') {
+        try {
+          await navigator.share({
+            title: `Join ${team.teamName || 'our team'} on PulseCheck`,
+            text: `Use this link to join ${team.teamName || 'our team'} on PulseCheck.`,
+            url: shareUrl,
+          });
+          setCopied(false);
+          setToast('Reusable team invite shared.');
+          return;
+        } catch (shareError) {
+          if ((shareError as { name?: string })?.name === 'AbortError') return;
+          console.warn('[CoachDashboard] native athlete invite share unavailable; copying instead', shareError);
+        }
+      }
+
+      await copyShareUrl(shareUrl);
       setCopied(true);
-      setToast(`Copied ${n}'s invite link.`);
-      setInviteOpen(false);
-      await loadInvites();
+      setToast('Reusable team link copied. Share it with any athlete.');
     } catch (err) {
-      console.error('[CoachDashboard] failed to create personal athlete invite', err);
-      setToast('Could not create the invite. Try again.');
+      console.error('[CoachDashboard] failed to create shareable athlete link', err);
+      setToast('Could not share the team link. Try again.');
     } finally {
       setBusy(false);
     }
   };
 
-  // Re-send the athlete invite email for an existing pending invite. Reuses the
-  // already-created link (no new link minted) and mirrors sendInvite's email +
-  // result-recording flow so the activation funnel stays accurate.
-  const resendInvite = async (row: AthleteInviteRow) => {
-    const e = row.email.trim();
-    if (!e) {
-      setToast(`${row.name}'s invite has no email on file — share the link instead.`);
-      return;
-    }
-    if (isDemo) {
-      setToast(`Invite re-sent to ${e}.`);
-      return;
-    }
-    if (!team || !coachId) {
-      setToast('Still resolving your team — try again in a moment.');
-      return;
-    }
-    setResendingId(row.id);
-    try {
-      let emailSent = false;
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) {
-        throw new Error('Sign in again to send this invite.');
-      }
-      // Athlete-specific, app-first email template (distinct from staff invite).
-      const resp = await fetch('/.netlify/functions/send-pulsecheck-athlete-invite-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-          ...getFirebaseModeRequestHeaders(),
-        },
-        body: JSON.stringify({
-          toEmail: e,
-          activationUrl: row.activationUrl,
-          recipientName: row.name,
-          organizationName: team.organizationName,
-          teamName: team.teamName,
-          senderName: coachName,
-        }),
-      });
-      const result = await resp.json().catch(() => ({ success: false }));
-      emailSent = resp.ok && result?.success === true;
-      await pulseCheckProvisioningService.recordAdminActivationEmailResult({
-        token: row.token,
-        success: emailSent,
-        messageId: result?.messageId,
-        sentByUserId: coachId,
-        sentByEmail: coachEmail || '',
-        targetEmail: e,
-        organizationId: team.organizationId,
-        teamId: team.teamId,
-        errorMessage: emailSent ? '' : String(result?.error || 'Send failed'),
-      });
-      setToast(
-        emailSent
-          ? `Invite re-sent to ${e}.`
-          : `Couldn't re-send to ${e} — share the link instead.`
-      );
-    } catch (err) {
-      console.error('[CoachDashboard] failed to resend athlete invite', err);
-      setToast('Could not re-send the invite. Try again.');
-    } finally {
-      setResendingId(null);
-    }
-  };
-
-  // Open the edit modal pre-loaded with the invite's current name + photo.
-  const openEditInvite = (row: AthleteInviteRow) => {
-    setEditingInvite(row);
-    setInvName(row.name);
-    setInvAge(row.athleteAge ? String(row.athleteAge) : '');
-    setInvTrackSelection(row.athleteTrackOverride || 'team-default');
-    setInvPhotoFile(null);
-    setInvPhotoPreview(row.avatarUrl || null);
-  };
-
-  // Persist name + (optional) new photo onto the existing invite link. The photo
-  // is uploaded to storage and stored as prefilledProfileImageUrl, which pre-fills
-  // the athlete's profile when they accept — same field staff invites use.
-  const saveInviteEdit = async () => {
-    if (!editingInvite) return;
-    const n = invName.trim();
-    if (!n) {
-      setToast("Add the athlete's name first.");
-      return;
-    }
-    const editTrackResolution = resolvePulseCheckAthleteInviteTrack({
-      athleteAge: invAge,
-      selection: invTrackSelection,
-      teamYouthTrack,
-    });
-    if (invAge.trim() && editTrackResolution.athleteAge === null) {
-      setToast('Enter a whole-number age between 1 and 120.');
-      return;
-    }
-    if (isDemo) {
-      setInvites((prev) =>
-        prev.map((i) =>
-          i.id === editingInvite.id
-            ? {
-                ...i,
-                name: n,
-                avatarUrl: invPhotoPreview || i.avatarUrl,
-                athleteAge: editTrackResolution.athleteAge || undefined,
-                athleteTrackOverride: editTrackResolution.trackOverride || undefined,
-              }
-            : i
-        )
-      );
-      setToast(`Updated ${n}'s invite.`);
-      setEditingInvite(null);
-      return;
-    }
-    setSavingInvite(true);
-    try {
-      let prefilledProfileImageUrl: string | undefined;
-      if (invPhotoFile) {
-        const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
-        const upload = await firebaseStorageService.uploadImage(invPhotoFile, UploadImageType.Profile, {
-          updateUserProfile: false,
-        });
-        prefilledProfileImageUrl = upload.downloadURL;
-      }
-      await pulseCheckProvisioningService.updateInviteLinkProfile({
-        inviteId: editingInvite.id,
-        recipientName: n,
-        athleteAge: editTrackResolution.athleteAge,
-        athleteTrackOverride: editTrackResolution.trackOverride,
-        ...(prefilledProfileImageUrl ? { prefilledProfileImageUrl } : {}),
-      });
-      setToast(`Updated ${n}'s invite.`);
-      setEditingInvite(null);
-      await loadInvites();
-    } catch (err) {
-      console.error('[CoachDashboard] failed to update athlete invite', err);
-      setToast('Could not save changes. Try again.');
-    } finally {
-      setSavingInvite(false);
-    }
-  };
-
-  const revokeInvite = async (row: AthleteInviteRow) => {
-    if (isDemo) {
-      setInvites((prev) => prev.filter((i) => i.id !== row.id));
-      setToast(`Revoked ${row.name}'s invite.`);
-      return;
-    }
-    setRevokingId(row.id);
-    try {
-      await pulseCheckProvisioningService.revokeInviteLink(row.id);
-      setToast(`Revoked ${row.name}'s invite.`);
-      await loadInvites();
-    } catch (err) {
-      console.error('[CoachDashboard] failed to revoke athlete invite', err);
-      setToast('Could not revoke the invite. Try again.');
-    } finally {
-      setRevokingId(null);
-    }
-  };
+  const copyLink = () => shareTeamLink(false);
+  const inviteAthlete = () => shareTeamLink(true);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
-          Invite athletes {invites.length > 0 && <span className="text-zinc-600">({invites.length} pending)</span>}
+        <div className="min-w-0">
+          <div className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            Reusable team link
+          </div>
+          <div className="mt-1 text-xs leading-5 text-zinc-500">
+            Share the same link with every athlete. Each person completes their own account and onboarding.
+          </div>
         </div>
         {canInvite && (
           <div className="flex items-center gap-2">
@@ -5262,18 +5206,25 @@ const AthleteInviteSection: React.FC<{
               disabled={busy || teamContextLoading || !team}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40 disabled:opacity-40"
             >
-              <Link2 className="w-4 h-4" /> Copy link
+              {copied ? <Check className="h-4 w-4 text-[#E0FE10]" /> : <Link2 className="h-4 w-4" />}
+              {copied ? 'Copied' : busy ? 'Preparing…' : 'Copy link'}
             </button>
             <button
-              onClick={openInvite}
-              disabled={teamContextLoading || !team}
+              onClick={inviteAthlete}
+              disabled={busy || teamContextLoading || !team}
               className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Plus className="w-4 h-4" /> Invite athlete
+              <Plus className="w-4 h-4" /> {busy ? 'Preparing…' : 'Invite athlete'}
             </button>
           </div>
         )}
       </div>
+
+      {inviteLink && (
+        <div className="truncate rounded-lg border border-zinc-700/30 bg-zinc-950/30 px-3 py-2 text-[11px] text-zinc-600">
+          {inviteLink}
+        </div>
+      )}
 
       {toast && (
         <div className="text-xs text-[#E0FE10] bg-[#E0FE10]/10 border border-[#E0FE10]/25 rounded-lg px-3 py-2">
@@ -5281,350 +5232,6 @@ const AthleteInviteSection: React.FC<{
         </div>
       )}
 
-      {/* Pending athlete invites — disappear from here once the athlete onboards. */}
-      {!loadingInvites && invites.length > 0 && (
-        <div className="rounded-xl border border-zinc-700/30 divide-y divide-zinc-800/50 overflow-hidden">
-          {invites.map((inv) => (
-            <div key={inv.id} className="flex items-center gap-3 px-3 py-2.5">
-              <button
-                type="button"
-                onClick={() => canInvite && openEditInvite(inv)}
-                disabled={!canInvite}
-                title={canInvite ? 'Edit invite profile' : undefined}
-                className="group flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
-              >
-                <span className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10">
-                  {inv.avatarUrl ? (
-                    <img src={inv.avatarUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    initialsOf(inv.name)
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-white truncate group-hover:text-[#E0FE10]">{inv.name}</span>
-                    <span className="text-[10px] uppercase tracking-wide text-amber-400/80 border border-amber-400/30 rounded-full px-1.5 py-0.5">
-                      Invited
-                    </span>
-                    {canInvite && (
-                      <Pencil className="h-3 w-3 flex-none text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100" />
-                    )}
-                  </div>
-                  <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500">
-                    <span className="truncate">{inv.email || inv.activationUrl}</span>
-                    {inv.athleteAge && (
-                      <span className="flex-none rounded-full border border-zinc-700/50 px-1.5 py-0.5 text-[10px] text-zinc-400">
-                        Age {inv.athleteAge}
-                      </span>
-                    )}
-                    <span className="flex-none rounded-full border border-violet-400/25 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-200">
-                      {pulseCheckTrackLabel(inv.athleteTrackOverride || teamYouthTrack)}
-                    </span>
-                  </div>
-                </div>
-              </button>
-              {canInvite && inv.email && (
-                <button
-                  onClick={() => resendInvite(inv)}
-                  disabled={resendingId === inv.id}
-                  className="flex flex-none items-center gap-1.5 rounded-lg border border-zinc-700/50 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
-                >
-                  <Mail className="h-3.5 w-3.5" /> {resendingId === inv.id ? 'Sending…' : 'Resend'}
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  try {
-                    navigator.clipboard?.writeText(inv.activationUrl);
-                  } catch {}
-                  setToast(`Copied ${inv.name}'s invite link.`);
-                }}
-                className="flex flex-none items-center gap-1.5 rounded-lg border border-zinc-700/50 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-              >
-                <Copy className="h-3.5 w-3.5" /> Copy
-              </button>
-              {canRevoke && (
-                <button
-                  onClick={() => revokeInvite(inv)}
-                  disabled={revokingId === inv.id}
-                  className="flex flex-none items-center gap-1.5 rounded-lg border border-red-500/30 px-2.5 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-40"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> {revokingId === inv.id ? 'Revoking…' : 'Revoke'}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Invite modal: athlete identity, age, track routing, and delivery. */}
-      <AnimatePresence>
-        {inviteOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
-          >
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setInviteOpen(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
-                <div>
-                  <div className="text-base font-semibold text-white">Invite an athlete</div>
-                  <div className="text-xs text-zinc-500">They’ll get a link to join the team and onboard.</div>
-                </div>
-                <button
-                  onClick={() => setInviteOpen(false)}
-                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="px-5 py-4 space-y-4">
-                <div className="space-y-2">
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Athlete name (required)"
-                    className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
-                  />
-                </div>
-
-                <div className="grid grid-cols-[110px_1fr] gap-3">
-                  <label className="space-y-1.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Age
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={120}
-                      inputMode="numeric"
-                      value={age}
-                      onChange={(e) => setAge(e.target.value)}
-                      placeholder="17"
-                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#E0FE10]/40 focus:outline-none"
-                    />
-                  </label>
-
-                  <label className="space-y-1.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Experience track
-                    </span>
-                    <select
-                      value={trackSelection}
-                      onChange={(e) =>
-                        setTrackSelection(e.target.value as PulseCheckAthleteTrackSelection)
-                      }
-                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white focus:border-[#E0FE10]/40 focus:outline-none"
-                    >
-                      <option value="age-based">Automatic from age</option>
-                      <option value="team-default">
-                        Team default ({pulseCheckTrackLabel(teamYouthTrack)})
-                      </option>
-                      <option value="junior">Junior</option>
-                      <option value="rookie">Rookie</option>
-                      <option value="pro">Pro</option>
-                    </select>
-                  </label>
-                </div>
-
-                <div className="rounded-lg border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-[11px] leading-5 text-violet-100">
-                  {trackSelection === 'age-based' && inviteTrackResolution.athleteAge === null
-                    ? `Add an age to route automatically. This invite currently uses the ${pulseCheckTrackLabel(teamYouthTrack)} team default.`
-                    : inviteTrackResolution.source === 'age'
-                      ? `Age ${inviteTrackResolution.athleteAge} routes this athlete to the ${pulseCheckTrackLabel(inviteTrackResolution.effectiveTrack)} track.`
-                      : inviteTrackResolution.source === 'team-default'
-                        ? `This athlete will use the ${pulseCheckTrackLabel(teamYouthTrack)} team default.`
-                        : `This invite assigns the ${pulseCheckTrackLabel(inviteTrackResolution.effectiveTrack)} track for this athlete.`}
-                </div>
-
-                <div className="space-y-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                    Invite by email
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') sendInvite();
-                      }}
-                      placeholder="athlete@school.edu"
-                      className="flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
-                    />
-                    <button
-                      onClick={sendInvite}
-                      disabled={!email.trim() || !name.trim() || busy}
-                      className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {busy ? 'Sending…' : 'Send'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-zinc-600">
-                    Athletes get set up in the PulseCheck app. Email is optional. You can share a personal link instead.
-                  </p>
-                </div>
-
-                <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={notifyOnAccept}
-                    onChange={(e) => setNotifyOnAccept(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-zinc-600 bg-zinc-900 text-[#E0FE10] accent-[#E0FE10] focus:outline-none focus:ring-1 focus:ring-[#E0FE10]/40"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-xs font-medium text-zinc-200">Email me when this athlete accepts</span>
-                    <span className="block text-[11px] text-zinc-600">Otherwise only our team is notified.</span>
-                  </span>
-                </label>
-
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-zinc-700/40 bg-zinc-800/30 px-3 py-2.5">
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium text-zinc-300">Or share this athlete&apos;s link</div>
-                    <div className="truncate text-[11px] text-zinc-600">{inviteLink}</div>
-                  </div>
-                  <button
-                    onClick={copyPersonalInviteLink}
-                    disabled={!name.trim() || busy}
-                    className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/50 px-3 py-1.5 text-xs font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {copied ? <Check className="h-3.5 w-3.5 text-[#E0FE10]" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? 'Copied' : busy ? 'Creating…' : 'Copy link'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Edit-invite modal — update a pending athlete's name + pre-filled photo. */}
-      <AnimatePresence>
-        {editingInvite && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[55] flex items-center justify-center p-4"
-          >
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingInvite(null)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-              className="relative z-10 w-full max-w-md rounded-2xl border border-zinc-700/50 bg-[#0d0d12] shadow-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
-                <div>
-                  <div className="text-base font-semibold text-white">Edit athlete invite</div>
-                  <div className="text-xs text-zinc-500">{editingInvite.email || editingInvite.name}</div>
-                </div>
-                <button
-                  onClick={() => setEditingInvite(null)}
-                  className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="px-5 py-4 space-y-4">
-                <div className="flex items-center gap-3">
-                  <label className="relative flex h-14 w-14 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-zinc-700/50 bg-zinc-800/40 hover:border-[#E0FE10]/40">
-                    {invPhotoPreview ? (
-                      <img src={invPhotoPreview} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <ImageIcon className="h-5 w-5 text-zinc-500" />
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0] || null;
-                        setInvPhotoFile(f);
-                        if (f) setInvPhotoPreview(URL.createObjectURL(f));
-                      }}
-                    />
-                  </label>
-                  <div className="min-w-0 flex-1">
-                    <input
-                      value={invName}
-                      onChange={(e) => setInvName(e.target.value)}
-                      placeholder="Athlete name (required)"
-                      className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-[110px_1fr] gap-3">
-                  <label className="space-y-1.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Age
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={120}
-                      inputMode="numeric"
-                      value={invAge}
-                      onChange={(e) => setInvAge(e.target.value)}
-                      placeholder="17"
-                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#E0FE10]/40 focus:outline-none"
-                    />
-                  </label>
-                  <label className="space-y-1.5">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                      Experience track
-                    </span>
-                    <select
-                      value={invTrackSelection}
-                      onChange={(e) =>
-                        setInvTrackSelection(e.target.value as PulseCheckAthleteTrackSelection)
-                      }
-                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/60 px-3 py-2 text-sm text-white focus:border-[#E0FE10]/40 focus:outline-none"
-                    >
-                      <option value="age-based">Automatic from age</option>
-                      <option value="team-default">
-                        Team default ({pulseCheckTrackLabel(teamYouthTrack)})
-                      </option>
-                      <option value="junior">Junior</option>
-                      <option value="rookie">Rookie</option>
-                      <option value="pro">Pro</option>
-                    </select>
-                  </label>
-                </div>
-                <p className="text-[11px] text-zinc-600">
-                  The age and track apply when this athlete accepts the invite.
-                </p>
-
-                <div className="flex items-center justify-end gap-2 pt-1">
-                  <button
-                    onClick={() => setEditingInvite(null)}
-                    className="px-4 py-2 rounded-lg border border-zinc-700/50 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveInviteEdit}
-                    disabled={!invName.trim() || savingInvite}
-                    className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {savingInvite ? 'Saving…' : 'Save changes'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
@@ -5771,9 +5378,10 @@ const RosterSection: React.FC<{
 
 const TrainNoraSection: React.FC<{
   coachId?: string;
+  teamId?: string;
   coachName?: string;
   athletes?: CoachAthlete[];
-}> = ({ coachId, coachName, athletes = [] }) => {
+}> = ({ coachId, teamId, coachName, athletes = [] }) => {
   const [entries, setEntries] = useState<NoraVaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
@@ -5787,23 +5395,23 @@ const TrainNoraSection: React.FC<{
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
-    if (!coachId) return;
+    if (!coachId || !teamId) return;
     setLoading(true);
     try {
-      setEntries(await noraVaultService.getEntries(coachId));
+      setEntries(await noraVaultService.getEntries(coachId, teamId));
     } catch (err) {
       console.error('[train-nora] load failed', err);
     } finally {
       setLoading(false);
     }
-  }, [coachId]);
+  }, [coachId, teamId]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
   const handleFiles = async (files: FileList | File[]) => {
-    if (!coachId) return;
+    if (!coachId || !teamId) return;
     setError(null);
     const arr = Array.from(files);
     for (const file of arr) {
@@ -5813,7 +5421,7 @@ const TrainNoraSection: React.FC<{
       }
       try {
         setUploading({ name: file.name, pct: 0 });
-        await noraVaultService.addFile(coachId, file, {
+        await noraVaultService.addFile(coachId, teamId, file, {
           onProgress: (pct) => setUploading({ name: file.name, pct }),
         });
       } catch (err: any) {
@@ -5826,9 +5434,9 @@ const TrainNoraSection: React.FC<{
   };
 
   const saveNote = async () => {
-    if (!coachId || (!noteBody.trim() && !noteTitle.trim())) return;
+    if (!coachId || !teamId || (!noteBody.trim() && !noteTitle.trim())) return;
     try {
-      await noraVaultService.addNote(coachId, {
+      await noraVaultService.addNote(coachId, teamId, {
         title: noteTitle,
         content: noteBody,
         category: noteCategory.trim() || undefined,
@@ -5845,7 +5453,8 @@ const TrainNoraSection: React.FC<{
 
   const remove = async (entry: NoraVaultEntry) => {
     try {
-      await noraVaultService.deleteEntry(entry);
+      if (!coachId || !teamId) return;
+      await noraVaultService.deleteEntry(coachId, teamId, entry);
       setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     } catch (err) {
       console.error('[train-nora] delete failed', err);
@@ -5935,6 +5544,7 @@ const TrainNoraSection: React.FC<{
           >
             <NoraChatPanel
               coachId={coachId}
+              teamId={teamId}
               coachName={coachName}
               athletes={athletes}
               onClose={() => setChatOpen(false)}
@@ -6113,11 +5723,12 @@ const CHAT_SUGGESTIONS = [
 
 const NoraChatPanel: React.FC<{
   coachId?: string;
+  teamId?: string;
   coachName?: string;
   athletes: CoachAthlete[];
   onClose: () => void;
   onNoteSaved: () => void;
-}> = ({ coachId, coachName, athletes, onClose, onNoteSaved }) => {
+}> = ({ coachId, teamId, coachName, athletes, onClose, onNoteSaved }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -6144,7 +5755,7 @@ const NoraChatPanel: React.FC<{
 
   const send = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || sending || !coachId) return;
+    if (!trimmed || sending || !coachId || !teamId) return;
     setChatError(null);
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const next: ChatMessage = { role: 'user', content: trimmed };
@@ -6157,6 +5768,7 @@ const NoraChatPanel: React.FC<{
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           coachId,
+          teamId,
           coachName,
           message: trimmed,
           history,
@@ -6296,9 +5908,10 @@ const NoraChatPanel: React.FC<{
 
 const NoraChatFab: React.FC<{
   coachId?: string;
+  teamId?: string;
   coachName?: string;
   athletes: CoachAthlete[];
-}> = ({ coachId, coachName, athletes }) => {
+}> = ({ coachId, teamId, coachName, athletes }) => {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -6313,6 +5926,7 @@ const NoraChatFab: React.FC<{
           >
             <NoraChatPanel
               coachId={coachId}
+              teamId={teamId}
               coachName={coachName}
               athletes={athletes}
               onClose={() => setOpen(false)}
@@ -6524,19 +6138,24 @@ const DemoReportsArchive: React.FC = () => {
 const formatDeliveredDate = (d?: Date) =>
   d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date pending';
 
-const ReportsSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coachId, isDemo }) => {
+const ReportsSection: React.FC<{
+  teamId?: string;
+  teamName?: string;
+  isDemo?: boolean;
+}> = ({ teamId, teamName, isDemo }) => {
   const router = useRouter();
   const [reports, setReports] = useState<CoachReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    if (isDemo || !coachId) {
+    setReports([]);
+    if (isDemo || !teamId) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    listSentSportsIntelligenceReportsForCoach(coachId)
+    listSentSportsIntelligenceReportsForTeam(teamId, teamName || 'Team')
       .then((rs) => {
         if (!cancelled) setReports(rs);
       })
@@ -6549,7 +6168,7 @@ const ReportsSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coac
     return () => {
       cancelled = true;
     };
-  }, [coachId, isDemo]);
+  }, [isDemo, teamId, teamName]);
 
   // Demo dashboards have no live archive — synthesize a delivery history instead.
   if (isDemo) return <DemoReportsArchive />;
@@ -6576,7 +6195,12 @@ const ReportsSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coac
         {reports.map((report, index) => (
           <ReportRow
             key={`${report.teamId}-${report.reportId}`}
-            onClick={() => router.push(report.href)}
+            onClick={() =>
+              router.push({
+                pathname: report.href,
+                query: teamId ? { teamId } : undefined,
+              })
+            }
             accent="#E0FE10"
             title={report.weekLabel || report.title || 'Sports Intelligence Report'}
             isLatest={index === 0}
@@ -6618,18 +6242,6 @@ const demoCoachServices: PulseCheckCoachService[] = [
     currency: 'usd',
     status: 'active',
   },
-  {
-    id: 'demo-subscription',
-    coachUserId: DEMO_COACH_ID,
-    teamId: 'demo-team',
-    organizationId: 'demo-org',
-    title: 'Monthly posing support',
-    description: 'Ongoing paid support with details shown after the athlete purchases.',
-    serviceType: 'subscription',
-    priceCents: 9900,
-    currency: 'usd',
-    status: 'inactive',
-  },
 ];
 
 const CoachServicesSection: React.FC<{
@@ -6663,26 +6275,37 @@ const CoachServicesSection: React.FC<{
       setLoading(false);
       return;
     }
-    if (!coachId) return;
+    setServices([]);
+    if (!coachId || !teamId || !organizationId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      setServices(await pulseCheckCoachServices.listForCoach(coachId));
+      setServices(await pulseCheckCoachServices.listForCoachTeam(coachId, teamId, organizationId));
     } catch (error) {
       console.error('[CoachDashboard] failed to load services', error);
       dispatch(showToast({ message: 'Could not load services. Please refresh and try again.', type: 'error' }));
     } finally {
       setLoading(false);
     }
-  }, [coachId, dispatch, isDemo]);
+  }, [coachId, dispatch, isDemo, organizationId, teamId]);
 
   useEffect(() => {
+    resetForm();
+    setPreviewService(null);
+    setPreviewStep(0);
     void loadServices();
+    // resetForm is intentionally local: every selected-team change starts with
+    // a clean editor and preview before loading that team's service catalog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadServices]);
 
   const formPriceCents = Math.round((Number.parseFloat(form.price) || 0) * 100);
   const feePreview = calculatePulseCheckServiceFees(formPriceCents);
 
   const startEdit = (service: PulseCheckCoachService) => {
+    if (service.serviceType === 'subscription') return;
     setEditingId(service.id);
     setForm({
       title: service.title,
@@ -6714,7 +6337,7 @@ const CoachServicesSection: React.FC<{
         organizationId,
         title,
         description: form.description.trim(),
-        serviceType: form.serviceType,
+        serviceType: 'one_time' as const,
         priceCents,
         currency: 'usd',
         status: 'active' as const,
@@ -6745,7 +6368,14 @@ const CoachServicesSection: React.FC<{
   };
 
   const toggleStatus = async (service: PulseCheckCoachService) => {
-    const nextStatus = service.status === 'active' ? 'inactive' : 'active';
+    if (service.serviceType === 'subscription' && service.status !== 'active') {
+      return;
+    }
+    const nextStatus = service.serviceType === 'subscription'
+      ? 'inactive'
+      : service.status === 'active'
+        ? 'inactive'
+        : 'active';
     if (isDemo) {
       setServices((current) =>
         current.map((item) => (item.id === service.id ? { ...item, status: nextStatus } : item))
@@ -6770,7 +6400,7 @@ const CoachServicesSection: React.FC<{
           </div>
           <div>
             <div className="text-sm font-bold text-white">Additional Services</div>
-            <div className="text-xs text-zinc-500">Create one-time booked sessions or ongoing paid services</div>
+            <div className="text-xs text-zinc-500">Create one-time sessions athletes can book after payment</div>
           </div>
         </div>
         <p className="text-sm text-zinc-300 leading-relaxed">
@@ -6783,7 +6413,7 @@ const CoachServicesSection: React.FC<{
           <div className="mb-4">
             <div className="text-sm font-semibold text-white">{editingId ? 'Edit service' : 'Add a service'}</div>
             <div className="mt-1 text-xs text-zinc-500">
-              One-time services trigger the booking flow after payment. Subscription services show service details after purchase.
+              Each paid service moves the athlete into the booking flow.
             </div>
           </div>
           <div className="space-y-3">
@@ -6820,7 +6450,6 @@ const CoachServicesSection: React.FC<{
                   className="mt-1.5 h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white outline-none transition focus:border-cyan-300/60"
                 >
                   <option value="one_time">One-time booked service</option>
-                  <option value="subscription">Ongoing subscription service</option>
                 </select>
               </label>
               <label className="block text-xs font-medium text-zinc-400">
@@ -6903,14 +6532,20 @@ const CoachServicesSection: React.FC<{
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="truncate text-sm font-semibold text-white">{service.title}</div>
                           <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                            service.status === 'active'
+                            service.serviceType !== 'subscription' && service.status === 'active'
                               ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
                               : 'border-zinc-600 bg-zinc-800 text-zinc-400'
                           }`}>
-                            {service.status === 'active' ? 'Active' : 'Inactive'}
+                            {service.serviceType === 'subscription'
+                              ? 'Sales paused'
+                              : service.status === 'active'
+                                ? 'Active'
+                                : 'Inactive'}
                           </span>
                           <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200">
-                            {service.serviceType === 'subscription' ? 'Subscription' : 'One-time booking'}
+                            {service.serviceType === 'subscription'
+                              ? 'Legacy, new sales paused'
+                              : 'One-time booking'}
                           </span>
                         </div>
                         <div className="mt-1 text-xs leading-relaxed text-zinc-500">
@@ -6926,23 +6561,36 @@ const CoachServicesSection: React.FC<{
                         <button
                           type="button"
                           onClick={() => startEdit(service)}
-                          className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white"
+                          disabled={service.serviceType === 'subscription'}
+                          className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openPreview(service)}
-                          className="h-9 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/15"
-                        >
-                          Preview purchase
-                        </button>
+                        {service.serviceType === 'subscription' ? null : (
+                          <button
+                            type="button"
+                            onClick={() => openPreview(service)}
+                            className="h-9 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/15"
+                          >
+                            Preview purchase
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => void toggleStatus(service)}
-                          className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white"
+                          disabled={
+                            service.serviceType === 'subscription'
+                            && service.status !== 'active'
+                          }
+                          className="h-9 rounded-lg border border-zinc-700 px-3 text-xs font-semibold text-zinc-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          {service.status === 'active' ? 'Deactivate' : 'Activate'}
+                          {service.serviceType === 'subscription'
+                            ? service.status === 'active'
+                              ? 'Pause legacy service'
+                              : 'Sales paused'
+                            : service.status === 'active'
+                              ? 'Deactivate'
+                              : 'Activate'}
                         </button>
                       </div>
                     </div>
@@ -6977,10 +6625,7 @@ const ServicePurchasePreviewModal: React.FC<{
     {
       eyebrow: '01 · Service selected',
       title: service.title,
-      body:
-        service.serviceType === 'subscription'
-          ? 'The athlete sees what is included in the ongoing service before starting subscription checkout.'
-          : 'The athlete sees what is included before paying. After payment, PulseCheck moves them into the booking flow.',
+      body: 'The athlete sees what is included before paying. After payment, PulseCheck moves them into the booking flow.',
     },
     {
       eyebrow: '02 · Test payment',
@@ -6989,11 +6634,8 @@ const ServicePurchasePreviewModal: React.FC<{
     },
     {
       eyebrow: '03 · Confirmation',
-      title: service.serviceType === 'subscription' ? 'Subscription service active' : 'Payment complete',
-      body:
-        service.serviceType === 'subscription'
-          ? 'PulseCheck shows the service details page and stores the active service on the order.'
-          : 'PulseCheck confirms payment, then the athlete picks a calendar time using the booking flow.',
+      title: 'Payment complete',
+      body: 'PulseCheck confirms payment, then the athlete picks a calendar time using the booking flow.',
     },
   ];
   const current = steps[Math.max(0, Math.min(step, steps.length - 1))];
@@ -7083,7 +6725,7 @@ const ServicePurchasePreviewModal: React.FC<{
                     {service.description || 'No service details added yet.'}
                   </p>
                   <div className="mt-3 inline-flex rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100">
-                    {service.serviceType === 'subscription' ? 'Monthly subscription service' : 'One-time booked service'}
+                    One-time booked service
                   </div>
                 </div>
               ) : null}
@@ -7121,9 +6763,7 @@ const ServicePurchasePreviewModal: React.FC<{
                     Purchase confirmed
                   </div>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-300">
-                    {service.serviceType === 'subscription'
-                      ? 'The athlete lands on the service details page. The order is stored as an active subscription service once Stripe confirms checkout.'
-                      : 'The athlete continues into the calendar booking flow. Once they choose a time, the booking appears in the conversation and coach earnings.'}
+                    The athlete continues into the calendar booking flow. Once they choose a time, the booking appears in the conversation and coach earnings.
                   </p>
                 </div>
               ) : null}
@@ -7217,6 +6857,45 @@ type CoachServiceEarning = {
   scheduledAt: Date | null;
 };
 
+type AthleteAppSubscriptionTransaction = {
+  id: string;
+  athleteUserId: string;
+  status: string;
+  paidAt: Date | null;
+  grossRevenue: number;
+  platformShare: number;
+  stripeProcessingFee: number;
+  coachNet: number;
+  refunded: number;
+  currency: string;
+};
+
+type AthleteAppSubscriptionEarnings = {
+  subscriberCount: number;
+  transactionCount: number;
+  currentMonthGross: number;
+  currentMonthNet: number;
+  lifetimeGross: number;
+  lifetimePlatformShare: number;
+  lifetimeStripeProcessingFee: number;
+  lifetimeNet: number;
+  estimatedMonthlyNet: number;
+  transactions: AthleteAppSubscriptionTransaction[];
+};
+
+const emptyAthleteAppSubscriptionEarnings = (): AthleteAppSubscriptionEarnings => ({
+  subscriberCount: 0,
+  transactionCount: 0,
+  currentMonthGross: 0,
+  currentMonthNet: 0,
+  lifetimeGross: 0,
+  lifetimePlatformShare: 0,
+  lifetimeStripeProcessingFee: 0,
+  lifetimeNet: 0,
+  estimatedMonthlyNet: 0,
+  transactions: [],
+});
+
 type CoachPayoutRequest = {
   id: string;
   amountCents: number;
@@ -7260,9 +6939,17 @@ const coachPayoutFunctionUrl = () => {
   return `${configuredBaseUrl}/.netlify/functions/pulsecheck-coach-payout`;
 };
 
-const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; revenueSharePct?: number }> = ({
+const EarningsSection: React.FC<{
+  athletes: CoachAthlete[];
+  teamId?: string;
+  isDemo?: boolean;
+  athleteAppEarningsEnabled?: boolean;
+  revenueSharePct?: number;
+}> = ({
   athletes,
+  teamId,
   isDemo,
+  athleteAppEarningsEnabled = false,
   revenueSharePct = 0,
 }) => {
   // Demo defaults to a 20% share if provisioning hasn't set one, so the tab demonstrates real numbers.
@@ -7275,6 +6962,8 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
   const [serviceEarnings, setServiceEarnings] = useState<CoachServiceEarning[]>([]);
   const [serviceCurrentMonthNet, setServiceCurrentMonthNet] = useState(0);
   const [serviceLifetimeNet, setServiceLifetimeNet] = useState(0);
+  const [athleteAppEarnings, setAthleteAppEarnings] =
+    useState<AthleteAppSubscriptionEarnings>(emptyAthleteAppSubscriptionEarnings);
   const [payout, setPayout] = useState<CoachPayoutSummary>({
     totalEarnedCents: 0,
     availableCents: 0,
@@ -7297,6 +6986,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
       setServiceEarnings([]);
       setServiceCurrentMonthNet(0);
       setServiceLifetimeNet(0);
+      setAthleteAppEarnings(emptyAthleteAppSubscriptionEarnings());
       setPayout({
         totalEarnedCents: 0,
         availableCents: 0,
@@ -7312,18 +7002,27 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
     const loadSubscriptions = async () => {
       setSubscriptionsLoading(true);
       setSubscriptionsError('');
+      setMemberSubscriptions([]);
+      setServiceEarnings([]);
+      setServiceCurrentMonthNet(0);
+      setServiceLifetimeNet(0);
+      setAthleteAppEarnings(emptyAthleteAppSubscriptionEarnings());
 
       try {
+        if (!teamId) throw new Error('Choose an active team to view earnings.');
         const firebaseUser = auth.currentUser;
         if (!firebaseUser) throw new Error('Sign in again to view earnings.');
         const idToken = await firebaseUser.getIdToken();
-        const response = await fetch(coachEarningsFunctionUrl(), {
+        const response = await fetch(
+          `${coachEarningsFunctionUrl()}?teamId=${encodeURIComponent(teamId)}`,
+          {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${idToken}`,
             ...getFirebaseModeRequestHeaders(),
           },
-        });
+          }
+        );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           throw new Error(payload.message || 'Earnings could not be loaded.');
@@ -7331,6 +7030,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
 
         const earnings = payload.earnings || {};
         const serviceSummary = earnings.serviceEarnings || {};
+        const athleteAppSummary = earnings.athleteAppSubscriptionEarnings || {};
         const payoutSummary = earnings.payout || {};
         const rows: MemberSubscriptionEarning[] = (Array.isArray(earnings.members) ? earnings.members : [])
           .map((member: any) => ({
@@ -7394,6 +7094,23 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           paidAt: transaction.paidAt ? new Date(transaction.paidAt) : null,
           scheduledAt: transaction.scheduledAt ? new Date(transaction.scheduledAt) : null,
         }));
+        const athleteAppRows: AthleteAppSubscriptionTransaction[] = (
+          Array.isArray(athleteAppSummary.transactions)
+            ? athleteAppSummary.transactions
+            : []
+        ).map((transaction: any) => ({
+          id: String(transaction.id || transaction.invoiceId || ''),
+          athleteUserId: String(transaction.athleteUserId || ''),
+          status: String(transaction.status || 'paid'),
+          paidAt: transaction.paidAt ? new Date(transaction.paidAt) : null,
+          grossRevenue: (Number(transaction.grossRevenueCents) || 0) / 100,
+          platformShare: (Number(transaction.platformShareCents) || 0) / 100,
+          stripeProcessingFee:
+            (Number(transaction.stripeProcessingFeeCents) || 0) / 100,
+          coachNet: (Number(transaction.coachNetCents) || 0) / 100,
+          refunded: (Number(transaction.refundedCents) || 0) / 100,
+          currency: String(transaction.currency || 'usd').toUpperCase(),
+        }));
 
         rows.sort((left, right) =>
           Number(right.isActive) - Number(left.isActive)
@@ -7405,6 +7122,23 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           setServiceEarnings(serviceRows);
           setServiceCurrentMonthNet((Number(serviceSummary.currentMonthNetCents) || 0) / 100);
           setServiceLifetimeNet((Number(serviceSummary.lifetimeNetCents) || 0) / 100);
+          setAthleteAppEarnings({
+            subscriberCount: Math.max(0, Number(athleteAppSummary.subscriberCount) || 0),
+            transactionCount: Math.max(0, Number(athleteAppSummary.transactionCount) || 0),
+            currentMonthGross:
+              (Number(athleteAppSummary.currentMonthGrossCents) || 0) / 100,
+            currentMonthNet:
+              (Number(athleteAppSummary.currentMonthNetCents) || 0) / 100,
+            lifetimeGross: (Number(athleteAppSummary.lifetimeGrossCents) || 0) / 100,
+            lifetimePlatformShare:
+              (Number(athleteAppSummary.lifetimePlatformShareCents) || 0) / 100,
+            lifetimeStripeProcessingFee:
+              (Number(athleteAppSummary.lifetimeStripeProcessingFeeCents) || 0) / 100,
+            lifetimeNet: (Number(athleteAppSummary.lifetimeNetCents) || 0) / 100,
+            estimatedMonthlyNet:
+              (Number(athleteAppSummary.estimatedMonthlyNetCents) || 0) / 100,
+            transactions: athleteAppRows,
+          });
           setPayout({
             totalEarnedCents: Math.max(0, Number(payoutSummary.totalEarnedCents) || 0),
             availableCents: Math.max(0, Number(payoutSummary.availableCents) || 0),
@@ -7421,6 +7155,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           setServiceEarnings([]);
           setServiceCurrentMonthNet(0);
           setServiceLifetimeNet(0);
+          setAthleteAppEarnings(emptyAthleteAppSubscriptionEarnings());
           setPayout({
             totalEarnedCents: 0,
             availableCents: 0,
@@ -7444,9 +7179,13 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
     return () => {
       cancelled = true;
     };
-  }, [athletes, isDemo, revenueSharePct, share]);
+  }, [athletes, isDemo, revenueSharePct, share, teamId]);
 
   const effectiveShare = isDemo ? share : liveShare || share;
+  const athleteNameById = useMemo(
+    () => new Map(athletes.map((athlete) => [athlete.id, athlete.displayName])),
+    [athletes]
+  );
 
   const conversions = useMemo<Conversion[]>(() => {
     if (!isDemo) return [];
@@ -7468,8 +7207,9 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
   const monthlyKickback = useMemo(
     () => isDemo
       ? conversions.reduce((sum, conversion) => sum + conversion.cut, 0)
-      : memberSubscriptions.reduce((sum, member) => sum + member.monthlyShareAmount, 0),
-    [conversions, isDemo, memberSubscriptions]
+      : memberSubscriptions.reduce((sum, member) => sum + member.monthlyShareAmount, 0)
+        + athleteAppEarnings.estimatedMonthlyNet,
+    [athleteAppEarnings.estimatedMonthlyNet, conversions, isDemo, memberSubscriptions]
   );
   const lifetime = +(monthlyKickback * 6.5).toFixed(2);
   const activeSubscriberCount = memberSubscriptions.filter((member) => member.isActive).length;
@@ -7490,6 +7230,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
 
     setPayoutSubmitting(true);
     try {
+      if (!teamId) throw new Error('Choose an active team before requesting a payout.');
       const firebaseUser = auth.currentUser;
       if (!firebaseUser) throw new Error('Sign in again to request a payout.');
       const idToken = await firebaseUser.getIdToken();
@@ -7501,6 +7242,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           ...getFirebaseModeRequestHeaders(),
         },
         body: JSON.stringify({
+          teamId,
           paymentMethod: payoutMethod,
           paymentDestination: payoutDestination.trim(),
         }),
@@ -7541,7 +7283,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
           </div>
         </div>
         <p className="text-sm text-zinc-300 leading-relaxed">
-          Service purchases route to your connected Stripe account.{' '}
+          Verified service purchases are added to this team&apos;s payout balance.{' '}
           {effectiveShare > 0 && (
             <>
               When an athlete you invited subscribes to a paid plan,{' '}
@@ -7583,7 +7325,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                 ) : null}
               </div>
               <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">
-                Request the full available referral balance. The Pulse team will send it through your selected method and mark it paid after the transfer is complete.
+                Request the selected team&apos;s available referral and service earnings. The Pulse team will send them through your selected method and mark the payout complete after the transfer.
               </p>
               {payout.activeRequest ? (
                 <p className="mt-2 text-xs text-zinc-300">
@@ -7684,6 +7426,161 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
         </div>
       )}
 
+      {!isDemo &&
+        (athleteAppEarningsEnabled ||
+          athleteAppEarnings.transactionCount > 0 ||
+          athleteAppEarnings.lifetimeNet > 0) && (
+          <div>
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                  Coach-priced app subscriptions
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">
+                  Stripe subscription earnings from your athlete invite offer
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#E0FE10]/15 bg-[#E0FE10]/5 px-3 py-2 text-xs text-zinc-400">
+                Estimated monthly coach net{' '}
+                <span className="ml-1 font-bold text-[#E0FE10]">
+                  {fmt(athleteAppEarnings.estimatedMonthlyNet)}
+                </span>
+              </div>
+            </div>
+
+            {subscriptionsLoading ? (
+              <LoadingBlock label="Loading app subscription earnings..." />
+            ) : subscriptionsError ? (
+              <EmptyBlock
+                icon={AlertTriangle}
+                title="App subscription earnings unavailable"
+                body={subscriptionsError}
+              />
+            ) : (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <StatTile
+                    label="Paid subscribers"
+                    value={athleteAppEarnings.subscriberCount}
+                    dot="bg-green-400"
+                  />
+                  <StatTile
+                    label="This month coach net"
+                    value={fmt(athleteAppEarnings.currentMonthNet)}
+                    accent
+                  />
+                  <StatTile
+                    label="Lifetime coach net"
+                    value={fmt(athleteAppEarnings.lifetimeNet)}
+                  />
+                  <StatTile
+                    label="Lifetime gross"
+                    value={fmt(athleteAppEarnings.lifetimeGross)}
+                  />
+                </div>
+
+                <div className="rounded-xl border border-zinc-700/30 bg-zinc-800/40 p-3">
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-400">
+                    <span>
+                      Current month gross{' '}
+                      <strong className="font-semibold text-white">
+                        {fmt(athleteAppEarnings.currentMonthGross)}
+                      </strong>
+                    </span>
+                    <span>
+                      Lifetime Pulse share{' '}
+                      <strong className="font-semibold text-white">
+                        {fmt(athleteAppEarnings.lifetimePlatformShare)}
+                      </strong>
+                    </span>
+                    <span>
+                      Lifetime Stripe fees{' '}
+                      <strong className="font-semibold text-white">
+                        {fmt(athleteAppEarnings.lifetimeStripeProcessingFee)}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                {athleteAppEarnings.transactions.length === 0 ? (
+                  <EmptyBlock
+                    icon={CreditCard}
+                    title="Your first app subscription is ready to happen"
+                    body="Share your athlete invite link. Stripe-confirmed payments and the coach share will appear here."
+                  />
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-zinc-700/30 bg-zinc-800/40">
+                    <div className="border-b border-zinc-700/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                      Subscription transactions
+                    </div>
+                    <div className="divide-y divide-zinc-700/30">
+                      {athleteAppEarnings.transactions.map((transaction) => {
+                        const athleteLabel =
+                          athleteNameById.get(transaction.athleteUserId) ||
+                          (transaction.athleteUserId
+                            ? `Athlete ${transaction.athleteUserId.slice(-6)}`
+                            : 'Athlete account');
+                        return (
+                          <div key={transaction.id} className="p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="text-sm font-medium text-white">{athleteLabel}</div>
+                                <div className="mt-0.5 text-xs text-zinc-500">
+                                  {transaction.paidAt
+                                    ? transaction.paidAt.toLocaleDateString('en-US', {
+                                        month: 'long',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                      })
+                                    : 'Stripe payment'}
+                                </div>
+                              </div>
+                              <span className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-green-300">
+                                {transaction.status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-2 text-xs lg:grid-cols-4">
+                              <div className="rounded-lg bg-zinc-950/45 p-2">
+                                <div className="text-zinc-500">Gross</div>
+                                <div className="mt-0.5 font-semibold text-white">
+                                  {fmt(transaction.grossRevenue)} {transaction.currency}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-zinc-950/45 p-2">
+                                <div className="text-zinc-500">Pulse share</div>
+                                <div className="mt-0.5 font-semibold text-white">
+                                  {fmt(transaction.platformShare)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg bg-zinc-950/45 p-2">
+                                <div className="text-zinc-500">Stripe fee</div>
+                                <div className="mt-0.5 font-semibold text-white">
+                                  {fmt(transaction.stripeProcessingFee)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-[#E0FE10]/15 bg-[#E0FE10]/5 p-2">
+                                <div className="text-zinc-400">Coach net</div>
+                                <div className="mt-0.5 font-bold text-[#E0FE10]">
+                                  +{fmt(transaction.coachNet)}
+                                </div>
+                              </div>
+                            </div>
+                            {transaction.refunded > 0 ? (
+                              <div className="mt-2 text-xs text-amber-200">
+                                Refunded amount: {fmt(transaction.refunded)}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
       {!isDemo && (
         <div>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
@@ -7692,7 +7589,7 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
                 Additional service earnings
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                One-time purchases paid through your connected Stripe account
+                Verified one-time purchases included in this team&apos;s payout balance
               </div>
             </div>
             <div className="flex gap-2 text-xs">
@@ -7923,8 +7820,20 @@ const EarningsSection: React.FC<{ athletes: CoachAthlete[]; isDemo?: boolean; re
 // Library / Schedule / Settings (lean but functional shells)
 // ---------------------------------------------------------------------------
 
-const ScheduleSection: React.FC<{ coachId?: string; isDemo?: boolean }> = ({ coachId, isDemo }) => (
-  <ScheduleBoard coachId={coachId} isDemo={isDemo} />
+const ScheduleSection: React.FC<{
+  coachId?: string;
+  teamId?: string;
+  organizationId?: string;
+  athleteIds?: string[];
+  isDemo?: boolean;
+}> = ({ coachId, teamId, organizationId, athleteIds, isDemo }) => (
+  <ScheduleBoard
+    coachId={coachId}
+    teamId={teamId}
+    organizationId={organizationId}
+    athleteIds={athleteIds}
+    isDemo={isDemo}
+  />
 );
 
 const LocalFirebaseEnvironmentPanel: React.FC = () => {
@@ -8014,6 +7923,260 @@ const LocalFirebaseEnvironmentPanel: React.FC = () => {
   );
 };
 
+const AthleteAppSubscriptionOfferPanel: React.FC<{
+  teamContext: CoachDashboardTeamContext | null;
+  canManage: boolean;
+  isDemo?: boolean;
+  onCommercialConfigChanged?: (
+    teamId: string,
+    commercialConfig: PulseCheckTeamCommercialConfig
+  ) => void;
+}> = ({ teamContext, canManage, isDemo, onCommercialConfigChanged }) => {
+  const config = teamContext?.commercialConfig;
+  const [enabled, setEnabled] = useState(config?.athleteAppSubscriptionEnabled === true);
+  const [monthlyPrice, setMonthlyPrice] = useState(
+    config?.athleteAppSubscriptionMonthlyPriceCents
+      ? (config.athleteAppSubscriptionMonthlyPriceCents / 100).toFixed(2)
+      : ''
+  );
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    setEnabled(config?.athleteAppSubscriptionEnabled === true);
+    setMonthlyPrice(
+      config?.athleteAppSubscriptionMonthlyPriceCents
+        ? (config.athleteAppSubscriptionMonthlyPriceCents / 100).toFixed(2)
+        : ''
+    );
+    setMessage(null);
+  }, [
+    config?.athleteAppSubscriptionEnabled,
+    config?.athleteAppSubscriptionMonthlyPriceCents,
+    teamContext?.teamId,
+  ]);
+
+  const monthlyPriceCents = Math.round((Number.parseFloat(monthlyPrice) || 0) * 100);
+  const formattedPrice = formatPulseCheckMonthlyPrice(monthlyPriceCents, 'usd');
+
+  const saveOffer = async () => {
+    if (!teamContext || !config || saving || !canManage) return;
+    if (enabled && monthlyPriceCents < MIN_PULSECHECK_ATHLETE_APP_PRICE_CENTS) {
+      setMessage({ type: 'error', text: 'Set a monthly price of at least $1.00.' });
+      return;
+    }
+    if (enabled && monthlyPriceCents > MAX_PULSECHECK_ATHLETE_APP_PRICE_CENTS) {
+      setMessage({ type: 'error', text: 'Set a monthly price of $1,000.00 or less.' });
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      let payload: Record<string, any> = {};
+      if (!isDemo) {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('Sign in again to save this offer.');
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch(
+          '/.netlify/functions/manage-pulsecheck-athlete-subscription-offer',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+              ...getFirebaseModeRequestHeaders(),
+            },
+            body: JSON.stringify({
+              teamId: teamContext.teamId,
+              enabled,
+              monthlyPriceCents,
+            }),
+          }
+        );
+        payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || payload.error || 'The subscription offer could not be saved.');
+        }
+      }
+
+      const publicOffer = payload.offer && typeof payload.offer === 'object' ? payload.offer : {};
+      const returnedConfig =
+        payload.commercialConfig && typeof payload.commercialConfig === 'object'
+          ? payload.commercialConfig
+          : {};
+      const nextConfig: PulseCheckTeamCommercialConfig = {
+        ...config,
+        ...returnedConfig,
+        athleteAppSubscriptionEnabled:
+          typeof publicOffer.enabled === 'boolean' ? publicOffer.enabled : enabled,
+        athleteAppSubscriptionMonthlyPriceCents: Number.isFinite(
+          Number(publicOffer.monthlyPriceCents)
+        )
+          ? Math.max(0, Math.round(Number(publicOffer.monthlyPriceCents)))
+          : monthlyPriceCents,
+        athleteAppSubscriptionCurrency: 'usd',
+        athleteAppSubscriptionOfferVersion: Number.isFinite(Number(publicOffer.version))
+          ? Math.max(0, Math.round(Number(publicOffer.version)))
+          : Math.max(0, config.athleteAppSubscriptionOfferVersion + 1),
+        athleteAppSubscriptionRevenueRecipientUserId: String(
+          returnedConfig.athleteAppSubscriptionRevenueRecipientUserId ||
+            publicOffer.revenueRecipientUserId ||
+            config.athleteAppSubscriptionRevenueRecipientUserId ||
+            ''
+        ),
+      };
+      onCommercialConfigChanged?.(teamContext.teamId, nextConfig);
+      setEnabled(nextConfig.athleteAppSubscriptionEnabled);
+      setMonthlyPrice(
+        nextConfig.athleteAppSubscriptionMonthlyPriceCents
+          ? (nextConfig.athleteAppSubscriptionMonthlyPriceCents / 100).toFixed(2)
+          : ''
+      );
+      setMessage({
+        type: 'success',
+        text: nextConfig.athleteAppSubscriptionEnabled
+          ? `Athlete subscriptions are live at ${formatPulseCheckMonthlyPrice(
+              nextConfig.athleteAppSubscriptionMonthlyPriceCents,
+              nextConfig.athleteAppSubscriptionCurrency
+            )} per month.`
+          : 'New athlete subscription sales are paused.',
+      });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'The subscription offer could not be saved.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-violet-400/20 bg-violet-950/10 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2 text-sm font-bold text-white">
+            <Wallet className="h-4 w-4 text-violet-300" />
+            Athlete app subscription
+          </div>
+          <p className="mt-2 text-xs leading-5 text-zinc-400">
+            Set the monthly PulseCheck price for athletes who join this team. Their invite opens account setup and secure Stripe checkout before app access begins.
+          </p>
+        </div>
+        <span
+          className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+            enabled
+              ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
+              : 'border-zinc-700 bg-zinc-800/60 text-zinc-400'
+          }`}
+        >
+          {enabled ? 'Live' : 'Paused'}
+        </span>
+      </div>
+
+      {teamContext ? (
+        <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.7fr)]">
+          <div className="space-y-4 rounded-xl border border-white/10 bg-black/20 p-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={enabled}
+                disabled={!canManage || saving}
+                onChange={(event) => setEnabled(event.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[#E0FE10]"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-white">Sell PulseCheck through athlete invites</span>
+                <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                  New athletes purchase before their membership and app entitlement become active.
+                </span>
+              </span>
+            </label>
+
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Monthly price</span>
+              <div className="mt-2 flex items-center rounded-xl border border-zinc-700 bg-zinc-950/60 px-3 focus-within:border-violet-400/50">
+                <span className="text-sm text-zinc-500">$</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={monthlyPrice}
+                  disabled={!canManage || saving}
+                  onChange={(event) => setMonthlyPrice(event.target.value)}
+                  placeholder="20.00"
+                  className="h-11 min-w-0 flex-1 bg-transparent px-2 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <span className="text-xs text-zinc-500">USD / month</span>
+              </div>
+            </label>
+
+            {message ? (
+              <div
+                className={`rounded-lg border px-3 py-2 text-xs ${
+                  message.type === 'success'
+                    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+                    : 'border-red-400/25 bg-red-400/10 text-red-100'
+                }`}
+              >
+                {message.text}
+              </div>
+            ) : null}
+
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() => void saveOffer()}
+                disabled={
+                  saving ||
+                  (enabled &&
+                    (monthlyPriceCents < MIN_PULSECHECK_ATHLETE_APP_PRICE_CENTS ||
+                      monthlyPriceCents > MAX_PULSECHECK_ATHLETE_APP_PRICE_CENTS))
+                }
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#E0FE10] px-4 text-sm font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {saving ? 'Saving...' : 'Save subscription offer'}
+              </button>
+            ) : (
+              <p className="text-xs text-zinc-500">A team admin manages this subscription offer.</p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Monthly split preview</div>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-400">Athlete price</span>
+                <span className="font-semibold text-white">{formattedPrice}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-400">PulseCheck share</span>
+                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(Math.round(monthlyPriceCents * 0.5))}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-400">Coach share before fees</span>
+                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(monthlyPriceCents - Math.round(monthlyPriceCents * 0.5))}</span>
+              </div>
+            </div>
+            <p className="mt-4 text-[11px] leading-5 text-zinc-500">
+              Stripe processing fees come from the coach share. Taxes, refunds, and chargebacks are recorded from the final Stripe transaction.
+            </p>
+            <p className="mt-3 text-[11px] leading-5 text-zinc-600">
+              Price updates apply to new subscribers. Current subscribers keep the Stripe price they accepted.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 text-xs text-zinc-500">Choose an active team to manage its athlete subscription.</p>
+      )}
+    </div>
+  );
+};
+
 const SettingsSection: React.FC<{
   coachName: string;
   email?: string;
@@ -8021,6 +8184,12 @@ const SettingsSection: React.FC<{
   servicesEnabled?: boolean;
   servicesTeamId?: string;
   servicesOrganizationId?: string;
+  teamContext: CoachDashboardTeamContext | null;
+  canManageCommercialization: boolean;
+  onCommercialConfigChanged?: (
+    teamId: string,
+    commercialConfig: PulseCheckTeamCommercialConfig
+  ) => void;
   isDemo?: boolean;
 }> = ({
   coachName,
@@ -8029,6 +8198,9 @@ const SettingsSection: React.FC<{
   servicesEnabled = false,
   servicesTeamId = '',
   servicesOrganizationId = '',
+  teamContext,
+  canManageCommercialization,
+  onCommercialConfigChanged,
   isDemo = false,
 }) => (
   <div className="space-y-4">
@@ -8044,12 +8216,18 @@ const SettingsSection: React.FC<{
       </div>
     </div>
     <AccountSignInMethods compact />
+    <AthleteAppSubscriptionOfferPanel
+      teamContext={teamContext}
+      canManage={canManageCommercialization}
+      isDemo={isDemo}
+      onCommercialConfigChanged={onCommercialConfigChanged}
+    />
     {servicesEnabled && (
       <div className="rounded-2xl border border-emerald-400/20 bg-emerald-950/10 p-4">
         <div className="mb-4 flex flex-col gap-1">
           <div className="text-sm font-bold text-white">Additional Services</div>
           <div className="text-xs text-zinc-500">
-            Add one-time services or ongoing subscription services athletes can buy from their coach conversation.
+            Add one-time services athletes can buy from their coach conversation.
           </div>
         </div>
         <CoachServicesSection

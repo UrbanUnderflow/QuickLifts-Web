@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import type { GetServerSideProps } from 'next';
 import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
 import { auth } from '../../api/firebase/config';
@@ -228,7 +229,21 @@ const CoachProfilePage: React.FC = () => {
     setStripeLoading(true);
     try {
       console.log('[CoachProfile] Starting Stripe onboarding for user:', currentUser.id, 'email:', currentUser.email);
-      const res = await fetch(`/.netlify/functions/create-connected-account-simple?userId=${encodeURIComponent(currentUser.id)}`);
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Sign in again to connect payments.');
+      }
+      const res = await fetch(
+        '/.netlify/functions/create-connected-account-simple',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: currentUser.id }),
+        }
+      );
       
       if (!res.ok) {
         let errorMessage = `Failed to start onboarding (Error ${res.status})`;
@@ -559,5 +574,12 @@ const CoachProfilePage: React.FC = () => {
     </CoachLayout>
   );
 };
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=settings',
+    permanent: false,
+  },
+});
 
 export default CoachProfilePage;

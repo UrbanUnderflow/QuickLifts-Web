@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useUser } from '../hooks/useUser';
-import { db } from '../api/firebase/config';
+import { auth, db } from '../api/firebase/config';
 import { resolvePulseCheckFunctionUrl } from '../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import {
   collection,
@@ -146,9 +146,17 @@ const PulseCheckChat: React.FC = () => {
     setSending(true);
 
     try {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser || firebaseUser.uid !== currentUser.id) {
+        throw new Error('The signed-in chat account changed.');
+      }
+      const idToken = await firebaseUser.getIdToken();
       const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
         body: JSON.stringify({ userId: currentUser.id, message: text, conversationId })
       });
       
@@ -313,4 +321,3 @@ const PulseCheckChat: React.FC = () => {
 };
 
 export default PulseCheckChat;
-

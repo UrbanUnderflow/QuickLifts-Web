@@ -1,5 +1,8 @@
 import { Handler } from '@netlify/functions';
-import { admin, headers as corsHeaders } from './config/firebase';
+import {
+  getFirebaseAdminApp,
+  headers as corsHeaders,
+} from './config/firebase';
 import { safeErrorBody } from './utils/safeErrorResponse';
 
 /**
@@ -22,12 +25,19 @@ const getHeader = (headers: Record<string, string | undefined> | undefined, head
   return matchedKey ? headers[matchedKey] : undefined;
 };
 
-const verifyAuth = async (authHeader: string | undefined): Promise<string | null> => {
+const verifyAuth = async (
+  event: Parameters<Handler>[0],
+  authHeader: string | undefined
+): Promise<{ database: any; userId: string } | null> => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   try {
     const idToken = authHeader.split('Bearer ')[1];
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    return decodedToken.uid;
+    const app = getFirebaseAdminApp(event);
+    const decodedToken = await app.auth().verifyIdToken(idToken);
+    return {
+      database: app.firestore(),
+      userId: decodedToken.uid,
+    };
   } catch (error) {
     console.error('[coach-schedule-import-status] Auth verification failed:', error);
     return null;
@@ -47,8 +57,11 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  const uid = await verifyAuth(getHeader(event.headers, 'authorization'));
-  if (!uid) {
+  const authenticated = await verifyAuth(
+    event,
+    getHeader(event.headers, 'authorization')
+  );
+  if (!authenticated) {
     return {
       statusCode: 401,
       headers: corsHeaders,
@@ -57,7 +70,12 @@ export const handler: Handler = async (event) => {
   }
 
   const jobId = event.queryStringParameters?.jobId;
-  if (!jobId) {
+  if (
+    !jobId
+    || jobId.length > 240
+    || jobId.includes('/')
+    || /[\u0000-\u001f\u007f]/.test(jobId)
+  ) {
     return {
       statusCode: 400,
       headers: corsHeaders,
@@ -65,7 +83,10 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  const jobDoc = await admin.firestore().collection(JOB_COLLECTION).doc(jobId).get();
+  const jobDoc = await authenticated.database
+    .collection(JOB_COLLECTION)
+    .doc(jobId)
+    .get();
   if (!jobDoc.exists) {
     return {
       statusCode: 404,
@@ -75,7 +96,7 @@ export const handler: Handler = async (event) => {
   }
 
   const job = jobDoc.data() || {};
-  if (job.ownerId !== uid) {
+  if (job.ownerId !== authenticated.userId) {
     return {
       statusCode: 403,
       headers: corsHeaders,

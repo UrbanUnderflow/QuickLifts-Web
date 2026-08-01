@@ -7,6 +7,7 @@ import PageHead from '../../components/PageHead';
 import CoachLayout from '../../components/CoachLayout';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import {
+  listSentSportsIntelligenceReportsForAuthorizedTeam,
   listSentSportsIntelligenceReportsForCoach,
   type CoachReportListItem,
 } from '../../api/firebase/pulsecheckCoachReportAccess';
@@ -37,6 +38,8 @@ const CoachSportsIntelligenceReports: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const trainingMode = router.query.training === '1';
+  const selectedTeamId =
+    typeof router.query.teamId === 'string' ? router.query.teamId.trim() : '';
 
   useEffect(() => {
     if (userLoading) return;
@@ -51,7 +54,11 @@ const CoachSportsIntelligenceReports: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    listSentSportsIntelligenceReportsForCoach(currentUser.id)
+    const reportRequest = selectedTeamId
+      ? listSentSportsIntelligenceReportsForAuthorizedTeam(currentUser.id, selectedTeamId)
+      : listSentSportsIntelligenceReportsForCoach(currentUser.id);
+
+    reportRequest
       .then((nextReports) => {
         if (!cancelled) setReports(nextReports);
       })
@@ -69,7 +76,7 @@ const CoachSportsIntelligenceReports: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, userLoading]);
+  }, [currentUser?.id, selectedTeamId, userLoading]);
 
   const filteredReports = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();

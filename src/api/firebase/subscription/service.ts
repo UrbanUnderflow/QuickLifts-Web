@@ -1,5 +1,9 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../firebase/config';
+import {
+  auth,
+  db,
+  getFirebaseModeRequestHeaders,
+} from '../../firebase/config';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export interface SubscriptionDoc {
@@ -136,10 +140,17 @@ async function computePulseCheckStatus(userId: string): Promise<SubscriptionStat
 
 async function syncWithRevenueCat(userId: string): Promise<void> {
   try {
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.uid !== userId) return;
+    const idToken = await currentUser.getIdToken();
     console.log('[subscriptionService] syncWithRevenueCat POST', { userId, userIdType: typeof userId, userIdLength: userId?.length });
     const res = await fetch('/.netlify/functions/sync-revenuecat-subscription', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        ...getFirebaseModeRequestHeaders(),
+      },
       body: JSON.stringify({ userId }),
     });
     const text = await res.text().catch(() => '');
@@ -153,13 +164,20 @@ async function syncWithRevenueCat(userId: string): Promise<void> {
   }
 }
 
-async function syncWithStripe(userId: string, stripeCustomerId?: string | null): Promise<void> {
+async function syncWithStripe(userId: string): Promise<void> {
   try {
-    console.log('[subscriptionService] syncWithStripe POST', { userId, hasCustomerId: !!stripeCustomerId });
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.uid !== userId) return;
+    const idToken = await currentUser.getIdToken();
+    console.log('[subscriptionService] syncWithStripe POST', { userId });
     const res = await fetch('/.netlify/functions/sync-stripe-subscription', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, stripeCustomerId }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        ...getFirebaseModeRequestHeaders(),
+      },
+      body: JSON.stringify({ userId }),
     });
     const text = await res.text().catch(() => '');
     console.log('[subscriptionService] syncWithStripe response', { status: res.status, text });
@@ -199,5 +217,4 @@ export const subscriptionService = {
 };
 
 export default subscriptionService;
-
 

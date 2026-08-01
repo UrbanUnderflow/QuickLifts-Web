@@ -7,6 +7,7 @@ const baseURLPort = new URL(baseURL).port || '3000';
 const defaultStorageState = path.resolve(process.cwd(), '.playwright/admin-storage-state.json');
 const storageState = process.env.PLAYWRIGHT_STORAGE_STATE || (existsSync(defaultStorageState) ? defaultStorageState : undefined);
 const useExistingServer = process.env.PLAYWRIGHT_USE_EXISTING_SERVER === 'true';
+const useStandaloneFlowLabServer = process.env.PLAYWRIGHT_FLOW_LAB_STANDALONE === 'true';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -27,8 +28,12 @@ export default defineConfig({
   webServer: useExistingServer
     ? undefined
     : {
-        command: `PORT=${baseURLPort} NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE=true npm run dev`,
-        url: `${baseURL}/admin/systemOverview`,
+        command: useStandaloneFlowLabServer
+          ? `next dev -H 0.0.0.0 -p ${baseURLPort}`
+          : `PORT=${baseURLPort} NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE=true npm run dev`,
+        url: useStandaloneFlowLabServer
+          ? `${baseURL}/PulseCheck/subscription-flow-lab`
+          : `${baseURL}/admin/systemOverview`,
         reuseExistingServer: true,
         timeout: 120_000,
       },

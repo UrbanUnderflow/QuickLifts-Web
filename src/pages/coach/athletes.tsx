@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import type { GetServerSideProps } from 'next';
 import { useUser } from '../../hooks/useUser';
 import PageHead from '../../components/PageHead';
 import CoachLayout from '../../components/CoachLayout';
@@ -363,5 +364,12 @@ const CoachAthletes: React.FC = () => {
     </>
   );
 };
+
+export const getServerSideProps: GetServerSideProps = async () => ({
+  redirect: {
+    destination: '/coach/dashboard?view=roster',
+    permanent: false,
+  },
+});
 
 export default CoachAthletes;

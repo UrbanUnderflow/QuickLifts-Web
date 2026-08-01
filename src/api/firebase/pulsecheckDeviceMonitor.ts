@@ -24,6 +24,11 @@ import { pulseCheckProvisioningService } from './pulsecheckProvisioning/service'
 import type { PulseCheckTeamMembership } from './pulsecheckProvisioning/types';
 import { userService } from './user/service';
 import type { User } from './user/types';
+import {
+  normalizePulseCheckWorkspaceScope,
+  pulseCheckRecordMatchesWorkspace,
+  type PulseCheckWorkspaceScope,
+} from './pulsecheckWorkspaceScope';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Public contract
@@ -403,10 +408,14 @@ interface DeriveInput {
   now: number;
   windowStart: number;
   windowDays: number;
+  windowDateKeys?: string[];
+  activeRecordCountsAsPresence?: boolean;
 }
 
 interface HealthContextSourceStatus {
   sourceFamily: HealthContextSourceFamily;
+  teamId?: string;
+  organizationId?: string;
   lifecycleState?: string;
   status?: string;
   connectionState?: string;
@@ -463,6 +472,9 @@ const buildSourceStatusFromEntry = (
   const data = entry as Record<string, unknown>;
   return {
     sourceFamily: (data.sourceFamily || family) as HealthContextSourceFamily,
+    teamId: typeof data.teamId === 'string' ? data.teamId : undefined,
+    organizationId:
+      typeof data.organizationId === 'string' ? data.organizationId : undefined,
     lifecycleState: data.lifecycleState as string | undefined,
     status: data.status as string | undefined,
     connectionState: data.connectionState as string | undefined,
@@ -473,11 +485,15 @@ const buildSourceStatusFromEntry = (
   };
 };
 
-const loadSharedSourceStatusMap = async (athleteUserId: string): Promise<HealthContextSourceStatus[]> => {
+const loadSharedSourceStatusMap = async (
+  athleteUserId: string,
+  workspace?: PulseCheckWorkspaceScope
+): Promise<HealthContextSourceStatus[]> => {
   try {
     const snap = await getDoc(doc(db, 'health-context-source-status', athleteUserId));
     if (!snap.exists()) return [];
     const data = snap.data() as Record<string, unknown>;
+    if (workspace && !pulseCheckRecordMatchesWorkspace(data, workspace)) return [];
     const sourceStatuses = (data.sourceStatuses && typeof data.sourceStatuses === 'object')
       ? data.sourceStatuses as Record<string, unknown>
       : data;
@@ -489,11 +505,15 @@ const loadSharedSourceStatusMap = async (athleteUserId: string): Promise<HealthC
   }
 };
 
-const loadNestedAthleteSourceStatus = async (athleteUserId: string): Promise<HealthContextSourceStatus[]> => {
+const loadNestedAthleteSourceStatus = async (
+  athleteUserId: string,
+  workspace?: PulseCheckWorkspaceScope
+): Promise<HealthContextSourceStatus[]> => {
   try {
     const snap = await getDoc(doc(db, 'athletes', athleteUserId, 'health-context-source-status', 'current'));
     if (!snap.exists()) return [];
     const data = snap.data() as Record<string, unknown>;
+    if (workspace && !pulseCheckRecordMatchesWorkspace(data, workspace)) return [];
     return WEARABLE_FAMILY_LIST
       .map((family) => buildSourceStatusFromEntry(family, data[family]))
       .filter((entry): entry is HealthContextSourceStatus => !!entry);
@@ -502,18 +522,29 @@ const loadNestedAthleteSourceStatus = async (athleteUserId: string): Promise<Hea
   }
 };
 
-const loadWearableSourceStatuses = async (athleteUserId: string): Promise<HealthContextSourceStatus[]> => {
+const loadWearableSourceStatuses = async (
+  athleteUserId: string,
+  workspace?: PulseCheckWorkspaceScope
+): Promise<HealthContextSourceStatus[]> => {
   const [sharedEntries, nestedEntries, familyEntries] = await Promise.all([
-    loadSharedSourceStatusMap(athleteUserId),
-    loadNestedAthleteSourceStatus(athleteUserId),
+    loadSharedSourceStatusMap(athleteUserId, workspace),
+    loadNestedAthleteSourceStatus(athleteUserId, workspace),
     Promise.all(
       WEARABLE_FAMILY_LIST.map(async (family): Promise<HealthContextSourceStatus | null> => {
         try {
           const snap = await getDoc(doc(db, 'health-context-source-status', `${athleteUserId}_${family}`));
           if (!snap.exists()) return null;
           const data = snap.data() as Record<string, unknown>;
+          if (workspace && !pulseCheckRecordMatchesWorkspace(data, workspace)) {
+            return null;
+          }
           const status: HealthContextSourceStatus = {
             sourceFamily: (data.sourceFamily || family) as HealthContextSourceFamily,
+            teamId: typeof data.teamId === 'string' ? data.teamId : undefined,
+            organizationId:
+              typeof data.organizationId === 'string'
+                ? data.organizationId
+                : undefined,
             lifecycleState: data.lifecycleState as string | undefined,
             status: data.status as string | undefined,
             connectionState: data.connectionState as string | undefined,
@@ -544,6 +575,8 @@ export const deriveAthleteDeviceStatus = ({
   now,
   windowStart,
   windowDays,
+  windowDateKeys,
+  activeRecordCountsAsPresence = false,
 }: DeriveInput): AthleteDeviceStatus => {
   const wearableRecords = records.filter((record) => WEARABLE_FAMILIES.has(record.sourceFamily));
   const connectedStatuses = sourceStatuses.filter(isConnectedSourceStatus);
@@ -563,6 +596,9 @@ export const deriveAthleteDeviceStatus = ({
   const families = new Set<HealthContextSourceFamily>();
   for (const record of wearableRecords) families.add(record.sourceFamily);
   for (const family of connectedStatusByFamily.keys()) families.add(family);
+  const dateIndexByKey = windowDateKeys
+    ? new Map(windowDateKeys.map((dateKey, index) => [dateKey, index]))
+    : null;
 
   const devices: AthleteDevicePerSourceStatus[] = Array.from(families).map((family) => {
     const familyRecords = wearableRecords.filter((record) => record.sourceFamily === family);
@@ -579,13 +615,19 @@ export const deriveAthleteDeviceStatus = ({
         // "Last data" must reflect the most recent record that actually carried
         // measured values — not an empty placeholder/sync record.
         if (
-          recordHasMeasuredData(record) &&
+          (activeRecordCountsAsPresence || recordHasMeasuredData(record)) &&
           (lastObservedAt === null || record.observedAt > lastObservedAt)
         ) {
           lastObservedAt = record.observedAt;
         }
-        const dayIndex = Math.floor((record.observedAt - windowStart) / SECONDS_PER_DAY);
-        if (dayIndex >= 0 && dayIndex < windowDays) {
+        const observedDate = new Date(record.observedAt * 1000);
+        const observedDateKey = Number.isNaN(observedDate.getTime())
+          ? ''
+          : `${observedDate.getFullYear()}-${String(observedDate.getMonth() + 1).padStart(2, '0')}-${String(observedDate.getDate()).padStart(2, '0')}`;
+        const dayIndex = dateIndexByKey
+          ? dateIndexByKey.get(observedDateKey)
+          : Math.floor((record.observedAt - windowStart) / SECONDS_PER_DAY);
+        if (dayIndex !== undefined && dayIndex >= 0 && dayIndex < windowDays) {
           const bucket = recordsByDay.get(dayIndex);
           if (bucket) bucket.push(record);
           else recordsByDay.set(dayIndex, [record]);
@@ -615,16 +657,16 @@ export const deriveAthleteDeviceStatus = ({
       connectionStatus = 'not_connected';
     }
 
-    // A day is only "worn"/present when its records actually produced measured
-    // values — empty-payload records don't light the cell green or count toward
-    // coverage. dailyDetails is the source of truth; presence mirrors it.
+    // General device-monitor surfaces require a measured value before calling a
+    // day worn. The scoped coach-readiness contract mirrors the universal app:
+    // any active wearable source record in that local calendar day is evidence.
     const dailyDetails: (AthleteDeviceDayDetail | null)[] = Array.from(
       { length: windowDays },
       (_, day): AthleteDeviceDayDetail | null => {
         const dayRecords = recordsByDay.get(day);
         if (!dayRecords || dayRecords.length === 0) return null;
         const metrics = extractDayMetrics(dayRecords);
-        if (metrics.length === 0) return null;
+        if (metrics.length === 0 && !activeRecordCountsAsPresence) return null;
         const maxObservedAt = dayRecords.reduce(
           (max, record) => (typeof record.observedAt === 'number' && record.observedAt > max ? record.observedAt : max),
           0,
@@ -739,10 +781,25 @@ const loadDeviceStatusesForMemberships = async (
   athletes: PulseCheckTeamMembership[],
   windowDays: number,
   preloadedUserById?: Map<string, User>,
+  workspace?: PulseCheckWorkspaceScope,
 ): Promise<TeamDeviceStatusResult> => {
   const safeWindowDays = safeWindow(windowDays);
   const now = Math.round(Date.now() / 1000);
-  const windowStart = now - safeWindowDays * SECONDS_PER_DAY;
+  const scopedWindowDates = workspace
+    ? Array.from({ length: safeWindowDays }, (_, index) => {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - (safeWindowDays - 1 - index));
+        return date;
+      })
+    : null;
+  const windowDateKeys = scopedWindowDates?.map(
+    (date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  );
+  const windowStart = scopedWindowDates?.[0]
+    ? Math.round(scopedWindowDates[0].getTime() / 1000)
+    : now - safeWindowDays * SECONDS_PER_DAY;
 
   const athleteIds = athletes.map((membership) => membership.userId);
   const userById = preloadedUserById || new Map(
@@ -757,7 +814,9 @@ const loadDeviceStatusesForMemberships = async (
     // catch(() => null) reported "No device" for EVERY athlete.
     const [records, sourceStatuses] = await Promise.all([
       listHealthContextSourceRecordsForWindow(membership.userId, windowStart, now, {
-        max: MAX_RECORDS_PER_ATHLETE,
+        ...(workspace
+          ? { workspace }
+          : { max: MAX_RECORDS_PER_ATHLETE }),
       }).catch((error) => {
         console.warn(
           `[pulsecheckDeviceMonitor] health-context-source-records query failed for ${membership.userId}; falling back to source-status`,
@@ -765,7 +824,7 @@ const loadDeviceStatusesForMemberships = async (
         );
         return [] as HealthContextSourceRecord[];
       }),
-      loadWearableSourceStatuses(membership.userId).catch((error) => {
+      loadWearableSourceStatuses(membership.userId, workspace).catch((error) => {
         console.warn(
           `[pulsecheckDeviceMonitor] source-status load failed for ${membership.userId}`,
           error,
@@ -781,6 +840,8 @@ const loadDeviceStatusesForMemberships = async (
       now,
       windowStart,
       windowDays: safeWindowDays,
+      windowDateKeys: windowDateKeys || undefined,
+      activeRecordCountsAsPresence: !!workspace,
     });
   });
 
@@ -818,7 +879,14 @@ export const loadTeamDeviceStatuses = async (
 export const loadAthleteDeviceStatuses = async (
   athleteUserIds: string[],
   windowDays: number = DEVICE_MONITOR_DEFAULT_WINDOW_DAYS,
+  scope?: PulseCheckWorkspaceScope,
 ): Promise<TeamDeviceStatusResult> => {
+  const workspace = scope ? normalizePulseCheckWorkspaceScope(scope) : null;
+  if (scope && !workspace) {
+    throw new Error(
+      '[pulsecheckDeviceMonitor] teamId and organizationId are required together.'
+    );
+  }
   const athleteIds = Array.from(new Set(athleteUserIds.map((id) => id.trim()).filter(Boolean)));
   const users = athleteIds.length ? await userService.getUsersByIds(athleteIds) : [];
   const userById = new Map(users.map((user) => [user.id, user]));
@@ -827,7 +895,12 @@ export const loadAthleteDeviceStatuses = async (
     role: 'athlete',
     email: userById.get(athleteUserId)?.email,
   } as PulseCheckTeamMembership));
-  return loadDeviceStatusesForMemberships(athletes, windowDays, userById);
+  return loadDeviceStatusesForMemberships(
+    athletes,
+    windowDays,
+    userById,
+    workspace || undefined
+  );
 };
 
 export interface TeamDeviceStatusSummary {

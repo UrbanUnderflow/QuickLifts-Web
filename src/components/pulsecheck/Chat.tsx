@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useUser } from '../../hooks/useUser';
 import { Brain, Send, Heart, Star, Target, Gauge, Flame, TrendingUp, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
-import { db } from '../../api/firebase/config';
+import { auth, db } from '../../api/firebase/config';
 import { collection, getDocs, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import EscalationModal from './EscalationModal';
@@ -22,6 +22,17 @@ import CurriculumIntentPanel from './CurriculumIntentPanel';
 const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
 const STORAGE_KEY_ACTIVE_EXERCISE = 'pulsecheck_active_exercise';
 const todayDateKey = () => new Date().toISOString().split('T')[0];
+
+const pulseCheckChatHeaders = async (expectedUserId: string) => {
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser || firebaseUser.uid !== expectedUserId) {
+    throw new Error('The signed-in chat account changed.');
+  }
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
+  };
+};
 
 const humanizeAssignmentLabel = (value?: string | null) => {
   if (!value) return 'Nora task';
@@ -521,7 +532,7 @@ const Chat: React.FC = () => {
       
       const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await pulseCheckChatHeaders(currentUser.id),
         body: JSON.stringify({ 
           userId: currentUser.id, 
           message: prompt, 
@@ -719,7 +730,7 @@ const Chat: React.FC = () => {
     try {
       const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-chat'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await pulseCheckChatHeaders(currentUser.id),
         body: JSON.stringify({ userId: currentUser.id, message: text, conversationId })
       });
       

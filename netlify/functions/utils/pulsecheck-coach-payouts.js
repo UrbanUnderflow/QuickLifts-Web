@@ -4,6 +4,12 @@ const PAYOUT_METHODS = new Set(['zelle', 'apple_pay', 'cash_app']);
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value) => normalizeString(value).toLowerCase();
+const payoutStateId = (coachUserId, teamId) => {
+  const coach = normalizeString(coachUserId);
+  const team = normalizeString(teamId);
+  if (!coach || !team || coach.includes('/') || team.includes('/')) return '';
+  return `${coach}__${team}`;
+};
 
 const calculatePercentageFeeCents = (amountCents, percentage) => {
   const amount = Math.max(0, Number(amountCents) || 0);
@@ -61,6 +67,8 @@ const serializePayoutRequest = (id, data = {}) => ({
   paymentReference: normalizeString(data.paymentReference) || null,
   emailSent: data.emailSent === true,
   teamIds: Array.isArray(data.teamIds) ? data.teamIds.map(normalizeString).filter(Boolean) : [],
+  teamId: normalizeString(data.teamId) || null,
+  organizationId: normalizeString(data.organizationId) || null,
   transactionCount: Math.max(0, Number(data.transactionCount) || 0),
 });
 
@@ -140,6 +148,7 @@ module.exports = {
   escapeHtml,
   normalizeEmail,
   normalizeString,
+  payoutStateId,
   payoutMethodLabel,
   resolveSiteUrl,
   serializePayoutRequest,

@@ -154,23 +154,61 @@ service cloud.firestore {
 
     function isExplicitlyRuledCollection(collectionName) {
       return collectionName in [
+        'admin-settings',
         'athletic-mind-hub-change-log',
+        'athlete-mental-progress',
         'beta-applications',
+        'coachAthletes',
+        'coach-notifications',
         'coach-nora-vault',
+        'coach-athlete-conversations',
+        'coach-athlete-messages',
+        'coachScheduleImportJobs',
         'pulsecheck-coach-services',
+        'pulsecheck-coach-service-orders',
+        'pulsecheck-coach-payout-requests',
+        'pulsecheck-coach-payout-states',
+        'pulsecheck-assessment-purchases',
+        'pulsecheck-athlete-app-checkout-locks',
+        'pulsecheck-athlete-app-checkouts',
+        'pulsecheck-athlete-app-commercialization',
+        'pulsecheck-athlete-app-entitlements',
+        'pulsecheck-athlete-app-invite-checkout-locks',
+        'pulsecheck-athlete-app-offers',
+        'pulsecheck-athlete-app-revenue-events',
+        'pulsecheck-referral-attributions',
         'coach-team-schedule',
         'company-config',
         'curriculum-notes',
+        'dailySentimentAnalysis',
         'document-notes',
+        'escalation-records',
+        'health-context-source-records',
+        'health-context-source-status',
         'junior-curriculum',
         'junior-progress',
         'mental-training-education-progress',
+        'mental-curriculum-assignments',
+        'mental-exercises',
+        'mental-recommendations',
         'programming-access',
         'pulsecheck-invite-activities',
         'pulsecheck-invite-links',
+        'pulsecheck-organizations',
+        'pulsecheck-organization-memberships',
+        'pulsecheck-push-installations',
+        'pulsecheck-morning-checkins',
+        'pulsecheck-teams',
         'pulsecheck-team-memberships',
+        'pulsecheck-daily-assignments',
         'round-exports',
+        'sim-modules',
+        'sim-completions',
         'signingRequests',
+        'stripeConnect',
+        'teams',
+        'transactions',
+        'users',
         'user-reports'
       ] || isAdminManagedPublicReadCollection(collectionName)
         || isAdminOnlyCollection(collectionName)
@@ -185,13 +223,295 @@ service cloud.firestore {
     function pcMembershipPath(teamId) {
       return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid);
     }
+    function pcUserMembershipPath(teamId, userId) {
+      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + userId);
+    }
+    function pcTeamPath(teamId) {
+      return /databases/$(database)/documents/pulsecheck-teams/$(teamId);
+    }
+    function pcOrganizationPath(organizationId) {
+      return /databases/$(database)/documents/pulsecheck-organizations/$(organizationId);
+    }
+    function pcMembershipDataIsActive(data) {
+      return (!('status' in data) || data.status == 'active')
+        && (!('revokedAt' in data) || data.revokedAt == null);
+    }
+    function pcTeamIsActive(teamId) {
+      return exists(pcTeamPath(teamId))
+        && get(pcTeamPath(teamId)).data.status == 'active'
+        && (!('archivedAt' in get(pcTeamPath(teamId)).data)
+          || get(pcTeamPath(teamId)).data.archivedAt == null)
+        && (!('deletedAt' in get(pcTeamPath(teamId)).data)
+          || get(pcTeamPath(teamId)).data.deletedAt == null);
+    }
+    function pcTeamOrganizationIsActive(teamId) {
+      let team = get(pcTeamPath(teamId)).data;
+      return pcTeamIsActive(teamId)
+        && team.organizationId is string
+        && team.organizationId.size() > 0
+        && exists(pcOrganizationPath(team.organizationId))
+        && get(pcOrganizationPath(team.organizationId)).data.status == 'active'
+        && (!('archivedAt' in get(pcOrganizationPath(team.organizationId)).data)
+          || get(pcOrganizationPath(team.organizationId)).data.archivedAt == null)
+        && (!('deletedAt' in get(pcOrganizationPath(team.organizationId)).data)
+          || get(pcOrganizationPath(team.organizationId)).data.deletedAt == null);
+    }
+    function pcDataMatchesTeamOrganization(data, teamId) {
+      return pcTeamOrganizationIsActive(teamId)
+        && data.organizationId is string
+        && data.organizationId == get(pcTeamPath(teamId)).data.organizationId;
+    }
+    function pcHasActiveTeamMembership(teamId) {
+      let membership = get(pcMembershipPath(teamId)).data;
+      let team = get(pcTeamPath(teamId)).data;
+      return isSignedIn()
+        && exists(pcMembershipPath(teamId))
+        && pcTeamOrganizationIsActive(teamId)
+        && membership.userId == request.auth.uid
+        && membership.teamId == teamId
+        && membership.organizationId == team.organizationId
+        && pcMembershipDataIsActive(membership);
+    }
+    function pcUserHasActiveAthleteMembership(teamId, athleteId) {
+      let membership = get(pcUserMembershipPath(teamId, athleteId)).data;
+      let team = get(pcTeamPath(teamId)).data;
+      return exists(pcUserMembershipPath(teamId, athleteId))
+        && pcTeamOrganizationIsActive(teamId)
+        && membership.userId == athleteId
+        && membership.teamId == teamId
+        && membership.organizationId == team.organizationId
+        && membership.role == 'athlete'
+        && pcMembershipDataIsActive(membership);
+    }
+    function pcUserHasActiveStaffMembership(teamId, userId) {
+      let membership = get(pcUserMembershipPath(teamId, userId)).data;
+      let team = get(pcTeamPath(teamId)).data;
+      return exists(pcUserMembershipPath(teamId, userId))
+        && pcTeamOrganizationIsActive(teamId)
+        && membership.userId == userId
+        && membership.teamId == teamId
+        && membership.organizationId == team.organizationId
+        && membership.role != 'athlete'
+        && pcMembershipDataIsActive(membership);
+    }
+    function pcUserMembershipHasCapability(teamId, userId, capability) {
+      let membership = get(pcUserMembershipPath(teamId, userId)).data;
+      return membership.role == 'team-admin'
+        || (
+          membership.staffCapabilities is list
+          && capability in membership.staffCapabilities
+        )
+        || (
+          (!('staffCapabilities' in membership)
+            || (
+              membership.staffCapabilities is list
+              && membership.staffCapabilities.size() == 0
+            ))
+          && (
+            (capability == 'coaching' && membership.role == 'coach')
+            || (capability == 'administrative' && membership.role == 'support-staff')
+            || (capability == 'athletic_trainer'
+              && membership.role in ['performance-staff', 'clinician'])
+          )
+        );
+    }
+    function pcStaffUserCanAccessTeamAthlete(coachId, teamId, athleteId) {
+      let membership = get(pcUserMembershipPath(teamId, coachId)).data;
+      return pcUserHasActiveStaffMembership(teamId, coachId)
+        && (
+          pcUserMembershipHasCapability(teamId, coachId, 'admin')
+          || pcUserMembershipHasCapability(teamId, coachId, 'coaching')
+        )
+        && pcUserHasActiveAthleteMembership(teamId, athleteId)
+        && (
+          !('rosterVisibilityScope' in membership)
+          || membership.rosterVisibilityScope == 'team'
+          || (
+            membership.rosterVisibilityScope == 'assigned'
+            && membership.allowedAthleteIds is list
+            && athleteId in membership.allowedAthleteIds
+          )
+        );
+    }
+    function pcMembershipHasCapability(teamId, capability) {
+      let membership = get(pcMembershipPath(teamId)).data;
+      return membership.role == 'team-admin'
+        || (
+          membership.staffCapabilities is list
+          && capability in membership.staffCapabilities
+        )
+        || (
+          (!('staffCapabilities' in membership)
+            || (
+              membership.staffCapabilities is list
+              && membership.staffCapabilities.size() == 0
+            ))
+          && (
+            (capability == 'coaching' && membership.role == 'coach')
+            || (capability == 'administrative' && membership.role == 'support-staff')
+            || (capability == 'athletic_trainer'
+              && membership.role in ['performance-staff', 'clinician'])
+          )
+        );
+    }
+    function pcCanUseNora(teamId) {
+      return pcHasActiveTeamMembership(teamId)
+        && get(pcMembershipPath(teamId)).data.role != 'athlete'
+        && (
+          pcMembershipHasCapability(teamId, 'admin')
+          || pcMembershipHasCapability(teamId, 'coaching')
+          || pcMembershipHasCapability(teamId, 'administrative')
+        );
+    }
+    function pcCanCoachTeam(teamId) {
+      return pcHasActiveTeamMembership(teamId)
+        && get(pcMembershipPath(teamId)).data.role != 'athlete'
+        && (
+          pcMembershipHasCapability(teamId, 'admin')
+          || pcMembershipHasCapability(teamId, 'coaching')
+        );
+    }
+    function pcCanAccessTeamAthlete(teamId, athleteId) {
+      let membership = get(pcMembershipPath(teamId)).data;
+      return pcCanCoachTeam(teamId)
+        && pcUserHasActiveAthleteMembership(teamId, athleteId)
+        && (
+          !('rosterVisibilityScope' in membership)
+          || membership.rosterVisibilityScope == 'team'
+          || (
+            membership.rosterVisibilityScope == 'assigned'
+            && membership.allowedAthleteIds is list
+            && athleteId in membership.allowedAthleteIds
+          )
+        );
+    }
+    function pcCanAccessCareTeamAthlete(teamId, athleteId) {
+      let membership = get(pcMembershipPath(teamId)).data;
+      return pcHasActiveTeamMembership(teamId)
+        && membership.role != 'athlete'
+        && pcUserHasActiveAthleteMembership(teamId, athleteId)
+        && (
+          pcMembershipHasCapability(teamId, 'admin')
+          || pcMembershipHasCapability(teamId, 'coaching')
+          || pcMembershipHasCapability(teamId, 'athletic_trainer')
+        )
+        && (
+          !('rosterVisibilityScope' in membership)
+          || membership.rosterVisibilityScope == 'team'
+          || (
+            membership.rosterVisibilityScope == 'assigned'
+            && membership.allowedAthleteIds is list
+            && athleteId in membership.allowedAthleteIds
+          )
+        );
+    }
+    function pcCanAccessClinicalTeamAthlete(teamId, athleteId) {
+      let membership = get(pcMembershipPath(teamId)).data;
+      return pcHasActiveTeamMembership(teamId)
+        && membership.role != 'athlete'
+        && pcUserHasActiveAthleteMembership(teamId, athleteId)
+        && (
+          pcMembershipHasCapability(teamId, 'admin')
+          || pcMembershipHasCapability(teamId, 'athletic_trainer')
+        )
+        && (
+          !('rosterVisibilityScope' in membership)
+          || membership.rosterVisibilityScope == 'team'
+          || (
+            membership.rosterVisibilityScope == 'assigned'
+            && membership.allowedAthleteIds is list
+            && athleteId in membership.allowedAthleteIds
+          )
+        );
+    }
+    function pcLegacyCoachProfileIsActive(coachId) {
+      let coachPath = /databases/$(database)/documents/coaches/$(coachId);
+      let coach = get(coachPath).data;
+      return coachId is string
+        && coachId.size() > 0
+        && exists(coachPath)
+        && (!('userId' in coach) || coach.userId == coachId)
+        && (!('userType' in coach) || coach.userType == 'coach')
+        && (!('status' in coach) || coach.status == 'active')
+        && (!('deletedAt' in coach) || coach.deletedAt == null)
+        && (!('revokedAt' in coach) || coach.revokedAt == null);
+    }
+    function pcHasValidLegacyCoachProfile(coachId) {
+      return isSignedIn()
+        && request.auth.uid == coachId
+        && pcLegacyCoachProfileIsActive(coachId);
+    }
+    function pcRecommendationPath(recommendationId) {
+      return /databases/$(database)/documents/mental-recommendations/$(recommendationId);
+    }
+    function pcIsValidAthleteSelfAssignment() {
+      let recommendation = get(
+        pcRecommendationPath(request.resource.data.recommendationId)
+      ).data;
+      return isSignedIn()
+        && request.resource.data.recommendationId is string
+        && exists(pcRecommendationPath(request.resource.data.recommendationId))
+        && request.resource.data.athleteId == request.auth.uid
+        && request.resource.data.source == 'athlete_self_assign'
+        && recommendation.athleteId == request.auth.uid
+        && recommendation.status == 'pending'
+        && request.resource.data.coachId == recommendation.coachId
+        && request.resource.data.exerciseId == recommendation.exerciseId
+        && recommendation.teamId is string
+        && recommendation.organizationId is string
+        && request.resource.data.teamId == recommendation.teamId
+        && request.resource.data.organizationId == recommendation.organizationId
+        && pcDataMatchesTeamOrganization(
+          recommendation,
+          recommendation.teamId
+        )
+        && pcUserHasActiveAthleteMembership(
+          recommendation.teamId,
+          request.auth.uid
+        )
+        && pcStaffUserCanAccessTeamAthlete(
+          recommendation.coachId,
+          recommendation.teamId,
+          request.auth.uid
+        );
+    }
+    function pcProgressAssociationIsValid(data, athleteId) {
+      return (
+          !('coachId' in data)
+          && !('teamId' in data)
+          && !('lastAssignedTeamId' in data)
+          && !('organizationId' in data)
+        )
+        || (
+          data.coachId is string
+          && (
+            (
+              data.teamId is string
+              && pcDataMatchesTeamOrganization(data, data.teamId)
+              && pcStaffUserCanAccessTeamAthlete(
+                data.coachId,
+                data.teamId,
+                athleteId
+              )
+            )
+            || (
+              data.lastAssignedTeamId is string
+              && pcDataMatchesTeamOrganization(data, data.lastAssignedTeamId)
+              && pcStaffUserCanAccessTeamAthlete(
+                data.coachId,
+                data.lastAssignedTeamId,
+                athleteId
+              )
+            )
+          )
+        );
+    }
     // Managing the team (inviting staff, assigning permissions) is admin-only.
     // The legacy 'team-admin' role is the org founder/full-access seat and keeps
     // access; the 'admin' staff capability is the new superuser grant. Manager
     // ('administrative') and 'coaching' no longer manage the team.
     function pcCanManageTeam(teamId) {
-      return isSignedIn()
-        && exists(pcMembershipPath(teamId))
+      return pcHasActiveTeamMembership(teamId)
         && (
           get(pcMembershipPath(teamId)).data.role == 'team-admin'
           || (
@@ -201,24 +521,460 @@ service cloud.firestore {
         );
     }
     function pcIsTeamStaff(teamId) {
-      return isSignedIn()
-        && exists(pcMembershipPath(teamId))
+      return pcHasActiveTeamMembership(teamId)
         && get(pcMembershipPath(teamId)).data.role != 'athlete';
     }
-    // A redeeming user may flip an invite link to redeemed for themselves without
-    // being a team manager (mirrors the redeem transaction's invite-link write).
-    function pcIsInviteRedemptionUpdate() {
+    function pcTeamScopedDataIsActive(data) {
+      return data.teamId is string
+        && data.organizationId is string
+        && pcDataMatchesTeamOrganization(data, data.teamId);
+    }
+    function pcCanReadTeamScopedData(data) {
+      return pcTeamScopedDataIsActive(data)
+        && pcHasActiveTeamMembership(data.teamId);
+    }
+    function pcCanWriteTeamWorkspace(teamId) {
+      return pcCanUseNora(teamId);
+    }
+    function pcConversationPath(conversationId) {
+      return /databases/$(database)/documents/coach-athlete-conversations/$(conversationId);
+    }
+    function pcMessagePath(messageId) {
+      return /databases/$(database)/documents/coach-athlete-messages/$(messageId);
+    }
+    function pcConversationScopeIdPartIsValid(value) {
+      return value is string
+        && value.size() > 0
+        && value.size() <= 256
+        && value.matches('^[A-Za-z0-9_-]+$');
+    }
+    function pcModernConversationIdMatchesScope(conversationId, data) {
+      return pcConversationScopeIdPartIsValid(data.organizationId)
+        && pcConversationScopeIdPartIsValid(data.teamId)
+        && pcConversationScopeIdPartIsValid(data.coachId)
+        && pcConversationScopeIdPartIsValid(data.athleteId)
+        && conversationId == 'pcv2_'
+          + data.organizationId + '~'
+          + data.teamId + '~'
+          + data.coachId + '~'
+          + data.athleteId;
+    }
+    function pcConversationParticipant(data) {
       return isSignedIn()
+        && (
+          data.coachId == request.auth.uid
+          || data.athleteId == request.auth.uid
+        );
+    }
+    function pcConversationHasActiveModernScope(data) {
+      let team = get(pcTeamPath(data.teamId)).data;
+      let organization = get(pcOrganizationPath(data.organizationId)).data;
+      let coachMembership = get(
+        pcUserMembershipPath(data.teamId, data.coachId)
+      ).data;
+      let athleteMembership = get(
+        pcUserMembershipPath(data.teamId, data.athleteId)
+      ).data;
+      return data.teamId is string
+        && data.organizationId is string
+        && data.coachId is string
+        && data.athleteId is string
+        && data.coachId != data.athleteId
+        && data.participantIds is list
+        && data.participantIds.size() == 2
+        && data.coachId in data.participantIds
+        && data.athleteId in data.participantIds
+        && team.status == 'active'
+        && team.organizationId == data.organizationId
+        && (!('archivedAt' in team) || team.archivedAt == null)
+        && (!('deletedAt' in team) || team.deletedAt == null)
+        && organization.status == 'active'
+        && (!('archivedAt' in organization) || organization.archivedAt == null)
+        && (!('deletedAt' in organization) || organization.deletedAt == null)
+        && coachMembership.userId == data.coachId
+        && coachMembership.teamId == data.teamId
+        && coachMembership.organizationId == data.organizationId
+        && coachMembership.role != 'athlete'
+        && (
+          !('status' in coachMembership)
+          || coachMembership.status == 'active'
+        )
+        && (
+          !('revokedAt' in coachMembership)
+          || coachMembership.revokedAt == null
+        )
+        && (
+          coachMembership.role == 'team-admin'
+          || (
+            coachMembership.staffCapabilities is list
+            && (
+              'admin' in coachMembership.staffCapabilities
+              || 'coaching' in coachMembership.staffCapabilities
+            )
+          )
+          || (
+            (
+              !('staffCapabilities' in coachMembership)
+              || (
+                coachMembership.staffCapabilities is list
+                && coachMembership.staffCapabilities.size() == 0
+              )
+            )
+            && coachMembership.role == 'coach'
+          )
+        )
+        && (
+          !('rosterVisibilityScope' in coachMembership)
+          || coachMembership.rosterVisibilityScope == 'team'
+          || (
+            coachMembership.rosterVisibilityScope == 'assigned'
+            && coachMembership.allowedAthleteIds is list
+            && data.athleteId in coachMembership.allowedAthleteIds
+          )
+        )
+        && athleteMembership.userId == data.athleteId
+        && athleteMembership.teamId == data.teamId
+        && athleteMembership.organizationId == data.organizationId
+        && athleteMembership.role == 'athlete'
+        && (
+          !('status' in athleteMembership)
+          || athleteMembership.status == 'active'
+        )
+        && (
+          !('revokedAt' in athleteMembership)
+          || athleteMembership.revokedAt == null
+        );
+    }
+    function pcModernConversationCreateIsValid(data) {
+      return data.keys().hasAll([
+          'coachId',
+          'athleteId',
+          'organizationId',
+          'teamId',
+          'participantIds',
+          'coachName',
+          'athleteName',
+          'lastMessage',
+          'lastMessageId',
+          'lastMessageTimestamp',
+          'lastMessageSenderId',
+          'unreadCount',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'coachId',
+          'athleteId',
+          'organizationId',
+          'teamId',
+          'participantIds',
+          'coachName',
+          'athleteName',
+          'lastMessage',
+          'lastMessageId',
+          'lastMessageTimestamp',
+          'lastMessageSenderId',
+          'unreadCount',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.coachName is string
+        && data.coachName.size() <= 200
+        && data.athleteName is string
+        && data.athleteName.size() <= 200
+        && data.lastMessage == ''
+        && data.lastMessageId == ''
+        && data.lastMessageSenderId == ''
+        && data.unreadCount is map
+        && data.unreadCount.keys().hasOnly([data.coachId, data.athleteId])
+        && data.unreadCount[data.coachId] == 0
+        && data.unreadCount[data.athleteId] == 0
+        && data.lastMessageTimestamp == request.time
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+    function pcConversationParticipantsAreImmutable(before, after) {
+      return (
+          'participantIds' in before
+          && 'participantIds' in after
+          && after.participantIds == before.participantIds
+        )
+        || (
+          !('participantIds' in before)
+          && !('participantIds' in after)
+        );
+    }
+    function pcDirectMessageCreateIsValid(data) {
+      return data.keys().hasAll([
+          'conversationId',
+          'senderId',
+          'senderType',
+          'content',
+          'timestamp',
+          'readBy',
+          'messageType'
+        ])
+        && data.keys().hasOnly([
+          'conversationId',
+          'senderId',
+          'senderType',
+          'content',
+          'timestamp',
+          'readBy',
+          'messageType',
+          'mediaUrl'
+        ])
+        && data.conversationId is string
+        && data.conversationId.size() > 0
+        && data.conversationId.size() <= 256
+        && data.senderId == request.auth.uid
+        && data.senderType in ['coach', 'athlete']
+        && data.content is string
+        && data.content.size() > 0
+        && data.content.size() <= 4000
+        && data.timestamp == request.time
+        && data.readBy is map
+        && data.readBy.keys().hasOnly([request.auth.uid])
+        && data.readBy[request.auth.uid] == request.time
+        && data.messageType in ['text', 'image', 'file']
+        && (
+          !('mediaUrl' in data)
+          || data.mediaUrl == null
+          || (
+            data.mediaUrl is string
+            && data.mediaUrl.size() <= 2048
+          )
+        );
+    }
+    function pcDirectMessageMatchesConversationTransition(messageId, data) {
+      let conversation = get(pcConversationPath(data.conversationId)).data;
+      let conversationAfter = getAfter(
+        pcConversationPath(data.conversationId)
+      ).data;
+      return conversationAfter.diff(conversation).affectedKeys()
+          .hasAll(['lastMessageId'])
+        && conversationAfter.lastMessageId == messageId
+        && conversationAfter.lastMessage == data.content
+        && conversationAfter.lastMessageSenderId == request.auth.uid
+        && conversationAfter.lastMessageTimestamp == request.time
+        && conversationAfter.updatedAt == request.time
+        && (
+          (
+            data.senderType == 'coach'
+            && conversation.coachId == request.auth.uid
+            && conversationAfter.coachId == request.auth.uid
+          )
+          || (
+            data.senderType == 'athlete'
+            && conversation.athleteId == request.auth.uid
+            && conversationAfter.athleteId == request.auth.uid
+          )
+        );
+    }
+    function pcConversationUnreadMapIsValid(data) {
+      return data.unreadCount is map
+        && data.unreadCount.keys().hasAll([data.coachId, data.athleteId])
+        && data.unreadCount.keys().hasOnly([data.coachId, data.athleteId])
+        && data.unreadCount[data.coachId] is int
+        && data.unreadCount[data.coachId] >= 0
+        && data.unreadCount[data.athleteId] is int
+        && data.unreadCount[data.athleteId] >= 0;
+    }
+    function pcConversationSenderSummaryUpdateIsValid(
+      conversationId,
+      before,
+      after,
+      recipientId
+    ) {
+      let message = getAfter(pcMessagePath(after.lastMessageId)).data;
+      return after.diff(before).affectedKeys().hasOnly([
+          'lastMessage',
+          'lastMessageId',
+          'lastMessageSenderId',
+          'lastMessageTimestamp',
+          'unreadCount',
+          'updatedAt'
+        ])
+        && after.lastMessage is string
+        && after.lastMessage.size() > 0
+        && after.lastMessage.size() <= 4000
+        && after.lastMessageId is string
+        && after.lastMessageId.size() > 0
+        && after.lastMessageId.size() <= 256
+        && (
+          !('lastMessageId' in before)
+          || after.lastMessageId != before.lastMessageId
+        )
+        && after.lastMessageSenderId == request.auth.uid
+        && after.lastMessageTimestamp == request.time
+        && after.updatedAt == request.time
+        && pcConversationUnreadMapIsValid(before)
+        && pcConversationUnreadMapIsValid(after)
+        && after.unreadCount.diff(before.unreadCount)
+          .affectedKeys().hasOnly([recipientId])
+        && after.unreadCount[recipientId]
+          == before.unreadCount[recipientId] + 1
+        && existsAfter(pcMessagePath(after.lastMessageId))
+        && message.conversationId == conversationId
+        && message.senderId == request.auth.uid
+        && message.content == after.lastMessage
+        && message.timestamp == request.time;
+    }
+    function pcConversationSelfReadResetIsValid(before, after, otherUserId) {
+      return after.diff(before).affectedKeys().hasOnly(['unreadCount'])
+        && pcConversationUnreadMapIsValid(before)
+        && pcConversationUnreadMapIsValid(after)
+        && after.unreadCount.diff(before.unreadCount)
+          .affectedKeys().hasOnly([request.auth.uid])
+        && after.unreadCount[request.auth.uid] == 0
+        && after.unreadCount[otherUserId] == before.unreadCount[otherUserId];
+    }
+    // Conversation reads and writes deliberately use different checks. Reads
+    // must be provable from the client query, while writes revalidate the full
+    // participant list, active athlete membership, and staff roster grant.
+    function pcCoachCanReadModernConversation(data) {
+      let membership = get(pcMembershipPath(data.teamId)).data;
+      return isSignedIn()
+        && data.coachId == request.auth.uid
+        && pcCanCoachTeam(data.teamId)
+        && (
+          !('rosterVisibilityScope' in membership)
+          || membership.rosterVisibilityScope == 'team'
+          || (
+            membership.rosterVisibilityScope == 'assigned'
+            && membership.allowedAthleteIds is list
+            && data.athleteId in membership.allowedAthleteIds
+          )
+        );
+    }
+    function pcCanReadConversation(data) {
+      return isSignedIn()
+        && (
+          // Athletes keep participant-history access, which is provable by the
+          // existing athleteId == uid inbox query even across prior teams.
+          data.athleteId == request.auth.uid
+          || (
+            data.coachId == request.auth.uid
+            && (
+              (
+                'teamId' in data
+                && 'organizationId' in data
+                && pcDataMatchesTeamOrganization(data, data.teamId)
+                && pcCoachCanReadModernConversation(data)
+              )
+              || (
+                !('teamId' in data)
+                && !('organizationId' in data)
+              )
+            )
+          )
+        );
+    }
+    function pcCanWriteConversation(data) {
+      return pcConversationParticipant(data)
+        && (
+          pcConversationHasActiveModernScope(data)
+          || (
+            !('teamId' in data)
+            && !('organizationId' in data)
+          )
+        );
+    }
+    function pcCanGetMissingDeterministicConversation(conversationId) {
+      return isSignedIn()
+        && conversationId.matches(
+          '^pcv2_[A-Za-z0-9_-]+~[A-Za-z0-9_-]+~[A-Za-z0-9_-]+~[A-Za-z0-9_-]+$'
+        )
+        && !exists(pcConversationPath(conversationId));
+    }
+    function pcPushInstallationIdIsValid(installationId) {
+      return installationId is string
+        && installationId.matches('^[A-Za-z0-9_-]{20,128}$');
+    }
+    function pcPushInstallationDataIsValid(data, ownerUserId, installationId) {
+      return data.keys().hasAll([
+          'ownerUserId',
+          'installationId',
+          'token',
+          'sourceApp',
+          'platform',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUserId',
+          'installationId',
+          'token',
+          'sourceApp',
+          'platform',
+          'createdAt',
+          'updatedAt'
+        ])
+        && pcPushInstallationIdIsValid(installationId)
+        && data.ownerUserId == ownerUserId
+        && data.installationId == installationId
+        && data.token is string
+        && data.token.size() > 0
+        && data.token.size() <= 4096
+        && data.sourceApp == 'pulsecheck'
+        && data.platform in ['ios', 'ipados', 'android', 'web']
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+    function pcPushInstallationCreateIsValid(ownerUserId, installationId) {
+      return pcPushInstallationDataIsValid(
+          request.resource.data,
+          ownerUserId,
+          installationId
+        )
+        && request.resource.data.createdAt == request.time;
+    }
+    function pcPushInstallationUpdateIsValid(ownerUserId, installationId) {
+      return pcPushInstallationDataIsValid(
+          request.resource.data,
+          ownerUserId,
+          installationId
+        )
+        && (
+          request.resource.data.createdAt == resource.data.createdAt
+          || request.resource.data.createdAt == request.time
+        );
+    }
+    function pcDailyAssignmentPath(assignmentId) {
+      return /databases/$(database)/documents/pulsecheck-daily-assignments/$(assignmentId);
+    }
+    function pcCompletionAssignmentMatchesAthlete(data, athleteId) {
+      return !('dailyAssignmentId' in data)
+        || data.dailyAssignmentId == null
+        || (
+          data.dailyAssignmentId is string
+          && exists(pcDailyAssignmentPath(data.dailyAssignmentId))
+          && get(pcDailyAssignmentPath(data.dailyAssignmentId)).data.athleteId == athleteId
+        );
+    }
+    function pcMembershipIdentityIsImmutable() {
+      return request.resource.data.userId == resource.data.userId
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.organizationId == resource.data.organizationId;
+    }
+    function pcIsSafeOwnMembershipUpdate() {
+      return isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && pcMembershipIdentityIsImmutable()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status',
-          'redeemedByUserId',
-          'redeemedByEmail',
-          'redeemedAt',
-          'redemptionCount',
+          'athleteAge',
+          'athleteOnboarding',
+          'coachIntakeCompletedAt',
+          'coachIntakeFormVersion',
+          'coachIntakeResponses',
+          'notificationPreferences',
+          'onboardingStatus',
+          'phone',
+          'postActivationCompletedAt',
+          'smsConsentAt',
           'updatedAt'
         ]);
     }
-
     function hasHumanUiAuditFields() {
       return request.resource.data.updatedBySource == 'human-ui'
         && request.resource.data.updatedByUid == request.auth.uid
@@ -410,6 +1166,7 @@ service cloud.firestore {
         && request.auth.uid == userId
         && request.resource.data.id == userId
         && request.resource.data.email == request.auth.token.email
+        && !('stripeCustomerIds' in request.resource.data)
         && hasValidLegalAcceptanceOnCreate();
     }
 
@@ -422,6 +1179,17 @@ service cloud.firestore {
         && request.resource.data.lifetimePulsePoints == resource.data.lifetimePulsePoints
         && request.resource.data.categoryPoints == resource.data.categoryPoints
         && request.resource.data.creator == resource.data.creator
+        && (
+          (
+            !('stripeCustomerIds' in resource.data)
+            && !('stripeCustomerIds' in request.resource.data)
+          )
+          || (
+            'stripeCustomerIds' in resource.data
+            && request.resource.data.stripeCustomerIds
+              == resource.data.stripeCustomerIds
+          )
+        )
         && (request.resource.data.username == resource.data.username || isValidUsernameValue(request.resource.data.username))
         && (request.resource.data.displayName == resource.data.displayName || isNonEmptyString(request.resource.data.displayName))
         && (request.resource.data.birthdate == resource.data.birthdate || request.resource.data.birthdate == null || request.resource.data.birthdate is timestamp || request.resource.data.birthdate is number)
@@ -436,6 +1204,51 @@ service cloud.firestore {
         && (request.resource.data.subscriptionPlatform == resource.data.subscriptionPlatform || isValidSubscriptionPlatformValue(request.resource.data.subscriptionPlatform))
         && (request.resource.data.checkinsPrivacy == resource.data.checkinsPrivacy || isValidCheckinsPrivacyValue(request.resource.data.checkinsPrivacy))
         && preservesOrValidlyUpdatesLegalAcceptance();
+    }
+
+    function isSafeOwnPulseCheckPushMetadataUpdate(userId) {
+      let affected = request.resource.data.diff(resource.data).affectedKeys();
+      let hasToken = 'pulseCheckFcmToken' in request.resource.data;
+      let hasTokenTime = 'pulseCheckFcmTokenUpdatedAt' in request.resource.data;
+      let hasSource = 'pushTokenSourceApp' in request.resource.data;
+      let hasDeclaredOwner = 'pulseCheckFcmTokenOwnerUserId'
+        in request.resource.data;
+      return isSignedIn()
+        && request.auth.uid == userId
+        && affected.hasOnly([
+          'pulseCheckPushTokenModelVersion',
+          'pulseCheckFcmToken',
+          'pulseCheckFcmTokenOwnerUserId',
+          'pulseCheckFcmTokenUpdatedAt',
+          'pushTokenSourceApp'
+        ])
+        && (
+          (
+            request.resource.data.pulseCheckPushTokenModelVersion == 2
+            && hasToken
+            && hasTokenTime
+            && hasSource
+            && request.resource.data.pulseCheckFcmToken is string
+            && request.resource.data.pulseCheckFcmToken.size() > 0
+            && request.resource.data.pulseCheckFcmToken.size() <= 4096
+            && request.resource.data.pulseCheckFcmTokenUpdatedAt == request.time
+            && request.resource.data.pushTokenSourceApp == 'pulsecheck'
+            && (
+              !hasDeclaredOwner
+              || request.resource.data.pulseCheckFcmTokenOwnerUserId == userId
+            )
+          )
+          || (
+            !hasToken
+            && !hasTokenTime
+            && !hasSource
+            && !hasDeclaredOwner
+            && (
+              !('pulseCheckPushTokenModelVersion' in request.resource.data)
+              || request.resource.data.pulseCheckPushTokenModelVersion == 2
+            )
+          )
+        );
     }
 
     function isOwnedPurchaseLogCreate() {
@@ -522,6 +1335,29 @@ service cloud.firestore {
       allow read: if isAdminUser()
         || (isSignedIn() && resource.data.buyerId == request.auth.uid);
       allow create, update, delete: if isAdminUser();
+    }
+
+    // Stripe destinations and financial ledgers are written by trusted server
+    // functions. Assessment buyers may read only their own completed receipt.
+    match /stripeConnect/{userId} {
+      allow read, create, update, delete: if isAdminUser();
+    }
+
+    match /pulsecheck-assessment-purchases/{purchaseId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.purchaserUserId == request.auth.uid
+        );
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /pulsecheck-referral-attributions/{attributionId} {
+      allow read, create, update, delete: if isAdminUser();
+    }
+
+    match /transactions/{transactionId} {
+      allow read, create, update, delete: if isAdminUser();
     }
 
     match /beta/{email} {
@@ -648,86 +1484,1306 @@ service cloud.firestore {
     match /users/{userId} {
       allow create: if isCanonicalRootUserCreate(userId);
 
-      allow update: if isCanonicalRootUserUpdate(userId);
+      allow update: if isSafeOwnPulseCheckPushMetadataUpdate(userId)
+        || isCanonicalRootUserUpdate(userId);
 
       allow read: if true;
     }
 
-    // Train Nora knowledge vault. Each entry is owned by the coach whose uid
-    // equals coachId. The owning coach manages their entries; any signed-in
-    // user (e.g. a linked athlete's Nora) may read so it can answer questions
-    // from the coach's shared context.
+    // Each app installation owns one token document under the signed-in user.
+    // The canonical claim lets the same physical install move accounts without
+    // leaving a still-deliverable token behind on the previous user.
+    match /users/{userId}/pulsecheckPushTokens/{installationId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && request.auth.uid == userId);
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.auth.uid == userId
+          && pcPushInstallationCreateIsValid(userId, installationId)
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.auth.uid == userId
+          && resource.data.ownerUserId == userId
+          && pcPushInstallationUpdateIsValid(userId, installationId)
+        );
+      allow delete: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.auth.uid == userId
+          && resource.data.ownerUserId == userId
+        );
+    }
+
+    match /pulsecheck-push-installations/{installationId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.ownerUserId == request.auth.uid
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.ownerUserId == request.auth.uid
+          && pcPushInstallationCreateIsValid(
+            request.auth.uid,
+            installationId
+          )
+        );
+      // The random, device-persisted installation id is possession proof for
+      // an account switch. A delayed delete from the previous owner cannot
+      // remove the new owner's claim.
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.ownerUserId == request.auth.uid
+          && pcPushInstallationUpdateIsValid(
+            request.auth.uid,
+            installationId
+          )
+        );
+      allow delete: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.ownerUserId == request.auth.uid
+        );
+    }
+
+    // Legacy direct coach links remain a participant-only compatibility lane.
+    // Team workspace authorization comes from modern deterministic memberships.
+    match /coachAthletes/{connectionId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.athleteUserId == request.auth.uid
+            || (
+              resource.data.coachId == request.auth.uid
+              && pcLegacyCoachProfileIsActive(request.auth.uid)
+            )
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.coachId is string
+          && pcLegacyCoachProfileIsActive(request.resource.data.coachId)
+          && (
+            !('status' in request.resource.data)
+            || request.resource.data.status == 'active'
+          )
+          && !('disconnectedAt' in request.resource.data)
+          && request.resource.data.keys().hasOnly([
+            'athleteUserId',
+            'coachId',
+            'createdAt',
+            'linkedAt',
+            'status',
+            'updatedAt'
+          ])
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.athleteUserId
+            == resource.data.athleteUserId
+          && request.resource.data.coachId == resource.data.coachId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'disconnectedAt',
+            'status',
+            'updatedAt'
+          ])
+          && (
+            !('status' in request.resource.data)
+            || request.resource.data.status in ['active', 'disconnected']
+          )
+        );
+      allow delete: if isAdminUser();
+    }
+
+    // Daily check-ins are server-authored personal records. Athletes may add
+    // their own bounded Energy Recalibration result. Scoped staff reads require
+    // an exact active team and organization carried by the server record.
+    match /pulsecheck-morning-checkins/{checkInId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.athleteUserId == request.auth.uid
+            || (
+              resource.data.athleteUserId is string
+              && resource.data.teamId is string
+              && resource.data.organizationId is string
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.teamId
+              )
+              && pcCanAccessCareTeamAthlete(
+                resource.data.teamId,
+                resource.data.athleteUserId
+              )
+            )
+          )
+        );
+      // Trusted check-in services create the canonical row. The athlete's
+      // merge write below may enrich only a row that already exists.
+      allow create: if isAdminUser();
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.athleteUserId
+            == resource.data.athleteUserId
+          && (
+            (
+              !('teamId' in resource.data)
+              && !('teamId' in request.resource.data)
+            )
+            || request.resource.data.teamId == resource.data.teamId
+          )
+          && (
+            (
+              !('organizationId' in resource.data)
+              && !('organizationId' in request.resource.data)
+            )
+            || request.resource.data.organizationId
+              == resource.data.organizationId
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'energyReset'
+          ])
+          && request.resource.data.energyReset is map
+        );
+      allow delete: if isAdminUser();
+    }
+
+    // Derived sentiment is backend-owned. Existing unscoped records remain
+    // visible to their athlete; team staff only receive exact scoped records.
+    match /dailySentimentAnalysis/{sentimentId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || (
+              resource.data.userId is string
+              && resource.data.teamId is string
+              && resource.data.organizationId is string
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.teamId
+              )
+              && pcCanAccessCareTeamAthlete(
+                resource.data.teamId,
+                resource.data.userId
+              )
+            )
+          )
+        );
+      allow create, update, delete: if isAdminUser();
+    }
+
+    // Raw device records are owned by the athlete adapter. Identity and source
+    // provenance cannot change after creation. A team-scoped server projection
+    // may also be read by active authorized care/coaching staff.
+    match /health-context-source-records/{recordId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.athleteUserId == request.auth.uid
+            || (
+              resource.data.athleteUserId is string
+              && resource.data.teamId is string
+              && resource.data.organizationId is string
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.teamId
+              )
+              && pcCanAccessCareTeamAthlete(
+                resource.data.teamId,
+                resource.data.athleteUserId
+              )
+            )
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && recordId.matches('^' + request.auth.uid + '_.*$')
+          && request.resource.data.id == recordId
+          && request.resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.sourceFamily is string
+          && request.resource.data.sourceType is string
+          && !('teamId' in request.resource.data)
+          && !('organizationId' in request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.athleteUserId
+            == resource.data.athleteUserId
+          && request.resource.data.sourceFamily
+            == resource.data.sourceFamily
+          && request.resource.data.sourceType == resource.data.sourceType
+          && (
+            (
+              !('teamId' in resource.data)
+              && !('teamId' in request.resource.data)
+            )
+            || (
+              request.resource.data.teamId == resource.data.teamId
+              && request.resource.data.organizationId
+                == resource.data.organizationId
+            )
+          )
+        );
+      allow delete: if isAdminUser();
+    }
+
+    // Source lifecycle rows use `{athleteUserId}_{sourceFamily}`. Athletes can
+    // connect, refresh, and remove only their own device-family status.
+    match /health-context-source-status/{statusId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.athleteUserId == request.auth.uid
+            || (
+              resource.data.athleteUserId is string
+              && resource.data.teamId is string
+              && resource.data.organizationId is string
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.teamId
+              )
+              && pcCanAccessCareTeamAthlete(
+                resource.data.teamId,
+                resource.data.athleteUserId
+              )
+            )
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.id == statusId
+          && request.resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.sourceFamily is string
+          && statusId == request.auth.uid + '_'
+            + request.resource.data.sourceFamily
+          && !('teamId' in request.resource.data)
+          && !('organizationId' in request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.athleteUserId
+            == resource.data.athleteUserId
+          && request.resource.data.sourceFamily
+            == resource.data.sourceFamily
+          && (
+            (
+              !('teamId' in resource.data)
+              && !('teamId' in request.resource.data)
+            )
+            || (
+              request.resource.data.teamId == resource.data.teamId
+              && request.resource.data.organizationId
+                == resource.data.organizationId
+            )
+          )
+        );
+      allow delete: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == request.auth.uid
+          && statusId == request.auth.uid + '_'
+            + resource.data.sourceFamily
+        );
+    }
+
+    // Safety records are authored by trusted services. Athletes can read their
+    // own record. Scoped staff reads require active care/coaching access, with
+    // tier-three details limited to care/admin capability.
+    match /escalation-records/{escalationId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || resource.data.athleteId == request.auth.uid
+            || (
+              resource.data.teamId is string
+              && resource.data.organizationId is string
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.teamId
+              )
+              && (
+                (
+                  resource.data.userId is string
+                  && (
+                    (
+                      resource.data.tier == 3
+                      && pcCanAccessClinicalTeamAthlete(
+                        resource.data.teamId,
+                        resource.data.userId
+                      )
+                    )
+                    || (
+                      resource.data.tier != 3
+                      && pcCanAccessCareTeamAthlete(
+                        resource.data.teamId,
+                        resource.data.userId
+                      )
+                    )
+                  )
+                )
+                || (
+                  resource.data.athleteId is string
+                  && (
+                    (
+                      resource.data.tier == 3
+                      && pcCanAccessClinicalTeamAthlete(
+                        resource.data.teamId,
+                        resource.data.athleteId
+                      )
+                    )
+                    || (
+                      resource.data.tier != 3
+                      && pcCanAccessCareTeamAthlete(
+                        resource.data.teamId,
+                        resource.data.athleteId
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        );
+      allow create, update, delete: if isAdminUser();
+    }
+
+    // Train Nora knowledge vault. Modern records are scoped to one active
+    // team. The synthetic legacy workspace remains owner-only on clients;
+    // athlete-facing Nora reads it through the validated server endpoint.
     match /coach-nora-vault/{entryId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && resource.data.teamId is string
+        && (
+          pcHasActiveTeamMembership(resource.data.teamId)
+          || (
+            resource.data.teamId == 'legacy:' + resource.data.coachId
+            && pcHasValidLegacyCoachProfile(resource.data.coachId)
+          )
+        );
       allow create: if isSignedIn()
-        && request.resource.data.coachId == request.auth.uid;
+        && request.resource.data.coachId == request.auth.uid
+        && request.resource.data.teamId is string
+        && (
+          pcCanUseNora(request.resource.data.teamId)
+          || (
+            request.resource.data.teamId == 'legacy:' + request.auth.uid
+            && pcHasValidLegacyCoachProfile(request.auth.uid)
+          )
+        );
       allow update: if isSignedIn()
         && resource.data.coachId == request.auth.uid
-        && request.resource.data.coachId == request.auth.uid;
+        && request.resource.data.coachId == resource.data.coachId
+        && request.resource.data.teamId == resource.data.teamId
+        && (
+          pcCanUseNora(resource.data.teamId)
+          || (
+            resource.data.teamId == 'legacy:' + request.auth.uid
+            && pcHasValidLegacyCoachProfile(request.auth.uid)
+          )
+        );
       allow delete: if isSignedIn()
-        && resource.data.coachId == request.auth.uid;
+        && resource.data.coachId == request.auth.uid
+        && (
+          pcCanUseNora(resource.data.teamId)
+          || (
+            resource.data.teamId == 'legacy:' + request.auth.uid
+            && pcHasValidLegacyCoachProfile(request.auth.uid)
+          )
+        );
     }
 
-    // Team schedule (Coach Dashboard v2 → Schedule tab). Same ownership model as
-    // the Nora vault: any signed-in athlete/coach can read, only the owning coach
-    // can write. Athlete-facing Nora reads these to answer "when's our next meet?".
-    match /coach-team-schedule/{eventId} {
-      allow read: if isSignedIn();
+    // Server functions create notifications. A coach may only list their own
+    // inbox and change read/archive presentation fields.
+    match /coach-notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.coachId == request.auth.uid;
+      allow create, delete: if false;
+      allow update: if isSignedIn()
+        && resource.data.coachId == request.auth.uid
+        && request.resource.data.coachId == resource.data.coachId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'read',
+          'readAt',
+          'archived',
+          'archivedAt',
+          'updatedAt'
+        ]);
+    }
+
+    // Coach-created recommendations are bound to the selected team and athlete.
+    // Athletes retain their existing own-record accept/dismiss flow.
+    match /mental-recommendations/{recommendationId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteId == request.auth.uid
+        )
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && resource.data.teamId is string
+          && pcDataMatchesTeamOrganization(
+            resource.data,
+            resource.data.teamId
+          )
+          && pcCanAccessTeamAthlete(resource.data.teamId, resource.data.athleteId)
+        );
       allow create: if isSignedIn()
-        && request.resource.data.coachId == request.auth.uid;
-      allow update, delete: if isSignedIn()
-        && resource.data.coachId == request.auth.uid;
+        && request.resource.data.coachId == request.auth.uid
+        && request.resource.data.teamId is string
+        && pcDataMatchesTeamOrganization(
+          request.resource.data,
+          request.resource.data.teamId
+        )
+        && pcCanAccessTeamAthlete(
+          request.resource.data.teamId,
+          request.resource.data.athleteId
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && resource.data.teamId is string
+          && request.resource.data.coachId == resource.data.coachId
+          && request.resource.data.athleteId == resource.data.athleteId
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+          && pcDataMatchesTeamOrganization(resource.data, resource.data.teamId)
+          && pcCanAccessTeamAthlete(resource.data.teamId, resource.data.athleteId)
+        )
+        || (
+          isSignedIn()
+          && resource.data.athleteId == request.auth.uid
+          && request.resource.data.athleteId == resource.data.athleteId
+          && request.resource.data.coachId == resource.data.coachId
+          && (
+            !('teamId' in resource.data)
+            || request.resource.data.teamId == resource.data.teamId
+          )
+          && (
+            !('organizationId' in resource.data)
+            || request.resource.data.organizationId == resource.data.organizationId
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status',
+            'acceptedAt',
+            'acceptedBy',
+            'assignmentId',
+            'dismissedAt',
+            'dismissedBy',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isAdminUser();
     }
 
-    // Coach-managed add-on services. The provisioning team switch gates whether
-    // the tab appears; rules keep writes owned by the coach or a team admin.
-    match /pulsecheck-coach-services/{serviceId} {
+    // Curriculum assignments support two writers: the selected-team coach and
+    // the athlete's existing self-assignment/completion flow.
+    match /mental-curriculum-assignments/{assignmentId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteId == request.auth.uid
+        )
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && resource.data.teamId is string
+          && pcDataMatchesTeamOrganization(
+            resource.data,
+            resource.data.teamId
+          )
+          && pcCanAccessTeamAthlete(resource.data.teamId, resource.data.athleteId)
+        );
+      allow create: if isSignedIn()
+        && (
+          (
+            request.resource.data.coachId == request.auth.uid
+            && request.resource.data.teamId is string
+            && pcDataMatchesTeamOrganization(
+              request.resource.data,
+              request.resource.data.teamId
+            )
+            && pcCanAccessTeamAthlete(
+              request.resource.data.teamId,
+              request.resource.data.athleteId
+            )
+          )
+          || pcIsValidAthleteSelfAssignment()
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && resource.data.teamId is string
+          && request.resource.data.coachId == resource.data.coachId
+          && request.resource.data.athleteId == resource.data.athleteId
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+          && pcDataMatchesTeamOrganization(resource.data, resource.data.teamId)
+          && pcCanAccessTeamAthlete(resource.data.teamId, resource.data.athleteId)
+        )
+        || (
+          isSignedIn()
+          && resource.data.athleteId == request.auth.uid
+          && request.resource.data.athleteId == resource.data.athleteId
+          && request.resource.data.coachId == resource.data.coachId
+          && (
+            !('teamId' in resource.data)
+            || request.resource.data.teamId == resource.data.teamId
+          )
+          && (
+            !('organizationId' in resource.data)
+            || request.resource.data.organizationId == resource.data.organizationId
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'completedDays',
+            'currentDayNumber',
+            'completionRate',
+            'status',
+            'masteryAchieved',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && resource.data.teamId is string
+          && pcDataMatchesTeamOrganization(
+            resource.data,
+            resource.data.teamId
+          )
+          && pcCanAccessTeamAthlete(resource.data.teamId, resource.data.athleteId)
+        );
+
+      match /daily-completions/{completionId} {
+        function assignmentData() {
+          return get(
+            /databases/$(database)/documents/mental-curriculum-assignments/$(assignmentId)
+          ).data;
+        }
+        allow read: if isAdminUser()
+          || (
+            isSignedIn()
+            && assignmentData().athleteId == request.auth.uid
+          )
+          || (
+            isSignedIn()
+            && assignmentData().coachId == request.auth.uid
+            && assignmentData().teamId is string
+            && pcDataMatchesTeamOrganization(
+              assignmentData(),
+              assignmentData().teamId
+            )
+            && pcCanAccessTeamAthlete(
+              assignmentData().teamId,
+              assignmentData().athleteId
+            )
+          );
+        allow create, update: if isSignedIn()
+          && assignmentData().athleteId == request.auth.uid;
+        allow delete: if isAdminUser()
+          || (
+            isSignedIn()
+            && assignmentData().coachId == request.auth.uid
+            && assignmentData().teamId is string
+            && pcDataMatchesTeamOrganization(
+              assignmentData(),
+              assignmentData().teamId
+            )
+            && pcCanAccessTeamAthlete(
+              assignmentData().teamId,
+              assignmentData().athleteId
+            )
+          );
+      }
+    }
+
+    // The athlete owns their canonical progress document and nested snapshots.
+    // Coach access is only available when the record carries an exact team scope.
+    match /athlete-mental-progress/{athleteId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && request.auth.uid == athleteId)
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && (
+            (
+              resource.data.teamId is string
+              && pcDataMatchesTeamOrganization(resource.data, resource.data.teamId)
+              && pcCanAccessTeamAthlete(resource.data.teamId, athleteId)
+            )
+            || (
+              resource.data.lastAssignedTeamId is string
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.lastAssignedTeamId
+              )
+              && pcCanAccessTeamAthlete(resource.data.lastAssignedTeamId, athleteId)
+            )
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.auth.uid == athleteId
+          && (
+            !('athleteId' in request.resource.data)
+            || request.resource.data.athleteId == athleteId
+          )
+          && pcProgressAssociationIsValid(request.resource.data, athleteId)
+        )
+        || (
+          isSignedIn()
+          && request.resource.data.coachId == request.auth.uid
+          && request.resource.data.athleteId == athleteId
+          && pcProgressAssociationIsValid(request.resource.data, athleteId)
+        );
+      allow update: if isSignedIn()
+        && request.auth.uid == athleteId
+        && (
+          !('athleteId' in request.resource.data)
+          || request.resource.data.athleteId == athleteId
+        )
+        && (
+          (
+            !('coachId' in resource.data)
+            || request.resource.data.coachId == resource.data.coachId
+          )
+          && (
+            !('teamId' in resource.data)
+            || request.resource.data.teamId == resource.data.teamId
+          )
+          && (
+            !('organizationId' in resource.data)
+            || request.resource.data.organizationId == resource.data.organizationId
+          )
+          && (
+            pcProgressAssociationIsValid(request.resource.data, athleteId)
+            || (
+              resource.data.coachId is string
+              && !('teamId' in resource.data)
+              && !('lastAssignedTeamId' in resource.data)
+              && request.resource.data.coachId == resource.data.coachId
+              && !('teamId' in request.resource.data)
+              && !('lastAssignedTeamId' in request.resource.data)
+              && !('organizationId' in request.resource.data)
+            )
+          )
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && request.resource.data.coachId == resource.data.coachId
+          && (
+            (
+              resource.data.teamId is string
+              && request.resource.data.teamId == resource.data.teamId
+              && request.resource.data.organizationId == resource.data.organizationId
+              && pcDataMatchesTeamOrganization(resource.data, resource.data.teamId)
+              && pcCanAccessTeamAthlete(resource.data.teamId, athleteId)
+            )
+            || (
+              resource.data.lastAssignedTeamId is string
+              && request.resource.data.lastAssignedTeamId == resource.data.lastAssignedTeamId
+              && request.resource.data.organizationId == resource.data.organizationId
+              && pcDataMatchesTeamOrganization(
+                resource.data,
+                resource.data.lastAssignedTeamId
+              )
+              && pcCanAccessTeamAthlete(resource.data.lastAssignedTeamId, athleteId)
+            )
+          )
+        );
+      allow delete: if isAdminUser();
+
+      match /{subcollection}/{document=**} {
+        allow read: if isAdminUser()
+          || (isSignedIn() && request.auth.uid == athleteId)
+          || (
+            isSignedIn()
+            && get(
+              /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+            ).data.coachId == request.auth.uid
+            && (
+              (
+                get(
+                  /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                ).data.teamId is string
+                && pcDataMatchesTeamOrganization(
+                  get(
+                    /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                  ).data,
+                  get(
+                    /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                  ).data.teamId
+                )
+                && pcCanAccessTeamAthlete(
+                  get(
+                    /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                  ).data.teamId,
+                  athleteId
+                )
+              )
+              || (
+                get(
+                  /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                ).data.lastAssignedTeamId is string
+                && pcDataMatchesTeamOrganization(
+                  get(
+                    /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                  ).data,
+                  get(
+                    /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                  ).data.lastAssignedTeamId
+                )
+                && pcCanAccessTeamAthlete(
+                  get(
+                    /databases/$(database)/documents/athlete-mental-progress/$(athleteId)
+                  ).data.lastAssignedTeamId,
+                  athleteId
+                )
+              )
+            )
+          );
+        allow create, update: if isSignedIn() && request.auth.uid == athleteId;
+        allow delete: if isAdminUser();
+      }
+    }
+
+    // Shared training libraries are readable in signed-in clients; publishing
+    // remains privileged to the admin tooling.
+    match /sim-modules/{moduleId} {
       allow read: if isSignedIn();
+      allow create, update, delete: if isAdminUser();
+    }
+    match /mental-exercises/{exerciseId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdminUser();
+    }
+
+    // Selected-team schedule. Both the document and the caller must remain bound
+    // to the same active team + organization for every operation.
+    match /coach-team-schedule/{eventId} {
+      allow read: if isAdminUser() || pcCanReadTeamScopedData(resource.data);
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.coachId == request.auth.uid
+          && pcTeamScopedDataIsActive(request.resource.data)
+          && pcCanWriteTeamWorkspace(request.resource.data.teamId)
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && request.resource.data.coachId == resource.data.coachId
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+          && pcCanWriteTeamWorkspace(resource.data.teamId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'date',
+            'endDate',
+            'location',
+            'notes',
+            'opponent',
+            'source',
+            'sourceUrl',
+            'time',
+            'title',
+            'type',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.coachId == request.auth.uid
+          && pcCanWriteTeamWorkspace(resource.data.teamId)
+        );
+    }
+
+    // Coach-managed add-on services use immutable team ownership. Active
+    // athletes may only read the active catalog for their own team.
+    match /pulsecheck-coach-services/{serviceId} {
+      allow read: if isAdminUser()
+        || (
+          pcTeamScopedDataIsActive(resource.data)
+          && (
+            pcIsTeamStaff(resource.data.teamId)
+            || (
+              resource.data.status == 'active'
+              && pcHasActiveTeamMembership(resource.data.teamId)
+              && get(pcMembershipPath(resource.data.teamId)).data.role == 'athlete'
+            )
+          )
+        );
       allow create: if isAdminUser()
         || (
           isSignedIn()
           && request.resource.data.coachUserId == request.auth.uid
-          && pcIsTeamStaff(request.resource.data.teamId)
+          && request.resource.data.serviceType == 'one_time'
+          && pcTeamScopedDataIsActive(request.resource.data)
+          && pcCanWriteTeamWorkspace(request.resource.data.teamId)
         );
-      allow update, delete: if isSignedIn()
-        && (
-          resource.data.coachUserId == request.auth.uid
-          || pcCanManageTeam(resource.data.teamId)
-          || isAdminUser()
-        );
-    }
-
-    // PulseCheck staff invites. Reads stay open to signed-in clients (a not-yet-
-    // member must read an invite to redeem it; the dashboard lists a team's links),
-    // but only an admin or a manager of the link's team may issue or change one. A
-    // redeeming user may mark their own redemption. The redeem API route uses the
-    // Admin SDK and bypasses these rules.
-    match /pulsecheck-invite-links/{inviteId} {
-      allow read: if isSignedIn();
-      allow create: if isAdminUser() || pcCanManageTeam(request.resource.data.teamId);
       allow update: if isAdminUser()
-        || pcCanManageTeam(resource.data.teamId)
-        || pcIsInviteRedemptionUpdate();
+        || (
+          isSignedIn()
+          && (
+            (
+              resource.data.coachUserId == request.auth.uid
+              && pcCanWriteTeamWorkspace(resource.data.teamId)
+            )
+            || pcCanManageTeam(resource.data.teamId)
+          )
+          && request.resource.data.coachUserId == resource.data.coachUserId
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+          && (
+            (
+              resource.data.serviceType == 'one_time'
+              && request.resource.data.serviceType == resource.data.serviceType
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'currency',
+                'description',
+                'priceCents',
+                'status',
+                'title',
+                'updatedAt'
+              ])
+            )
+            || (
+              resource.data.serviceType == 'subscription'
+              && request.resource.data.serviceType == resource.data.serviceType
+              && resource.data.status == 'active'
+              && request.resource.data.status == 'inactive'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'status',
+                'updatedAt'
+              ])
+            )
+          )
+        );
+      allow delete: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            (
+              resource.data.coachUserId == request.auth.uid
+              && pcCanWriteTeamWorkspace(resource.data.teamId)
+            )
+            || pcCanManageTeam(resource.data.teamId)
+          )
+        );
+    }
+
+    // Invite redemption is server-owned. A signed-in recipient may fetch a known
+    // token, while team lists and all mutations require active management access.
+    match /pulsecheck-invite-links/{inviteId} {
+      allow get: if isSignedIn()
+        && resource.data.status == 'active'
+        && (
+          !('revokedAt' in resource.data)
+          || resource.data.revokedAt == null
+        )
+        && (
+          !('targetEmail' in resource.data)
+          || resource.data.targetEmail == null
+          || resource.data.targetEmail == ''
+          || (
+            hasEmail()
+            && request.auth.token.email == resource.data.targetEmail
+          )
+          || isAdminUser()
+          || pcIsTeamStaff(resource.data.teamId)
+        );
+      allow list: if isAdminUser() || pcIsTeamStaff(resource.data.teamId);
+      allow create: if isAdminUser()
+        || (
+          pcCanManageTeam(request.resource.data.teamId)
+          && pcTeamScopedDataIsActive(request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          pcCanManageTeam(resource.data.teamId)
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+        );
       allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
     }
 
-    // PulseCheck team memberships (staff + athletes). Reads stay open to signed-in
-    // clients (iOS and the dashboard read memberships broadly). A user may write
-    // their own membership (onboarding / redemption), a team manager may adjust
-    // access for members of their team, and admins can do anything.
+    // Membership identity, role, capabilities, and roster scope are grants, not
+    // profile fields. Self-service clients can only update bounded onboarding and
+    // notification preferences; invite redemption is handled by trusted APIs.
     match /pulsecheck-team-memberships/{membershipId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (
-        isAdminUser()
-        || request.resource.data.userId == request.auth.uid
-        || pcCanManageTeam(request.resource.data.teamId)
-      );
-      allow update: if isSignedIn() && (
-        isAdminUser()
-        || resource.data.userId == request.auth.uid
-        || pcCanManageTeam(resource.data.teamId)
-      );
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || pcIsTeamStaff(resource.data.teamId)
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          pcCanManageTeam(request.resource.data.teamId)
+          && membershipId == request.resource.data.teamId + '_' + request.resource.data.userId
+          && pcTeamScopedDataIsActive(request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || pcIsSafeOwnMembershipUpdate()
+        || (
+          pcCanManageTeam(resource.data.teamId)
+          && pcMembershipIdentityIsImmutable()
+          && membershipId == resource.data.teamId + '_' + resource.data.userId
+        );
       allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // Stripe webhooks and authenticated server routes are the only readers and
+    // writers for athlete app commercialization truth. The UI receives only
+    // sanitized projections from those routes, never these internal records.
+    // Keeping every internal collection explicit also prevents it from falling
+    // through to the signed-in compatibility rule.
+    match /pulsecheck-athlete-app-offers/{offerId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-athlete-app-entitlements/{entitlementId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-athlete-app-revenue-events/{eventId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-athlete-app-checkouts/{checkoutId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-athlete-app-checkout-locks/{lockId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-athlete-app-invite-checkout-locks/{lockId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-athlete-app-commercialization/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-teams/{teamId} {
+      allow read: if isAdminUser() || pcHasActiveTeamMembership(teamId);
+      allow create, delete: if isAdminUser();
+      // Commercial and billing switches grant paid or sponsored app access.
+      // Coaches manage athlete pricing through the authenticated server route;
+      // only platform admins may write commercialConfig directly.
+      allow update: if isAdminUser()
+        || (
+          pcCanManageTeam(teamId)
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'defaultAdminEmail',
+            'defaultAdminName',
+            'defaultAdminUserIds',
+            'defaultInvitePolicy',
+            'displayName',
+            'notes',
+            'sportOrProgram',
+            'teamType',
+            'updatedAt'
+          ])
+        );
+    }
+
+    match /pulsecheck-organizations/{organizationId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.status == 'active'
+          && (
+            !('archivedAt' in resource.data)
+            || resource.data.archivedAt == null
+          )
+          && (
+            !('deletedAt' in resource.data)
+            || resource.data.deletedAt == null
+          )
+        );
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /pulsecheck-organization-memberships/{membershipId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+        );
+      allow create, update, delete: if isAdminUser();
+    }
+
+    // Reviewer documents never enter coach clients. Delivery writes a sanitized
+    // projection into coachReportViews; coaches can only read published/sent
+    // projections for an active team they are authorized to coach.
+    match /teams/{teamId} {
+      allow read, create, update, delete: if isAdminUser();
+
+      match /coachReports/{reportId} {
+        allow read, create, update, delete: if isAdminUser();
+      }
+
+      match /coachReportViews/{reportId} {
+        allow read: if isAdminUser()
+          || (
+            pcCanCoachTeam(teamId)
+            && resource.data.teamId == teamId
+            && resource.data.reviewStatus in ['published', 'sent']
+          );
+        allow create, update, delete: if false;
+      }
+    }
+
+    // Direct messages are never globally visible. Legacy conversations remain
+    // participant-only; modern records additionally revalidate the active team.
+    match /coach-athlete-conversations/{conversationId} {
+      allow get: if isAdminUser()
+        || pcCanGetMissingDeterministicConversation(conversationId)
+        || pcCanReadConversation(resource.data);
+      allow list: if isAdminUser() || pcCanReadConversation(resource.data);
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            request.resource.data.coachId == request.auth.uid
+            || request.resource.data.athleteId == request.auth.uid
+          )
+          && pcModernConversationCreateIsValid(request.resource.data)
+          && pcModernConversationIdMatchesScope(
+            conversationId,
+            request.resource.data
+          )
+          && pcConversationHasActiveModernScope(request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          pcCanWriteConversation(resource.data)
+          && request.resource.data.coachId == resource.data.coachId
+          && request.resource.data.athleteId == resource.data.athleteId
+          && pcConversationParticipantsAreImmutable(
+            resource.data,
+            request.resource.data
+          )
+          && (
+            !('teamId' in resource.data)
+            || request.resource.data.teamId == resource.data.teamId
+          )
+          && (
+            !('organizationId' in resource.data)
+            || request.resource.data.organizationId == resource.data.organizationId
+          )
+          && (
+            (
+              request.auth.uid == resource.data.coachId
+              && (
+                pcConversationSenderSummaryUpdateIsValid(
+                  conversationId,
+                  resource.data,
+                  request.resource.data,
+                  resource.data.athleteId
+                )
+                || pcConversationSelfReadResetIsValid(
+                  resource.data,
+                  request.resource.data,
+                  resource.data.athleteId
+                )
+              )
+            )
+            || (
+              request.auth.uid == resource.data.athleteId
+              && (
+                pcConversationSenderSummaryUpdateIsValid(
+                  conversationId,
+                  resource.data,
+                  request.resource.data,
+                  resource.data.coachId
+                )
+                || pcConversationSelfReadResetIsValid(
+                  resource.data,
+                  request.resource.data,
+                  resource.data.coachId
+                )
+              )
+            )
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /coach-athlete-messages/{messageId} {
+      allow read: if isAdminUser()
+        || (
+          resource.data.conversationId is string
+          && exists(pcConversationPath(resource.data.conversationId))
+          && pcCanReadConversation(
+            get(pcConversationPath(resource.data.conversationId)).data
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.resource.data.conversationId is string
+          && pcDirectMessageCreateIsValid(request.resource.data)
+          && pcDirectMessageMatchesConversationTransition(
+            messageId,
+            request.resource.data
+          )
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.conversationId is string
+          && exists(pcConversationPath(resource.data.conversationId))
+          && pcCanWriteConversation(
+            get(pcConversationPath(resource.data.conversationId)).data
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'readBy'
+          ])
+          && resource.data.readBy is map
+          && request.resource.data.readBy is map
+          && request.resource.data.readBy.diff(resource.data.readBy)
+            .affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.readBy[request.auth.uid] is timestamp
+        );
+      allow delete: if false;
+    }
+
+    // Payment/order truth and background import jobs are server-only.
+    match /pulsecheck-coach-service-orders/{orderId} {
+      allow read, create, update, delete: if isAdminUser();
+    }
+    match /pulsecheck-coach-payout-requests/{requestId} {
+      allow read, create, update, delete: if isAdminUser();
+    }
+    match /pulsecheck-coach-payout-states/{stateId} {
+      allow read, create, update, delete: if isAdminUser();
+    }
+    match /coachScheduleImportJobs/{jobId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /pulsecheck-daily-assignments/{assignmentId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteId == request.auth.uid
+        )
+        || (
+          isSignedIn()
+          && resource.data.teamId is string
+          && resource.data.coachId == request.auth.uid
+          && pcDataMatchesTeamOrganization(
+            resource.data,
+            resource.data.teamId
+          )
+          && pcCanAccessTeamAthlete(resource.data.teamId, resource.data.athleteId)
+        );
+      allow create, delete: if isAdminUser();
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteId == request.auth.uid
+          && request.resource.data.athleteId == resource.data.athleteId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'protocolPracticeSession',
+            'updatedAt'
+          ])
+        );
+    }
+
+    match /sim-completions/{athleteId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && request.auth.uid == athleteId);
+      allow create, update, delete: if false;
+
+      match /completions/{completionId} {
+        allow read: if isAdminUser()
+          || (isSignedIn() && request.auth.uid == athleteId)
+          || (
+            resource.data.dailyAssignmentId is string
+            && exists(pcDailyAssignmentPath(resource.data.dailyAssignmentId))
+            && get(
+              pcDailyAssignmentPath(resource.data.dailyAssignmentId)
+            ).data.teamId is string
+            && get(
+              pcDailyAssignmentPath(resource.data.dailyAssignmentId)
+            ).data.coachId == request.auth.uid
+            && pcDataMatchesTeamOrganization(
+              get(
+                pcDailyAssignmentPath(resource.data.dailyAssignmentId)
+              ).data,
+              get(
+                pcDailyAssignmentPath(resource.data.dailyAssignmentId)
+              ).data.teamId
+            )
+            && pcCanAccessTeamAthlete(
+              get(
+                pcDailyAssignmentPath(resource.data.dailyAssignmentId)
+              ).data.teamId,
+              athleteId
+            )
+          );
+        allow create: if isSignedIn()
+          && request.auth.uid == athleteId
+          && request.resource.data.userId == athleteId
+          && pcCompletionAssignmentMatchesAthlete(
+            request.resource.data,
+            athleteId
+          );
+        allow update: if isSignedIn()
+          && request.auth.uid == athleteId
+          && resource.data.userId == athleteId
+          && request.resource.data.userId == resource.data.userId
+          && (
+            !('dailyAssignmentId' in resource.data)
+            || request.resource.data.dailyAssignmentId
+              == resource.data.dailyAssignmentId
+          )
+          && pcCompletionAssignmentMatchesAthlete(
+            request.resource.data,
+            athleteId
+          );
+        allow delete: if false;
+      }
     }
 
     // Junior Track guided curriculum content. Athletes read lessons; the

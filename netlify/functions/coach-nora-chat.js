@@ -13,6 +13,7 @@
 // Request (POST):
 //   {
 //     coachId: string,
+//     teamId: string,
 //     message: string,
 //     history?: Array<{ role: 'user' | 'assistant', content: string }>,
 //     athletes?: Array<{ displayName, status, sentimentScore,
@@ -29,6 +30,7 @@ const VAULT_COLLECTION = 'coach-nora-vault';
 const ESCALATIONS_COLLECTION = 'escalation-records';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const LEGACY_COACHES_COLLECTION = 'coaches';
 const LEGACY_COACH_ATHLETES_COLLECTION = 'coachAthletes';
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
@@ -38,33 +40,6 @@ const KNOWN_STAFF_CAPABILITIES = new Set([
   'administrative',
   'coaching',
   'athletic_trainer',
-]);
-const INACTIVE_MEMBERSHIP_STATUSES = new Set([
-  'inactive',
-  'removed',
-  'revoked',
-  'declined',
-  'expired',
-  'pending',
-  'invited',
-  'suspended',
-  'disabled',
-]);
-const INACTIVE_TEAM_STATUSES = new Set([
-  'paused',
-  'archived',
-  'deleted',
-  'inactive',
-]);
-const INACTIVE_LEGACY_LINK_STATUSES = new Set([
-  'inactive',
-  'removed',
-  'revoked',
-  'declined',
-  'expired',
-  'disconnected',
-  'suspended',
-  'disabled',
 ]);
 
 const truncate = (value, max) => {
@@ -76,6 +51,14 @@ const normalizeString = (value) => (
   typeof value === 'string' ? value.trim() : ''
 );
 
+const isSafeDocumentId = (value) => (
+  Boolean(value)
+  && value.length <= 256
+  && value !== '.'
+  && value !== '..'
+  && !value.includes('/')
+);
+
 const snapshotExists = (snapshot) => (
   typeof snapshot?.exists === 'function'
     ? snapshot.exists()
@@ -84,19 +67,32 @@ const snapshotExists = (snapshot) => (
 
 function isActiveMembership(data) {
   const status = normalizeString(data?.status).toLowerCase();
-  return !INACTIVE_MEMBERSHIP_STATUSES.has(status) && data?.revokedAt == null;
+  return (!status || status === 'active') && data?.revokedAt == null;
 }
 
 function isActiveTeam(data) {
   const status = normalizeString(data?.status).toLowerCase();
-  return !INACTIVE_TEAM_STATUSES.has(status)
+  return status === 'active'
     && data?.deletedAt == null
     && data?.archivedAt == null;
 }
 
+function isValidLegacyCoachProfile(snapshot, coachId) {
+  if (!snapshotExists(snapshot)) return false;
+  const data = snapshot.data?.() || {};
+  const profileUserId = normalizeString(data.userId);
+  const userType = normalizeString(data.userType).toLowerCase();
+  const status = normalizeString(data.status).toLowerCase();
+  return (!profileUserId || profileUserId === coachId)
+    && (!userType || userType === 'coach')
+    && (!status || status === 'active')
+    && data.deletedAt == null
+    && data.revokedAt == null;
+}
+
 function isActiveLegacyLink(data) {
   const status = normalizeString(data?.status).toLowerCase();
-  return !INACTIVE_LEGACY_LINK_STATUSES.has(status)
+  return (!status || status === 'active')
     && data?.disconnectedAt == null
     && data?.revokedAt == null;
 }
@@ -158,31 +154,8 @@ function resolveRosterVisibility(data, capabilities) {
     : 'none';
 }
 
-function isValidLegacyCoachProfile(snapshot, coachId) {
-  if (!snapshotExists(snapshot)) return false;
-  const data = snapshot.data?.() || {};
-  const profileUserId = normalizeString(data.userId);
-  const status = normalizeString(data.status).toLowerCase();
-  return (!profileUserId || profileUserId === coachId)
-    && !INACTIVE_MEMBERSHIP_STATUSES.has(status)
-    && data.deletedAt == null
-    && data.revokedAt == null;
-}
 
-async function loadActiveTeamIds(db, teamIds) {
-  const activeTeamIds = new Set();
-  await Promise.all(
-    [...teamIds].map(async (teamId) => {
-      const snapshot = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
-      if (snapshotExists(snapshot) && isActiveTeam(snapshot.data?.() || {})) {
-        activeTeamIds.add(teamId);
-      }
-    })
-  );
-  return activeTeamIds;
-}
-
-async function loadTeamAthleteIds(db, teamId) {
+async function loadTeamAthleteIds(db, teamId, organizationId) {
   const snapshot = await db
     .collection(TEAM_MEMBERSHIPS_COLLECTION)
     .where('teamId', '==', teamId)
@@ -194,6 +167,9 @@ async function loadTeamAthleteIds(db, teamId) {
     if (
       normalizeString(data.role).toLowerCase() === 'athlete'
       && athleteId
+      && normalizeString(data.userId) === athleteId
+      && normalizeString(data.teamId) === teamId
+      && normalizeString(data.organizationId) === organizationId
       && isActiveMembership(data)
     ) {
       athleteIds.add(athleteId);
@@ -202,92 +178,25 @@ async function loadTeamAthleteIds(db, teamId) {
   return athleteIds;
 }
 
-async function resolveNoraCoachAccess(db, coachId) {
-  const [membershipSnapshot, legacyCoachSnapshot] = await Promise.all([
-    db
-      .collection(TEAM_MEMBERSHIPS_COLLECTION)
-      .where('userId', '==', coachId)
-      .get(),
-    db.collection(LEGACY_COACHES_COLLECTION).doc(coachId).get(),
-  ]);
+async function resolveNoraCoachAccess(db, coachId, teamId) {
+  const denied = {
+    authorized: false,
+    allowedAthleteIds: new Set(),
+    allowLegacyVaultBridge: false,
+  };
 
-  const candidateMemberships = [];
-  for (const document of membershipSnapshot.docs || []) {
-    const data = document.data?.() || {};
-    const role = normalizeString(data.role).toLowerCase();
-    const teamId = normalizeString(data.teamId);
-    if (
-      normalizeString(data.userId) !== coachId
-      || role === 'athlete'
-      || !teamId
-      || !isActiveMembership(data)
-    ) {
-      continue;
-    }
+  if (teamId === `legacy:${coachId}`) {
+    const legacyCoachSnapshot = await db
+      .collection(LEGACY_COACHES_COLLECTION)
+      .doc(coachId)
+      .get();
+    if (!isValidLegacyCoachProfile(legacyCoachSnapshot, coachId)) return denied;
 
-    const capabilities = resolveStaffCapabilities(data, role);
-    const canUseNora = capabilities.has('admin')
-      || capabilities.has('coaching')
-      || capabilities.has('administrative');
-    if (!canUseNora) continue;
-    candidateMemberships.push({ data, teamId, capabilities });
-  }
-
-  const activeTeamIds = await loadActiveTeamIds(
-    db,
-    new Set(candidateMemberships.map((membership) => membership.teamId))
-  );
-  const teamPolicies = new Map();
-  for (const membership of candidateMemberships) {
-    if (!activeTeamIds.has(membership.teamId)) continue;
-
-    const existingPolicy = teamPolicies.get(membership.teamId) || {
-      entireTeam: false,
-      assignedAthleteIds: new Set(),
-    };
-    const canReadRoster = membership.capabilities.has('admin')
-      || membership.capabilities.has('coaching')
-      || membership.capabilities.has('athletic_trainer');
-    const rosterVisibility = canReadRoster
-      ? resolveRosterVisibility(membership.data, membership.capabilities)
-      : 'none';
-
-    if (rosterVisibility === 'team') {
-      existingPolicy.entireTeam = true;
-      existingPolicy.assignedAthleteIds.clear();
-    } else if (rosterVisibility === 'assigned' && !existingPolicy.entireTeam) {
-      for (const value of Array.isArray(membership.data.allowedAthleteIds)
-        ? membership.data.allowedAthleteIds
-        : []) {
-        const athleteId = normalizeString(value);
-        if (athleteId) existingPolicy.assignedAthleteIds.add(athleteId);
-      }
-    }
-    teamPolicies.set(membership.teamId, existingPolicy);
-  }
-
-  const allowedAthleteIds = new Set();
-  await Promise.all(
-    [...teamPolicies.entries()].map(async ([teamId, policy]) => {
-      if (!policy.entireTeam && policy.assignedAthleteIds.size === 0) return;
-      const teamAthleteIds = await loadTeamAthleteIds(db, teamId);
-      for (const athleteId of teamAthleteIds) {
-        if (policy.entireTeam || policy.assignedAthleteIds.has(athleteId)) {
-          allowedAthleteIds.add(athleteId);
-        }
-      }
-    })
-  );
-
-  const legacyCoachProfileExists = isValidLegacyCoachProfile(
-    legacyCoachSnapshot,
-    coachId
-  );
-  if (legacyCoachProfileExists) {
     const legacyLinks = await db
       .collection(LEGACY_COACH_ATHLETES_COLLECTION)
       .where('coachId', '==', coachId)
       .get();
+    const allowedAthleteIds = new Set();
     for (const document of legacyLinks.docs || []) {
       const data = document.data?.() || {};
       const athleteId = normalizeString(data.athleteUserId)
@@ -300,11 +209,101 @@ async function resolveNoraCoachAccess(db, coachId) {
         allowedAthleteIds.add(athleteId);
       }
     }
+    return {
+      authorized: true,
+      allowedAthleteIds,
+      allowLegacyVaultBridge: true,
+    };
+  }
+  if (teamId.startsWith('legacy:')) return denied;
+
+  const teamSnapshot = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
+  if (!snapshotExists(teamSnapshot)) return denied;
+
+  const team = teamSnapshot.data?.() || {};
+  const organizationId = normalizeString(team.organizationId);
+  if (!organizationId || !isActiveTeam(team)) return denied;
+
+  const [membershipSnapshot, organizationSnapshot] = await Promise.all([
+    db
+      .collection(TEAM_MEMBERSHIPS_COLLECTION)
+      .where('userId', '==', coachId)
+      .where('teamId', '==', teamId)
+      .get(),
+    db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).get(),
+  ]);
+  if (
+    !snapshotExists(organizationSnapshot)
+    || !isActiveTeam(organizationSnapshot.data?.() || {})
+  ) {
+    return denied;
+  }
+
+  const candidateMemberships = [];
+  for (const document of membershipSnapshot.docs || []) {
+    const data = document.data?.() || {};
+    const role = normalizeString(data.role).toLowerCase();
+    if (
+      normalizeString(data.userId) !== coachId
+      || normalizeString(data.teamId) !== teamId
+      || normalizeString(data.organizationId) !== organizationId
+      || role === 'athlete'
+      || !isActiveMembership(data)
+    ) {
+      continue;
+    }
+
+    const capabilities = resolveStaffCapabilities(data, role);
+    const canUseNora = capabilities.has('admin')
+      || capabilities.has('coaching')
+      || capabilities.has('administrative');
+    if (canUseNora) candidateMemberships.push({ data, capabilities });
+  }
+  if (candidateMemberships.length === 0) return denied;
+
+  const policy = {
+    entireTeam: false,
+    assignedAthleteIds: new Set(),
+  };
+  for (const membership of candidateMemberships) {
+    const canReadRoster = membership.capabilities.has('admin')
+      || membership.capabilities.has('coaching')
+      || membership.capabilities.has('athletic_trainer');
+    const rosterVisibility = canReadRoster
+      ? resolveRosterVisibility(membership.data, membership.capabilities)
+      : 'none';
+
+    if (rosterVisibility === 'team') {
+      policy.entireTeam = true;
+      policy.assignedAthleteIds.clear();
+    } else if (rosterVisibility === 'assigned' && !policy.entireTeam) {
+      for (const value of Array.isArray(membership.data.allowedAthleteIds)
+        ? membership.data.allowedAthleteIds
+        : []) {
+        const athleteId = normalizeString(value);
+        if (athleteId) policy.assignedAthleteIds.add(athleteId);
+      }
+    }
+  }
+
+  const allowedAthleteIds = new Set();
+  if (policy.entireTeam || policy.assignedAthleteIds.size > 0) {
+    const teamAthleteIds = await loadTeamAthleteIds(db, teamId, organizationId);
+    for (const athleteId of teamAthleteIds) {
+      if (policy.entireTeam || policy.assignedAthleteIds.has(athleteId)) {
+        allowedAthleteIds.add(athleteId);
+      }
+    }
   }
 
   return {
-    authorized: teamPolicies.size > 0 || legacyCoachProfileExists,
+    authorized: true,
     allowedAthleteIds,
+    // Only the deterministic legacy team may adopt old unscoped entries.
+    allowLegacyVaultBridge:
+      teamId === `legacy-coach-team-${coachId}`
+      && normalizeString(team.legacySource) === 'legacy-coach-roster'
+      && normalizeString(team.legacyCoachId) === coachId,
   };
 }
 
@@ -325,13 +324,39 @@ function scopeAthletes(athletes, allowedAthleteIds) {
 }
 
 // Build a compact, text-only snapshot of the coach's vault for grounding.
-async function loadVaultContext(db, coachId) {
+async function loadVaultContext(db, coachId, teamId, allowLegacyVaultBridge = false) {
   try {
     const snap = await db
       .collection(VAULT_COLLECTION)
       .where('coachId', '==', coachId)
+      .where('teamId', '==', teamId)
       .get();
-    return snap.docs
+    const documents = [...(snap.docs || [])];
+
+    if (allowLegacyVaultBridge) {
+      const legacySnapshot = await db
+        .collection(VAULT_COLLECTION)
+        .where('coachId', '==', coachId)
+        .get();
+      const legacyDocuments = (legacySnapshot.docs || []).filter((document) => {
+        const entry = document.data?.() || {};
+        return !normalizeString(entry.teamId);
+      });
+      await Promise.all(
+        legacyDocuments.map((document) =>
+          db.collection(VAULT_COLLECTION).doc(document.id).set(
+            {
+              teamId,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+        )
+      );
+      documents.push(...legacyDocuments);
+    }
+
+    return documents
       .map((d) => d.data())
       .map((e) => {
         const label = e.category ? `[${e.category}] ` : '';
@@ -461,12 +486,13 @@ async function callOpenAi({ systemPrompt, history, message }) {
   }
 }
 
-async function saveNote(db, coachId, note) {
+async function saveNote(db, coachId, teamId, note) {
   if (!note || !note.content || !String(note.content).trim()) return null;
   const docRef = db.collection(VAULT_COLLECTION).doc();
   const payload = {
     id: docRef.id,
     coachId,
+    teamId,
     type: 'note',
     title: String(note.title || '').trim() || 'Note from chat',
     content: String(note.content).trim(),
@@ -518,14 +544,21 @@ exports.handler = async (event) => {
   }
 
   const coachId = authenticatedCoach.userId;
+  const teamId = normalizeString(body.teamId);
   const { message, history, athletes, coachName } = body;
+  if (!teamId) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing teamId' }) };
+  }
+  if (!isSafeDocumentId(teamId)) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid teamId' }) };
+  }
   if (!message || !String(message).trim()) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing message' }) };
   }
 
   try {
     const db = authenticatedCoach.app.firestore();
-    const access = await resolveNoraCoachAccess(db, coachId);
+    const access = await resolveNoraCoachAccess(db, coachId, teamId);
     if (!access.authorized) {
       return {
         statusCode: 403,
@@ -535,7 +568,7 @@ exports.handler = async (event) => {
     }
     const scopedAthletes = scopeAthletes(athletes, access.allowedAthleteIds);
     const [vaultLines, escalationLines] = await Promise.all([
-      loadVaultContext(db, coachId),
+      loadVaultContext(db, coachId, teamId, access.allowLegacyVaultBridge),
       loadEscalationContext(db, scopedAthletes),
     ]);
     const athleteLines = buildAthleteDigest(scopedAthletes);
@@ -549,7 +582,7 @@ exports.handler = async (event) => {
 
     let savedNote = null;
     if (result && result.note && typeof result.note === 'object') {
-      savedNote = await saveNote(db, coachId, result.note);
+      savedNote = await saveNote(db, coachId, teamId, result.note);
     }
 
     return { statusCode: 200, headers, body: JSON.stringify({ reply, savedNote }) };

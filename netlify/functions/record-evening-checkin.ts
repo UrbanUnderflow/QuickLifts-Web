@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import * as admin from 'firebase-admin';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { resolveUnambiguousAthleteScope } from './utils/pulsecheckAthleteScope';
 
 const RESPONSE_HEADERS = {
   'Content-Type': 'application/json',
@@ -111,20 +112,30 @@ export const handler: Handler = async (event) => {
 
   let timezone = typeof body.timezone === 'string' && body.timezone ? body.timezone : 'America/New_York';
   let teamId = '';
+  let organizationId = '';
+  let scopeWarning: string | null = null;
   try {
-    const membership = await db
-      .collection('pulsecheck-team-memberships')
-      .where('userId', '==', auth.uid)
-      .where('role', '==', 'athlete')
-      .limit(1)
-      .get();
-    if (!membership.empty) {
-      const membershipData = membership.docs[0].data();
-      teamId = String(membershipData.teamId || '');
-      if (!body.timezone && membershipData.timezone) timezone = String(membershipData.timezone);
+    const resolution = await resolveUnambiguousAthleteScope(db, auth.uid);
+    scopeWarning = resolution.warning;
+    if (resolution.scope) {
+      teamId = resolution.scope.teamId;
+      organizationId = resolution.scope.organizationId;
+      if (!body.timezone && resolution.scope.timezone) {
+        timezone = resolution.scope.timezone;
+      }
+    } else {
+      console.warn('Evening check-in saved without coach team scope.', {
+        athleteUserId: auth.uid,
+        scopeWarning,
+        validScopeCount: resolution.validScopeCount,
+      });
     }
-  } catch {
-    // A new athlete may not have a membership yet; the personal check-in still persists.
+  } catch (error) {
+    scopeWarning = 'scope_resolution_failed';
+    console.warn('Evening check-in team scope resolution failed.', {
+      athleteUserId: auth.uid,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const now = Date.now();
@@ -161,10 +172,15 @@ export const handler: Handler = async (event) => {
       {
         id: checkinDocId,
         athleteUserId: auth.uid,
-        teamId,
         dayKey,
         timezone,
         eveningCheckIn,
+        ...(teamId && organizationId
+          ? { teamId, organizationId }
+          : {
+              teamId: admin.firestore.FieldValue.delete(),
+              organizationId: admin.firestore.FieldValue.delete(),
+            }),
       },
       { merge: true },
     );
@@ -186,6 +202,7 @@ export const handler: Handler = async (event) => {
       noraProbe: probeText,
       noraAction: actionText,
       reflection: reflection || null,
+      scopeWarning,
     }),
   };
 };
