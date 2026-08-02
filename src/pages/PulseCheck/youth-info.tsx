@@ -1956,10 +1956,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           height: 100svh;
           overflow-y: auto;
           color: var(--yi-ink);
-          background:
-            linear-gradient(rgba(16,16,21,.045) 1px, transparent 1px),
-            var(--yi-paper);
-          background-size: 100% 55px;
+          background: var(--yi-paper);
           box-shadow: -34px 0 89px rgba(0,0,0,.28);
           animation: yiEducationPanelIn .42s cubic-bezier(.22,.8,.26,1) both;
           overscroll-behavior: contain;
