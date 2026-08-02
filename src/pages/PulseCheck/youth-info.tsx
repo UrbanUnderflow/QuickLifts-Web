@@ -24,7 +24,7 @@ const proPageMeta = {
   ogTitle: 'PulseCheck Pro | Train the Mind Like the Body.',
   ogDescription:
     'An athlete-first mental performance system with 200+ skills, a structured curriculum, wearable context, and qualified support when several hard days need a closer look.',
-  ogImage: '/pulsecheck-pro-og.png',
+  ogImage: '/pulsecheck-pro-og-clean.png',
   twitterCard: 'summary_large_image',
   lastUpdated: '2026-08-02T00:00:00.000Z',
 };
@@ -670,7 +670,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       <PageHead
         metaData={isPro ? proPageMeta : pageMeta}
         pageOgUrl={isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth-info'}
-        pageOgImage={isPro ? '/pulsecheck-pro-og.png' : '/pulsecheck-youth/youth-info-og.png'}
+        pageOgImage={isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og.png'}
         themeColor={isPro ? '#0b0b0e' : '#101015'}
         appleItunesAppArgument={isPro ? 'pulsecheck://pro' : 'pulsecheck://youth'}
       />

@@ -272,7 +272,7 @@ const pageMeta = {
     'See how PulseCheck Pro turns readiness into focused mental skills training, pressure testing, adaptive blocks, and long-term advancement.',
   ogTitle: 'PulseCheck Pro: Mental Skills Training for Adult Athletes',
   ogDescription: 'Assess. Prescribe. Train. Pressure-test. Advance.',
-  ogImage: '/pulsecheck-pro-og.png',
+  ogImage: '/pulsecheck-pro-og-clean.png',
   twitterCard: 'summary_large_image',
   lastUpdated: '2026-07-23T00:00:00.000Z',
 };
@@ -1535,7 +1535,7 @@ const PulseCheckProPage: React.FC = () => {
       <PageHead
         metaData={pageMeta}
         pageOgUrl="https://fitwithpulse.ai/PulseCheck/pro"
-        pageOgImage="/pulsecheck-pro-og.png"
+        pageOgImage="/pulsecheck-pro-og-clean.png"
         themeColor="#05070C"
         appleItunesAppArgument="pulsecheck://pro"
       />
@@ -5337,7 +5337,7 @@ export const getStaticProps: GetStaticProps = async () => ({
     ogMeta: {
       title: pageMeta.ogTitle,
       description: pageMeta.ogDescription,
-      image: 'https://fitwithpulse.ai/pulsecheck-pro-og.png',
+      image: 'https://fitwithpulse.ai/pulsecheck-pro-og-clean.png',
       url: 'https://fitwithpulse.ai/PulseCheck/pro',
       type: 'website',
       siteName: 'PulseCheck Pro',
