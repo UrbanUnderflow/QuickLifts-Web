@@ -18,10 +18,18 @@ import {
 } from 'lucide-react';
 import { athleteProgressService } from '../../api/firebase/mentaltraining';
 import {
+  BASELINE_BODY_AWARENESS_RESPONSE_PROFILES,
+  BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES,
+  BASELINE_REFLECTION_RESPONSE_PROFILES,
+  BASELINE_SETBACK_RESPONSE_PROFILES,
+  baselineAttentionResponseProfiles,
+  baselineSelfTalkResponseProfiles,
   baselineSportPack,
+  MENTAL_SKILL_FAMILIARITY_LEVELS,
   MENTAL_SKILL_FAMILIES,
   MENTAL_SKILL_FAMILY_LABELS,
   MENTAL_SKILL_STAGE_LABELS,
+  scoreSequenceOrder,
   scoreMentalSkillsBaseline,
   type MentalSkillEvidence,
   type MentalSkillFamiliarity,
@@ -36,6 +44,7 @@ interface BaselineAssessmentModalProps {
   athleteId: string;
   athleteName?: string;
   sportName?: string;
+  persist?: boolean;
   onComplete: (progress: any) => void;
 }
 
@@ -66,15 +75,19 @@ const familyIcons: Record<MentalSkillFamily, React.ComponentType<{ className?: s
 };
 
 const familiarityLabels: Record<MentalSkillFamiliarity, string> = {
-  new_to_me: 'New to me',
-  know_it: 'I know it',
-  practiced_it: 'I have practiced it',
+  new_to_me: 'I have not learned this yet',
+  heard_of_it: 'I have heard of this',
+  know_it: 'I understand the basic idea',
+  practiced_it: 'I have tried this in practice',
+  use_it: 'I use this on purpose',
 };
 
 const nextFamiliarity: Record<MentalSkillFamiliarity, MentalSkillFamiliarity> = {
-  new_to_me: 'know_it',
+  new_to_me: 'heard_of_it',
+  heard_of_it: 'know_it',
   know_it: 'practiced_it',
-  practiced_it: 'new_to_me',
+  practiced_it: 'use_it',
+  use_it: 'new_to_me',
 };
 
 const defaultFamiliarity = MENTAL_SKILL_FAMILIES.reduce((result, family) => {
@@ -138,6 +151,7 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
   athleteId,
   athleteName = 'Athlete',
   sportName,
+  persist = true,
   onComplete,
 }) => {
   const [step, setStep] = useState<Step>('intro');
@@ -158,12 +172,15 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
   const [evidence, setEvidence] = useState<MentalSkillEvidence[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [breathComplete, setBreathComplete] = useState(false);
+  const [breathPracticeSelected, setBreathPracticeSelected] = useState<string | null>(null);
   const [visualizationOrder, setVisualizationOrder] = useState<number[]>([]);
   const [coherenceOrder, setCoherenceOrder] = useState<string[]>([]);
   const [result, setResult] = useState<ReturnType<typeof scoreMentalSkillsBaseline> | null>(null);
 
   const archetype = useMemo(() => scenarioArchetypeForSport(sportName), [sportName]);
   const sportPack = useMemo(() => baselineSportPack(archetype), [archetype]);
+  const attentionResponses = useMemo(() => baselineAttentionResponseProfiles(sportPack), [sportPack]);
+  const selfTalkResponses = useMemo(() => baselineSelfTalkResponseProfiles(sportPack), [sportPack]);
   const stepIndex = steps.indexOf(step);
   const progress = Math.max(0, (stepIndex / (steps.length - 1)) * 100);
 
@@ -198,6 +215,11 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
     setStep('result');
     setIsSaving(true);
     setSaveError(null);
+    if (!persist) {
+      setSavedProgress(baseline);
+      setIsSaving(false);
+      return;
+    }
     try {
       const progressRecord = await athleteProgressService.saveMentalSkillsBaseline(athleteId, baseline);
       setSavedProgress(progressRecord);
@@ -229,7 +251,7 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
     if (step === 'tools') return { label: 'Start the challenges', run: () => advance('belief'), disabled: false };
     if (step === 'belief') return { label: 'Continue', run: () => advance('reflection'), disabled: !selected };
     if (step === 'reflection') return { label: 'Continue', run: () => advance('breath'), disabled: !selected };
-    if (step === 'breath') return { label: 'Continue', run: () => advance('visualization'), disabled: !breathComplete || !selected };
+    if (step === 'breath') return { label: 'Continue', run: () => advance('visualization'), disabled: !breathComplete || !selected || !breathPracticeSelected };
     if (step === 'visualization') return { label: 'Continue', run: () => advance('attention'), disabled: visualizationOrder.length !== 4 };
     if (step === 'attention') return { label: 'Continue', run: () => advance('emotion'), disabled: !selected };
     if (step === 'emotion') return { label: 'Continue', run: () => advance('coherence'), disabled: !selected };
@@ -313,12 +335,12 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                 <div>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Skill experience</p>
                   <h2 className="mt-3 text-3xl font-black sm:text-5xl">Which skills have you used?</h2>
-                  <p className="mt-3 text-zinc-400">Tap each skill until the label matches your experience.</p>
+                  <p className="mt-3 text-zinc-400">Choose the description that best matches your experience with each skill.</p>
                   <div className="mt-7 grid gap-3 sm:grid-cols-2">
                     {MENTAL_SKILL_FAMILIES.map((family) => {
                       const Icon = familyIcons[family];
                       return (
-                        <button key={family} type="button" onClick={() => setFamiliarity({ ...familiarity, [family]: nextFamiliarity[familiarity[family]] })} className="flex items-center gap-4 border border-white/10 bg-white/[0.05] p-4 text-left">
+                        <button key={family} type="button" onClick={() => setFamiliarity({ ...familiarity, [family]: nextFamiliarity[familiarity[family]] })} className="flex items-center gap-4 border border-white/10 bg-white/[0.05] p-4 text-left" aria-label={`${MENTAL_SKILL_FAMILY_LABELS[family]}: ${familiarityLabels[familiarity[family]]}. ${MENTAL_SKILL_FAMILIARITY_LEVELS.length} levels available.`}>
                           <Icon className="h-7 w-7 text-teal-300" />
                           <span className="min-w-0 flex-1"><span className="block font-bold">{MENTAL_SKILL_FAMILY_LABELS[family]}</span><span className="mt-1 block text-sm text-teal-200">{familiarityLabels[familiarity[family]]}</span></span>
                           <RotateCcw className="h-4 w-4 text-zinc-500" />
@@ -332,24 +354,22 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
               {step === 'belief' ? (
                 <div>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 1 · Belief</p>
-                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Respond to a setback</h2>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">What is your first thought?</h2>
                   <p className="mt-5 text-xl leading-8 text-zinc-200">{sportPack.setbackPrompt}</p>
                   <div className="mt-7 space-y-3">
-                    <OptionButton selected={selected === 'belief_use'} onClick={() => selectScored('belief_use', [
-                      { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: 100 },
-                      { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: 100 },
-                      { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: 90 },
-                    ])}>That moment gives me information. I can use it and choose my next action.</OptionButton>
-                    <OptionButton selected={selected === 'belief_fixed'} onClick={() => selectScored('belief_fixed', [
-                      { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: 20 },
-                      { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: 25 },
-                      { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: 30 },
-                    ])}>That proves I am not good enough for this level.</OptionButton>
-                    <OptionButton selected={selected === 'belief_ignore'} onClick={() => selectScored('belief_ignore', [
-                      { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: 45 },
-                      { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: 40 },
-                      { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: 20 },
-                    ])}>I should pretend it never happened and force myself to stop thinking about it.</OptionButton>
+                    {BASELINE_SETBACK_RESPONSE_PROFILES.map((response) => (
+                      <OptionButton
+                        key={response.id}
+                        selected={selected === response.id}
+                        onClick={() => selectScored(response.id, [
+                          { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: response.beliefScore },
+                          { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: response.selfTalkScore },
+                          { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: response.reflectionScore },
+                        ])}
+                      >
+                        {response.label}
+                      </OptionButton>
+                    ))}
                   </div>
                 </div>
               ) : null}
@@ -357,19 +377,15 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
               {step === 'reflection' ? (
                 <div>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 2 · Reflection</p>
-                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Turn experience into a plan</h2>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">What would you do first?</h2>
                   <p className="mt-5 text-xl leading-8 text-zinc-200">{sportPack.reflectionPrompt}</p>
                   <div className="mt-7 space-y-3">
-                    <OptionButton selected={selected === 'reflection_blame'} onClick={() => selectScored('reflection_blame', [
-                      { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: 20 },
-                    ])}>I would decide the result proves I am not talented enough.</OptionButton>
-                    <OptionButton selected={selected === 'reflection_avoid'} onClick={() => selectScored('reflection_avoid', [
-                      { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: 35 },
-                    ])}>I would avoid reviewing it and hope the next one goes better.</OptionButton>
-                    <OptionButton selected={selected === 'reflection_plan'} onClick={() => selectScored('reflection_plan', [
-                      { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: 100 },
-                      { challengeId: 'reflection', family: 'reflection_learning', component: 'rehearse', score: 90 },
-                    ])}>I would name what happened, choose one part I can improve, and plan how to practice it.</OptionButton>
+                    {BASELINE_REFLECTION_RESPONSE_PROFILES.map((response) => (
+                      <OptionButton key={response.id} selected={selected === response.id} onClick={() => selectScored(response.id, [
+                        { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: response.reflectionScore },
+                        { challengeId: 'reflection', family: 'belief_identity', component: 'understand', score: response.beliefScore },
+                      ])}>{response.label}</OptionButton>
+                    ))}
                   </div>
                 </div>
               ) : null}
@@ -380,23 +396,35 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                   <h2 className="mt-3 text-3xl font-black sm:text-5xl">Catch the first signal</h2>
                   <p className="mt-5 text-xl text-zinc-200">{sportPack.bodyPrompt}</p>
                   <div className="mt-7 space-y-3 text-left">
-                    {['My heart beats faster', 'My breathing changes', 'My muscles tighten', 'My thoughts speed up'].map((label, index) => (
-                      <OptionButton key={label} selected={selected === `body_${index}`} onClick={() => selectScored(`body_${index}`, [
-                        { challengeId: 'body_signal', family: 'breathing_body_awareness', component: 'recognize', score: 100 },
-                        { challengeId: 'body_signal', family: 'emotional_regulation', component: 'recognize', score: 90 },
-                      ])}>{label}</OptionButton>
+                    {BASELINE_BODY_AWARENESS_RESPONSE_PROFILES.map((response) => (
+                      <OptionButton key={response.id} selected={selected === response.id} onClick={() => selectScored(response.id, [
+                        { challengeId: 'body_signal', family: 'breathing_body_awareness', component: 'recognize', score: response.bodyAwarenessScore },
+                        { challengeId: 'body_signal', family: 'emotional_regulation', component: 'recognize', score: response.emotionalAwarenessScore },
+                      ])}>{response.label}</OptionButton>
                     ))}
                   </div>
                   <button type="button" onClick={() => {
                     setBreathComplete(true);
-                    replaceEvidence([
-                      { challengeId: 'guided_breath', family: 'breathing_body_awareness', component: 'rehearse', score: 100 },
-                      { challengeId: 'guided_breath', family: 'coherence', component: 'rehearse', score: 80 },
-                    ]);
                   }} className={`mx-auto mt-8 grid h-40 w-40 place-items-center rounded-full border-2 ${breathComplete ? 'border-teal-200 bg-teal-300 text-slate-950' : 'border-teal-300/40 bg-teal-300/10 text-teal-200'}`}>
                     {breathComplete ? <Check className="h-16 w-16" /> : <span><Wind className="mx-auto h-12 w-12" /><span className="mt-2 block text-sm font-bold">One slow breath</span></span>}
                   </button>
                   <p className="mt-4 text-sm text-zinc-400">Breathe in slowly. Breathe out slowly. Tap the circle when you finish.</p>
+                  {breathComplete ? (
+                    <div className="mt-8 text-left">
+                      <h3 className="text-xl font-black">How closely did you follow that breath?</h3>
+                      <div className="mt-4 space-y-3">
+                        {BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES.map((response) => (
+                          <OptionButton key={response.id} selected={breathPracticeSelected === response.id} onClick={() => {
+                            setBreathPracticeSelected(response.id);
+                            replaceEvidence([
+                              { challengeId: 'guided_breath', family: 'breathing_body_awareness', component: 'rehearse', score: response.breathingScore, selectedOptionId: response.id },
+                              { challengeId: 'guided_breath', family: 'coherence', component: 'rehearse', score: response.coherenceScore, selectedOptionId: response.id },
+                            ]);
+                          }}>{response.label}</OptionButton>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -413,11 +441,12 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                         const next = [...visualizationOrder, item.index];
                         setVisualizationOrder(next);
                         if (next.length === 4) {
-                          const correct = next.every((value, index) => value === index);
+                          const sequenceScore = scoreSequenceOrder(next, [0, 1, 2, 3]);
+                          const orderId = `visualization_order_${next.join('-')}`;
                           replaceEvidence([
-                            { challengeId: 'visualization_order', family: 'visualization', component: 'understand', score: correct ? 100 : 55 },
-                            { challengeId: 'visualization_order', family: 'visualization', component: 'choose', score: correct ? 100 : 55 },
-                            { challengeId: 'visualization_order', family: 'visualization', component: 'rehearse', score: 100 },
+                            { challengeId: 'visualization_order', family: 'visualization', component: 'understand', score: sequenceScore, selectedOptionId: orderId },
+                            { challengeId: 'visualization_order', family: 'visualization', component: 'choose', score: sequenceScore, selectedOptionId: orderId },
+                            { challengeId: 'visualization_order', family: 'visualization', component: 'rehearse', score: Math.min(100, sequenceScore + 5), selectedOptionId: orderId },
                           ]);
                         }
                       }}><span className="mr-3 inline-grid h-7 w-7 place-items-center rounded-full bg-black/20">{position >= 0 ? position + 1 : '·'}</span>{item.label}</OptionButton>;
@@ -430,18 +459,14 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
               {step === 'attention' ? (
                 <div>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 5 · Attention</p>
-                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Choose what deserves your attention</h2>
-                  <p className="mt-5 text-xl text-zinc-200">{sportPack.pressurePrompt} What can you control right now?</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Where would your attention go first?</h2>
+                  <p className="mt-5 text-xl text-zinc-200">{sportPack.pressurePrompt}</p>
                   <div className="mt-7 space-y-3">
-                    <OptionButton selected={selected === 'attention_control'} onClick={() => selectScored('attention_control', [
-                      { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: 100 },
-                    ])}>{sportPack.controllableCue}</OptionButton>
-                    <OptionButton selected={selected === 'attention_result'} onClick={() => selectScored('attention_result', [
-                      { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: 25 },
-                    ])}>{sportPack.resultDistraction}</OptionButton>
-                    <OptionButton selected={selected === 'attention_compare'} onClick={() => selectScored('attention_compare', [
-                      { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: 20 },
-                    ])}>{sportPack.comparisonDistraction}</OptionButton>
+                    {attentionResponses.map((response) => (
+                      <OptionButton key={response.id} selected={selected === response.id} onClick={() => selectScored(response.id, [
+                        { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: response.score },
+                      ])}>{response.label}</OptionButton>
+                    ))}
                   </div>
                 </div>
               ) : null}
@@ -449,21 +474,15 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
               {step === 'emotion' ? (
                 <div>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 6 · Self-talk</p>
-                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Choose the thought you will practice</h2>
-                  <p className="mt-5 text-xl text-zinc-200">You notice the same nervous feeling {sportPack.setting}. What do you tell yourself?</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">What would you tell yourself first?</h2>
+                  <p className="mt-5 text-xl text-zinc-200">You notice that you feel nervous {sportPack.setting}.</p>
                   <div className="mt-7 space-y-3">
-                    <OptionButton selected={selected === 'emotion_name'} onClick={() => selectScored('emotion_name', [
-                      { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: 100 },
-                      { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: 100 },
-                    ])}>{sportPack.usefulPhrase}</OptionButton>
-                    <OptionButton selected={selected === 'emotion_fight'} onClick={() => selectScored('emotion_fight', [
-                      { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: 30 },
-                      { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: 25 },
-                    ])}>I must make every nervous feeling disappear before I can perform.</OptionButton>
-                    <OptionButton selected={selected === 'emotion_identity'} onClick={() => selectScored('emotion_identity', [
-                      { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: 20 },
-                      { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: 20 },
-                    ])}>Feeling nervous means I am not ready.</OptionButton>
+                    {selfTalkResponses.map((response) => (
+                      <OptionButton key={response.id} selected={selected === response.id} onClick={() => selectScored(response.id, [
+                        { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: response.emotionalRegulationScore },
+                        { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: response.selfTalkScore },
+                      ])}>{response.label}</OptionButton>
+                    ))}
                   </div>
                 </div>
               ) : null}
@@ -472,7 +491,7 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                 <div>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Final challenge · Coherence</p>
                   <h2 className="mt-3 text-3xl font-black sm:text-5xl">Build a response you can repeat</h2>
-                  <p className="mt-3 text-zinc-400">Tap the four parts in order: notice the body change, take one slow breath, choose a useful thought, then choose the next action.</p>
+                  <p className="mt-3 text-zinc-400">Tap the four parts in the order that makes the most sense to you.</p>
                   <div className="mt-7 space-y-3">
                     {scrambledCoherenceItems.map((item) => {
                       const position = coherenceOrder.indexOf(item.id);
@@ -481,11 +500,13 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                         const next = [...coherenceOrder, item.id];
                         setCoherenceOrder(next);
                         if (next.length === 4) {
-                          const correct = next.every((value, index) => value === coherenceItems[index].id);
+                          const expectedOrder = coherenceItems.map((coherenceItem) => coherenceItem.id);
+                          const sequenceScore = scoreSequenceOrder(next, expectedOrder);
+                          const orderId = `coherence_order_${next.join('-')}`;
                           replaceEvidence([
-                            { challengeId: 'coherence_chain', family: 'coherence', component: 'understand', score: correct ? 100 : 50 },
-                            { challengeId: 'coherence_chain', family: 'coherence', component: 'choose', score: correct ? 100 : 50 },
-                            { challengeId: 'coherence_chain', family: 'reflection_learning', component: 'choose', score: correct ? 90 : 45 },
+                            { challengeId: 'coherence_chain', family: 'coherence', component: 'understand', score: sequenceScore, selectedOptionId: orderId },
+                            { challengeId: 'coherence_chain', family: 'coherence', component: 'choose', score: sequenceScore, selectedOptionId: orderId },
+                            { challengeId: 'coherence_chain', family: 'reflection_learning', component: 'choose', score: Math.max(0, sequenceScore - 5), selectedOptionId: orderId },
                           ]);
                         }
                       }}><span className="mr-3 inline-grid h-7 w-7 place-items-center rounded-full bg-black/20">{position >= 0 ? position + 1 : '·'}</span>{item.label}</OptionButton>;

@@ -51,7 +51,7 @@ const demoSteps: DemoStep[] = [
     title: 'Your devices',
     subtitle: 'WHOOP joins the lineup athletes already trust.',
     nora:
-      'This is the exact device sheet athletes see today. WHOOP slots in beside Fitbit Air, Polar, and Oura — not as a bolt-on, but as a first-class option.',
+      'This is the exact device sheet athletes see today. WHOOP slots in beside Fitbit Air, Polar, and Oura as a first-class option.',
     customHeader: true,
   },
   {
@@ -80,7 +80,7 @@ const demoSteps: DemoStep[] = [
     title: 'WHOOP data is flowing',
     subtitle: 'PulseCheck converts raw reads into one athlete health-context snapshot.',
     nora:
-      'Once connected, WHOOP lands in the same canonical pipeline as Polar, Oura, and Fitbit Air — one snapshot, not four dashboards.',
+      'Once connected, WHOOP lands in the same canonical pipeline as Polar, Oura, and Fitbit Air. One snapshot, one clear read.',
     durationMs: 5200,
   },
   {
@@ -90,7 +90,7 @@ const demoSteps: DemoStep[] = [
     title: 'Nora reads the pressure building',
     subtitle: "The athlete's words and WHOOP's numbers are telling the same story.",
     nora:
-      "WHOOP doesn't diagnose anything on its own — it informs how Nora interprets the check-in. HRV down, resting HR up, strain rising: that combination is what surfaces a regulation protocol.",
+      "WHOOP gives Nora more context for the check-in. HRV down, resting HR up, strain rising: that combination is what surfaces a regulation protocol.",
     durationMs: 7200,
   },
   {
@@ -98,7 +98,7 @@ const demoSteps: DemoStep[] = [
     label: 'Protocol',
     eyebrow: 'Regulation protocol matched',
     title: 'Nora runs Box Breathing',
-    subtitle: 'Equal-phase inhale, hold, exhale, hold — built to override fight-or-flight in minutes.',
+    subtitle: 'Equal-phase inhale, hold, exhale, hold. Built to override fight-or-flight in minutes.',
     nora:
       'Box Breathing is the same protocol Navy SEALs use under pressure. Four-second phases, six cycles, and WHOOP keeps reading heart rate the entire time.',
     durationMs: 17000,
@@ -108,9 +108,9 @@ const demoSteps: DemoStep[] = [
     label: 'Proof',
     eyebrow: 'Integration complete',
     title: 'WHOOP confirms the reset',
-    subtitle: 'Not a guess — biofeedback proves the rep actually worked.',
+    subtitle: 'Biofeedback shows the athlete actually settled.',
     nora:
-      'That is the integration: real onboarding, a real protocol, and WHOOP biofeedback that proves the mental rep actually worked.',
+      'That is the integration: real onboarding, a real protocol, and WHOOP biofeedback that shows the reset taking hold.',
   },
 ];
 
@@ -182,7 +182,7 @@ const PhoneStatusBar = () => (
 );
 
 // Shared 3D woven-metallic bracelet illustration (matches the PulseCheck iOS
-// device renders). Same geometry for every band; only the colorway differs —
+// device renders). Same geometry for every band; only the colorway differs.
 // Fitbit is champagne + warm orange rim, WHOOP is the black/onyx twin.
 type BandCfg = {
   edge: string;
@@ -402,6 +402,23 @@ const OuraRing: React.FC = () => (
   </svg>
 );
 
+const deviceRenderImages = {
+  whoop: '/pulsecheck-youth/wearables/whoop.png',
+  fitbit: '/pulsecheck-youth/wearables/fitbit.png',
+  polar: '/pulsecheck-youth/wearables/polar-360.png',
+  oura: '/pulsecheck-youth/wearables/oura-ring.png',
+  apple: '/pulsecheck-youth/wearables/apple-watch.png',
+} as const;
+
+type ProductDeviceKind = keyof typeof deviceRenderImages;
+
+const ProductDeviceRender: React.FC<{ kind: ProductDeviceKind; label: string }> = ({ kind, label }) => (
+  <div className={`whoop-product-device whoop-product-device--${kind}`}>
+    <span className="whoop-product-device__orbit" aria-hidden="true" />
+    <img className="whoop-product-device__image" src={deviceRenderImages[kind]} alt={label} />
+  </div>
+);
+
 const StatusPill: React.FC<{ children: React.ReactNode; tone?: 'green' | 'purple' | 'orange' | 'muted' }> = ({
   children,
   tone = 'green',
@@ -593,7 +610,7 @@ const StepContent: React.FC<{ step: DemoStep }> = ({ step }) => {
           </div>
           <div className="whoop-sheet-heading">
             <h1>Your devices</h1>
-            <p>Tap any device to see its data. Add another anytime — your live reads keep flowing in the background.</p>
+            <p>Tap any device to see its data. Add another anytime. Your live reads keep flowing in the background.</p>
           </div>
           <div className="whoop-device-stack">
             <DeviceCard
@@ -601,26 +618,31 @@ const StepContent: React.FC<{ step: DemoStep }> = ({ step }) => {
               badge="new"
               active
               description="Strain, recovery, sleep, heart rate, and workout windows from WHOOP."
-              visual={<WhoopBand />}
+              visual={<ProductDeviceRender kind="whoop" label="WHOOP performance band rendering" />}
             />
             <DeviceCard
               name="Fitbit Air"
               badge="signature"
               connected
               description="Sleep, heart rate, and activity from Fitbit through Google Health."
-              visual={<FitbitLoop />}
+              visual={<ProductDeviceRender kind="fitbit" label="Fitbit Air performance band rendering" />}
             />
             <DeviceCard
-              name="Polar"
+              name="Polar 360"
               connected
               description="Live heart rate during sims plus deep recovery from Polar Flow."
-              visual={<PolarSensor />}
+              visual={<ProductDeviceRender kind="polar" label="Polar 360 performance band rendering" />}
             />
             <DeviceCard
               name="Oura Ring"
               connected
               description="Recovery, readiness, and sleep quality from your Oura ring."
-              visual={<OuraRing />}
+              visual={<ProductDeviceRender kind="oura" label="Oura Ring rendering" />}
+            />
+            <DeviceCard
+              name="Apple Watch"
+              description="Sleep, heart rate, and activity from your watch via Apple Health."
+              visual={<ProductDeviceRender kind="apple" label="Apple Watch rendering" />}
             />
             <AddDeviceRow />
           </div>
@@ -719,8 +741,8 @@ const StepContent: React.FC<{ step: DemoStep }> = ({ step }) => {
           <div className="whoop-panel whoop-panel--compact">
             <h2>Nora&rsquo;s read</h2>
             <p>
-              WHOOP doesn&rsquo;t decide anything on its own — it informs how Nora interprets the check-in. HRV down,
-              resting HR up, strain rising: that combination is what surfaces a regulation protocol, not a guess.
+              WHOOP gives Nora more context for the check-in. HRV down, resting HR up, strain rising: that
+              combination is what surfaces a regulation protocol.
             </p>
           </div>
         </>
@@ -732,7 +754,7 @@ const StepContent: React.FC<{ step: DemoStep }> = ({ step }) => {
           <div className="whoop-panel whoop-panel--compact">
             <h2>Why Box Breathing</h2>
             <p>
-              Equal four-second phases stimulate the vagus nerve and lower cortisol within minutes — the same protocol
+              Equal four-second phases stimulate the vagus nerve and lower cortisol within minutes. It is the same protocol
               Navy SEALs use to stay composed under pressure.
             </p>
           </div>
@@ -866,7 +888,7 @@ export default function WhoopPulseCheckDemo() {
         <title>WHOOP × PulseCheck Integration Demo</title>
         <meta
           name="description"
-          content="How WHOOP plugs into PulseCheck: device onboarding, biometric-informed coaching, and a real mental-training protocol — Box Breathing — validated by WHOOP data."
+          content="How WHOOP plugs into PulseCheck: device onboarding, biometric-informed coaching, and a real mental-training protocol, Box Breathing, validated by WHOOP data."
         />
       </Head>
 
@@ -875,8 +897,8 @@ export default function WhoopPulseCheckDemo() {
           <span className="whoop-demo-intro__eyebrow">PulseCheck × WHOOP</span>
           <h1>How WHOOP plugs into PulseCheck</h1>
           <p>
-            A live walkthrough of device onboarding, biometric-informed coaching, and a real mental-training protocol —
-            Box Breathing — validated by WHOOP&rsquo;s own data.
+            A live walkthrough of device onboarding, biometric-informed coaching, and a real mental-training protocol,
+            Box Breathing, validated by WHOOP&rsquo;s own data.
           </p>
         </div>
 
@@ -1433,12 +1455,134 @@ export default function WhoopPulseCheckDemo() {
         }
 
         .whoop-device-card__visual {
+          position: relative;
+          isolation: isolate;
           display: flex;
           align-items: center;
           justify-content: center;
           min-width: 0;
           margin: 0 -2px 0 0;
           color: #a78bfa;
+        }
+
+        .whoop-product-device {
+          position: relative;
+          width: 100%;
+          height: 168px;
+          display: grid;
+          place-items: center;
+        }
+
+        .whoop-product-device::before {
+          content: "";
+          position: absolute;
+          inset: 12px 0 4px;
+          z-index: 0;
+          border-radius: 999px;
+          background:
+            radial-gradient(circle at 50% 48%, rgba(167, 139, 250, 0.26), transparent 42%),
+            radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 64%);
+          filter: blur(8px);
+          opacity: 0.92;
+          animation: whoopDeviceGlow 5.8s ease-in-out infinite;
+        }
+
+        .whoop-product-device::after {
+          content: "";
+          position: absolute;
+          left: 50%;
+          bottom: 18px;
+          z-index: 1;
+          width: 86px;
+          height: 13px;
+          border-radius: 999px;
+          background: radial-gradient(ellipse at center, rgba(167, 139, 250, 0.36), rgba(167, 139, 250, 0));
+          transform: translateX(-50%);
+          animation: whoopDeviceShadow 5.8s ease-in-out infinite;
+        }
+
+        .whoop-product-device__orbit {
+          position: absolute;
+          inset: 18px 2px 10px;
+          z-index: 1;
+          border: 1px solid rgba(167, 139, 250, 0.24);
+          border-radius: 50%;
+          transform: rotate(-8deg);
+          animation: whoopDeviceOrbit 11s linear infinite;
+        }
+
+        .whoop-product-device__orbit::before {
+          content: "";
+          position: absolute;
+          left: 50%;
+          top: -3px;
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: rgba(196, 181, 253, 0.92);
+          box-shadow: 0 0 18px rgba(167, 139, 250, 0.9);
+          transform: translateX(-50%);
+        }
+
+        .whoop-product-device__image {
+          position: relative;
+          z-index: 2;
+          width: 116px;
+          max-width: 100%;
+          max-height: 158px;
+          object-fit: contain;
+          filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.5));
+          animation: whoopDeviceFloat 5.8s ease-in-out infinite;
+        }
+
+        .whoop-product-device--fitbit::before {
+          background:
+            radial-gradient(circle at 50% 46%, rgba(96, 165, 250, 0.24), transparent 38%),
+            radial-gradient(circle at 60% 58%, rgba(167, 139, 250, 0.18), transparent 60%);
+        }
+
+        .whoop-product-device--fitbit .whoop-product-device__image {
+          width: 126px;
+          transform: rotate(-4deg);
+        }
+
+        .whoop-product-device--polar .whoop-product-device__image,
+        .whoop-product-device--whoop .whoop-product-device__image {
+          width: 124px;
+        }
+
+        .whoop-product-device--oura .whoop-product-device__image {
+          width: 108px;
+        }
+
+        .whoop-product-device--apple .whoop-product-device__image {
+          width: 118px;
+        }
+
+        .whoop-product-device--apple::before {
+          background:
+            radial-gradient(circle at 50% 46%, rgba(255, 77, 109, 0.16), transparent 34%),
+            radial-gradient(circle at 50% 52%, rgba(167, 139, 250, 0.2), transparent 58%);
+        }
+
+        @keyframes whoopDeviceFloat {
+          0%, 100% { translate: 0 0; }
+          50% { translate: 0 -7px; }
+        }
+
+        @keyframes whoopDeviceGlow {
+          0%, 100% { opacity: 0.72; scale: 0.98; }
+          50% { opacity: 1; scale: 1.04; }
+        }
+
+        @keyframes whoopDeviceShadow {
+          0%, 100% { opacity: 0.42; scale: 0.9 1; }
+          50% { opacity: 0.72; scale: 1.08 1; }
+        }
+
+        @keyframes whoopDeviceOrbit {
+          from { transform: rotate(-8deg); }
+          to { transform: rotate(352deg); }
         }
 
         .device-art {
@@ -2061,6 +2205,16 @@ export default function WhoopPulseCheckDemo() {
           background: rgba(255, 255, 255, 0.075);
           color: rgba(255, 255, 255, 0.86);
           backdrop-filter: blur(18px);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .whoop-product-device,
+          .whoop-product-device::before,
+          .whoop-product-device::after,
+          .whoop-product-device__orbit,
+          .whoop-product-device__image {
+            animation: none;
+          }
         }
 
         @media (max-width: 1040px) {

@@ -3,7 +3,8 @@
 .netlify
 node_modules
 .npm-cache/
-.next/
+# Next.js build output, including timestamped local dev/stale caches.
+/.next*/
 build/
 out/
 *.tsbuildinfo

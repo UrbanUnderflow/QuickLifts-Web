@@ -45,6 +45,12 @@ function normalizeReferralRevenueSharePct(value) {
   return Math.max(0, Math.min(100, Math.round(parsed * 100) / 100));
 }
 
+function normalizeNonNegativeInteger(value) {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''));
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.round(parsed));
+}
+
 function normalizeTeamCommercialConfig(value) {
   const candidate = value && typeof value === 'object' ? value : {};
   const commercialModel = normalizeString(candidate.commercialModel);
@@ -64,6 +70,24 @@ function normalizeTeamCommercialConfig(value) {
     parentAssessmentReferralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.parentAssessmentReferralRevenueSharePct),
     coachReferralKickbackEnabled: Boolean(candidate.coachReferralKickbackEnabled),
     coachReferralRevenueSharePct: normalizeReferralRevenueSharePct(candidate.coachReferralRevenueSharePct),
+    additionalServicesEnabled:
+      typeof candidate.additionalServicesEnabled === 'boolean'
+        ? candidate.additionalServicesEnabled
+        : false,
+    athleteAppSubscriptionEnabled:
+      typeof candidate.athleteAppSubscriptionEnabled === 'boolean'
+        ? candidate.athleteAppSubscriptionEnabled
+        : false,
+    athleteAppSubscriptionMonthlyPriceCents: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionMonthlyPriceCents
+    ),
+    athleteAppSubscriptionCurrency: 'usd',
+    athleteAppSubscriptionOfferVersion: normalizeNonNegativeInteger(
+      candidate.athleteAppSubscriptionOfferVersion
+    ),
+    athleteAppSubscriptionRevenueRecipientUserId: normalizeString(
+      candidate.athleteAppSubscriptionRevenueRecipientUserId
+    ),
     coachReferralRecipientUserId: normalizeString(candidate.coachReferralRecipientUserId),
     coachReferralRecipientEmail: normalizeString(candidate.coachReferralRecipientEmail),
     coachReferralSourceTeamId: normalizeString(candidate.coachReferralSourceTeamId),

@@ -36,6 +36,20 @@ type ScreenDemo = {
 // screens end-to-end (the web analog of the Macra / Pulse Ritual ScreenDemoView).
 const SCREEN_DEMOS: ScreenDemo[] = [
   {
+    id: 'mental-skills-starting-point',
+    surface: 'Athlete onboarding → interactive assessment',
+    title: 'Mental Skills Starting Point',
+    description:
+      'Walk through the complete interactive Starting Point with a Men’s physique sport context. It tests current state separately from skill competency, covers all eight mental skill families, shows the three recommended first skills, and keeps the result in the demo session only.',
+    launchUrl: '/PulseCheck/mental-skills-starting-point-demo',
+    steps: [
+      { label: 'State', detail: 'Capture mood, rest, energy, confidence, motivation, and belief without changing the competency score.' },
+      { label: 'Challenges', detail: 'Work through belief, reflection, breath, visualization, attention, self-talk, and coherence challenges.' },
+      { label: 'Starting point', detail: 'Review the eight family scores, stages, and one first skill for each discipline.' },
+    ],
+    status: 'live',
+  },
+  {
     id: 'coach-onboarding',
     surface: 'Coach onboarding → dashboard',
     title: 'Full Initial coach/admin onboarding sequence',

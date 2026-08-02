@@ -48,6 +48,14 @@ const skillNames = [
   'Game routines',
 ];
 
+const wearableDevices = [
+  { name: 'WHOOP', image: '/pulsecheck-youth/wearables/whoop.png' },
+  { name: 'Oura Ring', image: '/pulsecheck-youth/wearables/oura-ring.png' },
+  { name: 'Fitbit Air', image: '/pulsecheck-youth/wearables/fitbit.png' },
+  { name: 'Apple Watch', image: '/pulsecheck-youth/wearables/apple-watch.png' },
+  { name: 'Polar 360', image: '/pulsecheck-youth/wearables/polar-360.png' },
+];
+
 const PulseCheckYouthInfoPage: React.FC = () => {
   return (
     <main className="youth-info">
@@ -79,9 +87,8 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         <div className="yi-hero-copy">
           <p className="yi-kicker yi-kicker--light">A DAILY MENTAL PERFORMANCE SYSTEM</p>
           <h1>
-            LEARN IT.<br />
-            PRACTICE IT.<br />
-            <span>USE IT IN<br className="yi-mobile-break" /> THE GAME.</span>
+            TRAIN THE MIND<br />
+            <span>LIKE THE BODY.</span>
           </h1>
           <p className="yi-hero-deck">
             Short mental skills for mistakes, pressure, focus, and confidence.
@@ -90,6 +97,30 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             See the athlete experience <ArrowRight size={17} />
           </a>
         </div>
+        <figure className="yi-hero-phone">
+          <div className="yi-hero-phone-frame">
+            <img
+              src="/pulsecheck-media/08-box-breathing.png"
+              alt="PulseCheck phone screen teaching a Box Breathing exercise"
+            />
+            <div className="yi-phone-metric yi-phone-metric--hr" aria-hidden="true">
+              <strong>72</strong>
+              <span>bpm</span>
+              <small>Steady</small>
+            </div>
+            <div className="yi-phone-metric yi-phone-metric--stability" aria-hidden="true">
+              <strong>88</strong>
+              <span>/100</span>
+              <small>Steady</small>
+            </div>
+            <div className="yi-phone-metric yi-phone-metric--calm" aria-hidden="true">
+              <strong>84</strong>
+              <span>/100</span>
+              <small>Steady</small>
+            </div>
+          </div>
+          <figcaption>BOX BREATHING / LIVE PRACTICE</figcaption>
+        </figure>
         <div className="yi-hero-caption" aria-hidden="true">
           <span>THE NEXT PLAY</span>
           <span>STARTS BEFORE THE WHISTLE.</span>
@@ -150,21 +181,40 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             src="/pulsecheck-youth/hero-team.webp"
             alt="Three young athletes preparing together before competition"
           />
-          <div aria-hidden="true" />
+          <div className="yi-wearables-photo-shade" aria-hidden="true" />
+          <div className="yi-wearables-story">
+            <Watch size={34} strokeWidth={1.6} aria-hidden="true" />
+            <p className="yi-kicker yi-kicker--light">WEARABLE CONTEXT</p>
+            <h2>HOW YOU FEEL,<br /><em>WITH CONTEXT.</em></h2>
+            <p>
+              The athlete&apos;s check-in leads. Sleep, heart rate, recovery, and training load add
+              another clue so Nora can choose the right mental skill for today.
+            </p>
+          </div>
         </div>
         <div className="yi-wearables-copy">
-          <Watch size={34} strokeWidth={1.6} aria-hidden="true" />
-          <p className="yi-kicker">WEARABLE CONTEXT</p>
-          <h2>HOW YOU FEEL,<br /><em>WITH CONTEXT.</em></h2>
-          <p>
-            The athlete&apos;s check-in leads. Wearable signals add another clue. Together they help
-            Nora understand whether today calls for recovery, focus, confidence, or a harder challenge.
-          </p>
-          <dl>
-            <div><dt>ATHLETE</dt><dd>Mood · stress · energy · confidence</dd></div>
-            <div><dt>BODY</dt><dd>Sleep · heart rate · recovery · training load</dd></div>
-            <div><dt>TODAY</dt><dd>One clear mental skills plan</dd></div>
-          </dl>
+          <p className="yi-kicker">COMPATIBLE SIGNALS</p>
+          <h3>Connect the devices athletes already wear.</h3>
+          <div className="yi-device-render" aria-hidden="true">
+            <div className="yi-device-orbit" />
+            <div className="yi-device-core">
+              <span>PulseCheck</span>
+              <strong>Daily Read</strong>
+            </div>
+            {wearableDevices.map((device, index) => (
+              <span className={`yi-device-chip yi-device-chip--${index + 1}`} key={device.name}>
+                {device.name}
+              </span>
+            ))}
+          </div>
+          <ul className="yi-device-list" aria-label="Compatible wearable devices">
+            {wearableDevices.map((device) => (
+              <li key={device.name}>
+                <img src={device.image} alt="" aria-hidden="true" />
+                <span>{device.name}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -183,8 +233,9 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           <p className="yi-kicker">THE SURPRISING RESEARCH</p>
           <h2>MENTAL PRACTICE<br />MADE THE MUSCLE<br /><em>STRONGER.</em></h2>
           <p className="yi-research-explainer">
-            One small 12-week study asked people to imagine moving a finger with full effort. Their
-            finger strength increased 35%, compared with 53% in the physical-training group.
+            Every physical practice also teaches the brain. The surprise is that the brain can
+            rehearse a movement without the body moving. In one small 12-week study, imagined finger
+            movement produced 35% strength gains, compared with 53% from physical practice.
           </p>
           <a
             className="yi-text-link"
@@ -197,8 +248,15 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         </div>
         <div className="yi-research-stat">
           <strong>66%</strong>
-          <p>OF THE STRENGTH GAIN ACHIEVED BY THE PHYSICAL-TRAINING GROUP</p>
-          <span>RANGANATHAN ET AL. / NEUROPSYCHOLOGIA / 2004</span>
+          <p>AS MUCH STRENGTH GAIN AS PHYSICAL PRACTICE, FROM IMAGINED MOVEMENT</p>
+          <a
+            className="yi-research-citation"
+            href="https://doi.org/10.1016/j.neuropsychologia.2003.11.018"
+            target="_blank"
+            rel="noreferrer"
+          >
+            IMAGINED MOVEMENT 35% STRONGER / PHYSICAL PRACTICE 53% STRONGER / RANGANATHAN ET AL., 2004
+          </a>
         </div>
       </section>
 
@@ -327,7 +385,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         .yi-hero-copy {
           position: relative;
           z-index: 2;
-          width: min(780px, calc(100% - 42px));
+          width: min(700px, calc(100% - 42px));
           margin-left: clamp(21px, 7vw, 110px);
           padding: 144px 0 clamp(89px, 10vh, 144px);
         }
@@ -388,6 +446,95 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           font-weight: 700;
           letter-spacing: .18em;
         }
+        .yi-hero-phone {
+          position: absolute;
+          z-index: 3;
+          right: clamp(34px, 8vw, 144px);
+          top: clamp(110px, 15vh, 160px);
+          width: clamp(260px, 22vw, 340px);
+          margin: 0;
+          color: #fff;
+        }
+        .yi-hero-phone::before {
+          content: "";
+          position: absolute;
+          inset: 9% -18% 7%;
+          z-index: 0;
+          border-radius: 999px;
+          background: rgba(111, 85, 238, .18);
+          filter: blur(34px);
+        }
+        .yi-hero-phone-frame {
+          position: relative;
+          z-index: 1;
+          padding: 8px;
+          border: 1px solid rgba(255,255,255,.28);
+          border-radius: 45px;
+          background: rgba(6,7,10,.78);
+          box-shadow: 0 55px 90px rgba(0,0,0,.52);
+          overflow: hidden;
+        }
+        .yi-hero-phone-frame img {
+          width: 100%;
+          aspect-ratio: 864 / 1824;
+          object-fit: cover;
+          border-radius: 37px;
+          border: 1px solid rgba(255,255,255,.12);
+        }
+        .yi-phone-metric {
+          position: absolute;
+          z-index: 3;
+          width: 24.5%;
+          height: 5%;
+          padding: 0 0 0 2.2%;
+          background: #0b2028;
+          color: #eef3f5;
+          font-family: 'DM Sans', Arial, sans-serif;
+          line-height: 1;
+        }
+        .yi-phone-metric::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: -.9em;
+          height: 1.15em;
+          background: #0b2028;
+        }
+        .yi-phone-metric strong {
+          display: inline-block;
+          margin-right: .22em;
+          font-size: 14px;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+        .yi-phone-metric span {
+          color: rgba(238,243,245,.72);
+          font-size: 11px;
+          font-weight: 700;
+        }
+        .yi-phone-metric small {
+          position: relative;
+          z-index: 2;
+          display: block;
+          margin-top: .68em;
+          color: rgba(238,243,245,.48);
+          font-size: 10px;
+          font-weight: 600;
+        }
+        .yi-phone-metric--hr { left: 6.1%; top: 19%; }
+        .yi-phone-metric--stability { left: 38.9%; top: 19%; }
+        .yi-phone-metric--calm { left: 68.4%; top: 19%; }
+        .yi-hero-phone figcaption {
+          position: relative;
+          z-index: 2;
+          margin-top: 13px;
+          text-align: center;
+          color: rgba(255,255,255,.78);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: .18em;
+        }
 
         .yi-system {
           min-height: 980px;
@@ -441,19 +588,157 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         .yi-process-card h3 { margin: 0 0 13px; font: 400 clamp(34px, 3vw, 48px)/1 'Bebas Neue', sans-serif; }
         .yi-process-card p { max-width: 340px; margin: 0; color: #aaa7a2; font-size: 15px; line-height: 1.65; }
 
-        .yi-wearables { display: grid; grid-template-columns: 1.08fr .92fr; min-height: 820px; background: #d9d0f1; }
-        .yi-wearables-photo { position: relative; min-height: 640px; overflow: hidden; }
-        .yi-wearables-photo img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.3) sepia(.18); }
-        .yi-wearables-photo > div { position: absolute; inset: 0; background: linear-gradient(90deg, transparent 70%, rgba(217,208,241,.45)); }
-        .yi-wearables-copy { align-self: center; max-width: 650px; padding: 89px clamp(34px, 7vw, 110px) 89px clamp(34px, 6vw, 89px); }
-        .yi-wearables-copy > svg { margin-bottom: 34px; }
+        .yi-wearables { display: grid; grid-template-columns: 1.08fr .92fr; min-height: 820px; background: var(--yi-ink); }
+        .yi-wearables-photo { position: relative; min-height: 640px; overflow: hidden; color: #fff; }
+        .yi-wearables-photo img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.32) sepia(.18) contrast(1.05); }
+        .yi-wearables-photo-shade {
+          position: absolute;
+          inset: 0;
+          background:
+            linear-gradient(90deg, rgba(8,8,11,.86) 0%, rgba(8,8,11,.53) 46%, rgba(8,8,11,.2) 76%),
+            linear-gradient(0deg, rgba(8,8,11,.84) 0%, rgba(8,8,11,.16) 62%);
+        }
+        .yi-wearables-story {
+          position: absolute;
+          left: clamp(34px, 7vw, 110px);
+          right: clamp(34px, 7vw, 110px);
+          bottom: clamp(55px, 8vw, 110px);
+          max-width: 660px;
+        }
+        .yi-wearables-story > svg { margin-bottom: 34px; }
         .yi-wearables h2 { margin: 0 0 34px; font-size: clamp(64px, 6.4vw, 105px); line-height: .86; }
         .yi-wearables h2 em, .yi-research h2 em { font-family: 'Playfair Display', Georgia, serif; font-weight: 600; }
-        .yi-wearables-copy > p:not(.yi-kicker) { margin: 0; color: #4d494f; font-size: 17px; line-height: 1.7; }
-        .yi-wearables dl { margin: 34px 0 0; border-top: 1px solid var(--yi-line); }
-        .yi-wearables dl div { display: grid; grid-template-columns: 90px 1fr; gap: 21px; padding: 17px 0; border-bottom: 1px solid var(--yi-line); }
-        .yi-wearables dt { font-size: 10px; font-weight: 700; letter-spacing: .14em; }
-        .yi-wearables dd { margin: 0; color: #4d494f; font-size: 13px; }
+        .yi-wearables-story > p:not(.yi-kicker) { max-width: 560px; margin: 0; color: rgba(255,255,255,.82); font-size: 17px; line-height: 1.72; }
+        .yi-wearables-copy {
+          align-self: stretch;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: 89px clamp(34px, 7vw, 110px) 89px clamp(34px, 6vw, 89px);
+          color: var(--yi-ink);
+          background: #d9d0f1;
+        }
+        .yi-wearables-copy h3 {
+          max-width: 570px;
+          margin: 0;
+          font: 400 clamp(52px, 5.4vw, 86px)/.9 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.02em;
+          text-wrap: balance;
+        }
+        .yi-device-render {
+          position: relative;
+          width: min(100%, 520px);
+          aspect-ratio: 1.12;
+          margin: 55px 0 34px;
+          border: 1px solid rgba(17,17,21,.2);
+          background:
+            radial-gradient(circle at 50% 47%, rgba(111,85,238,.26), transparent 31%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.58), transparent 48%);
+          overflow: hidden;
+        }
+        .yi-device-render::before {
+          content: "";
+          position: absolute;
+          inset: 21px;
+          border: 1px solid rgba(17,17,21,.13);
+        }
+        .yi-device-orbit {
+          position: absolute;
+          inset: 21%;
+          border: 1px solid rgba(17,17,21,.24);
+          border-radius: 50%;
+        }
+        .yi-device-orbit::before,
+        .yi-device-orbit::after {
+          content: "";
+          position: absolute;
+          inset: 19%;
+          border: 1px solid rgba(17,17,21,.14);
+          border-radius: 50%;
+        }
+        .yi-device-orbit::after {
+          inset: -34%;
+          border-style: dashed;
+          opacity: .52;
+        }
+        .yi-device-core {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: 34%;
+          aspect-ratio: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border-radius: 50%;
+          color: #fff;
+          background: var(--yi-ink);
+          box-shadow: 0 21px 55px rgba(17,17,21,.22);
+          transform: translate(-50%, -50%);
+        }
+        .yi-device-core span { font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+        .yi-device-core strong { font: 400 34px/.9 'Bebas Neue', Impact, sans-serif; letter-spacing: -.02em; }
+        .yi-device-chip {
+          position: absolute;
+          min-width: 110px;
+          padding: 10px 14px;
+          border: 1px solid rgba(17,17,21,.28);
+          border-radius: 999px;
+          color: var(--yi-ink);
+          background: rgba(245,242,234,.7);
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: .11em;
+          text-align: center;
+          text-transform: uppercase;
+          box-shadow: 0 13px 34px rgba(17,17,21,.09);
+          animation: yiDeviceFloat 8s ease-in-out infinite;
+        }
+        .yi-device-chip--1 { left: 8%; top: 16%; animation-delay: -.7s; }
+        .yi-device-chip--2 { right: 7%; top: 17%; animation-delay: -2.2s; }
+        .yi-device-chip--3 { right: 6%; top: 58%; animation-delay: -3.4s; }
+        .yi-device-chip--4 { left: 11%; bottom: 13%; animation-delay: -4.6s; }
+        .yi-device-chip--5 { left: 50%; bottom: 6%; transform: translateX(-50%); animation-name: yiDeviceFloatCenter; animation-delay: -1.5s; }
+        @keyframes yiDeviceFloat {
+          0%, 100% { transform: translate3d(0,0,0); }
+          50% { transform: translate3d(0,-7px,0); }
+        }
+        @keyframes yiDeviceFloatCenter {
+          0%, 100% { transform: translate3d(-50%,0,0); }
+          50% { transform: translate3d(-50%,-7px,0); }
+        }
+        .yi-device-list {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0;
+          width: min(100%, 520px);
+          margin: 0;
+          padding: 0;
+          border-top: 1px solid rgba(17,17,21,.22);
+          list-style: none;
+        }
+        .yi-device-list li {
+          display: flex;
+          align-items: center;
+          gap: 13px;
+          padding: 17px 0;
+          border-bottom: 1px solid rgba(17,17,21,.22);
+          color: #2f2a35;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+        }
+        .yi-device-list img {
+          width: 72px;
+          height: 55px;
+          object-fit: contain;
+          flex: 0 0 auto;
+          filter: drop-shadow(0 8px 11px rgba(17,17,21,.16));
+        }
+        .yi-device-list li:nth-child(even) { padding-left: 21px; border-left: 1px solid rgba(17,17,21,.16); }
 
         .yi-privacy { position: relative; padding: 144px clamp(34px, 8vw, 144px); background: var(--yi-paper); }
         .yi-privacy-mark { width: 55px; height: 55px; display: grid; place-items: center; margin-bottom: 34px; border: 1px solid var(--yi-ink); border-radius: 50%; }
@@ -470,7 +755,21 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         .yi-research-stat { display: flex; flex-direction: column; justify-content: center; padding: 89px; color: #fff; background: var(--yi-purple); }
         .yi-research-stat strong { font: 400 clamp(150px, 17vw, 300px)/.78 'Bebas Neue', sans-serif; letter-spacing: -.04em; }
         .yi-research-stat p { max-width: 480px; margin: 55px 0 89px; font: 400 clamp(30px, 3vw, 48px)/1 'Bebas Neue', sans-serif; }
-        .yi-research-stat span { font-size: 9px; font-weight: 700; letter-spacing: .15em; }
+        .yi-research-citation {
+          width: fit-content;
+          color: rgba(255,255,255,.84);
+          border-bottom: 1px solid rgba(255,255,255,.36);
+          padding-bottom: 6px;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: .15em;
+          text-decoration: none;
+          transition: color .2s ease, border-color .2s ease;
+        }
+        .yi-research-citation:hover {
+          color: #fff;
+          border-color: #fff;
+        }
 
         .yi-support { position: relative; min-height: 790px; display: flex; align-items: flex-end; color: #fff; background: #0c0c10; }
         .yi-support-image, .yi-support-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -506,6 +805,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-wearables { grid-template-columns: 1fr; }
           .yi-wearables-photo { min-height: 560px; }
           .yi-wearables-copy { max-width: none; }
+          .yi-device-render { width: min(100%, 560px); }
           .yi-research { grid-template-columns: 1fr; }
           .yi-research-stat { min-height: 620px; }
         }
@@ -514,14 +814,32 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-nav { padding: 17px 21px; }
           .yi-brand { width: 154px; }
           .yi-nav-link { font-size: 9px; letter-spacing: .11em; }
-          .yi-hero { min-height: 820px; }
+          .yi-hero { display: block; min-height: auto; padding-bottom: 55px; }
           .yi-hero-image { object-position: 57% 50%; }
-          .yi-hero-shade { background: linear-gradient(0deg, rgba(7,7,10,.94) 0%, rgba(7,7,10,.55) 60%, rgba(7,7,10,.18) 100%); }
-          .yi-hero-copy { width: calc(100% - 42px); margin: 0 21px; padding: 140px 0 89px; }
+          .yi-hero-shade { background: linear-gradient(0deg, rgba(7,7,10,.97) 0%, rgba(7,7,10,.72) 58%, rgba(7,7,10,.25) 100%); }
+          .yi-hero-copy { width: calc(100% - 42px); margin: 0 21px; padding: 126px 0 0; }
           .yi-hero h1 { font-size: clamp(67px, 22vw, 94px); line-height: .82; }
           .yi-mobile-break { display: block; }
           .yi-hero-deck { max-width: 320px; margin: 26px 0; font-size: 16px; }
           .yi-button { width: 100%; }
+          .yi-hero-phone {
+            position: relative;
+            right: auto;
+            top: auto;
+            bottom: auto;
+            width: min(62vw, 250px);
+            margin: 55px auto 0;
+            transform: none;
+          }
+          .yi-hero-phone-frame {
+            padding: 6px;
+            border-radius: 34px;
+          }
+          .yi-hero-phone-frame img { border-radius: 29px; }
+          .yi-phone-metric strong { font-size: 12px; }
+          .yi-phone-metric span { font-size: 9px; }
+          .yi-phone-metric small { font-size: 8px; }
+          .yi-hero-phone figcaption { font-size: 8px; letter-spacing: .13em; }
           .yi-hero-caption { display: none; }
 
           .yi-system { display: flex; flex-direction: column; min-height: auto; gap: 55px; padding: 89px 21px; }
@@ -536,11 +854,28 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-process-card, .yi-process-card:first-child { min-height: auto; padding: 34px 0 55px; border: 0; border-bottom: 1px solid rgba(255,255,255,.28); }
           .yi-process-index { margin-bottom: 34px; }
 
-          .yi-wearables-photo { min-height: 420px; }
+          .yi-wearables-photo { min-height: 620px; }
           .yi-wearables-photo img { object-position: 60% center; }
+          .yi-wearables-photo-shade {
+            background:
+              linear-gradient(0deg, rgba(8,8,11,.94) 0%, rgba(8,8,11,.72) 52%, rgba(8,8,11,.2) 100%),
+              linear-gradient(90deg, rgba(8,8,11,.58), rgba(8,8,11,.05));
+          }
+          .yi-wearables-story { left: 21px; right: 21px; bottom: 55px; }
           .yi-wearables-copy { padding: 89px 21px; }
           .yi-wearables h2 { font-size: 64px; }
-          .yi-wearables dl div { grid-template-columns: 75px 1fr; }
+          .yi-wearables-copy h3 { font-size: 54px; }
+          .yi-device-render { aspect-ratio: .9; margin: 34px 0; }
+          .yi-device-core { width: 42%; }
+          .yi-device-core strong { font-size: 28px; }
+          .yi-device-chip { min-width: 92px; padding: 9px 10px; font-size: 9px; letter-spacing: .08em; }
+          .yi-device-chip--1 { left: 6%; top: 12%; }
+          .yi-device-chip--2 { right: 5%; top: 15%; }
+          .yi-device-chip--3 { right: 5%; top: 64%; }
+          .yi-device-chip--4 { left: 6%; bottom: 17%; }
+          .yi-device-chip--5 { bottom: 6%; }
+          .yi-device-list { grid-template-columns: 1fr; }
+          .yi-device-list li:nth-child(even) { padding-left: 0; border-left: 0; }
 
           .yi-privacy { padding: 89px 21px; }
           .yi-privacy h2 { font-size: 77px; }
@@ -552,6 +887,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-research-stat { min-height: 520px; padding: 55px 21px; }
           .yi-research-stat strong { font-size: 178px; }
           .yi-research-stat p { margin: 34px 0 55px; font-size: 34px; }
+          .yi-research-citation { line-height: 1.6; }
 
           .yi-support { min-height: 820px; }
           .yi-support-image { object-position: 58% center; }
@@ -572,6 +908,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         @media (prefers-reduced-motion: reduce) {
           html { scroll-behavior: auto; }
           .yi-button { transition: none; }
+          .yi-device-chip { animation: none; }
         }
       `}</style>
     </main>

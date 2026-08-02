@@ -65,3 +65,33 @@ test('commercial config save fills a safe recipient or requires an explicit sele
     'ambiguous teams should require the admin to choose a recipient'
   );
 });
+
+test('provisioning exposes athlete subscription pricing and saves through the protected Stripe manager', () => {
+  const provisioningSource = read('src/pages/admin/pulsecheckProvisioning.tsx');
+
+  assert.match(
+    provisioningSource,
+    /Sell PulseCheck through athlete invites/,
+    'the Team Commercial Config card should expose the subscription toggle'
+  );
+  assert.match(
+    provisioningSource,
+    /Athlete Monthly Price/,
+    'the provisioning dashboard should expose the coach-set monthly price'
+  );
+  assert.match(
+    provisioningSource,
+    /manage-pulsecheck-athlete-subscription-offer/,
+    'subscription changes should use the protected Stripe offer manager'
+  );
+  assert.match(
+    provisioningSource,
+    /Authorization: `Bearer \$\{idToken\}`/,
+    'the Stripe offer manager request should be authenticated'
+  );
+  assert.match(
+    provisioningSource,
+    /athleteAppSubscriptionEnabled: team\.commercialConfig\.athleteAppSubscriptionEnabled/,
+    'the browser should not advertise a new active offer before Stripe succeeds'
+  );
+});

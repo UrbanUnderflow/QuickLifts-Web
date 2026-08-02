@@ -31,7 +31,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
 import { showToast } from '../../redux/toastSlice';
 import GuidedTour, { type GuidedTourStep } from '../../components/onboarding/GuidedTour';
-import { storage } from '../../api/firebase/config';
+import { auth, getFirebaseModeRequestHeaders, storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import { normalizeStaffCapabilities } from '../../api/firebase/pulsecheckProvisioning/staffCapabilities';
 import { STAFF_PERMISSIONS as ADMIN_PERMISSIONS } from '../../lib/staffPermissions';
@@ -83,6 +83,11 @@ import type {
   PulseCheckYouthTrack,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { resolvePulseCheckInvitePreviewImage } from '../../utils/pulsecheckInviteLinks';
+import {
+  formatPulseCheckMonthlyPrice,
+  MAX_PULSECHECK_ATHLETE_APP_PRICE_CENTS,
+  MIN_PULSECHECK_ATHLETE_APP_PRICE_CENTS,
+} from '../../utils/pulsecheckCommercialization';
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
   displayName: '',
@@ -776,6 +781,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [coachPhotoUploadingToken, setCoachPhotoUploadingToken] = useState<string | null>(null);
   const [sportOptions, setSportOptions] = useState<PulseCheckSportConfigurationEntry[]>(() => getDefaultPulseCheckSports());
   const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
+  const [teamAthleteSubscriptionPriceDrafts, setTeamAthleteSubscriptionPriceDrafts] = useState<Record<string, string>>({});
   type OrgStaffOption = { userId: string; name: string; email?: string; role: PulseCheckTeamMembershipRole; title?: string };
   const [orgStaffById, setOrgStaffById] = useState<Record<string, OrgStaffOption[]>>({});
   const [isProvisioningModalOpen, setIsProvisioningModalOpen] = useState(false);
@@ -1681,6 +1687,27 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setMessage(null);
   };
 
+  const handleExistingTeamAthleteSubscriptionPriceChange = (teamId: string, value: string) => {
+    setTeamAthleteSubscriptionPriceDrafts((current) => ({
+      ...current,
+      [teamId]: value,
+    }));
+
+    const parsedDollars = Number.parseFloat(value);
+    const monthlyPriceCents = Number.isFinite(parsedDollars)
+      ? Math.max(0, Math.round(parsedDollars * 100))
+      : 0;
+    setTeamCommercialDrafts((current) => ({
+      ...current,
+      [teamId]: {
+        ...(current[teamId] || getDefaultPulseCheckTeamCommercialConfig()),
+        athleteAppSubscriptionMonthlyPriceCents: monthlyPriceCents,
+        athleteAppSubscriptionCurrency: 'usd',
+      },
+    }));
+    setMessage(null);
+  };
+
   const handlePilotFieldChange = (
     field: keyof CreatePulseCheckPilotInput,
     value: string | PulseCheckPilotStudyMode | PulseCheckPilot['status']
@@ -1988,7 +2015,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setMessage(null);
 
     try {
-      let nextDraft = draft;
+      const priceDraft = teamAthleteSubscriptionPriceDrafts[team.id];
+      const parsedMonthlyPrice = priceDraft === undefined
+        ? draft.athleteAppSubscriptionMonthlyPriceCents
+        : Math.round((Number.parseFloat(priceDraft) || 0) * 100);
+      let nextDraft: PulseCheckTeamCommercialConfig = {
+        ...draft,
+        athleteAppSubscriptionMonthlyPriceCents: Math.max(0, parsedMonthlyPrice),
+        athleteAppSubscriptionCurrency: 'usd',
+      };
       if (
         (draft.referralKickbackEnabled || draft.parentAssessmentReferralKickbackEnabled || draft.coachReferralKickbackEnabled) &&
         !draft.revenueRecipientUserId
@@ -2020,15 +2055,148 @@ const PulseCheckProvisioningPage: React.FC = () => {
         };
       }
 
+      if (nextDraft.athleteAppSubscriptionEnabled && !nextDraft.revenueRecipientUserId) {
+        const organizationStaff = orgStaffById[team.organizationId] || [];
+        const legacyCoach = team.legacyCoachId
+          ? organizationStaff.find((staff) => staff.userId === team.legacyCoachId)
+          : null;
+        const teamAdmins = organizationStaff.filter((staff) => staff.role === 'team-admin');
+        const inferredRecipient =
+          legacyCoach
+          || (team.legacyCoachId
+            ? {
+                userId: team.legacyCoachId,
+                role: 'coach' as const,
+              }
+            : null)
+          || (teamAdmins.length === 1 ? teamAdmins[0] : null)
+          || (organizationStaff.length === 1 ? organizationStaff[0] : null);
+
+        if (!inferredRecipient) {
+          throw new Error('Select the staff member who should receive the athlete subscription revenue.');
+        }
+
+        nextDraft = {
+          ...nextDraft,
+          revenueRecipientUserId: inferredRecipient.userId,
+          revenueRecipientRole: mapMembershipRoleToRecipientRole(inferredRecipient.role),
+        };
+      }
+
+      if (
+        nextDraft.athleteAppSubscriptionEnabled
+        && nextDraft.athleteAppSubscriptionMonthlyPriceCents < MIN_PULSECHECK_ATHLETE_APP_PRICE_CENTS
+      ) {
+        throw new Error('Set the athlete app monthly price to at least $1.00.');
+      }
+      if (
+        nextDraft.athleteAppSubscriptionEnabled
+        && nextDraft.athleteAppSubscriptionMonthlyPriceCents > MAX_PULSECHECK_ATHLETE_APP_PRICE_CENTS
+      ) {
+        throw new Error('Set the athlete app monthly price to $1,000.00 or less.');
+      }
+
+      const shouldManageAthleteSubscriptionOffer =
+        nextDraft.athleteAppSubscriptionEnabled
+        || team.commercialConfig.athleteAppSubscriptionEnabled;
+
+      if (shouldManageAthleteSubscriptionOffer) {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser) {
+          throw new Error('Sign in again to manage the Stripe athlete subscription.');
+        }
+        const idToken = await firebaseUser.getIdToken();
+
+        // Save the other commercial changes first, but keep the last confirmed
+        // subscription state in place until the protected Stripe route succeeds.
+        // This prevents a direct Firestore save from advertising an offer that
+        // has no server-owned Stripe Price behind it.
+        const prerequisiteConfig: PulseCheckTeamCommercialConfig = {
+          ...nextDraft,
+          athleteAppSubscriptionEnabled: team.commercialConfig.athleteAppSubscriptionEnabled,
+          athleteAppSubscriptionMonthlyPriceCents:
+            team.commercialConfig.athleteAppSubscriptionMonthlyPriceCents,
+          athleteAppSubscriptionCurrency: 'usd',
+          athleteAppSubscriptionOfferVersion:
+            team.commercialConfig.athleteAppSubscriptionOfferVersion,
+          athleteAppSubscriptionRevenueRecipientUserId:
+            nextDraft.athleteAppSubscriptionRevenueRecipientUserId
+            || nextDraft.revenueRecipientUserId
+            || team.commercialConfig.athleteAppSubscriptionRevenueRecipientUserId,
+        };
+        await pulseCheckProvisioningService.updateTeamCommercialConfig(team.id, prerequisiteConfig);
+
+        const response = await fetch('/.netlify/functions/manage-pulsecheck-athlete-subscription-offer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+            ...getFirebaseModeRequestHeaders(),
+          },
+          body: JSON.stringify({
+            teamId: team.id,
+            enabled: nextDraft.athleteAppSubscriptionEnabled,
+            monthlyPriceCents: nextDraft.athleteAppSubscriptionMonthlyPriceCents,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            payload.message
+            || payload.error
+            || 'The Stripe athlete subscription could not be saved.'
+          );
+        }
+
+        const publicOffer = payload.offer && typeof payload.offer === 'object'
+          ? payload.offer as Record<string, unknown>
+          : {};
+        const returnedConfig = payload.commercialConfig && typeof payload.commercialConfig === 'object'
+          ? payload.commercialConfig as Partial<PulseCheckTeamCommercialConfig>
+          : {};
+        nextDraft = {
+          ...nextDraft,
+          athleteAppSubscriptionEnabled:
+            typeof publicOffer.enabled === 'boolean'
+              ? publicOffer.enabled
+              : returnedConfig.athleteAppSubscriptionEnabled === true,
+          athleteAppSubscriptionMonthlyPriceCents: Number.isFinite(Number(publicOffer.monthlyPriceCents))
+            ? Math.max(0, Math.round(Number(publicOffer.monthlyPriceCents)))
+            : Math.max(0, Math.round(Number(returnedConfig.athleteAppSubscriptionMonthlyPriceCents) || 0)),
+          athleteAppSubscriptionCurrency: 'usd',
+          athleteAppSubscriptionOfferVersion: Number.isFinite(Number(publicOffer.version))
+            ? Math.max(0, Math.round(Number(publicOffer.version)))
+            : Math.max(0, Math.round(Number(returnedConfig.athleteAppSubscriptionOfferVersion) || 0)),
+          athleteAppSubscriptionRevenueRecipientUserId: String(
+            returnedConfig.athleteAppSubscriptionRevenueRecipientUserId
+            || publicOffer.revenueRecipientUserId
+            || nextDraft.athleteAppSubscriptionRevenueRecipientUserId
+            || nextDraft.revenueRecipientUserId
+            || ''
+          ),
+        };
+      }
+
       await pulseCheckProvisioningService.updateTeamCommercialConfig(team.id, nextDraft);
       setTeamCommercialDrafts((current) => ({
         ...current,
         [team.id]: nextDraft,
       }));
+      setTeamAthleteSubscriptionPriceDrafts((current) => ({
+        ...current,
+        [team.id]: nextDraft.athleteAppSubscriptionMonthlyPriceCents
+          ? (nextDraft.athleteAppSubscriptionMonthlyPriceCents / 100).toFixed(2)
+          : '',
+      }));
       await loadData();
       setMessage({
         type: 'success',
-        text: `${team.displayName} commercial config updated.`,
+        text: nextDraft.athleteAppSubscriptionEnabled
+          ? `${team.displayName} commercial config updated. Stripe athlete subscriptions are live at ${formatPulseCheckMonthlyPrice(
+              nextDraft.athleteAppSubscriptionMonthlyPriceCents,
+              nextDraft.athleteAppSubscriptionCurrency
+            )} per month.`
+          : `${team.displayName} commercial config updated.`,
       });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to update team commercial config:', error);
@@ -3871,6 +4039,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                 organization.invitePreviewImageUrl
                               );
                               const teamPlanBypass = derivePulseCheckTeamPlanBypass(teamCommercialDraft);
+                              const athleteSubscriptionPriceInput =
+                                teamAthleteSubscriptionPriceDrafts[team.id]
+                                ?? (teamCommercialDraft.athleteAppSubscriptionMonthlyPriceCents
+                                  ? (teamCommercialDraft.athleteAppSubscriptionMonthlyPriceCents / 100).toFixed(2)
+                                  : '');
+                              const athleteSubscriptionPriceCents = Math.max(
+                                0,
+                                Math.round((Number.parseFloat(athleteSubscriptionPriceInput) || 0) * 100)
+                              );
 
                               return (
                                 <div key={team.id} id={`pcp-team-${team.id}`} className="pcp-card pcp-team-card" style={{ paddingBottom: 20, scrollMarginTop: 16 }}>
@@ -3986,7 +4163,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           title="Team Commercial Config"
                                           open={teamCommercialOpen}
                                           onToggle={() => toggleOrgCard(`${team.id}:commercial`)}
-                                          preview={`${teamPlanBypass ? 'Team plan (paywall bypassed)' : 'Athlete-paid access'} — open to configure.`}
+                                          preview={`${teamPlanBypass
+                                            ? 'Team plan (paywall bypassed)'
+                                            : teamCommercialDraft.athleteAppSubscriptionEnabled
+                                              ? `Stripe athlete subscription (${formatPulseCheckMonthlyPrice(athleteSubscriptionPriceCents)}/month)`
+                                              : 'Athlete-paid access'} — open to configure.`}
                                         >
                                           <div className="pcp-commercial-footer" style={{ alignItems: 'flex-start' }}>
                                             <div>
@@ -4134,6 +4315,95 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   }
                                                 />
                                               </label>
+                                            </div>
+
+                                            <div
+                                              className="pcp-checkbox-row"
+                                              data-testid={`athlete-subscription-config-${team.id}`}
+                                              style={{
+                                                flexDirection: 'column',
+                                                gap: 12,
+                                                borderColor: teamCommercialDraft.athleteAppSubscriptionEnabled
+                                                  ? 'rgba(0, 212, 170, 0.28)'
+                                                  : undefined,
+                                                background: teamCommercialDraft.athleteAppSubscriptionEnabled
+                                                  ? 'rgba(0, 212, 170, 0.05)'
+                                                  : undefined,
+                                              }}
+                                            >
+                                              <label style={{ display: 'flex', gap: 10, cursor: 'pointer' }}>
+                                                <input
+                                                  type="checkbox"
+                                                  data-testid={`athlete-subscription-enabled-${team.id}`}
+                                                  checked={teamCommercialDraft.athleteAppSubscriptionEnabled}
+                                                  onChange={(event) =>
+                                                    handleExistingTeamCommercialFieldChange(
+                                                      team.id,
+                                                      'athleteAppSubscriptionEnabled',
+                                                      event.target.checked
+                                                    )
+                                                  }
+                                                />
+                                                <span>
+                                                  <span className="pcp-preview-title" style={{ display: 'block', fontSize: '12px', marginBottom: 4 }}>
+                                                    Sell PulseCheck through athlete invites
+                                                  </span>
+                                                  <span className="pcp-checkbox-copy" style={{ display: 'block' }}>
+                                                    The reusable team invite sends each athlete through account setup and Stripe checkout before their app access is activated.
+                                                  </span>
+                                                </span>
+                                              </label>
+
+                                              <div className="pcp-commercial-grid">
+                                                <label className="pcp-fld">
+                                                  <span className="pcp-flbl">Athlete Monthly Price</span>
+                                                  <div style={{ position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                                                      $
+                                                    </span>
+                                                    <input
+                                                      className="pcp-finp"
+                                                      data-testid={`athlete-subscription-price-${team.id}`}
+                                                      type="number"
+                                                      min="1"
+                                                      max="1000"
+                                                      step="0.01"
+                                                      inputMode="decimal"
+                                                      value={athleteSubscriptionPriceInput}
+                                                      onChange={(event) =>
+                                                        handleExistingTeamAthleteSubscriptionPriceChange(
+                                                          team.id,
+                                                          event.target.value
+                                                        )
+                                                      }
+                                                      placeholder="20.00"
+                                                      style={{ paddingLeft: 26 }}
+                                                    />
+                                                  </div>
+                                                </label>
+                                                <div className="pcp-fld">
+                                                  <span className="pcp-flbl">Monthly Revenue Split</span>
+                                                  <div className="pcp-finp" style={{ height: 'auto', minHeight: 38, display: 'grid', gap: 4, paddingTop: 8, paddingBottom: 8 }}>
+                                                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                                      <span style={{ color: 'rgba(255,255,255,0.52)' }}>PulseCheck 50%</span>
+                                                      <strong>{formatPulseCheckMonthlyPrice(Math.round(athleteSubscriptionPriceCents * 0.5))}</strong>
+                                                    </span>
+                                                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                                      <span style={{ color: 'rgba(255,255,255,0.52)' }}>Coach before Stripe fees</span>
+                                                      <strong>{formatPulseCheckMonthlyPrice(athleteSubscriptionPriceCents - Math.round(athleteSubscriptionPriceCents * 0.5))}</strong>
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              {teamPlanBypass ? (
+                                                <div className="pcp-checkbox-copy" style={{ color: '#f5c96a' }}>
+                                                  Team Plan is active, so invited athletes currently bypass checkout. Set Team Plan Status to Inactive to use this Stripe subscription.
+                                                </div>
+                                              ) : null}
+                                              <div className="pcp-checkbox-copy">
+                                                Save Commercial Config below to create or update the secure Stripe monthly price. Price changes apply to new subscribers; current subscribers keep their existing Stripe price.
+                                              </div>
                                             </div>
 
                                             <label className="pcp-checkbox-row">

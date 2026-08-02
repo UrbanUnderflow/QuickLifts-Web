@@ -62,7 +62,13 @@ const MENTAL_SKILL_FAMILIES = [
   'coherence',
 ];
 
-const MENTAL_SKILL_FAMILIARITY = new Set(['new_to_me', 'know_it', 'practiced_it']);
+const MENTAL_SKILL_FAMILIARITY = new Set([
+  'new_to_me',
+  'heard_of_it',
+  'know_it',
+  'practiced_it',
+  'use_it',
+]);
 const MENTAL_SKILL_COMPONENT_WEIGHTS = {
   recognize: 25,
   understand: 20,
@@ -70,9 +76,11 @@ const MENTAL_SKILL_COMPONENT_WEIGHTS = {
   rehearse: 15,
 };
 const MENTAL_SKILL_FAMILIARITY_SCORES = {
-  new_to_me: 20,
+  new_to_me: 15,
+  heard_of_it: 35,
   know_it: 55,
-  practiced_it: 85,
+  practiced_it: 75,
+  use_it: 95,
 };
 const MENTAL_SKILL_ARCHETYPES = new Set([
   'invasion',
@@ -182,7 +190,7 @@ function normalizeMentalSkillsBaseline(value) {
     .slice(0, 3);
 
   return {
-    version: Math.max(3, Math.round(normalizeNumber(value.version, 3))),
+    version: Math.max(5, Math.round(normalizeNumber(value.version, 5))),
     completedAt: normalizeNumber(value.completedAt, Date.now()),
     source: normalizeString(value.source) || 'mental-skills-starting-point',
     sportName: normalizeString(value.sportName) || null,
