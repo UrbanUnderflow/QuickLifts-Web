@@ -110,55 +110,7 @@ const stripeForServerMode = () => {
   return { stripe: new Stripe(key), mode };
 };
 
-const isActiveMembership = (membership = {}) => {
-  const status = normalizeString(membership.status).toLowerCase();
-  return (!status || status === 'active') && membership.revokedAt == null;
-};
-
-const ensurePaidInviteMembership = async ({ event, database, userId, teamId, inviteToken, forceDevFirebase }) => {
-  const membershipId = `${teamId}_${userId}`;
-  const membershipRef = database.collection('pulsecheck-team-memberships').doc(membershipId);
-  const membershipSnapshot = await membershipRef.get();
-  const membership = membershipSnapshot.exists ? membershipSnapshot.data() || {} : {};
-  const membershipMatches = membershipSnapshot.exists
-    && normalizeString(membership.userId) === userId
-    && normalizeString(membership.teamId) === teamId
-    && normalizeString(membership.role).toLowerCase() === 'athlete'
-    && membership.archivedAt == null
-    && membership.deletedAt == null
-    && isActiveMembership(membership);
-  if (membershipMatches) return true;
-
-  const baseUrl = normalizeString(process.env.SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
-  const authorization = event.headers?.authorization || event.headers?.Authorization || '';
-  const response = await fetch(`${baseUrl}/api/pulsecheck/team-invite/redeem`, {
-    method: 'POST',
-    headers: {
-      Authorization: authorization,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ token: inviteToken, forceDevFirebase: forceDevFirebase === true }),
-  });
-  if (response.ok) return true;
-
-  const retrySnapshot = await membershipRef.get();
-  const retryMembership = retrySnapshot.exists ? retrySnapshot.data() || {} : {};
-  if (
-    retrySnapshot.exists
-    && normalizeString(retryMembership.userId) === userId
-    && normalizeString(retryMembership.teamId) === teamId
-    && normalizeString(retryMembership.role).toLowerCase() === 'athlete'
-    && retryMembership.archivedAt == null
-    && retryMembership.deletedAt == null
-    && isActiveMembership(retryMembership)
-  ) return true;
-  const body = await response.text().catch(() => '');
-  const error = new Error(`Team access could not be activated${body ? `: ${body.slice(0, 160)}` : '.'}`);
-  error.statusCode = 502;
-  throw error;
-};
-
-const verifyAthleteAppOfferResult = async ({ event, session, body, authenticated }) => {
+const verifyAthleteAppOfferResult = async ({ session, body, authenticated }) => {
   const metadata = {
     ...(session.subscription?.metadata || {}),
     ...(session.metadata || {}),
@@ -219,31 +171,9 @@ const verifyAthleteAppOfferResult = async ({ event, session, body, authenticated
       body: JSON.stringify({
         success: false,
         pending: true,
-        message: 'Payment is confirmed. Team access is still being activated.',
+        message: 'Payment is confirmed. The subscription is still being activated.',
       }),
     };
-  }
-  try {
-    await ensurePaidInviteMembership({
-      event,
-      database,
-      userId,
-      teamId,
-      inviteToken,
-      forceDevFirebase: sessionFirebaseMode === 'dev',
-    });
-  } catch (error) {
-    if (Number(error?.statusCode) === 502) {
-      return {
-        statusCode: 202,
-        body: JSON.stringify({
-          success: false,
-          pending: true,
-          message: 'Payment is confirmed. Team access is still being activated.',
-        }),
-      };
-    }
-    throw error;
   }
   return {
     statusCode: 200,
@@ -251,8 +181,11 @@ const verifyAthleteAppOfferResult = async ({ event, session, body, authenticated
       success: true,
       pending: false,
       webhookConfirmed: true,
-      teamAccessActive: true,
-      message: 'Subscription and team access are active.',
+      subscriptionActive: true,
+      teamAccessActive: false,
+      inviteReady: true,
+      membershipPendingConsent: true,
+      message: 'Subscription is active. Continue in PulseCheck to review and accept the team invite.',
       user: { id: userId },
       teamId,
       inviteToken,
@@ -335,7 +268,7 @@ const handler = async (event) => {
     }
 
     if (isCoachOfferSession) {
-      return verifyAthleteAppOfferResult({ event, session, body, authenticated });
+      return verifyAthleteAppOfferResult({ session, body, authenticated });
     }
 
     // 3. Verify the user ID

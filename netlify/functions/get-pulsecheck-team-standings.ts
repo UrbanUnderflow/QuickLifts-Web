@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import {
   assignSharedRanks,
+  countFinalizedLeaderWins,
   current14DaySprint,
   dateKeyInTimeZone,
   hasEveningCheckIn,
@@ -38,6 +39,18 @@ type AvailableTeam = {
   teamId: string;
   teamName: string;
   leaderboardEnabled: boolean;
+};
+
+const loadFinalizedLeaderWinsByAthlete = async (
+  db: admin.firestore.Firestore,
+  teamId: string,
+): Promise<Map<string, number>> => {
+  const snapshot = await db.collection(SPRINT_COLLECTION)
+    .where('teamId', '==', teamId)
+    .get();
+  // Day 14 remains live until the window has closed. Only the scheduled
+  // next-day capture finalizes the result and awards the profile win.
+  return countFinalizedLeaderWins(snapshot.docs.map((document) => document.data() || {}));
 };
 
 const verifyAuth = async (authHeader?: string): Promise<{ uid: string } | null> => {
@@ -150,6 +163,7 @@ const persistShowingUpRecords = async (
     sprintStartDate: string;
     sprintEndDate: string;
     throughDate: string;
+    isFinalized: boolean;
     members: Array<Record<string, any>>;
   },
 ): Promise<void> => {
@@ -205,6 +219,10 @@ const persistShowingUpRecords = async (
       sprintEndDate: input.sprintEndDate,
       throughDate: input.throughDate,
       isComplete: input.throughDate >= input.sprintEndDate,
+      isFinalized: input.isFinalized,
+      ...(input.isFinalized
+        ? { finalizedAt: admin.firestore.FieldValue.serverTimestamp() }
+        : {}),
       scoreVersion: SCORE_VERSION,
       members: input.members.map((member) => ({
         athleteId: member.userId,
@@ -350,6 +368,7 @@ export const calculateAndPersistTeamStandings = async (input: {
   currentUserId?: string;
   timezoneOverride?: string;
   now?: Date;
+  finalizeWindow?: boolean;
 }): Promise<Record<string, any> | null> => {
   const { db, teamId, currentUserId, timezoneOverride } = input;
   const now = input.now || new Date();
@@ -430,8 +449,7 @@ export const calculateAndPersistTeamStandings = async (input: {
     };
   });
 
-  const members = assignSharedRanks(unrankedMembers);
-  const currentUser = members.find((member) => member.userId === currentUserId) || null;
+  const rankedMembers = assignSharedRanks(unrankedMembers);
   const teamName = normalizedString(teamData.displayName) || 'Your Team';
   const sprintId = `${teamId}_${sprint.sprintStartDate}`;
   await persistShowingUpRecords(db, {
@@ -444,8 +462,15 @@ export const calculateAndPersistTeamStandings = async (input: {
     sprintStartDate: sprint.sprintStartDate,
     sprintEndDate: sprint.sprintEndDate,
     throughDate,
-    members,
+    isFinalized: input.finalizeWindow === true,
+    members: rankedMembers,
   });
+  const leaderWinsByAthlete = await loadFinalizedLeaderWinsByAthlete(db, teamId);
+  const members = rankedMembers.map((member) => ({
+    ...member,
+    leaderWins: leaderWinsByAthlete.get(member.userId) || 0,
+  }));
+  const currentUser = members.find((member) => member.userId === currentUserId) || null;
 
   return {
     teamId,
@@ -520,6 +545,16 @@ export const handler: Handler = async (event) => {
   }
   const availableTeams = await resolveAvailableTeams(db, activeMemberships);
   const enabledTeams = availableTeams.filter((team) => team.leaderboardEnabled);
+  const leaderWinsByTeam = new Map(await Promise.all(availableTeams.map(async (team) => {
+    const wins = await loadFinalizedLeaderWinsByAthlete(db, team.teamId);
+    return [team.teamId, wins.get(auth.uid) || 0] as const;
+  })));
+  const leaderTrackerTeams = availableTeams.map(({ teamId, teamName }) => ({
+    teamId,
+    teamName,
+    leaderWins: leaderWinsByTeam.get(teamId) || 0,
+  }));
+  const leaderWinsTotal = [...leaderWinsByTeam.values()].reduce((total, wins) => total + wins, 0);
   const requestedEnabledTeam = enabledTeams.find((team) => team.teamId === requestedTeamId);
   const selectedTeamId = requestedEnabledTeam?.teamId || enabledTeams[0]?.teamId;
   if (!selectedTeamId) {
@@ -531,6 +566,8 @@ export const handler: Handler = async (event) => {
           ? {
               leaderboardEnabled: false,
               availableTeams: [],
+              leaderWinsTotal,
+              leaderTrackerTeams,
             }
           : { error: 'active_team_membership_required' }),
       }),
@@ -556,7 +593,13 @@ export const handler: Handler = async (event) => {
     body: JSON.stringify({
       ...standings,
       leaderboardEnabled: true,
-      availableTeams: enabledTeams.map(({ teamId, teamName }) => ({ teamId, teamName })),
+      leaderWinsTotal,
+      leaderTrackerTeams,
+      availableTeams: enabledTeams.map(({ teamId, teamName }) => ({
+        teamId,
+        teamName,
+        leaderWins: leaderWinsByTeam.get(teamId) || 0,
+      })),
     }),
   };
 };

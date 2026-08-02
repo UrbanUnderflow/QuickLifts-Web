@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   aggregateOverallStandings,
   assignSharedRanks,
+  countFinalizedLeaderWins,
   current14DaySprint,
   hasEveningCheckIn,
   hasMorningCheckIn,
@@ -69,6 +70,19 @@ test('shared ranks preserve ties and skip the next occupied position', () => {
       { userId: 'd', rank: 4 },
     ],
   );
+});
+
+test('profile leader wins count only closed 14-day boards and award shared first place', () => {
+  const wins = countFinalizedLeaderWins([
+    { isFinalized: false, winnerAthleteIds: ['a'] },
+    { isFinalized: true, winnerAthleteIds: ['a', 'b'] },
+    { isFinalized: true, winnerAthleteIds: ['a'] },
+    { isFinalized: true, winnerAthleteIds: [] },
+  ]);
+
+  assert.equal(wins.get('a'), 2);
+  assert.equal(wins.get('b'), 1);
+  assert.equal(wins.has('c'), false);
 });
 
 test('wearable point requires both sleep and recovery evidence', () => {

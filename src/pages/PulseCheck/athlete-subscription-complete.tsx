@@ -37,12 +37,19 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
 
   const sessionId = router.isReady ? singleQueryValue(router.query.session_id) : '';
   const inviteToken = router.isReady ? singleQueryValue(router.query.invite) : '';
+  const alreadyActive =
+    router.isReady && singleQueryValue(router.query.access) === 'already-active';
   const forceDevFirebase = router.isReady && router.query.devFirebase === '1';
 
-  const appOpenUrl = useMemo(
-    () => `pulsecheck://open?inviteToken=${encodeURIComponent(inviteToken)}`,
-    [inviteToken]
-  );
+  const appOpenUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      inviteToken,
+      checkoutComplete: '1',
+      resumeInvite: '1',
+    });
+    if (forceDevFirebase) params.set('devFirebase', '1');
+    return `pulsecheck://open?${params.toString()}`;
+  }, [forceDevFirebase, inviteToken]);
   const offerUrl = useMemo(
     () =>
       buildPulseCheckAthleteOfferWebUrl(
@@ -63,7 +70,7 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
 
   const confirmSubscription = useCallback(async () => {
     if (!router.isReady || !authReady) return;
-    if (!sessionId || !inviteToken) {
+    if (!inviteToken || (!sessionId && !alreadyActive)) {
       setState('error');
       setMessage('The Stripe return link is missing its payment or invite details.');
       return;
@@ -71,6 +78,14 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
     if (!authUser) {
       setState('waiting-for-account');
       setMessage('Sign in through your invitation to finish connecting this purchase.');
+      return;
+    }
+
+    if (alreadyActive) {
+      setState('confirmed');
+      setMessage(
+        'This account already has an active PulseCheck subscription. Continue in the app to review and accept the team invite.'
+      );
       return;
     }
 
@@ -98,7 +113,10 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
         const payload = await response.json().catch(() => ({}));
         if (response.ok && payload?.success === true) {
           setState('confirmed');
-          setMessage('Your subscription and team access are active.');
+          setMessage(
+            payload?.message ||
+              'Your subscription is active. Continue in PulseCheck to review and accept the team invite.'
+          );
           return;
         }
 
@@ -122,17 +140,40 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
         }
       }
 
-      setMessage('Payment received. PulseCheck is activating your team access now.');
+      setMessage('Payment received. PulseCheck is activating your subscription now.');
       await wait(1500);
     }
 
     setState('pending');
-    setMessage('Payment received. Team access is still being activated.');
-  }, [authReady, authUser, forceDevFirebase, inviteToken, router.isReady, sessionId]);
+    setMessage('Payment received. Your subscription is still being activated.');
+  }, [alreadyActive, authReady, authUser, forceDevFirebase, inviteToken, router.isReady, sessionId]);
 
   useEffect(() => {
     void confirmSubscription();
   }, [attempt, confirmSubscription]);
+
+  const handleOpenInstalledApp = useCallback(() => {
+    if (!inviteToken) return;
+
+    try {
+      window.sessionStorage.setItem('pulsecheck-pending-invite-token', inviteToken);
+      window.sessionStorage.setItem('pulsecheck-pending-invite-checkout-complete', '1');
+    } catch {
+      // The deep link still carries the full handoff when storage is unavailable.
+    }
+
+    window.location.assign(appOpenUrl);
+
+    // A native in-app browser can intercept the custom scheme and dismiss
+    // itself. window.close() is a harmless fallback for script-opened views.
+    window.setTimeout(() => {
+      try {
+        window.close();
+      } catch {
+        // Standard browser tabs remain on this page if they cannot be closed.
+      }
+    }, 750);
+  }, [appOpenUrl, inviteToken]);
 
   const confirmed = state === 'confirmed';
   const busy = state === 'confirming';
@@ -171,7 +212,7 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
               {confirmed ? 'Payment confirmed' : 'Confirmation in progress'}
             </p>
             <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">
-              {confirmed ? 'Your PulseCheck access is ready' : 'We are connecting your purchase'}
+              {confirmed ? 'Your PulseCheck subscription is ready' : 'We are connecting your purchase'}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-300">{message}</p>
             {authUser?.email ? (
@@ -209,6 +250,24 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
             {confirmed ? (
               <div className="mt-9 grid gap-5 lg:grid-cols-[1fr_0.92fr]">
                 <div className="space-y-3">
+                  <div className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/[0.06] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#E0FE10]">
+                      Already installed?
+                    </p>
+                    <h2 className="mt-2 text-lg font-semibold">Continue your team invite in PulseCheck</h2>
+                    <p className="mt-2 text-sm leading-6 text-zinc-300">
+                      We&apos;ll return you to this invitation so you can finish onboarding, review the required consents, and choose Join Team.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleOpenInstalledApp}
+                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black"
+                    >
+                      I already have the app
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Step 1</p>
                     <h2 className="mt-2 text-lg font-semibold">Download PulseCheck</h2>
@@ -241,15 +300,16 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
                     <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Step 2</p>
                     <h2 className="mt-2 text-lg font-semibold">Come back and open the app</h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
-                      Return to this page after installation, then use Open PulseCheck. Sign in with the same account shown above and continue through onboarding.
+                      Return to this page after installation, then use the button below. Sign in with the same account shown above and continue through onboarding.
                     </p>
-                    <a
-                      href={appOpenUrl}
+                    <button
+                      type="button"
+                      onClick={handleOpenInstalledApp}
                       className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black"
                     >
                       Open PulseCheck
                       <ArrowRight className="h-4 w-4" />
-                    </a>
+                    </button>
                   </div>
                 </div>
 
@@ -260,7 +320,7 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
                     PulseCheck uses the account from checkout to recognize your subscription in the app. Sign in with {authUser?.email || 'the same email used for checkout'}.
                   </p>
                   <div className="mt-5 rounded-xl border border-white/10 bg-black/20 p-4 text-sm leading-6 text-zinc-400">
-                    Your team invitation is saved with the purchase. The app can continue team onboarding after sign-in.
+                    Your invitation stays attached to this handoff. The app will show the normal agreements and Join Team steps before team access is completed.
                   </div>
                 </aside>
               </div>

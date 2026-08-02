@@ -10,7 +10,7 @@ const pageMeta = {
     'PulseCheck gives young athletes a private daily check-in, wearable context, and short mental skills they can practice before the pressure arrives.',
   ogTitle: 'PulseCheck Youth | Train the Mind for the Game',
   ogDescription:
-    'A daily mental performance system built for young athletes, with 200+ skills, wearable context, and human support when a pattern needs attention.',
+    'A daily mental performance system built for young athletes, with 200+ skills, wearable context, and human support when repeated check-ins need a closer look.',
   ogImage: '/pulsecheck-youth/youth-info-og.png',
   twitterCard: 'summary_large_image',
   lastUpdated: '2026-08-01T00:00:00.000Z',
@@ -26,14 +26,14 @@ const processSteps = [
   {
     number: '02',
     label: 'ADD CONTEXT',
-    title: 'See what the body is saying.',
+    title: 'See what sleep and recovery add.',
     body: 'Sleep, heart rate, recovery, and training load add context from a connected wearable.',
   },
   {
     number: '03',
     label: 'TRAIN TODAY',
-    title: 'Practice the right skill.',
-    body: 'Nora chooses a short plan for the athlete\'s energy, pressure, focus, and schedule.',
+    title: 'Practice the priority skill.',
+    body: 'Nora uses the athlete\'s curriculum, check-in, and body context to bring forward the skill that matters most for that athlete.',
   },
 ];
 
@@ -104,11 +104,11 @@ const educationStories: EducationStory[] = [
       {
         number: '05',
         title: 'Use it in the moment.',
-        body: 'Take one simple cue into training or competition and return to it when it matters.',
+        body: 'Take one short phrase or action into training or competition and return to it when it matters.',
       },
     ],
     callout:
-      'Nora brings a skill back when it fits how the athlete feels, what the body is showing, and what the day demands.',
+      'Nora brings a skill back when the athlete\'s curriculum, check-in, and body context show it should come next.',
   },
   {
     id: 'five-minutes',
@@ -129,8 +129,8 @@ const educationStories: EducationStory[] = [
       },
       {
         number: '03',
-        title: 'Get today\'s skills.',
-        body: 'Nora chooses a short plan for the athlete\'s energy, schedule, and pressure points.',
+        title: 'Get the priority skill.',
+        body: 'Nora uses the athlete\'s curriculum, check-in, and body context to bring forward the skill that matters most.',
       },
       {
         number: '04',
@@ -139,16 +139,16 @@ const educationStories: EducationStory[] = [
       },
       {
         number: '05',
-        title: 'Carry one cue forward.',
+        title: 'Take one action forward.',
         body: 'The session ends with something simple the athlete can remember later that day.',
       },
     ],
-    callout: 'Most daily plans are designed to fit into about five minutes.',
+    callout: 'Most daily plans are designed to take about five minutes.',
   },
   {
     id: 'wearable-context',
     eyebrow: 'How wearable context works',
-    title: 'The athlete speaks first. Body signals add another clue.',
+    title: 'The athlete speaks first. Sleep and recovery add another clue.',
     intro:
       'PulseCheck starts with the athlete\'s own answer. Wearable information helps Nora understand whether that answer lines up with sleep, recovery, heart rate, and recent training.',
     sections: [
@@ -165,23 +165,23 @@ const educationStories: EducationStory[] = [
       {
         number: '03',
         title: 'Nora looks at both.',
-        body: 'A good mood with poor sleep may call for a calmer plan. Feeling off with steady body signals may call for focus or confidence work.',
+        body: 'A good mood with poor sleep may call for a calmer plan. Feeling off with steady sleep and recovery may call for focus or confidence work.',
       },
       {
         number: '04',
-        title: 'Today gets one clear plan.',
-        body: 'The athlete receives skills chosen to fit the whole picture.',
+        title: 'The priority skill becomes a clear plan.',
+        body: 'The athlete receives a short activity from their curriculum.',
       },
     ],
     callout:
-      'Wearable signals guide mental performance education. Medical decisions stay with qualified people.',
+      'Wearable information guides mental performance education. Medical decisions stay with qualified people.',
   },
   {
     id: 'research-explained',
     eyebrow: 'The research in plain language',
     title: 'What the 66% figure actually means.',
     intro:
-      'In this study, one group physically trained a finger muscle and improved its strength by 53%. Another group only imagined making the same forceful movement and improved by 35%. Thirty-five is about 66% of fifty-three.',
+      'In this study, one group physically trained a finger muscle and improved its strength by 53%. Another group only imagined making the same forceful movement and improved by 35%. That means the imagining group gained about two-thirds as much strength as the physical training group.',
     sections: [
       {
         number: '01',
@@ -201,7 +201,7 @@ const educationStories: EducationStory[] = [
       {
         number: '04',
         title: 'Limits to keep in mind.',
-        body: 'This was a small study of healthy young adults and a simple finger movement. It supports the value of mental practice without predicting the result for one athlete.',
+        body: 'This was a small study of healthy young adults and a simple finger movement. The takeaway is general: mental practice can help train the brain-body connection.',
       },
     ],
     callout:
@@ -214,14 +214,14 @@ const educationStories: EducationStory[] = [
   {
     id: 'clinical-support',
     eyebrow: 'AuntEdna clinical support',
-    title: 'When a pattern needs a qualified person.',
+    title: 'When several hard days need a closer look.',
     intro:
       'One hard day can happen to any athlete. When difficult check-ins, poor sleep, or concerning answers keep showing up, the program can bring a qualified clinician into the review.',
     sections: [
       {
         number: '01',
-        title: 'A pattern appears.',
-        body: 'The system looks for repeated changes and program safety signals across more than one day.',
+        title: 'Several hard days appear.',
+        body: 'The system looks for repeated changes and answers that suggest extra support may be needed.',
       },
       {
         number: '02',
@@ -231,7 +231,7 @@ const educationStories: EducationStory[] = [
       {
         number: '03',
         title: 'A clinician reviews it.',
-        body: 'A qualified person looks at the pattern and uses human judgment to understand what may be happening.',
+        body: 'A qualified person looks at the repeated changes and uses human judgment to understand what may be happening.',
       },
       {
         number: '04',
@@ -239,14 +239,14 @@ const educationStories: EducationStory[] = [
         body: 'The next step can be a check-in, a conversation with a trusted adult, or a connection to the right care.',
       },
     ],
-    callout: 'PulseCheck can notice a pattern. A qualified person decides what care is appropriate.',
+    callout: 'PulseCheck can flag repeated changes. A qualified person decides what care is appropriate.',
   },
   {
     id: 'parent-trust',
     eyebrow: 'What parents should know',
     title: 'Clear roles help athletes feel safe.',
     intro:
-      'PulseCheck is a guided mental performance system with structured lessons, private check-ins, and human support when a pattern needs review.',
+      'PulseCheck is a guided mental performance system with structured lessons, private check-ins, and human support when repeated check-ins need review.',
     sections: [
       {
         number: '01',
@@ -255,8 +255,8 @@ const educationStories: EducationStory[] = [
       },
       {
         number: '02',
-        title: 'Private words receive protection.',
-        body: 'The athlete can answer honestly. Adults receive the broad patterns and actions their role allows them to see.',
+        title: 'Private answers receive protection.',
+        body: 'The athlete can answer honestly. Parents and coaches see themes and next steps based on their role.',
       },
       {
         number: '03',
@@ -269,7 +269,7 @@ const educationStories: EducationStory[] = [
         body: 'Parents, coaches, and clinicians keep their responsibilities for the athlete and the choices around them.',
       },
     ],
-    callout: 'A learning system for the athlete, with clear boundaries and human safeguards.',
+    callout: 'A learning system for athletes, with clear roles and real people involved.',
   },
   {
     id: 'return-to-sport',
@@ -286,7 +286,7 @@ const educationStories: EducationStory[] = [
       {
         number: '02',
         title: 'Practice confidence safely.',
-        body: 'Guided visualization, breathing, and self-talk can help the athlete prepare for the movements and moments they are working toward.',
+        body: 'Guided visualization, breathing, and self-talk can help the athlete prepare for the drills, games, and return-to-play moments ahead.',
       },
       {
         number: '03',
@@ -390,7 +390,7 @@ const BoxBreathingPhoneDemo: React.FC = () => {
         <span>⌁</span>
       </div>
 
-      <div className="yi-breathing-metrics" aria-label="Current body signals">
+      <div className="yi-breathing-metrics" aria-label="Current body readings">
         <div className="yi-breathing-metric yi-breathing-metric--hr">
           <span>♥ HR</span>
           <strong>{state.hr}<small> bpm</small></strong>
@@ -564,7 +564,8 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           </h2>
           <p className="yi-intro">
             Every day begins with a simple question: how do you feel? PulseCheck uses that answer,
-            body signals, and the athlete&apos;s schedule to choose a short practice for today.
+            sleep, recovery, heart rate, and the athlete&apos;s curriculum to bring forward the skill
+            that matters most.
           </p>
           <div className="yi-skill-list" aria-label="Examples from the mental skills library">
             {skillNames.map((skill) => (
@@ -633,7 +634,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             <h2>HOW YOU FEEL,<br /><em>WITH CONTEXT.</em></h2>
             <p>
               The athlete&apos;s check-in leads. Sleep, heart rate, recovery, and training load add
-              another clue so Nora can choose the right mental skill for today.
+              another clue so Nora can bring forward the skill that matters most for that athlete.
             </p>
             <button
               type="button"
@@ -646,13 +647,13 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           </div>
         </div>
         <div className="yi-wearables-copy">
-          <p className="yi-kicker">COMPATIBLE SIGNALS</p>
-          <h3>Connect the devices athletes already wear.</h3>
+          <p className="yi-kicker">COMPATIBLE DEVICES</p>
+          <h3>Works with the devices athletes already wear.</h3>
           <div className="yi-device-render" aria-hidden="true">
             <div className="yi-device-orbit" />
             <div className="yi-device-core">
               <span>PulseCheck</span>
-              <strong>Daily Read</strong>
+              <strong>Daily Check-In</strong>
             </div>
             {wearableDevices.map((device, index) => (
               <span className={`yi-device-chip yi-device-chip--${index + 1}`} key={device.name}>
@@ -676,14 +677,14 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         <p className="yi-kicker">PRIVATE BY DESIGN</p>
         <h2>HONESTY NEEDS<br />A SAFE PLACE.</h2>
         <p className="yi-privacy-copy">
-          Nora protects the athlete&apos;s private words. Coaches see broad patterns and clear ways to help.
+          Nora protects the athlete&apos;s private answers. Coaches see themes and clear ways to help.
         </p>
         <div className="yi-privacy-rule" aria-hidden="true"><span>ATHLETE TRUST</span><i /><span>USEFUL SUPPORT</span></div>
       </section>
 
       <section className="yi-trust" aria-labelledby="yi-trust-title">
         <div className="yi-trust-heading">
-          <p className="yi-kicker">CLEAR ROLES. HUMAN SAFEGUARDS.</p>
+          <p className="yi-kicker">CLEAR ROLES. REAL PEOPLE INVOLVED.</p>
           <h2 id="yi-trust-title">WHAT FAMILIES<br />CAN EXPECT.</h2>
           <button
             type="button"
@@ -703,7 +704,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           <article>
             <span>02</span>
             <h3>Private check-ins</h3>
-            <p>Honest answers receive protection, with useful patterns shared by role.</p>
+            <p>Athletes can answer honestly. Parents and coaches see themes and next steps based on their role.</p>
           </article>
           <article>
             <span>03</span>
@@ -721,11 +722,11 @@ const PulseCheckYouthInfoPage: React.FC = () => {
       <section className="yi-research">
         <div className="yi-research-story">
           <p className="yi-kicker">THE SURPRISING RESEARCH</p>
-          <h2>MENTAL PRACTICE<br />MADE THE MUSCLE<br /><em>STRONGER.</em></h2>
+          <h2>PICTURING THE MOVEMENT<br />MADE THE MUSCLE<br /><em>STRONGER.</em></h2>
           <p className="yi-research-explainer">
             Every physical practice also teaches the brain. The surprise is that the brain can
-            rehearse a movement without the body moving. In one small 12-week study, imagined finger
-            movement produced 35% strength gains, compared with 53% from physical practice.
+            practice the command while the body stays still. In one small 12-week study, imagined
+            finger movement produced 35% strength gains, compared with 53% from physical training.
           </p>
           <div className="yi-research-actions">
             <button
@@ -748,14 +749,14 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         </div>
         <div className="yi-research-stat">
           <strong>66%</strong>
-          <p>AS MUCH STRENGTH GAIN AS PHYSICAL PRACTICE, FROM IMAGINED MOVEMENT</p>
+          <p>THE IMAGINING GROUP GAINED ABOUT TWO-THIRDS AS MUCH STRENGTH AS THE PHYSICAL TRAINING GROUP</p>
           <a
             className="yi-research-citation"
             href="https://doi.org/10.1016/j.neuropsychologia.2003.11.018"
             target="_blank"
             rel="noreferrer"
           >
-            IMAGINED MOVEMENT 35% STRONGER / PHYSICAL PRACTICE 53% STRONGER / RANGANATHAN ET AL., 2004
+            IMAGINED MOVEMENT: 35% STRENGTH GAIN / PHYSICAL TRAINING: 53% / RANGANATHAN ET AL., 2004
           </a>
         </div>
       </section>
@@ -772,13 +773,13 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             <img src="/auntedna-mark.png" alt="AuntEdna" />
             <span>AUNTEDNA / CLINICAL SUPPORT</span>
           </div>
-          <h2>WHEN THE PATTERN<br />NEEDS A PERSON.</h2>
+          <h2>WHEN SEVERAL HARD DAYS<br />NEED A CLOSER LOOK.</h2>
           <p>
             When difficult check-ins or poor sleep keep showing up, AuntEdna helps a qualified
             clinician review what is happening and connect the athlete to care.
           </p>
           <div className="yi-support-path" aria-label="Support path">
-            <span><b>01</b>Pattern</span>
+            <span><b>01</b>Check-ins</span>
             <i />
             <span><b>02</b>Review</span>
             <i />
@@ -821,7 +822,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         <HeartPulse size={34} strokeWidth={1.5} aria-hidden="true" />
         <p className="yi-kicker">BUILT FOR THE WHOLE ATHLETE</p>
         <h2>TRAIN THE MIND<br />LIKE THE BODY.</h2>
-        <p>Give young athletes a skill they can practice today and use when the next moment arrives.</p>
+        <p>Give young athletes a skill they can practice today and use when practice or the game gets hard.</p>
         <a
           className="yi-button yi-button--dark"
           href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Youth"

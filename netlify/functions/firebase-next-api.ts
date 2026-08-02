@@ -534,6 +534,20 @@ const ROUTE_ENTRIES: RouteEntry[] = [
       import("../../src/pages/api/pulsecheck/team-invite/redeem.ts"),
   },
   {
+    pattern: "/api/pulsecheck/team-invite/native-handoff/create",
+    loadHandler: () =>
+      import(
+        "../../src/pages/api/pulsecheck/team-invite/native-handoff/create.ts"
+      ),
+  },
+  {
+    pattern: "/api/pulsecheck/team-invite/native-handoff/consume",
+    loadHandler: () =>
+      import(
+        "../../src/pages/api/pulsecheck/team-invite/native-handoff/consume.ts"
+      ),
+  },
+  {
     pattern: "/api/reset-badges",
     loadHandler: () => import("../../src/pages/api/reset-badges.ts"),
   },

@@ -934,7 +934,7 @@ const PULSECHECK_SOUNDS: PulseRitualSound[] = [
     id: 'pulsecheck-team-rank-advance',
     label: 'Team Leaderboard Advance',
     description:
-      'Plays when the athlete moves ahead of a teammate during the current 14-day Showing Up Sprint. First load and a fresh sprint stay quiet.',
+      'Plays when the athlete moves ahead of a teammate during the current 14-day Showing Up board. First load and a fresh 14-day board stay quiet.',
     icon: <Sparkles className="w-4 h-4" />,
     category: 'pulsecheck-moment',
     file: 'rank-ceremony-a-arena-ascent',
@@ -942,7 +942,7 @@ const PULSECHECK_SOUNDS: PulseRitualSound[] = [
       'Arena Ascent: compact upward athletic surge with a deep pulse, fast rising energy, and a clean bright arrival, competitive team momentum, premium and focused, no speech, no recognizable melody',
     durationSeconds: 2.4,
     promptInfluence: 0.55,
-    pairedHapticNote: 'TeamShowingUpBoardView when the athlete reaches a better place within the same 14-day sprint',
+    pairedHapticNote: 'TeamShowingUpBoardView when the athlete reaches a better place within the same 14-day board',
     priority: 'high',
   },
   {

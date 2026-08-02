@@ -1301,7 +1301,7 @@ test('financial reversal blocks survive active Stripe updates until a newer paym
   assert.equal(entitlement.financialAccessBlock.clearedBy, 'dispute_won');
 });
 
-test('verified success self-heals the Stripe entitlement and confirms only after athlete membership exists', async () => {
+test('verified success self-heals the Stripe entitlement without joining the team before consent', async () => {
   const firebase = createFirestoreAdminMock({
     collections: {
       users: [{ id: 'athlete_1', data: { email: 'athlete@example.com', subscriptionType: 'Unsubscribed' } }],
@@ -1349,42 +1349,28 @@ test('verified success self-heals the Stripe entitlement and confirms only after
       },
     };
   }
-  const originalFetch = global.fetch;
-  global.fetch = async () => {
-    await firebase.db.collection('pulsecheck-team-memberships').doc('team_1_athlete_1').set({
+  await withPatchedEnv(env, async () => {
+    const fn = loadVerify(firebase, VerifyStripe);
+    const response = await fn.handler(post({
+      sessionId: 'cs_verify_1',
       userId: 'athlete_1',
-      teamId: 'team_1',
-      organizationId: 'org_1',
-      role: 'athlete',
-      status: 'active',
-    });
-    return {
-      ok: true,
-      async text() { return ''; },
-    };
-  };
-  try {
-    await withPatchedEnv(env, async () => {
-      const fn = loadVerify(firebase, VerifyStripe);
-      const response = await fn.handler(post({
-        sessionId: 'cs_verify_1',
-        userId: 'athlete_1',
-        inviteToken: 'invite_1',
-        source: 'pulsecheck-coach-athlete-offer',
-      }));
-      assert.equal(response.statusCode, 200);
-      assert.equal(JSON.parse(response.body).teamAccessActive, true);
-      const entitlement = firebase.getDocument('pulsecheck-athlete-app-entitlements/team_1_athlete_1');
-      assert.equal(entitlement.active, true);
-      const plan = firebase
-        .getDocument('subscriptions/athlete_1')
-        .plans.find((entry) => entry.source === 'pulsecheck-coach-athlete-offer');
-      assert.equal(plan.type, 'pulsecheck-monthly');
-      assert.equal(firebase.getDocument('pulsecheck-team-memberships/team_1_athlete_1').role, 'athlete');
-    });
-  } finally {
-    global.fetch = originalFetch;
-  }
+      inviteToken: 'invite_1',
+      source: 'pulsecheck-coach-athlete-offer',
+    }));
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.equal(body.subscriptionActive, true);
+    assert.equal(body.teamAccessActive, false);
+    assert.equal(body.inviteReady, true);
+    assert.equal(body.membershipPendingConsent, true);
+    const entitlement = firebase.getDocument('pulsecheck-athlete-app-entitlements/team_1_athlete_1');
+    assert.equal(entitlement.active, true);
+    const plan = firebase
+      .getDocument('subscriptions/athlete_1')
+      .plans.find((entry) => entry.source === 'pulsecheck-coach-athlete-offer');
+    assert.equal(plan.type, 'pulsecheck-monthly');
+    assert.equal(firebase.getDocument('pulsecheck-team-memberships/team_1_athlete_1'), undefined);
+  });
 });
 
 test('payment verification refuses to reconcile a coach offer into the wrong Firebase environment', async () => {

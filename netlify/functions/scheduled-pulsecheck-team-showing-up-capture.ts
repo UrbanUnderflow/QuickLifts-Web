@@ -32,15 +32,16 @@ export const runPulseCheckTeamShowingUpCapture = async (now = new Date()) => {
       if (!current) continue;
       capturedTeams.push(teamId);
 
-      // On day one of a new sprint, recalculate yesterday once more. This
+      // On day one of a new 14-day window, recalculate yesterday once more. This
       // captures the completed day 14 before the live board moves to its fresh
-      // 14-day window.
+      // window and makes that winner's profile achievement official.
       if (current.daysElapsed === 1) {
         const previousDay = new Date(now.getTime() - (24 * 60 * 60 * 1000));
         const previous = await calculateAndPersistTeamStandings({
           db,
           teamId,
           now: previousDay,
+          finalizeWindow: true,
         });
         if (previous?.sprintId && previous.sprintId !== current.sprintId) {
           closedSprints.push(previous.sprintId);

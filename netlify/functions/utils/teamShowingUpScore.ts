@@ -20,6 +20,11 @@ export type RankedShowingUpMember<T extends RankableShowingUpMember> = T & {
   rank: number;
 };
 
+export type CompletedShowingUpWindow = {
+  isFinalized?: boolean;
+  winnerAthleteIds?: unknown;
+};
+
 const NON_SCORING_ASSIGNMENT_STATUSES = new Set([
   'overridden',
   'deferred',
@@ -171,6 +176,21 @@ export const assignSharedRanks = <T extends RankableShowingUpMember>(
     }
     return { ...member, rank: currentRank };
   });
+};
+
+export const countFinalizedLeaderWins = (
+  windows: CompletedShowingUpWindow[],
+): Map<string, number> => {
+  const winsByAthlete = new Map<string, number>();
+  for (const window of windows) {
+    if (window.isFinalized !== true || !Array.isArray(window.winnerAthleteIds)) continue;
+    for (const rawAthleteId of window.winnerAthleteIds) {
+      const athleteId = typeof rawAthleteId === 'string' ? rawAthleteId.trim() : '';
+      if (!athleteId) continue;
+      winsByAthlete.set(athleteId, (winsByAthlete.get(athleteId) || 0) + 1);
+    }
+  }
+  return winsByAthlete;
 };
 
 export type HistoricalShowingUpRecord = {

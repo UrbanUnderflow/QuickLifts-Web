@@ -11,6 +11,7 @@ import {
   onAuthStateChanged,
   sendEmailVerification,
   signInWithEmailAndPassword,
+  signInWithCustomToken,
   signInWithPopup,
   signOut,
   type User as FirebaseAuthUser,
@@ -78,8 +79,13 @@ type InviteActivityEventType =
   | 'redeem-failed'
   | 'follow-up-requested';
 type BrowserAccountGateState = 'checking' | 'clearing' | 'ready';
+type NativeHandoffState = 'waiting' | 'consuming' | 'ready' | 'error' | 'none';
 
 const SKIP_FRESH_ACCOUNT_QUERY_PARAM = 'skipFreshAccount';
+const NATIVE_HANDOFF_QUERY_PARAM = 'nativeHandoff';
+
+const queryParamString = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? String(value[0] || '').trim() : String(value || '').trim();
 
 const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
   'team-admin': 'Team Admin',
@@ -263,6 +269,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const [verificationEmailSent, setVerificationEmailSent] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [browserAccountGateState, setBrowserAccountGateState] = useState<BrowserAccountGateState>('checking');
+  const [nativeHandoffState, setNativeHandoffState] = useState<NativeHandoffState>('waiting');
   const [redeemedState, setRedeemedState] = useState<{
     organizationName: string;
     teamName: string;
@@ -276,6 +283,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const [followUpSubmitted, setFollowUpSubmitted] = useState(false);
   const inviteActivitySessionIdRef = useRef('');
   const trackedInviteActivityKeysRef = useRef<Set<string>>(new Set());
+  const nativeHandoffPromiseRef = useRef<Promise<FirebaseAuthUser> | null>(null);
+  const nativeHandoffBlockedRef = useRef(false);
+  const browserAccountGateStartedRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -305,10 +315,19 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
   const isGeneralInvite = invite.redemptionMode === 'general';
   const isAthleteInvite = invite.teamMembershipRole === 'athlete';
+  const nativeHandoffCode = router.isReady
+    ? queryParamString(router.query[NATIVE_HANDOFF_QUERY_PARAM])
+    : '';
+  const isNativeHandoff = isAthleteInvite && Boolean(nativeHandoffCode);
   const skipFreshAccountCheck = router.isReady && router.query[SKIP_FRESH_ACCOUNT_QUERY_PARAM] === '1';
-  const shouldClearExistingBrowserAccount = isAthleteInvite && !skipFreshAccountCheck;
+  const shouldClearExistingBrowserAccount =
+    isAthleteInvite && (isNativeHandoff || !skipFreshAccountCheck);
   const browserAccountGateReady = browserAccountGateState === 'ready';
-  const browserAccountGatePending = !authReady || !browserAccountGateReady;
+  const nativeHandoffPending =
+    isNativeHandoff &&
+    (nativeHandoffState === 'waiting' || nativeHandoffState === 'consuming');
+  const browserAccountGatePending =
+    !authReady || !browserAccountGateReady || nativeHandoffPending;
   // Athlete is the only non-staff role; everything else (coach, team-admin,
   // performance/support staff, clinician) uses the staff wizard.
   const isStaffInvite = invite.teamMembershipRole !== 'athlete';
@@ -336,8 +355,14 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
   useEffect(() => {
     if (!router.isReady || !authReady) return;
+    if (browserAccountGateStartedRef.current) return;
+    browserAccountGateStartedRef.current = true;
 
     let isCancelled = false;
+    const cleanup = () => {
+      isCancelled = true;
+      browserAccountGateStartedRef.current = false;
+    };
     const finish = () => {
       if (!isCancelled) {
         setBrowserAccountGateState('ready');
@@ -346,27 +371,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
     if (!shouldClearExistingBrowserAccount) {
       finish();
-      return () => {
-        isCancelled = true;
-      };
+      return cleanup;
     }
 
-    const storageKey = `pulsecheck-athlete-invite-fresh-account:${invite.token}`;
-    let alreadyChecked = false;
-    try {
-      alreadyChecked = window.sessionStorage.getItem(storageKey) === '1';
-      if (!alreadyChecked) {
-        window.sessionStorage.setItem(storageKey, '1');
-      }
-    } catch {
-      alreadyChecked = false;
-    }
-
-    if (alreadyChecked || !auth.currentUser) {
+    if (!auth.currentUser) {
       finish();
-      return () => {
-        isCancelled = true;
-      };
+      return cleanup;
     }
 
     setBrowserAccountGateState('clearing');
@@ -375,14 +385,20 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         if (isCancelled) return;
         setAuthUser(null);
         setVerificationEmailSent(false);
-        setMessage({
-          type: 'success',
-          text: 'For privacy, we signed this browser out first. Sign in with the account you want attached to this team.',
-        });
+        if (!isNativeHandoff) {
+          setMessage({
+            type: 'success',
+            text: 'For privacy, we signed this browser out first. Sign in with the account you want attached to this team.',
+          });
+        }
       })
       .catch((error) => {
         console.error('[pulsecheck-team-invite] Failed to clear existing browser account:', error);
         if (isCancelled) return;
+        if (isNativeHandoff) {
+          nativeHandoffBlockedRef.current = true;
+          setNativeHandoffState('error');
+        }
         setMessage({
           type: 'error',
           text: 'We could not sign out the existing browser account automatically. Sign out manually before continuing.',
@@ -392,10 +408,117 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         finish();
       });
 
+    return cleanup;
+  }, [
+    authReady,
+    invite.token,
+    isNativeHandoff,
+    router.isReady,
+    shouldClearExistingBrowserAccount,
+  ]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (!nativeHandoffCode) {
+      if (!nativeHandoffPromiseRef.current) {
+        setNativeHandoffState('none');
+      }
+      return;
+    }
+    if (
+      !authReady ||
+      !browserAccountGateReady ||
+      nativeHandoffBlockedRef.current
+    ) {
+      return;
+    }
+
+    if (!nativeHandoffPromiseRef.current) {
+      setNativeHandoffState('consuming');
+
+      // Remove the one-time code from browser history immediately. The local
+      // variable remains available for this single exchange only.
+      try {
+        const sanitizedUrl = new URL(window.location.href);
+        sanitizedUrl.searchParams.delete(NATIVE_HANDOFF_QUERY_PARAM);
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `${sanitizedUrl.pathname}${sanitizedUrl.search}${sanitizedUrl.hash}`
+        );
+      } catch {
+        // The server still enforces one-time use and the five-minute expiry.
+      }
+
+      nativeHandoffPromiseRef.current = (async () => {
+        const response = await fetch(
+          '/api/pulsecheck/team-invite/native-handoff/consume',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getFirebaseModeRequestHeaders(),
+            },
+            body: JSON.stringify({
+              inviteToken: invite.token,
+              handoffCode: nativeHandoffCode,
+              forceDevFirebase: router.query.devFirebase === '1',
+            }),
+          }
+        );
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.customToken) {
+          throw new Error(payload?.error || 'Secure app sign-in could not be completed.');
+        }
+
+        const credential = await signInWithCustomToken(auth, payload.customToken);
+        return credential.user;
+      })();
+    }
+
+    // React StrictMode mounts, cleans up, and mounts effects again in
+    // development. Each mount observes the same one-time exchange promise, so
+    // the simulated cleanup cannot consume the code and strand the UI.
+    let isActiveObserver = true;
+    nativeHandoffPromiseRef.current
+      .then((user) => {
+        if (!isActiveObserver) return;
+        setAuthUser(user);
+        setAthleteCompletionMode('existing-account');
+        setNativeHandoffState('ready');
+        setMessage({
+          type: 'success',
+          text: requiresAthleteCheckout
+            ? `You're securely signed in. Review the ${athleteMonthlyPrice} monthly subscription, then continue to Stripe.`
+            : `You're securely signed in as ${user.email || 'your athlete account'}.`,
+        });
+      })
+      .catch((error) => {
+        console.error('[pulsecheck-team-invite] Native app handoff failed:', error);
+        if (!isActiveObserver) return;
+        setNativeHandoffState('error');
+        setMessage({
+          type: 'error',
+          text:
+            error instanceof Error
+              ? error.message
+              : 'Secure app sign-in could not be completed. Sign in again to continue.',
+        });
+      });
+
     return () => {
-      isCancelled = true;
+      isActiveObserver = false;
     };
-  }, [authReady, invite.token, router.isReady, shouldClearExistingBrowserAccount]);
+  }, [
+    athleteMonthlyPrice,
+    authReady,
+    browserAccountGateReady,
+    invite.token,
+    nativeHandoffCode,
+    requiresAthleteCheckout,
+    router.isReady,
+    router.query.devFirebase,
+  ]);
 
   const updateWebOnboardingPreference = (nextValue: boolean) => {
     setShowWebOnboarding(nextValue);
@@ -636,7 +759,16 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       });
       const payload = await response.json().catch(() => null);
       if (payload?.alreadyActive === true) {
-        await completeRedeem(completionMode);
+        const completionUrl = new URL(
+          '/PulseCheck/athlete-subscription-complete',
+          window.location.origin
+        );
+        completionUrl.searchParams.set('invite', invite.token);
+        completionUrl.searchParams.set('access', 'already-active');
+        if (router.query.devFirebase === '1') {
+          completionUrl.searchParams.set('devFirebase', '1');
+        }
+        window.location.assign(completionUrl.toString());
         return;
       }
       if (!response.ok) {
@@ -1647,7 +1779,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               <div className="flex min-h-[420px] items-center justify-center">
                 <div className="flex flex-col items-center gap-3 text-center">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
-                  {browserAccountGateState === 'clearing' ? (
+                  {nativeHandoffState === 'consuming' ? (
+                    <p className="text-sm text-zinc-400">Securely signing you in...</p>
+                  ) : browserAccountGateState === 'clearing' ? (
                     <p className="text-sm text-zinc-400">Signing out this browser first...</p>
                   ) : null}
                 </div>
