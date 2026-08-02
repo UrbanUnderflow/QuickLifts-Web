@@ -26,7 +26,13 @@ import {
   athleteProgressToFirestore,
   sanitizeFirestoreValue,
 } from './types';
-import { bootstrapTaxonomyProfile, deriveTaxonomyProfile, prescribeNextSession } from './taxonomyProfileService';
+import type { MentalSkillsBaselineRecord } from './mentalSkillsBaseline';
+import {
+  bootstrapMentalSkillsBaselineProfile,
+  bootstrapTaxonomyProfile,
+  deriveTaxonomyProfile,
+  prescribeNextSession,
+} from './taxonomyProfileService';
 import type { SimSessionRecord } from './taxonomy';
 import { TaxonomyModifier } from './taxonomy';
 import { profileSnapshotService } from './profileSnapshotService';
@@ -235,6 +241,48 @@ export const athleteProgressService = {
     return updatedProgress;
   },
 
+  async saveMentalSkillsBaseline(
+    athleteId: string,
+    baseline: MentalSkillsBaselineRecord,
+  ): Promise<AthleteMentalProgress> {
+    let progress = await this.get(athleteId);
+    if (!progress) progress = await this.initialize(athleteId);
+
+    const taxonomyProfile = bootstrapMentalSkillsBaselineProfile(baseline);
+    const updatedProgress: AthleteMentalProgress = {
+      ...progress,
+      mentalSkillsBaseline: baseline,
+      assessmentNeeded: false,
+      currentPathway: MentalPathway.Foundation,
+      pathwayStep: 0,
+      taxonomyProfile,
+      activeProgram: prescribeNextSession({ profile: taxonomyProfile }),
+      lastProfileSyncAt: baseline.completedAt,
+      profileVersion: PROFILE_VERSION,
+      updatedAt: baseline.completedAt,
+    };
+
+    await setDoc(doc(db, COLLECTION, athleteId), athleteProgressToFirestore(updatedProgress));
+    await profileSnapshotService.writeCanonicalSnapshot(
+      profileSnapshotRuntime.buildProfileSnapshotWriteInput({
+        athleteId,
+        progress: updatedProgress,
+        milestoneType: 'baseline',
+        capturedAt: baseline.completedAt,
+        sourceEventId: `mental_skills_starting_point:${athleteId}:${baseline.completedAt}`,
+      }),
+    );
+    await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
+      athleteId,
+      profile: taxonomyProfile,
+      hasBaselineAssessment: true,
+      activeProgram: updatedProgress.activeProgram,
+      sourceDate: resolveLocalSourceDate(baseline.completedAt),
+      timezone: resolveLocalTimezone(),
+    });
+    return updatedProgress;
+  },
+
   async syncOnboardingSnapshot(athleteId: string): Promise<AthleteMentalProgress> {
     let progress = await this.get(athleteId);
     if (!progress) {
@@ -391,6 +439,7 @@ export const athleteProgressService = {
 
     const taxonomyProfile = deriveTaxonomyProfile({
       baselineAssessment: progress.baselineAssessment,
+      mentalSkillsBaseline: progress.mentalSkillsBaseline,
       checkIns,
       simSessions,
     });
@@ -414,7 +463,11 @@ export const athleteProgressService = {
     await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
       athleteId,
       profile: nextProgress.taxonomyProfile,
-      hasBaselineAssessment: Boolean(nextProgress.baselineAssessment),
+      hasBaselineAssessment: Boolean(
+        nextProgress.mentalSkillsBaseline
+        || nextProgress.baselineAssessment
+        || nextProgress.baselineProbe
+      ),
       activeProgram: nextProgress.activeProgram,
       sourceDate: resolveLocalSourceDate(now),
       timezone: resolveLocalTimezone(),

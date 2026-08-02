@@ -309,7 +309,11 @@ export const completionService = {
       await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
         athleteId: userId,
         profile: refreshedProgress?.taxonomyProfile,
-        hasBaselineAssessment: Boolean(refreshedProgress?.baselineAssessment),
+        hasBaselineAssessment: Boolean(
+          refreshedProgress?.mentalSkillsBaseline
+          || refreshedProgress?.baselineAssessment
+          || refreshedProgress?.baselineProbe
+        ),
         activeProgram: refreshedProgress?.activeProgram,
         sourceDate: resolveLocalSourceDate(now),
         timezone: resolveLocalTimezone(),

@@ -66,13 +66,13 @@ const PHASES: Phase[] = [
     {
         id: 'baseline',
         number: '2',
-        label: 'Starting Baseline',
+        label: 'Mental Skills Starting Point',
         icon: BarChart3,
         accent: '#34d399',
-        status: 'partial',
-        description: 'A short baseline session that samples the major pillars without overwhelming detail.',
+        status: 'live',
+        description: 'An interactive game that shows what the athlete already knows and which mental skills to practice first.',
         detail:
-            'This is mostly live now, and the framing should stay calm and low-stakes. The remaining gap is that all athletes still route into the same core baseline path; research-aware enrollment truth exists, but research-specific baseline branching is still not implemented.',
+            'The athlete moves through sport-specific situations covering eight mental-skill families. Current mood and readiness are saved as context, while competency comes only from familiarity and demonstrated skill choices. The server recalculates every score before saving the first three-skill prescription.',
     },
     {
         id: 'program',
@@ -81,7 +81,7 @@ const PHASES: Phase[] = [
         icon: Layers,
         accent: '#f59e0b',
         status: 'partial',
-        description: 'Immediately after baseline, Nora returns a first Program and assigns a single next session.',
+        description: 'Immediately after the Starting Point, Nora returns a first Program and assigns a single next skill.',
         detail:
             'The underlying data model already supports active programs and recommendation logic, and the workspace can preview what comes next. The missing piece is a true athlete-facing first-session handoff that feels prescribed, obvious, and launchable.',
     },
@@ -102,10 +102,10 @@ const PHASES: Phase[] = [
         label: 'Contextualization',
         icon: Globe,
         accent: '#c084fc',
-        status: 'target',
-        description: 'Nora begins to localize the same mechanisms through pressure-type and sport-specific variants.',
+        status: 'live',
+        description: 'Sports Intelligence presents the same mental mechanism through language and situations that match the athlete\'s sport.',
         detail:
-            'This remains a good north star. It should stay in the spec, but the product does not yet expose a visible athlete progression from generic mechanism work into pressure-type and sport-context variants.',
+            'Sport archetype packs now drive event language, settings, controllable cues, rehearsal steps, and the personalized-for-sport badge. The mechanism and scoring contract remain stable across sports.',
     },
     {
         id: 'transfer',
@@ -143,9 +143,9 @@ const CORE_PRINCIPLES = [
     },
     {
         icon: BookOpen,
-        label: 'Teach before localizing',
+        label: 'Measure the skill inside familiar language',
         description:
-            'Start with universal, sport-agnostic experiences so Nora can establish a clean baseline before introducing sport-specific wrappers.',
+            'Use a sport-correct situation without changing the mental mechanism or scoring rule being measured.',
     },
     {
         icon: Layers,
@@ -178,7 +178,7 @@ const IMPL_RULES = [
 ];
 
 const VARIANT_ORDER = [
-    { step: 1, label: 'Generic / Mechanism-Pure', description: 'First sessions are universal and establish clean baseline signal.', accent: '#60a5fa' },
+    { step: 1, label: 'Mechanism Core', description: 'Define the exact mental skill and evidence being trained.', accent: '#60a5fa' },
     { step: 2, label: 'Pressure-Type Variants', description: 'Applied once Nora has a basic profile read — same mechanism, different pressure context.', accent: '#a78bfa' },
     { step: 3, label: 'Sport-Context Variants', description: 'Make the mechanism feel closer to competition without changing the family mechanism.', accent: '#34d399' },
     { step: 4, label: 'Immersive / Field-Transfer', description: 'Trial-level fidelity using real-world or high-context scenarios to prove skill transfer.', accent: '#facc15' },
@@ -199,17 +199,17 @@ const CONSENT_BRANCHES = [
 
 const DAY_ONE_RULES = [
     'Show one next step, not a menu of possible sims or system objects.',
-    'Confirm why the athlete is here: team context, pilot context, and baseline expectation.',
-    'Branch automatically into the right baseline path based on enrollment truth rather than making the athlete choose.',
+    'Confirm why the athlete is here: team context, pilot context, and Mental Skills Starting Point expectation.',
+    'Load the correct sport content pack automatically rather than making the athlete choose internal assessment paths.',
     'Keep research / product branching invisible to the athlete unless consent or study posture requires explanation.',
 ];
 
 const CURRENT_V1_FLOW = [
     'Athlete redeems a team invite or pilot-linked team invite.',
     'Athlete completes onboarding: name, product consent, and research choice when required.',
-    'System checks required consent document versions and marks the athlete baseline-ready only after current versions are accepted.',
-    'Athlete completes the in-app baseline to unlock training; either web baselineAssessment or native baselineProbe can satisfy completion truth.',
-    'After baseline, the athlete can move between Today, Nora, Profile, and the team workspace. Today/Nora can now read the shared daily assignment, NoraInboxView can show reactive conversations, and DailyCurriculumReader can display curriculum-engine assignments that already exist.',
+    'System checks required consent document versions and marks the athlete ready for the Mental Skills Starting Point only after current versions are accepted.',
+    'Athlete completes the Mental Skills Starting Point to unlock training. Current clients store mentalSkillsBaseline; older baselineAssessment and baselineProbe records remain valid only for existing-athlete compatibility.',
+    'After the Starting Point, the athlete can move between Today, Conversations, Program, Profile, and the team workspace. Athlete surfaces can read the shared daily assignment, conversations can show reactive support, and the curriculum reader can display assignments that already exist.',
     'The remaining gap is not surface wiring alone; it is making scheduled curriculum generation and all coach/athlete follow-up paths feel fully automatic.',
 ];
 
@@ -220,7 +220,7 @@ const BUILD_CHECKLIST: JourneyChecklistItem[] = [
         priority: 'Now',
     },
     {
-        title: 'Deliver one clear assigned session after baseline',
+        title: 'Deliver one clear assigned skill after the Starting Point',
         detail: 'Turn active program and pending assignment data into a real athlete-facing launch surface instead of summary copy only.',
         priority: 'Now',
     },
@@ -231,12 +231,12 @@ const BUILD_CHECKLIST: JourneyChecklistItem[] = [
     },
     {
         title: 'Keep the athlete journey green in automated regression',
-        detail: 'The daily loop now needs Playwright coverage as part of the standard PulseCheck suite: post-baseline fixture seeding, Today check-in, Nora task visibility, mental-training handoff, session-summary rendering, and coach follow-up surfaces.',
+        detail: 'The daily loop now needs Playwright coverage as part of the standard PulseCheck suite: post-Starting-Point fixture seeding, Today check-in, Nora task visibility, mental-training handoff, session-summary rendering, and coach follow-up surfaces.',
         priority: 'Now',
     },
     {
-        title: 'Branch baseline by enrollment truth',
-        detail: 'Use product-only vs pilot vs research enrollment to route into the correct baseline path instead of one global baseline id.',
+        title: 'Preserve enrollment truth around one skill model',
+        detail: 'Keep product, pilot, and research provenance attached without changing the eight-family scoring model or asking the athlete to choose an internal assessment path.',
         priority: 'Next',
     },
     {
@@ -516,9 +516,9 @@ const AthleteJourneyTab: React.FC = () => {
                 </div>
             </div>
 
-            {/* ── CONSENT + BASELINE BRANCHING ── */}
+            {/* ── CONSENT + STARTING POINT ROUTING ── */}
             <div>
-                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Consent and Baseline Branching</h3>
+                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Consent and Starting Point Routing</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4 space-y-3">
                         <div className="flex items-center gap-2">
@@ -535,19 +535,19 @@ const AthleteJourneyTab: React.FC = () => {
                     <div className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4 space-y-3">
                         <div className="flex items-center gap-2">
                             <BarChart3 className="w-4 h-4 text-sky-400" />
-                            <p className="text-sm font-semibold text-white">Baseline Branching Rule</p>
+                            <p className="text-sm font-semibold text-white">Starting Point Routing Rule</p>
                         </div>
                         <p className="text-xs text-zinc-400 leading-relaxed">
-                            The first Trial an athlete takes is their baseline. Once onboarding is complete, the system should route them directly into the correct baseline path based on enrollment truth.
+                            After onboarding, the athlete enters one Mental Skills Starting Point. The sport content pack changes the situation language, while the eight skill families and scoring rules stay the same.
                         </p>
                         <div className="space-y-2">
                             <div className="rounded-lg border border-zinc-800 bg-black/20 p-3">
                                 <p className="text-xs font-semibold text-white">Product-only athlete</p>
-                                <p className="mt-1 text-xs text-zinc-500">Enter the standard baseline path and continue into the normal Program rhythm.</p>
+                                <p className="mt-1 text-xs text-zinc-500">Complete the Starting Point and continue into the normal Program rhythm.</p>
                             </div>
                             <div className="rounded-lg border border-zinc-800 bg-black/20 p-3">
                                 <p className="text-xs font-semibold text-white">Research-enrolled athlete</p>
-                                <p className="mt-1 text-xs text-zinc-500">Enter the research-aligned baseline path while preserving clean dataset eligibility rules.</p>
+                                <p className="mt-1 text-xs text-zinc-500">Complete the same skill model while the system preserves research consent, cohort, and dataset provenance.</p>
                             </div>
                         </div>
                     </div>
@@ -710,7 +710,7 @@ const AthleteJourneyTab: React.FC = () => {
             <div className="bg-gradient-to-br from-purple-500/10 to-sky-500/5 border border-purple-500/20 rounded-2xl p-6">
                 <h3 className="text-sm font-semibold text-white mb-2">Summary</h3>
                 <p className="text-sm text-zinc-300 leading-relaxed">
-                    The current athlete journey is now clearer: invite or enrollment entry, athlete onboarding, baseline unlock, baseline completion, and then movement between Today, Nora, Profile, and the team workspace.
+                    The current athlete journey is now clearer: invite or enrollment entry, athlete onboarding, Mental Skills Starting Point unlock and completion, then movement between Today, Conversations, Program, Profile, and the team workspace.
                     The longer-range journey still matters, but it should be treated as the target system we are building toward rather than the system we have already shipped.
                 </p>
             </div>

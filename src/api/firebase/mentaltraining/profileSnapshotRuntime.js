@@ -282,6 +282,56 @@ function bootstrapTaxonomyProfile(assessment) {
   return profile;
 }
 
+function bootstrapMentalSkillsBaselineProfile(baseline) {
+  if (!baseline?.familyScores) {
+    return bootstrapTaxonomyProfile();
+  }
+
+  const familyScore = (key) => clampScore(baseline.familyScores?.[key]?.score ?? 50);
+  const attention = familyScore('attention_cues');
+  const visualization = familyScore('visualization');
+  const breath = familyScore('breathing_body_awareness');
+  const emotion = familyScore('emotional_regulation');
+  const coherence = familyScore('coherence');
+  const selfTalk = familyScore('self_talk_reframing');
+  const reflection = familyScore('reflection_learning');
+  const belief = familyScore('belief_identity');
+
+  const skillScores = {
+    sustained_attention: attention,
+    selective_attention: attention,
+    attentional_shifting: average([attention, selfTalk]),
+    error_recovery_speed: average([reflection, emotion]),
+    emotional_interference_control: average([emotion, coherence]),
+    pressure_stability: average([breath, belief]),
+    response_inhibition: average([selfTalk, attention]),
+    working_memory_updating: average([visualization, reflection]),
+    cue_discrimination: attention,
+  };
+  const modifierScores = createEmptyModifierScores();
+  const pillarScores = computePillarScores(skillScores);
+  const profile = {
+    overallScore: clampScore(
+      baseline.overallCompetencyScore
+      ?? average([attention, visualization, breath, emotion, coherence, selfTalk, reflection, belief])
+    ),
+    pillarScores,
+    skillScores,
+    modifierScores,
+    pressureSensitivity: {
+      evaluative_threat: clampScore(100 - belief),
+      uncertainty: clampScore(100 - coherence),
+      visual_distraction: clampScore(100 - attention),
+    },
+    strongestSkills: rankSkills(skillScores, 'desc').slice(0, 3),
+    weakestSkills: rankSkills(skillScores, 'asc').slice(0, 3),
+    trendSummary: [],
+    updatedAt: Number(baseline.completedAt || Date.now()),
+  };
+  profile.trendSummary = createTrendSummary(profile);
+  return profile;
+}
+
 function buildTaxonomyCheckInState(input) {
   const readiness = clampScore(input.readinessScore * 20);
   const energy = typeof input.energyLevel === 'number' ? clampScore(input.energyLevel * 20) : readiness;
@@ -325,8 +375,10 @@ function buildTaxonomyCheckInState(input) {
   };
 }
 
-function deriveTaxonomyProfile({ baselineAssessment, checkIns = [], simSessions = [] }) {
-  const profile = bootstrapTaxonomyProfile(baselineAssessment);
+function deriveTaxonomyProfile({ baselineAssessment, mentalSkillsBaseline, checkIns = [], simSessions = [] }) {
+  const profile = mentalSkillsBaseline
+    ? bootstrapMentalSkillsBaselineProfile(mentalSkillsBaseline)
+    : bootstrapTaxonomyProfile(baselineAssessment);
 
   for (const session of simSessions) {
     const contribution = clampScore((Number(session.normalizedScore ?? 0) - 50) * 0.2, -20, 20);
@@ -653,7 +705,10 @@ function buildProfileSnapshotWriteInput({
   profileVersion = progress?.profileVersion || PROFILE_VERSION,
   writerVersion = SNAPSHOT_WRITER_VERSION,
 }) {
-  const profile = progress?.taxonomyProfile || bootstrapTaxonomyProfile(progress?.baselineAssessment);
+  const profile = progress?.taxonomyProfile
+    || (progress?.mentalSkillsBaseline
+      ? bootstrapMentalSkillsBaselineProfile(progress.mentalSkillsBaseline)
+      : bootstrapTaxonomyProfile(progress?.baselineAssessment));
   const currentEmphasis = resolveCurrentEmphasis(profile);
   const pressurePattern = resolvePressurePattern(progress, profile);
   const nextMilestone = resolveNextMilestone(progress);
@@ -715,6 +770,7 @@ module.exports = {
   SNAPSHOT_WRITER_VERSION,
   buildTaxonomyCheckInState,
   bootstrapTaxonomyProfile,
+  bootstrapMentalSkillsBaselineProfile,
   deriveTaxonomyProfile,
   prescribeNextSession,
   calculateTransferGap,

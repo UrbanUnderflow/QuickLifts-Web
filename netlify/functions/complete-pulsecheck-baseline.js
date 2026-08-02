@@ -9,6 +9,7 @@ const {
   recordPilotMetricAlert,
   recomputePilotMetricRollups,
   upsertPilotMentalPerformanceSnapshot,
+  deriveMentalSkillsBaselineProfile,
   deriveBaselineProbeProfile,
 } = require('./utils/pulsecheck-pilot-metrics');
 
@@ -50,6 +51,178 @@ function timestampFromMillis(value) {
   return admin.firestore.Timestamp.fromMillis(Number(value || Date.now()));
 }
 
+const MENTAL_SKILL_FAMILIES = [
+  'breathing_body_awareness',
+  'visualization',
+  'attention_cues',
+  'self_talk_reframing',
+  'emotional_regulation',
+  'reflection_learning',
+  'belief_identity',
+  'coherence',
+];
+
+const MENTAL_SKILL_FAMILIARITY = new Set(['new_to_me', 'know_it', 'practiced_it']);
+const MENTAL_SKILL_COMPONENT_WEIGHTS = {
+  recognize: 25,
+  understand: 20,
+  choose: 20,
+  rehearse: 15,
+};
+const MENTAL_SKILL_FAMILIARITY_SCORES = {
+  new_to_me: 20,
+  know_it: 55,
+  practiced_it: 85,
+};
+const MENTAL_SKILL_ARCHETYPES = new Set([
+  'invasion',
+  'net_racket',
+  'race',
+  'judged',
+  'stage',
+  'precision',
+  'combat',
+  'attempt',
+  'general',
+]);
+
+function clamp(value, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, Number(value || 0)));
+}
+
+function stageForScore(score) {
+  if (score < 35) return 'discovering';
+  if (score < 55) return 'recognizing';
+  if (score < 75) return 'choosing';
+  return 'rehearsing';
+}
+
+function normalizeMentalSkillsBaseline(value) {
+  if (!value || typeof value !== 'object') return null;
+
+  const familiarity = Object.fromEntries(
+    MENTAL_SKILL_FAMILIES.map((family) => {
+      const selection = normalizeString(value.familiarity?.[family]);
+      return [family, MENTAL_SKILL_FAMILIARITY.has(selection) ? selection : 'new_to_me'];
+    })
+  );
+  const evidence = (Array.isArray(value.evidence) ? value.evidence : []).map((entry) => ({
+    challengeId: normalizeString(entry?.challengeId),
+    family: normalizeString(entry?.family),
+    component: normalizeString(entry?.component),
+    score: clamp(normalizeNumber(entry?.score, 0)),
+    selectedOptionId: normalizeString(entry?.selectedOptionId) || null,
+  })).filter((entry) => (
+    entry.challengeId
+    && MENTAL_SKILL_FAMILIES.includes(entry.family)
+    && Object.hasOwn(MENTAL_SKILL_COMPONENT_WEIGHTS, entry.component)
+  ));
+  const missingEvidenceFamilies = MENTAL_SKILL_FAMILIES.filter(
+    (family) => !evidence.some((entry) => entry.family === family)
+  );
+  if (missingEvidenceFamilies.length) {
+    throw createError(
+      400,
+      `mentalSkillsBaseline is missing challenge evidence for: ${missingEvidenceFamilies.join(', ')}.`
+    );
+  }
+  const familyScores = {};
+  for (const family of MENTAL_SKILL_FAMILIES) {
+    const componentValues = {};
+    for (const component of Object.keys(MENTAL_SKILL_COMPONENT_WEIGHTS)) {
+      const values = evidence
+        .filter((entry) => entry.family === family && entry.component === component)
+        .map((entry) => entry.score);
+      if (values.length) {
+        componentValues[component] = values.reduce((total, score) => total + score, 0) / values.length;
+      }
+    }
+
+    const familiarityValue = MENTAL_SKILL_FAMILIARITY_SCORES[familiarity[family]];
+    let evidenceTotal = 0;
+    let evidenceWeight = 0;
+    for (const [component, weight] of Object.entries(MENTAL_SKILL_COMPONENT_WEIGHTS)) {
+      if (typeof componentValues[component] === 'number') {
+        evidenceTotal += componentValues[component] * weight;
+        evidenceWeight += weight;
+      }
+    }
+    const demonstrated = evidenceWeight > 0 ? evidenceTotal / evidenceWeight : familiarityValue;
+    const score = Math.round(clamp((familiarityValue * 0.2) + (demonstrated * 0.8)));
+    familyScores[family] = {
+      familiarity: familiarityValue,
+      recognize: componentValues.recognize ?? null,
+      understand: componentValues.understand ?? null,
+      choose: componentValues.choose ?? null,
+      rehearse: componentValues.rehearse ?? null,
+      score,
+      stage: stageForScore(score),
+    };
+  }
+
+  const averageScore = MENTAL_SKILL_FAMILIES.reduce(
+    (total, family) => total + familyScores[family].score,
+    0
+  ) / MENTAL_SKILL_FAMILIES.length;
+  const mood = normalizeString(value.currentState?.mood);
+  const validMoods = new Set(['drained', 'off', 'okay', 'solid', 'locked_in']);
+  const normalizeStateRating = (rating) => Math.round(clamp(normalizeNumber(rating, 3), 1, 5));
+  const sportArchetype = normalizeString(value.sportArchetype);
+  const lowest = (families) => [...families].sort(
+    (left, right) => familyScores[left].score - familyScores[right].score
+  )[0];
+  const disciplineFocus = {
+    championMindset: lowest(['belief_identity', 'self_talk_reframing', 'reflection_learning']),
+    mentalPerformance: lowest(['visualization', 'attention_cues']),
+    emotionalRegulation: lowest(['breathing_body_awareness', 'emotional_regulation', 'coherence']),
+  };
+  const startingFocus = [...new Set(Object.values(disciplineFocus))];
+  const strengths = [...MENTAL_SKILL_FAMILIES]
+    .sort((left, right) => familyScores[right].score - familyScores[left].score)
+    .slice(0, 3);
+
+  return {
+    version: Math.max(3, Math.round(normalizeNumber(value.version, 3))),
+    completedAt: normalizeNumber(value.completedAt, Date.now()),
+    source: normalizeString(value.source) || 'mental-skills-starting-point',
+    sportName: normalizeString(value.sportName) || null,
+    sportArchetype: MENTAL_SKILL_ARCHETYPES.has(sportArchetype) ? sportArchetype : 'general',
+    currentState: {
+      mood: validMoods.has(mood) ? mood : 'okay',
+      rest: normalizeStateRating(value.currentState?.rest),
+      energy: normalizeStateRating(value.currentState?.energy),
+      confidence: normalizeStateRating(value.currentState?.confidence),
+      motivation: normalizeStateRating(value.currentState?.motivation),
+      sportConnection: normalizeStateRating(value.currentState?.sportConnection),
+      selfBelief: normalizeStateRating(value.currentState?.selfBelief),
+      improvementBelief: normalizeStateRating(value.currentState?.improvementBelief),
+    },
+    familiarity,
+    familyScores,
+    overallCompetencyScore: Math.round(clamp(averageScore)),
+    beliefScore: familyScores.belief_identity.score,
+    coherenceKnowledgeScore: familyScores.coherence.score,
+    strengths,
+    startingFocus,
+    disciplineFocus,
+    evidence,
+  };
+}
+
+function normalizeLegacyBaselineProbe(value) {
+  if (!value || typeof value !== 'object') return null;
+  return {
+    completedAt: normalizeNumber(value.completedAt, Date.now()),
+    composureRecoveryMs: normalizeNumber(value.composureRecoveryMs, 4500),
+    composureConsistency: normalizeNumber(value.composureConsistency, 0.5),
+    focusAccuracy: normalizeNumber(value.focusAccuracy, 0.5),
+    focusDistractorCost: normalizeNumber(value.focusDistractorCost, 0),
+    decisionAccuracy: normalizeNumber(value.decisionAccuracy, 0.5),
+    decisionFalseStarts: Math.max(0, normalizeNumber(value.decisionFalseStarts, 0)),
+    sessionType: normalizeString(value.sessionType) || 'probe',
+  };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
@@ -77,18 +250,23 @@ exports.handler = async (event) => {
       throw createError(403, 'Authenticated user does not match requested user.');
     }
 
-    const baselineProbe = body.baselineProbe && typeof body.baselineProbe === 'object' ? body.baselineProbe : null;
-    if (!baselineProbe) {
-      throw createError(400, 'baselineProbe is required.');
+    const mentalSkillsBaseline = normalizeMentalSkillsBaseline(body.mentalSkillsBaseline);
+    const baselineProbe = normalizeLegacyBaselineProbe(body.baselineProbe);
+    if (!mentalSkillsBaseline && !baselineProbe) {
+      throw createError(400, 'mentalSkillsBaseline is required.');
     }
 
-    const completedAt = normalizeNumber(baselineProbe.completedAt, Date.now());
-    const mprScore = normalizeNumber(body.mprScore, 1);
+    const completedAt = normalizeNumber(
+      mentalSkillsBaseline?.completedAt || baselineProbe?.completedAt,
+      Date.now()
+    );
     const recommendedPathway = normalizeString(body.recommendedPathway) || 'foundation';
     const currentPathway = normalizeString(body.currentPathway) || recommendedPathway;
     const pathwayStep = normalizeNumber(body.pathwayStep, 0);
     const assessmentNeeded = typeof body.assessmentNeeded === 'boolean' ? body.assessmentNeeded : false;
-    const source = normalizeString(body.source) || 'native-probe';
+    const source = normalizeString(body.source)
+      || mentalSkillsBaseline?.source
+      || 'mental-skills-starting-point';
     const trustDispositionBaseline = normalizeTrustDispositionBaseline(body.trustDispositionBaseline);
 
     const progressRef = db.collection(ATHLETE_PROGRESS_COLLECTION).doc(userId);
@@ -97,22 +275,25 @@ exports.handler = async (event) => {
       ? (progressSnap.data() || {})
       : profileSnapshotRuntime.buildInitialAthleteProgress(userId, completedAt);
 
+    const mprScore = mentalSkillsBaseline
+      ? normalizeNumber(existingProgress.mprScore, 1)
+      : normalizeNumber(body.mprScore, 1);
+    const baselineFields = mentalSkillsBaseline
+      ? { mentalSkillsBaseline }
+      : { baselineProbe };
+    const taxonomyProfile = mentalSkillsBaseline
+      ? deriveMentalSkillsBaselineProfile({ ...existingProgress, mentalSkillsBaseline })
+      : deriveBaselineProbeProfile({ ...existingProgress, baselineProbe });
+
     const nextProgress = {
       ...existingProgress,
       athleteId: userId,
       assessmentNeeded,
-      baselineProbe: {
-        completedAt,
-        composureRecoveryMs: normalizeNumber(baselineProbe.composureRecoveryMs, 4500),
-        composureConsistency: normalizeNumber(baselineProbe.composureConsistency, 0.5),
-        focusAccuracy: normalizeNumber(baselineProbe.focusAccuracy, 0.5),
-        focusDistractorCost: normalizeNumber(baselineProbe.focusDistractorCost, 0),
-        decisionAccuracy: normalizeNumber(baselineProbe.decisionAccuracy, 0.5),
-        decisionFalseStarts: Math.max(0, normalizeNumber(baselineProbe.decisionFalseStarts, 0)),
-        sessionType: normalizeString(baselineProbe.sessionType) || 'probe',
-      },
+      ...baselineFields,
       mprScore,
-      mprLastCalculated: completedAt,
+      mprLastCalculated: mentalSkillsBaseline
+        ? normalizeNumber(existingProgress.mprLastCalculated, completedAt)
+        : completedAt,
       recommendedPathway,
       currentPathway,
       pathwayStep,
@@ -121,19 +302,7 @@ exports.handler = async (event) => {
       totalAssignmentsCompleted: Number(existingProgress.totalAssignmentsCompleted || 0),
       currentStreak: Number(existingProgress.currentStreak || 0),
       longestStreak: Number(existingProgress.longestStreak || 0),
-      taxonomyProfile: deriveBaselineProbeProfile({
-        ...existingProgress,
-        baselineProbe: {
-          completedAt,
-          composureRecoveryMs: normalizeNumber(baselineProbe.composureRecoveryMs, 4500),
-          composureConsistency: normalizeNumber(baselineProbe.composureConsistency, 0.5),
-          focusAccuracy: normalizeNumber(baselineProbe.focusAccuracy, 0.5),
-          focusDistractorCost: normalizeNumber(baselineProbe.focusDistractorCost, 0),
-          decisionAccuracy: normalizeNumber(baselineProbe.decisionAccuracy, 0.5),
-          decisionFalseStarts: Math.max(0, normalizeNumber(baselineProbe.decisionFalseStarts, 0)),
-          sessionType: normalizeString(baselineProbe.sessionType) || 'probe',
-        },
-      }),
+      taxonomyProfile,
       lastProfileSyncAt: completedAt,
       profileVersion: profileSnapshotRuntime.PROFILE_VERSION,
       trustDispositionBaseline,
@@ -270,7 +439,8 @@ exports.handler = async (event) => {
           metricPayload: {
             source,
             recommendedPathway,
-            mprScore,
+            baselineType: mentalSkillsBaseline ? 'mental_skills_starting_point' : 'legacy_probe',
+            mentalSkillsCompetencyScore: mentalSkillsBaseline?.overallCompetencyScore ?? null,
             trustDispositionBaselineScore: trustDispositionBaseline?.score ?? null,
           },
           createdAt: completedAt,

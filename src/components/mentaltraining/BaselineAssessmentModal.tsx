@@ -1,405 +1,545 @@
-/**
- * BaselineAssessmentModal
- * 
- * 5-minute mental training assessment for new athletes.
- * Determines initial MPR score and recommended pathway.
- */
-
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  X,
-  ChevronRight,
-  ChevronLeft,
+  Activity,
+  BookOpen,
   Brain,
-  AlertTriangle,
-  CheckCircle,
+  Check,
+  ChevronRight,
+  Crosshair,
+  Eye,
+  Heart,
+  MessageCircle,
+  Play,
+  RotateCcw,
+  Sparkles,
+  Wind,
+  X,
 } from 'lucide-react';
-import {
-  BaselineAssessment,
-} from '../../api/firebase/mentaltraining/types';
 import { athleteProgressService } from '../../api/firebase/mentaltraining';
+import {
+  baselineSportPack,
+  MENTAL_SKILL_FAMILIES,
+  MENTAL_SKILL_FAMILY_LABELS,
+  MENTAL_SKILL_STAGE_LABELS,
+  scoreMentalSkillsBaseline,
+  type MentalSkillEvidence,
+  type MentalSkillFamiliarity,
+  type MentalSkillFamily,
+  type MentalSkillsCurrentState,
+} from '../../api/firebase/mentaltraining/mentalSkillsBaseline';
+import { scenarioArchetypeForSport } from '../../api/firebase/mentaltraining/sportScenarioArchetypes';
 
 interface BaselineAssessmentModalProps {
   isOpen: boolean;
   onClose: () => void;
   athleteId: string;
   athleteName?: string;
+  sportName?: string;
   onComplete: (progress: any) => void;
 }
 
-interface Question {
-  id: string;
-  section: number;
-  question: string;
-  description?: string;
-  type: 'single' | 'scale' | 'multi-scale';
-  options?: { value: string; label: string; description?: string }[];
-  scales?: { id: string; label: string }[];
-}
+type Step =
+  | 'intro'
+  | 'state'
+  | 'tools'
+  | 'belief'
+  | 'reflection'
+  | 'breath'
+  | 'visualization'
+  | 'attention'
+  | 'emotion'
+  | 'coherence'
+  | 'result';
 
-const questions: Question[] = [
-  // Section 1: Current Mental Training
-  {
-    id: 'mentalTrainingExperience',
-    section: 1,
-    question: 'What is your experience with mental training?',
-    type: 'single',
-    options: [
-      { value: 'never', label: 'Never tried it', description: 'I haven\'t done any mental training' },
-      { value: 'self_tried', label: 'Self-taught', description: 'I\'ve tried apps or books on my own' },
-      { value: 'worked_with_professional', label: 'Worked with a professional', description: 'I\'ve worked with a sport psychologist or mental coach' },
-      { value: 'consistent_6_months', label: 'Consistent practice (6+ months)', description: 'I\'ve practiced regularly for at least 6 months' },
-    ],
-  },
-  {
-    id: 'currentPracticeFrequency',
-    section: 1,
-    question: 'How often do you currently practice mental skills?',
-    type: 'single',
-    options: [
-      { value: 'never', label: 'Never', description: 'I don\'t practice mental skills' },
-      { value: 'occasionally_when_stressed', label: 'Occasionally when stressed', description: 'Only when I\'m feeling anxious or struggling' },
-      { value: 'weekly', label: 'Weekly', description: 'At least once a week' },
-      { value: 'daily', label: 'Daily', description: 'Part of my daily routine' },
-    ],
-  },
-  // Section 2: Self-Assessment by Domain
-  {
-    id: 'domainRatings',
-    section: 2,
-    question: 'Rate yourself in each mental skill area',
-    description: 'Be honest - this helps us customize your training',
-    type: 'multi-scale',
-    scales: [
-      { id: 'arousalControlRating', label: 'Arousal Control (managing energy/anxiety)' },
-      { id: 'focusRating', label: 'Focus (concentration during competition)' },
-      { id: 'confidenceRating', label: 'Confidence (belief in abilities)' },
-      { id: 'visualizationRating', label: 'Visualization (mental imagery)' },
-      { id: 'resilienceRating', label: 'Resilience (bouncing back from setbacks)' },
-    ],
-  },
-  // Section 3: Pressure Response
-  {
-    id: 'pressureResponse',
-    section: 3,
-    question: 'How do you typically perform under pressure?',
-    type: 'single',
-    options: [
-      { value: 'freeze_perform_worse', label: 'I freeze or perform worse', description: 'Pressure causes me to underperform' },
-      { value: 'anxious_push_through', label: 'Anxious but push through', description: 'I feel nervous but can usually manage' },
-      { value: 'same_as_training', label: 'Same as training', description: 'My performance stays consistent' },
-      { value: 'rise_to_occasion', label: 'Rise to the occasion', description: 'I perform better under pressure' },
-    ],
-  },
-  {
-    id: 'setbackRecovery',
-    section: 3,
-    question: 'How quickly do you recover from mistakes or setbacks?',
-    type: 'single',
-    options: [
-      { value: 'dwell_for_days', label: 'Dwell for days', description: 'Mistakes stay with me for a long time' },
-      { value: 'struggle_same_day', label: 'Struggle same day', description: 'It affects the rest of my performance that day' },
-      { value: 'move_on_after_time', label: 'Move on after some time', description: 'Takes a few moments but I can refocus' },
-      { value: 'let_go_immediately', label: 'Let go immediately', description: 'I can quickly move past mistakes' },
-    ],
-  },
-  // Section 4: Goals
-  {
-    id: 'biggestChallenge',
-    section: 4,
-    question: 'What is your biggest mental challenge?',
-    description: 'This determines your specialized training pathway',
-    type: 'single',
-    options: [
-      { value: 'pre_competition_anxiety', label: 'Pre-competition anxiety', description: 'I get too nervous before competing' },
-      { value: 'focus_during_competition', label: 'Focus during competition', description: 'My mind wanders during performance' },
-      { value: 'confidence_in_abilities', label: 'Confidence in my abilities', description: 'I doubt myself or my preparation' },
-      { value: 'bouncing_back_from_setbacks', label: 'Bouncing back from setbacks', description: 'Mistakes or losses affect me too much' },
-      { value: 'performing_under_pressure', label: 'Performing under pressure', description: 'I underperform when it matters most' },
-      { value: 'other', label: 'Other', description: 'Something else not listed' },
-    ],
-  },
+const steps: Step[] = ['intro', 'state', 'tools', 'belief', 'reflection', 'breath', 'visualization', 'attention', 'emotion', 'coherence', 'result'];
+
+const familyIcons: Record<MentalSkillFamily, React.ComponentType<{ className?: string }>> = {
+  breathing_body_awareness: Wind,
+  visualization: Eye,
+  attention_cues: Crosshair,
+  self_talk_reframing: MessageCircle,
+  emotional_regulation: Heart,
+  reflection_learning: BookOpen,
+  belief_identity: Sparkles,
+  coherence: Activity,
+};
+
+const familiarityLabels: Record<MentalSkillFamiliarity, string> = {
+  new_to_me: 'New to me',
+  know_it: 'I know it',
+  practiced_it: 'I have practiced it',
+};
+
+const nextFamiliarity: Record<MentalSkillFamiliarity, MentalSkillFamiliarity> = {
+  new_to_me: 'know_it',
+  know_it: 'practiced_it',
+  practiced_it: 'new_to_me',
+};
+
+const defaultFamiliarity = MENTAL_SKILL_FAMILIES.reduce((result, family) => {
+  result[family] = 'new_to_me';
+  return result;
+}, {} as Record<MentalSkillFamily, MentalSkillFamiliarity>);
+
+const moodOptions: Array<{ id: MentalSkillsCurrentState['mood']; label: string; symbol: string }> = [
+  { id: 'drained', label: 'Drained', symbol: '▁' },
+  { id: 'off', label: 'Off', symbol: '▂' },
+  { id: 'okay', label: 'Okay', symbol: '▃' },
+  { id: 'solid', label: 'Solid', symbol: '▅' },
+  { id: 'locked_in', label: 'Locked in', symbol: '▇' },
 ];
 
-const sectionTitles: Record<number, string> = {
-  1: 'Current Experience',
-  2: 'Self-Assessment',
-  3: 'Pressure Response',
-  4: 'Your Goals',
-};
+function OptionButton(props: {
+  selected: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      className={`w-full border px-5 py-4 text-left text-base font-semibold transition ${
+        props.selected
+          ? 'border-teal-300 bg-teal-300 text-slate-950'
+          : 'border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.1]'
+      }`}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+function Meter(props: { label: string; value: number; onChange: (value: number) => void }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-sm font-semibold text-zinc-200">
+        <span>{props.label}</span>
+        <span>{props.value} / 5</span>
+      </div>
+      <div className="grid grid-cols-5 gap-2">
+        {[1, 2, 3, 4, 5].map((value) => (
+          <button
+            type="button"
+            key={value}
+            aria-label={`${props.label} ${value} of 5`}
+            onClick={() => props.onChange(value)}
+            className={`h-11 border transition ${value <= props.value ? 'border-teal-300 bg-teal-300' : 'border-white/10 bg-white/[0.06]'}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = ({
   isOpen,
   onClose,
   athleteId,
-  athleteName: _athleteName = 'Athlete',
+  athleteName = 'Athlete',
+  sportName,
   onComplete,
 }) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({
-    // Initialize scale ratings with defaults
-    arousalControlRating: 3,
-    focusRating: 3,
-    confidenceRating: 3,
-    visualizationRating: 3,
-    resilienceRating: 3,
+  const [step, setStep] = useState<Step>('intro');
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedProgress, setSavedProgress] = useState<any>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [currentState, setCurrentState] = useState<MentalSkillsCurrentState>({
+    mood: 'okay',
+    rest: 3,
+    energy: 3,
+    confidence: 3,
+    motivation: 3,
+    sportConnection: 3,
+    selfBelief: 3,
+    improvementBelief: 3,
   });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [familiarity, setFamiliarity] = useState(defaultFamiliarity);
+  const [evidence, setEvidence] = useState<MentalSkillEvidence[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [breathComplete, setBreathComplete] = useState(false);
+  const [visualizationOrder, setVisualizationOrder] = useState<number[]>([]);
+  const [coherenceOrder, setCoherenceOrder] = useState<string[]>([]);
+  const [result, setResult] = useState<ReturnType<typeof scoreMentalSkillsBaseline> | null>(null);
 
-  const currentQuestion = questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
-  const isLastQuestion = currentQuestionIndex === questions.length - 1;
+  const archetype = useMemo(() => scenarioArchetypeForSport(sportName), [sportName]);
+  const sportPack = useMemo(() => baselineSportPack(archetype), [archetype]);
+  const stepIndex = steps.indexOf(step);
+  const progress = Math.max(0, (stepIndex / (steps.length - 1)) * 100);
 
-  const canProceed = () => {
-    if (currentQuestion.type === 'multi-scale') {
-      // All scales should have values (they start with defaults)
-      return true;
-    }
-    return answers[currentQuestion.id] !== undefined;
+  const replaceEvidence = (items: MentalSkillEvidence[]) => {
+    const ids = new Set(items.map((item) => `${item.challengeId}:${item.family}:${item.component}`));
+    setEvidence((current) => [
+      ...current.filter((item) => !ids.has(`${item.challengeId}:${item.family}:${item.component}`)),
+      ...items,
+    ]);
   };
 
-  const handleAnswer = (questionId: string, value: any) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
+  const advance = (next: Step) => {
+    setSelected(null);
+    setStep(next);
   };
 
-  const handleNext = async () => {
-    if (!canProceed()) return;
-
-    if (isLastQuestion) {
-      await handleSubmit();
-    } else {
-      setCurrentQuestionIndex((prev) => prev + 1);
-    }
+  const selectScored = (id: string, items: MentalSkillEvidence[]) => {
+    setSelected(id);
+    replaceEvidence(items.map((item) => ({ ...item, selectedOptionId: id })));
   };
 
-  const handleBack = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1);
-    }
-  };
-
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    setError(null);
-
+  const finish = async () => {
+    const baseline = scoreMentalSkillsBaseline({
+      source: 'mental-skills-starting-point-web',
+      sportName,
+      sportArchetype: archetype,
+      currentState,
+      familiarity,
+      evidence,
+    });
+    setResult(baseline);
+    setStep('result');
+    setIsSaving(true);
+    setSaveError(null);
     try {
-      const assessment: Omit<BaselineAssessment, 'completedAt'> = {
-        mentalTrainingExperience: answers.mentalTrainingExperience,
-        currentPracticeFrequency: answers.currentPracticeFrequency,
-        arousalControlRating: answers.arousalControlRating,
-        focusRating: answers.focusRating,
-        confidenceRating: answers.confidenceRating,
-        visualizationRating: answers.visualizationRating,
-        resilienceRating: answers.resilienceRating,
-        pressureResponse: answers.pressureResponse,
-        setbackRecovery: answers.setbackRecovery,
-        biggestChallenge: answers.biggestChallenge,
-        biggestChallengeOther: answers.biggestChallengeOther,
-      };
-
-      const progress = await athleteProgressService.saveBaselineAssessment(athleteId, assessment);
-      onComplete(progress);
-      onClose();
-    } catch (err) {
-      console.error('Error saving assessment:', err);
-      setError('Failed to save assessment. Please try again.');
+      const progressRecord = await athleteProgressService.saveMentalSkillsBaseline(athleteId, baseline);
+      setSavedProgress(progressRecord);
+    } catch (error) {
+      console.error('[Mental skills starting point] Failed to save:', error);
+      setSaveError('Your starting point could not be saved. Check your connection and try again.');
     } finally {
-      setSubmitting(false);
+      setIsSaving(false);
     }
   };
+
+  const visualizationItems = [2, 0, 3, 1].map((index) => ({
+    label: sportPack.mentalRehearsalSteps[index],
+    index,
+  }));
+  const coherenceItems = [
+    { id: 'signal', label: 'Notice: my heart is beating faster' },
+    { id: 'breath', label: 'Breathe: one slow breath in and out' },
+    { id: 'thought', label: 'Think: my body is preparing me' },
+    { id: 'action', label: `Choose: ${sportPack.controllableCue}` },
+  ];
+  const scrambledCoherenceItems = [coherenceItems[3], coherenceItems[0], coherenceItems[2], coherenceItems[1]];
 
   if (!isOpen) return null;
 
+  const action = (() => {
+    if (step === 'intro') return { label: 'Begin', run: () => advance('state'), disabled: false };
+    if (step === 'state') return { label: 'Continue', run: () => advance('tools'), disabled: false };
+    if (step === 'tools') return { label: 'Start the challenges', run: () => advance('belief'), disabled: false };
+    if (step === 'belief') return { label: 'Continue', run: () => advance('reflection'), disabled: !selected };
+    if (step === 'reflection') return { label: 'Continue', run: () => advance('breath'), disabled: !selected };
+    if (step === 'breath') return { label: 'Continue', run: () => advance('visualization'), disabled: !breathComplete || !selected };
+    if (step === 'visualization') return { label: 'Continue', run: () => advance('attention'), disabled: visualizationOrder.length !== 4 };
+    if (step === 'attention') return { label: 'Continue', run: () => advance('emotion'), disabled: !selected };
+    if (step === 'emotion') return { label: 'Continue', run: () => advance('coherence'), disabled: !selected };
+    if (step === 'coherence') return { label: 'See my starting point', run: finish, disabled: coherenceOrder.length !== 4 };
+    return null;
+  })();
+
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-zinc-900 rounded-2xl overflow-hidden"
-      >
-        {/* Header */}
-        <div className="p-6 border-b border-zinc-800">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center">
-                <Brain className="w-5 h-5 text-black" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">Mental Training Assessment</h2>
-                <p className="text-sm text-zinc-400">~5 minutes • Personalize your training</p>
-              </div>
+    <div className="fixed inset-0 z-[100] overflow-hidden bg-[#05080d] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(45,212,191,0.16),transparent_36%),radial-gradient(circle_at_85%_80%,rgba(132,204,22,0.1),transparent_32%)]" />
+      <div className="relative mx-auto flex h-full w-full max-w-3xl flex-col px-5 pb-5 pt-6 sm:px-8">
+        <header className="flex items-center gap-4">
+          <button type="button" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full bg-white/10" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-[0.18em] text-teal-300">
+              <span>Mental Skills Starting Point</span>
+              {step !== 'intro' && step !== 'result' ? <span>{stepIndex} of {steps.length - 2}</span> : null}
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
-            >
-              <X className="w-5 h-5 text-zinc-400" />
-            </button>
+            <div className="mt-3 h-1 overflow-hidden bg-white/10">
+              <motion.div className="h-full bg-teal-300" animate={{ width: `${progress}%` }} />
+            </div>
           </div>
+        </header>
 
-          {/* Progress bar */}
-          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-            <motion.div
-              animate={{ width: `${progress}%` }}
-              className="h-full bg-gradient-to-r from-[#E0FE10] to-[#c8e40e]"
-            />
+        {archetype !== 'general' ? (
+          <div className="mt-5 self-center bg-teal-300/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-teal-200">
+            <Sparkles className="mr-2 inline h-4 w-4" /> Personalized for {sportName}
           </div>
-          <div className="flex justify-between mt-2 text-xs text-zinc-500">
-            <span>Section {currentQuestion.section}: {sectionTitles[currentQuestion.section]}</span>
-            <span>{currentQuestionIndex + 1} of {questions.length}</span>
-          </div>
-        </div>
+        ) : null}
 
-        {/* Question Content */}
-        <div className="p-6 min-h-[400px]">
+        <main className="min-h-0 flex-1 overflow-y-auto py-7 [scrollbar-width:none]">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={currentQuestion.id}
-              initial={{ opacity: 0, x: 20 }}
+            <motion.section
+              key={step}
+              initial={{ opacity: 0, x: 24 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.25 }}
+              className="mx-auto max-w-2xl"
             >
-              <h3 className="text-xl font-semibold text-white mb-2">
-                {currentQuestion.question}
-              </h3>
-              {currentQuestion.description && (
-                <p className="text-zinc-400 mb-6">{currentQuestion.description}</p>
-              )}
-
-              {/* Single Choice */}
-              {currentQuestion.type === 'single' && currentQuestion.options && (
-                <div className="space-y-3">
-                  {currentQuestion.options.map((option) => (
-                    <button
-                      key={option.value}
-                      onClick={() => handleAnswer(currentQuestion.id, option.value)}
-                      className={`w-full p-4 rounded-xl text-left transition-all ${
-                        answers[currentQuestion.id] === option.value
-                          ? 'bg-[#E0FE10]/10 border-2 border-[#E0FE10]'
-                          : 'bg-zinc-800 border-2 border-transparent hover:bg-zinc-700'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                            answers[currentQuestion.id] === option.value
-                              ? 'border-[#E0FE10] bg-[#E0FE10]'
-                              : 'border-zinc-600'
-                          }`}
-                        >
-                          {answers[currentQuestion.id] === option.value && (
-                            <CheckCircle className="w-3 h-3 text-black" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-medium text-white">{option.label}</p>
-                          {option.description && (
-                            <p className="text-sm text-zinc-400 mt-1">{option.description}</p>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+              {step === 'intro' ? (
+                <div className="pt-8 text-center">
+                  <motion.div animate={{ scale: [1, 1.08, 1] }} transition={{ duration: 2.4, repeat: Infinity }} className="mx-auto grid h-32 w-32 place-items-center rounded-full bg-teal-300/10">
+                    <Brain className="h-16 w-16 text-teal-300" />
+                  </motion.div>
+                  <p className="mt-8 text-sm font-bold uppercase tracking-[0.2em] text-teal-300">Your first mental training session</p>
+                  <h1 className="mt-4 text-4xl font-black sm:text-6xl">Show us how you think.</h1>
+                  <p className="mx-auto mt-5 max-w-xl text-lg leading-8 text-zinc-300">
+                    You will work through short challenges that use breathing, visualization, attention, self-talk, reflection, belief, and coherence. Your choices help Nora pick the right first skills for you.
+                  </p>
                 </div>
-              )}
+              ) : null}
 
-              {/* Multi-Scale (Domain Ratings) */}
-              {currentQuestion.type === 'multi-scale' && currentQuestion.scales && (
-                <div className="space-y-6">
-                  {currentQuestion.scales.map((scale) => (
-                    <div key={scale.id} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-white font-medium">{scale.label}</span>
-                        <span className="text-[#E0FE10] font-bold">{answers[scale.id]}/5</span>
-                      </div>
-                      <div className="flex gap-2">
-                        {[1, 2, 3, 4, 5].map((value) => (
-                          <button
-                            key={value}
-                            onClick={() => handleAnswer(scale.id, value)}
-                            className={`flex-1 py-3 rounded-lg text-sm font-medium transition-all ${
-                              answers[scale.id] === value
-                                ? 'bg-[#E0FE10] text-black'
-                                : answers[scale.id] > value
-                                ? 'bg-[#E0FE10]/30 text-white'
-                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                            }`}
-                          >
-                            {value}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="flex justify-between text-xs text-zinc-500">
-                        <span>Needs work</span>
-                        <span>Excellent</span>
-                      </div>
-                    </div>
-                  ))}
+              {step === 'state' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">State check</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">How do you feel right now?</h2>
+                  <p className="mt-3 text-zinc-400">We save how today feels separately from your mental skill results.</p>
+                  <div className="mt-7 grid grid-cols-5 gap-2">
+                    {moodOptions.map((option) => (
+                      <button key={option.id} type="button" onClick={() => setCurrentState({ ...currentState, mood: option.id })} className={`min-h-24 border p-2 text-center ${currentState.mood === option.id ? 'border-teal-300 bg-teal-300 text-slate-950' : 'border-white/10 bg-white/[0.05]'}`}>
+                        <div className="text-2xl">{option.symbol}</div><div className="mt-2 text-xs font-bold sm:text-sm">{option.label}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-8 space-y-6">
+                    <Meter label="Rest" value={currentState.rest} onChange={(rest) => setCurrentState({ ...currentState, rest })} />
+                    <Meter label="Energy" value={currentState.energy} onChange={(energy) => setCurrentState({ ...currentState, energy })} />
+                    <Meter label="Confidence" value={currentState.confidence} onChange={(confidence) => setCurrentState({ ...currentState, confidence })} />
+                    <Meter label="Motivation" value={currentState.motivation} onChange={(motivation) => setCurrentState({ ...currentState, motivation })} />
+                    <Meter label="Connection to my sport" value={currentState.sportConnection} onChange={(sportConnection) => setCurrentState({ ...currentState, sportConnection })} />
+                    <Meter label="Belief in myself as an athlete" value={currentState.selfBelief} onChange={(selfBelief) => setCurrentState({ ...currentState, selfBelief })} />
+                    <Meter label="Belief that I can improve with practice" value={currentState.improvementBelief} onChange={(improvementBelief) => setCurrentState({ ...currentState, improvementBelief })} />
+                  </div>
                 </div>
-              )}
+              ) : null}
 
-              {/* Other text input for biggestChallenge */}
-              {currentQuestion.id === 'biggestChallenge' && answers.biggestChallenge === 'other' && (
-                <div className="mt-4">
-                  <input
-                    type="text"
-                    placeholder="Describe your challenge..."
-                    value={answers.biggestChallengeOther || ''}
-                    onChange={(e) => handleAnswer('biggestChallengeOther', e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:border-[#E0FE10] focus:outline-none"
-                  />
+              {step === 'tools' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Skill experience</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Which skills have you used?</h2>
+                  <p className="mt-3 text-zinc-400">Tap each skill until the label matches your experience.</p>
+                  <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                    {MENTAL_SKILL_FAMILIES.map((family) => {
+                      const Icon = familyIcons[family];
+                      return (
+                        <button key={family} type="button" onClick={() => setFamiliarity({ ...familiarity, [family]: nextFamiliarity[familiarity[family]] })} className="flex items-center gap-4 border border-white/10 bg-white/[0.05] p-4 text-left">
+                          <Icon className="h-7 w-7 text-teal-300" />
+                          <span className="min-w-0 flex-1"><span className="block font-bold">{MENTAL_SKILL_FAMILY_LABELS[family]}</span><span className="mt-1 block text-sm text-teal-200">{familiarityLabels[familiarity[family]]}</span></span>
+                          <RotateCcw className="h-4 w-4 text-zinc-500" />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
+              ) : null}
 
-              {error && (
-                <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-red-400">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">{error}</span>
+              {step === 'belief' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 1 · Belief</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Respond to a setback</h2>
+                  <p className="mt-5 text-xl leading-8 text-zinc-200">{sportPack.setbackPrompt}</p>
+                  <div className="mt-7 space-y-3">
+                    <OptionButton selected={selected === 'belief_use'} onClick={() => selectScored('belief_use', [
+                      { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: 100 },
+                      { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: 100 },
+                      { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: 90 },
+                    ])}>That moment gives me information. I can use it and choose my next action.</OptionButton>
+                    <OptionButton selected={selected === 'belief_fixed'} onClick={() => selectScored('belief_fixed', [
+                      { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: 20 },
+                      { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: 25 },
+                      { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: 30 },
+                    ])}>That proves I am not good enough for this level.</OptionButton>
+                    <OptionButton selected={selected === 'belief_ignore'} onClick={() => selectScored('belief_ignore', [
+                      { challengeId: 'setback', family: 'belief_identity', component: 'choose', score: 45 },
+                      { challengeId: 'setback', family: 'self_talk_reframing', component: 'choose', score: 40 },
+                      { challengeId: 'setback', family: 'reflection_learning', component: 'understand', score: 20 },
+                    ])}>I should pretend it never happened and force myself to stop thinking about it.</OptionButton>
+                  </div>
                 </div>
-              )}
-            </motion.div>
+              ) : null}
+
+              {step === 'reflection' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 2 · Reflection</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Turn experience into a plan</h2>
+                  <p className="mt-5 text-xl leading-8 text-zinc-200">{sportPack.reflectionPrompt}</p>
+                  <div className="mt-7 space-y-3">
+                    <OptionButton selected={selected === 'reflection_blame'} onClick={() => selectScored('reflection_blame', [
+                      { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: 20 },
+                    ])}>I would decide the result proves I am not talented enough.</OptionButton>
+                    <OptionButton selected={selected === 'reflection_avoid'} onClick={() => selectScored('reflection_avoid', [
+                      { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: 35 },
+                    ])}>I would avoid reviewing it and hope the next one goes better.</OptionButton>
+                    <OptionButton selected={selected === 'reflection_plan'} onClick={() => selectScored('reflection_plan', [
+                      { challengeId: 'reflection', family: 'reflection_learning', component: 'choose', score: 100 },
+                      { challengeId: 'reflection', family: 'reflection_learning', component: 'rehearse', score: 90 },
+                    ])}>I would name what happened, choose one part I can improve, and plan how to practice it.</OptionButton>
+                  </div>
+                </div>
+              ) : null}
+
+              {step === 'breath' ? (
+                <div className="text-center">
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 3 · Body and breath</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Catch the first signal</h2>
+                  <p className="mt-5 text-xl text-zinc-200">{sportPack.bodyPrompt}</p>
+                  <div className="mt-7 space-y-3 text-left">
+                    {['My heart beats faster', 'My breathing changes', 'My muscles tighten', 'My thoughts speed up'].map((label, index) => (
+                      <OptionButton key={label} selected={selected === `body_${index}`} onClick={() => selectScored(`body_${index}`, [
+                        { challengeId: 'body_signal', family: 'breathing_body_awareness', component: 'recognize', score: 100 },
+                        { challengeId: 'body_signal', family: 'emotional_regulation', component: 'recognize', score: 90 },
+                      ])}>{label}</OptionButton>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => {
+                    setBreathComplete(true);
+                    replaceEvidence([
+                      { challengeId: 'guided_breath', family: 'breathing_body_awareness', component: 'rehearse', score: 100 },
+                      { challengeId: 'guided_breath', family: 'coherence', component: 'rehearse', score: 80 },
+                    ]);
+                  }} className={`mx-auto mt-8 grid h-40 w-40 place-items-center rounded-full border-2 ${breathComplete ? 'border-teal-200 bg-teal-300 text-slate-950' : 'border-teal-300/40 bg-teal-300/10 text-teal-200'}`}>
+                    {breathComplete ? <Check className="h-16 w-16" /> : <span><Wind className="mx-auto h-12 w-12" /><span className="mt-2 block text-sm font-bold">One slow breath</span></span>}
+                  </button>
+                  <p className="mt-4 text-sm text-zinc-400">Breathe in slowly. Breathe out slowly. Tap the circle when you finish.</p>
+                </div>
+              ) : null}
+
+              {step === 'visualization' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 4 · Visualization</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Build a complete mental rehearsal</h2>
+                  <p className="mt-3 text-zinc-400">Tap the scenes in the order you would rehearse them.</p>
+                  <div className="mt-7 space-y-3">
+                    {visualizationItems.map((item) => {
+                      const position = visualizationOrder.indexOf(item.index);
+                      return <OptionButton key={item.index} selected={position >= 0} onClick={() => {
+                        if (position >= 0) return;
+                        const next = [...visualizationOrder, item.index];
+                        setVisualizationOrder(next);
+                        if (next.length === 4) {
+                          const correct = next.every((value, index) => value === index);
+                          replaceEvidence([
+                            { challengeId: 'visualization_order', family: 'visualization', component: 'understand', score: correct ? 100 : 55 },
+                            { challengeId: 'visualization_order', family: 'visualization', component: 'choose', score: correct ? 100 : 55 },
+                            { challengeId: 'visualization_order', family: 'visualization', component: 'rehearse', score: 100 },
+                          ]);
+                        }
+                      }}><span className="mr-3 inline-grid h-7 w-7 place-items-center rounded-full bg-black/20">{position >= 0 ? position + 1 : '·'}</span>{item.label}</OptionButton>;
+                    })}
+                  </div>
+                  {visualizationOrder.length ? <button type="button" onClick={() => setVisualizationOrder([])} className="mt-4 text-sm font-bold text-teal-300">Start the order again</button> : null}
+                </div>
+              ) : null}
+
+              {step === 'attention' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 5 · Attention</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Choose what deserves your attention</h2>
+                  <p className="mt-5 text-xl text-zinc-200">{sportPack.pressurePrompt} What can you control right now?</p>
+                  <div className="mt-7 space-y-3">
+                    <OptionButton selected={selected === 'attention_control'} onClick={() => selectScored('attention_control', [
+                      { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: 100 },
+                    ])}>{sportPack.controllableCue}</OptionButton>
+                    <OptionButton selected={selected === 'attention_result'} onClick={() => selectScored('attention_result', [
+                      { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: 25 },
+                    ])}>{sportPack.resultDistraction}</OptionButton>
+                    <OptionButton selected={selected === 'attention_compare'} onClick={() => selectScored('attention_compare', [
+                      { challengeId: 'attention', family: 'attention_cues', component: 'choose', score: 20 },
+                    ])}>{sportPack.comparisonDistraction}</OptionButton>
+                  </div>
+                </div>
+              ) : null}
+
+              {step === 'emotion' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 6 · Self-talk</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Choose the thought you will practice</h2>
+                  <p className="mt-5 text-xl text-zinc-200">You notice the same nervous feeling {sportPack.setting}. What do you tell yourself?</p>
+                  <div className="mt-7 space-y-3">
+                    <OptionButton selected={selected === 'emotion_name'} onClick={() => selectScored('emotion_name', [
+                      { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: 100 },
+                      { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: 100 },
+                    ])}>{sportPack.usefulPhrase}</OptionButton>
+                    <OptionButton selected={selected === 'emotion_fight'} onClick={() => selectScored('emotion_fight', [
+                      { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: 30 },
+                      { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: 25 },
+                    ])}>I must make every nervous feeling disappear before I can perform.</OptionButton>
+                    <OptionButton selected={selected === 'emotion_identity'} onClick={() => selectScored('emotion_identity', [
+                      { challengeId: 'emotion', family: 'emotional_regulation', component: 'choose', score: 20 },
+                      { challengeId: 'emotion', family: 'self_talk_reframing', component: 'understand', score: 20 },
+                    ])}>Feeling nervous means I am not ready.</OptionButton>
+                  </div>
+                </div>
+              ) : null}
+
+              {step === 'coherence' ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Final challenge · Coherence</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Build a response you can repeat</h2>
+                  <p className="mt-3 text-zinc-400">Tap the four parts in order: notice the body change, take one slow breath, choose a useful thought, then choose the next action.</p>
+                  <div className="mt-7 space-y-3">
+                    {scrambledCoherenceItems.map((item) => {
+                      const position = coherenceOrder.indexOf(item.id);
+                      return <OptionButton key={item.id} selected={position >= 0} onClick={() => {
+                        if (position >= 0) return;
+                        const next = [...coherenceOrder, item.id];
+                        setCoherenceOrder(next);
+                        if (next.length === 4) {
+                          const correct = next.every((value, index) => value === coherenceItems[index].id);
+                          replaceEvidence([
+                            { challengeId: 'coherence_chain', family: 'coherence', component: 'understand', score: correct ? 100 : 50 },
+                            { challengeId: 'coherence_chain', family: 'coherence', component: 'choose', score: correct ? 100 : 50 },
+                            { challengeId: 'coherence_chain', family: 'reflection_learning', component: 'choose', score: correct ? 90 : 45 },
+                          ]);
+                        }
+                      }}><span className="mr-3 inline-grid h-7 w-7 place-items-center rounded-full bg-black/20">{position >= 0 ? position + 1 : '·'}</span>{item.label}</OptionButton>;
+                    })}
+                  </div>
+                  {coherenceOrder.length ? <button type="button" onClick={() => setCoherenceOrder([])} className="mt-4 text-sm font-bold text-teal-300">Start the order again</button> : null}
+                </div>
+              ) : null}
+
+              {step === 'result' && result ? (
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Your starting point</p>
+                  <h2 className="mt-3 text-4xl font-black sm:text-6xl">Here is where your training begins.</h2>
+                  <div className="mt-7 flex items-end gap-4"><span className="text-7xl font-black text-teal-300">{result.overallCompetencyScore}</span><span className="pb-2 text-zinc-400">mental skill competency</span></div>
+                  <p className="mt-3 max-w-xl text-zinc-300">This score shows what you recognized and practiced today. Your current mood was saved separately.</p>
+                  <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                    {MENTAL_SKILL_FAMILIES.map((family) => {
+                      const Icon = familyIcons[family];
+                      const familyResult = result.familyScores[family];
+                      return <div key={family} className="flex items-center gap-4 border border-white/10 bg-white/[0.05] p-4"><Icon className="h-6 w-6 text-teal-300" /><span className="flex-1"><span className="block font-bold">{MENTAL_SKILL_FAMILY_LABELS[family]}</span><span className="text-sm text-zinc-400">{MENTAL_SKILL_STAGE_LABELS[familyResult.stage]}</span></span><span className="text-xl font-black">{familyResult.score}</span></div>;
+                    })}
+                  </div>
+                  <h3 className="mt-9 text-xl font-black">Your first three skills</h3>
+                  <div className="mt-3 space-y-2">
+                    {Object.values(result.disciplineFocus).map((family, index) => <div key={`${family}-${index}`} className="flex items-center gap-3 bg-teal-300/10 px-4 py-3 font-bold text-teal-100"><span className="grid h-7 w-7 place-items-center rounded-full bg-teal-300 text-slate-950">{index + 1}</span>{MENTAL_SKILL_FAMILY_LABELS[family]}</div>)}
+                  </div>
+                  {saveError ? <p className="mt-5 font-semibold text-amber-300">{saveError}</p> : null}
+                </div>
+              ) : null}
+            </motion.section>
           </AnimatePresence>
-        </div>
+        </main>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-zinc-800 flex justify-between">
-          <button
-            onClick={handleBack}
-            disabled={currentQuestionIndex === 0}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-zinc-400 hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back
+        {action ? (
+          <button type="button" disabled={action.disabled || isSaving} onClick={action.run} className="flex h-16 w-full items-center justify-center gap-3 bg-teal-300 text-lg font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+            {step === 'intro' ? <Play className="h-5 w-5 fill-current" /> : null}{action.label}<ChevronRight className="h-5 w-5" />
           </button>
-
+        ) : step === 'result' ? (
           <button
-            onClick={handleNext}
-            disabled={!canProceed() || submitting}
-            className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors ${
-              canProceed() && !submitting
-                ? 'bg-[#E0FE10] text-black hover:bg-[#c8e40e]'
-                : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-            }`}
+            type="button"
+            disabled={isSaving}
+            onClick={() => {
+              if (saveError) {
+                void finish();
+                return;
+              }
+              if (savedProgress) onComplete(savedProgress);
+            }}
+            className="h-16 w-full bg-teal-300 text-lg font-black text-slate-950 disabled:opacity-50"
           >
-            {submitting ? (
-              'Saving...'
-            ) : isLastQuestion ? (
-              <>
-                Complete
-                <CheckCircle className="w-4 h-4" />
-              </>
-            ) : (
-              <>
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </>
-            )}
+            {isSaving ? 'Saving your starting point…' : saveError ? 'Try saving again' : `Start training, ${athleteName.split(' ')[0]}`}
           </button>
-        </div>
-      </motion.div>
+        ) : null}
+      </div>
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { requiresReConsentForVersion } from './accessState';
 export type PulseCheckBaselineTaskStatus = 'pending' | 'ready' | 'started' | 'complete';
 
 export type PulseCheckBaselineCompletionSource =
+  | 'mental-skills-starting-point'
   | 'web-assessment'
   | 'native-probe'
   | 'membership-sync'
@@ -46,6 +47,14 @@ export function getCompletedBaselineEvidence(progress?: AthleteMentalProgress | 
 } {
   if (!progress) {
     return { complete: false, source: null, completedAt: null };
+  }
+
+  if (progress.mentalSkillsBaseline) {
+    return {
+      complete: true,
+      source: 'mental-skills-starting-point',
+      completedAt: coerceMillis(progress.mentalSkillsBaseline.completedAt),
+    };
   }
 
   if (progress.baselineAssessment) {

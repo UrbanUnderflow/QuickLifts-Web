@@ -117,6 +117,7 @@
     "test:pulsecheck:runtime": "node --test tests/api/pulsecheck/submit-pulsecheck-checkin.runtime.test.cjs tests/api/pulsecheck/pulsecheck-functions-proxy.runtime.test.cjs",
     "test:pulsecheck:messaging-rules": "firebase emulators:exec --only firestore --project demo-pulsecheck-coach-messaging \"node --test tests/api/pulsecheck/coach-messaging-firestore-rules.emulator.test.cjs\"",
     "test:pulsecheck:sport-content-packs": "node --import tsx --test tests/unit/sport-scenario-packs.test.ts",
+    "test:pulsecheck:mental-skills-baseline": "node --import tsx --test tests/unit/mental-skills-baseline.test.ts",
     "test:pulsecheck:gate": "node --test tests/api/pulsecheck/repair-daily-assignment.test.cjs tests/api/pulsecheck/submit-pulsecheck-checkin.runtime.test.cjs tests/api/pulsecheck/pulsecheck-functions-proxy.runtime.test.cjs",
     "smoke:pulsecheck:repair": "node scripts/pulsecheck-repair-smoke.cjs",
     "test:pulsecheck:predeploy": "npm run test:pulsecheck:sport-content-packs && npm run test:pulsecheck:gate && npm run smoke:pulsecheck:repair",

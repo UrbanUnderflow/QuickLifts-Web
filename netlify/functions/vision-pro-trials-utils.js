@@ -1220,6 +1220,7 @@ async function syncTrialProfileSnapshot(db, athleteUserId, session) {
   const simSessions = simSessionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   const taxonomyProfile = profileSnapshotRuntime.deriveTaxonomyProfile({
     baselineAssessment: existingProgress.baselineAssessment,
+    mentalSkillsBaseline: existingProgress.mentalSkillsBaseline,
     checkIns,
     simSessions,
   });

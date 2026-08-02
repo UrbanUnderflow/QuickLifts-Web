@@ -8,6 +8,7 @@
 export * from './types';
 export * from './taxonomy';
 export * from './displayNames';
+export * from './mentalSkillsBaseline';
 
 // Services
 export { exerciseLibraryService, simModuleLibraryService } from './exerciseLibraryService';

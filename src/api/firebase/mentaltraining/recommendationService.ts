@@ -237,7 +237,7 @@ export const recommendationService = {
       }
 
       // Determine confidence based on data available
-      if (progress.baselineAssessment) {
+      if (progress.mentalSkillsBaseline || progress.baselineAssessment || progress.baselineProbe) {
         confidence = RecommendationConfidence.High;
       } else {
         confidence = RecommendationConfidence.Medium;

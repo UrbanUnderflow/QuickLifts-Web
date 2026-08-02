@@ -122,6 +122,11 @@ export class User {
   checkinsAccessList: string[];
   legalAcceptance?: LegalAcceptanceRecord | null;
   protocolCueWords: Record<string, string>;
+  sport?: string;
+  position?: string;
+  preferredName?: string;
+  mentalPerformanceGoals?: string[];
+  primaryPerformanceGoal?: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -198,6 +203,15 @@ export class User {
           return acc;
         }, {})
       : {};
+    this.sport = typeof data.sport === 'string' ? data.sport : undefined;
+    this.position = typeof data.position === 'string' ? data.position : undefined;
+    this.preferredName = typeof data.preferredName === 'string' ? data.preferredName : undefined;
+    this.mentalPerformanceGoals = Array.isArray(data.mentalPerformanceGoals)
+      ? data.mentalPerformanceGoals.filter((value: unknown): value is string => typeof value === 'string')
+      : undefined;
+    this.primaryPerformanceGoal = typeof data.primaryPerformanceGoal === 'string'
+      ? data.primaryPerformanceGoal
+      : undefined;
 
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
 

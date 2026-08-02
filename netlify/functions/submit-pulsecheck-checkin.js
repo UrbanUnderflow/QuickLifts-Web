@@ -425,7 +425,9 @@ async function ensurePrimaryTrainingPlan({
     activeProgram,
     snapshot,
     recentAssignments,
-    hasBaselineAssessment: Boolean(progress?.baselineAssessment),
+    hasBaselineAssessment: Boolean(
+      progress?.mentalSkillsBaseline || progress?.baselineAssessment || progress?.baselineProbe
+    ),
   });
 
   if (!authoringDecision.shouldAuthor || !authoringDecision.trigger) {
@@ -2530,6 +2532,7 @@ async function syncTaxonomyProfile(db, athleteId, currentProgress) {
 
   const taxonomyProfile = profileSnapshotRuntime.deriveTaxonomyProfile({
     baselineAssessment: currentProgress?.baselineAssessment,
+    mentalSkillsBaseline: currentProgress?.mentalSkillsBaseline,
     checkIns,
     simSessions,
   });

@@ -3,15 +3,15 @@ import { AlertTriangle, Database, FileText, History, RefreshCw, ShieldCheck, Wor
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock } from './PulseCheckRuntimeDocPrimitives';
 
 const CURRENT_STATE_ROWS = [
-  ['Live athlete progress exists', '`athlete-mental-progress/{athleteId}` stores live pathway, MPR, and baseline-linked fields.', 'Existing runtime base; not a snapshot history system.'],
-  ['Baseline writes exist', 'iOS Baseline Assessment writes `baselineProbe` straight into the progress doc.', 'A valid milestone write path already exists in product code.'],
+  ['Live athlete progress exists', '`athlete-mental-progress/{athleteId}` stores live pathway, coherence inputs, and Mental Skills Starting Point evidence.', 'Existing runtime base; not a snapshot history system.'],
+  ['Starting Point writes exist', 'Web, iOS, and Android write the shared `mentalSkillsBaseline` contract after server-side score verification.', 'A valid cross-platform milestone write path already exists in product code.'],
   ['Canonical snapshot store missing', 'No first-class profile snapshot collection or deterministic snapshot writer is present.', 'This is the main implementation gap.'],
   ['Research export contract missing', 'No shared service defaults to canonical profile snapshots for export.', 'Exports would currently be ad hoc.'],
   ['Template validator missing', 'Profile can render template-like Nora copy, but there is no shared validator contract yet.', 'Needs cross-surface enforcement.'],
 ];
 
 const COLLECTION_ROWS = [
-  ['`athlete-mental-progress/{athleteId}`', 'Live profile state and snapshot pointers', '`currentCanonicalSnapshotIds`, `profileVersion`, `lastProfileSnapshotAt`, `baselineProbe`, `currentPathway`'],
+  ['`athlete-mental-progress/{athleteId}`', 'Live profile state and snapshot pointers', '`currentCanonicalSnapshotIds`, `profileVersion`, `lastProfileSnapshotAt`, `mentalSkillsBaseline`, `currentPathway`'],
   ['`athlete-mental-progress/{athleteId}/profile-snapshots/{snapshotKey}`', 'Single canonical head doc for each milestone scope', '`snapshotKey`, `milestoneType`, `pilotEnrollmentId`, `canonical`, `revision`, `payloadFingerprint`, `profilePayload`, `noraExplanation`'],
   ['`athlete-mental-progress/{athleteId}/profile-snapshots/{snapshotKey}/revisions/{revisionId}`', 'Immutable audit trail of superseded or replayed payloads', '`revision`, `supersededAt`, `supersededBy`, `writeReason`, `writerVersion`, `profilePayload`'],
   ['`research-export-jobs/{jobId}`', 'Export job metadata and options', '`dataset`, `canonicalOnly`, `milestones`, `requestedBy`, `createdAt`, `outputUri`'],
@@ -51,10 +51,10 @@ const EXPORT_ROWS = [
 
 const PHASE_ROWS = [
   ['Phase 1', 'Schema and writer contract', 'Add head + revision schema, deterministic key builder, and transaction-based writer.'],
-  ['Phase 2', 'Milestone integration', 'Route onboarding, baseline, midpoint, endpoint, retention, and manual staff checkpoint writes through the shared writer.'],
+  ['Phase 2', 'Milestone integration', 'Route onboarding, Mental Skills Starting Point, midpoint, endpoint, retention, and manual staff checkpoint writes through the shared writer.'],
   ['Phase 3', 'Template validator', 'Ship shared Nora explanation templates plus a validator that rejects non-compliant copy before persistence.'],
   ['Phase 4', 'Research export', 'Add canonical-default export service and separate audit export path.'],
-  ['Phase 5', 'Backfill', 'Convert existing baseline-only athletes into baseline canonical heads with revision `1` and explicit backfill provenance.'],
+  ['Phase 5', 'Backfill', 'Convert athletes with only legacy baselineAssessment or baselineProbe records into canonical heads with revision `1` and explicit backfill provenance.'],
 ];
 
 const VALIDATOR_RULES = [
@@ -122,7 +122,7 @@ const PulseCheckProfileSnapshotExportSpecTab: React.FC = () => {
           <InfoCard
             title="Deterministic Snapshot Key"
             accent="blue"
-            body="For official milestones, use a deterministic key such as `solo__baseline` or `{pilotEnrollmentId}__midpoint`. The same milestone scope must always resolve to the same canonical head document."
+            body="For official milestones, use a deterministic key such as `solo__mental-skills-starting-point` or `{pilotEnrollmentId}__midpoint`. The same milestone scope must always resolve to the same canonical head document."
           />
           <InfoCard
             title="Why Head + Revisions"
@@ -183,7 +183,7 @@ const PulseCheckProfileSnapshotExportSpecTab: React.FC = () => {
         <InfoCard
           title="Backfill Note"
           accent="red"
-          body="Existing athletes with only `baselineProbe` in live progress need a controlled backfill. The backfill should create baseline canonical heads with explicit provenance instead of pretending those rows were produced by the new writer from day one."
+          body="Existing athletes with only legacy `baselineAssessment` or `baselineProbe` data need a controlled backfill. The backfill should create canonical Starting Point heads with explicit provenance instead of pretending those rows were produced by the current writer."
         />
       </SectionBlock>
 

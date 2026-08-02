@@ -548,7 +548,7 @@ export default function PulseCheckTeamWorkspacePage() {
       const nextAction = !athlete.consentReady
         ? 'Ask athlete to finish consent'
         : !athlete.baselineReady
-          ? 'Ask athlete to complete baseline'
+          ? 'Ask athlete to complete their Mental Skills Starting Point'
           : healthyDeviceCount === 0
             ? 'Connect or sync a device'
             : 'Ready for first check-in and training';
@@ -558,7 +558,7 @@ export default function PulseCheckTeamWorkspacePage() {
         displayName: athlete.displayName,
         email: athlete.email,
         inviteState: 'Account created',
-        setupState: athlete.baselineReady ? 'Baseline complete' : athlete.consentReady ? 'Consent complete' : 'Setup pending',
+        setupState: athlete.baselineReady ? 'Starting point complete' : athlete.consentReady ? 'Consent complete' : 'Setup pending',
         deviceStatuses,
         nextAction,
         joined: true,
@@ -627,17 +627,17 @@ export default function PulseCheckTeamWorkspacePage() {
       setBaselineModalOpen(true);
     } catch (error) {
       console.error('[PulseCheck team workspace] Failed to prepare baseline task:', error);
-      setMessage({ type: 'error', text: 'Failed to launch the baseline task.' });
+      setMessage({ type: 'error', text: 'The Mental Skills Starting Point could not open. Please try again.' });
     }
   }, [baselineComplete, currentUser?.id, membership]);
 
   const athleteHeroSummary = !consentComplete
     ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. First, finish setup so we can get you ready to begin.`
     : !baselineComplete
-    ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. Your next step is to complete your baseline so we can personalize your starting point.`
+    ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. Your next step is to complete your Mental Skills Starting Point so we can choose the right skills for you.`
     : todayDailyAssignment
-    ? `You are all set in ${team?.displayName || 'your team'}. Your consent and baseline are complete, and today\'s Nora task is now your source of truth.`
-    : `You are all set in ${team?.displayName || 'your team'}. Your consent and baseline are complete, and you are ready for what comes next.`;
+    ? `You are all set in ${team?.displayName || 'your team'}. Your consent and Mental Skills Starting Point are complete, and today\'s Nora task is now your source of truth.`
+    : `You are all set in ${team?.displayName || 'your team'}. Your consent and Mental Skills Starting Point are complete, and you are ready for what comes next.`;
 
   const handleBaselineComplete = useCallback(async (progress: AthleteMentalProgress) => {
     if (!membership) return;
@@ -652,10 +652,10 @@ export default function PulseCheckTeamWorkspacePage() {
         baselinePathwayId: progress.currentPathway,
       });
       await refreshWorkspace();
-      setMessage({ type: 'success', text: 'Baseline completed. Required tasks are now unlocked for training.' });
+      setMessage({ type: 'success', text: 'Mental Skills Starting Point complete. Your training is now unlocked.' });
     } catch (error) {
       console.error('[PulseCheck team workspace] Failed to mark baseline complete:', error);
-      setMessage({ type: 'error', text: 'Baseline finished, but the task status failed to refresh. Reload and verify the unlock state.' });
+      setMessage({ type: 'error', text: 'Your Starting Point was saved, but the task status did not refresh. Reload and verify the unlock state.' });
     }
   }, [membership]);
 
@@ -873,7 +873,7 @@ export default function PulseCheckTeamWorkspacePage() {
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                       >
                         {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-                        {baselineStarted ? 'Resume Baseline' : 'Start Baseline'}
+                        {baselineStarted ? 'Resume Starting Point' : 'Begin Starting Point'}
                       </button>
                       <Link
                         href="/PulseCheck/oura"
@@ -977,17 +977,17 @@ export default function PulseCheckTeamWorkspacePage() {
                         {requiredTasksComplete
                           ? todayDailyAssignment
                             ? todayTaskSubtitle
-                            : 'Your consent and baseline are complete. Nora and your team can now start personalizing what comes next.'
-                          : 'Before training starts, we need your baseline. It gives us a starting point so Nora and your team can personalize what comes next. A Vision Pro session may be offered later, but it is optional.'}
+                            : 'Your consent and Mental Skills Starting Point are complete. Nora and your team can now choose what comes next.'
+                          : 'Before training starts, complete your Mental Skills Starting Point. It shows Nora and your team which skills you already know and which ones to practice first. A Vision Pro session may be offered later, but it is optional.'}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-6 grid gap-4 md:grid-cols-3">
                     {[
-                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus in-app baseline', accent: '#7C3AED' },
-                      { label: 'Current Assignments', value: athleteCurrentAssignmentCount, sub: requiredTasksComplete ? 'Ready for you now' : 'These appear after your baseline', accent: '#3B82F6' },
-                      { label: 'Today\'s Nora Task', value: requiredTasksComplete && todayTaskName ? todayTaskName : requiredTasksComplete && nextProgramName ? nextProgramName : 'After your baseline', sub: todayTaskSubtitle, accent: '#8B5CF6' },
+                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus Mental Skills Starting Point', accent: '#7C3AED' },
+                      { label: 'Current Assignments', value: athleteCurrentAssignmentCount, sub: requiredTasksComplete ? 'Ready for you now' : 'These appear after your Starting Point', accent: '#3B82F6' },
+                      { label: 'Today\'s Nora Task', value: requiredTasksComplete && todayTaskName ? todayTaskName : requiredTasksComplete && nextProgramName ? nextProgramName : 'After your Starting Point', sub: todayTaskSubtitle, accent: '#8B5CF6' },
                     ].map((stat) => (
                       <div key={stat.label} className="rounded-[20px] border border-white/8 bg-black/25 p-4" style={{ borderColor: `${stat.accent}18` }}>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{stat.label}</div>
@@ -1048,14 +1048,14 @@ export default function PulseCheckTeamWorkspacePage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
-                        <div className="mt-2 text-lg font-semibold text-white">In-App Baseline</div>
+                        <div className="mt-2 text-lg font-semibold text-white">Mental Skills Starting Point</div>
                       </div>
                       <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: baselineComplete ? '#7C3AED' : baselineStarted ? '#3B82F6' : '#a1a1aa', background: baselineComplete ? 'rgba(124,58,237,0.1)' : baselineStarted ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.06)', border: `1px solid ${baselineComplete ? 'rgba(124,58,237,0.25)' : baselineStarted ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.1)'}` }}>
                         {baselineComplete ? 'Complete' : baselineStarted ? 'In Progress' : 'Ready'}
                       </div>
                     </div>
                     <p className="mt-4 text-sm leading-7 text-zinc-400">
-                      Your baseline gives us a starting point so Nora and your team can personalize what comes next.
+                      Play through short mental-skill situations so Nora and your team can see what you know and choose what to practice first.
                     </p>
                     <button
                       type="button"
@@ -1067,7 +1067,7 @@ export default function PulseCheckTeamWorkspacePage() {
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
                       {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-                      {baselineComplete ? 'Baseline complete' : baselineStarted ? 'Resume baseline' : 'Start baseline'}
+                      {baselineComplete ? 'Starting Point complete' : baselineStarted ? 'Resume Starting Point' : 'Begin Starting Point'}
                     </button>
                   </div>
 
@@ -1082,7 +1082,7 @@ export default function PulseCheckTeamWorkspacePage() {
                       </div>
                     </div>
                     <p className="mt-4 text-sm leading-7 text-zinc-400">
-                      Some teams add an optional Vision Pro session after baseline. It does not block training.
+                      Some teams add an optional Vision Pro session after the Starting Point. It does not block training.
                     </p>
                   </div>
                 </div>
@@ -1113,7 +1113,7 @@ export default function PulseCheckTeamWorkspacePage() {
                     </div>
                   </div>
                   <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300">
-                    Use this during device delivery and athlete app setup. It observes invite state, consent, baseline, and device source status from the same team workspace data.
+                    Use this during device delivery and athlete app setup. It observes invite state, consent, Mental Skills Starting Point, and device source status from the same team workspace data.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -1151,7 +1151,7 @@ export default function PulseCheckTeamWorkspacePage() {
                 <div className="rounded-[22px] border border-black/20 bg-black/20 p-4">
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Ready</div>
                   <div className="mt-3 text-3xl font-semibold text-white">{launchDayReadyCount}</div>
-                  <div className="mt-1 text-sm text-zinc-300">Consent, baseline, and device state are usable</div>
+                  <div className="mt-1 text-sm text-zinc-300">Consent, Starting Point, and device state are usable</div>
                 </div>
                 <div className="rounded-[22px] border border-black/20 bg-black/20 p-4">
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-400">Invite Links</div>
@@ -1457,7 +1457,7 @@ export default function PulseCheckTeamWorkspacePage() {
                   <Waves className="h-5 w-5 text-emerald-300" />
                   <div>
                     <div className="text-lg font-semibold text-white">Athlete Roster</div>
-                    <div className="text-sm text-zinc-400">Your athletes, with their consent and baseline status.</div>
+                    <div className="text-sm text-zinc-400">Your athletes, with their consent and Mental Skills Starting Point status.</div>
                   </div>
                 </div>
                 <Link
@@ -1596,7 +1596,7 @@ export default function PulseCheckTeamWorkspacePage() {
                             </div>
                           </div>
                           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-center">
-                            <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Baseline</div>
+                            <div className="text-xs uppercase tracking-[0.16em] text-zinc-500">Starting Point</div>
                             <div className={`mt-2 text-sm font-semibold ${athlete.baselineReady ? 'text-green-300' : 'text-zinc-300'}`}>
                               {athlete.baselineReady ? 'Ready' : 'Pending'}
                             </div>
@@ -1635,6 +1635,7 @@ export default function PulseCheckTeamWorkspacePage() {
           onClose={() => setBaselineModalOpen(false)}
           athleteId={currentUser.id}
           athleteName={currentUser.displayName || currentUser.username || currentUser.email || 'Athlete'}
+          sportName={currentUser.sport}
           onComplete={handleBaselineComplete}
         />
 

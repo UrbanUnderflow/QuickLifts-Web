@@ -669,8 +669,83 @@ function deriveBaselineProbeProfile(progress = {}) {
   };
 }
 
+function deriveMentalSkillsBaselineProfile(progress = {}) {
+  const baseline = progress.mentalSkillsBaseline || {};
+  const familyScores = baseline.familyScores || {};
+  const familyScore = (key, fallback = 50) => clampScore(
+    normalizeNumber(familyScores?.[key]?.score) ?? fallback
+  );
+
+  const attention = familyScore('attention_cues');
+  const visualization = familyScore('visualization');
+  const breath = familyScore('breathing_body_awareness');
+  const emotion = familyScore('emotional_regulation');
+  const coherence = familyScore('coherence');
+  const selfTalk = familyScore('self_talk_reframing');
+  const reflection = familyScore('reflection_learning');
+  const belief = familyScore('belief_identity');
+
+  const skillScores = {
+    sustained_attention: attention,
+    selective_attention: attention,
+    attentional_shifting: clampScore((attention + selfTalk) / 2),
+    error_recovery_speed: clampScore((reflection + emotion) / 2),
+    emotional_interference_control: clampScore((emotion + coherence) / 2),
+    pressure_stability: clampScore((breath + belief) / 2),
+    response_inhibition: clampScore((selfTalk + attention) / 2),
+    working_memory_updating: clampScore((visualization + reflection) / 2),
+    cue_discrimination: attention,
+  };
+
+  const pillarScores = {
+    focus: clampScore((attention + visualization) / 2),
+    composure: clampScore((breath + emotion + coherence) / 3),
+    decision: clampScore((selfTalk + reflection + belief) / 3),
+  };
+  const sortedSkillsAsc = Object.entries(skillScores)
+    .sort((left, right) => left[1] - right[1])
+    .map(([key]) => key);
+
+  return {
+    overallScore: clampScore(normalizeNumber(baseline.overallCompetencyScore) ?? average([
+      attention,
+      visualization,
+      breath,
+      emotion,
+      coherence,
+      selfTalk,
+      reflection,
+      belief,
+    ])),
+    pillarScores,
+    skillScores,
+    modifierScores: {
+      readiness: 50,
+      fatigability: 50,
+      consistency: 50,
+      pressure_sensitivity: 50,
+    },
+    pressureSensitivity: {
+      evaluative_threat: clampScore(100 - belief),
+      uncertainty: clampScore(100 - coherence),
+      visual_distraction: clampScore(100 - attention),
+    },
+    strongestSkills: [...sortedSkillsAsc].reverse().slice(0, 3),
+    weakestSkills: sortedSkillsAsc.slice(0, 3),
+    trendSummary: [
+      `Mental Skills Starting Point recorded attention at ${Math.round(attention)}.`,
+      `Mental Skills Starting Point recorded body awareness at ${Math.round(breath)}.`,
+      `Mental Skills Starting Point recorded belief at ${Math.round(belief)}.`,
+    ],
+    updatedAt: coerceMillis(baseline.completedAt) || Date.now(),
+  };
+}
+
 function resolveProfileForSnapshot(progress = {}, snapshotType) {
   if (snapshotType === 'baseline') {
+    if (progress.mentalSkillsBaseline) {
+      return deriveMentalSkillsBaselineProfile(progress);
+    }
     if (progress.baselineProbe) {
       return deriveBaselineProbeProfile(progress);
     }
@@ -681,6 +756,10 @@ function resolveProfileForSnapshot(progress = {}, snapshotType) {
 
   if (progress.taxonomyProfile) {
     return progress.taxonomyProfile;
+  }
+
+  if (progress.mentalSkillsBaseline) {
+    return deriveMentalSkillsBaselineProfile(progress);
   }
 
   if (progress.baselineProbe) {
@@ -835,10 +914,19 @@ async function upsertPilotMentalPerformanceSnapshot({
 
   const capturedAt =
     snapshotType === 'baseline'
-      ? coerceMillis(progress.baselineProbe?.completedAt || progress.baselineAssessment?.completedAt)
+      ? coerceMillis(
+          progress.mentalSkillsBaseline?.completedAt
+          || progress.baselineProbe?.completedAt
+          || progress.baselineAssessment?.completedAt
+        )
       : coerceMillis(progress.lastProfileSyncAt || progress.updatedAt);
   const computedAt = Date.now();
-  const hasBaselineAssessment = Boolean(progress.baselineProbe || progress.baselineAssessment || baselineSnapshot);
+  const hasBaselineAssessment = Boolean(
+    progress.mentalSkillsBaseline
+    || progress.baselineProbe
+    || progress.baselineAssessment
+    || baselineSnapshot
+  );
   const freshnessWindowDays = snapshotType === 'current_latest_valid' ? FRESHNESS_WINDOW_DAYS : null;
   const hasRecentProfile = Boolean(capturedAt && computedAt - capturedAt <= FRESHNESS_WINDOW_MS);
 
@@ -5295,6 +5383,7 @@ module.exports = {
   writePilotOperationalStateChange,
   savePilotSurveyResponse,
   upsertPilotMentalPerformanceSnapshot,
+  deriveMentalSkillsBaselineProfile,
   deriveBaselineProbeProfile,
   normalizeTrustDispositionBaseline,
   writePilotMetricOpsStatus,

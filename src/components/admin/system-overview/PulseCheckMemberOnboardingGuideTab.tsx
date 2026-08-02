@@ -24,7 +24,7 @@ const SYSTEM_SETUP_STEPS = [
   },
   {
     title: 'Configure the team operating defaults',
-    body: 'Set the team type, sport or unit, default invite policy, team admins, and any baseline routing defaults that the roster should inherit at entry.',
+    body: 'Set the team type, sport or unit, default invite policy, team admins, and the sport identity used by the Mental Skills Starting Point and Sports Intelligence layer.',
     owner: 'PulseCheck internal admin',
   },
   {
@@ -48,7 +48,7 @@ const ROLE_HANDOFF_ROWS = [
   ['Org or team admin', 'Receives administrative access through the rollout handoff, becomes the operating admin for the container, and can manage staff and roster operations when that responsibility is delegated.'],
   ['Coach or staff', 'Arrives through a role-specific staff invite, confirms role and title, receives scoped visibility, and can invite athletes if permissions allow it.'],
   ['Clinician', 'Arrives through a clinician invite, completes identity or compliance onboarding, and is linked to the AuntEdna bridge through the ClinicianBridge model.'],
-  ['Athlete', 'Arrives through an athlete invite or direct team-linked entry, completes product onboarding, and is routed into baseline automatically.'],
+  ['Athlete', 'Arrives through an athlete invite or direct team-linked entry, completes product onboarding, and enters the Mental Skills Starting Point automatically.'],
 ];
 
 const COACH_AND_STAFF_STEPS = [
@@ -107,7 +107,7 @@ const ATHLETE_STEPS = [
   },
   {
     title: 'Required tasks stay visible until they are complete',
-    body: 'The athlete-facing workspace should keep the first decision simple: consent is done, the in-app baseline is the next required task, and standard training assignments remain locked until baseline finishes. The shared task model treats either web baselineAssessment or native baselineProbe as valid completion evidence.',
+    body: 'The athlete-facing workspace keeps the first decision simple: consent is done, the Mental Skills Starting Point is next, and standard skill assignments remain locked until it is finished. Current clients write mentalSkillsBaseline; older baselineAssessment and baselineProbe records are accepted only for existing-athlete compatibility.',
     owner: 'App runtime + workspace shell',
   },
   {
@@ -116,8 +116,8 @@ const ATHLETE_STEPS = [
     owner: 'Staff + runtime',
   },
   {
-    title: 'Baseline completion clears the unlock gate',
-    body: 'Once the athlete finishes the in-app baseline on web or iOS, baselinePathStatus becomes complete, assessmentNeeded flips false, the first canonical profile snapshot is written, and standard training delivery can begin.',
+    title: 'Starting Point completion clears the unlock gate',
+    body: 'Once the athlete finishes the Mental Skills Starting Point on web, iOS, or Android, the legacy-named baselinePathStatus becomes complete, assessmentNeeded flips false, mentalSkillsBaseline is written, and standard skill delivery can begin.',
     owner: 'Athlete + app',
   },
 ];
@@ -131,7 +131,7 @@ const OBJECT_ROWS = [
   ['OrganizationMembership / TeamMembership', 'Role and permission truth for admins, coaches, staff, and athletes.'],
   ['ClinicianBridge', 'Explicit PulseCheck to AuntEdna bridge that keeps escalation routing coherent.'],
   ['users/{uid}', 'Athlete or staff profile record and onboarding completion truth.'],
-  ['athlete-mental-progress/{uid}', 'Baseline routing, pathway seed, and post-baseline recommendations.'],
+  ['athlete-mental-progress/{uid}', 'Mental Skills Starting Point evidence, eight-family scores, first-skill recommendations, pathway seed, and legacy compatibility fields.'],
 ];
 
 const DATA_WRITE_ROWS = [
@@ -141,19 +141,19 @@ const DATA_WRITE_ROWS = [
   ['Role and invite setup', 'inviteType, defaultRole, permissionSetId, teamId, targetPilotId, status, expiresAt', 'Determines who can enter, what they become at entry, and which onboarding questions or views they should see.'],
   ['Clinician routing setup', 'ClinicianBridge mapping, team default clinician profile, athlete override when needed', 'Ensures the clinical escalation route exists before any real support or safety events occur.'],
   ['Athlete runtime onboarding', 'preferredName, pulseCheckOnboardingComplete, dailyReflectionPreferences, sport, position, seasonPhase, primaryMentalChallenge, primaryPerformanceGoal, initialPathway', 'Stores the in-app athlete onboarding truth, the primary training bottleneck, and the athlete-stated outcome context.'],
-  ['Athlete task gate', 'athleteOnboarding.productConsentAccepted, athleteOnboarding.baselinePathStatus, athlete-mental-progress/{uid}.assessmentNeeded', 'Creates the required-task lane that must clear before normal assignments or simulations should unlock. Team membership task state is synchronized from either web or native baseline completion.'],
-  ['Athlete baseline routing', 'assessmentNeeded, currentPathway, recommendedPathway, baselineAssessment or baselineProbe', 'Connects onboarding to the first training prescription, writes the first canonical snapshot, and closes the onboarding loop no matter which client captured the baseline.'],
+  ['Athlete task gate', 'athleteOnboarding.productConsentAccepted, athleteOnboarding.baselinePathStatus, athlete-mental-progress/{uid}.assessmentNeeded', 'Creates the required-task lane that must clear before normal skills unlock. The membership status keeps its legacy field name while all current clients share one completion contract.'],
+  ['Mental Skills Starting Point', 'mentalSkillsBaseline.currentState, familiarity, evidence, familyScores, disciplineFocus, version', 'Separates current state from competency, records demonstrated evidence across eight skill families, and creates the first three-skill prescription.'],
 ];
 
 const ROLE_JOURNEY_ROWS = [
   ['Org or team admin', 'Receive administrative access, become the controlling admin for the operating container, then invite and manage the team when that responsibility has been handed off.'],
   ['Coach', 'Enter through a role-specific invite, confirm scoped visibility, complete setup, and land on an immediately useful roster read.'],
-  ['Athlete', 'Enter through the correct team or pilot path, complete Nora onboarding, run the baseline, and leave with one clear next program direction.'],
+  ['Athlete', 'Enter through the correct team or pilot path, complete Nora onboarding, play the Mental Skills Starting Point, and leave with one clear starting skill in each discipline.'],
   ['Clinician', 'Enter through a clinician-specific path, complete compliance and identity steps, and join the escalation route without broad roster-wide exposure.'],
 ];
 
 const VISIBILITY_ROWS = [
-  ['Athlete invite', 'Athlete role, team connection, baseline flow, pilot enrollment, and cohort alignment.'],
+  ['Athlete invite', 'Athlete role, team connection, Mental Skills Starting Point flow, pilot enrollment, and cohort alignment.'],
   ['Coach or staff invite', 'Scoped team role, dashboard visibility, notification setup, and athlete-invite ability when permitted.'],
   ['Clinician invite', 'Clinician role, compliance onboarding, and explicit bridge activation.'],
   ['Admin activation', 'Org and team admin authority for setup, invites, and administrative controls.'],
@@ -164,10 +164,10 @@ const VERIFICATION_ROWS = [
   ['Clinical route', 'The team has a valid default clinician profile or an intentional no-clinician posture.'],
   ['Coach onboarding', 'The coach sees team and pilot context, the correct role, and a scoped dashboard experience.'],
   ['Athlete onboarding', 'users/{uid}.pulseCheckOnboardingComplete is true and sport is populated after Nora onboarding.'],
-  ['Baseline trigger', 'athlete-mental-progress/{uid}.assessmentNeeded is true immediately after athlete onboarding save.'],
+  ['Starting Point trigger', 'athlete-mental-progress/{uid}.assessmentNeeded is true immediately after athlete onboarding save.'],
   ['Task gate state', 'pulsecheck-team-memberships/{membershipId}.athleteOnboarding.baselinePathStatus moves ready -> started -> complete and the athlete workspace keeps assignments locked until complete.'],
-  ['Shared baseline evidence', 'The gate clears when assessmentNeeded is false and the athlete has either baselineAssessment (web) or baselineProbe (native), with membership task state reconciled to complete.'],
-  ['Baseline completion', 'assessmentNeeded flips to false, baselinePathStatus is complete, and the first profile snapshot is present after baseline.'],
+  ['Shared Starting Point evidence', 'The gate clears when assessmentNeeded is false and mentalSkillsBaseline is present. Legacy baselineAssessment and baselineProbe records remain accepted for existing athletes only.'],
+  ['Starting Point completion', 'assessmentNeeded flips to false, baselinePathStatus is complete, all eight family evidence records are present, and the first three-skill prescription is saved.'],
 ];
 
 const FAILURE_ROWS = [
@@ -175,8 +175,8 @@ const FAILURE_ROWS = [
   ['Coach lands with the wrong access or no useful dashboard', 'Check the invite type, default role, permission set, and team membership mapping.'],
   ['Athlete enters without team or pilot context', 'Check whether the athlete used the correct invite path and whether pilot or cohort fields were attached to the invite or enrollment flow.'],
   ['Clinical routing is missing when needed', 'Check the default clinician profile, ClinicianBridge mapping, and team escalation defaults.'],
-  ['Baseline never appears', 'Check athlete-mental-progress/{uid}.assessmentNeeded and confirm the app reaches MainTabView after onboarding closes.'],
-  ['Athlete can receive normal sim assignments before baseline completes', 'Check the athlete task gate in the workspace and confirm coach assignment surfaces respect the baseline lock for baseline-incomplete athletes.'],
+  ['Mental Skills Starting Point never appears', 'Check athlete-mental-progress/{uid}.assessmentNeeded and confirm the app reaches MainTabView after onboarding closes.'],
+  ['Athlete can receive normal skills before the Starting Point is complete', 'Check the athlete task gate in the workspace and confirm assignment surfaces respect the lock for athletes who have not finished the Starting Point.'],
 ];
 
 const MODELING_ROWS = [
@@ -193,7 +193,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
         eyebrow="PulseCheck Operations"
         title="Member Onboarding Guide"
         version="Version 1.3 | March 14, 2026"
-        summary="Operational onboarding guide for how a new PulseCheck member actually enters the system from upstream setup through the athlete task gate and in-app baseline completion. This page covers the full chain: organization creation, team setup, pilot and cohort posture, clinician routing, role-specific invites, coach onboarding, athlete first-run experience, and the pre-training unlock boundary."
+        summary="Operational onboarding guide for how a new PulseCheck member enters the system from upstream setup through the athlete task gate and Mental Skills Starting Point. This page covers organization creation, team setup, pilot and cohort posture, clinician routing, role-specific invites, coach onboarding, athlete first-run experience, and the pre-training unlock boundary."
         highlights={[
           {
             title: 'Setup Starts Before The Athlete',
@@ -205,7 +205,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
           },
           {
             title: 'Task Gate Before Training',
-            body: 'Even after consent is complete, the athlete should stay in a required-task lane until the in-app baseline finishes and standard training unlocks.',
+            body: 'Even after consent is complete, the athlete stays in a required-task lane until the Mental Skills Starting Point is finished and standard skills unlock.',
           },
         ]}
       />
@@ -214,7 +214,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
         sectionLabel="Operational Alignment"
         role="Source-of-truth runbook for how PulseCheck should onboard a new member across system setup, role assignment, coach enablement, athlete first-run flow, and clinician routing."
         sourceOfTruth="This document is authoritative for the full operational onboarding chain for a new PulseCheck member and should be read alongside the Athlete Journey, Coach Journey, Team and Pilot Onboarding Architecture, and Permissions & Visibility artifacts."
-        masterReference="Use this artifact when preparing a launch, training staff, testing onboarding end to end, or validating that a member is entering the correct team, pilot, and baseline path."
+        masterReference="Use this artifact when preparing a launch, training staff, testing onboarding end to end, or validating that a member is entering the correct team, pilot, and Mental Skills Starting Point path."
         relatedDocs={[
           'Athlete User Journey',
           'Coach User Journey',
@@ -233,7 +233,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
           <InfoCard
             title="What Counts As Done"
             accent="green"
-            body="A member onboarding is only complete when the system shell is ready, the right role enters through the right invite, and the athlete clears the required task gate by finishing baseline."
+            body="A member onboarding is only complete when the system shell is ready, the right role enters through the right invite, and the athlete clears the required task gate by finishing the Mental Skills Starting Point."
           />
         </CardGrid>
         <DataTable columns={['Checkpoint', 'Expectation']} rows={READINESS_ROWS} />
@@ -297,7 +297,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
         <StepRail steps={COACH_AND_STAFF_STEPS} />
       </SectionBlock>
 
-      <SectionBlock icon={Brain} title="Athlete Onboarding and Baseline Flow">
+      <SectionBlock icon={Brain} title="Athlete Onboarding and Mental Skills Starting Point">
         <StepRail steps={ATHLETE_STEPS} />
       </SectionBlock>
 
@@ -374,8 +374,8 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
               <BulletList
                 items={[
                   'Athlete reaches Nora onboarding without staff rescue.',
-                  'Baseline auto-launches after onboarding.',
-                  'Recommended pathway is written back after the 3-sim baseline.',
+                  'Mental Skills Starting Point launches after onboarding.',
+                  'All eight family scores and three starting skills are written after completion.',
                 ]}
               />
             }
@@ -414,7 +414,7 @@ const ONBOARDING_ACCESS_PAGES: ArtifactPageEntry[] = [
   {
     id: 'member-onboarding-guide',
     label: 'Member Onboarding Guide',
-    subtitle: 'End-to-end entry flow from setup through baseline unlock.',
+    subtitle: 'End-to-end entry flow from setup through the Mental Skills Starting Point unlock.',
     icon: FileText,
     accent: '#c084fc',
     render: () => <MemberOnboardingGuideOverviewDoc />,

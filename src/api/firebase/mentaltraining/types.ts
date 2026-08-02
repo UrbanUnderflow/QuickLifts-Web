@@ -1776,6 +1776,7 @@ export interface AthleteMentalProgress {
   foundationCheckInsComplete: boolean;
 
   // Assessment
+  mentalSkillsBaseline?: import('./mentalSkillsBaseline').MentalSkillsBaselineRecord;
   baselineAssessment?: BaselineAssessment;
   baselineProbe?: BaselineProbe;
   assessmentNeeded: boolean;
@@ -2976,6 +2977,9 @@ export function athleteProgressToFirestore(progress: AthleteMentalProgress): Rec
   if (progress.baselineAssessment) {
     data.baselineAssessment = progress.baselineAssessment;
   }
+  if (progress.mentalSkillsBaseline) {
+    data.mentalSkillsBaseline = sanitizeFirestoreValue(progress.mentalSkillsBaseline);
+  }
   if (progress.baselineProbe) {
     data.baselineProbe = progress.baselineProbe;
   }
@@ -3034,6 +3038,7 @@ export function athleteProgressFromFirestore(athleteId: string, data: Record<str
     foundationComplete: data.foundationComplete || false,
     foundationBoxBreathingComplete: data.foundationBoxBreathingComplete || false,
     foundationCheckInsComplete: data.foundationCheckInsComplete || false,
+    mentalSkillsBaseline: data.mentalSkillsBaseline,
     baselineAssessment: data.baselineAssessment,
     baselineProbe: data.baselineProbe,
     assessmentNeeded: data.assessmentNeeded ?? true,

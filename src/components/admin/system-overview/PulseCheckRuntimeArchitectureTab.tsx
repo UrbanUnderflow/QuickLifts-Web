@@ -48,7 +48,7 @@ const RUNTIME_LAYERS = [
 const FLOW_STEPS = [
   {
     title: 'Athlete Entry Gate',
-    body: 'Before standard performance assignment begins, PulseCheck should confirm the athlete has cleared the required task gate: consent is complete, the in-app baseline is complete, and any optional Vision Pro session remains explicitly non-blocking. Shared gate resolution accepts either web baselineAssessment or native baselineProbe, then synchronizes membership task state.',
+    body: 'Before standard skill assignment begins, PulseCheck confirms that consent and the Mental Skills Starting Point are complete. Current clients write mentalSkillsBaseline. Older baselineAssessment and baselineProbe records satisfy the gate only for existing-athlete compatibility. Any optional Vision Pro session remains non-blocking.',
     owner: 'Onboarding shell / workspace',
   },
   {
@@ -125,7 +125,7 @@ const PILOT_DEFAULT_ROWS = [
   ['Coach intervention behavior', 'New Nora daily assignments notify the coach immediately. Coach defer and override decisions become the source of truth for the rest of that date unless safety policy says otherwise.'],
   ['Coach follow-up behavior', 'Coach notifications should accumulate into one readable follow-up queue with unread count, read state, archive state, and direct links into assignment review or athlete follow-up surfaces.'],
   ['Stale escalation behavior', 'If the latest snapshot is stale, classify-escalation may read it as context but cannot increase confidence because of it.'],
-  ['Pre-training unlock behavior', 'Standard coach or Nora sim assignment should stay locked until consent and the in-app baseline are complete. Optional Vision Pro sessions do not block unlock unless the rollout explicitly says otherwise. Shared completion truth can come from web baselineAssessment or native baselineProbe.'],
+  ['Pre-training unlock behavior', 'Standard coach or Nora skill assignments stay locked until consent and the Mental Skills Starting Point are complete. Optional Vision Pro sessions do not block unlock. Current completion truth is mentalSkillsBaseline; legacy baselineAssessment and baselineProbe are compatibility-only.'],
 ];
 
 const RuntimeArchitectureOverviewDoc: React.FC = () => {

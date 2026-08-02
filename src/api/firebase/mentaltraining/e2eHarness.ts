@@ -3019,7 +3019,9 @@ async function submitPulseCheckCheckInViaHarness(
   const authoringResult = await trainingPlanAuthoringService.maybeAuthorPrimaryPlan({
     athleteId,
     profile: progress?.taxonomyProfile || null,
-    hasBaselineAssessment: Boolean(progress?.baselineAssessment),
+    hasBaselineAssessment: Boolean(
+      progress?.mentalSkillsBaseline || progress?.baselineAssessment || progress?.baselineProbe
+    ),
     activeProgram: progress?.activeProgram || null,
     snapshot,
     sourceDate,

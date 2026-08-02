@@ -191,7 +191,9 @@ export const CoachPrimaryPlanReviewModal: React.FC<CoachPrimaryPlanReviewModalPr
         ? await stateSnapshotService.getById(readModel.todayTask.sourceStateSnapshotId)
         : await stateSnapshotService.getForAthleteOnDate(athlete.id, readModel.sourceDate);
 
-      const baselineSnapshot = progress?.baselineAssessment
+      const baselineSnapshot = (
+        progress?.mentalSkillsBaseline || progress?.baselineAssessment || progress?.baselineProbe
+      )
         ? await profileSnapshotService.getCanonical(athlete.id, 'baseline')
         : null;
 
@@ -238,7 +240,11 @@ export const CoachPrimaryPlanReviewModal: React.FC<CoachPrimaryPlanReviewModalPr
         athleteId: athlete.id,
         coachId,
         profile: reviewState.progress?.taxonomyProfile || null,
-        hasBaselineAssessment: Boolean(reviewState.progress?.baselineAssessment),
+        hasBaselineAssessment: Boolean(
+          reviewState.progress?.mentalSkillsBaseline
+          || reviewState.progress?.baselineAssessment
+          || reviewState.progress?.baselineProbe
+        ),
         activeProgram: reviewState.progress?.activeProgram || null,
         snapshot: reviewState.snapshot,
         sourceDate: reviewState.readModel.sourceDate,

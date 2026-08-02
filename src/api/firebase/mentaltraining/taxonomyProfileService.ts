@@ -1,4 +1,5 @@
 import type { BaselineAssessment, MentalCheckIn } from './types';
+import type { MentalSkillsBaselineRecord } from './mentalSkillsBaseline';
 import type {
   ProgramPrescription,
   SimSessionRecord,
@@ -25,8 +26,15 @@ export function bootstrapTaxonomyProfile(
   return profileSnapshotRuntime.bootstrapTaxonomyProfile(assessment);
 }
 
+export function bootstrapMentalSkillsBaselineProfile(
+  baseline: MentalSkillsBaselineRecord
+): TaxonomyProfile {
+  return profileSnapshotRuntime.bootstrapMentalSkillsBaselineProfile(baseline);
+}
+
 export function deriveTaxonomyProfile(input: {
   baselineAssessment?: BaselineAssessment | null;
+  mentalSkillsBaseline?: MentalSkillsBaselineRecord | null;
   checkIns?: MentalCheckIn[];
   simSessions?: SimSessionRecord[];
 }): TaxonomyProfile {

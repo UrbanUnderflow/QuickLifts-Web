@@ -24,9 +24,9 @@ const ARCHITECTURE_ROWS = [
 ];
 
 const METRIC_ROWS = [
-  ['Enrollment', 'Athlete finished onboarding, accepted all required consents, and completed the initial baseline test.', 'Enrollment complete / invited'],
+  ['Enrollment', 'Athlete finished onboarding, accepted all required consents, and completed the Mental Skills Starting Point.', 'Enrollment complete / invited'],
   ['Adherence', 'Expected active athlete-days where both the daily check-in and assigned action were completed.', 'Full-day adherence rate'],
-  ['Mental performance improvement', 'Average pillar composite delta from valid pilot baseline to valid current profile.', 'Average pillar composite delta'],
+  ['Mental-skill growth', 'Average change from the athlete\'s eight-family Mental Skills Starting Point scores to later validated skill evidence.', 'Average mental-skill family delta'],
   ['Escalations', 'Pilot-scoped escalation counts and status by tier.', 'Escalations total + tier mix'],
   ['Speed to care', 'Time from escalation creation to care-path movement.', 'Median minutes to handoff initiated'],
   ['Trust', 'Direct self-reported trust in PulseCheck guidance, role-specific.', 'Average most recent valid trust response'],
@@ -41,7 +41,7 @@ const EXECUTION_ROWS = [
 ];
 
 const OWNERSHIP_ROWS = [
-  ['`baseline_completed`', 'Baseline completion backend path', 'Prevent duplicate event writes from client and server.'],
+  ['`baseline_completed`', 'Mental Skills Starting Point completion backend path', 'Legacy event name retained for analytics continuity; prevent duplicate event writes from client and server.'],
   ['`daily_checkin_completed`', '`submit-pulsecheck-checkin`', 'Canonical writer for check-in completion.'],
   ['`daily_assignment_completed`', '`record-pulsecheck-assignment-event`', 'Canonical writer when event type becomes `completed`.'],
   ['`care_handoff_initiated` / `care_handoff_completed`', 'Escalation backend', 'Canonical care lifecycle ownership.'],
