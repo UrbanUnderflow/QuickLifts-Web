@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
@@ -154,6 +154,7 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
   persist = true,
   onComplete,
 }) => {
+  const contentRef = useRef<HTMLElement>(null);
   const [step, setStep] = useState<Step>('intro');
   const [isSaving, setIsSaving] = useState(false);
   const [savedProgress, setSavedProgress] = useState<any>(null);
@@ -183,6 +184,10 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
   const selfTalkResponses = useMemo(() => baselineSelfTalkResponseProfiles(sportPack), [sportPack]);
   const stepIndex = steps.indexOf(step);
   const progress = Math.max(0, (stepIndex / (steps.length - 1)) * 100);
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [step]);
 
   const replaceEvidence = (items: MentalSkillEvidence[]) => {
     const ids = new Set(items.map((item) => `${item.challengeId}:${item.family}:${item.component}`));
@@ -284,7 +289,7 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
           </div>
         ) : null}
 
-        <main className="min-h-0 flex-1 overflow-y-auto py-7 [scrollbar-width:none]">
+        <main ref={contentRef} className="min-h-0 flex-1 overflow-y-auto py-7 [scrollbar-width:none]">
           <AnimatePresence mode="wait">
             <motion.section
               key={step}

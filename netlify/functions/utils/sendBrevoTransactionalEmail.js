@@ -13,6 +13,6 @@
 // keep working unchanged; they transparently get the canonical implementation.
 // Netlify's esbuild bundler resolves the `.ts` import at build time.
 // ---------------------------------------------------------------------------
-const { sendBrevoTransactionalEmail, buildEmailDedupeKey } = require('./emailSequenceHelpers');
+const { sendBrevoTransactionalEmail, buildEmailDedupeKey } = require('./emailSequenceHelpers.ts');
 
 module.exports = { sendBrevoTransactionalEmail, buildEmailDedupeKey };
