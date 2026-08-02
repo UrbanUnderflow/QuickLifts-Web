@@ -592,6 +592,10 @@ export interface PulseCheckTeam {
   status: PulseCheckTeamStatus;
   defaultInvitePolicy: PulseCheckInvitePolicy;
   commercialConfig: PulseCheckTeamCommercialConfig;
+  showingUpLeaderboard?: {
+    enabled: boolean;
+    anchorDateKey?: string;
+  };
   defaultEscalationRoute: PulseCheckTeamEscalationRoute;
   defaultClinicianProfileId?: string;
   defaultClinicianExternalProfileId?: string;

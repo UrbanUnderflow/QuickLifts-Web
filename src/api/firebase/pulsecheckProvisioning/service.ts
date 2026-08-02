@@ -914,6 +914,10 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   status: (data.status as PulseCheckTeamStatus) || 'provisioning',
   defaultInvitePolicy: data.defaultInvitePolicy || 'admin-only',
   commercialConfig: normalizeTeamCommercialConfig(data.commercialConfig),
+  showingUpLeaderboard: {
+    enabled: data.showingUpLeaderboard?.enabled !== false,
+    anchorDateKey: normalizeString(data.showingUpLeaderboard?.anchorDateKey) || undefined,
+  },
   defaultEscalationRoute: normalizeTeamEscalationRoute(data.defaultEscalationRoute),
   defaultClinicianProfileId: data.defaultClinicianProfileId || '',
   defaultClinicianExternalProfileId: data.defaultClinicianExternalProfileId || '',

@@ -50,6 +50,7 @@ import {
   Pencil,
   Database,
   CreditCard,
+  Trophy,
 } from 'lucide-react';
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
@@ -697,6 +698,7 @@ interface CoachDashboardShellProps {
     teamId: string,
     commercialConfig: PulseCheckTeamCommercialConfig
   ) => void;
+  onTeamLeaderboardChanged?: (teamId: string, enabled: boolean) => void;
 }
 
 type CoachDashboardTeamContext = {
@@ -706,6 +708,7 @@ type CoachDashboardTeamContext = {
   teamName: string;
   legacyCoachId?: string;
   commercialConfig: PulseCheckTeamCommercialConfig;
+  showingUpLeaderboardEnabled: boolean;
 };
 
 type CoachDashboardResolvedTeamAccess = {
@@ -728,6 +731,7 @@ const DEMO_COACH_TEAM_CONTEXT: CoachDashboardTeamContext = {
     coachReferralKickbackEnabled: true,
     coachReferralRevenueSharePct: 10,
   },
+  showingUpLeaderboardEnabled: true,
 };
 
 export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
@@ -754,6 +758,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   teamContextLoading = false,
   onSelectTeam,
   onTeamCommercialConfigChanged,
+  onTeamLeaderboardChanged,
 }) => {
   const router = useRouter();
   // Demo always shows everything; live gates off the coach's own capabilities.
@@ -1202,7 +1207,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       servicesOrganizationId={additionalServicesOrganizationId}
                       teamContext={teamContext}
                       canManageCommercialization={can('admin') || can('coaching')}
+                      canManageTeamSettings={can('admin') || can('coaching') || can('administrative')}
                       onCommercialConfigChanged={onTeamCommercialConfigChanged}
+                      onLeaderboardChanged={onTeamLeaderboardChanged}
                       isDemo={isDemo}
                     />
                   )}
@@ -1399,6 +1406,8 @@ const CoachDashboard: React.FC = () => {
                 teamName: team.displayName || 'your team',
                 legacyCoachId: team.legacyCoachId,
                 commercialConfig: team.commercialConfig,
+                showingUpLeaderboardEnabled:
+                  team.showingUpLeaderboard?.enabled !== false,
               },
             } satisfies CoachDashboardResolvedTeamAccess;
           })
@@ -1667,6 +1676,25 @@ const CoachDashboard: React.FC = () => {
     []
   );
 
+  const handleTeamLeaderboardChanged = useCallback(
+    (teamId: string, enabled: boolean) => {
+      setTeamAccesses((current) =>
+        current.map((access) =>
+          access.context.teamId === teamId
+            ? {
+                ...access,
+                context: {
+                  ...access.context,
+                  showingUpLeaderboardEnabled: enabled,
+                },
+              }
+            : access
+        )
+      );
+    },
+    []
+  );
+
   return (
     <CoachProtectedRoute requiresActiveSubscription={false}>
       <Head>
@@ -1743,6 +1771,7 @@ const CoachDashboard: React.FC = () => {
             }
           }}
           onTeamCommercialConfigChanged={handleTeamCommercialConfigChanged}
+          onTeamLeaderboardChanged={handleTeamLeaderboardChanged}
         />
       )}
     </CoachProtectedRoute>

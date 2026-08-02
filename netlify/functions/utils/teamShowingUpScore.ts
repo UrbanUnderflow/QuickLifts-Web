@@ -43,6 +43,10 @@ const normalizedString = (value: unknown): string => (
   typeof value === 'string' ? value.trim().toLowerCase() : ''
 );
 
+export const isShowingUpLeaderboardEnabled = (team: Record<string, any> | undefined): boolean => (
+  team?.showingUpLeaderboard?.enabled !== false
+);
+
 export const isSkillAssignmentDueToday = (assignment: Record<string, any>): boolean => {
   const actionType = normalizedString(assignment.actionType);
   const status = normalizedString(assignment.status);

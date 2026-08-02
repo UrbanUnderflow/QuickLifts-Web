@@ -9,6 +9,7 @@ import {
   hasMorningCheckIn,
   hasVerifiedOvernightData,
   isSkillAssignmentDueToday,
+  isShowingUpLeaderboardEnabled,
   resolveTimeZone,
   scoreShowingUpDay,
 } from './utils/teamShowingUpScore';
@@ -36,6 +37,7 @@ type ActiveMembership = {
 type AvailableTeam = {
   teamId: string;
   teamName: string;
+  leaderboardEnabled: boolean;
 };
 
 const verifyAuth = async (authHeader?: string): Promise<{ uid: string } | null> => {
@@ -337,6 +339,7 @@ const resolveAvailableTeams = async (
     return [{
       teamId: membership.teamId,
       teamName: normalizedString(team.data.displayName) || 'Your Team',
+      leaderboardEnabled: isShowingUpLeaderboardEnabled(team.data),
     }];
   });
 };
@@ -516,15 +519,20 @@ export const handler: Handler = async (event) => {
     };
   }
   const availableTeams = await resolveAvailableTeams(db, activeMemberships);
-  const selectedTeamId = requestedTeamId || availableTeams[0]?.teamId;
+  const enabledTeams = availableTeams.filter((team) => team.leaderboardEnabled);
+  const requestedEnabledTeam = enabledTeams.find((team) => team.teamId === requestedTeamId);
+  const selectedTeamId = requestedEnabledTeam?.teamId || enabledTeams[0]?.teamId;
   if (!selectedTeamId) {
     return {
-      statusCode: activeMemberships.length > 0 ? 404 : 403,
+      statusCode: activeMemberships.length > 0 ? 200 : 403,
       headers: RESPONSE_HEADERS,
       body: JSON.stringify({
-        error: activeMemberships.length > 0
-          ? 'active_team_required'
-          : 'active_team_membership_required',
+        ...(activeMemberships.length > 0
+          ? {
+              leaderboardEnabled: false,
+              availableTeams: [],
+            }
+          : { error: 'active_team_membership_required' }),
       }),
     };
   }
@@ -547,7 +555,8 @@ export const handler: Handler = async (event) => {
     headers: RESPONSE_HEADERS,
     body: JSON.stringify({
       ...standings,
-      availableTeams,
+      leaderboardEnabled: true,
+      availableTeams: enabledTeams.map(({ teamId, teamName }) => ({ teamId, teamName })),
     }),
   };
 };

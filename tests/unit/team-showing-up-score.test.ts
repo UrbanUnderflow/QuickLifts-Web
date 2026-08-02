@@ -9,6 +9,7 @@ import {
   hasMorningCheckIn,
   hasVerifiedOvernightData,
   isSkillAssignmentDueToday,
+  isShowingUpLeaderboardEnabled,
   scoreShowingUpDay,
 } from '../../netlify/functions/utils/teamShowingUpScore';
 
@@ -43,6 +44,13 @@ test('morning and evening check-ins are separate completion signals', () => {
   assert.equal(hasEveningCheckIn(eveningOnly), true);
   assert.equal(hasMorningCheckIn(both), true);
   assert.equal(hasEveningCheckIn(both), true);
+});
+
+test('team leaderboard visibility defaults on and honors an explicit coach setting', () => {
+  assert.equal(isShowingUpLeaderboardEnabled(undefined), true);
+  assert.equal(isShowingUpLeaderboardEnabled({}), true);
+  assert.equal(isShowingUpLeaderboardEnabled({ showingUpLeaderboard: { enabled: true } }), true);
+  assert.equal(isShowingUpLeaderboardEnabled({ showingUpLeaderboard: { enabled: false } }), false);
 });
 
 test('shared ranks preserve ties and skip the next occupied position', () => {

@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowRight, HeartPulse, LockKeyhole, Watch } from 'lucide-react';
+import { ArrowDown, ArrowRight, HeartPulse, LockKeyhole, Watch, X } from 'lucide-react';
 import PageHead from '../../components/PageHead';
 
 const pageMeta = {
@@ -54,6 +54,254 @@ const wearableDevices = [
   { name: 'Fitbit Air', image: '/pulsecheck-youth/wearables/fitbit.png' },
   { name: 'Apple Watch', image: '/pulsecheck-youth/wearables/apple-watch.png' },
   { name: 'Polar 360', image: '/pulsecheck-youth/wearables/polar-360.png' },
+];
+
+type EducationStory = {
+  id: string;
+  eyebrow: string;
+  title: string;
+  intro: string;
+  sections: Array<{
+    number: string;
+    title: string;
+    body: string;
+  }>;
+  callout?: string;
+  citation?: {
+    label: string;
+    href: string;
+  };
+};
+
+const educationStories: EducationStory[] = [
+  {
+    id: 'skill-learning',
+    eyebrow: 'How one skill gets learned',
+    title: 'From a new idea to something an athlete can use.',
+    intro:
+      'PulseCheck teaches one clear skill at a time. The athlete learns what it is, sees it in a real sports moment, practices it with guidance, and carries it into the day.',
+    sections: [
+      {
+        number: '01',
+        title: 'Name it.',
+        body: 'Give the skill a short name the athlete can remember when the moment gets loud.',
+      },
+      {
+        number: '02',
+        title: 'Understand it.',
+        body: 'Explain what the skill changes and when it can help during practice, recovery, or competition.',
+      },
+      {
+        number: '03',
+        title: 'See it.',
+        body: 'Show what the skill looks and sounds like when an athlete uses it well.',
+      },
+      {
+        number: '04',
+        title: 'Practice it calmly.',
+        body: 'Follow a short guided activity before pressure makes the choice harder.',
+      },
+      {
+        number: '05',
+        title: 'Use it in the moment.',
+        body: 'Take one simple cue into training or competition and return to it when it matters.',
+      },
+    ],
+    callout:
+      'Nora brings a skill back when it fits how the athlete feels, what the body is showing, and what the day demands.',
+  },
+  {
+    id: 'five-minutes',
+    eyebrow: 'What a day looks like',
+    title: 'A short plan built around today.',
+    intro:
+      'The exact skills can change from day to day. The structure stays familiar, so the athlete always knows what comes next.',
+    sections: [
+      {
+        number: '01',
+        title: 'Check in.',
+        body: 'The athlete names how they arrived: drained, off, okay, good, or locked in.',
+      },
+      {
+        number: '02',
+        title: 'Add body context.',
+        body: 'A connected wearable can add sleep, heart rate, recovery, and training load.',
+      },
+      {
+        number: '03',
+        title: 'Get today\'s skills.',
+        body: 'Nora chooses a short plan for the athlete\'s energy, schedule, and pressure points.',
+      },
+      {
+        number: '04',
+        title: 'Follow the guidance.',
+        body: 'The athlete practices breathing, focus, confidence, self-talk, or another useful skill.',
+      },
+      {
+        number: '05',
+        title: 'Carry one cue forward.',
+        body: 'The session ends with something simple the athlete can remember later that day.',
+      },
+    ],
+    callout: 'Most daily plans are designed to fit into about five minutes.',
+  },
+  {
+    id: 'wearable-context',
+    eyebrow: 'How wearable context works',
+    title: 'The athlete speaks first. Body signals add another clue.',
+    intro:
+      'PulseCheck starts with the athlete\'s own answer. Wearable information helps Nora understand whether that answer lines up with sleep, recovery, heart rate, and recent training.',
+    sections: [
+      {
+        number: '01',
+        title: 'The athlete leads.',
+        body: 'Mood, stress, energy, and confidence come directly from the person wearing the device.',
+      },
+      {
+        number: '02',
+        title: 'The body adds context.',
+        body: 'Sleep, heart rate, recovery, and training load can show how much the body has handled lately.',
+      },
+      {
+        number: '03',
+        title: 'Nora looks at both.',
+        body: 'A good mood with poor sleep may call for a calmer plan. Feeling off with steady body signals may call for focus or confidence work.',
+      },
+      {
+        number: '04',
+        title: 'Today gets one clear plan.',
+        body: 'The athlete receives skills chosen to fit the whole picture.',
+      },
+    ],
+    callout:
+      'Wearable signals guide mental performance education. Medical decisions stay with qualified people.',
+  },
+  {
+    id: 'research-explained',
+    eyebrow: 'The research in plain language',
+    title: 'What the 66% figure actually means.',
+    intro:
+      'In this study, one group physically trained a finger muscle and improved its strength by 53%. Another group only imagined making the same forceful movement and improved by 35%. Thirty-five is about 66% of fifty-three.',
+    sections: [
+      {
+        number: '01',
+        title: 'What the researchers did.',
+        body: 'Eight adults imagined pushing their little finger as hard as possible. Six adults physically trained the same movement over the same 12 weeks.',
+      },
+      {
+        number: '02',
+        title: 'What changed.',
+        body: 'The imagined-movement group became 35% stronger. The physical-training group became about 53% stronger.',
+      },
+      {
+        number: '03',
+        title: 'What it suggests.',
+        body: 'The brain can improve how strongly it tells a muscle to work, even while the body stays still.',
+      },
+      {
+        number: '04',
+        title: 'Limits to keep in mind.',
+        body: 'This was a small study of healthy young adults and a simple finger movement. It supports the value of mental practice without predicting the result for one athlete.',
+      },
+    ],
+    callout:
+      'The study supports focused mental practice as one part of physical performance training.',
+    citation: {
+      label: 'Read Ranganathan et al. in Neuropsychologia',
+      href: 'https://doi.org/10.1016/j.neuropsychologia.2003.11.018',
+    },
+  },
+  {
+    id: 'clinical-support',
+    eyebrow: 'AuntEdna clinical support',
+    title: 'When a pattern needs a qualified person.',
+    intro:
+      'One hard day can happen to any athlete. When difficult check-ins, poor sleep, or concerning answers keep showing up, the program can bring a qualified clinician into the review.',
+    sections: [
+      {
+        number: '01',
+        title: 'A pattern appears.',
+        body: 'The system looks for repeated changes and program safety signals across more than one day.',
+      },
+      {
+        number: '02',
+        title: 'Program rules guide the handoff.',
+        body: 'Each organization sets consent, safety, and escalation rules for the athletes it supports.',
+      },
+      {
+        number: '03',
+        title: 'A clinician reviews it.',
+        body: 'A qualified person looks at the pattern and uses human judgment to understand what may be happening.',
+      },
+      {
+        number: '04',
+        title: 'The athlete connects to care.',
+        body: 'The next step can be a check-in, a conversation with a trusted adult, or a connection to the right care.',
+      },
+    ],
+    callout: 'PulseCheck can notice a pattern. A qualified person decides what care is appropriate.',
+  },
+  {
+    id: 'parent-trust',
+    eyebrow: 'What parents should know',
+    title: 'Clear roles help athletes feel safe.',
+    intro:
+      'PulseCheck is a guided mental performance system with structured lessons, private check-ins, and human support when a pattern needs review.',
+    sections: [
+      {
+        number: '01',
+        title: 'Nora follows a structured library.',
+        body: 'Athletes receive guided lessons and activities written for specific mental skills and sports moments.',
+      },
+      {
+        number: '02',
+        title: 'Private words receive protection.',
+        body: 'The athlete can answer honestly. Adults receive the broad patterns and actions their role allows them to see.',
+      },
+      {
+        number: '03',
+        title: 'Clinicians handle clinical care.',
+        body: 'Diagnosis, treatment, and clinical decisions belong to qualified professionals.',
+      },
+      {
+        number: '04',
+        title: 'Caring adults stay involved.',
+        body: 'Parents, coaches, and clinicians keep their responsibilities for the athlete and the choices around them.',
+      },
+    ],
+    callout: 'A learning system for the athlete, with clear boundaries and human safeguards.',
+  },
+  {
+    id: 'return-to-sport',
+    eyebrow: 'For injured athletes',
+    title: 'Support while they heal. Skills that stay useful after clearance.',
+    intro:
+      'An injury changes more than the body. PulseCheck can help an athlete stay engaged with the home plan, work through fear, and build skills that still matter when competition returns.',
+    sections: [
+      {
+        number: '01',
+        title: 'Keep the home plan moving.',
+        body: 'A daily check-in can reveal changes in sleep, mood, energy, or motivation before the athlete begins the day\'s work.',
+      },
+      {
+        number: '02',
+        title: 'Practice confidence safely.',
+        body: 'Guided visualization, breathing, and self-talk can help the athlete prepare for the movements and moments they are working toward.',
+      },
+      {
+        number: '03',
+        title: 'Return with useful skills.',
+        body: 'The same focus, reset, and confidence skills can help after a mistake, before a whistle, or late in a close game.',
+      },
+      {
+        number: '04',
+        title: 'Leave with a habit.',
+        body: 'A short daily practice can continue after discharge, giving the athlete a routine they already know how to use.',
+      },
+    ],
+    callout:
+      'Rehabilitation professionals guide physical clearance. PulseCheck supports the mental skills around the return.',
+  },
 ];
 
 const boxBreathingPhases = [
@@ -201,6 +449,59 @@ const BoxBreathingPhoneDemo: React.FC = () => {
 };
 
 const PulseCheckYouthInfoPage: React.FC = () => {
+  const [activeEducationId, setActiveEducationId] = useState<string | null>(null);
+  const closeEducationButtonRef = useRef<HTMLButtonElement>(null);
+  const lastEducationTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const activeEducation = educationStories.find((story) => story.id === activeEducationId) ?? null;
+
+  const openEducation = (id: string, trigger: HTMLButtonElement) => {
+    lastEducationTriggerRef.current = trigger;
+    setActiveEducationId(id);
+  };
+
+  const closeEducation = () => {
+    setActiveEducationId(null);
+    window.setTimeout(() => lastEducationTriggerRef.current?.focus(), 0);
+  };
+
+  useEffect(() => {
+    if (!activeEducationId) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => closeEducationButtonRef.current?.focus(), 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveEducationId(null);
+        window.setTimeout(() => lastEducationTriggerRef.current?.focus(), 0);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const panel = closeEducationButtonRef.current?.closest('.yi-education-panel');
+      const focusable = panel?.querySelectorAll<HTMLElement>('button, a[href]');
+      if (!focusable?.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeEducationId]);
+
   return (
     <main className="youth-info">
       <PageHead
@@ -270,6 +571,14 @@ const PulseCheckYouthInfoPage: React.FC = () => {
               <span key={skill}>{skill}</span>
             ))}
           </div>
+          <button
+            type="button"
+            className="yi-learn-link"
+            onClick={(event) => openEducation('skill-learning', event.currentTarget)}
+          >
+            <span>See how one skill gets learned</span>
+            <i aria-hidden="true">+</i>
+          </button>
         </div>
 
         <figure className="yi-phone-figure">
@@ -285,7 +594,17 @@ const PulseCheckYouthInfoPage: React.FC = () => {
       <section className="yi-process" id="how-it-works">
         <div className="yi-section-heading">
           <p className="yi-kicker">FEELING. BODY. SKILL.</p>
-          <h2>ONE CHECK-IN.<br />A BETTER PLAN FOR TODAY.</h2>
+          <div>
+            <h2>ONE CHECK-IN.<br />A BETTER PLAN FOR TODAY.</h2>
+            <button
+              type="button"
+              className="yi-learn-link yi-learn-link--light"
+              onClick={(event) => openEducation('five-minutes', event.currentTarget)}
+            >
+              <span>What happens in five minutes</span>
+              <i aria-hidden="true">+</i>
+            </button>
+          </div>
         </div>
         <div className="yi-process-grid">
           {processSteps.map((step) => (
@@ -316,6 +635,14 @@ const PulseCheckYouthInfoPage: React.FC = () => {
               The athlete&apos;s check-in leads. Sleep, heart rate, recovery, and training load add
               another clue so Nora can choose the right mental skill for today.
             </p>
+            <button
+              type="button"
+              className="yi-learn-link yi-learn-link--light"
+              onClick={(event) => openEducation('wearable-context', event.currentTarget)}
+            >
+              <span>What does the wearable change?</span>
+              <i aria-hidden="true">+</i>
+            </button>
           </div>
         </div>
         <div className="yi-wearables-copy">
@@ -354,6 +681,43 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         <div className="yi-privacy-rule" aria-hidden="true"><span>ATHLETE TRUST</span><i /><span>USEFUL SUPPORT</span></div>
       </section>
 
+      <section className="yi-trust" aria-labelledby="yi-trust-title">
+        <div className="yi-trust-heading">
+          <p className="yi-kicker">CLEAR ROLES. HUMAN SAFEGUARDS.</p>
+          <h2 id="yi-trust-title">WHAT FAMILIES<br />CAN EXPECT.</h2>
+          <button
+            type="button"
+            className="yi-learn-link"
+            onClick={(event) => openEducation('parent-trust', event.currentTarget)}
+          >
+            <span>Read the parent guide</span>
+            <i aria-hidden="true">+</i>
+          </button>
+        </div>
+        <div className="yi-trust-grid">
+          <article>
+            <span>01</span>
+            <h3>Structured lessons</h3>
+            <p>Nora guides athletes through a clear mental skills library.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Private check-ins</h3>
+            <p>Honest answers receive protection, with useful patterns shared by role.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Qualified review</h3>
+            <p>Clinical questions and care decisions stay with qualified people.</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>Adults stay involved</h3>
+            <p>Parents, coaches, and clinicians keep caring for the athlete.</p>
+          </article>
+        </div>
+      </section>
+
       <section className="yi-research">
         <div className="yi-research-story">
           <p className="yi-kicker">THE SURPRISING RESEARCH</p>
@@ -363,14 +727,24 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             rehearse a movement without the body moving. In one small 12-week study, imagined finger
             movement produced 35% strength gains, compared with 53% from physical practice.
           </p>
-          <a
-            className="yi-text-link"
-            href="https://doi.org/10.1016/j.neuropsychologia.2003.11.018"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Read the study <ArrowRight size={16} />
-          </a>
+          <div className="yi-research-actions">
+            <button
+              type="button"
+              className="yi-learn-link"
+              onClick={(event) => openEducation('research-explained', event.currentTarget)}
+            >
+              <span>Explain this research</span>
+              <i aria-hidden="true">+</i>
+            </button>
+            <a
+              className="yi-text-link"
+              href="https://doi.org/10.1016/j.neuropsychologia.2003.11.018"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Read the study <ArrowRight size={16} />
+            </a>
+          </div>
         </div>
         <div className="yi-research-stat">
           <strong>66%</strong>
@@ -410,6 +784,36 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             <i />
             <span><b>03</b>Care</span>
           </div>
+          <button
+            type="button"
+            className="yi-learn-link yi-learn-link--light"
+            onClick={(event) => openEducation('clinical-support', event.currentTarget)}
+          >
+            <span>When does a clinician step in?</span>
+            <i aria-hidden="true">+</i>
+          </button>
+        </div>
+      </section>
+
+      <section className="yi-recovery" aria-labelledby="yi-recovery-title">
+        <div>
+          <p className="yi-kicker">FOR INJURED ATHLETES</p>
+          <h2 id="yi-recovery-title">GETTING BACK.<br /><em>THEN GETTING BETTER.</em></h2>
+        </div>
+        <div className="yi-recovery-copy">
+          <p>
+            During rehabilitation, PulseCheck can help an athlete stay engaged with the home plan,
+            work through fear, and prepare for the return. After clearance, those same skills help
+            with mistakes, focus, pressure, and confidence.
+          </p>
+          <button
+            type="button"
+            className="yi-learn-link"
+            onClick={(event) => openEducation('return-to-sport', event.currentTarget)}
+          >
+            <span>See support through recovery</span>
+            <i aria-hidden="true">+</i>
+          </button>
         </div>
       </section>
 
@@ -434,6 +838,63 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           <span>© {new Date().getFullYear()} Pulse Intelligence Labs</span>
         </div>
       </footer>
+
+      {activeEducation && (
+        <div
+          className="yi-education-layer"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeEducation();
+          }}
+        >
+          <aside
+            className="yi-education-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`yi-education-title-${activeEducation.id}`}
+          >
+            <header className="yi-education-panel-header">
+              <span>PULSECHECK / PARENT NOTES</span>
+              <button
+                ref={closeEducationButtonRef}
+                type="button"
+                aria-label="Close parent notes"
+                onClick={closeEducation}
+              >
+                <X size={22} />
+              </button>
+            </header>
+            <div className="yi-education-panel-body">
+              <p className="yi-kicker">{activeEducation.eyebrow}</p>
+              <h2 id={`yi-education-title-${activeEducation.id}`}>{activeEducation.title}</h2>
+              <p className="yi-education-intro">{activeEducation.intro}</p>
+              <div className="yi-education-sections">
+                {activeEducation.sections.map((section) => (
+                  <article key={section.number}>
+                    <span>{section.number}</span>
+                    <div>
+                      <h3>{section.title}</h3>
+                      <p>{section.body}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {activeEducation.callout && (
+                <blockquote>{activeEducation.callout}</blockquote>
+              )}
+              {activeEducation.citation && (
+                <a
+                  className="yi-education-citation"
+                  href={activeEducation.citation.href}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {activeEducation.citation.label} <ArrowRight size={16} />
+                </a>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
 
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@1,600&display=swap');
@@ -559,6 +1020,41 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         }
         .yi-button:hover { transform: translateY(-2px); }
         .yi-button--light:hover { color: var(--yi-ink); background: #fff; }
+        .yi-learn-link {
+          width: fit-content;
+          display: inline-flex;
+          align-items: center;
+          gap: 13px;
+          margin-top: 34px;
+          padding: 0 0 8px;
+          border: 0;
+          border-bottom: 1px solid currentColor;
+          color: var(--yi-ink);
+          background: transparent;
+          font: 700 12px/1.3 'DM Sans', Arial, sans-serif;
+          text-align: left;
+          cursor: pointer;
+        }
+        .yi-learn-link i {
+          width: 22px;
+          height: 22px;
+          display: grid;
+          place-items: center;
+          border: 1px solid currentColor;
+          border-radius: 50%;
+          font-size: 16px;
+          font-style: normal;
+          font-weight: 400;
+          line-height: 1;
+          transition: color .2s ease, background .2s ease, transform .2s ease;
+        }
+        .yi-learn-link:hover i {
+          color: var(--yi-paper);
+          background: var(--yi-ink);
+          transform: rotate(90deg);
+        }
+        .yi-learn-link--light { color: #fff; }
+        .yi-learn-link--light:hover i { color: var(--yi-ink); background: #fff; }
         .yi-hero-caption {
           position: absolute;
           z-index: 2;
@@ -898,6 +1394,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
 
         .yi-process { padding: 144px clamp(34px, 7vw, 110px); color: #fff; background: var(--yi-ink); }
         .yi-section-heading { display: grid; grid-template-columns: .45fr 1fr; gap: 55px; align-items: end; margin-bottom: 89px; }
+        .yi-section-heading > div { max-width: 850px; }
         .yi-section-heading h2 { max-width: 850px; margin: 0; font-size: clamp(64px, 7.2vw, 118px); line-height: .88; }
         .yi-process-grid { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid rgba(255,255,255,.28); }
         .yi-process-card { min-height: 360px; padding: 34px; border-right: 1px solid rgba(255,255,255,.28); }
@@ -1067,11 +1564,58 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         .yi-privacy-rule { display: flex; align-items: center; gap: 21px; margin-top: 89px; font-size: 10px; font-weight: 700; letter-spacing: .16em; }
         .yi-privacy-rule i { height: 1px; flex: 1; background: var(--yi-line); }
 
+        .yi-trust {
+          display: grid;
+          grid-template-columns: minmax(310px, .76fr) minmax(0, 1.24fr);
+          gap: clamp(55px, 7vw, 110px);
+          padding: 110px clamp(34px, 7vw, 110px);
+          border-top: 1px solid var(--yi-line);
+          color: var(--yi-ink);
+          background: #d9d0f1;
+        }
+        .yi-trust-heading h2 {
+          margin: 0;
+          font: 400 clamp(66px, 6.4vw, 102px)/.84 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.025em;
+        }
+        .yi-trust-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          border-top: 1px solid rgba(16,16,21,.28);
+          border-left: 1px solid rgba(16,16,21,.28);
+        }
+        .yi-trust-grid article {
+          min-height: 220px;
+          padding: 34px;
+          border-right: 1px solid rgba(16,16,21,.28);
+          border-bottom: 1px solid rgba(16,16,21,.28);
+        }
+        .yi-trust-grid article > span {
+          display: block;
+          margin-bottom: 34px;
+          color: var(--yi-purple);
+          font: 400 36px/1 'Bebas Neue', Impact, sans-serif;
+        }
+        .yi-trust-grid h3 {
+          margin: 0 0 13px;
+          font: 400 31px/1 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.01em;
+        }
+        .yi-trust-grid p {
+          max-width: 290px;
+          margin: 0;
+          color: #56505d;
+          font-size: 14px;
+          line-height: 1.55;
+        }
+
         .yi-research { display: grid; grid-template-columns: 1.12fr .88fr; min-height: 780px; border-top: 1px solid var(--yi-line); background: var(--yi-paper); }
         .yi-research-story { padding: 110px clamp(34px, 7vw, 110px); }
         .yi-research h2 { margin: 0 0 34px; font-size: clamp(64px, 7.2vw, 116px); line-height: .86; }
         .yi-research-explainer { max-width: 640px; margin: 0 0 34px; color: #4d4943; font-size: 17px; line-height: 1.72; }
         .yi-text-link { display: inline-flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid currentColor; text-decoration: none; font-size: 12px; font-weight: 700; }
+        .yi-research-actions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 21px 34px; }
+        .yi-research-actions .yi-learn-link { margin-top: 0; }
         .yi-research-stat { display: flex; flex-direction: column; justify-content: center; padding: 89px; color: #fff; background: var(--yi-purple); }
         .yi-research-stat strong { font: 400 clamp(150px, 17vw, 300px)/.78 'Bebas Neue', sans-serif; letter-spacing: -.04em; }
         .yi-research-stat p { max-width: 480px; margin: 55px 0 89px; font: 400 clamp(30px, 3vw, 48px)/1 'Bebas Neue', sans-serif; }
@@ -1105,6 +1649,32 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         .yi-support-path b { color: #e890c4; font-size: 9px; letter-spacing: .12em; }
         .yi-support-path i { height: 1px; flex: 1; margin: 0 13px; background: rgba(255,255,255,.32); }
 
+        .yi-recovery {
+          display: grid;
+          grid-template-columns: minmax(0, 1.16fr) minmax(340px, .84fr);
+          align-items: end;
+          gap: clamp(55px, 8vw, 144px);
+          padding: 110px clamp(34px, 7vw, 110px);
+          color: var(--yi-ink);
+          background: #d9d0f1;
+        }
+        .yi-recovery h2 {
+          margin: 0;
+          font: 400 clamp(68px, 7.4vw, 118px)/.85 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.025em;
+        }
+        .yi-recovery h2 em {
+          font-family: 'Playfair Display', Georgia, serif;
+          font-weight: 600;
+        }
+        .yi-recovery-copy > p {
+          max-width: 610px;
+          margin: 0;
+          color: #4f4956;
+          font-size: 17px;
+          line-height: 1.72;
+        }
+
         .yi-close { display: flex; flex-direction: column; align-items: center; padding: 144px 34px; text-align: center; background: var(--yi-paper); }
         .yi-close > svg { margin-bottom: 34px; }
         .yi-close h2 { margin: 0; font-size: clamp(82px, 11vw, 170px); line-height: .8; }
@@ -1117,6 +1687,141 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         .yi-footer > div { display: flex; align-items: center; gap: 21px; color: #aaa7a2; font-size: 10px; }
         .yi-footer a { text-decoration: none; }
 
+        .yi-education-layer {
+          position: fixed;
+          z-index: 1000;
+          inset: 0;
+          display: flex;
+          justify-content: flex-end;
+          background: rgba(6, 6, 9, .72);
+          backdrop-filter: blur(10px);
+          animation: yiEducationFade .24s ease both;
+        }
+        .yi-education-panel {
+          width: min(660px, 48vw);
+          height: 100svh;
+          overflow-y: auto;
+          color: var(--yi-ink);
+          background:
+            linear-gradient(rgba(16,16,21,.045) 1px, transparent 1px),
+            var(--yi-paper);
+          background-size: 100% 55px;
+          box-shadow: -34px 0 89px rgba(0,0,0,.28);
+          animation: yiEducationPanelIn .42s cubic-bezier(.22,.8,.26,1) both;
+          overscroll-behavior: contain;
+        }
+        .yi-education-panel-header {
+          position: sticky;
+          z-index: 2;
+          top: 0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          min-height: 76px;
+          padding: 13px clamp(21px, 4vw, 55px);
+          border-bottom: 1px solid var(--yi-line);
+          background: rgba(240,237,228,.94);
+          backdrop-filter: blur(14px);
+        }
+        .yi-education-panel-header > span {
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: .18em;
+        }
+        .yi-education-panel-header button {
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          padding: 0;
+          border: 1px solid var(--yi-ink);
+          border-radius: 50%;
+          color: var(--yi-ink);
+          background: transparent;
+          cursor: pointer;
+          transition: color .2s ease, background .2s ease, transform .2s ease;
+        }
+        .yi-education-panel-header button:hover {
+          color: var(--yi-paper);
+          background: var(--yi-ink);
+          transform: rotate(90deg);
+        }
+        .yi-education-panel-body { padding: 89px clamp(34px, 5vw, 76px) 110px; }
+        .yi-education-panel-body > h2 {
+          max-width: 570px;
+          margin: 0;
+          font: 400 clamp(58px, 5.2vw, 82px)/.88 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.025em;
+        }
+        .yi-education-intro {
+          max-width: 550px;
+          margin: 34px 0 55px;
+          color: #47433d;
+          font-size: 18px;
+          line-height: 1.7;
+        }
+        .yi-education-sections { border-top: 1px solid var(--yi-line); }
+        .yi-education-sections article {
+          display: grid;
+          grid-template-columns: 55px 1fr;
+          gap: 21px;
+          padding: 34px 0;
+          border-bottom: 1px solid var(--yi-line);
+        }
+        .yi-education-sections article > span {
+          color: var(--yi-purple);
+          font: 400 34px/1 'Bebas Neue', Impact, sans-serif;
+        }
+        .yi-education-sections h3 {
+          margin: 0 0 8px;
+          font: 400 29px/1 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.01em;
+        }
+        .yi-education-sections p {
+          margin: 0;
+          color: #5f5a53;
+          font-size: 15px;
+          line-height: 1.65;
+        }
+        .yi-education-panel blockquote {
+          position: relative;
+          margin: 55px 0 0;
+          padding: 34px 34px 34px 55px;
+          color: #fff;
+          background: var(--yi-ink);
+          font: 600 italic 22px/1.5 'Playfair Display', Georgia, serif;
+        }
+        .yi-education-panel blockquote::before {
+          content: "";
+          position: absolute;
+          left: 21px;
+          top: 34px;
+          bottom: 34px;
+          width: 3px;
+          background: var(--yi-purple);
+        }
+        .yi-education-citation {
+          width: fit-content;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 34px;
+          padding-bottom: 6px;
+          border-bottom: 1px solid currentColor;
+          color: var(--yi-ink);
+          font-size: 12px;
+          font-weight: 700;
+          text-decoration: none;
+        }
+        @keyframes yiEducationFade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes yiEducationPanelIn {
+          from { transform: translate3d(100%,0,0); }
+          to { transform: translate3d(0,0,0); }
+        }
+
         @media (max-width: 900px) {
           .yi-nav { grid-template-columns: 1fr auto; min-height: 76px; }
           .yi-nav-label { display: none; }
@@ -1126,6 +1831,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-wearables-photo { min-height: 560px; }
           .yi-wearables-copy { max-width: none; }
           .yi-device-render { width: min(100%, 560px); }
+          .yi-trust, .yi-recovery { grid-template-columns: 1fr; }
           .yi-research { grid-template-columns: 1fr; }
           .yi-research-stat { min-height: 620px; }
         }
@@ -1252,6 +1958,12 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-privacy-copy { margin-top: 34px; font-size: 22px; }
           .yi-privacy-rule { margin-top: 55px; gap: 8px; font-size: 8px; letter-spacing: .1em; }
 
+          .yi-trust { gap: 55px; padding: 89px 21px; }
+          .yi-trust-heading h2 { font-size: 64px; }
+          .yi-trust-grid { grid-template-columns: 1fr; }
+          .yi-trust-grid article { min-height: auto; padding: 34px 21px; }
+          .yi-trust-grid article > span { margin-bottom: 21px; }
+
           .yi-research-story { padding: 89px 21px; }
           .yi-research h2 { font-size: 62px; }
           .yi-research-stat { min-height: 520px; padding: 55px 21px; }
@@ -1269,16 +1981,46 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           .yi-support-path span { flex-direction: column; align-items: flex-start; gap: 3px; }
           .yi-support-path i { margin: 14px 4px 0; }
 
+          .yi-recovery { gap: 34px; padding: 89px 21px; }
+          .yi-recovery h2 { font-size: 62px; }
+          .yi-recovery-copy > p { font-size: 16px; }
+
           .yi-close { padding: 110px 21px; }
           .yi-close h2 { font-size: 76px; }
           .yi-footer { flex-direction: column; align-items: flex-start; padding: 34px 21px; }
           .yi-footer > div { flex-wrap: wrap; }
+
+          .yi-education-layer { align-items: flex-end; }
+          .yi-education-panel {
+            width: 100%;
+            height: auto;
+            max-height: 92svh;
+            border-radius: 26px 26px 0 0;
+            animation-name: yiEducationSheetIn;
+          }
+          .yi-education-panel-header { min-height: 68px; padding: 13px 21px; }
+          .yi-education-panel-body { padding: 55px 21px 89px; }
+          .yi-education-panel-body > h2 { font-size: 55px; }
+          .yi-education-intro { margin: 26px 0 34px; font-size: 16px; }
+          .yi-education-sections article { grid-template-columns: 42px 1fr; gap: 13px; padding: 26px 0; }
+          .yi-education-sections article > span { font-size: 29px; }
+          .yi-education-sections h3 { font-size: 27px; }
+          .yi-education-sections p { font-size: 14px; }
+          .yi-education-panel blockquote { margin-top: 34px; padding: 26px 21px 26px 42px; font-size: 19px; }
+          .yi-education-panel blockquote::before { left: 17px; top: 26px; bottom: 26px; }
+        }
+
+        @keyframes yiEducationSheetIn {
+          from { transform: translate3d(0,100%,0); }
+          to { transform: translate3d(0,0,0); }
         }
 
         @media (prefers-reduced-motion: reduce) {
           html { scroll-behavior: auto; }
           .yi-button { transition: none; }
           .yi-device-chip { animation: none; }
+          .yi-education-layer, .yi-education-panel { animation: none; }
+          .yi-learn-link i, .yi-education-panel-header button { transition: none; }
           .yi-breathing-orb,
           .yi-breathing-progress span,
           .yi-breathing-phase-track span,
