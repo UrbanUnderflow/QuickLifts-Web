@@ -7,11 +7,11 @@ import {
   Check,
   ChevronRight,
   Crosshair,
+  ChevronsUpDown,
   Eye,
   Heart,
   MessageCircle,
   Play,
-  RotateCcw,
   Sparkles,
   Wind,
   X,
@@ -54,6 +54,7 @@ type Step =
   | 'tools'
   | 'belief'
   | 'reflection'
+  | 'body'
   | 'breath'
   | 'visualization'
   | 'attention'
@@ -61,7 +62,7 @@ type Step =
   | 'coherence'
   | 'result';
 
-const steps: Step[] = ['intro', 'state', 'tools', 'belief', 'reflection', 'breath', 'visualization', 'attention', 'emotion', 'coherence', 'result'];
+const steps: Step[] = ['intro', 'state', 'tools', 'belief', 'reflection', 'body', 'breath', 'visualization', 'attention', 'emotion', 'coherence', 'result'];
 
 const familyIcons: Record<MentalSkillFamily, React.ComponentType<{ className?: string }>> = {
   breathing_body_awareness: Wind,
@@ -81,6 +82,9 @@ const familiarityLabels: Record<MentalSkillFamiliarity, string> = {
   practiced_it: 'I have tried this in practice',
   use_it: 'I use this on purpose',
 };
+
+const familiarityLevelPosition = (value: MentalSkillFamiliarity) =>
+  MENTAL_SKILL_FAMILIARITY_LEVELS.findIndex((level) => level.id === value) + 1;
 
 const nextFamiliarity: Record<MentalSkillFamiliarity, MentalSkillFamiliarity> = {
   new_to_me: 'heard_of_it',
@@ -255,8 +259,9 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
     if (step === 'state') return { label: 'Continue', run: () => advance('tools'), disabled: false };
     if (step === 'tools') return { label: 'Start the challenges', run: () => advance('belief'), disabled: false };
     if (step === 'belief') return { label: 'Continue', run: () => advance('reflection'), disabled: !selected };
-    if (step === 'reflection') return { label: 'Continue', run: () => advance('breath'), disabled: !selected };
-    if (step === 'breath') return { label: 'Continue', run: () => advance('visualization'), disabled: !breathComplete || !selected || !breathPracticeSelected };
+    if (step === 'reflection') return { label: 'Continue', run: () => advance('body'), disabled: !selected };
+    if (step === 'body') return { label: 'Continue', run: () => advance('breath'), disabled: !selected };
+    if (step === 'breath') return { label: 'Continue', run: () => advance('visualization'), disabled: !breathComplete || !breathPracticeSelected };
     if (step === 'visualization') return { label: 'Continue', run: () => advance('attention'), disabled: visualizationOrder.length !== 4 };
     if (step === 'attention') return { label: 'Continue', run: () => advance('emotion'), disabled: !selected };
     if (step === 'emotion') return { label: 'Continue', run: () => advance('coherence'), disabled: !selected };
@@ -344,11 +349,11 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                   <div className="mt-7 grid gap-3 sm:grid-cols-2">
                     {MENTAL_SKILL_FAMILIES.map((family) => {
                       const Icon = familyIcons[family];
+                      const currentLevel = familiarity[family];
                       return (
-                        <button key={family} type="button" onClick={() => setFamiliarity({ ...familiarity, [family]: nextFamiliarity[familiarity[family]] })} className="flex items-center gap-4 border border-white/10 bg-white/[0.05] p-4 text-left" aria-label={`${MENTAL_SKILL_FAMILY_LABELS[family]}: ${familiarityLabels[familiarity[family]]}. ${MENTAL_SKILL_FAMILIARITY_LEVELS.length} levels available.`}>
+                        <button key={family} type="button" onClick={() => setFamiliarity({ ...familiarity, [family]: nextFamiliarity[currentLevel] })} className="flex items-center gap-4 border border-white/10 bg-white/[0.05] p-4 text-left" aria-label={`${MENTAL_SKILL_FAMILY_LABELS[family]}: ${familiarityLabels[currentLevel]}. Tap to change your answer, currently level ${familiarityLevelPosition(currentLevel)} of ${MENTAL_SKILL_FAMILIARITY_LEVELS.length}.`}>
                           <Icon className="h-7 w-7 text-teal-300" />
-                          <span className="min-w-0 flex-1"><span className="block font-bold">{MENTAL_SKILL_FAMILY_LABELS[family]}</span><span className="mt-1 block text-sm text-teal-200">{familiarityLabels[familiarity[family]]}</span></span>
-                          <RotateCcw className="h-4 w-4 text-zinc-500" />
+                          <span className="min-w-0 flex-1"><span className="block font-bold">{MENTAL_SKILL_FAMILY_LABELS[family]}</span><span className="mt-1 block text-sm text-teal-200">{familiarityLabels[currentLevel]}</span><span className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-zinc-400"><ChevronsUpDown className="h-3.5 w-3.5" />Tap to change your answer · level {familiarityLevelPosition(currentLevel)} of {MENTAL_SKILL_FAMILIARITY_LEVELS.length}</span></span>
                         </button>
                       );
                     })}
@@ -395,9 +400,9 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                 </div>
               ) : null}
 
-              {step === 'breath' ? (
+              {step === 'body' ? (
                 <div className="text-center">
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 3 · Body and breath</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Challenge 3 · Body awareness</p>
                   <h2 className="mt-3 text-3xl font-black sm:text-5xl">Catch the first signal</h2>
                   <p className="mt-5 text-xl text-zinc-200">{sportPack.bodyPrompt}</p>
                   <div className="mt-7 space-y-3 text-left">
@@ -408,15 +413,22 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
                       ])}>{response.label}</OptionButton>
                     ))}
                   </div>
+                </div>
+              ) : null}
+
+              {step === 'breath' ? (
+                <div className="text-center">
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-teal-300">Breath practice</p>
+                  <h2 className="mt-3 text-3xl font-black sm:text-5xl">Breathe in slowly, then breathe out slowly</h2>
                   <button type="button" onClick={() => {
                     setBreathComplete(true);
                   }} className={`mx-auto mt-8 grid h-40 w-40 place-items-center rounded-full border-2 ${breathComplete ? 'border-teal-200 bg-teal-300 text-slate-950' : 'border-teal-300/40 bg-teal-300/10 text-teal-200'}`}>
                     {breathComplete ? <Check className="h-16 w-16" /> : <span><Wind className="mx-auto h-12 w-12" /><span className="mt-2 block text-sm font-bold">One slow breath</span></span>}
                   </button>
-                  <p className="mt-4 text-sm text-zinc-400">Breathe in slowly. Breathe out slowly. Tap the circle when you finish.</p>
+                  <p className="mt-4 text-sm text-zinc-400">Breathe in slowly. Breathe out slowly. Tap the circle after you finish breathing out.</p>
                   {breathComplete ? (
                     <div className="mt-8 text-left">
-                      <h3 className="text-xl font-black">How closely did you follow that breath?</h3>
+                      <h3 className="text-xl font-black">Which statement best describes what you did?</h3>
                       <div className="mt-4 space-y-3">
                         {BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES.map((response) => (
                           <OptionButton key={response.id} selected={breathPracticeSelected === response.id} onClick={() => {

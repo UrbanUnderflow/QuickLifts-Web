@@ -254,12 +254,12 @@ export interface BaselineBreathPracticeResponseProfile {
 }
 
 export const BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES: BaselineBreathPracticeResponseProfile[] = [
-  { id: 'breath_full_steady', label: 'I followed the full breath at a slow, steady pace.', breathingScore: 95, coherenceScore: 92 },
-  { id: 'breath_brief_drift', label: 'I followed most of it, but my attention moved away for a moment.', breathingScore: 82, coherenceScore: 78 },
-  { id: 'breath_rushed', label: 'I completed the breath, but I moved through it too quickly.', breathingScore: 66, coherenceScore: 62 },
-  { id: 'breath_pace_unsure', label: 'I completed it, but I was not sure how slowly to breathe.', breathingScore: 52, coherenceScore: 48 },
-  { id: 'breath_restart', label: 'I lost track of the breath and had to start again.', breathingScore: 38, coherenceScore: 36 },
-  { id: 'breath_not_yet', label: 'I could not follow the full breath yet.', breathingScore: 20, coherenceScore: 20 },
+  { id: 'breath_full_steady', label: 'I breathed in slowly and breathed out slowly.', breathingScore: 95, coherenceScore: 92 },
+  { id: 'breath_brief_drift', label: 'I breathed in slowly, but I lost focus before I finished breathing out.', breathingScore: 82, coherenceScore: 78 },
+  { id: 'breath_rushed', label: 'I breathed in and out, but both parts were faster than instructed.', breathingScore: 66, coherenceScore: 62 },
+  { id: 'breath_pace_unsure', label: 'I completed both parts, but I was unsure how to breathe slowly.', breathingScore: 52, coherenceScore: 48 },
+  { id: 'breath_restart', label: 'I stopped before I finished breathing in and breathing out.', breathingScore: 38, coherenceScore: 36 },
+  { id: 'breath_not_yet', label: 'I did not complete the slow inhale and slow exhale.', breathingScore: 20, coherenceScore: 20 },
 ];
 
 export interface BaselineAttentionResponseProfile {

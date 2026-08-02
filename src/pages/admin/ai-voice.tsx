@@ -132,6 +132,28 @@ const SOUND_EFFECTS: {
     durationSeconds: 8,
   },
   {
+    id: 'pc-body-scan-transition',
+    label: 'Body Scan Transition',
+    description: 'Marks the move from one body-scan focus area to the next.',
+    icon: <Music className="w-4 h-4" />,
+    category: 'pulsecheck',
+    file: 'body-scan-transition',
+    platform: 'pulsecheck',
+    prompt: 'Short soft spatial sweep that gently moves from low to high, calm body-awareness transition, warm and grounded, no speech, no melody, no sharp transient',
+    durationSeconds: 1.5,
+  },
+  {
+    id: 'pc-body-scan-ambient',
+    label: 'Body Scan Ambient',
+    description: 'Low ambient bed underneath the guided body-scan exercise.',
+    icon: <Music className="w-4 h-4" />,
+    category: 'pulsecheck',
+    file: 'body-scan-ambient',
+    platform: 'pulsecheck',
+    prompt: 'Calm low-volume ambient bed for a guided body scan, slow warm air movement with a grounded soft drone, seamless and unobtrusive, no speech, no percussion, no melody',
+    durationSeconds: 12,
+  },
+  {
     id: 'pc-success-chime',
     label: 'Success Chime',
     description: 'Baseline completed or mental task achieved.',
@@ -909,18 +931,33 @@ const PULSECHECK_SOUNDS: PulseRitualSound[] = [
     priority: 'high',
   },
   {
-    id: 'pulsecheck-rank-earned',
-    label: 'Rank Earned',
+    id: 'pulsecheck-team-rank-advance',
+    label: 'Team Leaderboard Advance',
     description:
-      'Ceremony sound for passing a checkpoint gate and earning a rank (STEADY, LOCKED IN, CLUTCH...). Identity moment — restrained triumph, esports rank-up energy without cheese.',
+      'Plays when the athlete moves ahead of a teammate during the current 14-day Showing Up Sprint. First load and a fresh sprint stay quiet.',
     icon: <Sparkles className="w-4 h-4" />,
     category: 'pulsecheck-moment',
-    file: 'pulsecheck-rank-earned',
+    file: 'rank-ceremony-a-arena-ascent',
     prompt:
-      'Rising three-note synth swell resolving into a bright restrained metallic shimmer, dark arena atmosphere, modern esports rank-up, confident and premium, no cheesy fanfare, no music melody, no speech',
+      'Arena Ascent: compact upward athletic surge with a deep pulse, fast rising energy, and a clean bright arrival, competitive team momentum, premium and focused, no speech, no recognizable melody',
     durationSeconds: 2.4,
     promptInfluence: 0.55,
-    pairedHapticNote: 'HapticsService.celebrate() — rank gate ceremony (upcoming)',
+    pairedHapticNote: 'TeamShowingUpBoardView when the athlete reaches a better place within the same 14-day sprint',
+    priority: 'high',
+  },
+  {
+    id: 'pulsecheck-identity-rank-earned',
+    label: 'Personal Identity Rank Earned',
+    description:
+      'Plays inside the dedicated full-screen ceremony when an athlete earns a new personal identity rank such as STEADY, LOCKED IN, or CLUTCH.',
+    icon: <Sparkles className="w-4 h-4" />,
+    category: 'pulsecheck-moment',
+    file: 'rank-ceremony-d-clutch-rise',
+    prompt:
+      'Clutch Rise: emotionally charged rank-up swell that gathers from a grounded low pulse into a confident bright crest, personal identity breakthrough, cinematic and premium, no speech, no recognizable melody',
+    durationSeconds: 2.8,
+    promptInfluence: 0.58,
+    pairedHapticNote: 'JuniorRankEarnedCeremonyView as the earned identity rank is revealed',
     priority: 'high',
   },
   {
@@ -1052,6 +1089,108 @@ const PULSECHECK_UTILITY_SOUNDS: PulseRitualSound[] = [
 ];
 
 const ALL_SFX_SOUNDS: PulseRitualSound[] = [...RITUAL_SOUNDS, ...PULSECHECK_SOUNDS, ...PULSECHECK_UTILITY_SOUNDS];
+
+type PulseCheckRuntimeSoundInventoryItem = {
+  id: string;
+  label: string;
+  file: string;
+  trigger: string;
+  delivery: string;
+  managedIn: 'Core App Sounds' | 'PulseCheck Moments' | 'Vision Pro';
+};
+
+const PULSECHECK_CORE_SOUND_FILES: Record<string, string> = {
+  'pc-splash': 'pulse-splash.mp3',
+  'pc-mind-coach': 'mind-coach-greeting.mp3',
+  'pc-action-card': 'action-card-appear.mp3',
+  'pc-message-received': 'message-received.mp3',
+  'pc-message-sent': 'message-sent.mp3',
+  'pc-breathing-gong': 'breathing-gong.mp3',
+  'pc-body-scan-transition': 'body-scan-transition.mp3',
+  'pc-body-scan-ambient': 'body-scan-ambient.mp3',
+  'pc-success-chime': 'success-chime.wav',
+  'pc-subtle-click': 'subtle-click.wav',
+};
+
+const PULSECHECK_MOMENT_SOUND_FILES: Record<string, string> = {
+  'pulsecheck-team-rank-advance': 'rank-ceremony-a-arena-ascent.wav',
+  'pulsecheck-identity-rank-earned': 'rank-ceremony-d-clutch-rise.wav',
+};
+
+const PULSECHECK_RUNTIME_SOUND_INVENTORY: PulseCheckRuntimeSoundInventoryItem[] = [
+  ...SOUND_EFFECTS
+    .filter((sound) => sound.platform === 'pulsecheck' || sound.platform === 'both')
+    .map((sound) => ({
+      id: sound.id,
+      label: sound.label,
+      file: PULSECHECK_CORE_SOUND_FILES[sound.id] ?? sound.file,
+      trigger: sound.description,
+      delivery: sound.id === 'pc-message-sent'
+        ? 'Bundled. Uses subtle-click.wav until the dedicated file ships.'
+        : 'Bundled with the iOS app.',
+      managedIn: 'Core App Sounds' as const,
+    })),
+  ...PULSECHECK_SOUNDS.map((sound) => ({
+    id: sound.id,
+    label: sound.label,
+    file: PULSECHECK_MOMENT_SOUND_FILES[sound.id] ?? `${sound.file} (OTA asset ID)`,
+    trigger: sound.description,
+    delivery: sound.id === 'pulsecheck-team-rank-advance' || sound.id === 'pulsecheck-identity-rank-earned'
+      ? 'Delivered over the air with the named WAV bundled as the exact fallback.'
+      : sound.id === 'pulsecheck-day-complete'
+        ? 'Delivered over the air with success-chime.wav as the bundled fallback.'
+        : 'Delivered over the air and cached on the device.',
+    managedIn: 'PulseCheck Moments' as const,
+  })),
+  {
+    id: 'vision-pro-start-clock',
+    label: 'Vision Pro Start Clock',
+    file: 'startClock.mp3',
+    trigger: 'Starts the competition clock in the Vision Pro football runtime.',
+    delivery: 'Bundled with the app.',
+    managedIn: 'Vision Pro',
+  },
+  {
+    id: 'vision-pro-lock-in-ambient-drone',
+    label: 'Vision Pro Lock-In Ambient Drone',
+    file: 'lockInAmbientDrone.mp3',
+    trigger: 'Creates the focused ambient bed during the Vision Pro Reset trial lock-in stage.',
+    delivery: 'Delivered over the air and cached for the immersive session.',
+    managedIn: 'Vision Pro',
+  },
+  {
+    id: 'vision-pro-disruption-impact-slam',
+    label: 'Vision Pro Disruption Impact Slam',
+    file: 'disruptionImpactSlam.mp3',
+    trigger: 'Marks the disruption event in the Vision Pro Reset trial.',
+    delivery: 'Delivered over the air and cached for the immersive session.',
+    managedIn: 'Vision Pro',
+  },
+  {
+    id: 'vision-pro-recovery-window-ping',
+    label: 'Vision Pro Recovery Window Ping',
+    file: 'recoveryWindowPing.mp3',
+    trigger: 'Signals the recovery response window in the Vision Pro Reset trial.',
+    delivery: 'Delivered over the air and cached for the immersive session.',
+    managedIn: 'Vision Pro',
+  },
+  {
+    id: 'vision-pro-tap-confirm-chime',
+    label: 'Vision Pro Tap Confirm Chime',
+    file: 'tapConfirmChime.mp3',
+    trigger: 'Confirms the athlete\'s response tap in the Vision Pro Reset trial.',
+    delivery: 'Delivered over the air and cached for the immersive session.',
+    managedIn: 'Vision Pro',
+  },
+  {
+    id: 'vision-pro-block-transition-settle',
+    label: 'Vision Pro Block Transition Settle',
+    file: 'blockTransitionSettle.mp3',
+    trigger: 'Grounds the transition between Vision Pro Reset trial blocks.',
+    delivery: 'Delivered over the air and cached for the immersive session.',
+    managedIn: 'Vision Pro',
+  },
+];
 
 const RITUAL_CATEGORY_LABELS: Record<string, string> = {
   onboarding: 'Onboarding Moments',
@@ -4171,8 +4310,8 @@ const AdminAiVoice: React.FC = () => {
             <AudioTabButton
               active={activeTab === 'pulseCheckAppSounds'}
               icon={<Smartphone className="h-4 w-4" />}
-              label="PulseCheck App Sounds"
-              description="Core PulseCheck app sound effects for launch, selections, messaging, training, and success moments."
+              label="PulseCheck Sound Catalog"
+              description="Complete runtime record of every PulseCheck sound, its trigger, file, and delivery path."
               onClick={() => setActiveTab('pulseCheckAppSounds')}
             />
             <AudioTabButton
@@ -4897,10 +5036,12 @@ const AdminAiVoice: React.FC = () => {
               </div>
               <div>
                 <div className="font-semibold text-white">
-                  {isPulseCheckLibrary ? 'PulseCheck App Sounds' : 'Fit With Pulse App Sounds'}
+                  {isPulseCheckLibrary ? 'PulseCheck Sound Catalog' : 'Fit With Pulse App Sounds'}
                 </div>
                 <div className="text-xs text-zinc-500">
-                  All {librarySounds.length} {isPulseCheckLibrary ? 'PulseCheck iOS' : 'Fit With Pulse'} sounds. Click Preview to hear them.
+                  {isPulseCheckLibrary
+                    ? `${PULSECHECK_RUNTIME_SOUND_INVENTORY.length} runtime sounds recorded. Core bundled sounds can be previewed below.`
+                    : `All ${librarySounds.length} Fit With Pulse sounds. Click Preview to hear them.`}
                 </div>
                 {appSoundLoadError && (
                   <div className="mt-1 text-[11px] text-red-300">{appSoundLoadError}</div>
@@ -4924,6 +5065,40 @@ const AdminAiVoice: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {isPulseCheckLibrary && (
+              <div className="mb-8 rounded-2xl border border-purple-500/20 bg-purple-500/[0.05] p-4">
+                <div className="mb-4 flex flex-wrap items-end gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Complete Runtime Inventory</div>
+                    <div className="mt-1 text-xs text-zinc-400">
+                      This is the source-of-truth record for sounds the PulseCheck app can play. Core files are managed below. Path and ceremony files are managed in PulseCheck Moments. Immersive files are managed in Vision Pro.
+                    </div>
+                  </div>
+                  <div className="ml-auto rounded-full border border-purple-400/20 bg-purple-400/10 px-2.5 py-1 text-[11px] font-semibold text-purple-200">
+                    {PULSECHECK_RUNTIME_SOUND_INVENTORY.length} sounds
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {PULSECHECK_RUNTIME_SOUND_INVENTORY.map((sound) => (
+                    <div key={sound.id} className="rounded-xl border border-white/[0.07] bg-black/20 p-3.5">
+                      <div className="flex flex-wrap items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-zinc-100">{sound.label}</div>
+                          <code className="mt-1 block break-all text-[11px] text-purple-300">{sound.file}</code>
+                        </div>
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                          {sound.managedIn}
+                        </span>
+                      </div>
+                      <div className="mt-3 text-xs leading-relaxed text-zinc-400">{sound.trigger}</div>
+                      <div className="mt-2 text-[11px] text-zinc-500">{sound.delivery}</div>
+                      <code className="mt-2 block text-[10px] text-zinc-600">{sound.id}</code>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-8">
               {CATEGORY_ORDER.map((cat) => {

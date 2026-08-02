@@ -88,6 +88,96 @@ test('PulseCheck function proxy forwards supported functions to direct Netlify e
   }
 });
 
+test('PulseCheck function proxy forwards team standings requests', async () => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    fetchCalls.push({ url: String(url), options });
+    return {
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      async arrayBuffer() {
+        return Buffer.from('{"teamId":"team-1","members":[]}');
+      },
+    };
+  };
+
+  try {
+    const { default: handler } = loadProxyModule();
+    const response = createResponseRecorder();
+
+    await handler({
+      method: 'POST',
+      url: '/api/pulsecheck/functions/get-pulsecheck-team-standings',
+      query: { name: 'get-pulsecheck-team-standings' },
+      headers: {
+        host: 'fitwithpulse.ai',
+        'x-forwarded-host': 'fitwithpulse.ai',
+        'x-forwarded-proto': 'https',
+        authorization: 'Bearer token',
+      },
+      body: { timezone: 'America/New_York' },
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(
+      fetchCalls[0].url,
+      'https://fitwithpulse.ai/.netlify/functions/get-pulsecheck-team-standings',
+    );
+    assert.equal(fetchCalls[0].options.headers.get('authorization'), 'Bearer token');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('PulseCheck function proxy forwards team showing-up history requests', async () => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    fetchCalls.push({ url: String(url), options });
+    return {
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      async arrayBuffer() {
+        return Buffer.from('{"teamId":"team-1","standings":[]}');
+      },
+    };
+  };
+
+  try {
+    const { default: handler } = loadProxyModule();
+    const response = createResponseRecorder();
+
+    await handler({
+      method: 'POST',
+      url: '/api/pulsecheck/functions/get-pulsecheck-team-showing-up-history',
+      query: { name: 'get-pulsecheck-team-showing-up-history' },
+      headers: {
+        host: 'fitwithpulse.ai',
+        'x-forwarded-host': 'fitwithpulse.ai',
+        'x-forwarded-proto': 'https',
+        authorization: 'Bearer token',
+      },
+      body: {
+        teamId: 'team-1',
+        startDate: '2026-07-30',
+        endDate: '2026-10-27',
+      },
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(
+      fetchCalls[0].url,
+      'https://fitwithpulse.ai/.netlify/functions/get-pulsecheck-team-showing-up-history',
+    );
+    assert.equal(fetchCalls[0].options.headers.get('authorization'), 'Bearer token');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('PulseCheck function proxy strips upstream transfer and encoding headers', async () => {
   const originalFetch = global.fetch;
   global.fetch = async () => ({

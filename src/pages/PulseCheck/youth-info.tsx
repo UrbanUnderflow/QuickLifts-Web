@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowRight, HeartPulse, LockKeyhole, Watch } from 'lucide-react';
 import PageHead from '../../components/PageHead';
@@ -56,6 +56,150 @@ const wearableDevices = [
   { name: 'Polar 360', image: '/pulsecheck-youth/wearables/polar-360.png' },
 ];
 
+const boxBreathingPhases = [
+  {
+    key: 'inhale',
+    label: 'Slowly inhale through your nose',
+    shortLabel: 'Inhale',
+    orbClass: 'yi-breathing-orb--inhale',
+  },
+  {
+    key: 'hold-top',
+    label: 'Hold it steady',
+    shortLabel: 'Hold',
+    orbClass: 'yi-breathing-orb--hold-top',
+  },
+  {
+    key: 'exhale',
+    label: 'Slowly exhale through your mouth',
+    shortLabel: 'Exhale',
+    orbClass: 'yi-breathing-orb--exhale',
+  },
+  {
+    key: 'hold-bottom',
+    label: 'Hold the calm',
+    shortLabel: 'Hold',
+    orbClass: 'yi-breathing-orb--hold-bottom',
+  },
+] as const;
+
+const phaseSeconds = 4;
+const boxBreathingCycles = 5;
+
+const BoxBreathingPhoneDemo: React.FC = () => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const totalSeconds = boxBreathingPhases.length * phaseSeconds * boxBreathingCycles;
+
+  useEffect(() => {
+    if (isPaused) return undefined;
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((current) => (current + 1) % totalSeconds);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isPaused, totalSeconds]);
+
+  const state = useMemo(() => {
+    const loopSecond = elapsedSeconds % totalSeconds;
+    const phaseIndex = Math.floor(loopSecond / phaseSeconds) % boxBreathingPhases.length;
+    const cycle = Math.floor(loopSecond / (phaseSeconds * boxBreathingPhases.length)) + 1;
+    const secondInPhase = loopSecond % phaseSeconds;
+    const count = phaseSeconds - secondInPhase;
+    const phase = boxBreathingPhases[phaseIndex];
+
+    return {
+      phase,
+      phaseIndex,
+      cycle,
+      count,
+      hr: Math.max(68, 74 - Math.floor(loopSecond / 18)),
+      stability: Math.min(93, 86 + Math.floor(loopSecond / 13)),
+      calm: Math.min(92, 80 + Math.floor(loopSecond / 10) + (phase.key === 'exhale' ? 1 : 0)),
+    };
+  }, [elapsedSeconds, totalSeconds]);
+
+  const skipForward = () => {
+    setElapsedSeconds((current) => {
+      const currentPhaseStart = Math.floor(current / phaseSeconds) * phaseSeconds;
+      return (currentPhaseStart + phaseSeconds) % totalSeconds;
+    });
+  };
+
+  return (
+    <div className="yi-breathing-phone-screen" aria-label="Live Box Breathing module demo">
+      <div className="yi-breathing-status">
+        <span>9:41</span>
+        <div aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+      </div>
+
+      <div className="yi-breathing-topbar" aria-hidden="true">
+        <span>×</span>
+        <span>⌁</span>
+      </div>
+
+      <div className="yi-breathing-metrics" aria-label="Current body signals">
+        <div className="yi-breathing-metric yi-breathing-metric--hr">
+          <span>♥ HR</span>
+          <strong>{state.hr}<small> bpm</small></strong>
+          <em>Steady</em>
+        </div>
+        <div className="yi-breathing-metric yi-breathing-metric--stability">
+          <span>⌁ Stability</span>
+          <strong>{state.stability}<small>/100</small></strong>
+          <em>Steady</em>
+        </div>
+        <div className="yi-breathing-metric yi-breathing-metric--calm">
+          <span>◐ Calm</span>
+          <strong>{state.calm}<small>/100</small></strong>
+          <em>Steady</em>
+        </div>
+      </div>
+
+      <div className="yi-breathing-progress" aria-label={`Cycle ${state.cycle} of ${boxBreathingCycles}`}>
+        {Array.from({ length: boxBreathingCycles }).map((_, index) => (
+          <span
+            key={index}
+            className={index + 1 === state.cycle ? 'is-active' : index + 1 < state.cycle ? 'is-complete' : ''}
+          />
+        ))}
+      </div>
+
+      <div className="yi-breathing-stage" aria-live="polite">
+        <div className={`yi-breathing-orb ${state.phase.orbClass}`}>
+          <span>{state.count}</span>
+        </div>
+        <div className="yi-breathing-phase-track" aria-hidden="true">
+          {boxBreathingPhases.map((phase, index) => (
+            <span key={phase.key} className={index === state.phaseIndex ? 'is-active' : ''}>
+              {phase.shortLabel}
+            </span>
+          ))}
+        </div>
+        <h2>{state.phase.label}</h2>
+        <p>Cycle {state.cycle} of {boxBreathingCycles}</p>
+      </div>
+
+      <div className="yi-breathing-controls">
+        <button
+          type="button"
+          aria-label={isPaused ? 'Resume Box Breathing' : 'Pause Box Breathing'}
+          onClick={() => setIsPaused((current) => !current)}
+        >
+          {isPaused ? '▶' : 'Ⅱ'}
+        </button>
+        <button type="button" aria-label="Skip to next breath phase" onClick={skipForward}>
+          ▶▶
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const PulseCheckYouthInfoPage: React.FC = () => {
   return (
     <main className="youth-info">
@@ -99,25 +243,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
         </div>
         <figure className="yi-hero-phone">
           <div className="yi-hero-phone-frame">
-            <img
-              src="/pulsecheck-media/08-box-breathing.png"
-              alt="PulseCheck phone screen teaching a Box Breathing exercise"
-            />
-            <div className="yi-phone-metric yi-phone-metric--hr" aria-hidden="true">
-              <strong>72</strong>
-              <span>bpm</span>
-              <small>Steady</small>
-            </div>
-            <div className="yi-phone-metric yi-phone-metric--stability" aria-hidden="true">
-              <strong>88</strong>
-              <span>/100</span>
-              <small>Steady</small>
-            </div>
-            <div className="yi-phone-metric yi-phone-metric--calm" aria-hidden="true">
-              <strong>84</strong>
-              <span>/100</span>
-              <small>Steady</small>
-            </div>
+            <BoxBreathingPhoneDemo />
           </div>
           <figcaption>BOX BREATHING / LIVE PRACTICE</figcaption>
         </figure>
@@ -474,57 +600,251 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           box-shadow: 0 55px 90px rgba(0,0,0,.52);
           overflow: hidden;
         }
-        .yi-hero-phone-frame img {
+        .yi-breathing-phone-screen {
+          position: relative;
           width: 100%;
           aspect-ratio: 864 / 1824;
-          object-fit: cover;
+          display: flex;
+          flex-direction: column;
+          padding: 24px 16px 22px;
           border-radius: 37px;
           border: 1px solid rgba(255,255,255,.12);
-        }
-        .yi-phone-metric {
-          position: absolute;
-          z-index: 3;
-          width: 24.5%;
-          height: 5%;
-          padding: 0 0 0 2.2%;
-          background: #0b2028;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 50% 48%, rgba(40, 214, 232, .22), transparent 28%),
+            radial-gradient(circle at 55% 34%, rgba(111, 85, 238, .14), transparent 36%),
+            linear-gradient(180deg, #071823 0%, #05171d 43%, #061219 100%);
           color: #eef3f5;
           font-family: 'DM Sans', Arial, sans-serif;
-          line-height: 1;
         }
-        .yi-phone-metric::after {
+        .yi-breathing-phone-screen::before {
           content: "";
           position: absolute;
-          left: 0;
-          right: 0;
-          bottom: -.9em;
-          height: 1.15em;
-          background: #0b2028;
+          inset: 0;
+          pointer-events: none;
+          background:
+            linear-gradient(90deg, rgba(255,255,255,.04), transparent 28%, rgba(255,255,255,.05) 55%, transparent),
+            radial-gradient(circle at 50% 42%, rgba(43, 218, 235, .18), transparent 24%);
+          opacity: .82;
         }
-        .yi-phone-metric strong {
-          display: inline-block;
-          margin-right: .22em;
-          font-size: 14px;
-          font-weight: 800;
-          letter-spacing: 0;
-        }
-        .yi-phone-metric span {
-          color: rgba(238,243,245,.72);
-          font-size: 11px;
-          font-weight: 700;
-        }
-        .yi-phone-metric small {
+        .yi-breathing-status,
+        .yi-breathing-topbar,
+        .yi-breathing-metrics,
+        .yi-breathing-progress,
+        .yi-breathing-stage,
+        .yi-breathing-controls {
           position: relative;
           z-index: 2;
-          display: block;
-          margin-top: .68em;
-          color: rgba(238,243,245,.48);
-          font-size: 10px;
-          font-weight: 600;
         }
-        .yi-phone-metric--hr { left: 6.1%; top: 19%; }
-        .yi-phone-metric--stability { left: 38.9%; top: 19%; }
-        .yi-phone-metric--calm { left: 68.4%; top: 19%; }
+        .yi-breathing-status {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 16px;
+          font-size: 14px;
+          font-weight: 800;
+        }
+        .yi-breathing-status div {
+          display: flex;
+          align-items: end;
+          gap: 4px;
+        }
+        .yi-breathing-status i {
+          display: block;
+          width: 4px;
+          height: 8px;
+          border-radius: 99px;
+          background: rgba(255,255,255,.92);
+        }
+        .yi-breathing-status i:nth-child(2) { height: 11px; }
+        .yi-breathing-status i:nth-child(3) {
+          width: 18px;
+          height: 9px;
+          border: 1px solid rgba(255,255,255,.84);
+          background: #d9ff2f;
+        }
+        .yi-breathing-topbar {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 24px;
+        }
+        .yi-breathing-topbar span,
+        .yi-breathing-controls button {
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 50%;
+          color: rgba(255,255,255,.9);
+          background: rgba(255,255,255,.1);
+          cursor: pointer;
+        }
+        .yi-breathing-topbar span {
+          width: 42px;
+          height: 42px;
+          font-size: 24px;
+          line-height: 1;
+        }
+        .yi-breathing-topbar span:last-child {
+          font-size: 18px;
+        }
+        .yi-breathing-metrics {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 7px;
+        }
+        .yi-breathing-metric {
+          min-height: 76px;
+          padding: 10px 8px;
+          border: 1px solid rgba(255,255,255,.18);
+          border-radius: 11px;
+          background: rgba(10, 32, 40, .72);
+          box-shadow: inset 0 -18px 25px rgba(30, 220, 232, .04);
+        }
+        .yi-breathing-metric--hr { border-color: rgba(255, 64, 102, .64); }
+        .yi-breathing-metric--stability { border-color: rgba(54, 132, 255, .62); }
+        .yi-breathing-metric--calm { border-color: rgba(197, 255, 39, .55); }
+        .yi-breathing-metric span {
+          display: block;
+          margin-bottom: 12px;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: .06em;
+          text-transform: uppercase;
+        }
+        .yi-breathing-metric strong {
+          display: block;
+          font-size: 15px;
+          font-weight: 900;
+          letter-spacing: -.02em;
+        }
+        .yi-breathing-metric small {
+          color: rgba(255,255,255,.68);
+          font-size: 10px;
+          font-weight: 800;
+        }
+        .yi-breathing-metric em {
+          display: block;
+          margin-top: 7px;
+          color: rgba(255,255,255,.45);
+          font-size: 9px;
+          font-style: normal;
+          font-weight: 700;
+        }
+        .yi-breathing-progress {
+          display: flex;
+          justify-content: center;
+          gap: 8px;
+          margin: auto 0 30px;
+        }
+        .yi-breathing-progress span {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: rgba(40, 214, 232, .22);
+          transition: transform .25s ease, background .25s ease, box-shadow .25s ease;
+        }
+        .yi-breathing-progress span.is-active {
+          background: #2ad7e8;
+          box-shadow: 0 0 14px rgba(42, 215, 232, .84);
+          transform: scale(1.1);
+        }
+        .yi-breathing-progress span.is-complete {
+          background: rgba(42, 215, 232, .5);
+        }
+        .yi-breathing-stage {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .yi-breathing-orb {
+          width: 142px;
+          aspect-ratio: 1;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          background:
+            radial-gradient(circle at 38% 30%, rgba(255,255,255,.42), transparent 23%),
+            linear-gradient(180deg, #43e2ef, #1fb7cf);
+          box-shadow:
+            0 0 0 22px rgba(43, 218, 235, .06),
+            0 0 55px rgba(43, 218, 235, .42),
+            inset 0 -18px 26px rgba(0,0,0,.08);
+          transition: transform 1s ease-in-out, box-shadow 1s ease-in-out;
+        }
+        .yi-breathing-orb span {
+          color: #fff;
+          font-size: 58px;
+          font-weight: 900;
+          line-height: 1;
+        }
+        .yi-breathing-orb--inhale {
+          transform: scale(1.12);
+          box-shadow:
+            0 0 0 34px rgba(43, 218, 235, .08),
+            0 0 76px rgba(43, 218, 235, .54),
+            inset 0 -18px 26px rgba(0,0,0,.08);
+        }
+        .yi-breathing-orb--hold-top {
+          transform: scale(1.16);
+        }
+        .yi-breathing-orb--exhale {
+          transform: scale(.82);
+          box-shadow:
+            0 0 0 13px rgba(43, 218, 235, .05),
+            0 0 34px rgba(43, 218, 235, .34),
+            inset 0 -18px 26px rgba(0,0,0,.08);
+        }
+        .yi-breathing-orb--hold-bottom {
+          transform: scale(.86);
+        }
+        .yi-breathing-phase-track {
+          display: grid;
+          grid-template-columns: repeat(4, auto);
+          gap: 9px;
+          margin: 27px 0 16px;
+        }
+        .yi-breathing-phase-track span {
+          color: rgba(255,255,255,.33);
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+          transition: color .25s ease;
+        }
+        .yi-breathing-phase-track span.is-active {
+          color: #fff;
+        }
+        .yi-breathing-stage h2 {
+          max-width: 260px;
+          margin: 0;
+          color: #fff;
+          font: 800 17px/1.25 'DM Sans', Arial, sans-serif;
+          letter-spacing: -.04em;
+        }
+        .yi-breathing-stage p {
+          margin: 13px 0 0;
+          color: rgba(255,255,255,.5);
+          font-size: 12px;
+          font-weight: 700;
+        }
+        .yi-breathing-controls {
+          display: flex;
+          justify-content: center;
+          gap: 20px;
+          margin-top: auto;
+        }
+        .yi-breathing-controls button {
+          width: 48px;
+          height: 48px;
+          font-size: 18px;
+          font-weight: 900;
+          transition: transform .2s ease, background .2s ease;
+        }
+        .yi-breathing-controls button:hover {
+          transform: translateY(-2px);
+          background: rgba(255,255,255,.15);
+        }
         .yi-hero-phone figcaption {
           position: relative;
           z-index: 2;
@@ -827,7 +1147,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             right: auto;
             top: auto;
             bottom: auto;
-            width: min(62vw, 250px);
+            width: min(76vw, 300px);
             margin: 55px auto 0;
             transform: none;
           }
@@ -835,10 +1155,60 @@ const PulseCheckYouthInfoPage: React.FC = () => {
             padding: 6px;
             border-radius: 34px;
           }
-          .yi-hero-phone-frame img { border-radius: 29px; }
-          .yi-phone-metric strong { font-size: 12px; }
-          .yi-phone-metric span { font-size: 9px; }
-          .yi-phone-metric small { font-size: 8px; }
+          .yi-breathing-phone-screen {
+            padding: 20px 13px 18px;
+            border-radius: 29px;
+          }
+          .yi-breathing-status {
+            margin-bottom: 13px;
+            font-size: 12px;
+          }
+          .yi-breathing-topbar {
+            margin-bottom: 18px;
+          }
+          .yi-breathing-topbar span {
+            width: 36px;
+            height: 36px;
+            font-size: 21px;
+          }
+          .yi-breathing-metrics { gap: 5px; }
+          .yi-breathing-metric {
+            min-height: 65px;
+            padding: 8px 6px;
+            border-radius: 10px;
+          }
+          .yi-breathing-metric span {
+            margin-bottom: 9px;
+            font-size: 7px;
+          }
+          .yi-breathing-metric strong { font-size: 13px; }
+          .yi-breathing-metric small { font-size: 8px; }
+          .yi-breathing-metric em { font-size: 8px; }
+          .yi-breathing-progress {
+            gap: 6px;
+            margin-bottom: 23px;
+          }
+          .yi-breathing-progress span {
+            width: 7px;
+            height: 7px;
+          }
+          .yi-breathing-orb { width: 118px; }
+          .yi-breathing-orb span { font-size: 48px; }
+          .yi-breathing-phase-track {
+            gap: 7px;
+            margin: 22px 0 12px;
+          }
+          .yi-breathing-phase-track span { font-size: 7px; }
+          .yi-breathing-stage h2 { font-size: 15px; }
+          .yi-breathing-stage p { font-size: 11px; }
+          .yi-breathing-controls {
+            gap: 16px;
+          }
+          .yi-breathing-controls button {
+            width: 42px;
+            height: 42px;
+            font-size: 16px;
+          }
           .yi-hero-phone figcaption { font-size: 8px; letter-spacing: .13em; }
           .yi-hero-caption { display: none; }
 
@@ -909,6 +1279,10 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           html { scroll-behavior: auto; }
           .yi-button { transition: none; }
           .yi-device-chip { animation: none; }
+          .yi-breathing-orb,
+          .yi-breathing-progress span,
+          .yi-breathing-phase-track span,
+          .yi-breathing-controls button { transition: none; }
         }
       `}</style>
     </main>

@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "pulsecheck-team-showing-up-daily-scores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateKey",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "health-context-source-records",
       "queryScope": "COLLECTION",
       "fields": [

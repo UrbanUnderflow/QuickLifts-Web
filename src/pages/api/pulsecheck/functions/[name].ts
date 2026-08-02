@@ -2,6 +2,8 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 
 const SUPPORTED_FUNCTIONS = new Set([
   'submit-pulsecheck-checkin',
+  'get-pulsecheck-team-standings',
+  'get-pulsecheck-team-showing-up-history',
   'repair-pulsecheck-daily-assignment',
   'record-pulsecheck-assignment-event',
   'record-pilot-survey-response',
