@@ -136,6 +136,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/pulse-check-tech-demo',
     // PulseCheck marketing landing (public)
     '/PulseCheck',
+    '/PulseCheck/youth-info',
+    '/youth',
     // Nora marketing landing (public)
     '/Nora',
     // Macra marketing landing (public)

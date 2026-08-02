@@ -8206,6 +8206,140 @@ const AthleteAppSubscriptionOfferPanel: React.FC<{
   );
 };
 
+const TeamLeaderboardSettingsPanel: React.FC<{
+  teamContext: CoachDashboardTeamContext | null;
+  canManage: boolean;
+  isDemo?: boolean;
+  onChanged?: (teamId: string, enabled: boolean) => void;
+}> = ({ teamContext, canManage, isDemo, onChanged }) => {
+  const configuredEnabled = teamContext?.showingUpLeaderboardEnabled !== false;
+  const [enabled, setEnabled] = useState(configuredEnabled);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    setEnabled(configuredEnabled);
+    setMessage(null);
+  }, [configuredEnabled, teamContext?.teamId]);
+
+  const updateVisibility = async (nextEnabled: boolean) => {
+    if (!teamContext || !canManage || saving) return;
+    const previousEnabled = enabled;
+    setEnabled(nextEnabled);
+    setSaving(true);
+    setMessage(null);
+    try {
+      if (!isDemo) {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('Sign in again to change this setting.');
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch('/.netlify/functions/manage-pulsecheck-team-leaderboard', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+            ...getFirebaseModeRequestHeaders(),
+          },
+          body: JSON.stringify({
+            action: 'update',
+            teamId: teamContext.teamId,
+            enabled: nextEnabled,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.success !== true) {
+          throw new Error(payload?.error || 'The leaderboard setting could not be saved.');
+        }
+        nextEnabled = payload.enabled !== false;
+        setEnabled(nextEnabled);
+      }
+      onChanged?.(teamContext.teamId, nextEnabled);
+      setMessage({
+        type: 'success',
+        text: nextEnabled
+          ? 'The team leaderboard is visible to athletes.'
+          : 'The team leaderboard is hidden from athletes.',
+      });
+    } catch (error) {
+      setEnabled(previousEnabled);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'The leaderboard setting could not be saved.',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-950/10 p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
+          <div className="flex items-center gap-2 text-sm font-bold text-white">
+            <Trophy className="h-4 w-4 text-cyan-300" />
+            Team leaderboard
+          </div>
+          <p className="mt-2 text-xs leading-5 text-zinc-400">
+            Show the 14-day Showing Up leaderboard on athlete Home and Pro Program screens. Daily scoring and records continue while it is hidden.
+          </p>
+          {teamContext ? (
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">
+              {teamContext.teamName}
+            </p>
+          ) : null}
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Show team leaderboard to athletes"
+          disabled={!teamContext || !canManage || saving}
+          onClick={() => void updateVisibility(!enabled)}
+          className={`relative h-8 w-14 flex-none rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+            enabled
+              ? 'border-cyan-300/40 bg-cyan-300'
+              : 'border-zinc-700 bg-zinc-800'
+          }`}
+        >
+          <span
+            className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+              enabled ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <span
+          className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+            enabled
+              ? 'border-cyan-300/25 bg-cyan-300/10 text-cyan-200'
+              : 'border-zinc-700 bg-zinc-800/60 text-zinc-400'
+          }`}
+        >
+          {saving ? 'Saving' : enabled ? 'Visible' : 'Hidden'}
+        </span>
+        {!canManage && teamContext ? (
+          <span className="text-xs text-zinc-500">Coach or manager access is required to change this setting.</span>
+        ) : null}
+      </div>
+
+      {message ? (
+        <div
+          className={`mt-4 rounded-lg border px-3 py-2 text-xs ${
+            message.type === 'success'
+              ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+              : 'border-red-400/25 bg-red-400/10 text-red-100'
+          }`}
+        >
+          {message.text}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const SettingsSection: React.FC<{
   coachName: string;
   email?: string;
@@ -8215,10 +8349,12 @@ const SettingsSection: React.FC<{
   servicesOrganizationId?: string;
   teamContext: CoachDashboardTeamContext | null;
   canManageCommercialization: boolean;
+  canManageTeamSettings: boolean;
   onCommercialConfigChanged?: (
     teamId: string,
     commercialConfig: PulseCheckTeamCommercialConfig
   ) => void;
+  onLeaderboardChanged?: (teamId: string, enabled: boolean) => void;
   isDemo?: boolean;
 }> = ({
   coachName,
@@ -8229,7 +8365,9 @@ const SettingsSection: React.FC<{
   servicesOrganizationId = '',
   teamContext,
   canManageCommercialization,
+  canManageTeamSettings,
   onCommercialConfigChanged,
+  onLeaderboardChanged,
   isDemo = false,
 }) => (
   <div className="space-y-4">
@@ -8245,6 +8383,12 @@ const SettingsSection: React.FC<{
       </div>
     </div>
     <AccountSignInMethods compact />
+    <TeamLeaderboardSettingsPanel
+      teamContext={teamContext}
+      canManage={canManageTeamSettings}
+      isDemo={isDemo}
+      onChanged={onLeaderboardChanged}
+    />
     <AthleteAppSubscriptionOfferPanel
       teamContext={teamContext}
       canManage={canManageCommercialization}
