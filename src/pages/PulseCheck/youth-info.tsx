@@ -669,13 +669,13 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
     <main className={`youth-info ${isPro ? 'pro-info' : ''}`}>
       <PageHead
         metaData={isPro ? proPageMeta : pageMeta}
-        pageOgUrl={isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth'}
+        pageOgUrl={isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth-info'}
         pageOgImage={isPro ? '/pulsecheck-pro-og.png' : '/pulsecheck-youth/youth-info-og.png'}
         themeColor={isPro ? '#0b0b0e' : '#101015'}
         appleItunesAppArgument={isPro ? 'pulsecheck://pro' : 'pulsecheck://youth'}
       />
       <header className="yi-nav">
-        <Link href={isPro ? '/pro-info' : '/PulseCheck/youth'} className="yi-brand" aria-label={isPro ? 'PulseCheck Pro information' : 'PulseCheck Youth home'}>
+        <Link href={isPro ? '/pro-info' : '/youth-info'} className="yi-brand" aria-label={isPro ? 'PulseCheck Pro information' : 'PulseCheck Youth home'}>
           <img src="/pulsecheck-youth/pulsecheck-wordmark.png" alt="PulseCheck" />
         </Link>
         <span className="yi-nav-label">{isPro ? 'PRO / MENTAL PERFORMANCE' : 'YOUTH / MENTAL PERFORMANCE'}</span>
@@ -2355,7 +2355,7 @@ export const getStaticProps = async () => ({
       title: pageMeta.ogTitle,
       description: pageMeta.ogDescription,
       image: 'https://fitwithpulse.ai/pulsecheck-youth/youth-info-og.png',
-      url: 'https://pulsecheckmind.ai/youth',
+      url: 'https://pulsecheckmind.ai/youth-info',
       type: 'website',
       siteName: 'PulseCheck',
     },
