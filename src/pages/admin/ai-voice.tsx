@@ -59,6 +59,7 @@ const SOUND_EFFECTS: {
   icon: React.ReactNode;
   category: 'splash' | 'celebration' | 'workout' | 'notification' | 'ui' | 'pulsecheck';
   file: string;    // path relative to /audio/ or iOS bundle name
+  fileExtension?: 'mp3' | 'wav';
   platform: 'community' | 'pulsecheck' | 'both';
   prompt: string;
   durationSeconds: number;
@@ -174,6 +175,18 @@ const SOUND_EFFECTS: {
     platform: 'pulsecheck',
     prompt: 'Tiny soft matte interface click, precise and tactile like a smooth switch engaging, near-subliminal, dark and premium, no speech, no music, no reverb',
     durationSeconds: 0.35,
+  },
+  {
+    id: 'pc-selection-calm-glass',
+    label: 'Selection: Calm Glass',
+    description: 'Locked selection feedback for tabs, chips, check-in choices, pickers, and lightweight buttons throughout PulseCheck.',
+    icon: <Zap className="w-4 h-4" />,
+    category: 'ui',
+    file: 'selection-07-calm-glass',
+    fileExtension: 'wav',
+    platform: 'pulsecheck',
+    prompt: 'Delicate calm glass selection touch, extremely short and quiet, soft rounded attack, gentle clean decay, soothing tactile feedback paired with a native selection haptic, no speech, no melody, no reverb tail, no harsh high frequencies',
+    durationSeconds: 0.18,
   },
 
   // ── Pulse Community App
@@ -1110,6 +1123,7 @@ const PULSECHECK_CORE_SOUND_FILES: Record<string, string> = {
   'pc-body-scan-ambient': 'body-scan-ambient.mp3',
   'pc-success-chime': 'success-chime.wav',
   'pc-subtle-click': 'subtle-click.wav',
+  'pc-selection-calm-glass': 'selection-07-calm-glass.wav',
 };
 
 const PULSECHECK_MOMENT_SOUND_FILES: Record<string, string> = {
@@ -1930,7 +1944,7 @@ const SoundCard: React.FC<{
             </div>
             <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{sound.description}</p>
             <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
-              {sound.durationSeconds}s · {sound.generationMode === 'speech' ? 'ElevenLabs voice' : 'OpenAI Synth SFX'} · {sound.file}.mp3
+              {sound.durationSeconds}s · {sound.generationMode === 'speech' ? 'ElevenLabs voice' : 'OpenAI Synth SFX'} · {sound.file}.{sound.fileExtension ?? 'mp3'}
             </code>
           </div>
         </div>
@@ -3977,7 +3991,7 @@ const AdminAiVoice: React.FC = () => {
       : generatedAsset?.provider === 'openai' && generatedAsset?.renderer === OPENAI_SYNTH_RENDERER;
     const previewUrl = generatedAssetIsUsable && generatedAsset?.downloadURL
       ? generatedAsset.downloadURL
-      : `/audio/sfx/${sound.file}.mp3`;
+      : `/audio/sfx/${sound.file}.${sound.fileExtension ?? 'mp3'}`;
     playAudioUrl(previewUrl);
   };
 

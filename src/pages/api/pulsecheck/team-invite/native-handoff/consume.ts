@@ -101,13 +101,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return binding.uid;
     });
 
-    const customToken = await admin.auth(adminApp).createCustomToken(userId, {
-      pulsecheckNativeInviteHandoff: true,
-    });
+    // The token only establishes the already-verified Firebase identity. It
+    // carries no entitlement or membership claim; checkout and invite
+    // redemption remain separate server-authorized steps.
+    const customToken = await admin.auth(adminApp).createCustomToken(userId);
     return res.status(200).json({ customToken });
   } catch (error) {
-    console.error('[pulsecheck-native-athlete-handoff/consume] Failed:', error);
     const response = nativeAthleteInviteHandoffErrorResponse(error);
+    if (response.statusCode >= 500) {
+      console.error('[pulsecheck-native-athlete-handoff/consume] Failed:', error);
+    }
     return res.status(response.statusCode).json({ error: response.message });
   }
 }

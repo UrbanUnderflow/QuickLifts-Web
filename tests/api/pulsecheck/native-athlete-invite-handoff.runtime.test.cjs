@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -29,6 +30,15 @@ const compiledRuntime = compileTypeScriptRuntime({
   ],
 });
 
+const clearCompiledRuntime = () => {
+  const realOutputDirectory = fs.realpathSync(compiledRuntime.outDir);
+  for (const cacheKey of Object.keys(require.cache)) {
+    if (cacheKey.startsWith(realOutputDirectory)) {
+      delete require.cache[cacheKey];
+    }
+  }
+};
+
 const baseInvite = (overrides = {}) => ({
   inviteType: 'team-access',
   status: 'active',
@@ -50,6 +60,7 @@ const request = ({ body = {}, authorization = '', firebaseMode = '' } = {}) => (
 });
 
 const loadHandoffRuntime = ({ invite = baseInvite(), decoded = {} } = {}) => {
+  clearCompiledRuntime();
   const firebase = createFirestoreAdminMock({
     collections: {
       'pulsecheck-invite-links': [
@@ -163,12 +174,11 @@ test('native handoff stores only a hashed, five-minute, invite-bound code', asyn
   assert.equal(stored.teamId, 'team-1');
   assert.equal(stored.firebaseMode, 'dev');
   assert.equal(stored.status, 'active');
-  assert.equal(
-    stored.expiresAtEpochSeconds - Math.floor(Date.now() / 1000),
-    300
-  );
+  const remainingSeconds =
+    stored.expiresAtEpochSeconds - Math.floor(Date.now() / 1000);
+  assert.ok(remainingSeconds >= 299 && remainingSeconds <= 300);
   assert.equal(JSON.stringify(stored).includes(response.body.handoffCode), false);
-  assert.equal(runtime.firebase.getDocument('pulsecheck-team-memberships/athlete-1'), null);
+  assert.equal(runtime.firebase.getDocument('pulsecheck-team-memberships/athlete-1'), undefined);
 });
 
 test('native handoff consumes once, checks the exact invite, and mints the bound user token', async () => {
@@ -203,7 +213,7 @@ test('native handoff consumes once, checks the exact invite, and mints the bound
   assert.deepEqual(runtime.authCalls.at(-1), {
     method: 'createCustomToken',
     uid: 'athlete-1',
-    claims: { pulsecheckNativeInviteHandoff: true },
+    claims: undefined,
   });
 
   const replay = createNextApiResponseRecorder();
@@ -221,7 +231,7 @@ test('native handoff consumes once, checks the exact invite, and mints the bound
   );
   assert.equal(runtime.firebase.writes.updates.length, 1);
   assert.equal(runtime.firebase.writes.updates[0].next.status, 'consumed');
-  assert.equal(runtime.firebase.getDocument('pulsecheck-team-memberships/athlete-1'), null);
+  assert.equal(runtime.firebase.getDocument('pulsecheck-team-memberships/athlete-1'), undefined);
 });
 
 test('native handoff rejects the wrong athlete account and rechecks revocation at consume time', async () => {

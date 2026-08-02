@@ -7,15 +7,20 @@ interface RequestBody {
   stakeholderName?: string;
   stakeholderEmail?: string;
   stakeholderType?: 'founder' | 'employee' | 'advisor' | 'investor' | 'contractor';
+  stakeholderTitle?: string;
   documentType: string;
   prompt?: string;
   requiresSignature?: boolean;
   boardApprovalDate?: string;
   documentDate?: string;
+  planShareReserve?: number;
   grantDetails?: {
     equityType: string;
     numberOfShares: number;
     strikePrice: number;
+    fairMarketValueAtGrant?: number;
+    valuationDate?: string;
+    earlyExerciseAllowed?: boolean;
     vestingSchedule: string;
     vestingStartDate: string;
     cliffMonths: number;
@@ -69,7 +74,20 @@ const getGrantDate = (data: RequestBody) => {
 };
 
 const getVestingCommencementDate = (data: RequestBody) => {
-  return data.boardApprovalDate || formatHumanDate(data.grantDetails?.vestingStartDate) || getGrantDate(data);
+  // Service-based vesting may start before the Board formally approves a grant.
+  // Keep that date distinct; never backdate the legal Grant Date.
+  return formatHumanDate(data.grantDetails?.vestingStartDate) || data.boardApprovalDate || getGrantDate(data);
+};
+
+const getValuationDate = (data: RequestBody) =>
+  formatHumanDate(data.grantDetails?.valuationDate) || data.boardApprovalDate || getGrantDate(data);
+
+const formatPerSharePrice = (value?: number) => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  });
 };
 
 const getOptionExpirationDate = (data: RequestBody) => {
@@ -129,6 +147,19 @@ const getVestingInstructionBlock = (
       : `- All ${numberOfShares.toLocaleString()} shares vest on the cliff date because the cliff equals the full vesting period.`,
     `- Make clear that the Grant Date / Board Approval Date and the Vesting Commencement Date may be the same, but if both are shown they must be labeled distinctly and consistently.`,
   ].join('\n');
+};
+
+const getEarlyExerciseInstructionBlock = (data: RequestBody) => {
+  if (!data.grantDetails?.earlyExerciseAllowed) {
+    return `- Early exercise is not permitted. The Advisor may exercise only vested portions of the Option.
+- State that an 83(b) election is not triggered merely by the grant of this ordinary NSO. Do not attach an 83(b) form to a grant that does not transfer substantially nonvested shares.`;
+  }
+
+  return `- Early exercise is permitted only under the express mechanics in this Agreement.
+- Shares acquired before vesting remain subject to the same vesting schedule and to a Company repurchase right at the Advisor's original exercise price upon cessation of service, subject to applicable law and the Plan.
+- Include an 83(b) NOTICE (not tax advice) explaining that if the Advisor exercises for substantially nonvested shares, an election may be available and generally must be filed with the IRS no later than 30 days after the shares are transferred.
+- Attach a clearly labeled SAMPLE 83(b) ELECTION exhibit with blanks for exercise/transfer-specific facts. State that the Company does not file it for the Advisor and that the Advisor must consult personal tax counsel.
+- Do not say an 83(b) election is due on the Option Grant Date; the relevant transfer, if any, occurs when unvested shares are acquired on exercise.`;
 };
 
 const formatAdditionalContext = (prompt?: string) => {
@@ -260,7 +291,10 @@ ${data.grantDetails ? `
 GRANT TO APPROVE:
 - Type: ${data.grantDetails.equityType === 'iso' ? 'Incentive Stock Option' : data.grantDetails.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails.equityType}
 - Number of Shares: ${data.grantDetails.numberOfShares.toLocaleString()}
-- Exercise Price (Fair Market Value per 409A): $${data.grantDetails.strikePrice.toFixed(4)}
+- Exercise Price per Share: $${formatPerSharePrice(data.grantDetails.strikePrice) || '[MISSING - DO NOT APPROVE]'}
+- Board-Determined Fair Market Value per Share: $${formatPerSharePrice(data.grantDetails.fairMarketValueAtGrant ?? data.grantDetails.strikePrice) || '[MISSING - DO NOT APPROVE]'}
+- Fair Market Value Determination Date: ${getValuationDate(data)}
+- Early Exercise: ${data.grantDetails.earlyExerciseAllowed ? 'Permitted, subject to the award agreement and Company repurchase right' : 'Not permitted'}
 - Vesting: ${data.grantDetails.vestingSchedule}
 - Cliff: ${data.grantDetails.cliffMonths} months
 - Total Vesting Period: ${data.grantDetails.vestingMonths} months
@@ -276,7 +310,10 @@ DOCUMENT STRUCTURE REQUIREMENTS:
 3. RECITALS (WHEREAS clauses):
    - Establish that the Company has adopted the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the "Plan")
    - Identify the grantee and their role as ${data.stakeholderType}
-   - State the Board has determined the fair market value of the Company's common stock to be $${data.grantDetails?.strikePrice?.toFixed(4) || '0.0010'} per share, determined in accordance with Section 409A of the Internal Revenue Code
+   - State that, after considering the supporting valuation materials in the corporate records, the Board determined in good faith that the fair market value of the Company's common stock was $${formatPerSharePrice(data.grantDetails?.fairMarketValueAtGrant ?? data.grantDetails?.strikePrice) || '[MISSING]'} per share as of ${getValuationDate(data)}
+   - State that the exercise price is not less than the Board-determined fair market value on the Grant Date
+   - Do NOT claim that a formal Section 409A appraisal exists unless the additional instructions explicitly say one exists
+   - Do NOT use or describe the certificate-of-incorporation par value as fair market value or as the option exercise price
    - Note that granting equity to ${data.stakeholderName} is in the best interest of the Company
 
 4. RESOLUTIONS ("NOW, THEREFORE, BE IT RESOLVED"):
@@ -419,18 +456,22 @@ Keep it concise (FAST agreements are meant to be simple) but comprehensive.`,
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 ADVISOR: ${data.stakeholderName}
 EMAIL: ${data.stakeholderEmail}
+ADVISOR ROLE: ${data.stakeholderTitle || 'Strategic Advisor'}
 GRANT DATE: ${getGrantDate(data)}
 VESTING COMMENCEMENT DATE: ${getVestingCommencementDate(data)}
 
 GRANT DETAILS:
 - Option Type: Non-Qualified Stock Option (NSO)
 - Number of Shares: ${data.grantDetails?.numberOfShares?.toLocaleString() || '10,000'}
-- Exercise Price per Share: $${data.grantDetails?.strikePrice?.toFixed(4) || '0.0010'}
+- Exercise Price per Share: $${formatPerSharePrice(data.grantDetails?.strikePrice) || '[MISSING - DO NOT ISSUE]'}
+- Board-Determined Fair Market Value per Share: $${formatPerSharePrice(data.grantDetails?.fairMarketValueAtGrant ?? data.grantDetails?.strikePrice) || '[MISSING - DO NOT ISSUE]'}
+- Fair Market Value Determination Date: ${getValuationDate(data)}
 - Vesting Period: ${data.grantDetails?.vestingMonths || 24} months total
 - Vesting Schedule: Monthly vesting after cliff
 - Cliff Period: ${data.grantDetails?.cliffMonths || 3} months
 - Option Term: 10 years from Grant Date
 - Option Expiration Date: ${getOptionExpirationDate(data)}
+- Early Exercise: ${data.grantDetails?.earlyExerciseAllowed ? 'Permitted, subject to repurchase and tax provisions' : 'Not permitted'}
 ${data.boardApprovalDate ? `- Board Approval Date: ${data.boardApprovalDate}` : ''}
 
 ${formatAdditionalContext(data.prompt)}
@@ -439,7 +480,7 @@ Generate a SINGLE COMBINED AGREEMENT with these requirements. CRITICAL: Do NOT u
 
 SECTION 1 - ADVISOR SERVICES AGREEMENT:
 1.1 Engagement - Company engages Advisor for non-exclusive advisory services on a non-exclusive basis
-1.2 Services - Strategic guidance, introductions to investors/partners/customers, periodic advisory meetings. IMPORTANT: Add this sentence: "Nothing herein obligates the Company to request, or the Advisor to provide, any minimum number of hours or services."
+1.2 Services - Strategic guidance relevant to the Advisor's stated role, product/market advice, bona fide commercial or institutional partnership advice, industry expertise, and periodic advisory meetings. Do not list fundraising, securities placement, investor solicitation, or promotion of a market for Company securities as compensable services. IMPORTANT: Add these sentences: "Nothing herein obligates the Company to request, or the Advisor to provide, any minimum number of hours or services." "The services compensated by this Option are bona fide advisory services and do not include services in connection with the offer or sale of securities in a capital-raising transaction or services that directly or indirectly promote or maintain a market for the Company's securities."
 1.3 No Employment Relationship - Independent contractor, not an employee/officer/director
 1.4 Confidentiality - Keep non-public information confidential
 1.5 Intellectual Property - Use this STRONGER language: "All inventions, ideas, improvements, works of authorship, feedback, and materials conceived or developed by the Advisor in connection with the services shall be the exclusive property of the Company. The Advisor hereby assigns all right, title, and interest in such intellectual property to the Company."
@@ -447,16 +488,22 @@ SECTION 1 - ADVISOR SERVICES AGREEMENT:
 
 SECTION 2 - GRANT OF NON-QUALIFIED STOCK OPTIONS:
 2.1 Grant - NSO to purchase the specified shares pursuant to the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the "Plan"). CRITICAL: Include this exact sentence: "This Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan'), which is hereby incorporated by reference."${data.boardApprovalDate ? ` CRITICAL: Also include this exact sentence: "The Option was approved by the Board of Directors pursuant to written consent dated ${data.boardApprovalDate}."` : ''}
-2.1A Date Consistency - The Grant Date / Effective Date for the option grant must be ${getGrantDate(data)}. The Vesting Commencement Date must also be ${getVestingCommencementDate(data)}.${data.boardApprovalDate ? ` Do NOT use a different board approval date, grant date, or vesting commencement date elsewhere in the document.` : ''}
+2.1A Date Treatment - The legal Grant Date / Board Approval Date must be ${getGrantDate(data)}. The separate Vesting Commencement Date must be ${getVestingCommencementDate(data)}. Do not backdate the Grant Date. If the two dates differ, label them distinctly and do not rewrite one to match the other.
 2.2 Exercise Price - Fair market value as determined by the Board
+   - State that the exercise price is not less than the Board-determined fair market value on the Grant Date
+   - State that corporate par value is legally distinct from fair market value and is not being used as the exercise price
+   - Do not claim that a formal Section 409A appraisal exists unless the additional instructions explicitly say one exists
 2.3 Vesting Schedule
 ${getVestingInstructionBlock(data.grantDetails, getVestingCommencementDate(data))}
+2.3A Early Exercise and Section 83(b)
+${getEarlyExerciseInstructionBlock(data)}
 2.4 Term of Option - Include this exact sentence: "The Option shall expire ten (10) years from the Grant Date, on ${getOptionExpirationDate(data)}, unless earlier terminated pursuant to the Plan or this Agreement." Do NOT say only that the Option expires 10 years from the Grant Date, and do NOT say the Grant Date itself is the expiration date.
 2.5 Termination of Service - Unvested options terminate. For advisors, set the post-termination exercise window to six (6) months for vested options (not 90 days). Include clear mechanics and any Plan override language.
 2.6 No Stockholder Rights - Until Option is exercised
 
 SECTION 3 - TAX MATTERS AND INVESTMENT RISK:
 - Company makes no tax representations, Advisor responsible for own tax advice
+- Clearly distinguish the tax timing of an NSO grant, exercise, and any later transfer or sale of shares
 - Add this investment risk acknowledgement: "The Advisor acknowledges that the Option involves investment risk and that there is no guarantee of liquidity or value. The Advisor has had an opportunity to consult with their own legal and financial advisors."
 
 SECTION 4 - GENERAL PROVISIONS:
@@ -492,6 +539,7 @@ Format this as a professional legal document ready for e-signature. Use clear se
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 PLAN EFFECTIVE DATE: ${currentDate}
+PLAN SHARE RESERVE: ${(data.planShareReserve || 1_000_000).toLocaleString()} shares of Common Stock
 ${formatAdditionalContext(data.prompt)}
 
 Please create a full Equity Incentive Plan that includes:
@@ -506,14 +554,17 @@ Please create a full Equity Incentive Plan that includes:
    - Decisions binding
 
 3. SHARES SUBJECT TO THE PLAN
-   - Share reserve
+   - Set the initial aggregate share reserve to exactly ${(data.planShareReserve || 1_000_000).toLocaleString()} shares of Common Stock
    - Share counting rules
    - Adjustments for corporate events
+   - State that the Plan reserve is not itself an issuance or grant; every award requires separate Board approval and an award agreement
 
 4. ELIGIBILITY
    - Employees, Directors, Consultants, and Advisors
    - Make clear that advisors are expressly eligible service providers under the Plan and are not left to implication
    - ISO limitations (employees only)
+   - For reliance on Rule 701, limit consultant/advisor eligibility to natural persons providing bona fide services that are not connected to a capital-raising securities transaction and do not directly or indirectly promote or maintain a market for Company securities
+   - State that the Administrator must confirm the applicable securities-law exemption for every grant; do not imply that Plan eligibility alone supplies an exemption
 
 5. TYPES OF AWARDS
    - Stock Options (ISOs and NSOs)
@@ -525,11 +576,14 @@ Please create a full Equity Incentive Plan that includes:
 6. STOCK OPTIONS
    - Grant of Options
    - Exercise Price (not less than FMV)
+   - Make clear that corporate par value is distinct from fair market value and must not be substituted for the Board-determined exercise price
    - Vesting and Exercisability
    - Term (10 years max)
    - Method of Exercise
    - Payment methods
    - ISO specific rules
+   - Early exercise only when an individual award agreement expressly permits it; require Company repurchase rights for unvested shares and a participant tax notice addressing the possible 30-day Section 83(b) deadline after transfer of substantially nonvested shares
+   - State that an 83(b) election is not triggered merely by the grant of an unexercised option
 
 7. RESTRICTED STOCK AND RSUs
    - Grant provisions
@@ -613,6 +667,34 @@ const handler: Handler = async (event) => {
       if (!body.stakeholderName || !body.stakeholderEmail || !body.stakeholderType) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing stakeholder details for this document type' }) };
       }
+    }
+
+    if (documentType === 'advisor_nso_agreement' || (documentType === 'board_consent' && body.stakeholderType === 'advisor')) {
+      const strikePrice = body.grantDetails?.strikePrice;
+      if (!body.grantDetails?.numberOfShares || !strikePrice || strikePrice <= 0) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            error: 'Advisor option documents require a positive option count and Board-determined exercise price. Corporate par value cannot be used as a default.',
+          }),
+        };
+      }
+      if (!body.grantDetails.valuationDate) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: 'Advisor option documents require a fair-market-value determination date.' }),
+        };
+      }
+    }
+
+    if (documentType === 'eip' && (!body.planShareReserve || body.planShareReserve <= 0)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'The Equity Incentive Plan requires a positive, explicit share reserve.' }),
+      };
     }
 
     const bulletFormattingRules = `

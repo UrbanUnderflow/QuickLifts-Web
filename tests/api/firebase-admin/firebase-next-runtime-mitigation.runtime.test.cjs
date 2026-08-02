@@ -54,6 +54,18 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
     '/api/admin/nora-guard/revoke'
   );
   assert.equal(
+    proxyModule.__test.resolveRoutePattern(
+      '/api/pulsecheck/team-invite/native-handoff/create'
+    ),
+    '/api/pulsecheck/team-invite/native-handoff/create'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern(
+      '/api/pulsecheck/team-invite/native-handoff/consume'
+    ),
+    '/api/pulsecheck/team-invite/native-handoff/consume'
+  );
+  assert.equal(
     proxyModule.__test.resolveRoutePattern('/api/admin/group-meet/request-123/invites/token-123/flex'),
     '/api/admin/group-meet/[requestId]/invites/[token]/flex'
   );

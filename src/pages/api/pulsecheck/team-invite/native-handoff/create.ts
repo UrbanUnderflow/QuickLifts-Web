@@ -86,8 +86,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       expiresInSeconds: NATIVE_ATHLETE_INVITE_HANDOFF_TTL_SECONDS,
     });
   } catch (error) {
-    console.error('[pulsecheck-native-athlete-handoff/create] Failed:', error);
     const response = nativeAthleteInviteHandoffErrorResponse(error);
+    if (response.statusCode >= 500) {
+      console.error('[pulsecheck-native-athlete-handoff/create] Failed:', error);
+    }
     return res.status(response.statusCode).json({ error: response.message });
   }
 }
