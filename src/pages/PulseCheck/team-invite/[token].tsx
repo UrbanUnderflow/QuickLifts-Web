@@ -77,6 +77,9 @@ type InviteActivityEventType =
   | 'redeem-succeeded'
   | 'redeem-failed'
   | 'follow-up-requested';
+type BrowserAccountGateState = 'checking' | 'clearing' | 'ready';
+
+const SKIP_FRESH_ACCOUNT_QUERY_PARAM = 'skipFreshAccount';
 
 const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
   'team-admin': 'Team Admin',
@@ -129,6 +132,17 @@ const nextHrefByRole = (role: PulseCheckTeamMembershipRole, organizationId: stri
   }
 
   return `/PulseCheck/member-setup?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+};
+
+const addSkipFreshAccountCheck = (url: string) => {
+  try {
+    const parsedUrl = new URL(url);
+    parsedUrl.searchParams.set(SKIP_FRESH_ACCOUNT_QUERY_PARAM, '1');
+    return parsedUrl.toString();
+  } catch {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${SKIP_FRESH_ACCOUNT_QUERY_PARAM}=1`;
+  }
 };
 
 const normalizeInviteCommercialSnapshot = (
@@ -248,6 +262,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [verificationEmailSent, setVerificationEmailSent] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
+  const [browserAccountGateState, setBrowserAccountGateState] = useState<BrowserAccountGateState>('checking');
   const [redeemedState, setRedeemedState] = useState<{
     organizationName: string;
     teamName: string;
@@ -289,6 +304,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
   const isGeneralInvite = invite.redemptionMode === 'general';
+  const isAthleteInvite = invite.teamMembershipRole === 'athlete';
+  const skipFreshAccountCheck = router.isReady && router.query[SKIP_FRESH_ACCOUNT_QUERY_PARAM] === '1';
+  const shouldClearExistingBrowserAccount = isAthleteInvite && !skipFreshAccountCheck;
+  const browserAccountGateReady = browserAccountGateState === 'ready';
+  const browserAccountGatePending = !authReady || !browserAccountGateReady;
   // Athlete is the only non-staff role; everything else (coach, team-admin,
   // performance/support staff, clinician) uses the staff wizard.
   const isStaffInvite = invite.teamMembershipRole !== 'athlete';
@@ -313,6 +333,69 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     : shouldPreferAppDownload
       ? `Download the PulseCheck app to join ${inviteScopeLabel}.`
       : `Join ${invite.teamName}`;
+
+  useEffect(() => {
+    if (!router.isReady || !authReady) return;
+
+    let isCancelled = false;
+    const finish = () => {
+      if (!isCancelled) {
+        setBrowserAccountGateState('ready');
+      }
+    };
+
+    if (!shouldClearExistingBrowserAccount) {
+      finish();
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    const storageKey = `pulsecheck-athlete-invite-fresh-account:${invite.token}`;
+    let alreadyChecked = false;
+    try {
+      alreadyChecked = window.sessionStorage.getItem(storageKey) === '1';
+      if (!alreadyChecked) {
+        window.sessionStorage.setItem(storageKey, '1');
+      }
+    } catch {
+      alreadyChecked = false;
+    }
+
+    if (alreadyChecked || !auth.currentUser) {
+      finish();
+      return () => {
+        isCancelled = true;
+      };
+    }
+
+    setBrowserAccountGateState('clearing');
+    signOut(auth)
+      .then(() => {
+        if (isCancelled) return;
+        setAuthUser(null);
+        setVerificationEmailSent(false);
+        setMessage({
+          type: 'success',
+          text: 'For privacy, we signed this browser out first. Sign in with the account you want attached to this team.',
+        });
+      })
+      .catch((error) => {
+        console.error('[pulsecheck-team-invite] Failed to clear existing browser account:', error);
+        if (isCancelled) return;
+        setMessage({
+          type: 'error',
+          text: 'We could not sign out the existing browser account automatically. Sign out manually before continuing.',
+        });
+      })
+      .finally(() => {
+        finish();
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authReady, invite.token, router.isReady, shouldClearExistingBrowserAccount]);
 
   const updateWebOnboardingPreference = (nextValue: boolean) => {
     setShowWebOnboarding(nextValue);
@@ -427,14 +510,14 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   }, [router.isReady]);
 
   useEffect(() => {
-    if (!authReady || !authUser) return;
+    if (!authReady || !browserAccountGateReady || !authUser) return;
     void recordInviteActivity('authenticated-view', {
       dedupeKey: `authenticated-view:${authUser.uid}`,
       includeAuth: true,
     }).catch((error) => {
       console.error('[pulsecheck-team-invite] Failed to record authenticated view:', error);
     });
-  }, [authReady, authUser]);
+  }, [authReady, authUser, browserAccountGateReady]);
 
   const createTeamInviteUser = async (user: FirebaseAuthUser, username: string) => {
     const normalizedName = normalizeUsername(username);
@@ -583,7 +666,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     if (!verificationEmailSent) {
       try {
         await sendEmailVerification(user, {
-          url: invite.pageUrl,
+          url: addSkipFreshAccountCheck(invite.pageUrl),
           handleCodeInApp: false,
         });
       } catch (error) {
@@ -613,6 +696,18 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   ) => {
     if (!(await ensureCheckoutEmailIsVerified(user))) return;
     await startAthleteSubscriptionCheckout(completionMode);
+  };
+
+  const prepareAthleteCheckoutReview = async (
+    user: FirebaseAuthUser,
+    completionMode: AthleteCompletionMode
+  ) => {
+    setAthleteCompletionMode(completionMode);
+    if (!(await ensureCheckoutEmailIsVerified(user))) return;
+    setMessage({
+      type: 'success',
+      text: `You're signed in. Review the ${athleteMonthlyPrice} monthly subscription, then continue to Stripe when you're ready.`,
+    });
   };
 
   const handleSubmitFollowUp = async (event: React.FormEvent) => {
@@ -700,7 +795,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       await claimUsername(credential.user.uid, finalUsername);
       await createTeamInviteUser(credential.user, finalUsername);
       if (requiresAthleteCheckout) {
-        await continueToVerifiedAthleteCheckout(credential.user, 'new-account');
+        await prepareAthleteCheckoutReview(credential.user, 'new-account');
       } else {
         await completeRedeem('new-account');
       }
@@ -743,7 +838,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     try {
       const credential = await signInWithEmailAndPassword(auth, email, signInForm.password);
       if (requiresAthleteCheckout) {
-        await continueToVerifiedAthleteCheckout(credential.user, 'existing-account');
+        await prepareAthleteCheckoutReview(credential.user, 'existing-account');
       } else {
         await completeRedeem('existing-account');
       }
@@ -831,7 +926,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         completionMode = 'new-account';
       }
 
-      await continueToVerifiedAthleteCheckout(user, completionMode);
+      await prepareAthleteCheckoutReview(user, completionMode);
     } catch (error) {
       console.error('[pulsecheck-team-invite] Social sign-in failed:', error);
       const code =
@@ -862,7 +957,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     setMessage(null);
     try {
       if (requiresAthleteCheckout) {
-        await continueToVerifiedAthleteCheckout(authUser, 'existing-account');
+        await continueToVerifiedAthleteCheckout(authUser, athleteCompletionMode);
       } else {
         await completeRedeem('existing-account');
       }
@@ -1003,9 +1098,14 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
             </div>
           ) : null}
 
-          {!authReady ? (
+          {browserAccountGatePending ? (
             <div className="flex min-h-[420px] items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+              <div className="flex flex-col items-center gap-3 text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                {browserAccountGateState === 'clearing' ? (
+                  <p className="text-sm text-zinc-400">Signing out this browser first...</p>
+                ) : null}
+              </div>
             </div>
           ) : staffStep === 3 && redeemedState ? (
             /* STEP 3 — Done */
@@ -1543,9 +1643,14 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
-            ) : !authReady ? (
+            ) : browserAccountGatePending ? (
               <div className="flex min-h-[420px] items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                  {browserAccountGateState === 'clearing' ? (
+                    <p className="text-sm text-zinc-400">Signing out this browser first...</p>
+                  ) : null}
+                </div>
               </div>
             ) : authUser ? (
               <div className="space-y-6">
@@ -1778,7 +1883,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                         : requiresAthleteCheckout
                           ? requiresTargetEmailVerification
                             ? 'Create Account and Verify Email'
-                            : 'Create Account and Continue to Stripe'
+                            : 'Create Account and Review Subscription'
                           : 'Create Account and Join'}
                     </button>
                   </form>
@@ -1818,7 +1923,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                         : requiresAthleteCheckout
                           ? requiresTargetEmailVerification
                             ? 'Sign In and Verify Email'
-                            : 'Sign In and Continue to Stripe'
+                            : 'Sign In and Review Subscription'
                           : 'Sign In and Join'}
                     </button>
                   </form>

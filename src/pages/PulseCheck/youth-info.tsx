@@ -205,7 +205,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
     <main className="youth-info">
       <PageHead
         metaData={pageMeta}
-        pageOgUrl="https://fitwithpulse.ai/PulseCheck/youth-info"
+        pageOgUrl="https://pulsecheckmind.ai/youth"
         pageOgImage="/pulsecheck-youth/youth-info-og.png"
         themeColor="#101015"
         appleItunesAppArgument="pulsecheck://youth"
@@ -422,7 +422,7 @@ const PulseCheckYouthInfoPage: React.FC = () => {
           className="yi-button yi-button--dark"
           href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Youth"
         >
-          Start a conversation <ArrowRight size={17} />
+          Request a demo <ArrowRight size={17} />
         </a>
       </section>
 
@@ -1297,7 +1297,7 @@ export const getStaticProps = async () => ({
       title: pageMeta.ogTitle,
       description: pageMeta.ogDescription,
       image: 'https://fitwithpulse.ai/pulsecheck-youth/youth-info-og.png',
-      url: 'https://fitwithpulse.ai/PulseCheck/youth-info',
+      url: 'https://pulsecheckmind.ai/youth',
       type: 'website',
       siteName: 'PulseCheck',
     },
