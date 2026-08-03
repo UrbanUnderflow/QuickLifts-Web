@@ -62,7 +62,7 @@ const adminCardsData = [
   },
   {
     title: "PulseCheck Media",
-    description: "Apple-ready PulseCheck App Store screenshots at 1284 × 2778, plus the broader product media archive. Preview and download every asset.",
+    description: "Apple-ready PulseCheck App Store screenshots for iPhone 6.5-inch and iPad 13-inch, plus the broader product media archive. Preview and download every asset.",
     icon: <ImageIcon className="w-5 h-5" />,
     link: "/admin/pulsecheckMedia"
   },

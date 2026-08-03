@@ -80,6 +80,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "media:pulsecheck:app-store-ipad": "node scripts/generate-pulsecheck-app-store-ipad-media.cjs",
     "copy:pulsecheck": "node scripts/check-pulsecheck-website-copy.cjs",
     "copy:pulsecheck:audit": "node scripts/check-pulsecheck-website-copy.cjs --audit",
     "copy:pulsecheck:update-baseline": "node scripts/check-pulsecheck-website-copy.cjs --update-baseline",

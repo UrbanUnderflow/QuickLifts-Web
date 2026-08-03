@@ -6,10 +6,13 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 
 interface MediaItem {
   src: string;
+  downloadSrc?: string;
   title: string;
   caption: string;
-  group: 'App Store 6.5"' | 'Daily & Biometrics' | 'Nora & Training' | 'Recovery & Safety';
+  group: 'App Store 6.5"' | 'App Store iPad 13"' | 'Daily & Biometrics' | 'Nora & Training' | 'Recovery & Safety';
   appStoreReady?: boolean;
+  dimensions?: string;
+  displayTarget?: string;
 }
 
 const MEDIA: MediaItem[] = [
@@ -54,6 +57,66 @@ const MEDIA: MediaItem[] = [
     caption: 'Nora, coaches, and follow-up conversations stay organized in one clear place.',
     group: 'App Store 6.5"',
     appStoreReady: true,
+  },
+  {
+    src: '/pulsecheck-media/ipad-13/appstore-ipad-01-daily-skills.png',
+    downloadSrc: '/pulsecheck-media/full/ipad-13/appstore-ipad-01-daily-skills.png',
+    title: 'iPad 01 · Daily skills',
+    caption: 'The athlete opens PulseCheck and receives three clear mental skills to train today.',
+    group: 'App Store iPad 13"',
+    appStoreReady: true,
+    dimensions: '2048 × 2732',
+    displayTarget: 'iPad 13"',
+  },
+  {
+    src: '/pulsecheck-media/ipad-13/appstore-ipad-02-training-system.png',
+    downloadSrc: '/pulsecheck-media/full/ipad-13/appstore-ipad-02-training-system.png',
+    title: 'iPad 02 · Training system',
+    caption: 'The athlete sees the assigned rep, why it was selected, and where it fits in the program.',
+    group: 'App Store iPad 13"',
+    appStoreReady: true,
+    dimensions: '2048 × 2732',
+    displayTarget: 'iPad 13"',
+  },
+  {
+    src: '/pulsecheck-media/ipad-13/appstore-ipad-03-box-breathing.png',
+    downloadSrc: '/pulsecheck-media/full/ipad-13/appstore-ipad-03-box-breathing.png',
+    title: 'iPad 03 · Box breathing',
+    caption: 'A live guided breathing rep shows how mental skills become something the athlete can practice.',
+    group: 'App Store iPad 13"',
+    appStoreReady: true,
+    dimensions: '2048 × 2732',
+    displayTarget: 'iPad 13"',
+  },
+  {
+    src: '/pulsecheck-media/ipad-13/appstore-ipad-04-nora-coaching.png',
+    downloadSrc: '/pulsecheck-media/full/ipad-13/appstore-ipad-04-nora-coaching.png',
+    title: 'iPad 04 · Nora coaching',
+    caption: 'Nora helps the athlete understand what happened and leave the conversation with a clear plan.',
+    group: 'App Store iPad 13"',
+    appStoreReady: true,
+    dimensions: '2048 × 2732',
+    displayTarget: 'iPad 13"',
+  },
+  {
+    src: '/pulsecheck-media/ipad-13/appstore-ipad-05-program.png',
+    downloadSrc: '/pulsecheck-media/full/ipad-13/appstore-ipad-05-program.png',
+    title: 'iPad 05 · Program',
+    caption: 'The athlete can see what they built, the block they are training, and what opens next.',
+    group: 'App Store iPad 13"',
+    appStoreReady: true,
+    dimensions: '2048 × 2732',
+    displayTarget: 'iPad 13"',
+  },
+  {
+    src: '/pulsecheck-media/ipad-13/appstore-ipad-06-support-system.png',
+    downloadSrc: '/pulsecheck-media/full/ipad-13/appstore-ipad-06-support-system.png',
+    title: 'iPad 06 · Support system',
+    caption: 'Nora, coaches, and follow-up conversations stay organized in one clear place.',
+    group: 'App Store iPad 13"',
+    appStoreReady: true,
+    dimensions: '2048 × 2732',
+    displayTarget: 'iPad 13"',
   },
   {
     src: '/pulsecheck-media/00-app-store-meet-nora.png',
@@ -125,6 +188,7 @@ const MEDIA: MediaItem[] = [
 
 const GROUPS: MediaItem['group'][] = [
   'App Store 6.5"',
+  'App Store iPad 13"',
   'Daily & Biometrics',
   'Nora & Training',
   'Recovery & Safety',
@@ -132,7 +196,14 @@ const GROUPS: MediaItem['group'][] = [
 
 const PulseCheckMediaPage: React.FC = () => {
   const [active, setActive] = useState<MediaItem | null>(null);
-  const appStoreItems = MEDIA.filter((item) => item.appStoreReady);
+  const iphoneAppStoreItems = MEDIA.filter((item) => item.group === 'App Store 6.5"' && item.appStoreReady);
+  const ipadAppStoreItems = MEDIA.filter((item) => item.group === 'App Store iPad 13"' && item.appStoreReady);
+  const appStoreItems = [...iphoneAppStoreItems, ...ipadAppStoreItems];
+
+  const fullResolutionPath = (item: MediaItem): string =>
+    item.downloadSrc ?? item.src.replace('/pulsecheck-media/', '/pulsecheck-media/full/');
+
+  const isIpadGroup = (group: MediaItem['group']): boolean => group === 'App Store iPad 13"';
 
   return (
     <AdminRouteGuard>
@@ -158,18 +229,28 @@ const PulseCheckMediaPage: React.FC = () => {
                   App Store media, ready to use.
                 </h1>
                 <p className="mt-3 max-w-xl text-gray-400">
-                  A polished six-screen product story built from the real PulseCheck app. Open any
-                  image to review it, then download the full-resolution PNG for App Store Connect.
+                  Matching six-screen iPhone and iPad product stories built from the real PulseCheck
+                  app. Open any image to review it, then download the full-resolution PNG for App Store Connect.
                 </p>
               </div>
-              <a
-                href="/pulsecheck-media/PulseCheck-App-Store-6.5-Screenshots.zip"
-                download
-                className="inline-flex items-center gap-2 rounded-full bg-[#D8FF3E] px-6 py-3 text-sm font-black text-[#090A0D] transition-transform hover:scale-[1.03]"
-              >
-                <PackageOpen size={17} />
-                Download complete set
-              </a>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <a
+                  href="/pulsecheck-media/PulseCheck-App-Store-6.5-Screenshots.zip"
+                  download
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#D8FF3E] px-6 py-3 text-sm font-black text-[#090A0D] transition-transform hover:scale-[1.03]"
+                >
+                  <PackageOpen size={17} />
+                  Download iPhone set
+                </a>
+                <a
+                  href="/pulsecheck-media/PulseCheck-App-Store-iPad-13-Screenshots.zip"
+                  download
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[#52E4CD]/35 bg-[#52E4CD]/10 px-6 py-3 text-sm font-black text-[#72EBD8] transition-transform hover:scale-[1.03]"
+                >
+                  <PackageOpen size={17} />
+                  Download iPad set
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -178,9 +259,9 @@ const PulseCheckMediaPage: React.FC = () => {
           <section className="mb-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['Final screenshots', `${appStoreItems.length}`],
-              ['Apple-ready size', '1284 × 2778'],
+              ['iPhone set', `${iphoneAppStoreItems.length} · 1284 × 2778`],
+              ['iPad set', `${ipadAppStoreItems.length} · 2048 × 2732`],
               ['File format', 'PNG'],
-              ['Display target', 'iPhone 6.5"'],
             ].map(([label, value]) => (
               <div key={label} className="rounded-2xl border border-white/10 bg-white/[0.035] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">{label}</p>
@@ -198,14 +279,14 @@ const PulseCheckMediaPage: React.FC = () => {
                   <h2 className="font-mono text-xs font-bold uppercase tracking-[0.24em] text-gray-500">
                     {group} · {items.length}
                   </h2>
-                  {group === 'App Store 6.5"' && (
+                  {(group === 'App Store 6.5"' || group === 'App Store iPad 13"') && (
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-[#52E4CD]/25 bg-[#52E4CD]/10 px-3 py-1 text-xs font-bold text-[#72EBD8]">
                       <Check size={13} />
-                      Accepted dimensions
+                      {isIpadGroup(group) ? '2048 × 2732 accepted' : '1284 × 2778 accepted'}
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+                <div className={`grid gap-5 ${isIpadGroup(group) ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'}`}>
                   {items.map((item) => (
                     <button
                       key={item.src}
@@ -217,7 +298,7 @@ const PulseCheckMediaPage: React.FC = () => {
                           src={item.src}
                           alt={item.title}
                           loading="lazy"
-                          className="aspect-[9/19] w-full object-cover object-top"
+                          className={`${isIpadGroup(item.group) ? 'aspect-[3/4]' : 'aspect-[9/19]'} w-full object-cover object-top`}
                         />
                         <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/90 to-transparent px-4 pb-4 pt-14 opacity-0 transition-opacity group-hover:opacity-100">
                           <span className="text-xs font-bold text-white">Open preview</span>
@@ -228,10 +309,15 @@ const PulseCheckMediaPage: React.FC = () => {
                         <h3 className="text-sm font-bold text-white">{item.title}</h3>
                         {item.appStoreReady && (
                           <span className="shrink-0 rounded-full bg-[#52E4CD]/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#72EBD8]">
-                            Ready
+                            {item.displayTarget ?? 'Ready'}
                           </span>
                         )}
                       </div>
+                      {item.dimensions && (
+                        <p className="mt-1 font-mono text-[11px] font-bold text-[#72EBD8]">
+                          {item.dimensions} PNG
+                        </p>
+                      )}
                       <p className="mt-1 text-xs leading-snug text-gray-500">{item.caption}</p>
                     </button>
                   ))}
@@ -265,12 +351,12 @@ const PulseCheckMediaPage: React.FC = () => {
                   <div className="mt-1 text-sm text-gray-400">{active.caption}</div>
                   {active.appStoreReady && (
                     <div className="mt-2 text-xs font-bold text-[#72EBD8]">
-                      Full download · 1284 × 2778 PNG
+                      Full download · {active.dimensions ?? '1284 × 2778'} PNG
                     </div>
                   )}
                 </div>
                 <a
-                  href={active.src.replace('/pulsecheck-media/', '/pulsecheck-media/full/')}
+                  href={fullResolutionPath(active)}
                   download
                   className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#A875FF] px-5 py-2.5 text-sm font-bold text-white transition-transform hover:scale-105"
                   onClick={(e) => e.stopPropagation()}

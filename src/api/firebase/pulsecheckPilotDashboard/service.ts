@@ -42,9 +42,6 @@ import {
   isRescuedAdherenceCompletion,
   resolveAthleteDayAdherenceState,
 } from './adherenceOrchestrator';
-import {
-  getDefaultPulseCheckIntakeForm,
-} from '../pulsecheckProvisioning/types';
 import type {
   PulseCheckIntakeResponses,
   PulseCheckPilot,
@@ -1825,10 +1822,7 @@ const formatIntakeAnswerValue = (value: string | number | string[] | undefined |
 
 const resolveTeamAthleteIntakeQuestions = (team: PulseCheckTeam | null | undefined): SurveyQuestion[] => {
   const overrideQuestions = team?.intake?.athlete?.questions;
-  if (Array.isArray(overrideQuestions) && overrideQuestions.length > 0) {
-    return overrideQuestions;
-  }
-  return getDefaultPulseCheckIntakeForm('athlete').questions;
+  return Array.isArray(overrideQuestions) ? overrideQuestions : [];
 };
 
 const buildAthleteIntakeAnswers = (
@@ -2726,9 +2720,7 @@ export const pulseCheckPilotDashboardService = {
           const intakeCompleted = Boolean(coerceTimestampMs(athleteOnboarding?.intakeCompletedAt));
           const intake = buildAthleteIntakeAnswers(
             athleteOnboarding?.intakeResponses,
-            assignedIntakeQuestions.length > 0
-              ? assignedTeamIntakeQuestions
-              : resolveTeamAthleteIntakeQuestions(team)
+            resolveTeamAthleteIntakeQuestions(team)
           );
 
           return {

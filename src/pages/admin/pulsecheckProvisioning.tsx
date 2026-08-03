@@ -1334,15 +1334,6 @@ const PulseCheckProvisioningPage: React.FC = () => {
         next.add(`${focusTeam}:intakecard`);
         return next;
       });
-      const targetTeam = teams.find((team) => team.id === focusTeam);
-      if (targetTeam) {
-        const kind = focusIntake as PulseCheckIntakeKind;
-        const existing = targetTeam.intake?.[kind]?.questions || [];
-        if (existing.length === 0) {
-          const key = `${focusTeam}:${kind}`;
-          setTeamIntakeDrafts((prev) => (prev[key] ? prev : { ...prev, [key]: getDefaultPulseCheckIntakeForm(kind).questions }));
-        }
-      }
     }
 
     window.setTimeout(() => {
@@ -2394,6 +2385,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
   const handleLoadStarterIntake = (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
     setIntakeDraft(team.id, kind, getDefaultPulseCheckIntakeForm(kind).questions);
+  };
+
+  const handleDisableIntake = (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
+    setIntakeDraft(team.id, kind, []);
   };
 
   const handleDiscardIntakeDraft = (team: PulseCheckTeam, kind: PulseCheckIntakeKind) => {
@@ -4997,6 +4992,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           <Share2 /> Share link
                                                         </button>
                                                       ) : null}
+                                                      <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleDisableIntake(team, kind)}>No questions</button>
                                                       <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleLoadStarterIntake(team, kind)}>Load starter</button>
                                                     </div>
                                                   </div>
