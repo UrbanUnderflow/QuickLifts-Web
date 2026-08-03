@@ -52,6 +52,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/pulse-check-tech-demo': 'PulseCheck Tech Demo | Pulse Intelligence Labs',
   '/whoop-pulsecheck-demo': 'WHOOP x PulseCheck Integration Demo',
   '/pulse-auntedna-stakeholder-deck': 'Pulse × auntEDNA.ai — Stakeholder Deck',
+  '/planned-org': 'Planned Organization | Pulse Intelligence Labs',
   '/pulsecheck': 'PulseCheck',
   '/morning-mobility-challenge': 'Morning Mobility — Pulse',
   '/mobility': 'Mobility — Pulse',
