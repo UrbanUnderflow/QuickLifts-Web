@@ -13,7 +13,7 @@ export const getStaticProps = async () => ({
       title: 'PulseCheck | Mental Performance for Work, School, Sport, and Life',
       description:
         'A daily mental performance system for professionals, students, athletes, and anyone who wants to handle pressure with greater focus and confidence.',
-      image: 'https://pulsecheckmind.ai/pulsecheck-performers/performers-info-og.png',
+      image: 'https://pulsecheckmind.ai/pulsecheck-performers/performers-info-og-v2.png',
       url: 'https://pulsecheckmind.ai/performers-info',
       type: 'website',
       siteName: 'PulseCheck',

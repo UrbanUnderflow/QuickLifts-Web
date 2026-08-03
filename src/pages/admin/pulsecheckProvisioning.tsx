@@ -2189,21 +2189,23 @@ const PulseCheckProvisioningPage: React.FC = () => {
           : '',
       }));
       await loadData();
-      setMessage({
-        type: 'success',
-        text: nextDraft.athleteAppSubscriptionEnabled
+      dispatch(showToast({
+        message: nextDraft.athleteAppSubscriptionEnabled
           ? `${team.displayName} commercial config updated. Stripe athlete subscriptions are live at ${formatPulseCheckMonthlyPrice(
               nextDraft.athleteAppSubscriptionMonthlyPriceCents,
               nextDraft.athleteAppSubscriptionCurrency
             )} per month.`
           : `${team.displayName} commercial config updated.`,
-      });
+        type: 'success',
+        duration: 10000,
+      }));
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to update team commercial config:', error);
-      setMessage({
+      dispatch(showToast({
+        message: error instanceof Error ? error.message : 'Failed to update team commercial config.',
         type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to update team commercial config.',
-      });
+        duration: 10000,
+      }));
     } finally {
       setTeamCommercialSavingId((current) => (current === team.id ? null : current));
     }

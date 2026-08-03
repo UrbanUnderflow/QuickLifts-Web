@@ -177,7 +177,7 @@ const handler = async (event) => {
       items: [{ price: checkout.priceId }],
       payment_behavior: 'default_incomplete',
       payment_settings: {
-        payment_method_types: ['card'],
+        payment_method_types: ['card', 'link'],
         save_default_payment_method: 'on_subscription',
       },
       metadata,
@@ -228,7 +228,7 @@ const handler = async (event) => {
         publishableKey,
         customerId: stripeCustomer.customerId,
         customerEphemeralKeySecret: stripeCustomer.ephemeralKeySecret,
-        paymentMethodTypes: paymentIntent.payment_method_types || ['card'],
+        paymentMethodTypes: paymentIntent.payment_method_types || ['card', 'link'],
         amountCents: Number(paymentIntent.amount) || 0,
         currency: normalizeString(paymentIntent.currency) || 'usd',
         teamId: checkout.teamId,

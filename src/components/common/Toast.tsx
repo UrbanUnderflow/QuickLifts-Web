@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
+import { useRouter } from 'next/router';
 import { RootState } from '../../redux/store'; // Adjust path if needed
 import { hideToast } from '../../redux/toastSlice'; // Adjust path if needed
 import { CheckCircle, XCircle, Info, AlertTriangle, Award } from 'lucide-react';
@@ -14,8 +15,11 @@ const toastAnimation = `
 
 const Toast: React.FC = () => {
   const dispatch = useDispatch();
+  const router = useRouter();
   const { isVisible, message, type, duration } = useSelector((state: RootState) => state.toast);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isAdminScreen = router.pathname === '/admin' || router.pathname.startsWith('/admin/');
+  const effectiveDuration = isAdminScreen ? 10000 : duration;
 
   useEffect(() => {
     // Clear previous timeout if a new toast is shown before the old one hides
@@ -28,7 +32,7 @@ const Toast: React.FC = () => {
       // Set a timeout to hide the toast after the specified duration
       timeoutRef.current = setTimeout(() => {
         dispatch(hideToast());
-      }, duration);
+      }, effectiveDuration);
     }
 
     // Cleanup timeout on component unmount or when isVisible changes
@@ -37,7 +41,7 @@ const Toast: React.FC = () => {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [isVisible, duration, dispatch]);
+  }, [isVisible, effectiveDuration, dispatch]);
 
   if (!isVisible) {
     return null;
@@ -78,7 +82,7 @@ const Toast: React.FC = () => {
   const isAward = type === 'award';
   const positionClasses = isAward 
     ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
-    : 'bottom-4 right-4 md:bottom-8 md:right-8';
+    : 'bottom-6 left-1/2 -translate-x-1/2 md:bottom-8';
 
   const awardSpecificClasses = isAward
     ? 'border-2 border-yellow-300 text-black'
@@ -88,7 +92,7 @@ const Toast: React.FC = () => {
     <>
       <style>{toastAnimation}</style>
       <div
-        className={`fixed z-[101] p-4 rounded-lg shadow-xl flex items-center gap-3 
+        className={`fixed z-[101] w-[min(calc(100vw-2rem),42rem)] p-4 rounded-xl shadow-2xl flex items-center gap-3
           ${positionClasses} 
           ${baseBgColor} 
           ${awardSpecificClasses} 
@@ -110,4 +114,4 @@ const Toast: React.FC = () => {
   );
 };
 
-export default Toast; 
+export default Toast;

@@ -37,7 +37,7 @@ const performersPageMeta = {
   ogTitle: 'PulseCheck | Train the Mind Like the Body.',
   ogDescription:
     'A daily mental performance system for professionals, students, athletes, and anyone who wants to handle pressure with greater focus and confidence.',
-  ogImage: '/pulsecheck-performers/performers-info-og.png',
+  ogImage: '/pulsecheck-performers/performers-info-og-v2.png',
   twitterCard: 'summary_large_image',
   lastUpdated: '2026-08-02T00:00:00.000Z',
 };
@@ -971,7 +971,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       <PageHead
         metaData={isPerformers ? performersPageMeta : isPro ? proPageMeta : pageMeta}
         pageOgUrl={isPerformers ? 'https://pulsecheckmind.ai/performers-info' : isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth-info'}
-        pageOgImage={isPerformers ? '/pulsecheck-performers/performers-info-og.png' : isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og-branded.png'}
+        pageOgImage={isPerformers ? '/pulsecheck-performers/performers-info-og-v2.png' : isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og-branded.png'}
         themeColor={isPerformers ? '#080a0d' : isPro ? '#0b0b0e' : '#101015'}
         appleItunesAppArgument={isPerformers ? 'pulsecheck://home' : isPro ? 'pulsecheck://pro' : 'pulsecheck://youth'}
       />
@@ -995,7 +995,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         <img
           className="yi-hero-image"
           src={isPerformers ? '/pulsecheck-performers/hero.webp' : isPro ? '/pulsecheck-pro/hero-athletes.webp' : '/pulsecheck-youth/next-play.webp'}
-          alt={isPerformers ? 'A business professional preparing for an important presentation' : isPro ? 'Two competitive athletes preparing before competition' : 'A young athlete focused on the field before the next play'}
+          alt={isPerformers ? 'Three business professionals preparing together for an important presentation' : isPro ? 'Two competitive athletes preparing before competition' : 'A young athlete focused on the field before the next play'}
         />
         <div className="yi-hero-shade" aria-hidden="true" />
         <div className="yi-grain" aria-hidden="true" />
@@ -1157,7 +1157,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           <article className="yi-context-panel yi-context-panel--school" id="students">
             <img
               src="/pulsecheck-performers/student.webp"
-              alt="A university student preparing for an important exam or presentation"
+              alt="A Black university student preparing for an important exam or presentation"
             />
             <div className="yi-context-shade" aria-hidden="true" />
             <div className="yi-context-content">
