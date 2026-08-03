@@ -1,14 +1,16 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPEN_AI_SECRET_KEY,
-});
+import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 interface RequestBody {
   boardConsentContent: string;
   expectedStakeholderName: string;
   expectedNumberOfOptions?: number;
+  expectedExercisePrice?: number;
+  expectedVestingStartDate?: string;
+  expectedCliffMonths?: number;
+  expectedVestingMonths?: number;
+  expectedEarlyExerciseAllowed?: boolean;
 }
 
 const handler: Handler = async (event) => {
@@ -37,9 +39,33 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing expectedStakeholderName' }) };
     }
 
+    const openaiApiKey = resolveOpenAIApiKey();
+    if (!openaiApiKey) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured.' }) };
+    }
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+
     const expectedOptionsLine = typeof body.expectedNumberOfOptions === 'number'
       ? `Expected options amount: ${body.expectedNumberOfOptions.toLocaleString()}`
       : `Expected options amount: (not provided)`;
+    const expectedTerms = [
+      expectedOptionsLine,
+      typeof body.expectedExercisePrice === 'number'
+        ? `Expected exercise price / Board-determined FMV per share: $${body.expectedExercisePrice}`
+        : null,
+      body.expectedVestingStartDate
+        ? `Expected vesting commencement date: ${body.expectedVestingStartDate}`
+        : null,
+      typeof body.expectedCliffMonths === 'number'
+        ? `Expected cliff: ${body.expectedCliffMonths} months`
+        : null,
+      typeof body.expectedVestingMonths === 'number'
+        ? `Expected total vesting period: ${body.expectedVestingMonths} months`
+        : null,
+      typeof body.expectedEarlyExerciseAllowed === 'boolean'
+        ? `Expected early-exercise treatment: ${body.expectedEarlyExerciseAllowed ? 'permitted' : 'not permitted'}`
+        : null,
+    ].filter(Boolean).join('\n');
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -61,6 +87,8 @@ const handler: Handler = async (event) => {
             `- If no date is present/inferrable, approvalDate must be null and add an issue: "Approval date is missing or not inferrable."\n` +
             `- Check for signature date in the signature block - if missing, add issue: "Signature date is missing."\n` +
             `- Be strict: if stakeholder name doesn't appear, mark invalid.\n` +
+            `- Compare every supplied expected grant term (option count, exercise price/FMV, vesting commencement, cliff, total vesting, and early-exercise treatment) against the document. Any omission or mismatch is an issue and makes the consent invalid.\n` +
+            `- Treat corporate par value as distinct from fair market value. If the consent substitutes par value for the expected exercise price/FMV, mark invalid.\n` +
             `- The document must have BOTH an approval/effective date AND a signature date clearly stated.\n`,
         },
         {
@@ -68,7 +96,7 @@ const handler: Handler = async (event) => {
           content:
             `Verify this Board Consent matches the expected grant.\n\n` +
             `Expected stakeholder name: ${body.expectedStakeholderName}\n` +
-            `${expectedOptionsLine}\n\n` +
+            `${expectedTerms}\n\n` +
             `BOARD CONSENT CONTENT:\n` +
             `${body.boardConsentContent}\n`,
         },

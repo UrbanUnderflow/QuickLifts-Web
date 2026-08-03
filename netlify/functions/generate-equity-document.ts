@@ -30,8 +30,8 @@ interface RequestBody {
 
 const formatHumanDate = (value?: string) => {
   if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
+  const parsed = parseDateLike(value);
+  if (!parsed) return value;
   return parsed.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -158,8 +158,22 @@ const getEarlyExerciseInstructionBlock = (data: RequestBody) => {
   return `- Early exercise is permitted only under the express mechanics in this Agreement.
 - Shares acquired before vesting remain subject to the same vesting schedule and to a Company repurchase right at the Advisor's original exercise price upon cessation of service, subject to applicable law and the Plan.
 - Include an 83(b) NOTICE (not tax advice) explaining that if the Advisor exercises for substantially nonvested shares, an election may be available and generally must be filed with the IRS no later than 30 days after the shares are transferred.
-- Attach a clearly labeled SAMPLE 83(b) ELECTION exhibit with blanks for exercise/transfer-specific facts. State that the Company does not file it for the Advisor and that the Advisor must consult personal tax counsel.
+- Include a clearly labeled Section 83(b) notice directing the Advisor to the then-current official IRS Form 15620 (or other IRS-accepted written statement). Do not invent or prefill a substitute tax form. State that the Company does not file the election for the Advisor and that the Advisor must consult personal tax counsel.
 - Do not say an 83(b) election is due on the Option Grant Date; the relevant transfer, if any, occurs when unvested shares are acquired on exercise.`;
+};
+
+const getAdvisorServiceScope = (data: RequestBody) => {
+  const normalizedName = (data.stakeholderName || '').trim().toLowerCase();
+
+  if (normalizedName === 'valerie alexander') {
+    return 'Enterprise strategy, organizational planning, go-to-market positioning, executive coaching, and bona fide commercial partnership strategy. Excludes legal representation, fundraising, investor solicitation, securities placement, and securities-market promotion.';
+  }
+
+  if (normalizedName === 'marques zak') {
+    return 'Marketing and brand strategy, athletic-conference market insight, customer positioning, and bona fide institutional partnership strategy. Excludes fundraising, investor solicitation, securities placement, and securities-market promotion.';
+  }
+
+  return `Strategic guidance relevant to the Advisor's role as ${data.stakeholderTitle || 'Strategic Advisor'}, product/market advice, industry expertise, and bona fide commercial partnership strategy. Excludes fundraising, investor solicitation, securities placement, and securities-market promotion.`;
 };
 
 const formatAdditionalContext = (prompt?: string) => {
@@ -457,6 +471,7 @@ COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 ADVISOR: ${data.stakeholderName}
 EMAIL: ${data.stakeholderEmail}
 ADVISOR ROLE: ${data.stakeholderTitle || 'Strategic Advisor'}
+COMPENSABLE ADVISORY SERVICES: ${getAdvisorServiceScope(data)}
 GRANT DATE: ${getGrantDate(data)}
 VESTING COMMENCEMENT DATE: ${getVestingCommencementDate(data)}
 
@@ -480,7 +495,7 @@ Generate a SINGLE COMBINED AGREEMENT with these requirements. CRITICAL: Do NOT u
 
 SECTION 1 - ADVISOR SERVICES AGREEMENT:
 1.1 Engagement - Company engages Advisor for non-exclusive advisory services on a non-exclusive basis
-1.2 Services - Strategic guidance relevant to the Advisor's stated role, product/market advice, bona fide commercial or institutional partnership advice, industry expertise, and periodic advisory meetings. Do not list fundraising, securities placement, investor solicitation, or promotion of a market for Company securities as compensable services. IMPORTANT: Add these sentences: "Nothing herein obligates the Company to request, or the Advisor to provide, any minimum number of hours or services." "The services compensated by this Option are bona fide advisory services and do not include services in connection with the offer or sale of securities in a capital-raising transaction or services that directly or indirectly promote or maintain a market for the Company's securities."
+1.2 Services - Use this role-specific scope: "${getAdvisorServiceScope(data)}" Also include periodic advisory meetings. Do not add fundraising, securities placement, investor solicitation, or promotion of a market for Company securities as compensable services. IMPORTANT: Add these sentences: "Nothing herein obligates the Company to request, or the Advisor to provide, any minimum number of hours or services." "The services compensated by this Option are bona fide advisory services and do not include services in connection with the offer or sale of securities in a capital-raising transaction or services that directly or indirectly promote or maintain a market for the Company's securities."
 1.3 No Employment Relationship - Independent contractor, not an employee/officer/director
 1.4 Confidentiality - Keep non-public information confidential
 1.5 Intellectual Property - Use this STRONGER language: "All inventions, ideas, improvements, works of authorship, feedback, and materials conceived or developed by the Advisor in connection with the services shall be the exclusive property of the Company. The Advisor hereby assigns all right, title, and interest in such intellectual property to the Company."
@@ -565,6 +580,7 @@ Please create a full Equity Incentive Plan that includes:
    - ISO limitations (employees only)
    - For reliance on Rule 701, limit consultant/advisor eligibility to natural persons providing bona fide services that are not connected to a capital-raising securities transaction and do not directly or indirectly promote or maintain a market for Company securities
    - State that the Administrator must confirm the applicable securities-law exemption for every grant; do not imply that Plan eligibility alone supplies an exemption
+   - Do not name Valerie Alexander, Marques Zak, or any individual participant in the company-wide Plan
 
 5. TYPES OF AWARDS
    - Stock Options (ISOs and NSOs)
@@ -618,6 +634,8 @@ Please create a full Equity Incentive Plan that includes:
       Founder & Sole Director
       Sole Stockholder
       Date: ${currentDate}
+    - State that individual grants remain ineffective until separately approved by the Board and documented in an award agreement
+    - State that any ISO provisions are subject to timely stockholder approval as required by applicable tax law
 
 Make it comprehensive and suitable for a venture-backed startup. Include standard 409A compliance language. Do not leave blank signature lines or placeholder dates.`;
     },
@@ -760,4 +778,12 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
   }
 };
 
-export { handler };
+const __test = {
+  DOCUMENT_TEMPLATES,
+  getGrantDate,
+  getVestingCommencementDate,
+  getEarlyExerciseInstructionBlock,
+  getAdvisorServiceScope,
+};
+
+export { handler, __test };

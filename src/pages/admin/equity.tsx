@@ -3,6 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
+import { getManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PieChart, Users, FileText, Download, Trash2, Loader2, Sparkles, Clock, 
@@ -164,6 +165,7 @@ interface EquityDocument {
   autoSignedAt?: Timestamp | Date;
   originalDocumentId?: string;
   isAmendment?: boolean;
+  legalTemplateVersion?: string;
 }
 
 interface SignaturePacketDocument {
@@ -408,6 +410,7 @@ const getEquityDocumentRevisionEntries = (equityDoc: EquityDocument) =>
   );
 
 const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'] as const;
+const ADVISOR_PACKET_TEMPLATE_VERSION = '2026-08-02-advisor-nso-v2';
 const LOCAL_EQUITY_FUNCTION_FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 
 const isAutoExecutedCompanyDocType = (documentType?: string | null): boolean =>
@@ -824,6 +827,15 @@ const formatCurrency = (num: number): string => {
   }).format(num);
 };
 
+const formatPerShareCurrency = (num: number): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  }).format(num);
+};
+
 const formatPercentage = (num: number): string => {
   return `${num.toFixed(2)}%`;
 };
@@ -1036,6 +1048,7 @@ const EquityAdminPage: React.FC = () => {
   const [docHistoryAnchor, setDocHistoryAnchor] = useState<EquityDocument | null>(null);
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [signingDoc, setSigningDoc] = useState<EquityDocument | null>(null);
+  const [preparingSigningDocId, setPreparingSigningDocId] = useState<string | null>(null);
   const [signers, setSigners] = useState<SignerRow[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [signingModalStatus, setSigningModalStatus] = useState<InlineStatus | null>(null);
@@ -1055,9 +1068,9 @@ const EquityAdminPage: React.FC = () => {
   // Edit Grant Terms state
   const [editingGrantStakeholderId, setEditingGrantStakeholderId] = useState<string | null>(null);
   const [editGrantOptionsValue, setEditGrantOptionsValue] = useState<number>(0);
-  const [editGrantDateValue, setEditGrantDateValue] = useState(new Date().toISOString().split('T')[0]);
+  const [editGrantDateValue, setEditGrantDateValue] = useState(getDateInputValue(new Date()));
   const [editGrantStrikePriceValue, setEditGrantStrikePriceValue] = useState<number>(0);
-  const [editGrantValuationDateValue, setEditGrantValuationDateValue] = useState(new Date().toISOString().split('T')[0]);
+  const [editGrantValuationDateValue, setEditGrantValuationDateValue] = useState(getDateInputValue(new Date()));
   const [editGrantEarlyExerciseAllowed, setEditGrantEarlyExerciseAllowed] = useState(false);
   const [isSavingGrantOptions, setIsSavingGrantOptions] = useState(false);
   
@@ -1067,13 +1080,13 @@ const EquityAdminPage: React.FC = () => {
     email: '',
     type: 'employee' as StakeholderType,
     title: '',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: getDateInputValue(new Date()),
     // Advisor NSO grant details (used when type === 'advisor')
     advisorShares: 10000,
     advisorVestingMonths: 24,
     advisorCliffMonths: 3,
     advisorStrikePrice: 0,
-    advisorValuationDate: new Date().toISOString().split('T')[0],
+    advisorValuationDate: getDateInputValue(new Date()),
     advisorEarlyExerciseAllowed: false,
     // Board consent linkage
     boardConsentDocId: '' as string,
@@ -1084,7 +1097,7 @@ const EquityAdminPage: React.FC = () => {
     numberOfShares: 0,
     strikePrice: 0,
     vestingSchedule: '4-year-1-cliff' as VestingSchedule,
-    vestingStartDate: new Date().toISOString().split('T')[0],
+    vestingStartDate: getDateInputValue(new Date()),
     cliffMonths: 12,
     vestingMonths: 48,
   });
@@ -1380,7 +1393,7 @@ const EquityAdminPage: React.FC = () => {
   }) => {
     const docTitle = `Board Consent - ${stakeholderName}`;
     const createdAt = Timestamp.now();
-    const boardApprovalDate = formatDate(createdAt);
+    const boardApprovalDate = formatLegalDate(createdAt);
     const placeholder = await addDoc(collection(db, 'equity-documents'), {
       title: docTitle,
       prompt: `Generate a Board Consent approving equity grant for ${stakeholderName}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
@@ -1392,6 +1405,7 @@ const EquityAdminPage: React.FC = () => {
       stakeholderEmail,
       stakeholderType: 'advisor',
       grantDetails,
+      legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
       autoSigned: true,
       autoSignedAt: createdAt,
       createdAt,
@@ -1407,6 +1421,8 @@ const EquityAdminPage: React.FC = () => {
         stakeholderTitle,
         documentType: 'board_consent',
         requiresSignature: false,
+        boardApprovalDate,
+        documentDate: boardApprovalDate,
         prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholderName}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
         grantDetails,
       });
@@ -1424,6 +1440,7 @@ const EquityAdminPage: React.FC = () => {
         signingRequestId: deleteField(),
         signingRequestIds: deleteField(),
         needsResendSignature: false,
+        legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
         status: 'completed',
         updatedAt: serverTimestamp(),
       });
@@ -1470,6 +1487,7 @@ const EquityAdminPage: React.FC = () => {
       stakeholderEmail,
       stakeholderType: 'advisor',
       grantDetails,
+      legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
       createdAt: Timestamp.now(),
       status: 'generating',
     });
@@ -1495,6 +1513,7 @@ const EquityAdminPage: React.FC = () => {
       await updateDoc(doc(db, 'equity-documents', placeholder.id), {
         content: result.content,
         title: result.title || docTitle,
+        legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
         status: 'completed',
         updatedAt: serverTimestamp(),
       });
@@ -1515,13 +1534,20 @@ const EquityAdminPage: React.FC = () => {
 
   // Add Stakeholder
   const handleAddStakeholder = async () => {
+    const managedAdvisorProfile = getManagedAdvisorEquityProfile(newStakeholder.name);
+    const advisorOptionCount = managedAdvisorProfile?.numberOfOptions ?? newStakeholder.advisorShares;
+
     if (!newStakeholder.name.trim() || !newStakeholder.email.trim()) {
       setMessage({ type: 'error', text: 'Please fill in all required fields' });
       return;
     }
 
     if (newStakeholder.type === 'advisor') {
-      if (newStakeholder.advisorShares <= 0) {
+      if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+        setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before approving an advisor option grant.' });
+        return;
+      }
+      if (advisorOptionCount <= 0) {
         setMessage({ type: 'error', text: 'Advisor option grants must include at least one option.' });
         return;
       }
@@ -1549,12 +1575,12 @@ const EquityAdminPage: React.FC = () => {
     setGenerating(true);
     try {
       const isAdvisor = newStakeholder.type === 'advisor';
-      const hasOptionGrant = isAdvisor && newStakeholder.advisorShares > 0;
+      const hasOptionGrant = isAdvisor && advisorOptionCount > 0;
       const stakeholderName = newStakeholder.name.trim();
       const stakeholderEmail = newStakeholder.email.toLowerCase().trim();
       const grantDetails = {
         equityType: 'nso',
-        numberOfShares: newStakeholder.advisorShares,
+        numberOfShares: advisorOptionCount,
         strikePrice: newStakeholder.advisorStrikePrice,
         fairMarketValueAtGrant: newStakeholder.advisorStrikePrice,
         valuationDate: newStakeholder.advisorValuationDate,
@@ -1565,13 +1591,9 @@ const EquityAdminPage: React.FC = () => {
         vestingMonths: newStakeholder.advisorVestingMonths,
       };
       
-      // Get board consent date if linked
-      const linkedBoardConsent = newStakeholder.boardConsentDocId 
-        ? equityDocuments.find(d => d.id === newStakeholder.boardConsentDocId)
-        : null;
-      const boardApprovalDate = linkedBoardConsent 
-        ? formatDate(linkedBoardConsent.createdAt)
-        : null;
+      // A new advisor grant gets its own contemporaneous Board Consent. Existing
+      // approvals are never recycled for a different person or grant.
+      const boardApprovalDate: string | null = null;
       
       const stakeholderData = {
         name: stakeholderName,
@@ -1588,15 +1610,15 @@ const EquityAdminPage: React.FC = () => {
           status: 'active',
         }] : [],
         // For option holders, use optionsGranted (not shares - they don't own shares until exercise)
-        optionsGranted: hasOptionGrant ? newStakeholder.advisorShares : 0,
+        optionsGranted: hasOptionGrant ? advisorOptionCount : 0,
         optionsVested: 0,
-        optionsUnvested: hasOptionGrant ? newStakeholder.advisorShares : 0,
+        optionsUnvested: hasOptionGrant ? advisorOptionCount : 0,
         optionsExercised: 0,
         // Actual shares owned (only after exercise or if directly issued)
         sharesOwned: 0,
         documents: [],
         // Board consent linkage
-        boardConsentDocId: newStakeholder.boardConsentDocId || null,
+        boardConsentDocId: null,
         boardApprovalDate: boardApprovalDate || null,
       };
       
@@ -1604,7 +1626,7 @@ const EquityAdminPage: React.FC = () => {
       
       // Update the equity pool if we're granting options
       if (hasOptionGrant && equityPool.id) {
-        const newGranted = equityPool.granted + newStakeholder.advisorShares;
+        const newGranted = equityPool.granted + advisorOptionCount;
         const newAvailable = equityPool.totalReserved - newGranted - equityPool.exercised;
         
         await updateDoc(doc(db, 'equity-pool', equityPool.id), {
@@ -1618,8 +1640,8 @@ const EquityAdminPage: React.FC = () => {
       if (isAdvisor && hasOptionGrant) {
         setMessage({ type: 'info', text: 'Stakeholder added. Generating the required advisor documents...' });
 
-        let resolvedBoardConsentId = newStakeholder.boardConsentDocId || null;
-        let resolvedBoardApprovalDate = boardApprovalDate;
+        let resolvedBoardConsentId: string | null = null;
+        let resolvedBoardApprovalDate: string | null = boardApprovalDate;
 
         if (!resolvedBoardConsentId) {
           const generatedBoardConsent = await createAdvisorBoardConsentDocument({
@@ -1640,16 +1662,10 @@ const EquityAdminPage: React.FC = () => {
           });
         }
 
-        await createAdvisorAgreementDocument({
-          stakeholderId: stakeholderRef.id,
-          stakeholderName,
-          stakeholderEmail,
-          stakeholderTitle: newStakeholder.title.trim(),
-          grantDetails,
-          boardApprovalDate: resolvedBoardApprovalDate || undefined,
+        setMessage({
+          type: 'success',
+          text: 'Advisor added and a new Board Consent was generated. Verify that consent before generating the advisor agreement.',
         });
-
-        setMessage({ type: 'success', text: 'Advisor added and required documents generated.' });
       } else if (isAdvisor) {
         setMessage({ type: 'success', text: 'Advisor added successfully. Add an option grant to generate the required documents.' });
       } else {
@@ -1662,12 +1678,12 @@ const EquityAdminPage: React.FC = () => {
         email: '',
         type: 'employee',
         title: '',
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: getDateInputValue(new Date()),
         advisorShares: 10000,
         advisorVestingMonths: 24,
         advisorCliffMonths: 3,
         advisorStrikePrice: 0,
-        advisorValuationDate: new Date().toISOString().split('T')[0],
+        advisorValuationDate: getDateInputValue(new Date()),
         advisorEarlyExerciseAllowed: false,
         boardConsentDocId: '',
       });
@@ -1682,19 +1698,56 @@ const EquityAdminPage: React.FC = () => {
 
   const getAdvisorGrantDetails = (stakeholder: Stakeholder): AdvisorGrantDocumentDetails => {
     const grant = stakeholder.grants?.[0];
-    const strikePrice = grant?.strikePrice ?? grant?.fairMarketValueAtGrant ?? 0;
+    const managedProfile = getManagedAdvisorEquityProfile(stakeholder.name);
+    const latestAdvisorAgreement = getLatestRelevantDocuments(
+      equityDocuments.filter(
+        equityDoc =>
+          equityDoc.stakeholderId === stakeholder.id &&
+          equityDoc.documentType === 'advisor_nso_agreement' &&
+          equityDoc.status === 'completed',
+      ),
+    )[0];
+    const documentedGrantDetails = latestAdvisorAgreement?.grantDetails || {};
+    const strikePrice =
+      grant?.strikePrice ??
+      grant?.fairMarketValueAtGrant ??
+      documentedGrantDetails.strikePrice ??
+      documentedGrantDetails.fairMarketValueAtGrant ??
+      managedProfile?.fallbackExercisePrice ??
+      0;
+    const valuationDate =
+      getDateInputValue(grant?.valuationDate) ||
+      getDateInputValue(documentedGrantDetails.valuationDate) ||
+      getDateInputValue(stakeholder.boardApprovalDate) ||
+      getDateInputValue(grant?.grantDate) ||
+      getDateInputValue(stakeholder.startDate);
+    const vestingStartDate =
+      getDateInputValue(grant?.vestingStartDate) ||
+      getDateInputValue(documentedGrantDetails.vestingStartDate) ||
+      getDateInputValue(stakeholder.startDate) ||
+      getDateInputValue(grant?.grantDate);
 
     return {
       equityType: grant?.equityType || 'nso',
-      numberOfShares: grant?.numberOfShares || stakeholder.optionsGranted || stakeholder.totalShares || 0,
+      numberOfShares:
+        managedProfile?.numberOfOptions ||
+        grant?.numberOfShares ||
+        stakeholder.optionsGranted ||
+        stakeholder.totalShares ||
+        0,
       strikePrice,
-      fairMarketValueAtGrant: grant?.fairMarketValueAtGrant ?? strikePrice,
-      valuationDate: getDateInputValue(grant?.valuationDate) || '',
-      earlyExerciseAllowed: Boolean(grant?.earlyExerciseAllowed),
-      vestingSchedule: grant?.vestingSchedule || 'monthly',
-      vestingStartDate: getDateInputValue(grant?.vestingStartDate || stakeholder.startDate),
-      cliffMonths: grant?.cliffMonths ?? 3,
-      vestingMonths: grant?.vestingMonths ?? 24,
+      fairMarketValueAtGrant:
+        grant?.fairMarketValueAtGrant ??
+        documentedGrantDetails.fairMarketValueAtGrant ??
+        strikePrice,
+      valuationDate,
+      earlyExerciseAllowed: Boolean(
+        grant?.earlyExerciseAllowed ?? documentedGrantDetails.earlyExerciseAllowed,
+      ),
+      vestingSchedule: grant?.vestingSchedule || documentedGrantDetails.vestingSchedule || 'monthly',
+      vestingStartDate,
+      cliffMonths: grant?.cliffMonths ?? documentedGrantDetails.cliffMonths ?? 3,
+      vestingMonths: grant?.vestingMonths ?? documentedGrantDetails.vestingMonths ?? 24,
     };
   };
 
@@ -1713,6 +1766,11 @@ const EquityAdminPage: React.FC = () => {
   const handleGenerateBoardConsent = async (stakeholder: Stakeholder) => {
     if (stakeholder.type !== 'advisor') {
       setMessage({ type: 'error', text: 'This function is only for advisors' });
+      return;
+    }
+
+    if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+      setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating an advisor Board Consent.' });
       return;
     }
 
@@ -1835,6 +1893,11 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
+    if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+      setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating an advisor agreement.' });
+      return;
+    }
+
     // Require a VERIFIED Board Consent before generating
     const verification = boardConsentVerification[stakeholder.id];
     if (verification?.status !== 'verified' || !verification.approvalDate) {
@@ -1854,57 +1917,18 @@ const EquityAdminPage: React.FC = () => {
     const boardApprovalDate = verification.approvalDate;
 
     try {
-      const docTitle = `Advisor Agreement + NSO Grant - ${stakeholder.name}`;
-      
-      // Create placeholder doc in Firestore
-      const placeholder = await addDoc(collection(db, 'equity-documents'), {
-        title: docTitle,
-        prompt: `Generate a combined Advisor Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}`,
-        content: '',
-        documentType: 'advisor_nso_agreement',
-        requiresSignature: true,
-        stakeholderId: stakeholder.id,
-        stakeholderName: stakeholder.name,
-        stakeholderEmail: stakeholder.email,
-        stakeholderType: 'advisor',
-        grantDetails,
-        createdAt: Timestamp.now(),
-        status: 'generating',
-      });
-
       setMessage({ type: 'info', text: 'Generating Advisor Agreement + NSO Grant...' });
-
-      // Call API to generate document
-      const { result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+      await createAdvisorAgreementDocument({
         stakeholderId: stakeholder.id,
         stakeholderName: stakeholder.name,
         stakeholderEmail: stakeholder.email,
-        stakeholderType: 'advisor',
         stakeholderTitle: stakeholder.title,
-        documentType: 'advisor_nso_agreement',
-        requiresSignature: true,
-        boardApprovalDate: boardApprovalDate || undefined,
-        prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant (do not label as FAST unless explicitly requested).`,
         grantDetails,
+        boardApprovalDate,
       });
-
-      if (result.success && result.content) {
-        await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-          content: result.content,
-          title: result.title || docTitle,
-          status: 'completed',
-          updatedAt: Timestamp.now(),
-        });
-        setMessage({ type: 'success', text: 'Advisor Agreement generated! Ready for signature.' });
-        loadData(); // Refresh to show the new document
-        setActiveTab('documents'); // Switch to documents tab to show it
-      } else {
-        await updateDoc(doc(db, 'equity-documents', placeholder.id), {
-          status: 'error',
-          errorMessage: result.error || 'Failed to generate document',
-        });
-        setMessage({ type: 'error', text: result.error || 'Failed to generate document' });
-      }
+      setMessage({ type: 'success', text: 'Advisor Agreement generated! Ready for signature.' });
+      loadData();
+      setActiveTab('documents');
     } catch (error) {
       console.error('Error generating advisor agreement:', error);
       setMessage({ type: 'error', text: 'Failed to generate document' });
@@ -1928,6 +1952,10 @@ const EquityAdminPage: React.FC = () => {
       : newGrant;
 
     if (usesStoredAdvisorGrant) {
+      if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+        setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating advisor grant documents.' });
+        return;
+      }
       const grantValidationError = validateAdvisorGrantDetails(effectiveGrantDetails as AdvisorGrantDocumentDetails);
       if (grantValidationError) {
         setMessage({ type: 'error', text: grantValidationError });
@@ -2094,6 +2122,7 @@ const EquityAdminPage: React.FC = () => {
       signingRequestId: deleteField(),
       signingRequestIds: deleteField(),
       needsResendSignature: false,
+      legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
       status: 'completed',
       revisionHistory: [
         ...convertedHistory,
@@ -2130,9 +2159,6 @@ const EquityAdminPage: React.FC = () => {
 
     setIsRevisingEquityDoc(true);
     try {
-      const revisionReferenceDate = new Date();
-      const revisionReferenceDateLabel = formatLegalDate(revisionReferenceDate);
-
       if (isCleanRegenerationDoc) {
         await regenerateCompanyApprovalDocCleanly(
           editingEquityDoc,
@@ -2167,9 +2193,9 @@ const EquityAdminPage: React.FC = () => {
       const advisorDateAlignmentPrompt =
         editingEquityDoc.documentType === 'advisor_nso_agreement'
           ? `Date alignment instructions:
-- Update the Grant Date, Effective Date, Board approval written consent date, and Vesting Commencement Date so they all match exactly.
-- Use ${revisionReferenceDateLabel} as the single controlling date everywhere in the document.
-- Do not leave any prior grant-date or vesting-start-date references behind.`
+- Preserve the approved Grant Date and Board approval date already stated in the document; never replace them with today's revision date.
+- Preserve the existing Vesting Commencement Date.
+- Grant/Board dates and the Vesting Commencement Date may differ. Keep them distinctly labeled and do not force them to match.`
           : '';
 
       const finalRevisionPrompt = [effectiveRevisionPrompt.trim(), advisorDateAlignmentPrompt]
@@ -2187,6 +2213,7 @@ const EquityAdminPage: React.FC = () => {
           stakeholderName: editingEquityDoc.stakeholderName,
           stakeholderEmail: editingEquityDoc.stakeholderEmail,
           stakeholderType: editingEquityDoc.stakeholderType,
+          stakeholderTitle: stakeholders.find(s => s.id === editingEquityDoc.stakeholderId)?.title,
           grantDetails: editingEquityDoc.grantDetails,
         });
 
@@ -2210,13 +2237,6 @@ const EquityAdminPage: React.FC = () => {
         requiresSignature: Boolean(editRequiresSignature),
         updatedAt: Timestamp.now(),
       };
-
-      if (editingEquityDoc.documentType === 'advisor_nso_agreement' && editingEquityDoc.grantDetails) {
-        updateData.grantDetails = {
-          ...editingEquityDoc.grantDetails,
-          vestingStartDate: revisionReferenceDate.toISOString(),
-        };
-      }
 
       if (finalRevisionPrompt.trim()) {
         updateData.content = newContent;
@@ -2530,14 +2550,25 @@ const EquityAdminPage: React.FC = () => {
 
   const invalidateSigningRequestsForDoc = async (equityDoc: EquityDocument, reason: string) => {
     const activeRequests = getSigningRequestsForEquityDoc(equityDoc.id);
+    const invalidatedAt = Timestamp.now();
     await Promise.all(
       activeRequests.map(request =>
         updateDoc(doc(db, 'signingRequests', request.id), {
-          invalidatedAt: serverTimestamp(),
+          invalidatedAt,
           invalidatedReason: reason,
         })
       )
     );
+    if (activeRequests.length) {
+      const invalidatedRequestIds = new Set(activeRequests.map(request => request.id));
+      setSigningRequests(prev =>
+        prev.map(request =>
+          invalidatedRequestIds.has(request.id)
+            ? { ...request, invalidatedAt, invalidatedReason: reason }
+            : request,
+        ),
+      );
+    }
     return activeRequests.length;
   };
 
@@ -2550,11 +2581,16 @@ const EquityAdminPage: React.FC = () => {
     };
   };
 
-  const buildDefaultSignersForDoc = (docToSign: EquityDocument): SignerRow[] => {
+  const buildDefaultSignersForDoc = (
+    docToSign: EquityDocument,
+    reuseExistingRequests = true,
+  ): SignerRow[] => {
     const company = getDefaultCompanySigner();
 
     // Reuse any existing requests if present
-    const existingReqs = getSigningRequestsForEquityDoc(docToSign.id);
+    const existingReqs = reuseExistingRequests
+      ? getSigningRequestsForEquityDoc(docToSign.id)
+      : [];
 
     const makeRow = (row: Omit<SignerRow, 'id'>): SignerRow => {
       const existing = existingReqs.find(r => r.recipientEmail?.toLowerCase() === row.email?.toLowerCase() && r.signerRole === row.role);
@@ -2589,14 +2625,100 @@ const EquityAdminPage: React.FC = () => {
     ];
   };
 
-  const openSigningModal = (docToSign: EquityDocument) => {
+  const openSigningModalWithDocument = (
+    docToSign: EquityDocument,
+    reuseExistingRequests = true,
+  ) => {
     const company = getDefaultCompanySigner();
     setSigningDoc(docToSign);
-    setSigners(buildDefaultSignersForDoc(docToSign));
+    setSigners(buildDefaultSignersForDoc(docToSign, reuseExistingRequests));
     setPreviewRecipientName(company.name || 'Preview Tester');
     setPreviewRecipientEmail(company.email || '');
     setSigningModalStatus(null);
     setIsSigningModalOpen(true);
+  };
+
+  const openSigningModal = async (docToSign: EquityDocument) => {
+    const stakeholder = docToSign.stakeholderId
+      ? stakeholders.find(candidate => candidate.id === docToSign.stakeholderId)
+      : null;
+    const managedProfile = getManagedAdvisorEquityProfile(
+      docToSign.stakeholderName || stakeholder?.name,
+    );
+    const isManagedUnsignedAdvisorAgreement =
+      Boolean(managedProfile) &&
+      stakeholder?.type === 'advisor' &&
+      docToSign.documentType === 'advisor_nso_agreement' &&
+      !getEquityDocSignatureState(docToSign).isFullyExecuted;
+
+    if (!isManagedUnsignedAdvisorAgreement || !stakeholder || !managedProfile) {
+      openSigningModalWithDocument(docToSign);
+      return;
+    }
+
+    if (preparingSigningDocId) return;
+
+    setPreparingSigningDocId(docToSign.id);
+    setMessage({
+      type: 'info',
+      text: `Preparing ${managedProfile.canonicalName}'s current 25,000-option packet...`,
+    });
+
+    try {
+      const currentEip = getLatestCompletedEquityDocumentByType('eip');
+      if (!currentEip) {
+        throw new Error('A completed Equity Incentive Plan is required before sending this advisor packet.');
+      }
+
+      await regenerateCompanyApprovalDocCleanly(
+        currentEip,
+        currentEip.title,
+        'Refresh automatically for the current advisor resend and preview packet.',
+      );
+
+      const grantDetails = getAdvisorGrantDetails(stakeholder);
+      const saved = await saveGrantOptions(stakeholder, {
+        forceRegenerateDocuments: true,
+        optionsValue: managedProfile.numberOfOptions,
+        vestingStartDateValue:
+          getDateInputValue(grantDetails.vestingStartDate) || getDateInputValue(new Date()),
+        strikePriceValue: grantDetails.strikePrice,
+        valuationDateValue:
+          getDateInputValue(grantDetails.valuationDate) || getDateInputValue(new Date()),
+        earlyExerciseAllowed: Boolean(grantDetails.earlyExerciseAllowed),
+      });
+
+      if (!saved) return;
+
+      const refreshedDocumentSnapshot = await getDoc(doc(db, 'equity-documents', docToSign.id));
+      if (!refreshedDocumentSnapshot.exists()) {
+        throw new Error('The refreshed advisor agreement could not be found.');
+      }
+
+      const refreshedDocument = {
+        id: refreshedDocumentSnapshot.id,
+        ...refreshedDocumentSnapshot.data(),
+      } as EquityDocument;
+
+      await loadData();
+      openSigningModalWithDocument(refreshedDocument, false);
+      setSigningModalStatus({
+        type: 'success',
+        text: `Latest EIP, Board Consent, and 25,000-option advisor agreement loaded for ${managedProfile.canonicalName}.`,
+      });
+      setMessage({
+        type: 'success',
+        text: `${managedProfile.canonicalName}'s 25,000-option packet is current and ready to preview or resend.`,
+      });
+    } catch (error) {
+      console.error('Error preparing advisor signing packet:', error);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to prepare the advisor signing packet.',
+      });
+    } finally {
+      setPreparingSigningDocId(null);
+    }
   };
 
   const closeSigningModal = () => {
@@ -2663,10 +2785,14 @@ const EquityAdminPage: React.FC = () => {
           requestId = docRef.id;
         } else {
           await updateDoc(doc(db, 'signingRequests', requestId), {
+            documentType: signingDoc.documentType,
+            documentName: signingDoc.title,
             recipientName: signer.name,
             recipientEmail: signer.email,
             signerRole: signer.role,
             stakeholderId: signer.stakeholderId || null,
+            equityDocumentId: signingDoc.id,
+            documentContent: signingDoc.content,
             supportingDocuments,
             updatedAt: serverTimestamp(),
           });
@@ -2885,13 +3011,60 @@ const EquityAdminPage: React.FC = () => {
     }
   };
 
+  const verifyBoardConsentRecord = async (
+    stakeholder: Stakeholder,
+    boardConsentDocId: string,
+    expectedGrantDetails: AdvisorGrantDocumentDetails = getAdvisorGrantDetails(stakeholder),
+  ) => {
+    const consentSnapshot = await getDoc(doc(db, 'equity-documents', boardConsentDocId));
+    if (!consentSnapshot.exists()) {
+      throw new Error('Selected Board Consent could not be found.');
+    }
+
+    const consentDoc = { id: consentSnapshot.id, ...consentSnapshot.data() } as EquityDocument;
+    if (!consentDoc.content?.trim()) {
+      throw new Error('Selected Board Consent has no content to verify.');
+    }
+
+    const { ok, result: data } = await postEquityFunctionJson('/.netlify/functions/verify-board-consent', {
+      boardConsentContent: consentDoc.content,
+      expectedStakeholderName: stakeholder.name,
+      expectedNumberOfOptions: expectedGrantDetails.numberOfShares,
+      expectedExercisePrice: expectedGrantDetails.strikePrice || undefined,
+      expectedVestingStartDate: getDateInputValue(expectedGrantDetails.vestingStartDate),
+      expectedCliffMonths: expectedGrantDetails.cliffMonths,
+      expectedVestingMonths: expectedGrantDetails.vestingMonths,
+      expectedEarlyExerciseAllowed: Boolean(expectedGrantDetails.earlyExerciseAllowed),
+    });
+
+    if (!ok || !data?.success) {
+      throw new Error(data?.error || 'Failed to verify board consent');
+    }
+
+    if (!data.isValid || !data.approvalDate) {
+      const issues = Array.isArray(data.issues) ? data.issues : [];
+      throw new Error(
+        issues.length
+          ? `Board Consent verification failed: ${issues.join(' ')}`
+          : 'Board Consent verification failed.',
+      );
+    }
+
+    await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), {
+      boardConsentDocId,
+      boardApprovalDate: data.approvalDate,
+      boardConsentVerifiedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    return {
+      approvalDate: data.approvalDate as string,
+      consentDoc,
+    };
+  };
+
   // Verify + link a Board Consent document to a stakeholder
   const verifyAndLinkBoardConsent = async (stakeholder: Stakeholder, boardConsentDocId: string) => {
-    const consentDoc = equityDocuments.find(d => d.id === boardConsentDocId);
-    if (!consentDoc?.content?.trim()) {
-      setMessage({ type: 'error', text: 'Selected Board Consent has no content to verify.' });
-      return;
-    }
 
     setBoardConsentVerification(prev => ({
       ...prev,
@@ -2899,48 +3072,27 @@ const EquityAdminPage: React.FC = () => {
     }));
 
     try {
-      const expectedOptions = stakeholder.optionsGranted || stakeholder.totalShares || stakeholder.grants?.[0]?.numberOfShares;
-
-      const { ok, result: data } = await postEquityFunctionJson('/.netlify/functions/verify-board-consent', {
-        boardConsentContent: consentDoc.content,
-        expectedStakeholderName: stakeholder.name,
-        expectedNumberOfOptions: typeof expectedOptions === 'number' ? expectedOptions : undefined,
-      });
-
-      if (!ok || !data?.success) {
-        throw new Error(data?.error || 'Failed to verify board consent');
-      }
-
-      if (!data.isValid || !data.approvalDate) {
-        setBoardConsentVerification(prev => ({
-          ...prev,
-          [stakeholder.id]: { status: 'failed', approvalDate: data.approvalDate || undefined, issues: data.issues || [] }
-        }));
-        setMessage({ type: 'error', text: 'Board Consent verification failed. Please review the issues.' });
-        return;
-      }
-
-      // Persist linkage on stakeholder
-      await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), {
+      const expectedGrantDetails = getAdvisorGrantDetails(stakeholder);
+      const result = await verifyBoardConsentRecord(
+        stakeholder,
         boardConsentDocId,
-        boardApprovalDate: data.approvalDate,
-        boardConsentVerifiedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+        expectedGrantDetails,
+      );
 
       setBoardConsentVerification(prev => ({
         ...prev,
-        [stakeholder.id]: { status: 'verified', approvalDate: data.approvalDate, issues: [] }
+        [stakeholder.id]: { status: 'verified', approvalDate: result.approvalDate, issues: [] }
       }));
-      setMessage({ type: 'success', text: `Board Consent verified (Approval Date: ${data.approvalDate}). You can now generate the Advisor Agreement.` });
+      setMessage({ type: 'success', text: `Board Consent verified (Approval Date: ${result.approvalDate}). You can now generate the Advisor Agreement.` });
       loadData();
     } catch (e) {
       console.error('verifyAndLinkBoardConsent error', e);
+      const issue = e instanceof Error ? e.message : 'Unknown error';
       setBoardConsentVerification(prev => ({
         ...prev,
-        [stakeholder.id]: { status: 'failed', issues: [e instanceof Error ? e.message : 'Unknown error'] }
+        [stakeholder.id]: { status: 'failed', issues: [issue] }
       }));
-      setMessage({ type: 'error', text: 'Failed to verify Board Consent' });
+      setMessage({ type: 'error', text: issue });
     }
   };
 
@@ -2965,6 +3117,17 @@ const EquityAdminPage: React.FC = () => {
     const missing: string[] = [];
     if (!getLatestCompletedEquityDocumentByType('eip')) {
       missing.push('completed Equity Incentive Plan');
+    }
+
+    if (equityDoc.stakeholderType === 'advisor' && equityDoc.stakeholderId) {
+      const stakeholder = stakeholders.find(s => s.id === equityDoc.stakeholderId);
+      const linkedBoardConsent = stakeholder?.boardConsentDocId
+        ? equityDocuments.find(d => d.id === stakeholder.boardConsentDocId && d.status === 'completed')
+        : null;
+
+      if (!linkedBoardConsent || !stakeholder?.boardConsentVerifiedAt) {
+        missing.push('verified advisor-specific Board Consent');
+      }
     }
     return missing;
   };
@@ -2993,8 +3156,7 @@ const EquityAdminPage: React.FC = () => {
           )
         )[0] || null;
 
-        addDocument(linkedBoardConsent);
-        addDocument(latestBoardConsent);
+        addDocument(linkedBoardConsent || latestBoardConsent);
       }
     }
 
@@ -3408,7 +3570,10 @@ const EquityAdminPage: React.FC = () => {
   // Get the display values for a stakeholder
   const getStakeholderMetrics = (stakeholder: Stakeholder) => {
     // Check if they have option grants (optionsGranted field or grants with nso/iso)
-    const optionsGranted = stakeholder.optionsGranted || 
+    const optionsGranted =
+      (stakeholder.type === 'advisor'
+        ? getManagedAdvisorEquityProfile(stakeholder.name)?.numberOfOptions
+        : 0) || stakeholder.optionsGranted ||
       (stakeholder.grants?.reduce((sum, g) => 
         ['nso', 'iso'].includes(g.equityType) ? sum + (g.numberOfShares || 0) : sum, 0) || 0);
     
@@ -3501,11 +3666,17 @@ const EquityAdminPage: React.FC = () => {
     return requiresExternalSignature(equityDoc) && getEquityDocSignatureState(equityDoc).isFullyExecuted;
   };
 
-  const getCurrentStakeholderGrantOptions = (stakeholder: Stakeholder) =>
+  const getStoredStakeholderGrantOptions = (stakeholder: Stakeholder) =>
     stakeholder.optionsGranted ||
     stakeholder.grants?.[0]?.numberOfShares ||
     stakeholder.totalShares ||
     0;
+
+  const getCurrentStakeholderGrantOptions = (stakeholder: Stakeholder) =>
+    (stakeholder.type === 'advisor'
+      ? getManagedAdvisorEquityProfile(stakeholder.name)?.numberOfOptions
+      : 0) ||
+    getStoredStakeholderGrantOptions(stakeholder);
 
   const getCurrentStakeholderGrantDate = (stakeholder: Stakeholder) =>
     stakeholder.type === 'advisor'
@@ -3526,12 +3697,27 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
+    if (
+      stakeholder.type === 'advisor' &&
+      !equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')
+    ) {
+      setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before changing advisor grant terms.' });
+      return;
+    }
+
     setEditGrantOptionsValue(getCurrentStakeholderGrantOptions(stakeholder));
-    setEditGrantDateValue(getDateInputValue(getCurrentStakeholderGrantDate(stakeholder)) || new Date().toISOString().split('T')[0]);
+    setEditGrantDateValue(getDateInputValue(getCurrentStakeholderGrantDate(stakeholder)) || getDateInputValue(new Date()));
+    const grantDetails = stakeholder.type === 'advisor' ? getAdvisorGrantDetails(stakeholder) : null;
     const grant = stakeholder.grants?.[0];
-    setEditGrantStrikePriceValue(grant?.strikePrice ?? grant?.fairMarketValueAtGrant ?? 0);
-    setEditGrantValuationDateValue(getDateInputValue(grant?.valuationDate) || new Date().toISOString().split('T')[0]);
-    setEditGrantEarlyExerciseAllowed(Boolean(grant?.earlyExerciseAllowed));
+    setEditGrantStrikePriceValue(
+      grantDetails?.strikePrice ?? grant?.strikePrice ?? grant?.fairMarketValueAtGrant ?? 0,
+    );
+    setEditGrantValuationDateValue(
+      getDateInputValue(grantDetails?.valuationDate || grant?.valuationDate) || getDateInputValue(new Date()),
+    );
+    setEditGrantEarlyExerciseAllowed(
+      grantDetails?.earlyExerciseAllowed ?? Boolean(grant?.earlyExerciseAllowed),
+    );
     setEditingGrantStakeholderId(stakeholder.id);
   };
 
@@ -3546,7 +3732,7 @@ const EquityAdminPage: React.FC = () => {
       valuationDateValue?: string;
       earlyExerciseAllowed?: boolean;
     } = {}
-  ) => {
+  ): Promise<boolean> => {
     const nextOptionsValue = options.optionsValue ?? editGrantOptionsValue;
     const nextVestingStartDateValue = options.vestingStartDateValue ?? editGrantDateValue;
     const nextStrikePriceValue = options.strikePriceValue ?? editGrantStrikePriceValue;
@@ -3562,7 +3748,7 @@ const EquityAdminPage: React.FC = () => {
     
     if (nextOptionsValue <= 0) {
       setMessage({ type: 'error', text: 'Options granted must be greater than 0' });
-      return;
+      return false;
     }
 
     if (isStakeholderGrantLocked(stakeholder)) {
@@ -3571,10 +3757,10 @@ const EquityAdminPage: React.FC = () => {
         text: 'This advisor grant is fully executed and can no longer be edited. Add a separate new grant for any additional equity.',
       });
       setEditingGrantStakeholderId(null);
-      return;
+      return false;
     }
 
-    const oldOptions = getCurrentStakeholderGrantOptions(stakeholder);
+    const oldOptions = getStoredStakeholderGrantOptions(stakeholder);
     const currentAdvisorVestingStartDateValue =
       stakeholder.type === 'advisor'
         ? getDateInputValue(getCurrentStakeholderGrantDate(stakeholder))
@@ -3591,17 +3777,17 @@ const EquityAdminPage: React.FC = () => {
 
     if (stakeholder.type === 'advisor' && !parseDateInputValue(nextVestingStartDateValue)) {
       setMessage({ type: 'error', text: 'Choose a valid advisor vesting commencement date before saving.' });
-      return;
+      return false;
     }
 
     if (stakeholder.type === 'advisor' && nextStrikePriceValue <= 0) {
       setMessage({ type: 'error', text: 'Enter the Board-determined fair market value / exercise price. Do not use corporate par value.' });
-      return;
+      return false;
     }
 
     if (stakeholder.type === 'advisor' && !parseDateInputValue(nextValuationDateValue)) {
       setMessage({ type: 'error', text: 'Choose a valid fair-market-value determination date before saving.' });
-      return;
+      return false;
     }
 
     if (
@@ -3613,7 +3799,7 @@ const EquityAdminPage: React.FC = () => {
       !forceRegenerateDocuments
     ) {
       setMessage({ type: 'info', text: 'No grant changes to save.' });
-      return;
+      return true;
     }
 
     setIsSavingGrantOptions(true);
@@ -3749,17 +3935,66 @@ const EquityAdminPage: React.FC = () => {
       // ============================================
       // 1. Handle Board Consent Document
       // ============================================
-      const boardConsentDoc = equityDocuments.find(d => 
-        d.id === stakeholder.boardConsentDocId ||
-        (d.stakeholderId === stakeholder.id && d.documentType === 'board_consent' && d.status === 'completed')
-      );
+      const boardConsentDoc =
+        (stakeholder.boardConsentDocId
+          ? equityDocuments.find(d => d.id === stakeholder.boardConsentDocId)
+          : null) ||
+        getLatestRelevantDocuments(
+          equityDocuments.filter(d =>
+            d.stakeholderId === stakeholder.id &&
+            d.documentType === 'board_consent' &&
+            d.status === 'completed'
+          )
+        )[0] ||
+        null;
 
       if (boardConsentDoc) {
         const boardDocState = getEquityDocSignatureState(boardConsentDoc);
         const boardConsentExecuted = Boolean(boardConsentDoc.autoSigned || boardConsentDoc.autoSignedAt) || boardDocState.isFullyExecuted;
 
         if (boardConsentExecuted && !advisorGrantTermsChanged) {
-          console.log('[saveGrantOptions] Skipping locked Board Consent refresh because no terms changed');
+          if (!forceRegenerateDocuments) {
+            console.log('[saveGrantOptions] Skipping locked Board Consent refresh because no terms changed');
+          } else {
+            console.log('[saveGrantOptions] Cleanly refreshing executed Board Consent with latest language');
+            setMessage({ type: 'info', text: 'Refreshing the Board Consent with the latest advisor terms...' });
+
+            const preservedApprovalDate =
+              stakeholder.boardApprovalDate ||
+              formatLegalDate(boardConsentDoc.autoSignedAt || boardConsentDoc.createdAt);
+            const { ok, result } = await postEquityFunctionJson('/.netlify/functions/generate-equity-document', {
+              stakeholderId: stakeholder.id,
+              stakeholderName: stakeholder.name,
+              stakeholderEmail: stakeholder.email,
+              stakeholderType: stakeholder.type,
+              stakeholderTitle: stakeholder.title,
+              documentType: 'board_consent',
+              requiresSignature: false,
+              boardApprovalDate: preservedApprovalDate,
+              documentDate: preservedApprovalDate,
+              prompt: `Cleanly refresh the existing advisor-specific Board Consent for ${stakeholder.name} using the latest approved language. Preserve the original approval date and approved economics.`,
+              grantDetails,
+            });
+
+            if (!ok || !result.success || !result.content) {
+              throw new Error(result.error || 'Failed to refresh the Board Consent');
+            }
+
+            await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
+              content: result.content,
+              title: result.title || boardConsentDoc.title,
+              grantDetails,
+              legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
+              requiresSignature: false,
+              autoSigned: true,
+              autoSignedAt: boardConsentDoc.autoSignedAt || boardConsentDoc.createdAt,
+              status: 'completed',
+              updatedAt: serverTimestamp(),
+            });
+            effectiveBoardApprovalDate = preservedApprovalDate;
+            effectiveBoardConsentDocId = boardConsentDoc.id;
+            regeneratedDocCount++;
+          }
         } else if (boardConsentExecuted) {
           console.log('[saveGrantOptions] Board Consent is executed, creating amendment');
           setMessage({ type: 'info', text: 'Creating auto-executed Board Consent Amendment...' });
@@ -3778,6 +4013,7 @@ const EquityAdminPage: React.FC = () => {
               stakeholderType: stakeholder.type,
               stakeholderTitle: stakeholder.title,
               grantDetails,
+              legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
               isAmendment: true,
               originalDocumentId: boardConsentDoc.id,
               autoSigned: true,
@@ -3791,6 +4027,7 @@ const EquityAdminPage: React.FC = () => {
               stakeholderName: stakeholder.name,
               stakeholderEmail: stakeholder.email,
               stakeholderType: stakeholder.type,
+              stakeholderTitle: stakeholder.title,
               documentType: 'board_consent',
               requiresSignature: false,
               isAmendment: true,
@@ -3809,6 +4046,7 @@ const EquityAdminPage: React.FC = () => {
                 requiresSignature: false,
                 autoSigned: true,
                 autoSignedAt: serverTimestamp(),
+                legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
                 status: 'completed',
                 updatedAt: serverTimestamp(),
               });
@@ -3854,6 +4092,7 @@ const EquityAdminPage: React.FC = () => {
               signingRequestIds: deleteField(),
               needsResendSignature: false,
               status: 'generating',
+              legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
               updatedAt: serverTimestamp(),
             });
 
@@ -3880,6 +4119,7 @@ const EquityAdminPage: React.FC = () => {
                 autoSignedAt: serverTimestamp(),
                 status: 'completed',
                 grantDetails,
+                legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
                 updatedAt: serverTimestamp(),
               });
               effectiveBoardApprovalDate = revisedBoardApprovalDate;
@@ -3913,8 +4153,49 @@ const EquityAdminPage: React.FC = () => {
         await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), {
           boardApprovalDate: effectiveBoardApprovalDate,
           boardConsentDocId: effectiveBoardConsentDocId,
+          ...(advisorGrantTermsChanged ? { boardConsentVerifiedAt: deleteField() } : {}),
           updatedAt: serverTimestamp(),
         });
+      }
+
+      let boardConsentAutoVerified = false;
+      if (stakeholder.type === 'advisor' && effectiveBoardConsentDocId) {
+        setMessage({ type: 'info', text: 'Verifying the refreshed advisor-specific Board Consent...' });
+        const verificationStakeholder: Stakeholder = {
+          ...stakeholder,
+          optionsGranted: nextOptionsValue,
+          startDate: revisedVestingStartTimestamp,
+          boardApprovalDate: effectiveBoardApprovalDate,
+          boardConsentDocId: effectiveBoardConsentDocId,
+          grants: stakeholder.grants?.map((existingGrant, index) =>
+            index === 0
+              ? {
+                  ...existingGrant,
+                  numberOfShares: nextOptionsValue,
+                  strikePrice: nextStrikePriceValue,
+                  fairMarketValueAtGrant: nextStrikePriceValue,
+                  valuationDate: valuationTimestamp,
+                  earlyExerciseAllowed: nextEarlyExerciseAllowed,
+                  vestingStartDate: revisedVestingStartTimestamp,
+                }
+              : existingGrant,
+          ),
+        };
+        const verification = await verifyBoardConsentRecord(
+          verificationStakeholder,
+          effectiveBoardConsentDocId,
+          grantDetails,
+        );
+        effectiveBoardApprovalDate = verification.approvalDate;
+        boardConsentAutoVerified = true;
+        setBoardConsentVerification(prev => ({
+          ...prev,
+          [stakeholder.id]: {
+            status: 'verified',
+            approvalDate: verification.approvalDate,
+            issues: [],
+          },
+        }));
       }
 
       // ============================================
@@ -3962,6 +4243,7 @@ const EquityAdminPage: React.FC = () => {
 
             await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
               grantDetails: updatedGrantDetails,
+              legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
               signingRequestId: deleteField(),
               signingRequestIds: deleteField(),
               needsResendSignature: invalidatedRequestCount > 0,
@@ -3988,6 +4270,7 @@ const EquityAdminPage: React.FC = () => {
                 title: result.title || equityDoc.title,
                 status: 'completed',
                 grantDetails: updatedGrantDetails,
+                legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
                 needsResendSignature: invalidatedRequestCount > 0,
                 updatedAt: serverTimestamp(),
               });
@@ -4000,11 +4283,25 @@ const EquityAdminPage: React.FC = () => {
                 updatedAt: serverTimestamp(),
               });
               console.error('[saveGrantOptions] Failed to regenerate document:', result.error);
+              throw new Error(result.error || 'Failed to regenerate Advisor Agreement');
             }
           } catch (docError: any) {
             console.error('[saveGrantOptions] Error regenerating document:', docError);
+            throw docError;
           }
         }
+      }
+
+      if (stakeholderDocs.length === 0) {
+        await createAdvisorAgreementDocument({
+          stakeholderId: stakeholder.id,
+          stakeholderName: stakeholder.name,
+          stakeholderEmail: stakeholder.email,
+          stakeholderTitle: stakeholder.title,
+          grantDetails,
+          boardApprovalDate: effectiveBoardApprovalDate,
+        });
+        newDocsCreated++;
       }
 
       // Update equity pool (only if pool exists and we have an ID)
@@ -4038,6 +4335,7 @@ const EquityAdminPage: React.FC = () => {
                     startDate: revisedVestingStartTimestamp,
                     boardApprovalDate: effectiveBoardApprovalDate,
                     boardConsentDocId: effectiveBoardConsentDocId,
+                    boardConsentVerifiedAt: boardConsentAutoVerified ? Timestamp.now() : s.boardConsentVerifiedAt,
                   }
                 : {}),
               totalShares: s.totalShares ? nextOptionsValue : s.totalShares,
@@ -4094,12 +4392,16 @@ const EquityAdminPage: React.FC = () => {
       if (docActions.length > 0) {
         successMessage += ` — ${docActions.join(', ')}`;
       }
+
+      if (boardConsentAutoVerified) {
+        successMessage += '. Board Consent verified automatically';
+      }
       
       setMessage({ type: 'success', text: successMessage });
       setEditingGrantStakeholderId(null);
-      setEditGrantDateValue(new Date().toISOString().split('T')[0]);
+      setEditGrantDateValue(getDateInputValue(new Date()));
       setEditGrantStrikePriceValue(0);
-      setEditGrantValuationDateValue(new Date().toISOString().split('T')[0]);
+      setEditGrantValuationDateValue(getDateInputValue(new Date()));
       setEditGrantEarlyExerciseAllowed(false);
       console.log('[saveGrantOptions] Update completed successfully');
       
@@ -4108,12 +4410,14 @@ const EquityAdminPage: React.FC = () => {
       
       // Reload data to ensure UI is in sync
       setTimeout(() => loadData(), 500);
+      return true;
     } catch (error: any) {
       console.error('[saveGrantOptions] Error updating grant options:', error);
       const errorMessage = error?.message || 'Failed to update options. Please try again.';
       setMessage({ type: 'error', text: `Error: ${errorMessage}` });
       // Auto-dismiss error message after 5 seconds
       setTimeout(() => setMessage(null), 5000);
+      return false;
     } finally {
       setIsSavingGrantOptions(false);
     }
@@ -4321,7 +4625,9 @@ const EquityAdminPage: React.FC = () => {
                             <div className="p-3 rounded-lg bg-zinc-800/50">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                  <p className="text-zinc-500 text-xs mb-1">Start Date</p>
+                                  <p className="text-zinc-500 text-xs mb-1">
+                                    {stakeholder.type === 'advisor' ? 'Vesting Start' : 'Start Date'}
+                                  </p>
                                   <p className="text-white font-medium">{formatDate(stakeholder.startDate)}</p>
                                 </div>
                                 {stakeholder.type === 'advisor' && (
@@ -4332,8 +4638,8 @@ const EquityAdminPage: React.FC = () => {
                                       startEditingGrantTerms(stakeholder);
                                     }}
                                     disabled={isStakeholderGrantLocked(stakeholder)}
-                                    title="Update grant date and regenerate active documents"
-                                    aria-label="Update grant date"
+                                    title="Update vesting and valuation terms"
+                                    aria-label="Update advisor grant terms"
                                     className="shrink-0 flex items-center gap-1 px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-md text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <Calendar className="w-3 h-3" />
@@ -4379,11 +4685,22 @@ const EquityAdminPage: React.FC = () => {
                                 const grantLocked = isStakeholderGrantLocked(stakeholder);
                                 const currentGrantOptions = getCurrentStakeholderGrantOptions(stakeholder);
                                 const currentGrantDate = getCurrentStakeholderGrantDate(stakeholder);
-                                const currentGrantDateInputValue = getDateInputValue(currentGrantDate) || new Date().toISOString().split('T')[0];
+                                const currentGrantDateInputValue = getDateInputValue(currentGrantDate) || getDateInputValue(new Date());
                                 const currentGrant = stakeholder.grants?.[0];
-                                const currentStrikePrice = currentGrant?.strikePrice ?? currentGrant?.fairMarketValueAtGrant ?? 0;
-                                const currentValuationDateInputValue = getDateInputValue(currentGrant?.valuationDate) || '';
-                                const currentEarlyExerciseAllowed = Boolean(currentGrant?.earlyExerciseAllowed);
+                                const currentAdvisorGrantDetails =
+                                  stakeholder.type === 'advisor' ? getAdvisorGrantDetails(stakeholder) : null;
+                                const currentStrikePrice =
+                                  currentAdvisorGrantDetails?.strikePrice ??
+                                  currentGrant?.strikePrice ??
+                                  currentGrant?.fairMarketValueAtGrant ??
+                                  0;
+                                const currentValuationDateInputValue =
+                                  getDateInputValue(
+                                    currentAdvisorGrantDetails?.valuationDate || currentGrant?.valuationDate,
+                                  ) || '';
+                                const currentEarlyExerciseAllowed = Boolean(
+                                  currentAdvisorGrantDetails?.earlyExerciseAllowed ?? currentGrant?.earlyExerciseAllowed,
+                                );
                                 const canRefreshDocuments = stakeholder.type === 'advisor' && !grantLocked;
                                 return (
                                   <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -4497,7 +4814,7 @@ const EquityAdminPage: React.FC = () => {
                                         {stakeholder.type === 'advisor' && (
                                           <>
                                             <div className="text-right">
-                                              <p className="text-white font-semibold text-sm leading-none">{formatCurrency(currentStrikePrice)}</p>
+                                              <p className="text-white font-semibold text-sm leading-none">{formatPerShareCurrency(currentStrikePrice)}</p>
                                               <p className="text-[11px] text-zinc-500 mt-1">Exercise Price / FMV</p>
                                             </div>
                                             <div className="text-right">
@@ -4553,6 +4870,21 @@ const EquityAdminPage: React.FC = () => {
                                   </div>
                                 );
                               })()}
+                            </div>
+                          )}
+
+                          {stakeholder.type === 'advisor' && (
+                            <div className="mb-6 p-4 rounded-xl bg-cyan-900/10 border border-cyan-700/40">
+                              <h5 className="text-sm font-semibold text-cyan-300 flex items-center gap-2">
+                                <Shield className="w-4 h-4" />
+                                Advisor equity legal checks
+                              </h5>
+                              <ul className="mt-2 space-y-1 text-xs text-zinc-400">
+                                <li>- NSO holder only; options are not shares or current ownership until exercised.</li>
+                                <li>- Exercise price must use Board-determined fair market value, not the $0.000001 corporate par value.</li>
+                                <li>- An 83(b) election is not due merely because an NSO is granted. It may become relevant after an early exercise transfers unvested shares.</li>
+                                <li>- Compensated advisor services must exclude securities fundraising or market-promotion work unless counsel documents another exemption.</li>
+                              </ul>
                             </div>
                           )}
 
@@ -4750,10 +5082,19 @@ const EquityAdminPage: React.FC = () => {
                                           {canManageSignature && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); openSigningModal(edoc); }}
-                                              className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs transition-colors"
+                                              disabled={preparingSigningDocId === edoc.id}
+                                              className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs transition-colors disabled:opacity-60 disabled:cursor-wait"
                                             >
-                                              <Send className="w-3 h-3" />
-                                              {docState.needsResend || signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
+                                              {preparingSigningDocId === edoc.id ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                              ) : (
+                                                <Send className="w-3 h-3" />
+                                              )}
+                                              {preparingSigningDocId === edoc.id
+                                                ? 'Preparing Current Packet...'
+                                                : docState.needsResend || signingRequest
+                                                ? 'Resend Signature Email'
+                                                : 'Send for Signature'}
                                             </button>
                                           )}
                                           {signingRequest && needsSignature && !docState.isFullyExecuted && (
@@ -4871,10 +5212,19 @@ const EquityAdminPage: React.FC = () => {
                                     e.stopPropagation();
                                     openSigningModal(primarySignatureDoc);
                                   }}
-                                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-500 transition-colors"
+                                  disabled={preparingSigningDocId === primarySignatureDoc.id}
+                                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-500 transition-colors disabled:opacity-60 disabled:cursor-wait"
                                 >
-                                  <Send className="w-4 h-4" />
-                                  {signingState.needsResend || signingRequest ? 'Resend Signature Doc' : 'Send Signature Doc'}
+                                  {preparingSigningDocId === primarySignatureDoc.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Send className="w-4 h-4" />
+                                  )}
+                                  {preparingSigningDocId === primarySignatureDoc.id
+                                    ? 'Preparing Current Packet...'
+                                    : signingState.needsResend || signingRequest
+                                    ? 'Resend Signature Doc'
+                                    : 'Send Signature Doc'}
                                 </button>
                               );
                             })()}
@@ -5000,7 +5350,7 @@ const EquityAdminPage: React.FC = () => {
                 <div>
                   <p className="text-blue-300 font-medium text-sm">Company-wide document</p>
                   <p className="text-blue-400/70 text-xs mt-0.5">
-                    Equity Incentive Plans are not issued to a single stakeholder. This will be generated for Pulse Intelligence Labs, Inc.
+                    This company-wide Plan will use an exact reserve of {formatNumber(equityPool.totalReserved)} shares. It authorizes awards but does not itself grant equity to Valerie, Marques, or anyone else; each grant still needs Board approval and an award agreement.
                   </p>
                 </div>
               </div>
@@ -5067,7 +5417,7 @@ const EquityAdminPage: React.FC = () => {
               onChange={(e) => setGenerationPrompt(e.target.value)}
               placeholder={
                 selectedDocType === 'eip'
-                  ? "Add any specific instructions for the EIP. For example: 'Include a 10M share reserve. Standard 4-year vesting with 1-year cliff for all grants.'"
+                  ? "Add any company-specific Plan instructions. The current option-pool reserve is inserted automatically; do not restate a different number here."
                   : "Describe any specific terms or clauses. For example: 'Include a 90-day post-termination exercise period. Vesting accelerates 50% on change of control.'"
               }
               className="w-full h-32 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#8B5CF6] transition-colors resize-none"
@@ -5302,10 +5652,19 @@ const EquityAdminPage: React.FC = () => {
                             ) : needsSignature ? (
                               <button
                                 onClick={() => openSigningModal(edoc)}
-                                className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors"
+                                disabled={preparingSigningDocId === edoc.id}
+                                className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
                               >
-                                <Send className="w-4 h-4" />
-                                {signingState.needsResend || signingRequest ? 'Resend Signature Email' : 'Send for Signature'}
+                                {preparingSigningDocId === edoc.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Send className="w-4 h-4" />
+                                )}
+                                {preparingSigningDocId === edoc.id
+                                  ? 'Preparing Current Packet...'
+                                  : signingState.needsResend || signingRequest
+                                  ? 'Resend Signature Email'
+                                  : 'Send for Signature'}
                               </button>
                             ) : signingRequest && needsSignature ? (
                               <button
@@ -5579,7 +5938,7 @@ const EquityAdminPage: React.FC = () => {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg overflow-hidden"
+              className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between p-6 border-b border-zinc-700">
                 <div>
@@ -5604,7 +5963,15 @@ const EquityAdminPage: React.FC = () => {
                   <input
                     type="text"
                     value={newStakeholder.name}
-                    onChange={(e) => setNewStakeholder({ ...newStakeholder, name: e.target.value })}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      const managedProfile = getManagedAdvisorEquityProfile(name);
+                      setNewStakeholder({
+                        ...newStakeholder,
+                        name,
+                        ...(managedProfile ? { advisorShares: managedProfile.numberOfOptions } : {}),
+                      });
+                    }}
                     placeholder="John Smith"
                     className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#E0FE10] transition-colors"
                   />
@@ -5681,7 +6048,7 @@ const EquityAdminPage: React.FC = () => {
                     
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs text-zinc-400 mb-1">Number of Shares</label>
+                        <label className="block text-xs text-zinc-400 mb-1">Number of Options</label>
                         <input
                           type="number"
                           value={newStakeholder.advisorShares}
@@ -5752,30 +6119,9 @@ const EquityAdminPage: React.FC = () => {
                       Corporate par value ($0.000001/share) is not the option exercise price. Use the fair market value approved by the Board for the grant date and keep the supporting valuation in the corporate records.
                     </div>
 
-                    {/* Board Consent Linkage */}
-                    <div className="mt-4 pt-4 border-t border-purple-700/50">
-                      <label className="block text-xs text-zinc-400 mb-2">
-                        Link to Board Consent (Optional)
-                      </label>
-                      <select
-                        value={newStakeholder.boardConsentDocId}
-                        onChange={(e) => setNewStakeholder({ ...newStakeholder, boardConsentDocId: e.target.value })}
-                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
-                      >
-                        <option value="">No board consent linked</option>
-                        {equityDocuments
-                          .filter(d => d.documentType === 'board_consent' && d.status === 'completed')
-                          .map(doc => (
-                            <option key={doc.id} value={doc.id}>
-                              {doc.title} ({formatDate(doc.updatedAt || doc.createdAt)})
-                            </option>
-                          ))
-                        }
-                      </select>
-                      <p className="text-xs text-purple-400 mt-1">
-                        If you do not link one here, a new Board Consent will be auto-generated and attached.
-                      </p>
-                    </div>
+                    <p className="text-xs text-purple-300">
+                      A new, advisor-specific Board Consent will be generated using the current approval date. Existing corporate approvals are preserved and are never reused or overwritten.
+                    </p>
                   </div>
                 )}
               </div>

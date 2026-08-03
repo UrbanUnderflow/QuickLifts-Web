@@ -37,7 +37,6 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PILOTS_COLLECTION = 'pulsecheck-pilots';
 const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const ATHLETE_APP_ENTITLEMENTS_COLLECTION = 'pulsecheck-athlete-app-entitlements';
-const SUBSCRIPTIONS_COLLECTION = 'subscriptions';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
@@ -438,7 +437,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
         .doc(`${organizationId}_${userId}`);
       const teamMembershipRef = firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
-      const subscriptionRef = firestore.collection(SUBSCRIPTIONS_COLLECTION).doc(userId);
       const athleteAppEntitlementRef = firestore
         .collection(ATHLETE_APP_ENTITLEMENTS_COLLECTION)
         .doc(`${teamId}_${userId}`);
@@ -451,10 +449,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transaction.get(organizationRef),
         transaction.get(teamRef),
       ]);
-      const [userSnap, existingTeamMembershipSnap, subscriptionSnap, athleteAppEntitlementSnap] = await Promise.all([
+      const [userSnap, existingTeamMembershipSnap, athleteAppEntitlementSnap] = await Promise.all([
         transaction.get(userRef),
         transaction.get(teamMembershipRef),
-        transaction.get(subscriptionRef),
         transaction.get(athleteAppEntitlementRef),
       ]);
       const hadExistingTeamMembership = existingTeamMembershipSnap.exists;
@@ -546,13 +543,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         && nextTeamCommercialConfig.athleteAppSubscriptionEnabled
         && !commercialSnapshot.teamPlanBypassesPaywall
       ) {
-        const subscriptionData = subscriptionSnap.exists ? subscriptionSnap.data() || {} : {};
-        const plans = Array.isArray(subscriptionData.plans) ? subscriptionData.plans : [];
         const nowEpochSeconds = Math.floor(Date.now() / 1000);
-        const hasActivePulseCheckPlan = plans.some((plan: Record<string, unknown>) => (
-          normalizeString(plan?.type).startsWith('pulsecheck-')
-          && epochSeconds(plan?.expiration) > nowEpochSeconds
-        ));
         const entitlement = athleteAppEntitlementSnap.exists
           ? athleteAppEntitlementSnap.data() || {}
           : {};
@@ -566,7 +557,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           && epochSeconds(
             entitlement.currentPeriodEndEpochSeconds || entitlement.currentPeriodEnd
           ) > nowEpochSeconds;
-        if (!hasActivePulseCheckPlan && !hasMatchingCoachOfferEntitlement) {
+        if (!hasMatchingCoachOfferEntitlement) {
           throw new Error('Active PulseCheck app access is required before joining this team.');
         }
       }

@@ -12,10 +12,14 @@ interface RequestBody {
   stakeholderName?: string;
   stakeholderEmail?: string;
   stakeholderType?: 'founder' | 'employee' | 'advisor' | 'investor' | 'contractor';
+  stakeholderTitle?: string;
   grantDetails?: {
     equityType: string;
     numberOfShares: number;
     strikePrice: number;
+    fairMarketValueAtGrant?: number;
+    valuationDate?: string;
+    earlyExerciseAllowed?: boolean;
     vestingSchedule: string;
     vestingStartDate: string;
     cliffMonths: number;
@@ -70,17 +74,21 @@ const handler: Handler = async (event) => {
       body.documentType !== 'eip' && body.stakeholderName ? `STAKEHOLDER: ${body.stakeholderName}` : null,
       body.documentType !== 'eip' && body.stakeholderEmail ? `EMAIL: ${body.stakeholderEmail}` : null,
       body.documentType !== 'eip' && body.stakeholderType ? `ROLE TYPE: ${body.stakeholderType}` : null,
+      body.documentType !== 'eip' && body.stakeholderTitle ? `ROLE TITLE: ${body.stakeholderTitle}` : null,
       body.grantDetails
         ? [
             `GRANT DETAILS:`,
             `- Equity Type: ${body.grantDetails.equityType}`,
             `- Number of Shares: ${body.grantDetails.numberOfShares.toLocaleString()}`,
             `- Strike Price per Share: $${Number(body.grantDetails.strikePrice).toFixed(4)}`,
+            `- Board-Determined FMV per Share: $${Number(body.grantDetails.fairMarketValueAtGrant ?? body.grantDetails.strikePrice).toFixed(4)}`,
+            body.grantDetails.valuationDate ? `- FMV Determination Date: ${body.grantDetails.valuationDate}` : null,
+            `- Early Exercise: ${body.grantDetails.earlyExerciseAllowed ? 'Allowed' : 'Not allowed'}`,
             `- Vesting Schedule: ${body.grantDetails.vestingSchedule}`,
             `- Vesting Start Date: ${body.grantDetails.vestingStartDate}`,
             `- Cliff Months: ${body.grantDetails.cliffMonths}`,
             `- Vesting Months: ${body.grantDetails.vestingMonths}`,
-          ].join('\n')
+          ].filter(Boolean).join('\n')
         : null,
       body.originalPrompt?.trim() ? `ORIGINAL PROMPT:\n${body.originalPrompt.trim()}` : null,
     ]
@@ -111,6 +119,12 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
             `- Return ONLY the revised document text.\n` +
             `- Preserve the overall structure unless the revision explicitly changes it.\n` +
             `- If the revision asks to add/remove sections, do so cleanly.\n` +
+            (body.documentType === 'advisor_nso_agreement'
+              ? `- Preserve the distinction between corporate par value and Board-determined fair market value / exercise price.\n` +
+                `- Do not list fundraising, investor solicitation, securities placement, or market-promotion work as compensable advisor services.\n` +
+                `- Do not say an 83(b) election is due at option grant. Include an 83(b) notice or sample only when early exercise can transfer substantially nonvested shares.\n` +
+                `- Keep the legal Grant Date / Board Approval Date distinct from the Vesting Commencement Date; never backdate the Grant Date.\n`
+              : ``) +
             (body.requiresSignature
               ? `- Ensure a signature section exists at the end with signature blocks for BOTH parties (Company and Recipient), including printed name + title + date lines.\n`
               : `- Remove signature lines/blocks if present unless they are strictly required.\n`) +

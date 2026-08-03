@@ -195,10 +195,9 @@ const loadCoachPricedInviteCheckout = async ({
     throw requestError('A valid athlete invite and signed-in account are required.');
   }
 
-  const [inviteSnapshot, userSnapshot, subscriptionSnapshot] = await Promise.all([
+  const [inviteSnapshot, userSnapshot] = await Promise.all([
     database.collection(INVITES_COLLECTION).doc(normalizedInviteToken).get(),
     database.collection(USERS_COLLECTION).doc(normalizedUserId).get(),
-    database.collection(SUBSCRIPTIONS_COLLECTION).doc(normalizedUserId).get(),
   ]);
   if (!inviteSnapshot.exists) throw requestError('This athlete invite is no longer available.', 404);
   if (!userSnapshot.exists) throw requestError('Create your PulseCheck account before checkout.', 404);
@@ -216,7 +215,6 @@ const loadCoachPricedInviteCheckout = async ({
     : inviteStatus === 'active' || sameUserSingleUseReplay;
   const targetEmail = normalizeEmail(invite.targetEmail);
   const userData = userSnapshot.data() || {};
-  const subscriptionData = subscriptionSnapshot.exists ? subscriptionSnapshot.data() || {} : {};
   const verifiedAuthEmail = normalizeEmail(authenticatedEmail);
   const resolvedEmail = verifiedAuthEmail || normalizeEmail(userData.email);
   if (
@@ -240,18 +238,6 @@ const loadCoachPricedInviteCheckout = async ({
   const expiresAt = epochSeconds(invite.expiresAt || invite.expirationDate);
   if (expiresAt && expiresAt <= Math.floor(Date.now() / 1000)) {
     throw requestError('This athlete invite has expired.', 410);
-  }
-
-  const nowSec = Math.floor(Date.now() / 1000);
-  const alreadyHasPulseCheckAccess = (Array.isArray(subscriptionData.plans) ? subscriptionData.plans : [])
-    .some((plan) => (
-      normalizeString(plan?.type).startsWith('pulsecheck-')
-      && epochSeconds(plan?.expiration) > nowSec
-    ));
-  if (alreadyHasPulseCheckAccess) {
-    const error = requestError('This account already has active PulseCheck app access.', 409);
-    error.alreadyActive = true;
-    throw error;
   }
 
   const [teamSnapshot, organizationSnapshot, offerSnapshot, entitlementSnapshot] = await Promise.all([
