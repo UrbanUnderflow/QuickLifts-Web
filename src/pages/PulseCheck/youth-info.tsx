@@ -11,7 +11,7 @@ const pageMeta = {
   ogTitle: 'PulseCheck Youth | Train the Mind for the Game',
   ogDescription:
     'A daily mental performance system built for young athletes, with 200+ skills, wearable context, and human support when repeated check-ins need a closer look.',
-  ogImage: '/pulsecheck-youth/youth-info-og.png',
+  ogImage: '/pulsecheck-youth/youth-info-og-branded.png',
   twitterCard: 'summary_large_image',
   lastUpdated: '2026-08-01T00:00:00.000Z',
 };
@@ -670,7 +670,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       <PageHead
         metaData={isPro ? proPageMeta : pageMeta}
         pageOgUrl={isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth-info'}
-        pageOgImage={isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og.png'}
+        pageOgImage={isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og-branded.png'}
         themeColor={isPro ? '#0b0b0e' : '#101015'}
         appleItunesAppArgument={isPro ? 'pulsecheck://pro' : 'pulsecheck://youth'}
       />
@@ -2351,7 +2351,7 @@ export const getStaticProps = async () => ({
     ogMeta: {
       title: pageMeta.ogTitle,
       description: pageMeta.ogDescription,
-      image: 'https://fitwithpulse.ai/pulsecheck-youth/youth-info-og.png',
+      image: 'https://pulsecheckmind.ai/pulsecheck-youth/youth-info-og-branded.png',
       url: 'https://pulsecheckmind.ai/youth-info',
       type: 'website',
       siteName: 'PulseCheck',
