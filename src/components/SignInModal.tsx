@@ -204,7 +204,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
     ? 'athleticMindHub'
     : variant;
   const isAthleticMindHubFlow = effectiveVariant === 'athleticMindHub';
-  const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage || isAthleticMindHubFlow;
+  const isSubscriptionManagementPage = normalizedModalRoutePath === '/subscription';
+  const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage || isOnAdminPage || isAthleticMindHubFlow || isSubscriptionManagementPage;
   const isPulseCheckLegalContext = isOnCoachPage || router.asPath.startsWith('/PulseCheck/post-activation');
   const legalTheme = isPulseCheckLegalContext
     ? {

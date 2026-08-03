@@ -63,7 +63,7 @@ const SettingsPage: NextPage = () => {
   const supportEmail = 'info@fitwithpulse.ai';
 
   const handleSubscription = () => {
-    router.push('/subscribe');
+    router.push('/subscription');
   };
 
   const handleCoachSetup = () => {
@@ -196,5 +196,4 @@ const SettingsPage: NextPage = () => {
 };
 
 export default SettingsPage;
-
 

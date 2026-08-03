@@ -81,7 +81,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const publicRoutes = [
     '/', '/about', '/creator', '/creators', '/rounds', '/privacyPolicy', '/privacy', '/programming', '/100trainers',
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
-    '/subscribe', '/pricing', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
+    '/subscribe', '/subscription', '/pricing', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     '/delete-account', '/deleteAccount',
     '/checkout-redirect', '/subscription-success', '/subscription-error',
     '/group-meet', '/group-meet/privacy', '/group-meet/terms',
