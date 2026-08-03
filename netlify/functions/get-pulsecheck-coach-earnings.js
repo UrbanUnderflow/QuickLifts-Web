@@ -133,13 +133,19 @@ const teamAllowsCoachEarnings = ({ team, membership, userId, athleteAppOffer = n
   const hasAthleteReferralEarnings = config.referralKickbackEnabled && config.referralRevenueSharePct > 0;
   const hasParentAssessmentEarnings =
     config.parentAssessmentReferralKickbackEnabled && config.parentAssessmentReferralRevenueSharePct > 0;
+  const hasServiceEarnings = config.additionalServicesEnabled || config.referralKickbackEnabled;
   const hasAthleteAppSubscriptionEarnings = Boolean(
     athleteAppOffer
     && normalizeString(athleteAppOffer.teamId) === normalizeString(team?.id)
     && normalizeString(athleteAppOffer.revenueRecipientUserId) === userId
   );
 
-  if (!hasAthleteReferralEarnings && !hasParentAssessmentEarnings && !hasAthleteAppSubscriptionEarnings) {
+  if (
+    !hasAthleteReferralEarnings
+    && !hasParentAssessmentEarnings
+    && !hasServiceEarnings
+    && !hasAthleteAppSubscriptionEarnings
+  ) {
     return null;
   }
 
@@ -775,7 +781,7 @@ const loadCoachServiceEarnings = async ({
     .map((entry) => {
       const order = entry.data() || {};
       const status = normalizeStatus(order.status);
-      const isEarned = status === 'paid' || status === 'booked';
+      const isEarned = status === 'paid' || status === 'booked' || status === 'active';
       if (
         !isEarned
         || order.paymentAuthorized !== true
@@ -809,7 +815,7 @@ const loadCoachServiceEarnings = async ({
         platformFeeCents,
         coachNetCents,
         currency: normalizeStatus(order.currency) || 'usd',
-        paidAt: isoTimestamp(order.paidAt),
+        paidAt: isoTimestamp(order.paidAt || order.subscriptionActivatedAt || order.paymentVerifiedAt),
         scheduledAt: isoTimestamp(order.scheduledAt),
         bookedAt: isoTimestamp(order.bookedAt),
       };

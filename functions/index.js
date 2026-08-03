@@ -116,6 +116,15 @@ exports.sendTestReflectionNotification = require("./dailyReflectionNotifications
 // Export PulseCheck coach-athlete message notifications
 exports.sendCoachAthleteMessageNotification = require("./coachAthleteMessageNotifications").sendCoachAthleteMessageNotification;
 
+// Export PulseCheck coach event notifications
+exports.onCoachNotificationCreated = require("./pulsecheckCoachEventNotifications").onCoachNotificationCreated;
+exports.onPulseCheckTeamMembershipCreated = require("./pulsecheckCoachEventNotifications").onPulseCheckTeamMembershipCreated;
+exports.onPulseCheckTeamMembershipUpdated = require("./pulsecheckCoachEventNotifications").onPulseCheckTeamMembershipUpdated;
+exports.onPulseCheckMentalCheckInCreated = require("./pulsecheckCoachEventNotifications").onPulseCheckMentalCheckInCreated;
+exports.onPulseCheckAthleteAppRevenueEventCreated = require("./pulsecheckCoachEventNotifications").onPulseCheckAthleteAppRevenueEventCreated;
+exports.onPulseCheckRevenueEventCreated = require("./pulsecheckCoachEventNotifications").onPulseCheckRevenueEventCreated;
+exports.onPulseCheckTeamShowingUpSprintUpdated = require("./pulsecheckCoachEventNotifications").onPulseCheckTeamShowingUpSprintUpdated;
+
 // Macra: scheduled daily insight (rich context, sport-aware, FWP-coupled)
 exports.scheduledMacraDailyInsight = require("./macraDailyInsight").scheduledMacraDailyInsight;
 

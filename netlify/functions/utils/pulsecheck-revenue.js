@@ -104,7 +104,9 @@ const normalizeCommercialConfig = (value) => {
     coachReferralRevenueSharePct: normalizeRevenueSharePct(
       candidate.coachReferralRevenueSharePct ?? defaults.coachReferralRevenueSharePct
     ),
-    additionalServicesEnabled: referralKickbackEnabled,
+    additionalServicesEnabled: normalizeBoolean(
+      candidate.additionalServicesEnabled ?? defaults.additionalServicesEnabled
+    ),
     athleteAppSubscriptionEnabled: normalizeBoolean(
       candidate.athleteAppSubscriptionEnabled ?? defaults.athleteAppSubscriptionEnabled
     ),

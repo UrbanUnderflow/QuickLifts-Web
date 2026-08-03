@@ -1284,6 +1284,26 @@ async function handleCheckoutSessionCompleted(session) {
       return;
     }
 
+    if (normalizeCoachServiceString(session?.metadata?.payment_type) === 'pulsecheck_coach_service') {
+      const eventStripeClient = stripeClientForLivemode(session.livemode);
+      const paymentIntentId =
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : normalizeCoachServiceString(session.payment_intent?.id);
+      if (!paymentIntentId) {
+        throw new Error(`Coach service checkout session ${session.id} is missing a payment intent.`);
+      }
+      const paymentIntent = await eventStripeClient.paymentIntents.retrieve(
+        paymentIntentId,
+        { expand: ['latest_charge'] }
+      );
+      await markOrderPaid({
+        paymentIntent,
+        source: 'checkout.session.completed',
+      });
+      return;
+    }
+
     // Extract necessary information from the session
     const { metadata, customer_email, customer, client_reference_id } = session;
     if (isAthleteAppMetadata(metadata || {})) {

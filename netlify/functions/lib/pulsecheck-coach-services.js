@@ -660,6 +660,32 @@ const assertSubscriptionSessionMatchesOrder = (session, order) => {
   }
 };
 
+const assertCheckoutSessionMatchesOrder = (session, order) => {
+  const expectedMode = normalizeStatus(order?.stripeMode);
+  const liveModeMatches = typeof session?.livemode !== 'boolean'
+    || session.livemode === (expectedMode === 'live');
+  if (
+    normalizeString(session?.id) !== normalizeString(order?.stripeSessionId)
+    || normalizeString(session?.client_reference_id)
+      !== normalizeString(order?.athleteUserId)
+    || !paymentMetadataMatchesOrder(
+      session?.metadata,
+      order,
+      'pulsecheck_coach_service'
+    )
+    || (Number.isFinite(Number(session?.amount_total))
+      && Number(session.amount_total) !== Number(order.amountCents))
+    || (normalizeString(session?.currency)
+      && normalizeStatus(session.currency) !== normalizeStatus(order.currency))
+    || !liveModeMatches
+  ) {
+    throw permissionError(
+      'Stripe checkout details do not match this service order.',
+      409
+    );
+  }
+};
+
 const resolveCoachStripeAccount = async (coachUserId, database = db) => {
   const [userSnap, connectSnap] = await Promise.all([
     database.collection('users').doc(coachUserId).get(),
@@ -714,18 +740,32 @@ const markOrderPaid = async ({ paymentIntent, source = 'api', database = db }) =
     if (!verifyOrderIntegrity(order)) {
       throw new Error(`Coach service order ${orderId} could not be verified.`);
     }
+    const paymentIntentId = normalizeString(paymentIntent.id);
+    const stripeCustomerId =
+      typeof paymentIntent.customer === 'string'
+        ? normalizeString(paymentIntent.customer)
+        : normalizeString(paymentIntent.customer?.id);
+    const orderWithPaymentIntent = normalizeString(order.paymentIntentId)
+      ? order
+      : sealOrder({
+          ...order,
+          paymentIntentId,
+          stripeCustomerId: stripeCustomerId || normalizeString(order.stripeCustomerId),
+        });
     assertPaymentIntentMatchesOrder(
       paymentIntent,
-      order,
+      orderWithPaymentIntent,
       { requireSucceeded: true }
     );
     const authorizedOrder = sealOrder({
-      ...order,
+      ...orderWithPaymentIntent,
       paymentAuthorized: true,
     });
     transaction.set(ref, {
       status: normalizeStatus(order.status) === 'booked' ? 'booked' : 'paid',
       paymentStatus: normalizeString(paymentIntent.status),
+      paymentIntentId,
+      stripeCustomerId: stripeCustomerId || normalizeString(order.stripeCustomerId) || null,
       paymentAuthorized: true,
       orderIntegritySeal: authorizedOrder.orderIntegritySeal,
       paymentMethodType:
@@ -789,6 +829,7 @@ const markSubscriptionOrderActive = async ({ session, source = 'stripe-webhook',
       stripeCustomerId,
       paymentAuthorized: true,
       orderIntegritySeal: resealedOrder.orderIntegritySeal,
+      paidAt: order.paidAt || admin.firestore.FieldValue.serverTimestamp(),
       subscriptionActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
       paymentVerificationSource: source,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -811,6 +852,7 @@ module.exports = {
   STRIPE_PROCESSING_PERCENT,
   SERVICE_CATALOG,
   assertOrderMatchesConversation,
+  assertCheckoutSessionMatchesOrder,
   assertPaymentIntentCanFulfillOrder,
   assertPaymentIntentMatchesOrder,
   assertSubscriptionSessionMatchesOrder,

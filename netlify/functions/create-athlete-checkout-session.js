@@ -241,12 +241,47 @@ const reserveCoachOfferCheckout = async ({
     return error;
   };
 
-  const sessionMatchesScope = (session) => {
+  const sessionMatchesTeamOffer = (session) => {
     const metadata = session?.metadata || {};
     return normalizeString(session?.client_reference_id) === userId
       && normalizeString(metadata.pulsecheckTeamId) === teamId
-      && normalizeString(metadata.pulsecheckInviteToken) === inviteToken
       && Number(metadata.pulsecheckOfferVersion) === Number(offerVersion);
+  };
+
+  const sessionMatchesScope = (session) => {
+    const metadata = session?.metadata || {};
+    return sessionMatchesTeamOffer(session)
+      && normalizeString(metadata.pulsecheckInviteToken) === inviteToken;
+  };
+
+  const sessionCanBeReused = (session) => (
+    singleUseInvite
+      ? sessionMatchesScope(session)
+      : sessionMatchesTeamOffer(session)
+  );
+
+  const markLockStale = async (ref, patch = {}) => {
+    if (!ref) return;
+    await ref.set({
+      status: 'stale',
+      leaseExpiresAtEpochSeconds: 0,
+      ...patch,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  };
+
+  const expireOpenSession = async (session) => {
+    const sessionId = normalizeString(session?.id);
+    if (!sessionId || session?.status !== 'open') return;
+    try {
+      await stripeClient.checkout.sessions.expire(sessionId);
+    } catch (error) {
+      const statusCode = Number(error?.statusCode);
+      if (error?.code === 'checkout_session_not_open' || statusCode === 400 || statusCode === 404) {
+        return;
+      }
+      throw error;
+    }
   };
 
   const retrieveSession = async (sessionId) => {
@@ -273,8 +308,26 @@ const reserveCoachOfferCheckout = async ({
     const sessionId = normalizeString(current.stripeSessionId);
     const session = await retrieveSession(sessionId);
     if (session?.status === 'open' && normalizeString(session.url)) {
-      if (normalizeString(current.userId) === userId && sessionMatchesScope(session)) {
+      if (normalizeString(current.userId) === userId && sessionCanBeReused(session)) {
         return { current, session };
+      }
+      if (label === 'user') {
+        try {
+          await expireOpenSession(session);
+        } catch (error) {
+          console.warn(
+            '[AthleteCheckout] Existing checkout session could not be expired:',
+            session.id,
+            error?.message || error
+          );
+        }
+        await markLockStale(ref, {
+          staleReason: sessionMatchesTeamOffer(session)
+            ? 'invite_context_changed'
+            : 'checkout_scope_changed',
+          previousStripeSessionId: session.id,
+        });
+        return { current, session: null };
       }
       throw checkoutPendingError(
         label === 'invite'
@@ -300,11 +353,7 @@ const reserveCoachOfferCheckout = async ({
       );
     }
     if (sessionId) {
-      await ref.set({
-        status: 'stale',
-        leaseExpiresAtEpochSeconds: 0,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+      await markLockStale(ref);
     }
     return { current, session: null };
   };
@@ -339,6 +388,10 @@ const reserveCoachOfferCheckout = async ({
         && normalizeString(current.teamId) === teamId
         && normalizeString(current.inviteToken) === inviteToken
         && Number(current.offerVersion) === Number(offerVersion);
+      const sameTeamOffer = normalizeString(current.userId) === userId
+        && normalizeString(current.teamId) === teamId
+        && Number(current.offerVersion) === Number(offerVersion);
+      const canReuseOpenLock = singleUseInvite ? sameScope : sameTeamOffer;
       if (
         normalizeString(current.status) === 'creating'
         && Number(current.leaseExpiresAtEpochSeconds) > nowSec
@@ -350,7 +403,8 @@ const reserveCoachOfferCheckout = async ({
         );
       }
       if (normalizeString(current.status) === 'open' && normalizeString(current.stripeSessionId)) {
-        if (!sameScope) {
+        if (!canReuseOpenLock) {
+          if (label === 'user') continue;
           throw checkoutPendingError(
             label === 'invite'
               ? 'This single-use athlete invite already has a checkout in progress.'
@@ -399,7 +453,7 @@ const reserveCoachOfferCheckout = async ({
 
   if (reservation.reuseSessionId) {
     const session = await retrieveSession(reservation.reuseSessionId);
-    if (session?.status === 'open' && normalizeString(session.url) && sessionMatchesScope(session)) {
+    if (session?.status === 'open' && normalizeString(session.url) && sessionCanBeReused(session)) {
       return {
         lockId,
         lockRef,

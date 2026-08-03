@@ -7618,7 +7618,7 @@ const EarningsSection: React.FC<{
                 Additional service earnings
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                Verified one-time purchases included in this team&apos;s payout balance
+                Verified purchases and active service subscriptions included in this team&apos;s payout balance
               </div>
             </div>
             <div className="flex gap-2 text-xs">
@@ -7636,8 +7636,8 @@ const EarningsSection: React.FC<{
           ) : serviceEarnings.length === 0 ? (
             <EmptyBlock
               icon={CalendarDays}
-              title="No service purchases yet"
-              body="One-on-one video and video posing purchases will appear here after Stripe confirms payment."
+              title="No service earnings yet"
+              body="One-on-one purchases and active service subscriptions will appear here after Stripe confirms payment."
             />
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-700/30 bg-zinc-800/40">
@@ -7651,7 +7651,11 @@ const EarningsSection: React.FC<{
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="truncate text-sm font-medium text-white">{earning.serviceTitle}</div>
                         <span className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-300">
-                          {earning.status === 'booked' ? 'Booked' : 'Paid'}
+                          {earning.status === 'booked'
+                            ? 'Booked'
+                            : earning.status === 'active'
+                              ? 'Active'
+                              : 'Paid'}
                         </span>
                       </div>
                       <div className="mt-1 text-xs text-zinc-500">

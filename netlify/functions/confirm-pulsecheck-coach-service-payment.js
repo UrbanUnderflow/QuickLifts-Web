@@ -2,6 +2,7 @@ const Stripe = require('stripe');
 const { headers, getFirebaseAdminApp } = require('./config/firebase');
 const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
 const {
+  assertCheckoutSessionMatchesOrder,
   assertPaymentIntentCanFulfillOrder,
   assertPaymentIntentMatchesOrder,
   loadValidatedOrderForAthlete,
@@ -67,27 +68,50 @@ const handler = async (event) => {
       database,
     });
 
-    const paymentIntentId = normalizeString(order.paymentIntentId);
-    if (!paymentIntentId) {
-      const error = new Error('This service order has no Stripe payment.');
-      error.statusCode = 409;
-      throw error;
-    }
     const stripe = await stripeClient(order);
-    const paymentIntent = await stripe.paymentIntents.retrieve(
-      paymentIntentId,
-      { expand: ['latest_charge'] }
-    );
+    const storedPaymentIntentId = normalizeString(order.paymentIntentId);
+    let paymentIntent;
+
+    if (storedPaymentIntentId) {
+      paymentIntent = await stripe.paymentIntents.retrieve(
+        storedPaymentIntentId,
+        { expand: ['latest_charge'] }
+      );
+      assertPaymentIntentMatchesOrder(
+        paymentIntent,
+        order,
+        { requireSucceeded: true }
+      );
+    } else {
+      const sessionId = normalizeString(order.stripeSessionId);
+      if (!sessionId) {
+        const error = new Error('This service order has no Stripe payment.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const session = await stripe.checkout.sessions.retrieve(
+        sessionId,
+        { expand: ['payment_intent.latest_charge'] }
+      );
+      assertCheckoutSessionMatchesOrder(session, order);
+      if (normalizeString(session.payment_status).toLowerCase() !== 'paid') {
+        const error = new Error('Stripe has not confirmed this payment yet.');
+        error.statusCode = 409;
+        throw error;
+      }
+      paymentIntent = session.payment_intent;
+      if (!paymentIntent || typeof paymentIntent === 'string') {
+        const error = new Error('Stripe has not attached a payment to this checkout yet.');
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+
     if (normalizeString(paymentIntent.status).toLowerCase() !== 'succeeded') {
       const error = new Error('Stripe has not confirmed this payment yet.');
       error.statusCode = 409;
       throw error;
     }
-    assertPaymentIntentMatchesOrder(
-      paymentIntent,
-      order,
-      { requireSucceeded: true }
-    );
     assertPaymentIntentCanFulfillOrder(paymentIntent);
 
     await markOrderPaid({

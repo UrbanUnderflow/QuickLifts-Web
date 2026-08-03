@@ -935,25 +935,10 @@ exports.onAthleteSelfAssignment = onDocumentCreated(
       const coachDoc = await db.collection('users').doc(coachId).get();
       const coachData = coachDoc.exists ? coachDoc.data() : null;
 
-      // 1. Send Push Notification to Coach
-      const pushTitle = '🧠 Athlete Started Mental Training';
-      const pushBody = `${athleteName} started "${exerciseName}" from your recommendations.`;
-      
-      await sendNotificationToUser(
-        coachId,
-        pushTitle,
-        pushBody,
-        {
-          assignmentId,
-          athleteId,
-          exerciseName,
-          action: 'view_assignment'
-        },
-        'ATHLETE_SELF_ASSIGNMENT'
-      );
-      console.log(`Push notification sent to coach ${coachId}`);
+      // Phone push is handled by onCoachNotificationCreated using the
+      // PulseCheck installation token model.
 
-      // 2. Send Email to Coach (if email is available)
+      // Send Email to Coach (if email is available)
       if (coachData?.email) {
         await sendSelfAssignmentEmail(
           coachData.email,
@@ -965,10 +950,11 @@ exports.onAthleteSelfAssignment = onDocumentCreated(
         console.log(`Email sent to coach ${coachData.email}`);
       }
 
-      // 3. Mark notification as processed
+      // Mark notification as processed
       await event.data.ref.update({
         processed: true,
-        processedAt: Date.now()
+        processedAt: Date.now(),
+        phonePushHandledBy: 'onCoachNotificationCreated'
       });
 
       return { success: true };
@@ -1048,36 +1034,18 @@ exports.onNoraAutoAssignmentCreated = onDocumentCreated(
         },
       });
 
-      const result = await sendNotificationToUser(
-        coachId,
-        pushTitle,
-        pushBody,
-        {
-          assignmentId,
-          athleteId,
-          sourceDate: assignment.sourceDate || formatDate(Date.now()),
-          actionType: assignment.actionType || 'sim',
-          teamId,
-          organizationId,
-          target: 'coach_mental_training',
-          webUrl: 'https://fitwithpulse.ai/coach/mentalGames?tab=assignments',
-        },
-        'NORA_AUTO_ASSIGNMENT'
-      );
+      await db.collection('coach-notifications').doc(notificationId).set({
+        processed: true,
+        processedAt: Date.now(),
+        phonePushHandledBy: 'onCoachNotificationCreated',
+        updatedAt: Date.now(),
+      }, { merge: true });
+      await event.data.ref.update({
+        coachNotifiedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
 
-      if (result.success) {
-        await db.collection('coach-notifications').doc(notificationId).set({
-          processed: true,
-          processedAt: Date.now(),
-          updatedAt: Date.now(),
-        }, { merge: true });
-        await event.data.ref.update({
-          coachNotifiedAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-      }
-
-      return result;
+      return { success: true };
     } catch (error) {
       console.error('Error processing Nora auto-assignment notification:', error);
       return { success: false, error: error.message };
@@ -1150,31 +1118,14 @@ exports.onPulseCheckSessionSummaryCreated = onDocumentUpdated(
         },
       });
 
-      const result = await sendNotificationToUser(
-        coachId,
-        title,
-        body,
-        {
-          athleteId,
-          completionId: event.params.completionId,
-          dailyAssignmentId: after.dailyAssignmentId || '',
-          teamId,
-          organizationId,
-          target: 'coach_mental_training',
-          webUrl: 'https://fitwithpulse.ai/coach/mentalGames',
-        },
-        'PULSECHECK_SESSION_UPDATE'
-      );
+      await db.collection('coach-notifications').doc(notificationId).set({
+        processed: true,
+        processedAt: Date.now(),
+        phonePushHandledBy: 'onCoachNotificationCreated',
+        updatedAt: Date.now(),
+      }, { merge: true });
 
-      if (result.success) {
-        await db.collection('coach-notifications').doc(notificationId).set({
-          processed: true,
-          processedAt: Date.now(),
-          updatedAt: Date.now(),
-        }, { merge: true });
-      }
-
-      return result;
+      return { success: true };
     } catch (error) {
       console.error('Error processing Pulse Check session summary notification:', error);
       return { success: false, error: error.message };

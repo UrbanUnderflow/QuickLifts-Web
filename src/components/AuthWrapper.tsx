@@ -141,6 +141,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/youth',
     '/pro-info',
     '/performers-info',
+    '/testimonials',
     // Nora marketing landing (public)
     '/Nora',
     // Macra marketing landing (public)
@@ -185,6 +186,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       '/youth',
       '/pro-info',
       '/performers-info',
+      '/testimonials',
     ].includes(normalizedPath);
   };
 
