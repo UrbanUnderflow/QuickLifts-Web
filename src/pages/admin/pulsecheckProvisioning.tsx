@@ -4384,14 +4384,33 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 <div className="pcp-fld">
                                                   <span className="pcp-flbl">Monthly Revenue Split</span>
                                                   <div className="pcp-finp" style={{ height: 'auto', minHeight: 38, display: 'grid', gap: 4, paddingTop: 8, paddingBottom: 8 }}>
+                                                    {(() => {
+                                                      const platformShareCents = Math.round(athleteSubscriptionPriceCents * 0.5);
+                                                      const estimatedStripeFeeCents = Math.max(0, Math.round(athleteSubscriptionPriceCents * 0.029) + 30);
+                                                      const estimatedCoachAfterStripeFeesCents = Math.max(
+                                                        0,
+                                                        athleteSubscriptionPriceCents - platformShareCents - estimatedStripeFeeCents
+                                                      );
+                                                      return (
+                                                        <>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                                                       <span style={{ color: 'rgba(255,255,255,0.52)' }}>PulseCheck 50%</span>
-                                                      <strong>{formatPulseCheckMonthlyPrice(Math.round(athleteSubscriptionPriceCents * 0.5))}</strong>
+                                                      <strong>{formatPulseCheckMonthlyPrice(platformShareCents)}</strong>
                                                     </span>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                                                       <span style={{ color: 'rgba(255,255,255,0.52)' }}>Coach before Stripe fees</span>
-                                                      <strong>{formatPulseCheckMonthlyPrice(athleteSubscriptionPriceCents - Math.round(athleteSubscriptionPriceCents * 0.5))}</strong>
+                                                      <strong>{formatPulseCheckMonthlyPrice(athleteSubscriptionPriceCents - platformShareCents)}</strong>
                                                     </span>
+                                                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                                      <span style={{ color: 'rgba(255,255,255,0.52)' }}>Coach after Stripe fees (estimated)</span>
+                                                      <strong>{formatPulseCheckMonthlyPrice(estimatedCoachAfterStripeFeesCents)}</strong>
+                                                    </span>
+                                                        </>
+                                                      );
+                                                    })()}
+                                                  </div>
+                                                  <div className="pcp-checkbox-copy" style={{ marginTop: 6 }}>
+                                                    Estimate uses standard US card pricing of 2.9% + $0.30. Actual Stripe fees are recorded from each payment.
                                                   </div>
                                                 </div>
                                               </div>

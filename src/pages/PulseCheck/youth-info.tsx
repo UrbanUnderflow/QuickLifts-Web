@@ -29,6 +29,19 @@ const proPageMeta = {
   lastUpdated: '2026-08-02T00:00:00.000Z',
 };
 
+const performersPageMeta = {
+  pageId: 'pulsecheck-performers-info',
+  pageTitle: 'PulseCheck | Mental Performance for Work, School, Sport, and Life',
+  metaDescription:
+    'PulseCheck combines a private daily check-in, a structured mental skills curriculum, wearable context, and qualified support for people who face pressure.',
+  ogTitle: 'PulseCheck | Train the Mind Like the Body.',
+  ogDescription:
+    'A daily mental performance system for professionals, students, athletes, and anyone who wants to handle pressure with greater focus and confidence.',
+  ogImage: '/pulsecheck-performers/performers-info-og.png',
+  twitterCard: 'summary_large_image',
+  lastUpdated: '2026-08-02T00:00:00.000Z',
+};
+
 const processSteps = [
   {
     number: '01',
@@ -71,6 +84,27 @@ const proProcessSteps = [
   },
 ];
 
+const performersProcessSteps = [
+  {
+    number: '01',
+    label: 'CHECK IN',
+    title: 'Name how you are showing up.',
+    body: 'Choose the answer that feels true, then add your energy, stress, confidence, and focus.',
+  },
+  {
+    number: '02',
+    label: 'BODY CONTEXT',
+    title: 'See what your body has handled.',
+    body: 'Sleep, heart rate, recovery, and recent activity add context from a connected wearable.',
+  },
+  {
+    number: '03',
+    label: 'PRACTICE',
+    title: 'Work on the priority skill.',
+    body: 'Nora uses your curriculum, check-in, and body context to bring forward the skill that matters most.',
+  },
+];
+
 const skillNames = [
   'Mistake recovery',
   'Focus',
@@ -91,6 +125,17 @@ const proSkillNames = [
   'Visualization',
   'Breathing',
   'Pre-game routines',
+];
+
+const performersSkillNames = [
+  'Focus under pressure',
+  'Confidence',
+  'Breathing',
+  'Self-talk',
+  'Visualization',
+  'Mistake recovery',
+  'Difficult conversations',
+  'Decision-making',
 ];
 
 const wearableDevices = [
@@ -459,6 +504,249 @@ const proEducationStories: EducationStory[] = [
   },
 ];
 
+const performersEducationStories: EducationStory[] = [
+  ...educationStories
+    .filter((story) => story.id !== 'return-to-sport')
+    .map((story): EducationStory => {
+      if (story.id === 'skill-learning') {
+        return {
+          ...story,
+          eyebrow: 'How one skill gets learned',
+          title: 'Learn it clearly. Use it when pressure rises.',
+          intro:
+            'PulseCheck teaches one clear skill at a time. You learn what it is, see how it applies to your goal, practice it with guidance, and take one useful action into the day.',
+          sections: [
+            {
+              number: '01',
+              title: 'Name it.',
+              body: 'Give the skill a short name you can remember during a presentation, exam, competition, or hard conversation.',
+            },
+            {
+              number: '02',
+              title: 'Understand it.',
+              body: 'Learn what the skill changes and when it can help.',
+            },
+            {
+              number: '03',
+              title: 'See it.',
+              body: 'See what the skill looks and sounds like when someone uses it well.',
+            },
+            {
+              number: '04',
+              title: 'Practice it calmly.',
+              body: 'Follow a short guided activity before an urgent decision has to be made.',
+            },
+            {
+              number: '05',
+              title: 'Use it under pressure.',
+              body: 'Take one phrase or action into the day and return to it when the situation gets hard.',
+            },
+          ],
+          callout:
+            'Nora brings a skill forward when your curriculum, check-in, and body context show it should come next.',
+        };
+      }
+
+      if (story.id === 'five-minutes') {
+        return {
+          ...story,
+          eyebrow: 'What your daily plan looks like',
+          title: 'A short plan connected to your goal.',
+          intro:
+            'Your curriculum sets the path. The structure stays familiar, so you always know what comes next.',
+          sections: [
+            {
+              number: '01',
+              title: 'Check in.',
+              body: 'Name your energy, stress, confidence, and focus before the day gets moving.',
+            },
+            {
+              number: '02',
+              title: 'Add body context.',
+              body: 'A connected wearable can add sleep, heart rate, recovery, and recent activity.',
+            },
+            {
+              number: '03',
+              title: 'Get the priority skill.',
+              body: 'Nora uses your curriculum, check-in, and body context to bring forward the skill that matters most.',
+            },
+            {
+              number: '04',
+              title: 'Follow the guidance.',
+              body: 'Practice breathing, focus, confidence, self-talk, or another skill from your curriculum.',
+            },
+            {
+              number: '05',
+              title: 'Take one action forward.',
+              body: 'Finish with something simple you can remember during a meeting, exam, competition, or hard conversation.',
+            },
+          ],
+          callout: 'Most daily plans are designed to take about five minutes.',
+        };
+      }
+
+      if (story.id === 'wearable-context') {
+        return {
+          ...story,
+          title: 'Your check-in leads. Your body adds context.',
+          intro:
+            'PulseCheck starts with your answer. Wearable information helps Nora understand how that answer lines up with sleep, recovery, heart rate, and recent activity.',
+          sections: [
+            {
+              number: '01',
+              title: 'You speak first.',
+              body: 'Mood, stress, energy, and confidence come directly from you.',
+            },
+            {
+              number: '02',
+              title: 'Your body adds context.',
+              body: 'Sleep, heart rate, recovery, and recent activity can show how much your body has handled lately.',
+            },
+            {
+              number: '03',
+              title: 'Nora looks at both.',
+              body: 'Your check-in and body context help Nora select the priority skill from your curriculum.',
+            },
+            {
+              number: '04',
+              title: 'The skill becomes a clear plan.',
+              body: 'You receive one short activity connected to the goal you are working toward.',
+            },
+          ],
+          callout:
+            'Wearable information guides mental performance education. Qualified people make medical decisions.',
+        };
+      }
+
+      if (story.id === 'clinical-support') {
+        return {
+          ...story,
+          intro:
+            'When difficult check-ins, poor sleep, or concerning answers continue, program rules can bring a qualified clinician into the review.',
+          sections: [
+            {
+              number: '01',
+              title: 'Changes continue.',
+              body: 'Several difficult check-ins, poor sleep, or concerning answers appear over time.',
+            },
+            {
+              number: '02',
+              title: 'Program rules guide the handoff.',
+              body: 'Each organization sets consent, safety, and escalation rules for the people it supports.',
+            },
+            {
+              number: '03',
+              title: 'A clinician reviews it.',
+              body: 'A qualified clinician looks at the changes and uses human judgment to understand what may be happening.',
+            },
+            {
+              number: '04',
+              title: 'The person connects to care.',
+              body: 'The next step can be a check-in, a conversation with a trusted person, or a connection to the right care.',
+            },
+          ],
+          callout:
+            'PulseCheck can flag ongoing changes. A qualified clinician decides what care is appropriate.',
+        };
+      }
+
+      if (story.id === 'parent-trust') {
+        return {
+          id: 'parent-trust',
+          eyebrow: 'Privacy and program access',
+          title: 'Honest answers need clear rules.',
+          intro:
+            'Your private check-in gives you room to be honest. Role-based access and program rules control what other people can see.',
+          sections: [
+            {
+              number: '01',
+              title: 'Your check-in is private.',
+              body: 'You can answer honestly and focus on the skill in front of you.',
+            },
+            {
+              number: '02',
+              title: 'Roles control access.',
+              body: 'Managers, educators, coaches, and support teams see only the information their role allows.',
+            },
+            {
+              number: '03',
+              title: 'Programs set the rules.',
+              body: 'Each organization defines consent, safety, and escalation rules for its members.',
+            },
+            {
+              number: '04',
+              title: 'Qualified people handle care.',
+              body: 'Clinicians use human judgment when repeated changes need review.',
+            },
+          ],
+          callout: 'Clear roles help people answer honestly and understand what happens next.',
+        };
+      }
+
+      return story;
+    }),
+  {
+    id: 'business-pressure',
+    eyebrow: 'Pressure at work',
+    title: 'Practice the response before the meeting starts.',
+    intro:
+      'PulseCheck turns common work pressure into clear skills you can practice before a presentation, hard conversation, deadline, or important decision.',
+    sections: [
+      {
+        number: '01',
+        title: 'Present with a clear first point.',
+        body: 'Settle your breathing, choose the first idea you need to land, and begin from there.',
+      },
+      {
+        number: '02',
+        title: 'Enter hard conversations with a goal.',
+        body: 'Choose what the conversation needs to accomplish before emotion takes over.',
+      },
+      {
+        number: '03',
+        title: 'Recover after a mistake.',
+        body: 'Name what happened, choose the next action, and return your attention to the work.',
+      },
+      {
+        number: '04',
+        title: 'Notice the long weeks.',
+        body: 'Track changes in sleep, stress, energy, and confidence before they become harder to manage.',
+      },
+    ],
+    callout: 'The skill becomes useful when it points to the next clear action.',
+  },
+  {
+    id: 'student-pressure',
+    eyebrow: 'Pressure at school',
+    title: 'Build the skill before the exam, deadline, or presentation.',
+    intro:
+      'PulseCheck gives students a short way to practice focus, breathing, confidence, and recovery skills inside a structured curriculum.',
+    sections: [
+      {
+        number: '01',
+        title: 'Focus on one task.',
+        body: 'Choose the task, set a clear time window, and bring your attention back when it drifts.',
+      },
+      {
+        number: '02',
+        title: 'Begin the exam steadily.',
+        body: 'Use breathing and self-talk to calm your body and choose a clear first step.',
+      },
+      {
+        number: '03',
+        title: 'Learn from a setback.',
+        body: 'Separate one result from the next choice. Decide what to change and what to do next.',
+      },
+      {
+        number: '04',
+        title: 'Practice speaking up.',
+        body: 'Prepare a clear opening line before a presentation, interview, or difficult conversation.',
+      },
+    ],
+    callout: 'One clear skill can make the next hard moment easier to enter.',
+  },
+];
+
 const boxBreathingPhases = [
   {
     key: 'inhale',
@@ -604,18 +892,31 @@ const BoxBreathingPhoneDemo: React.FC = () => {
 };
 
 type PulseCheckInfoPageProps = {
-  audience?: 'youth' | 'pro';
+  audience?: 'youth' | 'pro' | 'all-performers';
 };
 
 export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ audience = 'youth' }) => {
   const isPro = audience === 'pro';
+  const isPerformers = audience === 'all-performers';
   const [activeEducationId, setActiveEducationId] = useState<string | null>(null);
   const closeEducationButtonRef = useRef<HTMLButtonElement>(null);
   const lastEducationTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-  const activeEducationStories = isPro ? proEducationStories : educationStories;
-  const activeProcessSteps = isPro ? proProcessSteps : processSteps;
-  const activeSkillNames = isPro ? proSkillNames : skillNames;
+  const activeEducationStories = isPerformers
+    ? performersEducationStories
+    : isPro
+      ? proEducationStories
+      : educationStories;
+  const activeProcessSteps = isPerformers
+    ? performersProcessSteps
+    : isPro
+      ? proProcessSteps
+      : processSteps;
+  const activeSkillNames = isPerformers
+    ? performersSkillNames
+    : isPro
+      ? proSkillNames
+      : skillNames;
   const activeEducation = activeEducationStories.find((story) => story.id === activeEducationId) ?? null;
 
   const openEducation = (id: string, trigger: HTMLButtonElement) => {
@@ -666,19 +967,25 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
   }, [activeEducationId]);
 
   return (
-    <main className={`youth-info ${isPro ? 'pro-info' : ''}`}>
+    <main className={`youth-info ${isPerformers ? 'performers-info' : isPro ? 'pro-info' : ''}`}>
       <PageHead
-        metaData={isPro ? proPageMeta : pageMeta}
-        pageOgUrl={isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth-info'}
-        pageOgImage={isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og-branded.png'}
-        themeColor={isPro ? '#0b0b0e' : '#101015'}
-        appleItunesAppArgument={isPro ? 'pulsecheck://pro' : 'pulsecheck://youth'}
+        metaData={isPerformers ? performersPageMeta : isPro ? proPageMeta : pageMeta}
+        pageOgUrl={isPerformers ? 'https://pulsecheckmind.ai/performers-info' : isPro ? 'https://pulsecheckmind.ai/pro-info' : 'https://pulsecheckmind.ai/youth-info'}
+        pageOgImage={isPerformers ? '/pulsecheck-performers/performers-info-og.png' : isPro ? '/pulsecheck-pro-og-clean.png' : '/pulsecheck-youth/youth-info-og-branded.png'}
+        themeColor={isPerformers ? '#080a0d' : isPro ? '#0b0b0e' : '#101015'}
+        appleItunesAppArgument={isPerformers ? 'pulsecheck://home' : isPro ? 'pulsecheck://pro' : 'pulsecheck://youth'}
       />
       <header className="yi-nav">
-        <Link href={isPro ? '/pro-info' : '/youth-info'} className="yi-brand" aria-label={isPro ? 'PulseCheck Pro information' : 'PulseCheck Youth home'}>
+        <Link
+          href={isPerformers ? '/performers-info' : isPro ? '/pro-info' : '/youth-info'}
+          className="yi-brand"
+          aria-label={isPerformers ? 'PulseCheck for high-pressure performers' : isPro ? 'PulseCheck Pro information' : 'PulseCheck Youth home'}
+        >
           <img src="/pulsecheck-youth/pulsecheck-wordmark.png" alt="PulseCheck" />
         </Link>
-        <span className="yi-nav-label">{isPro ? 'PRO / MENTAL PERFORMANCE' : 'YOUTH / MENTAL PERFORMANCE'}</span>
+        <span className="yi-nav-label">
+          {isPerformers ? 'WORK / SCHOOL / SPORT / LIFE' : isPro ? 'PRO / MENTAL PERFORMANCE' : 'YOUTH / MENTAL PERFORMANCE'}
+        </span>
         <a className="yi-nav-link" href="#how-it-works">
           See how it works <ArrowDown size={15} />
         </a>
@@ -687,8 +994,8 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       <section className="yi-hero">
         <img
           className="yi-hero-image"
-          src={isPro ? '/pulsecheck-pro/hero-athletes.webp' : '/pulsecheck-youth/next-play.webp'}
-          alt={isPro ? 'Two competitive athletes preparing before competition' : 'A young athlete focused on the field before the next play'}
+          src={isPerformers ? '/pulsecheck-performers/hero.webp' : isPro ? '/pulsecheck-pro/hero-athletes.webp' : '/pulsecheck-youth/next-play.webp'}
+          alt={isPerformers ? 'A business professional preparing for an important presentation' : isPro ? 'Two competitive athletes preparing before competition' : 'A young athlete focused on the field before the next play'}
         />
         <div className="yi-hero-shade" aria-hidden="true" />
         <div className="yi-grain" aria-hidden="true" />
@@ -699,12 +1006,14 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
             <span>LIKE THE BODY.</span>
           </h1>
           <p className="yi-hero-deck">
-            {isPro
+            {isPerformers
+              ? 'Build focus, confidence, and calm for presentations, exams, difficult conversations, competition, and important decisions.'
+              : isPro
               ? 'Learn how to reset after mistakes, stay steady under pressure, and make the next decision with confidence.'
               : 'Short mental skills for mistakes, pressure, focus, and confidence.'}
           </p>
           <a className="yi-button yi-button--light" href="#dashboard">
-            See the athlete experience <ArrowRight size={17} />
+            {isPerformers ? 'See how it works' : 'See the athlete experience'} <ArrowRight size={17} />
           </a>
         </div>
         <figure className="yi-hero-phone">
@@ -714,21 +1023,23 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           <figcaption>BOX BREATHING / LIVE PRACTICE</figcaption>
         </figure>
         <div className="yi-hero-caption" aria-hidden="true">
-          <span>{isPro ? 'YOUR EDGE' : 'THE NEXT PLAY'}</span>
-          <span>{isPro ? 'IS BUILT BEFORE THE MOMENT.' : 'STARTS BEFORE THE WHISTLE.'}</span>
+          <span>{isPerformers ? 'PRACTICE THE SKILL' : isPro ? 'YOUR EDGE' : 'THE NEXT PLAY'}</span>
+          <span>{isPerformers ? 'BEFORE PRESSURE RISES.' : isPro ? 'IS BUILT BEFORE THE MOMENT.' : 'STARTS BEFORE THE WHISTLE.'}</span>
         </div>
       </section>
 
       <section className="yi-system" id="dashboard">
         <div className="yi-system-copy">
-          <p className="yi-kicker">{isPro ? 'PULSECHECK / PRO' : 'PULSECHECK / YOUTH'}</p>
+          <p className="yi-kicker">{isPerformers ? 'PULSECHECK / HIGH PRESSURE' : isPro ? 'PULSECHECK / PRO' : 'PULSECHECK / YOUTH'}</p>
           <h2>
             <span className="yi-number">200+</span>
             MENTAL SKILLS.<br />
-            {isPro ? 'ONE PRIORITY AT A TIME.' : 'ONE CLEAR PLAN.'}
+            {isPerformers || isPro ? 'ONE PRIORITY AT A TIME.' : 'ONE CLEAR PLAN.'}
           </h2>
           <p className="yi-intro">
-            {isPro
+            {isPerformers
+              ? 'Choose where pressure shows up: work, school, sport, or life. Your curriculum sets the path. Your check-in and wearable context help Nora bring forward the skill that matters most.'
+              : isPro
               ? 'You check in. PulseCheck uses that answer, your curriculum, and wearable context to bring forward the mental skill that matters most.'
               : <>Every day begins with a simple question: how do you feel? PulseCheck uses that answer,
                   sleep, recovery, heart rate, and the athlete&apos;s curriculum to bring forward the skill
@@ -760,7 +1071,13 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
 
         <figure className="yi-phone-figure">
           <div className="yi-phone-halo" aria-hidden="true" />
-          {isPro ? (
+          {isPerformers ? (
+            <img
+              className="yi-pro-home-screenshot yi-performers-onboarding-screenshot"
+              src="/pulsecheck-performers/performers-onboarding.png"
+              alt="PulseCheck onboarding screen where a person chooses Work, School, Sport, or Life"
+            />
+          ) : isPro ? (
             <img
               className="yi-pro-home-screenshot"
               src="/pulsecheck-pro/pro-home.png"
@@ -772,15 +1089,15 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               alt="PulseCheck youth dashboard showing a daily check-in and today's mental skill"
             />
           )}
-          <figcaption>PULSECHECK / DASHBOARD</figcaption>
+          <figcaption>{isPerformers ? 'PULSECHECK / CHOOSE YOUR PATH' : 'PULSECHECK / DASHBOARD'}</figcaption>
         </figure>
       </section>
 
       <section className="yi-process" id="how-it-works">
         <div className="yi-section-heading">
-          <p className="yi-kicker">{isPro ? 'CHECK IN. ADD CONTEXT. PRACTICE.' : 'FEELING. BODY. SKILL.'}</p>
+          <p className="yi-kicker">{isPerformers || isPro ? 'CHECK IN. ADD CONTEXT. PRACTICE.' : 'FEELING. BODY. SKILL.'}</p>
           <div>
-            <h2>{isPro ? <>ONE CHECK-IN.<br />ONE PRIORITY SKILL.</> : <>ONE CHECK-IN.<br />A BETTER PLAN FOR TODAY.</>}</h2>
+            <h2>{isPerformers || isPro ? <>ONE CHECK-IN.<br />ONE PRIORITY SKILL.</> : <>ONE CHECK-IN.<br />A BETTER PLAN FOR TODAY.</>}</h2>
             <button
               type="button"
               className="yi-learn-link yi-learn-link--light"
@@ -805,19 +1122,87 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         </div>
       </section>
 
+      {isPerformers && (
+        <section className="yi-contexts" aria-label="Mental performance for work and school">
+          <article className="yi-context-panel yi-context-panel--work" id="business-professionals">
+            <img
+              src="/pulsecheck-performers/business-team.webp"
+              alt="Business professionals working through an important decision together"
+            />
+            <div className="yi-context-shade" aria-hidden="true" />
+            <div className="yi-context-content">
+              <p className="yi-kicker yi-kicker--light">FOR BUSINESS PROFESSIONALS</p>
+              <h2>THINK CLEARLY<br />WHEN THE STAKES<br /><em>ARE HIGH.</em></h2>
+              <p>
+                Practice how to settle your breathing before a presentation, recover after a mistake,
+                enter a hard conversation with a clear goal, and focus on the next decision.
+              </p>
+              <div className="yi-context-moments" aria-label="Pressure moments at work">
+                <span>Presentations</span>
+                <span>Hard conversations</span>
+                <span>Mistakes</span>
+                <span>Long weeks</span>
+              </div>
+              <button
+                type="button"
+                className="yi-learn-link yi-learn-link--light"
+                onClick={(event) => openEducation('business-pressure', event.currentTarget)}
+              >
+                <span>See how PulseCheck supports pressure at work</span>
+                <i aria-hidden="true">+</i>
+              </button>
+            </div>
+          </article>
+
+          <article className="yi-context-panel yi-context-panel--school" id="students">
+            <img
+              src="/pulsecheck-performers/student.webp"
+              alt="A university student preparing for an important exam or presentation"
+            />
+            <div className="yi-context-shade" aria-hidden="true" />
+            <div className="yi-context-content">
+              <p className="yi-kicker yi-kicker--light">FOR STUDENTS</p>
+              <h2>HANDLE THE PRESSURE<br />THAT COMES<br /><em>WITH SCHOOL.</em></h2>
+              <p>
+                Practice how to focus before studying, calm your body before an exam, recover after a
+                poor result, speak with confidence, and keep moving through a heavy week.
+              </p>
+              <div className="yi-context-moments" aria-label="Pressure moments at school">
+                <span>Study focus</span>
+                <span>Exams</span>
+                <span>Setbacks</span>
+                <span>Speaking up</span>
+              </div>
+              <button
+                type="button"
+                className="yi-learn-link yi-learn-link--light"
+                onClick={(event) => openEducation('student-pressure', event.currentTarget)}
+              >
+                <span>See how PulseCheck supports pressure at school</span>
+                <i aria-hidden="true">+</i>
+              </button>
+            </div>
+          </article>
+        </section>
+      )}
+
       <section className="yi-wearables">
         <div className="yi-wearables-photo">
           <img
-            src={isPro ? '/pulsecheck-pro/hero-athletes.webp' : '/pulsecheck-youth/hero-team.webp'}
-            alt={isPro ? 'Two competitive athletes preparing together before competition' : 'Three young athletes preparing together before competition'}
+            src={isPerformers ? '/athletic-mind-hub/council-workspace.png' : isPro ? '/pulsecheck-pro/hero-athletes.webp' : '/pulsecheck-youth/hero-team.webp'}
+            alt={isPerformers ? 'Professionals and students collaborating in a shared workspace' : isPro ? 'Two competitive athletes preparing together before competition' : 'Three young athletes preparing together before competition'}
           />
           <div className="yi-wearables-photo-shade" aria-hidden="true" />
           <div className="yi-wearables-story">
             <Watch size={34} strokeWidth={1.6} aria-hidden="true" />
             <p className="yi-kicker yi-kicker--light">WEARABLE CONTEXT</p>
-            <h2>HOW YOU FEEL,<br /><em>WITH CONTEXT.</em></h2>
+            <h2>
+              {isPerformers ? <><span>YOUR CHECK-IN LEADS.</span><br /><em>YOUR BODY ADDS CONTEXT.</em></> : <>HOW YOU FEEL,<br /><em>WITH CONTEXT.</em></>}
+            </h2>
             <p>
-              {isPro
+              {isPerformers
+                ? 'You say how you feel. Sleep, heart rate, recovery, and recent activity add another clue. Nora uses both to bring forward the priority skill from your curriculum.'
+                : isPro
                 ? 'Your check-in leads. Sleep, heart rate, recovery, and training load add context so Nora can bring forward the skill that matters most.'
                 : <>The athlete&apos;s check-in leads. Sleep, heart rate, recovery, and training load add
                     another clue so Nora can bring forward the skill that matters most for that athlete.</>}
@@ -827,14 +1212,14 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               className="yi-learn-link yi-learn-link--light"
               onClick={(event) => openEducation('wearable-context', event.currentTarget)}
             >
-              <span>What does the wearable change?</span>
+              <span>{isPerformers ? 'See how wearable context works' : 'What does the wearable change?'}</span>
               <i aria-hidden="true">+</i>
             </button>
           </div>
         </div>
         <div className="yi-wearables-copy">
           <p className="yi-kicker">COMPATIBLE DEVICES</p>
-          <h3>Works with the devices athletes already wear.</h3>
+          <h3>Works with the devices {isPerformers ? 'people' : 'athletes'} already wear.</h3>
           <div className="yi-device-render" aria-hidden="true">
             <div className="yi-device-orbit" />
             <div className="yi-device-core">
@@ -860,31 +1245,60 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
 
       <section className="yi-privacy">
         <div className="yi-privacy-mark"><LockKeyhole size={34} strokeWidth={1.45} /></div>
-        <p className="yi-kicker">{isPro ? 'START WITH THE ATHLETE' : 'PRIVATE BY DESIGN'}</p>
-        <h2>{isPro ? <>BUY-IN STARTS<br />WITH THEM.</> : <>HONESTY NEEDS<br />A SAFE PLACE.</>}</h2>
+        <p className="yi-kicker">{isPerformers ? 'PRIVATE BY DESIGN' : isPro ? 'START WITH THE ATHLETE' : 'PRIVATE BY DESIGN'}</p>
+        <h2>{isPerformers ? <>HONEST ANSWERS<br />NEED A SAFE PLACE.</> : isPro ? <>BUY-IN STARTS<br />WITH THEM.</> : <>HONESTY NEEDS<br />A SAFE PLACE.</>}</h2>
         <p className="yi-privacy-copy">
-          {isPro
+          {isPerformers
+            ? 'Your private check-in gives you room to be honest. Role-based access and program rules control what other people can see.'
+            : isPro
             ? 'Athletes use PulseCheck when each skill helps them reach a goal, handle pressure, or move toward the next level.'
             : <>Nora protects the athlete&apos;s private answers. Coaches see themes and clear ways to help.</>}
         </p>
-        <div className="yi-privacy-rule" aria-hidden="true"><span>{isPro ? 'ATHLETE GOALS' : 'ATHLETE TRUST'}</span><i /><span>{isPro ? 'SKILLS FOR THE MOMENT' : 'USEFUL SUPPORT'}</span></div>
+        <div className="yi-privacy-rule" aria-hidden="true">
+          <span>{isPerformers ? 'PRIVATE CHECK-IN' : isPro ? 'ATHLETE GOALS' : 'ATHLETE TRUST'}</span>
+          <i />
+          <span>{isPerformers ? 'ROLE-BASED ACCESS' : isPro ? 'SKILLS FOR THE MOMENT' : 'USEFUL SUPPORT'}</span>
+        </div>
       </section>
 
       <section className="yi-trust" aria-labelledby="yi-trust-title">
         <div className="yi-trust-heading">
-          <p className="yi-kicker">{isPro ? 'ATHLETE OWNERSHIP. COACH SUPPORT.' : 'CLEAR ROLES. REAL PEOPLE INVOLVED.'}</p>
-          <h2 id="yi-trust-title">{isPro ? <>BUILT FOR<br />ATHLETES.</> : <>WHAT FAMILIES<br />CAN EXPECT.</>}</h2>
+          <p className="yi-kicker">{isPerformers ? 'ONE SYSTEM. FOUR STARTING POINTS.' : isPro ? 'ATHLETE OWNERSHIP. COACH SUPPORT.' : 'CLEAR ROLES. REAL PEOPLE INVOLVED.'}</p>
+          <h2 id="yi-trust-title">{isPerformers ? <>CHOOSE WHERE<br />PRESSURE SHOWS UP.</> : isPro ? <>BUILT FOR<br />ATHLETES.</> : <>WHAT FAMILIES<br />CAN EXPECT.</>}</h2>
           <button
             type="button"
             className="yi-learn-link"
             onClick={(event) => openEducation('parent-trust', event.currentTarget)}
           >
-            <span>{isPro ? 'See how athletes and coaches work together' : 'Read the parent guide'}</span>
+            <span>{isPerformers ? 'See how privacy and access work' : isPro ? 'See how athletes and coaches work together' : 'Read the parent guide'}</span>
             <i aria-hidden="true">+</i>
           </button>
         </div>
         <div className="yi-trust-grid">
-          {isPro ? (
+          {isPerformers ? (
+            <>
+              <article>
+                <span>01</span>
+                <h3>Work</h3>
+                <p>Meetings, presentations, deadlines, difficult conversations, and important decisions.</p>
+              </article>
+              <article>
+                <span>02</span>
+                <h3>School</h3>
+                <p>Exams, studying, applications, presentations, and heavy workloads.</p>
+              </article>
+              <article>
+                <span>03</span>
+                <h3>Sport</h3>
+                <p>Competition, mistakes, confidence, focus, and return from injury.</p>
+              </article>
+              <article>
+                <span>04</span>
+                <h3>Life</h3>
+                <p>Change, conflict, personal goals, recovery, and difficult choices.</p>
+              </article>
+            </>
+          ) : isPro ? (
             <>
               <article>
                 <span>01</span>
@@ -937,9 +1351,11 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       <section className="yi-research">
         <div className="yi-research-story">
           <p className="yi-kicker">THE SURPRISING RESEARCH</p>
-          <h2>{isPro ? <>THE BRAIN CAN TRAIN<br />THE MOVEMENT<br /><em>WHILE THE BODY STAYS STILL.</em></> : <>PICTURING THE MOVEMENT<br />MADE THE MUSCLE<br /><em>STRONGER.</em></>}</h2>
+          <h2>{isPro ? <>THE BRAIN CAN TRAIN<br />THE MOVEMENT<br /><em>WHILE THE BODY STAYS STILL.</em></> : <>PICTURING A MOVEMENT<br />MADE THE MUSCLE<br /><em>STRONGER.</em></>}</h2>
           <p className="yi-research-explainer">
-            {isPro
+            {isPerformers
+              ? 'In a small 12-week study, one group pictured themselves pushing a finger as hard as possible while keeping it still. Their finger strength increased by 35%. A group that physically trained the same movement increased by 53%. The result suggests focused mental practice can improve how strongly the brain tells a muscle to work.'
+              : isPro
               ? 'In one small 12-week study, adults who imagined a forceful finger movement gained 35% strength. The physical-training group gained 53%. The result suggests focused mental practice can strengthen the brain\'s command to the body.'
               : <>Every physical practice also teaches the brain. The surprise is that the brain can
                   practice the command while the body stays still. In one small 12-week study, imagined
@@ -966,7 +1382,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         </div>
         <div className="yi-research-stat">
           <strong>66%</strong>
-          <p>THE IMAGINING GROUP GAINED ABOUT TWO-THIRDS AS MUCH STRENGTH AS THE PHYSICAL TRAINING GROUP</p>
+          <p>{isPerformers ? 'THE 35% GAIN FROM PICTURED MOVEMENT WAS ABOUT TWO-THIRDS OF THE 53% GAIN FROM PHYSICAL TRAINING' : 'THE IMAGINING GROUP GAINED ABOUT TWO-THIRDS AS MUCH STRENGTH AS THE PHYSICAL TRAINING GROUP'}</p>
           <a
             className="yi-research-citation"
             href="https://doi.org/10.1016/j.neuropsychologia.2003.11.018"
@@ -979,7 +1395,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       </section>
 
       <section className="yi-support">
-        {!isPro && (
+        {!isPro && !isPerformers && (
           <img
             className="yi-support-image"
             src="/pulsecheck-youth/support-team.webp"
@@ -992,9 +1408,11 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
             <img src="/auntedna-mark.png" alt="AuntEdna" />
             <span>AUNTEDNA / CLINICAL SUPPORT</span>
           </div>
-          <h2>{isPro ? <>WHEN SEVERAL HARD DAYS<br />KEEP SHOWING UP.</> : <>WHEN SEVERAL HARD DAYS<br />NEED A CLOSER LOOK.</>}</h2>
+          <h2>{isPerformers || isPro ? <>WHEN SEVERAL HARD DAYS<br />KEEP SHOWING UP.</> : <>WHEN SEVERAL HARD DAYS<br />NEED A CLOSER LOOK.</>}</h2>
           <p>
-            {isPro
+            {isPerformers
+              ? 'When difficult check-ins, poor sleep, or concerning answers continue, program rules can bring a qualified clinician into the review. The clinician uses human judgment and can help connect the person to care.'
+              : isPro
               ? 'When difficult check-ins, poor sleep, or concerning answers continue, a qualified clinician can review what is happening and help connect the athlete to care.'
               : <>When difficult check-ins or poor sleep keep showing up, AuntEdna helps a qualified
                   clinician review what is happening and connect the athlete to care.</>}
@@ -1011,7 +1429,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
             className="yi-learn-link yi-learn-link--light"
             onClick={(event) => openEducation('clinical-support', event.currentTarget)}
           >
-            <span>When does a clinician step in?</span>
+            <span>{isPerformers ? 'See when a clinician joins the review' : 'When does a clinician step in?'}</span>
             <i aria-hidden="true">+</i>
           </button>
         </div>
@@ -1019,12 +1437,14 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
 
       <section className="yi-recovery" aria-labelledby="yi-recovery-title">
         <div>
-          <p className="yi-kicker">{isPro ? 'COMPETITIVE INTENSITY' : 'FOR INJURED ATHLETES'}</p>
-          <h2 id="yi-recovery-title">{isPro ? <>BRING OUT THE DOG.<br /><em>TURN THAT EDGE INTO ACTION.</em></> : <>GETTING BACK.<br /><em>THEN GETTING BETTER.</em></>}</h2>
+          <p className="yi-kicker">{isPerformers ? 'SPORT + LIFE' : isPro ? 'COMPETITIVE INTENSITY' : 'FOR INJURED ATHLETES'}</p>
+          <h2 id="yi-recovery-title">{isPerformers ? <>THE SAME SKILLS<br /><em>TRAVEL WITH YOU.</em></> : isPro ? <>BRING OUT THE DOG.<br /><em>TURN THAT EDGE INTO ACTION.</em></> : <>GETTING BACK.<br /><em>THEN GETTING BETTER.</em></>}</h2>
         </div>
         <div className="yi-recovery-copy">
           <p>
-            {isPro
+            {isPerformers
+              ? 'Pressure can show up before competition, during change, in conflict, or when a personal goal feels hard. PulseCheck keeps the curriculum clear and gives you one skill to practice for the moment ahead.'
+              : isPro
               ? 'That edge shows up in a decision: reset after a mistake, choose a clear target, and commit to the next action. PulseCheck teaches the breathing, self-talk, focus, and reset skills behind that response.'
               : <>During rehabilitation, PulseCheck can help an athlete stay engaged with the home plan,
                   work through fear, and prepare for the return. After clearance, those same skills help
@@ -1033,9 +1453,9 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           <button
             type="button"
             className="yi-learn-link"
-            onClick={(event) => openEducation(isPro ? 'competitive-edge' : 'return-to-sport', event.currentTarget)}
+            onClick={(event) => openEducation(isPerformers ? 'skill-learning' : isPro ? 'competitive-edge' : 'return-to-sport', event.currentTarget)}
           >
-            <span>{isPro ? 'See how mindset changes the next action' : 'See support through recovery'}</span>
+            <span>{isPerformers ? 'See how one skill becomes usable' : isPro ? 'See how mindset changes the next action' : 'See support through recovery'}</span>
             <i aria-hidden="true">+</i>
           </button>
         </div>
@@ -1043,12 +1463,12 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
 
       <section className="yi-close">
         <HeartPulse size={34} strokeWidth={1.5} aria-hidden="true" />
-        <p className="yi-kicker">{isPro ? 'BUILT FOR THE ATHLETE' : 'BUILT FOR THE WHOLE ATHLETE'}</p>
+        <p className="yi-kicker">{isPerformers ? 'BUILT FOR PEOPLE WHO FACE PRESSURE' : isPro ? 'BUILT FOR THE ATHLETE' : 'BUILT FOR THE WHOLE ATHLETE'}</p>
         <h2>TRAIN THE MIND<br />LIKE THE BODY.</h2>
-        <p>{isPro ? 'Give athletes a daily way to build focus, confidence, and a response they can use when competition gets hard.' : 'Give young athletes a skill they can practice today and use when practice or the game gets hard.'}</p>
+        <p>{isPerformers ? 'Give people a daily way to build focus, confidence, and calm they can use in meetings, exams, competition, and difficult conversations.' : isPro ? 'Give athletes a daily way to build focus, confidence, and a response they can use when competition gets hard.' : 'Give young athletes a skill they can practice today and use when practice or the game gets hard.'}</p>
         <a
           className="yi-button yi-button--dark"
-          href={isPro ? 'mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pro%20Demo' : 'mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Youth'}
+          href={isPerformers ? 'mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20for%20High-Pressure%20Performers%20Demo' : isPro ? 'mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pro%20Demo' : 'mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Youth'}
         >
           Request a demo <ArrowRight size={17} />
         </a>
@@ -1077,11 +1497,11 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
             aria-labelledby={`yi-education-title-${activeEducation.id}`}
           >
             <header className="yi-education-panel-header">
-              <span>{isPro ? 'PULSECHECK / DEEPER LOOK' : 'PULSECHECK / PARENT NOTES'}</span>
+              <span>{isPerformers || isPro ? 'PULSECHECK / DEEPER LOOK' : 'PULSECHECK / PARENT NOTES'}</span>
               <button
                 ref={closeEducationButtonRef}
                 type="button"
-                aria-label={isPro ? 'Close deeper look' : 'Close parent notes'}
+                aria-label={isPerformers || isPro ? 'Close deeper look' : 'Close parent notes'}
                 onClick={closeEducation}
               >
                 <X size={22} />
@@ -1638,6 +2058,85 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-process-card h3 { margin: 0 0 13px; font: 400 clamp(34px, 3vw, 48px)/1 'Bebas Neue', sans-serif; }
         .yi-process-card p { max-width: 340px; margin: 0; color: #aaa7a2; font-size: 15px; line-height: 1.65; }
 
+        .yi-contexts { color: #fff; background: #07090c; }
+        .yi-context-panel {
+          position: relative;
+          min-height: 790px;
+          display: flex;
+          align-items: flex-end;
+          overflow: hidden;
+          border-top: 1px solid rgba(255,255,255,.22);
+        }
+        .yi-context-panel > img,
+        .yi-context-shade {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+        .yi-context-panel > img {
+          object-fit: cover;
+          filter: saturate(.62) contrast(1.08) brightness(.82);
+        }
+        .yi-context-panel--work > img { object-position: center; }
+        .yi-context-panel--school > img { object-position: center; }
+        .yi-context-panel--work .yi-context-shade {
+          background:
+            linear-gradient(90deg, rgba(5,7,10,.97) 0%, rgba(5,7,10,.82) 39%, rgba(5,7,10,.12) 72%),
+            linear-gradient(0deg, rgba(5,7,10,.86) 0%, transparent 64%);
+        }
+        .yi-context-panel--school .yi-context-shade {
+          background:
+            linear-gradient(270deg, rgba(5,7,10,.97) 0%, rgba(5,7,10,.8) 42%, rgba(5,7,10,.12) 74%),
+            linear-gradient(0deg, rgba(5,7,10,.82) 0%, transparent 62%);
+        }
+        .yi-context-content {
+          position: relative;
+          z-index: 2;
+          width: min(720px, calc(100% - 68px));
+          padding: 110px 0;
+        }
+        .yi-context-panel--work .yi-context-content { margin-left: clamp(34px, 7vw, 110px); }
+        .yi-context-panel--school .yi-context-content { margin-left: auto; margin-right: clamp(34px, 7vw, 110px); }
+        .yi-context-content h2 {
+          margin: 0 0 34px;
+          font: 400 clamp(70px, 7.6vw, 124px)/.83 'Bebas Neue', Impact, sans-serif;
+          letter-spacing: -.025em;
+          text-wrap: balance;
+        }
+        .yi-context-content h2 em {
+          color: #bac8d3;
+          font-family: 'Playfair Display', Georgia, serif;
+          font-weight: 600;
+        }
+        .yi-context-content > p:not(.yi-kicker) {
+          max-width: 620px;
+          margin: 0;
+          color: rgba(255,255,255,.82);
+          font-size: 17px;
+          line-height: 1.72;
+        }
+        .yi-context-moments {
+          max-width: 620px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          margin-top: 55px;
+          border-top: 1px solid rgba(255,255,255,.3);
+          border-left: 1px solid rgba(255,255,255,.3);
+        }
+        .yi-context-moments span {
+          min-height: 68px;
+          display: flex;
+          align-items: center;
+          padding: 13px 21px;
+          border-right: 1px solid rgba(255,255,255,.3);
+          border-bottom: 1px solid rgba(255,255,255,.3);
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+        }
+
         .yi-wearables { display: grid; grid-template-columns: 1.08fr .92fr; min-height: 820px; background: var(--yi-ink); }
         .yi-wearables-photo { position: relative; min-height: 640px; overflow: hidden; color: #fff; }
         .yi-wearables-photo img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.32) sepia(.18) contrast(1.05); }
@@ -2134,11 +2633,71 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .pro-info .yi-education-intro { color: #47433d; }
         .pro-info .yi-education-sections p { color: #5b5650; }
 
+        .performers-info {
+          --yi-ink: #080a0d;
+          --yi-paper: #e7e2d8;
+          --yi-lavender: #c7d0d8;
+          --yi-purple: #315f76;
+          --yi-muted: #696d70;
+          --yi-line: rgba(8, 10, 13, .23);
+        }
+        .performers-info .yi-hero-image {
+          object-position: 68% center;
+          filter: saturate(.68) contrast(1.1) brightness(.76);
+        }
+        .performers-info .yi-hero-shade {
+          background:
+            linear-gradient(90deg, rgba(5,7,10,.97) 0%, rgba(5,7,10,.8) 44%, rgba(5,7,10,.12) 74%),
+            linear-gradient(0deg, rgba(5,7,10,.88) 0%, transparent 54%);
+        }
+        .performers-info .yi-hero-phone::before { background: rgba(49, 95, 118, .3); }
+        .performers-info .yi-system { background: #e7e2d8; }
+        .performers-info .yi-system .yi-intro,
+        .performers-info .yi-research-explainer,
+        .performers-info .yi-close > p:not(.yi-kicker) { color: #44484a; }
+        .performers-info .yi-phone-halo { background: #c9d0d4; }
+        .performers-info .yi-process-index span { color: #8fb1c2; }
+        .performers-info .yi-wearables-photo img {
+          object-position: 62% center;
+          filter: saturate(.36) contrast(1.1) brightness(.7);
+        }
+        .performers-info .yi-wearables-copy { background: #c7d0d8; }
+        .performers-info .yi-device-render {
+          background:
+            radial-gradient(circle at 50% 47%, rgba(49,95,118,.28), transparent 31%),
+            radial-gradient(circle at 50% 50%, rgba(255,255,255,.48), transparent 48%);
+        }
+        .performers-info .yi-trust { background: #c7d0d8; }
+        .performers-info .yi-trust-grid p { color: #3f474c; }
+        .performers-info .yi-research-stat { background: #315f76; }
+        .performers-info .yi-support-overlay {
+          background:
+            radial-gradient(circle at 82% 28%, rgba(49,95,118,.34), transparent 28rem),
+            linear-gradient(90deg, rgba(6,8,11,.98) 0%, rgba(6,8,11,.9) 56%, rgba(6,8,11,.54) 100%);
+        }
+        .performers-info .yi-support {
+          background:
+            radial-gradient(circle at 82% 28%, rgba(49,95,118,.31), transparent 30rem),
+            linear-gradient(135deg, #080a0d 0%, #101820 100%);
+        }
+        .performers-info .yi-recovery {
+          color: #f5f2ec;
+          background: #22313b;
+        }
+        .performers-info .yi-recovery h2 em { color: #c9d8df; }
+        .performers-info .yi-recovery-copy > p { color: #d4dce0; }
+        .performers-info .yi-recovery .yi-learn-link { color: #fff; }
+        .performers-info .yi-recovery .yi-learn-link:hover i { color: #22313b; background: #fff; }
+        .performers-info .yi-education-panel-header { background: rgba(231,226,216,.95); }
+        .performers-info .yi-education-intro { color: #44484a; }
+        .performers-info .yi-education-sections p { color: #555b5f; }
+
         @media (max-width: 900px) {
           .yi-nav { grid-template-columns: 1fr auto; min-height: 76px; }
           .yi-nav-label { display: none; }
           .yi-system { grid-template-columns: 1fr 320px; gap: 34px; padding-inline: 34px; }
           .yi-process-card { padding: 26px 21px; }
+          .yi-context-panel { min-height: 720px; }
           .yi-wearables { grid-template-columns: 1fr; }
           .yi-wearables-photo { min-height: 560px; }
           .yi-wearables-copy { max-width: none; }
@@ -2155,6 +2714,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           .yi-hero { display: block; min-height: auto; padding-bottom: 55px; }
           .yi-hero-image { object-position: 57% 50%; }
           .pro-info .yi-hero-image { object-position: 38% 50%; }
+          .performers-info .yi-hero-image { object-position: 64% 50%; }
           .yi-hero-shade { background: linear-gradient(0deg, rgba(7,7,10,.97) 0%, rgba(7,7,10,.72) 58%, rgba(7,7,10,.25) 100%); }
           .yi-hero-copy { width: calc(100% - 42px); margin: 0 21px; padding: 126px 0 0; }
           .yi-hero h1 { font-size: clamp(67px, 22vw, 94px); line-height: .82; }
@@ -2242,6 +2802,26 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           .yi-process-grid { grid-template-columns: 1fr; border-top: 1px solid rgba(255,255,255,.28); }
           .yi-process-card, .yi-process-card:first-child { min-height: auto; padding: 34px 0 55px; border: 0; border-bottom: 1px solid rgba(255,255,255,.28); }
           .yi-process-index { margin-bottom: 34px; }
+
+          .yi-context-panel { min-height: 760px; }
+          .yi-context-panel--work > img { object-position: 64% center; }
+          .yi-context-panel--school > img { object-position: 35% center; }
+          .yi-context-panel--work .yi-context-shade,
+          .yi-context-panel--school .yi-context-shade {
+            background:
+              linear-gradient(0deg, rgba(5,7,10,.98) 0%, rgba(5,7,10,.8) 61%, rgba(5,7,10,.2) 100%),
+              linear-gradient(90deg, rgba(5,7,10,.55), rgba(5,7,10,.08));
+          }
+          .yi-context-panel--work .yi-context-content,
+          .yi-context-panel--school .yi-context-content {
+            width: calc(100% - 42px);
+            margin: 0 21px;
+            padding: 89px 0;
+          }
+          .yi-context-content h2 { font-size: 62px; }
+          .yi-context-content > p:not(.yi-kicker) { font-size: 16px; }
+          .yi-context-moments { margin-top: 34px; }
+          .yi-context-moments span { min-height: 58px; padding: 10px 13px; font-size: 9px; }
 
           .yi-wearables-photo { min-height: 620px; }
           .yi-wearables-photo img { object-position: 60% center; }

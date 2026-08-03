@@ -140,6 +140,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/youth-info',
     '/youth',
     '/pro-info',
+    '/performers-info',
     // Nora marketing landing (public)
     '/Nora',
     // Macra marketing landing (public)
@@ -173,6 +174,18 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     return normalizedPath === '/admin/systemoverview';
+  };
+
+  const isPulseCheckInfoPath = (path: string) => {
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    return [
+      '/pulsecheck/youth-info',
+      '/youth-info',
+      '/youth',
+      '/pro-info',
+      '/performers-info',
+    ].includes(normalizedPath);
   };
 
   const isPublicClubPath = (path: string) => {
@@ -444,7 +457,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 isCreatorLandingPath(routePath) ||
                 isClubCheckInPath(routePath) ||
                 isSharedSystemOverviewPath(routePath) ||
-                isLocalSystemOverviewPreviewPath(routePath)
+                isLocalSystemOverviewPreviewPath(routePath) ||
+                isPulseCheckInfoPath(routePath)
               ) {
                 console.log('[AuthWrapper] Authenticated but missing username on public route. Not showing modal.');
                 setShowSignInModal(false);
@@ -471,7 +485,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 isCreatorLandingPath(routePath) ||
                 isClubCheckInPath(routePath) ||
                 isSharedSystemOverviewPath(routePath) ||
-                isLocalSystemOverviewPreviewPath(routePath)
+                isLocalSystemOverviewPreviewPath(routePath) ||
+                isPulseCheckInfoPath(routePath)
               ) {
                 console.log('[AuthWrapper] Authenticated but missing current legal acceptance on public route. Not showing modal.');
                 setShowSignInModal(false);

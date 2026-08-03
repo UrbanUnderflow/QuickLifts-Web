@@ -371,7 +371,6 @@
 [functions]
   directory = "netlify/functions"
   included_files = ["netlify/functions/**"]
-  external_node_modules = ["stripe"]
   node_bundler = "esbuild"
 
 # Schedule the update-challenge-status function to run daily
@@ -434,28 +433,12 @@
   timeout = 26
 
 # Coach Partnership Functions
-[functions.create-coach-checkout-session]
-  external_node_modules = ["stripe"]
-
-[functions.create-athlete-checkout-session]
-  external_node_modules = ["stripe"]
-
 [functions.create-partner-profile]
   # Partner profile creation (no Stripe needed)
 
-[functions.stripe-coach-webhook]
-  external_node_modules = ["stripe"]
-
-[functions.manage-subscription]
-  external_node_modules = ["stripe"]
-
 [functions.calculate-coach-revenue]
-  external_node_modules = ["stripe"]
   # Run revenue calculation daily at 6 AM UTC
   schedule = "0 6 * * *"
-
-[functions.validate-promo-code]
-  external_node_modules = ["stripe"]
 
 [functions.get-coach-profile]
   external_node_modules = ["firebase-admin"]

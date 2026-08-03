@@ -7987,6 +7987,12 @@ const AthleteAppSubscriptionOfferPanel: React.FC<{
 
   const monthlyPriceCents = Math.round((Number.parseFloat(monthlyPrice) || 0) * 100);
   const formattedPrice = formatPulseCheckMonthlyPrice(monthlyPriceCents, 'usd');
+  const platformShareCents = Math.round(monthlyPriceCents * 0.5);
+  const estimatedStripeFeeCents = Math.max(0, Math.round(monthlyPriceCents * 0.029) + 30);
+  const estimatedCoachAfterStripeFeesCents = Math.max(
+    0,
+    monthlyPriceCents - platformShareCents - estimatedStripeFeeCents
+  );
 
   const saveOffer = async () => {
     if (!teamContext || !config || saving || !canManage) return;
@@ -8184,15 +8190,19 @@ const AthleteAppSubscriptionOfferPanel: React.FC<{
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-zinc-400">PulseCheck share</span>
-                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(Math.round(monthlyPriceCents * 0.5))}</span>
+                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(platformShareCents)}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-zinc-400">Coach share before fees</span>
-                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(monthlyPriceCents - Math.round(monthlyPriceCents * 0.5))}</span>
+                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(monthlyPriceCents - platformShareCents)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-zinc-400">Coach after Stripe fees (estimated)</span>
+                <span className="font-semibold text-white">{formatPulseCheckMonthlyPrice(estimatedCoachAfterStripeFeesCents)}</span>
               </div>
             </div>
             <p className="mt-4 text-[11px] leading-5 text-zinc-500">
-              Stripe processing fees come from the coach share. Taxes, refunds, and chargebacks are recorded from the final Stripe transaction.
+              Stripe processing fees come from the coach share. The estimate uses standard US card pricing (2.9% + $0.30); taxes, refunds, and chargebacks are recorded from the final Stripe transaction.
             </p>
             <p className="mt-3 text-[11px] leading-5 text-zinc-600">
               Price updates apply to new subscribers. Current subscribers keep the Stripe price they accepted.

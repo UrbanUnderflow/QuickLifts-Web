@@ -1210,7 +1210,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
                       <span>{formatPulseCheckMonthlyPrice(exampleStripeFeeCents)}</span>
                     </div>
                     <div className="flex justify-between border-t border-white/10 pt-2 font-semibold text-white">
-                      <span>Example coach net</span>
+                      <span>Coach after Stripe fees (estimated)</span>
                       <span>{formatPulseCheckMonthlyPrice(exampleCoachNetCents)}</span>
                     </div>
                     <p className="pt-1 text-[10px] leading-4 text-zinc-600">
