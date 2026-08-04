@@ -79,7 +79,7 @@ interface ChatMsg {
 type AudioManifestEntry = { id: string; filename: string; text: string };
 
 const AUDIO_BASE = '/audio/pulsecheckdemo';
-const AUDIO_VERSION = 'usc-track-10am-v3';
+const AUDIO_VERSION = 'usc-track-static-restore-v4';
 const AUDIO_MANIFEST = [
     ...(act1AudioManifest as AudioManifestEntry[]),
     ...(athleteAudioManifest as AudioManifestEntry[]),

@@ -71,7 +71,7 @@ type Act1AudioManifestEntry = {
 };
 
 const ACT1_STATIC_AUDIO_BASE = '/audio/pulsecheckdemo';
-const ACT1_AUDIO_VERSION = 'usc-track-10am-v3';
+const ACT1_AUDIO_VERSION = 'usc-track-static-restore-v4';
 const ACT1_AUDIO_MANIFEST = act1AudioManifest as Act1AudioManifestEntry[];
 const ACT1_AUDIO_BY_ID = new Map(
     ACT1_AUDIO_MANIFEST.map((entry) => [entry.id, entry])
