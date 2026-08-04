@@ -13,7 +13,7 @@ const TIERS = [
     title: 'No escalation',
     summary: 'Routine signal. Normal routing stays active.',
     chips: ['Routine', 'Stable metrics', 'Normal state'],
-    example: '"I am a little tight before the game, but I should settle in after warmups."',
+    example: '"I am a little tight before my race, but I should settle in after warmups."',
     routeTitle: 'No escalation route',
     routeBody: 'Context saved, routing continues.',
     accent: '#A1A1AA',

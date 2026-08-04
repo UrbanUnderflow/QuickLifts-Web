@@ -71,6 +71,7 @@ type Act1AudioManifestEntry = {
 };
 
 const ACT1_STATIC_AUDIO_BASE = '/audio/pulsecheckdemo';
+const ACT1_AUDIO_VERSION = 'usc-track-10am-v3';
 const ACT1_AUDIO_MANIFEST = act1AudioManifest as Act1AudioManifestEntry[];
 const ACT1_AUDIO_BY_ID = new Map(
     ACT1_AUDIO_MANIFEST.map((entry) => [entry.id, entry])
@@ -85,11 +86,11 @@ const ACT1_AUDIO_ID_BY_SCRIPT_INDEX: Record<number, string> = {
     7: 'act1-06-support-staff',
 };
 const ACT1_STAFF_AUDIO_ID_BY_SELECTION: Record<string, string> = {
-    'Coach Mayo (Head Coach)': 'act1-07-notify-coach-mayo',
-    'Coach Van Pelt (Offensive Coordinator)': 'act1-07-notify-coach-van-pelt',
-    'Coach Covington (Defensive Coordinator)': 'act1-07-notify-coach-covington',
-    'Jim Whalen (Head Athletic Trainer)': 'act1-07-notify-jim-whalen',
-    'Dr. Liz Carter (Staff Clinician)': 'act1-07-notify-dr-liz-carter',
+    'Tim Hall (Head Coach)': 'act1-07-notify-tim-hall',
+    'Felicia Brown Edwards (Assistant Coach, Sprints)': 'act1-07-notify-felicia-brown-edwards',
+    'Joe Evangelista (Athletic Trainer, Track & Field)': 'act1-07-notify-joe-evangelista',
+    'Iliana Velazquez (Athletic Trainer, Track & Cross Country)': 'act1-07-notify-iliana-velazquez',
+    'Dr. Timothy Malone (Psychiatrist and Director of Athletics Mental Health)': 'act1-07-notify-timothy-malone',
     "Don't notify anyone": 'act1-07-notify-opt-out',
 };
 
@@ -98,7 +99,7 @@ const getAct1AudioEntry = (audioId: string | null): Act1AudioManifestEntry | nul
 
 const getAct1AudioPath = (audioId: string | null): string | null => {
     const entry = getAct1AudioEntry(audioId);
-    return entry ? `${ACT1_STATIC_AUDIO_BASE}/${entry.filename}` : null;
+    return entry ? `${ACT1_STATIC_AUDIO_BASE}/${entry.filename}?v=${ACT1_AUDIO_VERSION}` : null;
 };
 
 const NORA_THINKING_MS = 3500;
@@ -163,7 +164,7 @@ const primePulseCheckDemoAudioContext = () => {
 const DEMO_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
-        content: 'Hi Tremaine, today is game day. How are you feeling?',
+        content: 'Hi Tremaine, today is meet day. How are you feeling?',
         delay: 1000,
         ttsSpeed: 0.85,
     },
@@ -178,21 +179,21 @@ const DEMO_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
         content:
-            "Coach scheduled the competition prep meeting for 10:00 AM in the film room. You've got a couple hours.",
+            "Coach Hall scheduled the pre-meet team meeting for 10 AM in the team room. You've got a couple hours.",
         delay: 1200,
     },
-    // User responds: "Cool. I'm not going to lie, I'm a little nervous about today's game."
+    // User responds: "Cool. I'm not going to lie, I'm a little nervous about today's meet."
     {
         role: 'nora',
         content:
-            "Talk to me. What is it about today that feels different from the other days? Why does today's game make you nervous?",
+            "Talk to me. What is it about today that feels different from the other days? Why does today's meet make you nervous?",
         delay: 1500,
     },
     // User responds about anxiety
     {
         role: 'nora',
         content:
-            "OK. Let's slow it down.\n\nI want to run you through an exercise called Box Breathing. This is a technique performed by Navy SEALs during acute stress responses to override the body's fight-or-flight system. We can apply it right now, and you can use it again right before you run out of the tunnel.\n\nHere's how it works: Inhale for 4 seconds → Hold for 4 seconds → Exhale for 4 seconds → Hold for 4 seconds. We'll do 4 rounds.\n\nAre you ready?",
+            "OK. Let's slow it down.\n\nI want to run you through an exercise called Box Breathing. It can help your body settle during a stressful moment. We can use it now, and you can use it again before your first heat.\n\nHere's how it works: Inhale for 4 seconds. Hold for 4 seconds. Exhale for 4 seconds. Hold for 4 seconds. We'll do 2 rounds.\n\nAre you ready?",
         delay: 2000,
     },
     // User responds: "Sure"
@@ -212,14 +213,14 @@ const DEMO_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
         content:
-            "That's okay — anxiety before a high-stakes game is completely normal. I have a few other mental frameworks we can run through, but first — we'd like to notify someone on your support staff so they're in the loop. Who should we notify?",
+            "Thank you for telling me. Meet-day anxiety can feel heavy. Would you like me to update someone on your support team? You choose who receives the update.",
         delay: 1500,
     },
     // User selects a staff member (or opts out)
     {
         role: 'nora',
         content:
-            "Done. I've sent a secure briefing with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting.",
+            "With your permission, I sent a secure briefing with your physical baseline data and today's conversation context. They will have the information before your 10 AM team meeting.",
         delay: 2000,
         autoAdvance: true,
         autoAdvanceDelay: 4000,
@@ -272,7 +273,7 @@ const SUGGESTED_RESPONSES: Record<number, SuggestedResponse[]> = {
     3: [
         { text: "Perfect, 10 AM. That gives me time to get right.", sentiment: 'positive' },
         { text: "Alright, I'll be there.", sentiment: 'neutral' },
-        { text: "Ugh, 10 AM? That feels early on game day.", sentiment: 'negative' },
+        { text: "Ugh, 10 AM? That feels early on meet day.", sentiment: 'negative' },
     ],
     4: [
         { text: "I mean, the pressure is there, but I've been here before. I'll figure it out.", sentiment: 'positive' },
@@ -290,11 +291,11 @@ const SUGGESTED_RESPONSES: Record<number, SuggestedResponse[]> = {
         { text: "I'm still feeling pretty anxious.", sentiment: 'negative' },
     ],
     8: [
-        { text: 'Coach Mayo (Head Coach)', sentiment: 'positive' },
-        { text: 'Coach Van Pelt (Offensive Coordinator)', sentiment: 'neutral' },
-        { text: "Coach Covington (Defensive Coordinator)", sentiment: 'neutral' },
-        { text: 'Jim Whalen (Head Athletic Trainer)', sentiment: 'neutral' },
-        { text: 'Dr. Liz Carter (Staff Clinician)', sentiment: 'positive' },
+        { text: 'Tim Hall (Head Coach)', sentiment: 'positive' },
+        { text: 'Felicia Brown Edwards (Assistant Coach, Sprints)', sentiment: 'positive' },
+        { text: 'Joe Evangelista (Athletic Trainer, Track & Field)', sentiment: 'neutral' },
+        { text: 'Iliana Velazquez (Athletic Trainer, Track & Cross Country)', sentiment: 'neutral' },
+        { text: 'Dr. Timothy Malone (Psychiatrist and Director of Athletics Mental Health)', sentiment: 'positive' },
         { text: "Don't notify anyone", sentiment: 'negative' },
     ],
 };
@@ -631,31 +632,31 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
     ];
 
     const roster = [
-        { name: 'T. Grant', pos: 'DB', num: 24, status: 'elevated', text: 'Elevated Anxiety', time: '8:15 AM', hl: true },
-        { name: 'K. Thompson', pos: 'LB', num: 52, status: 'critical', text: 'Escalated — Clinical', time: '6:50 AM', hl: true },
+        { name: 'T. Grant', pos: '100m', num: 24, status: 'elevated', text: 'Elevated Anxiety', time: '8:15 AM', hl: true },
+        { name: 'K. Thompson', pos: '800m', num: 52, status: 'critical', text: 'Escalated — Clinical', time: '6:50 AM', hl: true },
         { name: 'D. Okafor', pos: 'DT', num: 94, status: 'warning', text: 'Low Sleep (4.5h)', time: '7:55 AM', hl: false },
-        { name: 'B. Washington', pos: 'TE', num: 87, status: 'warning', text: 'Elevated Stress', time: '7:50 AM', hl: false },
-        { name: 'J. Rodriguez', pos: 'QB', num: 7, status: 'optimal', text: 'Game Ready', time: '7:30 AM', hl: false },
-        { name: 'M. Williams', pos: 'WR', num: 11, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
-        { name: 'A. Johnson', pos: 'RB', num: 28, status: 'optimal', text: 'Game Ready', time: '8:00 AM', hl: false },
-        { name: 'C. Martinez', pos: 'OG', num: 75, status: 'optimal', text: 'Optimal', time: '7:20 AM', hl: false },
-        { name: 'R. Davis', pos: 'S', num: 21, status: 'optimal', text: 'Optimal', time: '7:40 AM', hl: false },
-        { name: 'L. Chen', pos: 'K', num: 3, status: 'optimal', text: 'Optimal', time: '7:15 AM', hl: false },
-        { name: 'J. Patel', pos: 'CB', num: 32, status: 'optimal', text: 'Game Ready', time: '8:05 AM', hl: false },
-        { name: 'S. Brooks', pos: 'WR', num: 15, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
-        { name: 'T. Morrison', pos: 'DE', num: 91, status: 'optimal', text: 'Game Ready', time: '7:25 AM', hl: false },
-        { name: 'E. Campbell', pos: 'OT', num: 68, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
-        { name: 'M. Foster', pos: 'LB', num: 56, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
-        { name: 'D. Rivera', pos: 'CB', num: 29, status: 'optimal', text: 'Game Ready', time: '8:10 AM', hl: false },
-        { name: 'K. Wright', pos: 'RB', num: 33, status: 'optimal', text: 'Optimal', time: '7:30 AM', hl: false },
-        { name: 'J. Harper', pos: 'WR', num: 84, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
-        { name: 'N. Cooper', pos: 'DT', num: 97, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
-        { name: 'C. Bell', pos: 'S', num: 26, status: 'optimal', text: 'Optimal', time: '7:50 AM', hl: false },
-        { name: 'P. Adams', pos: 'C', num: 62, status: 'optimal', text: 'Game Ready', time: '7:40 AM', hl: false },
-        { name: 'R. Mitchell', pos: 'DE', num: 95, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
-        { name: 'L. Turner', pos: 'FB', num: 45, status: 'optimal', text: 'Optimal', time: '7:25 AM', hl: false },
-        { name: 'A. Scott', pos: 'P', num: 8, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
-        { name: 'H. Baker', pos: 'LS', num: 48, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+        { name: 'B. Washington', pos: 'HJ', num: 87, status: 'warning', text: 'Elevated Stress', time: '7:50 AM', hl: false },
+        { name: 'J. Rodriguez', pos: '200m', num: 7, status: 'optimal', text: 'Meet Ready', time: '7:30 AM', hl: false },
+        { name: 'M. Williams', pos: '400m', num: 11, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
+        { name: 'A. Johnson', pos: '110H', num: 28, status: 'optimal', text: 'Meet Ready', time: '8:00 AM', hl: false },
+        { name: 'C. Martinez', pos: 'LJ', num: 75, status: 'optimal', text: 'Optimal', time: '7:20 AM', hl: false },
+        { name: 'R. Davis', pos: 'TJ', num: 21, status: 'optimal', text: 'Optimal', time: '7:40 AM', hl: false },
+        { name: 'L. Chen', pos: 'PV', num: 3, status: 'optimal', text: 'Optimal', time: '7:15 AM', hl: false },
+        { name: 'J. Patel', pos: 'XC', num: 32, status: 'optimal', text: 'Meet Ready', time: '8:05 AM', hl: false },
+        { name: 'S. Brooks', pos: '800m', num: 15, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
+        { name: 'T. Morrison', pos: 'SP', num: 91, status: 'optimal', text: 'Meet Ready', time: '7:25 AM', hl: false },
+        { name: 'E. Campbell', pos: 'Dec', num: 68, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+        { name: 'M. Foster', pos: '400H', num: 56, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
+        { name: 'D. Rivera', pos: '100H', num: 29, status: 'optimal', text: 'Meet Ready', time: '8:10 AM', hl: false },
+        { name: 'K. Wright', pos: '1500', num: 33, status: 'optimal', text: 'Optimal', time: '7:30 AM', hl: false },
+        { name: 'J. Harper', pos: '5K', num: 84, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+        { name: 'N. Cooper', pos: 'HT', num: 97, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
+        { name: 'C. Bell', pos: 'Hep', num: 26, status: 'optimal', text: 'Optimal', time: '7:50 AM', hl: false },
+        { name: 'P. Adams', pos: 'JT', num: 62, status: 'optimal', text: 'Meet Ready', time: '7:40 AM', hl: false },
+        { name: 'R. Mitchell', pos: 'DT', num: 95, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
+        { name: 'L. Turner', pos: '3KSC', num: 45, status: 'optimal', text: 'Optimal', time: '7:25 AM', hl: false },
+        { name: 'A. Scott', pos: 'PV', num: 8, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
+        { name: 'H. Baker', pos: '10K', num: 48, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
     ];
 
     const statusDot = (s: string) => (
@@ -778,7 +779,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                 <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold">
                                     2 ALERTS
                                 </span>
-                                <span className="text-[10px] text-zinc-500">March 2, 2026 • 8:15 AM</span>
+                                <span className="text-[10px] text-zinc-500">March 7, 2026 • 8:15 AM</span>
                             </div>
                         </div>
 
@@ -830,12 +831,11 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                                     <h3 className="font-bold text-white">Nora Alert — Tremaine Grant</h3>
                                                                     <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">Elevated Anxiety</span>
                                                                 </div>
-                                                                <p className="text-xs text-zinc-500 mt-0.5">Today at 8:15 AM • Game Day</p>
+                                                                <p className="text-xs text-zinc-500 mt-0.5">Today at 8:15 AM • Meet Day</p>
                                                             </div>
                                                         </div>
                                                         <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                                                            Tremaine is experiencing elevated game-day anxiety related to season-ending pressure. I ran a Box Breathing protocol (4 rounds), but residual tension persists. His physical baseline is excellent (RHR 42, HRV high, 8h sleep), so this appears to be{' '}
-                                                            <span className="text-orange-400 font-semibold">purely psychological</span>.
+                                                            Tremaine is experiencing elevated meet-day anxiety tied to championship pressure. He completed 2 rounds of Box Breathing, and some tension remains. His physical data looks stable, while his reported anxiety and residual tension remain the clearest signals.
                                                         </p>
                                                         <div className="grid grid-cols-3 gap-3 mb-4">
                                                             {[
@@ -852,7 +852,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                         </div>
                                                         <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 p-3">
                                                             <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">Recommendation</div>
-                                                            <p className="text-sm text-zinc-300">Check in with Tremaine before the 10:00 AM competition prep meeting. Monitor throughout the day in case escalation to clinical support is needed.</p>
+                                                            <p className="text-sm text-zinc-300">Check in with Tremaine before the 10 AM pre-meet team meeting. Monitor throughout the day in case escalation to clinical support is needed.</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -894,7 +894,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                         </div>
                                                         <div className="rounded-xl bg-red-500/8 border border-red-500/30 p-3">
                                                             <div className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-1">⚠ Immediate Action Required</div>
-                                                            <p className="text-sm text-zinc-300">Do not discuss availability or performance with Kevin today. A clinical handoff to Dr. Liz Carter has been initiated. Review full case in Team Roster.</p>
+                                                            <p className="text-sm text-zinc-300">A clinical handoff to Dr. Timothy Malone has been initiated. Keep clinical details within the care team and review the full case in Team Roster.</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -940,21 +940,21 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                     <div className="rounded-xl bg-orange-500/6 border border-orange-500/20 px-4 py-3 mb-3 flex items-start gap-3">
                                         <Brain className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
                                         <p className="text-xs text-zinc-300 leading-relaxed">
-                                            Based on Tremaine&apos;s check-in — <span className="text-orange-400 font-medium">elevated pre-game anxiety</span>, high self-pressure sentiment, and residual tension post-breathing — Nora selected and queued these sims to address his cognitive state before the 10 AM meeting.
+                                            Based on Tremaine&apos;s check-in, <span className="text-orange-400 font-medium">elevated pre-meet anxiety</span>, high self-pressure sentiment, and residual tension after breathing, Nora selected and queued these sims before the 10 AM team meeting.
                                         </p>
                                     </div>
                                     <div className="space-y-2">
                                         {[
                                             {
                                                 name: 'Box Breathing',
-                                                desc: 'Regulated autonomic response — 4 rounds completed this session',
+                                                desc: 'Regulated autonomic response, 2 rounds completed this session',
                                                 icon: Wind,
                                                 color: '#22D3EE',
                                                 status: 'Completed',
                                             },
                                             {
                                                 name: 'Competition Walkthrough',
-                                                desc: 'Mental rehearsal of key game scenarios to build execution confidence',
+                                                desc: 'Mental rehearsal of the start, race phases, and finish to build execution confidence',
                                                 icon: Eye,
                                                 color: '#8B5CF6',
                                                 status: 'Assigned',
@@ -975,7 +975,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                             },
                                             {
                                                 name: 'Highlight Reel',
-                                                desc: 'Replay peak performance memories to prime confidence before tip-off',
+                                                desc: 'Replay peak performance memories to build confidence before the first heat',
                                                 icon: Star,
                                                 color: '#10B981',
                                                 status: 'In Queue',
@@ -1033,15 +1033,12 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                 Clinical Handoff Available
                                             </h3>
                                             <p className="text-xs text-zinc-500">
-                                                HIPAA-Compliant • AuntEdna Integration
+                                                Restricted Clinical Handoff • AuntEdna Integration
                                             </p>
                                         </div>
                                     </div>
                                     <p className="text-sm text-zinc-300 leading-relaxed">
-                                        If Nora detects that a player&apos;s anxiety is scaling into a
-                                        clinical zone, Pulse automatically packages the full context —
-                                        sleep data, HRV trends, chat sentiment analysis — and initiates a
-                                        secure handoff to{' '}
+                                        If Nora detects that an athlete&apos;s conversation meets clinical escalation criteria, Pulse packages the athlete-authorized context, including sleep data, HRV trends, and chat sentiment, and initiates a secure handoff to{' '}
                                         <span className="text-purple-400 font-semibold">AuntEdna</span>,
                                         the team&apos;s clinical mental health platform.
                                     </p>
@@ -1065,7 +1062,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                         {/* Header */}
                         <div className="flex items-center justify-between">
                             <span className="text-white font-medium text-sm">Team Roster</span>
-                            <span className="text-[10px] text-zinc-500">March 2, 2026 • 8:15 AM</span>
+                            <span className="text-[10px] text-zinc-500">March 7, 2026 • 8:15 AM</span>
                         </div>
 
                         {/* Roster stats legend */}
@@ -1102,40 +1099,14 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                         {/* Roster table */}
                         <div className="rounded-xl border border-zinc-700/30 overflow-hidden">
                             <div className="grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 text-[10px] font-bold text-zinc-500 uppercase tracking-wide px-3 py-2 bg-zinc-800/60 border-b border-zinc-700/30">
-                                <div>#</div>
-                                <div>Player</div>
-                                <div>Pos</div>
+                                <div>Bib</div>
+                                <div>Athlete</div>
+                                <div>Event</div>
                                 <div>Status</div>
                                 <div className="text-right">Time</div>
                             </div>
                             <div className="max-h-[420px] overflow-y-auto">
-                                {[
-                                    { name: 'T. Grant', pos: 'DB', num: 24, status: 'elevated', text: 'Elevated Anxiety', time: '8:15 AM', hl: true },
-                                    { name: 'K. Thompson', pos: 'LB', num: 52, status: 'critical', text: 'Escalated — Clinical', time: '6:50 AM', hl: true },
-                                    { name: 'D. Okafor', pos: 'DT', num: 94, status: 'warning', text: 'Low Sleep (4.5h)', time: '7:55 AM', hl: false },
-                                    { name: 'B. Washington', pos: 'TE', num: 87, status: 'warning', text: 'Elevated Stress', time: '7:50 AM', hl: false },
-                                    { name: 'J. Rodriguez', pos: 'QB', num: 7, status: 'optimal', text: 'Game Ready', time: '7:30 AM', hl: false },
-                                    { name: 'M. Williams', pos: 'WR', num: 11, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
-                                    { name: 'A. Johnson', pos: 'RB', num: 28, status: 'optimal', text: 'Game Ready', time: '8:00 AM', hl: false },
-                                    { name: 'C. Martinez', pos: 'OG', num: 75, status: 'optimal', text: 'Optimal', time: '7:20 AM', hl: false },
-                                    { name: 'R. Davis', pos: 'S', num: 21, status: 'optimal', text: 'Optimal', time: '7:40 AM', hl: false },
-                                    { name: 'L. Chen', pos: 'K', num: 3, status: 'optimal', text: 'Optimal', time: '7:15 AM', hl: false },
-                                    { name: 'J. Patel', pos: 'CB', num: 32, status: 'optimal', text: 'Game Ready', time: '8:05 AM', hl: false },
-                                    { name: 'S. Brooks', pos: 'WR', num: 15, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
-                                    { name: 'T. Morrison', pos: 'DE', num: 91, status: 'optimal', text: 'Game Ready', time: '7:25 AM', hl: false },
-                                    { name: 'E. Campbell', pos: 'OT', num: 68, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
-                                    { name: 'M. Foster', pos: 'LB', num: 56, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
-                                    { name: 'D. Rivera', pos: 'CB', num: 29, status: 'optimal', text: 'Game Ready', time: '8:10 AM', hl: false },
-                                    { name: 'K. Wright', pos: 'RB', num: 33, status: 'optimal', text: 'Optimal', time: '7:30 AM', hl: false },
-                                    { name: 'J. Harper', pos: 'WR', num: 84, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
-                                    { name: 'N. Cooper', pos: 'DT', num: 97, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
-                                    { name: 'C. Bell', pos: 'S', num: 26, status: 'optimal', text: 'Optimal', time: '7:50 AM', hl: false },
-                                    { name: 'P. Adams', pos: 'C', num: 62, status: 'optimal', text: 'Game Ready', time: '7:40 AM', hl: false },
-                                    { name: 'R. Mitchell', pos: 'DE', num: 95, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
-                                    { name: 'L. Turner', pos: 'FB', num: 45, status: 'optimal', text: 'Optimal', time: '7:25 AM', hl: false },
-                                    { name: 'A. Scott', pos: 'P', num: 8, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
-                                    { name: 'H. Baker', pos: 'LS', num: 48, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
-                                ].map((p, i) => {
+                                {roster.map((p, i) => {
                                     const dotClass = p.status === 'optimal' ? 'bg-green-400' : p.status === 'warning' ? 'bg-amber-400' : p.status === 'elevated' ? 'bg-orange-400' : p.status === 'critical' ? 'bg-red-400 animate-pulse' : 'bg-zinc-600';
                                     const textClass = p.status === 'optimal' ? 'text-green-400/80' : p.status === 'warning' ? 'text-amber-400/80' : p.status === 'elevated' ? 'text-orange-400/80' : p.status === 'critical' ? 'text-red-400/80' : 'text-zinc-600';
                                     return (
@@ -1298,7 +1269,7 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
                     </div>
                 </div>
                 <div className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
-                    Clinical Platform<br/>HIPAA Compliant
+                    Clinical Platform<br/>Restricted Clinical Data
                 </div>
             </motion.div>
         </div>
@@ -1526,7 +1497,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                             {/* Lock screen */}
                             <div className="text-center py-10">
                                 <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">
-                                    Saturday, March 2
+                                    Saturday, March 7
                                 </div>
                                 <div className="text-6xl font-thin text-white tracking-tight">
                                     7:14
@@ -1658,16 +1629,16 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 </div>
                             </div>
 
-                            {/* Dr. Liz Carter Profile */}
+                            {/* Dr. Timothy Malone Profile */}
                             <div className="px-4 py-4 border-b border-zinc-800/60">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/20 border border-purple-500/20 flex items-center justify-center">
-                                        <span className="text-sm font-bold text-purple-300">LC</span>
+                                        <span className="text-sm font-bold text-purple-300">TM</span>
                                     </div>
                                     <div>
-                                        <div className="text-sm font-semibold text-white">Dr. Liz Carter</div>
-                                        <div className="text-[10px] text-zinc-500">Ph.D., Licensed Clinician</div>
-                                        <div className="text-[9px] text-purple-400/70">Staff Clinician</div>
+                                        <div className="text-sm font-semibold text-white">Dr. Timothy Malone</div>
+                                        <div className="text-[10px] text-zinc-500">Psychiatrist</div>
+                                        <div className="text-[9px] text-purple-400/70">Director of Athletics Mental Health</div>
                                     </div>
                                 </div>
                             </div>
@@ -1734,12 +1705,12 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                             >
                                 <div className="flex items-start gap-4 mb-4">
                                     <div className="w-14 h-14 rounded-xl bg-red-500/20 flex items-center justify-center border border-red-500/20">
-                                        <span className="text-xl font-bold text-red-400">#52</span>
+                                        <span className="text-base font-bold text-red-400">800m</span>
                                     </div>
                                     <div className="flex-1">
                                         <h3 className="text-xl font-bold text-white">Kevin Thompson</h3>
-                                        <p className="text-xs text-zinc-500">Linebacker • Junior • 6&apos;2&quot; 235 lbs</p>
-                                        <p className="text-xs text-zinc-600 mt-0.5">Escalated: March 2, 2026 at 7:12 AM</p>
+                                        <p className="text-xs text-zinc-500">800m • Junior • Track &amp; Field</p>
+                                        <p className="text-xs text-zinc-600 mt-0.5">Escalated: March 7, 2026 at 7:12 AM</p>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-2xl font-bold text-red-400">8.2</div>
@@ -1831,7 +1802,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                             <Brain className="w-3 h-3 text-[#E0FE10]" />
                                         </div>
                                         <div className="rounded-xl bg-purple-500/10 border border-purple-500/20 px-3 py-2 text-sm text-zinc-300">
-                                            Kevin, thank you for trusting me with that. What you&apos;re describing sounds like something that would really benefit from talking to someone who specializes in this. I&apos;m going to connect you with Dr. Liz Carter right now&hellip;
+                                            Kevin, thank you for trusting me with that. I&apos;m going to stay with you while we connect with Dr. Timothy Malone right now&hellip;
                                             <div className="text-[9px] text-purple-400 mt-1 uppercase font-bold tracking-wider">
                                                 → Clinical handoff initiated
                                             </div>
@@ -1869,7 +1840,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 <div className="flex items-center gap-2 mb-4">
                                     <Shield className="w-4 h-4 text-purple-400" />
                                     <h4 className="text-sm font-bold text-white">Medical History</h4>
-                                    <span className="text-[9px] text-zinc-600 ml-auto">HIPAA Protected</span>
+                                    <span className="text-[9px] text-zinc-600 ml-auto">Restricted Clinical Record</span>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
@@ -1878,9 +1849,9 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                         <div className="text-[9px] text-zinc-500 uppercase font-bold mb-2">Injury History</div>
                                         <div className="space-y-2">
                                             {[
-                                                { injury: 'ACL Tear (Left Knee)', date: 'Oct 2024', note: 'Full surgical repair — 8 mo recovery' },
-                                                { injury: 'Grade 2 Concussion', date: 'Sep 2023', note: 'Missed 3 games — cleared Nov 2023' },
-                                                { injury: 'Shoulder Sprain (Right)', date: 'Nov 2022', note: 'Conservative treatment — 4 weeks' },
+                                                { injury: 'Hamstring Strain (Left)', date: 'Oct 2024', note: 'Rehab completed, returned to full training' },
+                                                { injury: 'Tibial Stress Reaction', date: 'Sep 2023', note: 'Six-week return-to-run progression' },
+                                                { injury: 'Ankle Sprain (Right)', date: 'Nov 2022', note: 'Conservative treatment, four weeks' },
                                             ].map((inj) => (
                                                 <div key={inj.injury} className="border-l-2 border-zinc-700 pl-2">
                                                     <div className="text-xs font-medium text-zinc-200">{inj.injury}</div>
@@ -1895,9 +1866,9 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                         <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
                                             <div className="text-[9px] text-zinc-500 uppercase font-bold mb-2">Surgical History</div>
                                             <div className="border-l-2 border-purple-500/30 pl-2">
-                                                <div className="text-xs font-medium text-zinc-200">ACL Reconstruction</div>
-                                                <div className="text-[10px] text-zinc-500">Oct 15, 2024 • Dr. Sarah Chen, MD</div>
-                                                <div className="text-[10px] text-zinc-500">Patellar tendon autograft — cleared for full contact Feb 2025</div>
+                                                <div className="text-xs font-medium text-zinc-200">No Surgery on Record</div>
+                                                <div className="text-[10px] text-zinc-500">Medical record reviewed March 2026</div>
+                                                <div className="text-[10px] text-zinc-500">Cleared for full track participation</div>
                                             </div>
                                         </div>
 
@@ -1925,7 +1896,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 </div>
                             </motion.div>
 
-                            {/* Personal / Professional Context */}
+                            {/* Personal / Academic Context */}
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -1935,7 +1906,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                             >
                                 <div className="flex items-center gap-2 mb-1">
                                     <Users className="w-4 h-4 text-blue-400" />
-                                    <h4 className="text-sm font-bold text-white">Personal / Professional</h4>
+                                    <h4 className="text-sm font-bold text-white">Personal / Academic</h4>
                                     <span className="text-[9px] text-zinc-600 ml-auto">Non-Sport Stressors</span>
                                 </div>
                                 <p className="text-[10px] text-zinc-500 mb-4 leading-relaxed">
@@ -1945,23 +1916,23 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 <div className="space-y-3">
                                     {[
                                         {
-                                            icon: '👶',
-                                            label: 'New Father — 6 Weeks Postpartum',
-                                            note: 'First child born Jan 18. Sleep disruption averaging 3–4h/night. Kevin has mentioned feeling "torn between being present at home and being locked in for the season."',
+                                            icon: '📚',
+                                            label: 'Midterm Week',
+                                            note: 'Three exams are scheduled within five days. Kevin has mentioned feeling behind after travel and struggling to focus at night.',
                                             impact: 'Sleep & Focus',
                                             impactColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
                                         },
                                         {
-                                            icon: '💼',
-                                            label: 'Brand Deal Pressure — Pending Contract',
-                                            note: 'Negotiating a $2.1M endorsement deal contingent on end-of-season performance metrics. Kevin flagged anxiety around "performing for the contract, not the team."',
+                                            icon: '🏃',
+                                            label: 'Championship Qualification Pressure',
+                                            note: 'Kevin is close to the conference qualifying mark and has described every race as a test of whether he belongs at this level.',
                                             impact: 'Identity Stress',
                                             impactColor: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
                                         },
                                         {
-                                            icon: '📋',
-                                            label: 'Contract Year — Free Agency Eligible',
-                                            note: 'Entering the final year of his rookie deal. Self-described pressure: "every game feels like an audition." Nora detected this framing across 4 check-ins this month.',
+                                            icon: '🤝',
+                                            label: 'NIL Opportunity Pending',
+                                            note: 'A local partnership conversation is tied to spring visibility. Kevin has raised concerns about balancing the opportunity with school and training.',
                                             impact: 'Performance Anxiety',
                                             impactColor: 'text-red-400 bg-red-500/10 border-red-500/20',
                                         },
@@ -2007,10 +1978,10 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 <div className="space-y-2.5">
                                     {[
                                         { step: 'Initiate immediate welfare check — contact K. Thompson directly', priority: 'Urgent', color: 'bg-red-500/15 text-red-400 border-red-500/25', clickable: true },
-                                        { step: 'Schedule same-day clinical session with Dr. Liz Carter (staff clinician)', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
+                                        { step: 'Schedule same-day clinical session with Dr. Timothy Malone', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
                                         { step: 'Review medication compliance — Sertraline prescribed 8 weeks ago, verify adherence', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
-                                        { step: 'Coordinate with athletic training on practice status — recommend hold pending evaluation', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
-                                        { step: 'Notify head coach of availability status only (no clinical details per HIPAA)', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
+                                        { step: 'Coordinate with athletic training on training status and hold participation pending evaluation', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
+                                        { step: 'Share participation status only with the head coach and keep clinical details within the care team', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
                                         { step: 'Document all actions and clearance decision in clinical record', priority: 'Standard', color: 'bg-zinc-700/40 text-zinc-400 border-zinc-600/30', clickable: false },
                                     ].map((item, i) => (
                                         <div
@@ -2062,7 +2033,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 <span className="text-2xl font-bold text-zinc-400">KT</span>
                             </div>
                             <div className="text-lg font-bold text-white mb-1">Kevin Thompson</div>
-                            <div className="text-xs text-zinc-500 mb-6">#52 • Linebacker</div>
+                            <div className="text-xs text-zinc-500 mb-6">800m • Junior</div>
 
                             {/* Status */}
                             <motion.div
@@ -2607,9 +2578,9 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                 </div>
                             </div>
                             <div className="text-center py-10">
-                                <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">Saturday, March 2</div>
+                                <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">Saturday, March 7</div>
                                 <div className="text-6xl font-thin text-white tracking-tight">2:30</div>
-                                <div className="text-xs text-zinc-500 mt-2 font-medium uppercase tracking-wider">Pre-Game</div>
+                                <div className="text-xs text-zinc-500 mt-2 font-medium uppercase tracking-wider">Pre-Meet</div>
                             </div>
                             <AnimatePresence>
                                 {showNotifCard && (
@@ -3787,7 +3758,7 @@ const PulseCheckDemo: React.FC = () => {
     const [showNotification, setShowNotification] = useState(false);
     const [introTapped, setIntroTapped] = useState(false);
     const [tapPosition, setTapPosition] = useState<{ x: number; y: number } | null>(null);
-    const [selectedStaff, setSelectedStaff] = useState('Coach Mayo (Head Coach)');
+    const [selectedStaff, setSelectedStaff] = useState('Tim Hall (Head Coach)');
     const scrollerRef = useRef<HTMLDivElement>(null);
 
     // Voice state
@@ -4278,8 +4249,8 @@ const PulseCheckDemo: React.FC = () => {
             const isStaffStep = nextIdx === 8;
             const didOptOut = userText === "Don't notify anyone";
 
-            // Capture staff selection for Act 2 sidebar
-            if (isStaffStep && !didOptOut) {
+            // Capture the athlete's choice for the next screen, including opt-out.
+            if (isStaffStep) {
                 setSelectedStaff(userText);
             }
 
@@ -4413,10 +4384,10 @@ const PulseCheckDemo: React.FC = () => {
     return (
         <>
             <Head>
-                <title>PulseCheck Demo — Patriots</title>
+                <title>PulseCheck Demo | USC Track &amp; Field</title>
                 <meta
                     name="description"
-                    content="PulseCheck: AI-powered mental performance coaching for elite athletes."
+                    content="PulseCheck mental performance and consent-based escalation demo for USC Track & Field."
                 />
             </Head>
 
@@ -4580,13 +4551,13 @@ const PulseCheckDemo: React.FC = () => {
                                     {/* Lock screen content */}
                                     <div className="text-center py-12">
                                         <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">
-                                            Saturday, March 2
+                                            Saturday, March 7
                                         </div>
                                         <div className="text-6xl font-thin text-white tracking-tight">
                                             6:47
                                         </div>
                                         <div className="text-xs text-[#E0FE10]/60 mt-2 font-medium uppercase tracking-wider">
-                                            ★ Game Day
+                                            ★ Meet Day
                                         </div>
                                     </div>
 
@@ -4664,7 +4635,7 @@ const PulseCheckDemo: React.FC = () => {
                                     className="mt-6 text-center"
                                 >
                                     <div className="text-xs text-zinc-500 uppercase tracking-widest">
-                                        Athlete Experience — Game Day Morning
+                                        Athlete Experience — Meet Day Morning
                                     </div>
                                 </motion.div>
                             </motion.div>
@@ -4887,13 +4858,14 @@ const PulseCheckDemo: React.FC = () => {
                                     onContinue={() => setCurrentAct('act2b')}
                                     notifiedStaff={(() => {
                                         const staffMap: Record<string, { name: string; initials: string; role: string }> = {
-                                            'Coach Mayo (Head Coach)': { name: 'Coach Mayo', initials: 'JM', role: 'Head Coach' },
-                                            'Coach Van Pelt (Offensive Coordinator)': { name: 'Coach Van Pelt', initials: 'BV', role: 'Offensive Coordinator' },
-                                            'Coach Covington (Defensive Coordinator)': { name: 'Coach Covington', initials: 'DC', role: 'Defensive Coordinator' },
-                                            'Jim Whalen (Head Athletic Trainer)': { name: 'Jim Whalen', initials: 'JW', role: 'Head Athletic Trainer' },
-                                            'Dr. Liz Carter (Staff Clinician)': { name: 'Dr. Liz Carter', initials: 'LC', role: 'Staff Clinician' },
+                                            'Tim Hall (Head Coach)': { name: 'Tim Hall', initials: 'TH', role: 'Head Coach' },
+                                            'Felicia Brown Edwards (Assistant Coach, Sprints)': { name: 'Felicia Brown Edwards', initials: 'FBE', role: 'Assistant Coach, Sprints' },
+                                            'Joe Evangelista (Athletic Trainer, Track & Field)': { name: 'Joe Evangelista', initials: 'JE', role: 'Athletic Trainer, Track & Field' },
+                                            'Iliana Velazquez (Athletic Trainer, Track & Cross Country)': { name: 'Iliana Velazquez', initials: 'IV', role: 'Athletic Trainer, Track & Cross Country' },
+                                            'Dr. Timothy Malone (Psychiatrist and Director of Athletics Mental Health)': { name: 'Dr. Timothy Malone', initials: 'TM', role: 'Psychiatrist and Director of Athletics Mental Health' },
+                                            "Don't notify anyone": { name: 'No Staff Notified', initials: '—', role: 'Athlete declined this update' },
                                         };
-                                        return staffMap[selectedStaff] ?? { name: 'Coach Mayo', initials: 'JM', role: 'Head Coach' };
+                                        return staffMap[selectedStaff] ?? { name: 'Tim Hall', initials: 'TH', role: 'Head Coach' };
                                     })()}
                                 />
                             </motion.div>

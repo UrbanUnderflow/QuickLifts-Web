@@ -24,7 +24,7 @@ const PRESENTATION_REGISTRY: PresentationLink[] = [
     category: 'Interactive Demos',
     typeLabel: 'Interactive demo',
     accessLabel: 'Live route',
-    description: 'Patriots-focused PulseCheck walkthrough for mental performance and escalation flow.',
+    description: 'USC Track & Field PulseCheck walkthrough for mental performance and consent-based escalation.',
   },
   {
     id: 'pulse-check-tech-demo',

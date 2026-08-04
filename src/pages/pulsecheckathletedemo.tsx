@@ -48,7 +48,7 @@ import {
 // Sibling to /pulsecheckdemo (the stakeholder cut). Same chat
 // engine, but the back half sells the ATHLETE instead of the
 // institution:
-//   intro → chat1 (game day) → curriculum (the growth)
+//   intro → chat1 (meet day) → curriculum (the growth)
 //         → chat2 (the spiral) → consent (your call) → call (human touch)
 //
 // No coach dashboard, no escalation tiers. Ends on the warm
@@ -79,6 +79,7 @@ interface ChatMsg {
 type AudioManifestEntry = { id: string; filename: string; text: string };
 
 const AUDIO_BASE = '/audio/pulsecheckdemo';
+const AUDIO_VERSION = 'usc-track-10am-v3';
 const AUDIO_MANIFEST = [
     ...(act1AudioManifest as AudioManifestEntry[]),
     ...(athleteAudioManifest as AudioManifestEntry[]),
@@ -87,7 +88,7 @@ const AUDIO_BY_ID = new Map(AUDIO_MANIFEST.map((e) => [e.id, e]));
 const getAudioPath = (id?: string | null): string | null => {
     if (!id) return null;
     const entry = AUDIO_BY_ID.get(id);
-    return entry ? `${AUDIO_BASE}/${entry.filename}` : null;
+    return entry ? `${AUDIO_BASE}/${entry.filename}?v=${AUDIO_VERSION}` : null;
 };
 
 const NORA_THINKING_MS = 3000;
@@ -96,11 +97,11 @@ const NORA_THINKING_MS = 3000;
 // SCRIPTS
 // ─────────────────────────────────────────────────────────
 
-// Chat 1 — Game Day (reuses the proven game-day moment + audio)
+// Chat 1, USC track and field meet day
 const CHAT1_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
-        content: 'Hi Tremaine, today is game day. How are you feeling?',
+        content: 'Hi Tremaine, today is meet day. How are you feeling?',
         delay: 1000,
         ttsSpeed: 0.85,
         audioId: 'act1-00-intro',
@@ -115,21 +116,21 @@ const CHAT1_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
         content:
-            "Coach scheduled the competition prep meeting for 10:00 AM in the film room. You've got a couple hours.",
+            "Coach Hall scheduled the pre-meet team meeting for 10 AM in the team room. You've got a couple hours.",
         delay: 1200,
         audioId: 'act1-02-meeting',
     },
     {
         role: 'nora',
         content:
-            "Talk to me. What is it about today that feels different from the other days? Why does today's game make you nervous?",
+            "Talk to me. What is it about today that feels different from the other days? Why does today's meet make you nervous?",
         delay: 1500,
         audioId: 'act1-03-probe',
     },
     {
         role: 'nora',
         content:
-            "OK. Let's slow it down.\n\nI want to run you through an exercise called Box Breathing. This is a technique performed by Navy SEALs during acute stress responses to override the body's fight-or-flight system. We can apply it right now, and you can use it again right before you run out of the tunnel.\n\nHere's how it works: Inhale for 4 seconds → Hold for 4 seconds → Exhale for 4 seconds → Hold for 4 seconds. We'll do 4 rounds.\n\nAre you ready?",
+            "OK. Let's slow it down.\n\nI want to run you through an exercise called Box Breathing. It can help your body settle during a stressful moment. We can use it now, and you can use it again before your first heat.\n\nHere's how it works: Inhale for 4 seconds. Hold for 4 seconds. Exhale for 4 seconds. Hold for 4 seconds. We'll do 2 rounds.\n\nAre you ready?",
         delay: 2000,
         audioId: 'act1-04-box-breathing',
     },
@@ -169,7 +170,7 @@ const CHAT1_RESPONSES: Record<number, SuggestedResponse[]> = {
     3: [
         { text: "Perfect, 10 AM. That gives me time to get right.", sentiment: 'positive' },
         { text: "Alright, I'll be there.", sentiment: 'neutral' },
-        { text: 'Ugh, 10 AM? That feels early on game day.', sentiment: 'negative' },
+        { text: 'Ugh, 10 AM? That feels early on meet day.', sentiment: 'negative' },
     ],
     4: [
         { text: "I mean, the pressure is there, but I've been here before.", sentiment: 'positive' },
@@ -214,14 +215,14 @@ const CHAT2_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
         content:
-            "I can connect you with Dr. Liz Carter, a licensed clinician. Here's what makes this different — she already has the context you've chosen to share. You won't start from zero or re-explain your whole life. And you decide exactly what she sees. Want me to set it up?",
+            "I can connect you with Dr. Timothy Malone, the Director of Athletics Mental Health. He will receive only the context you choose to share. You won't start from zero or re-explain your whole life. You decide exactly what he sees. Want me to set it up?",
         delay: 2000,
         audioId: 'athlete-spiral-03-connect',
     },
     {
         role: 'nora',
         content:
-            "You're in control of every piece of this. Let me show you exactly what gets shared before anything ever reaches her.",
+            "You're in control of every piece of this. Let me show you exactly what gets shared before anything reaches him.",
         delay: 1800,
         transitionTo: 'consent',
         autoAdvanceDelay: 4000,
@@ -765,7 +766,7 @@ const DATA_ROWS: ShareRow[] = [
 
 const PEOPLE_ROWS = [
     { key: 'family', label: 'Family' },
-    { key: 'coachMayo', label: 'Coach Mayo' },
+    { key: 'coachHall', label: 'Coach Hall' },
     { key: 'teammates', label: 'Teammates' },
     { key: 'partner', label: 'Partner' },
 ];
@@ -780,7 +781,7 @@ const ConsentControlScreen: React.FC<{ onContinue: () => void }> = ({ onContinue
     });
     const [people, setPeople] = useState<Record<string, boolean>>({
         family: true,
-        coachMayo: true,
+        coachHall: true,
         teammates: false,
         partner: true,
     });
@@ -797,9 +798,9 @@ const ConsentControlScreen: React.FC<{ onContinue: () => void }> = ({ onContinue
                         <Shield className="w-3.5 h-3.5 text-[#E0FE10]" />
                         <span className="text-[10px] font-bold text-[#E0FE10] uppercase tracking-[0.2em]">Your privacy, your call</span>
                     </div>
-                    <h2 className="text-2xl font-black text-white">Choose what Dr. Carter sees.</h2>
+                    <h2 className="text-2xl font-black text-white">Choose what Dr. Malone sees.</h2>
                     <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
-                        Nothing is shared until you tap connect. She walks in already knowing the context you choose — so you never start from zero.
+                        Nothing is shared until you tap connect. He walks in knowing the context you choose, so you never start from zero.
                     </p>
                 </motion.div>
 
@@ -830,7 +831,7 @@ const ConsentControlScreen: React.FC<{ onContinue: () => void }> = ({ onContinue
                         <span className="text-sm font-semibold text-white">The people in your life</span>
                     </div>
                     <p className="text-[11px] text-zinc-500 mb-3">
-                        The characters Nora already knows about. Pick who Dr. Carter can see — she won&apos;t have to learn your whole world from scratch.
+                        The people Nora already knows about. Pick who Dr. Malone can see, so he won&apos;t have to learn your whole world from scratch.
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                         {PEOPLE_ROWS.map((p) => {
@@ -853,7 +854,7 @@ const ConsentControlScreen: React.FC<{ onContinue: () => void }> = ({ onContinue
                 <div className="rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 border border-zinc-700/40 p-4 mb-4">
                     <div className="flex items-center gap-2 mb-2">
                         <Check className="w-4 h-4 text-emerald-400" />
-                        <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Dr. Carter will see</span>
+                        <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Dr. Malone will see</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                         {DATA_ROWS.filter((r) => shares[r.key]).map((r) => (
@@ -902,7 +903,7 @@ const ConsentControlScreen: React.FC<{ onContinue: () => void }> = ({ onContinue
                     style={{ background: '#E0FE10' }}
                 >
                     <Lock className="w-4 h-4" />
-                    Share &amp; connect with Dr. Carter
+                    Share &amp; connect with Dr. Malone
                 </motion.button>
                 <p className="text-center text-[11px] text-zinc-600">Sharing {sharedCount} item{sharedCount === 1 ? '' : 's'} · You stay in control</p>
             </div>
@@ -989,10 +990,10 @@ const ClinicianCall: React.FC = () => {
                 >
                     {/* Avatar */}
                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500/30 to-emerald-700/10 border-2 border-emerald-500/30 flex items-center justify-center mx-auto mb-4">
-                        <span className="text-2xl font-bold text-emerald-300">LC</span>
+                        <span className="text-2xl font-bold text-emerald-300">TM</span>
                     </div>
-                    <div className="text-lg font-bold text-white mb-0.5">Dr. Liz Carter</div>
-                    <div className="text-xs text-zinc-500 mb-6">Licensed Clinician · via PulseCheck</div>
+                    <div className="text-lg font-bold text-white mb-0.5">Dr. Timothy Malone</div>
+                    <div className="text-xs text-zinc-500 mb-6">Director of Athletics Mental Health · via PulseCheck</div>
 
                     {/* Status */}
                     <motion.div
@@ -1104,7 +1105,7 @@ const DEMO_ACT_ORDER: DemoAct[] = ['intro', 'chat1', 'curriculum', 'chat2', 'con
 
 const ACT_LABEL: Record<DemoAct, string> = {
     intro: '',
-    chat1: 'Game Day',
+    chat1: 'Meet Day',
     curriculum: 'Your Training',
     chat2: 'When It Gets Heavy',
     consent: 'Your Privacy, Your Call',
@@ -1473,8 +1474,8 @@ const PulseCheckAthleteDemo: React.FC = () => {
     return (
         <>
             <Head>
-                <title>PulseCheck — Athlete Experience</title>
-                <meta name="description" content="PulseCheck: mental skills, privacy, and a human in your corner — built around the athlete." />
+                <title>PulseCheck | USC Track and Field Athlete Experience</title>
+                <meta name="description" content="PulseCheck mental skills, privacy, and human support for a USC track and field athlete." />
             </Head>
 
             <div className="fixed inset-0 bg-[#0a0a0b] flex flex-col overflow-hidden">
@@ -1583,9 +1584,9 @@ const PulseCheckAthleteDemo: React.FC = () => {
                                     </div>
 
                                     <div className="text-center py-12">
-                                        <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">Saturday, March 2</div>
+                                        <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">Saturday, March 7</div>
                                         <div className="text-6xl font-thin text-white tracking-tight">6:47</div>
-                                        <div className="text-xs text-[#E0FE10]/60 mt-2 font-medium uppercase tracking-wider">★ Game Day</div>
+                                        <div className="text-xs text-[#E0FE10]/60 mt-2 font-medium uppercase tracking-wider">★ Meet Day</div>
                                     </div>
 
                                     <motion.div
@@ -1650,7 +1651,7 @@ const PulseCheckAthleteDemo: React.FC = () => {
                                     transition={{ delay: 2 }}
                                     className="mt-6 text-center"
                                 >
-                                    <div className="text-xs text-zinc-500 uppercase tracking-widest">Athlete Experience — Game Day Morning</div>
+                                    <div className="text-xs text-zinc-500 uppercase tracking-widest">Athlete Experience — Meet Day Morning</div>
                                 </motion.div>
                             </motion.div>
                         )}
