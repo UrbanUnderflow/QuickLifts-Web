@@ -7,7 +7,7 @@ const pageMeta = {
   pageId: 'pulsecheck-youth-info',
   pageTitle: 'PulseCheck Youth | Mental Skills for the Moments That Matter',
   metaDescription:
-    'PulseCheck gives young athletes a private daily check-in, wearable context, and short mental skills they can practice before the pressure arrives.',
+    'PulseCheck gives young athletes a structured daily check-in, wearable context, and short mental skills they can practice before the pressure arrives.',
   ogTitle: 'PulseCheck Youth | Train the Mind for the Game',
   ogDescription:
     'A daily mental performance system built for young athletes, with 200+ skills, wearable context, and human support when repeated check-ins need a closer look.',
@@ -33,7 +33,7 @@ const performersPageMeta = {
   pageId: 'pulsecheck-performers-info',
   pageTitle: 'PulseCheck | Mental Performance for Work, School, Sport, and Life',
   metaDescription:
-    'PulseCheck combines a private daily check-in, a structured mental skills curriculum, wearable context, and qualified support for people who face pressure.',
+    'PulseCheck combines a structured daily check-in, a mental skills curriculum, wearable context, and qualified support for people who face pressure.',
   ogTitle: 'PulseCheck | Train the Mind Like the Body.',
   ogDescription:
     'A daily mental performance system for professionals, students, athletes, and anyone who wants to handle pressure with greater focus and confidence.',
@@ -336,7 +336,7 @@ const educationStories: EducationStory[] = [
     eyebrow: 'What parents should know',
     title: 'Clear roles help athletes feel safe.',
     intro:
-      'PulseCheck is a guided mental performance system with structured lessons, private check-ins, and human support when repeated check-ins need review.',
+      'PulseCheck is a guided mental performance system with structured lessons, set check-in questions, and human support when repeated check-ins need review.',
     sections: [
       {
         number: '01',
@@ -345,18 +345,18 @@ const educationStories: EducationStory[] = [
       },
       {
         number: '02',
-        title: 'Private answers receive protection.',
-        body: 'The athlete can answer honestly. Parents and coaches see themes and next steps based on their role.',
+        title: 'Youth do not use open AI chat.',
+        body: 'Athletes answer set questions. Those answers help PulseCheck choose the next skill from the curriculum.',
       },
       {
         number: '03',
-        title: 'Clinicians handle clinical care.',
-        body: 'Diagnosis, treatment, and clinical decisions belong to qualified professionals.',
+        title: 'Adults see useful support steps.',
+        body: 'Parents and coaches see role-based themes and next steps, not an open chat transcript.',
       },
       {
         number: '04',
-        title: 'Caring adults stay involved.',
-        body: 'Parents, coaches, and clinicians keep their responsibilities for the athlete and the choices around them.',
+        title: 'Clinicians handle clinical care.',
+        body: 'Diagnosis, treatment, and clinical decisions belong to qualified professionals.',
       },
     ],
     callout: 'A learning system for athletes, with clear roles and real people involved.',
@@ -442,7 +442,7 @@ const proEducationStories: EducationStory[] = [
           },
           {
             number: '02',
-            title: 'Private answers stay protected.',
+            title: 'Roles stay clear.',
             body: 'Athletes can be honest. Coaches see themes and practical ways to support the team based on their role.',
           },
           {
@@ -1252,12 +1252,12 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
             ? 'Your private check-in gives you room to be honest. Role-based access and program rules control what other people can see.'
             : isPro
             ? 'Athletes use PulseCheck when each skill helps them reach a goal, handle pressure, or move toward the next level.'
-            : <>Nora protects the athlete&apos;s private answers. Coaches see themes and clear ways to help.</>}
+            : <>Youth do not use open AI chat. Athletes answer set questions, and those answers help PulseCheck choose the next skill.</>}
         </p>
         <div className="yi-privacy-rule" aria-hidden="true">
-          <span>{isPerformers ? 'PRIVATE CHECK-IN' : isPro ? 'ATHLETE GOALS' : 'ATHLETE TRUST'}</span>
+          <span>{isPerformers ? 'PRIVATE CHECK-IN' : isPro ? 'ATHLETE GOALS' : 'SET QUESTIONS'}</span>
           <i />
-          <span>{isPerformers ? 'ROLE-BASED ACCESS' : isPro ? 'SKILLS FOR THE MOMENT' : 'USEFUL SUPPORT'}</span>
+          <span>{isPerformers ? 'ROLE-BASED ACCESS' : isPro ? 'SKILLS FOR THE MOMENT' : 'NEXT SKILL'}</span>
         </div>
       </section>
 
@@ -1330,8 +1330,8 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               </article>
               <article>
                 <span>02</span>
-                <h3>Private check-ins</h3>
-                <p>Athletes can answer honestly. Parents and coaches see themes and next steps based on their role.</p>
+                <h3>Set questions</h3>
+                <p>No open AI chat for youth. Athletes answer set questions that help choose the next skill.</p>
               </article>
               <article>
                 <span>03</span>

@@ -108,6 +108,10 @@ function staffMembershipCanSeeAthlete(membership = {}, athleteId = '') {
   return isActiveRecord(membership) && canCoach && canSeeAthlete;
 }
 
+function isActiveTeamMembership(data = {}) {
+  return Boolean(cleanString(data.userId)) && isActiveRecord(data);
+}
+
 async function loadUserData(userId) {
   if (!userId) {
     return {};
@@ -144,6 +148,22 @@ async function loadCoachIdsForTeam({teamId, athleteId, extraCoachIds = []}) {
   return uniqueStrings(coachIds);
 }
 
+async function loadActiveTeamMemberIds(teamId) {
+  if (!teamId) {
+    return [];
+  }
+
+  const membershipSnap = await db.collection(TEAM_MEMBERSHIPS_COLLECTION)
+    .where('teamId', '==', teamId)
+    .get();
+  return uniqueStrings(
+    membershipSnap.docs
+      .map((document) => document.data() || {})
+      .filter(isActiveTeamMembership)
+      .map((membership) => membership.userId)
+  );
+}
+
 async function upsertCoachNotification(notificationId, payload) {
   const now = Date.now();
   await db.collection(COACH_NOTIFICATIONS_COLLECTION)
@@ -173,6 +193,7 @@ async function fanOutCoachNotification({
   webUrl = 'https://fitwithpulse.ai/coach/dashboard',
   metadata = {},
   actionRequired = false,
+  suppressPush = false,
 }) {
   const cleanCoachIds = uniqueStrings(coachIds);
   await Promise.all(cleanCoachIds.map((coachId) => upsertCoachNotification(
@@ -190,6 +211,7 @@ async function fanOutCoachNotification({
       sourceId,
       target,
       webUrl,
+      suppressPush,
       metadata: {
         ...metadata,
         teamId,
@@ -223,6 +245,168 @@ function pushDataPayload(notificationId, notification = {}) {
     }
     return payload;
   }, {});
+}
+
+function teamLeaderboardPushData({
+  eventType,
+  sprintId,
+  teamId,
+  teamName,
+  actorAthleteId,
+  recipientId,
+  throughDate,
+  previousRank = '',
+  newRank = '',
+  totalPoints = '',
+}) {
+  const data = {
+    type: 'TEAM_LEADERBOARD',
+    leaderboardEventType: eventType,
+    sprintId,
+    teamId,
+    teamName,
+    actorAthleteId,
+    recipientId,
+    throughDate,
+    previousRank,
+    newRank,
+    totalPoints,
+    target: 'team_showing_up',
+  };
+
+  return Object.entries(data).reduce((payload, [key, value]) => {
+    const text = String(value ?? '').trim();
+    if (text) {
+      payload[key] = text;
+    }
+    return payload;
+  }, {});
+}
+
+async function sendPulseCheckPushToUser({
+  recipientId,
+  title,
+  message,
+  data,
+  channelId = 'team_leaderboard',
+  apnsCategory = 'TEAM_LEADERBOARD_CATEGORY',
+}) {
+  const userRef = db.collection('users').doc(recipientId);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    return {recipientId, successCount: 0, failureCount: 0, skipped: 'user_not_found'};
+  }
+
+  const {targets} = await loadPulseCheckPushTargets(
+    recipientId,
+    userRef,
+    userSnap.data() || {}
+  );
+  if (targets.length === 0) {
+    return {recipientId, successCount: 0, failureCount: 0, skipped: 'no_pulsecheck_push_targets'};
+  }
+
+  const payload = {
+    tokens: targets.map(({token}) => token),
+    notification: {title, body: message},
+    data,
+    apns: {
+      headers: {'apns-priority': '10'},
+      payload: {
+        aps: {
+          alert: {title, body: message},
+          badge: 1,
+          sound: 'default',
+          category: apnsCategory,
+        },
+      },
+    },
+    android: {
+      notification: {
+        channelId,
+        priority: 'high',
+        defaultSound: true,
+        defaultVibrateTimings: true,
+      },
+    },
+  };
+
+  const response = await admin.messaging().sendEachForMulticast(payload);
+  logPushSendFailures(
+    'PulseCheck team leaderboard',
+    recipientId,
+    targets,
+    response.responses
+  );
+  await cleanupStalePushTargets(
+    recipientId,
+    userRef,
+    targets,
+    response.responses
+  );
+
+  return {
+    recipientId,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+    skipped: '',
+  };
+}
+
+async function fanOutTeamLeaderboardPush({
+  recipientIds,
+  title,
+  message,
+  eventType,
+  sprintId,
+  teamId,
+  teamName,
+  actorAthleteId,
+  throughDate,
+  previousRank = '',
+  newRank = '',
+  totalPoints = '',
+}) {
+  const results = await Promise.allSettled(uniqueStrings(recipientIds).map((recipientId) => (
+    sendPulseCheckPushToUser({
+      recipientId,
+      title,
+      message,
+      data: teamLeaderboardPushData({
+        eventType,
+        sprintId,
+        teamId,
+        teamName,
+        actorAthleteId,
+        recipientId,
+        throughDate,
+        previousRank,
+        newRank,
+        totalPoints,
+      }),
+    })
+  )));
+
+  const summary = {
+    recipientCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    skippedCount: 0,
+  };
+  results.forEach((result) => {
+    if (result.status !== 'fulfilled') {
+      summary.failureCount += 1;
+      console.error('PulseCheck team leaderboard push failed before send', result.reason);
+      return;
+    }
+    summary.recipientCount += 1;
+    summary.successCount += result.value.successCount || 0;
+    summary.failureCount += result.value.failureCount || 0;
+    if (result.value.skipped) {
+      summary.skippedCount += 1;
+    }
+  });
+  return summary;
 }
 
 exports.onCoachNotificationCreated = onDocumentCreated(
@@ -620,7 +804,13 @@ exports.onPulseCheckTeamShowingUpSprintUpdated = onDocumentUpdated(
       || String(Date.now());
     const organizationId = cleanString(after.organizationId);
     const coachIdsByTeam = new Map();
-    let notificationCount = 0;
+    const teamData = await loadTeamData(teamId);
+    const teamName = teamDisplayName(teamData);
+    const teamMemberIds = await loadActiveTeamMemberIds(teamId);
+    let coachNotificationCount = 0;
+    let teamPushSuccessCount = 0;
+    let teamPushFailureCount = 0;
+    let teamPushSkippedCount = 0;
 
     for (const [athleteId, member] of afterMembers.entries()) {
       const previous = beforeMembers.get(athleteId);
@@ -629,11 +819,35 @@ exports.onPulseCheckTeamShowingUpSprintUpdated = onDocumentUpdated(
       }
 
       const movedUp = previous.rank > member.rank;
+      if (movedUp) {
+        const title = member.rank === 1
+          ? `New leader: ${member.displayName}`
+          : `${member.displayName} moved up`;
+        const message = `${member.displayName} moved from #${previous.rank} to #${member.rank} on ${teamName}.`;
+        const teamPush = await fanOutTeamLeaderboardPush({
+          recipientIds: teamMemberIds,
+          title,
+          message,
+          eventType: 'rank_move',
+          sprintId: event.params.sprintId,
+          teamId,
+          teamName,
+          actorAthleteId: athleteId,
+          throughDate,
+          previousRank: previous.rank,
+          newRank: member.rank,
+          totalPoints: member.totalPoints,
+        });
+        teamPushSuccessCount += teamPush.successCount;
+        teamPushFailureCount += teamPush.failureCount;
+        teamPushSkippedCount += teamPush.skippedCount;
+      }
+
       if (!coachIdsByTeam.has(teamId)) {
         coachIdsByTeam.set(teamId, await loadCoachIdsForTeam({teamId, athleteId}));
       }
       const coachIds = coachIdsByTeam.get(teamId);
-      notificationCount += await fanOutCoachNotification({
+      coachNotificationCount += await fanOutCoachNotification({
         notificationKey: sanitizeDocId(
           `pulsecheck_leaderboard_move_${event.params.sprintId}_${throughDate}_${athleteId}_${previous.rank}_to_${member.rank}`
         ),
@@ -648,6 +862,7 @@ exports.onPulseCheckTeamShowingUpSprintUpdated = onDocumentUpdated(
         sourceId: event.params.sprintId,
         target: 'coach_leaderboard',
         webUrl: 'https://fitwithpulse.ai/coach/dashboard?tab=leaderboard',
+        suppressPush: true,
         metadata: {
           throughDate,
           previousRank: previous.rank,
@@ -665,8 +880,27 @@ exports.onPulseCheckTeamShowingUpSprintUpdated = onDocumentUpdated(
         if (!member) {
           continue;
         }
+        const title = 'New leader crowned';
+        const message = `${member.displayName} finished #1 on ${teamName}.`;
+        const teamPush = await fanOutTeamLeaderboardPush({
+          recipientIds: teamMemberIds,
+          title,
+          message,
+          eventType: 'leader_crowned',
+          sprintId: event.params.sprintId,
+          teamId,
+          teamName,
+          actorAthleteId: athleteId,
+          throughDate,
+          newRank: member.rank,
+          totalPoints: member.totalPoints,
+        });
+        teamPushSuccessCount += teamPush.successCount;
+        teamPushFailureCount += teamPush.failureCount;
+        teamPushSkippedCount += teamPush.skippedCount;
+
         const coachIds = await loadCoachIdsForTeam({teamId, athleteId});
-        notificationCount += await fanOutCoachNotification({
+        coachNotificationCount += await fanOutCoachNotification({
           notificationKey: sanitizeDocId(
             `pulsecheck_leaderboard_winner_${event.params.sprintId}_${athleteId}`
           ),
@@ -681,6 +915,7 @@ exports.onPulseCheckTeamShowingUpSprintUpdated = onDocumentUpdated(
           sourceId: event.params.sprintId,
           target: 'coach_leaderboard',
           webUrl: 'https://fitwithpulse.ai/coach/dashboard?tab=leaderboard',
+          suppressPush: true,
           metadata: {
             throughDate,
             rank: member.rank,
@@ -690,6 +925,11 @@ exports.onPulseCheckTeamShowingUpSprintUpdated = onDocumentUpdated(
       }
     }
 
-    return {coachNotificationCount: notificationCount};
+    return {
+      coachNotificationCount,
+      teamPushSuccessCount,
+      teamPushFailureCount,
+      teamPushSkippedCount,
+    };
   }
 );

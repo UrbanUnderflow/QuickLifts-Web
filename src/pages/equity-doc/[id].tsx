@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { auth, db, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { Download, Loader2, FileText, AlertCircle } from 'lucide-react';
 
 interface EquityDocument {
@@ -10,7 +10,7 @@ interface EquityDocument {
   title: string;
   content: string;
   documentType: string;
-  createdAt: Timestamp | Date;
+  createdAt: Timestamp | Date | string;
   requiresSignature?: boolean;
   signingRequestId?: string;
   needsResendSignature?: boolean;
@@ -22,9 +22,10 @@ const AUTO_EXECUTED_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'];
 const isAutoExecutedCompanyDoc = (document?: Pick<EquityDocument, 'documentType'> | null) =>
   Boolean(document?.documentType && AUTO_EXECUTED_DOC_TYPES.includes(document.documentType));
 
-const formatDate = (date: Timestamp | Date | undefined): string => {
+const formatDate = (date: Timestamp | Date | string | undefined): string => {
   if (!date) return 'N/A';
-  const d = date instanceof Timestamp ? date.toDate() : date;
+  const d = date instanceof Timestamp ? date.toDate() : date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return 'N/A';
   return d.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -191,33 +192,56 @@ const generatePdf = (document: EquityDocument) => {
 
 const EquityDocSharePage: React.FC = () => {
   const router = useRouter();
-  const { id } = router.query;
+  const { id, requestId } = router.query;
   const [document, setDocument] = useState<EquityDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDocument = async () => {
-      if (!id || typeof id !== 'string') return;
+      if (!router.isReady || !id || typeof id !== 'string') return;
       try {
         setLoading(true);
-        const docRef = doc(db, 'equity-documents', id);
-        const docSnap = await getDoc(docRef);
-        if (!docSnap.exists()) {
-          setError('Document not found');
+        setError(null);
+
+        const scopedRequestId = typeof requestId === 'string' ? requestId : null;
+        if (scopedRequestId) {
+          const query = new URLSearchParams({ documentId: id, requestId: scopedRequestId });
+          const response = await fetch(`/.netlify/functions/get-equity-document-preview?${query.toString()}`, {
+            headers: getFirebaseModeRequestHeaders(),
+          });
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result?.success || !result?.document) {
+            throw new Error(result?.error || 'This document preview link is unavailable.');
+          }
+          setDocument(result.document as EquityDocument);
           return;
         }
-        const data = docSnap.data();
-        setDocument({ id: docSnap.id, ...(data as any) } as EquityDocument);
+
+        // Equity records are intentionally admin-only. Wait until Firebase has
+        // restored the signed-in user in this new tab before attempting the read.
+        await auth.authStateReady();
+        if (!auth.currentUser) {
+          throw new Error('Sign in with an admin account to preview this equity document.');
+        }
+        await auth.currentUser.getIdToken();
+
+        const documentRef = doc(db, 'equity-documents', id);
+        const documentSnapshot = await getDoc(documentRef);
+        if (!documentSnapshot.exists()) {
+          throw new Error('Document not found.');
+        }
+        const data = documentSnapshot.data();
+        setDocument({ id: documentSnapshot.id, ...(data as any) } as EquityDocument);
       } catch (err) {
         console.error('Error fetching document:', err);
-        setError('Failed to load document');
+        setError(err instanceof Error ? err.message : 'Failed to load document');
       } finally {
         setLoading(false);
       }
     };
     fetchDocument();
-  }, [id]);
+  }, [id, requestId, router.isReady]);
 
   return (
     <>

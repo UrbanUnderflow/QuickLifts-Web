@@ -4,6 +4,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { getManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
+import { buildScopedEquityDocumentUrl } from '../../lib/equityDocumentPreview';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PieChart, Users, FileText, Download, Trash2, Loader2, Sparkles, Clock, 
@@ -2730,6 +2731,15 @@ const EquityAdminPage: React.FC = () => {
     setPreviewRecipientEmail('');
   };
 
+  const scopeSupportingDocumentsToRequest = (
+    documents: SignaturePacketDocument[],
+    signingRequestId: string,
+  ): SignaturePacketDocument[] =>
+    documents.map(document => ({
+      ...document,
+      url: buildScopedEquityDocumentUrl(window.location.origin, document.id, signingRequestId),
+    }));
+
   const handleSendForSignature = async () => {
     if (!signingDoc) return;
 
@@ -2783,20 +2793,24 @@ const EquityAdminPage: React.FC = () => {
           };
           const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
           requestId = docRef.id;
-        } else {
-          await updateDoc(doc(db, 'signingRequests', requestId), {
-            documentType: signingDoc.documentType,
-            documentName: signingDoc.title,
-            recipientName: signer.name,
-            recipientEmail: signer.email,
-            signerRole: signer.role,
-            stakeholderId: signer.stakeholderId || null,
-            equityDocumentId: signingDoc.id,
-            documentContent: signingDoc.content,
-            supportingDocuments,
-            updatedAt: serverTimestamp(),
-          });
         }
+
+        const requestSupportingDocuments = scopeSupportingDocumentsToRequest(
+          supportingDocuments,
+          requestId,
+        );
+        await updateDoc(doc(db, 'signingRequests', requestId), {
+          documentType: signingDoc.documentType,
+          documentName: signingDoc.title,
+          recipientName: signer.name,
+          recipientEmail: signer.email,
+          signerRole: signer.role,
+          stakeholderId: signer.stakeholderId || null,
+          equityDocumentId: signingDoc.id,
+          documentContent: signingDoc.content,
+          supportingDocuments: requestSupportingDocuments,
+          updatedAt: serverTimestamp(),
+        });
 
         signingRequestIds.push(requestId);
 
@@ -2809,7 +2823,7 @@ const EquityAdminPage: React.FC = () => {
             documentType: signingDoc.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
-            supportingDocuments,
+            supportingDocuments: requestSupportingDocuments,
             sendAttemptId: `${signingGroupId}-${requestId}`,
           }),
         });
@@ -2900,6 +2914,14 @@ const EquityAdminPage: React.FC = () => {
         previewSourceEquityDocumentId: signingDoc.id,
         supportingDocuments,
       });
+      const requestSupportingDocuments = scopeSupportingDocumentsToRequest(
+        supportingDocuments,
+        previewRequestRef.id,
+      );
+      await updateDoc(previewRequestRef, {
+        supportingDocuments: requestSupportingDocuments,
+        updatedAt: serverTimestamp(),
+      });
 
       const resp = await fetch('/.netlify/functions/send-signing-request', {
         method: 'POST',
@@ -2912,7 +2934,7 @@ const EquityAdminPage: React.FC = () => {
           recipientEmail: previewEmail,
           companyName: company.name || 'Pulse Intelligence Labs, Inc.',
           previewMode: true,
-          supportingDocuments,
+          supportingDocuments: requestSupportingDocuments,
           sendAttemptId: `preview-${signingDoc.id}-${Date.now()}`,
         }),
       });
