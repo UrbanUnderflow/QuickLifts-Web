@@ -364,33 +364,33 @@ const educationStories: EducationStory[] = [
   {
     id: 'return-to-sport',
     eyebrow: 'For injured athletes',
-    title: 'Support while they heal. Skills that stay useful after clearance.',
+    title: 'Built to support the return-to-play journey.',
     intro:
-      'An injury changes more than the body. PulseCheck can help an athlete stay engaged with the home plan, work through fear, and build skills that still matter when competition returns.',
+      'Return-to-play is clinical work. Strength testing, balance testing, running progressions, hop testing, and provider clearance belong with qualified professionals. PulseCheck supports the mental side around that work: home-plan follow-through, fear, confidence, and the habits that still matter after clearance.',
     sections: [
       {
         number: '01',
-        title: 'Keep the home plan moving.',
-        body: 'A daily check-in can reveal changes in sleep, mood, energy, or motivation before the athlete begins the day\'s work.',
+        title: 'Keep the home plan visible.',
+        body: 'A daily check-in can help the athlete stay connected to sleep, mood, energy, motivation, and the work they were asked to do at home.',
       },
       {
         number: '02',
-        title: 'Practice confidence safely.',
-        body: 'Guided visualization, breathing, and self-talk can help the athlete prepare for the drills, games, and return-to-play moments ahead.',
+        title: 'Respect clinical milestones.',
+        body: 'Return to running, return to practice, return to full play, and return to performance are different steps. PulseCheck supports the mindset around each step.',
       },
       {
         number: '03',
-        title: 'Return with useful skills.',
-        body: 'The same focus, reset, and confidence skills can help after a mistake, before a whistle, or late in a close game.',
+        title: 'Work through fear and hesitation.',
+        body: 'Guided visualization, breathing, and self-talk can help an athlete prepare for drills, cutting, contact, competition, and the first hard moments back.',
       },
       {
         number: '04',
-        title: 'Leave with a habit.',
-        body: 'A short daily practice can continue after discharge, giving the athlete a routine they already know how to use.',
+        title: 'Give clinicians better context.',
+        body: 'Repeated check-ins can show patterns over time, so qualified professionals have more context when they review how an athlete is doing.',
       },
     ],
     callout:
-      'Rehabilitation professionals guide physical clearance. PulseCheck supports the mental skills around the return.',
+      'Clinical experts guide physical clearance. PulseCheck supports the mental skills, daily engagement, and trend visibility around the return.',
   },
 ];
 
@@ -1446,10 +1446,17 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               ? 'Pressure can show up before competition, during change, in conflict, or when a personal goal feels hard. PulseCheck keeps the curriculum clear and gives you one skill to practice for the moment ahead.'
               : isPro
               ? 'That edge shows up in a decision: reset after a mistake, choose a clear target, and commit to the next action. PulseCheck teaches the breathing, self-talk, focus, and reset skills behind that response.'
-              : <>During rehabilitation, PulseCheck can help an athlete stay engaged with the home plan,
-                  work through fear, and prepare for the return. After clearance, those same skills help
-                  with mistakes, focus, pressure, and confidence.</>}
+              : <>Return-to-play is guided by clinical experts. PulseCheck supports the mental side
+                  around that process: staying engaged with the home plan, working through fear,
+                  and building confidence before the athlete returns to full play.</>}
           </p>
+          {!isPerformers && !isPro && (
+            <div className="yi-clinical-points" aria-label="Clinical return-to-play support">
+              <span>Clinical clearance stays with qualified professionals</span>
+              <span>Daily check-ins help track motivation, sleep, and confidence</span>
+              <span>Mental skills support running, practice, full play, and performance</span>
+            </div>
+          )}
           <button
             type="button"
             className="yi-learn-link"
@@ -2426,6 +2433,33 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           color: #4f4956;
           font-size: 17px;
           line-height: 1.72;
+        }
+        .yi-clinical-points {
+          display: grid;
+          gap: 13px;
+          max-width: 610px;
+          margin: 25px 0 0;
+          padding-top: 21px;
+          border-top: 1px solid rgba(16,16,21,.22);
+        }
+        .yi-clinical-points span {
+          position: relative;
+          display: block;
+          padding-left: 21px;
+          color: #1f1d24;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.35;
+        }
+        .yi-clinical-points span::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: .55em;
+          width: 7px;
+          height: 7px;
+          border: 1px solid currentColor;
+          border-radius: 50%;
         }
 
         .yi-close { display: flex; flex-direction: column; align-items: center; padding: 144px 34px; text-align: center; background: var(--yi-paper); }
