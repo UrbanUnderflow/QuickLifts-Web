@@ -34,7 +34,7 @@ function withEnv(overrides, fn) {
   }
 }
 
-test('resolveClinicalBridgeConfig defaults to the AuntEdna partner API and mock mode without a key', () => {
+test('resolveClinicalBridgeConfig defaults to the partner API and fails closed without a key', () => {
   withEnv({
     CLINICAL_BRIDGE_PROVIDER: undefined,
     CLINICAL_PROVIDER: undefined,
@@ -43,14 +43,12 @@ test('resolveClinicalBridgeConfig defaults to the AuntEdna partner API and mock 
     AUNTEDNA_API_URL: undefined,
     CLINICAL_BRIDGE_API_KEY: undefined,
     AUNTEDNA_API_KEY: undefined,
-    CLINICAL_BRIDGE_MOCK: undefined,
-    AUNTEDNA_MOCK: undefined,
   }, () => {
     const config = resolveClinicalBridgeConfig();
     assert.equal(config.provider, 'auntedna');
     assert.equal(config.baseUrl, DEFAULT_AUNTEDNA_BASE_URL);
-    assert.equal(config.mock, true);
     assert.equal(config.hasApiKey, false);
+    assert.equal(config.credentialMode, 'missing');
   });
 });
 
@@ -68,39 +66,141 @@ test('createClinicalBridge returns the AuntEdna bridge for the current provider'
     provider: 'auntedna',
     baseUrl: DEFAULT_AUNTEDNA_BASE_URL,
     apiKey: '',
-    mock: true,
-    explicitMock: true,
     hasApiKey: false,
+    timeoutMs: 1000,
   });
   assert.equal(bridge instanceof AuntEdnaClinicalBridge, true);
 });
 
-test('mock createEscalation normalizes provider-specific ids into the bridge contract', async () => {
+test('createEscalation rejects a missing credential instead of returning simulated success', async () => {
   const bridge = new AuntEdnaClinicalBridge({
     provider: 'auntedna',
     baseUrl: DEFAULT_AUNTEDNA_BASE_URL,
     apiKey: '',
-    mock: true,
-    explicitMock: true,
     hasApiKey: false,
+    credentialMode: 'missing',
+    timeoutMs: 1000,
   });
 
-  const result = await bridge.createEscalation({
-    escalationRecordId: 'pulse-escalation-12345',
-    tier: 3,
-  });
-
-  assert.equal(result.success, true);
-  assert.equal(result.mock, true);
-  assert.equal(result.escalationId, 'ae-pulse-escala');
-  assert.equal(result.status, 'assigned');
+  await assert.rejects(
+    bridge.createEscalation({ escalationRecordId: 'pulse-escalation-12345', tier: 3 }),
+    (error) => error?.code === 'CLINICAL_BRIDGE_API_KEY_MISSING',
+  );
 });
 
-test('normalizeCreateEscalationResult accepts caseId and fallback ids', () => {
+test('createEscalation returns a real provider response and sends required headers', async () => {
+  const originalFetch = global.fetch;
+  let captured;
+  global.fetch = async (url, options) => {
+    captured = { url, options };
+    return new Response(JSON.stringify({
+      success: true,
+      data: { escalationId: 'ae-case-real-1', status: 'received' },
+      requestId: 'req-real-1',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const bridge = new AuntEdnaClinicalBridge({
+      provider: 'auntedna',
+      baseUrl: DEFAULT_AUNTEDNA_BASE_URL,
+      apiKey: 'ae_pk_test_example',
+      hasApiKey: true,
+      credentialMode: 'test',
+      timeoutMs: 1000,
+    });
+    const result = await bridge.createEscalation({
+      escalationRecordId: 'pulse-escalation-12345',
+      tier: 3,
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.escalationId, 'ae-case-real-1');
+    assert.equal(result.status, 'received');
+    assert.equal(captured.url, `${DEFAULT_AUNTEDNA_BASE_URL}/escalations`);
+    assert.equal(captured.options.headers.Authorization, 'Bearer ae_pk_test_example');
+    assert.equal(captured.options.headers['X-Pulse-Integration'], 'true');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('HTTP failures cannot be normalized into clinical success', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    success: true,
+    data: { status: 'received' },
+  }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const bridge = new AuntEdnaClinicalBridge({
+      provider: 'auntedna',
+      baseUrl: DEFAULT_AUNTEDNA_BASE_URL,
+      apiKey: 'ae_pk_test_example',
+      hasApiKey: true,
+      credentialMode: 'test',
+      timeoutMs: 1000,
+    });
+    const result = await bridge.createEscalation({ escalationRecordId: 'esc-500', tier: 3 });
+    assert.equal(result.success, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.httpStatus, 500);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('an error-only provider envelope cannot be normalized into clinical success', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({
+    error: { code: 'PARTNER_REJECTED', message: 'Request rejected.' },
+    requestId: 'req-rejected-1',
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const bridge = new AuntEdnaClinicalBridge({
+      provider: 'auntedna',
+      baseUrl: DEFAULT_AUNTEDNA_BASE_URL,
+      apiKey: 'ae_pk_test_example',
+      hasApiKey: true,
+      credentialMode: 'test',
+      timeoutMs: 1000,
+    });
+    const result = await bridge.createEscalation({ escalationRecordId: 'esc-error-envelope', tier: 3 });
+    assert.equal(result.success, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, 'PARTNER_REJECTED');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('a bare 2xx object outside the provider envelope cannot become clinical success', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({ status: 'ok' }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  try {
+    const bridge = new AuntEdnaClinicalBridge({
+      provider: 'auntedna',
+      baseUrl: DEFAULT_AUNTEDNA_BASE_URL,
+      apiKey: 'ae_pk_test_example',
+      hasApiKey: true,
+      credentialMode: 'test',
+      timeoutMs: 1000,
+    });
+    const result = await bridge.upsertAthlete({ externalId: 'athlete-envelope-check' });
+    assert.equal(result.success, false);
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, 'INVALID_RESPONSE_ENVELOPE');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('normalizeCreateEscalationResult accepts a real provider caseId', () => {
   const normalized = normalizeCreateEscalationResult({
     success: true,
     data: { caseId: 'ae-case-42', escalationStatus: 'received' },
-  }, 'fallback-id');
+  });
 
   assert.equal(normalized.escalationId, 'ae-case-42');
   assert.equal(normalized.status, 'received');

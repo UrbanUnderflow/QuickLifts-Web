@@ -23,6 +23,14 @@ import { db } from '../../api/firebase/config';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
+  buildClinicalEscalationQueueQueryScopes,
+  buildClinicalEscalationTeamScope,
+  canAccessClinicalEscalationRecord,
+  hasClinicalEscalationMembershipAccess,
+  mergeClinicalEscalationTeamScopes,
+  type ClinicalEscalationTeamScope,
+} from '../../api/firebase/pulsecheckClinicalEscalationAccess';
+import {
   CLINICAL_ESCALATIONS_COLLECTION,
   acknowledgeClinicalEscalation,
   resolveClinicalEscalation,
@@ -41,13 +49,20 @@ import CrisisResources from '../../components/clinical-escalation/CrisisResource
 //   2. Admin/clinician opens the page directly to see the active queue.
 //
 // Auth: page-level permission gate. Either (a) the signed-in user is a
-// Pulse admin, or (b) the user has a `clinician` team membership on the
-// team that owns the escalation. Non-admin clinicians can only see /
-// act on records for teams where they hold a clinician seat. Why not
-// AdminRouteGuard? On-staff clinicians at pilot sites are not Pulse
-// admins — they sign in with their own accounts and need to reach
-// this page from email deep links.
+// Pulse admin, or (b) the user has active clinical access on the team that
+// owns the escalation. Non-admin clinical staff can only see and act on
+// records for active athletes inside their roster scope. Why not
+// AdminRouteGuard? On-staff clinicians at pilot sites are not Pulse admins.
+// They sign in with their own accounts and need to reach this page from email
+// deep links.
 // =============================================================================
+
+const ACTIVE_QUEUE_STATUSES = [
+  'pending',
+  'clinician_paged',
+  'clinician_acknowledged',
+] satisfies EscalationDeliveryStatus[];
+const ACTIVE_QUEUE_LIMIT = 50;
 
 const STATUS_TONE: Record<EscalationDeliveryStatus, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'border-amber-700/50 bg-amber-950/30 text-amber-200' },
@@ -60,22 +75,28 @@ const STATUS_TONE: Record<EscalationDeliveryStatus, { label: string; className: 
   failed: { label: 'Delivery failed', className: 'border-rose-700/60 bg-rose-950/40 text-rose-200' },
 };
 
-const formatTimestamp = (value: unknown): string => {
-  if (!value) return '—';
+const timestampToMillis = (value: unknown): number => {
+  if (!value) return 0;
   const ms =
     typeof (value as { toMillis?: () => number }).toMillis === 'function'
       ? (value as { toMillis: () => number }).toMillis()
       : typeof value === 'number'
         ? value * (value < 1e12 ? 1000 : 1)
         : Date.parse(String(value));
-  if (!Number.isFinite(ms)) return '—';
+  return Number.isFinite(ms) ? ms : 0;
+};
+
+const formatTimestamp = (value: unknown): string => {
+  const ms = timestampToMillis(value);
+  if (!ms) return '—';
   return new Date(ms).toLocaleString();
 };
 
 type PermissionState =
   | { status: 'loading' }
   | { status: 'denied'; reason: string }
-  | { status: 'granted'; isAdmin: boolean; allowedTeamIds: Set<string> | 'all' };
+  | { status: 'granted'; isAdmin: true; clinicalScopes: 'all' }
+  | { status: 'granted'; isAdmin: false; clinicalScopes: ClinicalEscalationTeamScope[] };
 
 const ClinicalEscalationsPage: React.FC = () => {
   const router = useRouter();
@@ -90,15 +111,14 @@ const ClinicalEscalationsPage: React.FC = () => {
   const [ackInProgress, setAckInProgress] = useState(false);
   const [resolveInProgress, setResolveInProgress] = useState(false);
   const [resolutionNote, setResolutionNote] = useState('');
-  const [clearWall, setClearWall] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const ackParam = typeof router.query.ack === 'string' ? router.query.ack : '';
 
-  // Permission resolution: admin OR clinician on at least one team.
-  // We capture the set of teamIds the user can act on so we can filter
-  // the queue + active record below.
+  // Permission resolution: platform admin OR an active team membership with
+  // clinical access. For clinical staff, resolve the active athletes inside
+  // each roster scope before opening any escalation listeners.
   useEffect(() => {
     if (userLoading) return;
     if (!currentUser?.id || !currentUser.email) {
@@ -114,27 +134,38 @@ const ClinicalEscalationsPage: React.FC = () => {
         const isAdmin = await adminMethods.isAdmin(currentUser.email);
         if (cancelled) return;
         if (isAdmin) {
-          setPermission({ status: 'granted', isAdmin: true, allowedTeamIds: 'all' });
+          setPermission({ status: 'granted', isAdmin: true, clinicalScopes: 'all' });
           return;
         }
         const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
         if (cancelled) return;
-        const clinicianTeamIds = memberships
-          .filter((m) => m.role === 'clinician')
-          .map((m) => m.teamId)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0);
-        if (clinicianTeamIds.length === 0) {
+        const clinicalMembershipsByTeam = new Map(
+          memberships
+            .filter(hasClinicalEscalationMembershipAccess)
+            .map((membership) => [membership.teamId, membership] as const),
+        );
+        const clinicalMemberships = Array.from(clinicalMembershipsByTeam.values());
+        if (clinicalMemberships.length === 0) {
           setPermission({
             status: 'denied',
             reason:
-              'This page is for Pulse admins and on-staff clinicians. Your account does not have a clinician team membership.',
+              'This page is for Pulse admins and clinical team members. Your account does not have active clinical access on a team.',
           });
           return;
         }
+
+        const scopes = await Promise.all(
+          clinicalMemberships.map(async (membership) =>
+            buildClinicalEscalationTeamScope(
+              membership,
+              await pulseCheckProvisioningService.listTeamMemberships(membership.teamId),
+            )),
+        );
+        if (cancelled) return;
         setPermission({
           status: 'granted',
           isAdmin: false,
-          allowedTeamIds: new Set(clinicianTeamIds),
+          clinicalScopes: mergeClinicalEscalationTeamScopes(scopes),
         });
       } catch (err) {
         if (!cancelled) {
@@ -151,36 +182,85 @@ const ClinicalEscalationsPage: React.FC = () => {
     };
   }, [currentUser?.id, currentUser?.email, userLoading]);
 
-  // Live subscription to the active queue (most-recent N), filtered to
-  // teams the current user is permitted to see.
+  // Live subscription to the active queue. Admins keep the full queue query.
+  // Clinical staff get one explicitly team-and-athlete-scoped query per active
+  // athlete so the potential result set satisfies the Firestore rule.
   useEffect(() => {
     if (permission.status !== 'granted') return;
     setLoadingQueue(true);
-    const constraints = [
-      where('deliveryStatus', 'in', ['pending', 'clinician_paged', 'clinician_acknowledged'] satisfies EscalationDeliveryStatus[]),
-      orderBy('detectedAt', 'desc'),
-      limit(50),
-    ];
-    const allowed = permission.allowedTeamIds;
-    const unsub = onSnapshot(
-      query(collection(db, CLINICAL_ESCALATIONS_COLLECTION), ...constraints),
-      (snap) => {
-        const rows = snap.docs
-          .map((docSnap) => ({
-            ...(docSnap.data() as ClinicalEscalationRecord),
-            id: docSnap.id,
-          }))
-          .filter((row) => allowed === 'all' || (row.teamId && allowed.has(row.teamId)));
-        setQueue(rows);
-        setLoadingQueue(false);
-      },
-      (err) => {
-        console.error('[ClinicalEscalationsPage] queue listener failed:', err);
-        setError(err?.message || 'Could not load active escalations.');
-        setLoadingQueue(false);
-      },
+    const queryScopes = buildClinicalEscalationQueueQueryScopes(
+      permission.isAdmin,
+      permission.clinicalScopes === 'all' ? [] : permission.clinicalScopes,
     );
-    return () => unsub();
+    if (queryScopes.length === 0) {
+      setQueue([]);
+      setLoadingQueue(false);
+      return;
+    }
+
+    const queueQueries = queryScopes.map((scope) => ({
+      key: scope.kind === 'admin'
+        ? 'admin'
+        : `${scope.teamId}:${scope.athleteUserId}`,
+      query: scope.kind === 'admin'
+        ? query(
+          collection(db, CLINICAL_ESCALATIONS_COLLECTION),
+          where('deliveryStatus', 'in', ACTIVE_QUEUE_STATUSES),
+          orderBy('detectedAt', 'desc'),
+          limit(ACTIVE_QUEUE_LIMIT),
+        )
+        : query(
+          collection(db, CLINICAL_ESCALATIONS_COLLECTION),
+          where('teamId', '==', scope.teamId),
+          where('athleteUserId', '==', scope.athleteUserId),
+          where('deliveryStatus', 'in', ACTIVE_QUEUE_STATUSES),
+          orderBy('detectedAt', 'desc'),
+          limit(ACTIVE_QUEUE_LIMIT),
+        ),
+    }));
+    const rowsByQuery = new Map<string, ClinicalEscalationRecord[]>();
+    const loadingQueries = new Set(queueQueries.map((entry) => entry.key));
+
+    const publishQueue = () => {
+      const rowsById = new Map<string, ClinicalEscalationRecord>();
+      for (const rows of rowsByQuery.values()) {
+        for (const row of rows) rowsById.set(row.id, row);
+      }
+      setQueue(
+        Array.from(rowsById.values())
+          .sort((left, right) => timestampToMillis(right.detectedAt) - timestampToMillis(left.detectedAt))
+          .slice(0, ACTIVE_QUEUE_LIMIT),
+      );
+    };
+    const finishLoadingQuery = (key: string) => {
+      loadingQueries.delete(key);
+      if (loadingQueries.size === 0) setLoadingQueue(false);
+    };
+
+    const unsubs = queueQueries.map((entry) =>
+      onSnapshot(
+        entry.query,
+        (snap) => {
+          rowsByQuery.set(
+            entry.key,
+            snap.docs.map((docSnap) => ({
+              ...(docSnap.data() as ClinicalEscalationRecord),
+              id: docSnap.id,
+            })),
+          );
+          publishQueue();
+          finishLoadingQuery(entry.key);
+        },
+        (err) => {
+          console.error(`[ClinicalEscalationsPage] queue listener ${entry.key} failed:`, err);
+          rowsByQuery.delete(entry.key);
+          publishQueue();
+          setError(err?.message || 'Could not load active escalations.');
+          finishLoadingQuery(entry.key);
+        },
+      ),
+    );
+    return () => unsubs.forEach((unsub) => unsub());
   }, [permission]);
 
   // Single-record load when arriving via ?ack=<id> deep link. Enforces
@@ -202,8 +282,8 @@ const ClinicalEscalationsPage: React.FC = () => {
           return;
         }
         const record = { ...(snap.data() as ClinicalEscalationRecord), id: snap.id };
-        const allowed = permission.allowedTeamIds;
-        if (allowed !== 'all' && (!record.teamId || !allowed.has(record.teamId))) {
+        const allowed = permission.clinicalScopes;
+        if (allowed !== 'all' && !canAccessClinicalEscalationRecord(allowed, record)) {
           setError('You do not have access to this escalation.');
           setActiveRecord(null);
           return;
@@ -261,17 +341,16 @@ const ClinicalEscalationsPage: React.FC = () => {
     setError(null);
     setNotice(null);
     try {
-      await resolveClinicalEscalation(record.id, {
+      const result = await resolveClinicalEscalation(record.id, {
         resolvedByUserId: currentUser.id,
         resolutionNote: resolutionNote.trim(),
-        clearCrisisWallForAthleteUserId: clearWall ? record.athleteUserId : undefined,
+        athleteUserId: record.athleteUserId,
+        legacyEscalationRecordId: record.legacyEscalationRecordId,
       });
       setNotice(
-        `Resolved. ${
-          clearWall
-            ? 'The athlete\'s crisis wall has been cleared.'
-            : 'The athlete\'s crisis wall remains active until you clear it manually.'
-        }`,
+        result.providerConfirmed
+          ? 'Resolved with the clinical provider. The athlete\'s protective state was not changed. Only a MANAS watch-list removal or authoritative care-state reconciliation can clear it.'
+          : 'Resolved in PulseCheck. No clinical provider case reference was available to confirm remotely. The athlete\'s protective state was not changed.',
       );
       const fresh = await getDoc(doc(db, CLINICAL_ESCALATIONS_COLLECTION, record.id));
       if (fresh.exists()) {
@@ -372,8 +451,6 @@ const ClinicalEscalationsPage: React.FC = () => {
                   resolveInProgress={resolveInProgress}
                   resolutionNote={resolutionNote}
                   setResolutionNote={setResolutionNote}
-                  clearWall={clearWall}
-                  setClearWall={setClearWall}
                 />
               ) : (
                 <p className="mt-4 text-sm text-zinc-500">
@@ -468,8 +545,6 @@ interface EscalationDetailProps {
   resolveInProgress: boolean;
   resolutionNote: string;
   setResolutionNote: (value: string) => void;
-  clearWall: boolean;
-  setClearWall: (value: boolean) => void;
 }
 
 const EscalationDetail: React.FC<EscalationDetailProps> = ({
@@ -480,8 +555,6 @@ const EscalationDetail: React.FC<EscalationDetailProps> = ({
   resolveInProgress,
   resolutionNote,
   setResolutionNote,
-  clearWall,
-  setClearWall,
 }) => {
   const isAcknowledged = Boolean(record.acknowledgedAt);
   const isResolved = record.deliveryStatus === 'resolved';
@@ -567,15 +640,9 @@ const EscalationDetail: React.FC<EscalationDetailProps> = ({
             />
           </div>
 
-          <label className="flex items-center gap-2 text-xs text-zinc-300">
-            <input
-              type="checkbox"
-              checked={clearWall}
-              onChange={(event) => setClearWall(event.target.checked)}
-              className="h-4 w-4 rounded border-zinc-700 bg-black"
-            />
-            Clear the athlete's crisis wall on resolve
-          </label>
+          <p className="rounded-lg border border-amber-800/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-100">
+            Marking the case resolved does not restore training access. The protective state changes only after a MANAS watch-list removal or an authoritative care-state reconciliation.
+          </p>
 
           <button
             type="button"

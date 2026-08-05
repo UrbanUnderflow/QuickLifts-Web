@@ -227,6 +227,8 @@ const Chat: React.FC = () => {
     tier: EscalationTier;
     category: EscalationCategory;
     reason?: string;
+    handoffConfirmed?: boolean;
+    handoffStatus?: string;
   }>({
     isOpen: false,
     tier: EscalationTier.None,
@@ -544,9 +546,12 @@ const Chat: React.FC = () => {
       const json = await res.json();
       if (res.ok) {
         if (json.conversationId && json.conversationId !== conversationId) setConversationId(json.conversationId);
+        const liveAssistantMessage = typeof json.assistantMessage === 'string'
+          ? json.assistantMessage.trim()
+          : '';
         const aiMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: json.assistantMessage || "Let's talk about this. How have you been feeling about this lately?",
+          content: liveAssistantMessage || 'Nora did not return a live response. Please try again.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000)
         };
@@ -554,7 +559,9 @@ const Chat: React.FC = () => {
       } else {
         const aiMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: 'Something went wrong. Please try again shortly.',
+          content: typeof json.error === 'string' && json.error.trim()
+            ? json.error.trim()
+            : 'The live chat request failed without a readable server message. Please try again.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000)
         };
@@ -581,7 +588,7 @@ const Chat: React.FC = () => {
     try {
       const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await pulseCheckChatHeaders(currentUser.id),
         body: JSON.stringify({
           action: 'consent',
           escalationId: currentEscalationId,
@@ -592,18 +599,46 @@ const Chat: React.FC = () => {
       
       const json = await res.json();
       if (res.ok && json.success) {
+        const liveStatusMessage = typeof json.message === 'string' ? json.message.trim() : '';
         // Add confirmation message to chat
         const confirmMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: json.message || 'Thank you. A mental health professional will reach out soon. In the meantime, I\'m here if you want to keep talking.',
+          content: liveStatusMessage || 'Your consent was recorded, but the clinical endpoint did not return a live handoff status. Please contact your support team directly if you need help now.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000)
         };
         setMessages(prev => [...prev, confirmMsg]);
         setEscalationModal({ isOpen: false, tier: EscalationTier.None, category: EscalationCategory.General });
+      } else {
+        const providerMessage = typeof json?.providerError?.message === 'string'
+          ? json.providerError.message.trim()
+          : '';
+        const responseMessage = typeof json?.message === 'string'
+          ? json.message.trim()
+          : typeof json?.error === 'string'
+            ? json.error.trim()
+            : '';
+        const failureMsg: ChatMessage = {
+          id: Math.random().toString(36).slice(2),
+          content: responseMessage
+            || providerMessage
+            || 'Your choice is saved, but the clinical connection could not be confirmed. Please contact your support team directly if you need help now.',
+          isFromUser: false,
+          timestamp: Math.floor(Date.now() / 1000)
+        };
+        setMessages(prev => [...prev, failureMsg]);
+        // Keep the consent surface open. The server is idempotent, so a retry
+        // returns the recorded decision without creating a second handoff.
       }
     } catch (e) {
       console.error('[PulseCheck] Consent acceptance failed:', e);
+      const failureMsg: ChatMessage = {
+        id: Math.random().toString(36).slice(2),
+        content: 'We could not confirm the clinical connection. Please contact your support team directly if you need help now.',
+        isFromUser: false,
+        timestamp: Math.floor(Date.now() / 1000)
+      };
+      setMessages(prev => [...prev, failureMsg]);
     } finally {
       setEscalationProcessing(false);
     }
@@ -617,7 +652,7 @@ const Chat: React.FC = () => {
     try {
       const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await pulseCheckChatHeaders(currentUser.id),
         body: JSON.stringify({
           action: 'consent',
           escalationId: currentEscalationId,
@@ -628,10 +663,11 @@ const Chat: React.FC = () => {
       
       const json = await res.json();
       if (res.ok && json.success) {
+        const liveStatusMessage = typeof json.message === 'string' ? json.message.trim() : '';
         // Add acknowledgment message to chat
         const declineMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: json.message || 'I understand. Remember, you can always change your mind. I\'m here whenever you want to talk.',
+          content: liveStatusMessage || 'Your choice was recorded, but the endpoint did not return a live confirmation message.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000)
         };
@@ -647,7 +683,10 @@ const Chat: React.FC = () => {
   }, [currentUser, currentEscalationId]);
 
   // Handle escalation response from chat API
-  const handleEscalation = useCallback(async (escalation: EscalationResponse, userMessage: string) => {
+  const handleEscalation = useCallback(async (
+    escalation: EscalationResponse,
+    outcome?: { success?: boolean; handoffStatus?: string | null },
+  ) => {
     if (!escalation || !escalation.shouldEscalate) return;
     
     // Set active escalation state for visual signals (Tier 2 and 3)
@@ -658,31 +697,6 @@ const Chat: React.FC = () => {
     
     // For Tier 2 (Elevated) - show consent modal
     if (escalation.tier === EscalationTier.ElevatedRisk) {
-      // Create escalation record first
-      try {
-        const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'create',
-            userId: currentUser?.id,
-            conversationId,
-            tier: escalation.tier,
-            category: escalation.category,
-            triggerContent: userMessage,
-            classificationReason: escalation.reason,
-            classificationConfidence: escalation.confidence
-          })
-        });
-        
-        const json = await res.json();
-        if (res.ok && json.escalationId) {
-          setCurrentEscalationId(json.escalationId);
-        }
-      } catch (e) {
-        console.error('[PulseCheck] Failed to create escalation record:', e);
-      }
-      
       setEscalationModal({
         isOpen: true,
         tier: escalation.tier,
@@ -693,21 +707,18 @@ const Chat: React.FC = () => {
     
     // For Tier 3 (Critical) - show modal immediately (escalation record already created by backend)
     if (escalation.tier === EscalationTier.CriticalRisk) {
+      const handoffConfirmed = outcome?.success === true && outcome?.handoffStatus === 'completed';
       setEscalationModal({
         isOpen: true,
         tier: escalation.tier,
         category: escalation.category,
-        reason: escalation.reason
+        reason: escalation.reason,
+        handoffConfirmed,
+        handoffStatus: outcome?.handoffStatus || 'unconfirmed',
       });
-      setEscalationProcessing(true);
-      
-      // The backend already creates the record and initiates handoff for Tier 3
-      // We just need to show the modal with crisis resources
-      setTimeout(() => {
-        setEscalationProcessing(false);
-      }, 2000);
+      setEscalationProcessing(false);
     }
-  }, [currentUser, conversationId]);
+  }, []);
 
   const send = async () => {
     if (!input.trim() || !currentUser || sending) return;
@@ -746,6 +757,12 @@ const Chat: React.FC = () => {
       
       if (res.ok) {
         if (json.conversationId && json.conversationId !== conversationId) setConversationId(json.conversationId);
+        if (json.escalationOutcome?.escalationRecordId) {
+          setCurrentEscalationId(json.escalationOutcome.escalationRecordId);
+        }
+        const liveAssistantMessage = typeof json.assistantMessage === 'string'
+          ? json.assistantMessage.trim()
+          : '';
         const tier = json.escalation?.tier ?? 0;
         const tierEnum = (tier as EscalationTier) ?? EscalationTier.None;
 
@@ -756,7 +773,7 @@ const Chat: React.FC = () => {
         }
         const aiMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: json.assistantMessage || "I'm here to support you. Can you share more?",
+          content: liveAssistantMessage || 'Nora did not return a live response. Please try again.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000),
           escalationTier: tierEnum >= EscalationTier.MonitorOnly ? tierEnum : undefined
@@ -789,7 +806,7 @@ const Chat: React.FC = () => {
         // Handle escalation if present
         if (json.escalation && json.escalation.shouldEscalate) {
           console.log('[PulseCheck Chat] ✅ Triggering escalation handler');
-          handleEscalation(json.escalation, text);
+          handleEscalation(json.escalation, json.escalationOutcome);
         } else {
           console.log('[PulseCheck Chat] ⏭️ No escalation action needed:', {
             hasEscalation: !!json.escalation,
@@ -1652,6 +1669,8 @@ const Chat: React.FC = () => {
       tier={escalationModal.tier}
       category={escalationModal.category}
       reason={escalationModal.reason}
+      handoffConfirmed={escalationModal.handoffConfirmed}
+      handoffStatus={escalationModal.handoffStatus}
       onAcceptConsent={handleAcceptConsent}
       onDeclineConsent={handleDeclineConsent}
       onClose={() => {

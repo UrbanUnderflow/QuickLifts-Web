@@ -22,6 +22,9 @@ const {
   defaultNoraVoiceRubricFallback,
   enforceNoraVoiceRubric,
 } = require('./utils/noraVoiceRubric');
+const {
+  runtimeHelpers: escalationRuntime,
+} = require('./pulsecheck-escalation');
 
 const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const CONVERSATION_SIGNAL_EVENTS_COLLECTION = 'conversation-derived-signal-events';
@@ -439,6 +442,30 @@ function buildEscalationRecordPayload({
     incidentLastActivityAt: incident.lastActivityAt,
     incidentClosedAt: null,
     incidentRecordCount: incident.recordCount,
+  };
+}
+
+function buildTrustedEscalationOutcome(created = {}) {
+  const escalationRecordId = created.escalationId || null;
+  const isCritical = created.isCritical === true;
+  const explicitSuccess = typeof created.success === 'boolean' ? created.success : null;
+  return {
+    escalationRecordId,
+    recordCreated: created.recordCreated === true || Boolean(escalationRecordId),
+    consentRequired: created.consentRequired === true || created.requiresConsent === true,
+    safetyStateWriteStatus: created.safetyStateWriteStatus || null,
+    safetyStateError: created.safetyStateError || null,
+    handoffStatus: created.handoffStatus || null,
+    handoffError: created.handoffError || null,
+    handoffResult: created.handoffResult || null,
+    supportRoute: created.supportRoute || null,
+    hotlineResource: created.hotlineResource || created.handoffResult?.hotlineResource || null,
+    message: created.message || created.handoffResult?.message || null,
+    isCritical,
+    deduped: created.deduped === true,
+    success: explicitSuccess === null
+      ? (isCritical ? created.handoffStatus === 'completed' : true)
+      : explicitSuccess,
   };
 }
 
@@ -1566,7 +1593,6 @@ exports.handler = async (event, context) => {
       userId: claimedUserId,
       message, 
       conversationId, 
-      skipEscalation = false,
       systemPromptContext, // DEPRECATED: iOS used to send full prompt, now sends raw data
       userContext,         // Optional: iOS sends structured user context
       healthContext,       // Optional: iOS sends health data from HealthKit
@@ -2122,7 +2148,10 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
 
       const completion = await completionRes.json();
-      assistantMessage = completion.choices?.[0]?.message?.content?.trim() || "I'm here to support you. Can you share more?";
+      assistantMessage = completion.choices?.[0]?.message?.content?.trim();
+      if (!assistantMessage) {
+        throw new Error('OpenAI did not return a live assistant message.');
+      }
 
       // If user has active assignments and hasn't opted in/out yet, Nora should ask once.
       try {
@@ -2173,7 +2202,10 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       },
     });
 
-    // Update conversation: append messages and save
+    // Build the assistant message now, but do not persist either turn until the
+    // live escalation classifier has completed. A classifier outage must not
+    // leave an assistant reply in history while the API reports that the
+    // message was not processed.
     const aiMsg = {
       id: cryptoRandomId(),
       content: assistantMessage,
@@ -2182,6 +2214,54 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       messageType: 'text'
     };
 
+    // === ESCALATION CLASSIFICATION AND SERVER-OWNED ORCHESTRATION ===
+    let escalation = null;
+    let escalationOutcome = null;
+
+    console.log('[pulsecheck-chat] ========== ESCALATION FLOW START ==========');
+    console.log('[pulsecheck-chat] Escalation parameters:', {
+      userId: userId.slice(0, 8) + '...',
+      messageLength: message.length,
+      recentMessagesCount: recentMessages?.length || 0,
+      conversationId: newConvoId
+    });
+
+    try {
+      console.log('[pulsecheck-chat] [1/5] Starting escalation classification...');
+      const classificationStartTime = Date.now();
+      escalation = await classifyEscalation(
+        db,
+        userId,
+        message,
+        recentMessages,
+        newConvoId
+      );
+      console.log(`[pulsecheck-chat] [2/5] Classification completed in ${Date.now() - classificationStartTime}ms`, {
+        tier: escalation?.tier,
+        shouldEscalate: escalation?.shouldEscalate,
+        category: escalation?.category,
+        confidence: escalation?.confidence,
+      });
+    } catch (classificationError) {
+      console.error('[pulsecheck-chat] Escalation classification failed:', classificationError);
+    }
+
+    if (!escalation) {
+      console.error('[pulsecheck-chat] Refusing to deliver an unclassified assistant response.');
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({
+          error: 'Nora could not process that message because the live safety check was unavailable. Please try again. If you may be in immediate danger or need urgent help, call 911 or call or text 988 now.',
+          errorCode: 'ESCALATION_CLASSIFICATION_UNAVAILABLE',
+          conversationId: newConvoId,
+          messageProcessed: false,
+        }),
+      };
+    }
+
+    // The live safety classification completed, so this turn is eligible to be
+    // stored and returned. Persistence remains non-blocking for chat delivery.
     try {
       if (!convo?.messages?.length) {
         const data = {
@@ -2210,125 +2290,89 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
     } catch (saveError) {
       console.error('[pulsecheck-chat] Error saving conversation:', saveError);
-      // Continue - we still have the response to return, just conversation wasn't saved
-      // This is not critical enough to fail the entire request
+      // The classified live response can still be returned if conversation
+      // persistence fails; no synthetic reply is substituted.
     }
 
-    // === ESCALATION CLASSIFICATION ===
-    // Run classification in parallel with response (don't block)
-    let escalation = null;
-    
-    console.log('[pulsecheck-chat] ========== ESCALATION FLOW START ==========');
-    console.log('[pulsecheck-chat] Escalation parameters:', {
-      skipEscalation,
-      userId: userId.slice(0, 8) + '...',
-      messageLength: message.length,
-      messagePreview: message.substring(0, 50) + '...',
-      recentMessagesCount: recentMessages?.length || 0,
-      conversationId: newConvoId
-    });
-    
-    if (!skipEscalation) {
+    const shouldCreateEscalation = Boolean(
+      escalation && isTrueCareEscalationClassification(escalation, message, recentMessages)
+    );
+    if (shouldCreateEscalation) {
+      const recordCreationStartedAt = Date.now();
       try {
-        console.log('[pulsecheck-chat] [1/5] Starting escalation classification...');
-        const classificationStartTime = Date.now();
-        
-        escalation = await classifyEscalation(
-          db,
+        const created = await escalationRuntime.createEscalationFromTrustedRuntime({
           userId,
-          message,
-          recentMessages,
-          newConvoId
-        );
-        
-        const classificationDuration = Date.now() - classificationStartTime;
-        console.log(`[pulsecheck-chat] [2/5] Classification completed in ${classificationDuration}ms`);
-        console.log('[pulsecheck-chat] [2/5] Escalation classification result:', {
-          hasResult: !!escalation,
-          tier: escalation?.tier,
-          tierName: escalation?.tier === 0 ? 'None' : escalation?.tier === 1 ? 'MonitorOnly' : escalation?.tier === 2 ? 'ElevatedRisk' : escalation?.tier === 3 ? 'CriticalRisk' : 'Unknown',
-          shouldEscalate: escalation?.shouldEscalate,
-          category: escalation?.category,
-          reason: escalation?.reason,
-          confidence: escalation?.confidence,
-          fullObject: JSON.stringify(escalation, null, 2)
-        });
+          conversationId: newConvoId,
+          tier: escalation.tier,
+          category: escalation.category,
+          triggerMessageId: userMsg.id,
+          triggerContent: message,
+          classificationReason: escalation.reason,
+          classificationConfidence: escalation.confidence,
+          disposition: escalation.disposition,
+          classificationFamily: escalation.classificationFamily,
+          explanation: escalation.explanation,
+          severity: escalation.severity,
+          requiresCoachReview: escalation.requiresCoachReview,
+          requiresClinicalHandoff: escalation.requiresClinicalHandoff,
+          dedupeEligible: escalation.dedupeEligible,
+          sourceTriggerMessageId: escalation.sourceTriggerMessageId || userMsg.id,
+          incident: escalation.incident,
+          stateSnapshot: currentStateSnapshot ? {
+            snapshotId: currentStateSnapshot.id,
+            sourceDate: currentStateSnapshot.sourceDate,
+            overallReadiness: currentStateSnapshot.overallReadiness,
+            readinessScore: currentStateSnapshot.readinessScore,
+            confidence: currentStateSnapshot.confidence,
+            freshness: currentStateSnapshot.freshness,
+            supportFlag: currentStateSnapshot.supportFlag,
+            recommendedRouting: currentStateSnapshot.recommendedRouting,
+            recommendedProtocolClass: currentStateSnapshot.recommendedProtocolClass,
+            summary: currentStateSnapshot.enrichedInterpretation?.summary,
+            trendSummary: currentStateSnapshot.trendSummary,
+            stateDimensions: currentStateSnapshot.stateDimensions,
+            sourcesUsed: currentStateSnapshot.sourcesUsed,
+            contextTags: currentStateSnapshot.contextTags,
+            capturedAt: currentStateSnapshot.updatedAt || currentStateSnapshot.createdAt,
+          } : undefined,
+        }, db);
 
-        // Create escalation records for Tier 1+ (Monitor-Only and above)
-        console.log('[pulsecheck-chat] [3/5] Evaluating escalation record creation...');
-        console.log('[pulsecheck-chat] [3/5] Evaluation checks:', {
-          hasEscalation: !!escalation,
-          shouldEscalate: escalation?.shouldEscalate,
-          tier: escalation?.tier,
-          isTier1: escalation?.tier === EscalationTier.MonitorOnly,
-          isTier2: escalation?.tier === EscalationTier.ElevatedRisk,
-          isTier3: escalation?.tier === EscalationTier.CriticalRisk,
-          shouldCreateRecord: escalation && isTrueCareEscalationClassification(escalation, message, recentMessages),
-          isTrueCareEscalation: isTrueCareEscalationClassification(escalation, message, recentMessages),
-        });
-        
-        if (escalation && isTrueCareEscalationClassification(escalation, message, recentMessages)) {
-          const tier = escalation.tier;
-          console.log(`[pulsecheck-chat] [4/5] Escalation tier detected (record will be saved). Tier: ${tier}`);
-          console.log(`[pulsecheck-chat] [4/5] Record creation params:`, {
-            userId: userId.slice(0, 8) + '...',
-            conversationId: newConvoId,
-            messageId: aiMsg.id,
-            tier,
-            category: escalation.category,
-            shouldEscalate: escalation.shouldEscalate
-          });
-          
-          // Trigger escalation record creation asynchronously (Tier 1+)
-          const recordCreationStartTime = Date.now();
-          createEscalationRecord(db, userId, newConvoId, aiMsg.id, message, escalation)
-            .then(async recordId => {
-              const recordCreationDuration = Date.now() - recordCreationStartTime;
-              console.log(`[pulsecheck-chat] [5/5] ✅ Escalation record created successfully in ${recordCreationDuration}ms`);
-              console.log(`[pulsecheck-chat] [5/5] Record ID: ${recordId}`);
+        escalationOutcome = buildTrustedEscalationOutcome(created);
 
-              // Tier 1 (Monitor-Only): notify coach (no AuntEdna escalation)
-              if (tier === EscalationTier.MonitorOnly) {
-                console.log('[pulsecheck-chat] [5/5] Tier 1 => notifying coach (monitor-only)');
-                try {
-                  await notifyCoachForEscalation(db, recordId, userId, tier);
-                  console.log('[pulsecheck-chat] [5/5] ✅ Coach notified for Tier 1 escalation');
-                } catch (notifyErr) {
-                  console.error('[pulsecheck-chat] [5/5] ❌ Coach notify failed (non-blocking):', notifyErr?.message || notifyErr);
-                }
-              }
-
-              console.log('[pulsecheck-chat] ========== ESCALATION FLOW SUCCESS ==========');
-            })
-            .catch(err => {
-              const recordCreationDuration = Date.now() - recordCreationStartTime;
-              console.error(`[pulsecheck-chat] [5/5] ❌ Escalation record creation FAILED after ${recordCreationDuration}ms`);
-              console.error('[pulsecheck-chat] [5/5] Error details:', {
-                message: err.message,
-                code: err.code,
-                stack: err.stack
-              });
-              console.error('[pulsecheck-chat] ========== ESCALATION FLOW FAILED ==========');
-            });
-        } else {
-          console.log('[pulsecheck-chat] [3/5] No escalation record needed:', {
-            reason: !escalation ? 'No escalation result' : escalation.tier === EscalationTier.None ? 'tier is 0 (None)' : 'Unknown',
-            escalationTier: escalation?.tier
-          });
-          console.log('[pulsecheck-chat] ========== ESCALATION FLOW COMPLETE (No escalation) ==========');
+        if (escalation.tier === EscalationTier.MonitorOnly && escalationOutcome.escalationRecordId) {
+          try {
+            await notifyCoachForEscalation(db, escalationOutcome.escalationRecordId, userId, escalation.tier);
+          } catch (notifyError) {
+            console.error('[pulsecheck-chat] Tier 1 coach notification failed:', notifyError?.message || notifyError);
+          }
         }
-      } catch (escErr) {
-        console.error('[pulsecheck-chat] ❌ ESCALATION CLASSIFICATION EXCEPTION');
-        console.error('[pulsecheck-chat] Error type:', escErr.constructor.name);
-        console.error('[pulsecheck-chat] Error message:', escErr.message);
-        console.error('[pulsecheck-chat] Error code:', escErr.code);
-        console.error('[pulsecheck-chat] Error stack:', escErr.stack);
-        console.error('[pulsecheck-chat] ========== ESCALATION FLOW ERROR ==========');
-        // Don't fail the chat if classification fails
+
+        console.log(`[pulsecheck-chat] [5/5] Escalation orchestration completed in ${Date.now() - recordCreationStartedAt}ms`, {
+          escalationRecordId: escalationOutcome.escalationRecordId,
+          tier: escalation.tier,
+          handoffStatus: escalationOutcome.handoffStatus,
+          consentRequired: escalationOutcome.consentRequired,
+        });
+      } catch (orchestrationError) {
+        console.error('[pulsecheck-chat] Escalation orchestration failed:', orchestrationError);
+        escalationOutcome = {
+          escalationRecordId: null,
+          recordCreated: false,
+          consentRequired: escalation?.tier === EscalationTier.ElevatedRisk,
+          handoffStatus: escalation?.tier === EscalationTier.CriticalRisk ? 'failed' : 'pending',
+          handoffResult: null,
+          supportRoute: null,
+          isCritical: escalation?.tier === EscalationTier.CriticalRisk,
+          deduped: false,
+          success: false,
+          error: orchestrationError?.message || 'Escalation orchestration failed.',
+        };
       }
     } else {
-      console.log('[pulsecheck-chat] ⏭️ Escalation skipped (skipEscalation=true)');
-      console.log('[pulsecheck-chat] ========== ESCALATION FLOW SKIPPED ==========');
+      console.log('[pulsecheck-chat] No escalation record needed.', {
+        tier: escalation?.tier ?? null,
+        shouldEscalate: escalation?.shouldEscalate ?? false,
+      });
     }
 
     // Prepare response
@@ -2358,7 +2402,9 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       assistantMessageLength: assistantMessage.length,
       hasEscalation: !!escalationResponse,
       escalationTier: escalationResponse?.tier,
-      escalationShouldEscalate: escalationResponse?.shouldEscalate
+      escalationShouldEscalate: escalationResponse?.shouldEscalate,
+      escalationRecordId: escalationOutcome?.escalationRecordId || null,
+      escalationHandoffStatus: escalationOutcome?.handoffStatus || null,
     });
     
     return {
@@ -2368,6 +2414,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         conversationId: newConvoId,
         assistantMessage,
         escalation: escalationResponse,
+        escalationOutcome,
         stateSnapshot: currentStateSnapshot || null,
         conversationSignalEvent: conversationSignalEvent || null,
         dailyAssignment: todaysNoraAssignment || null,
@@ -2403,9 +2450,45 @@ function cryptoRandomId() {
 /**
  * Classify message for escalation
  */
+function buildHardRiskSafetyFallback({ userId, message, recentMessages, conversationId }) {
+  const safeRecentMessages = Array.isArray(recentMessages) ? recentMessages : [];
+  const combinedText = [message]
+    .concat(safeRecentMessages.slice(-5).map((entry) => entry?.content || ''))
+    .join(' ');
+  if (!HARD_RISK_ESCALATION_PATTERN.test(combinedText)) return null;
+
+  return normalizeEscalationClassification({
+    tier: EscalationTier.CriticalRisk,
+    category: 'immediate_safety',
+    reason: 'Explicit immediate-safety language matched the deterministic safety rule while AI classification was unavailable.',
+    explanation: 'The safety fallback requires an immediate handoff when explicit hard-risk language is present.',
+    confidence: 1,
+    shouldEscalate: true,
+    disposition: EscalationDisposition.ClinicalHandoff,
+    classificationFamily: EscalationClassificationFamily.CriticalSafety,
+    severity: EscalationSeverity.Critical,
+    requiresCoachReview: true,
+    requiresClinicalHandoff: true,
+    dedupeEligible: true,
+    classificationSource: 'deterministic_hard_risk_fallback',
+  }, {
+    userId,
+    message,
+    recentMessages: safeRecentMessages,
+    conversationId,
+  });
+}
+
 async function classifyEscalation(db, userId, message, recentMessages, conversationId) {
+  const safeRecentMessages = Array.isArray(recentMessages) ? recentMessages : [];
+  const hardRiskSafetyFallback = buildHardRiskSafetyFallback({
+    userId,
+    message,
+    recentMessages: safeRecentMessages,
+    conversationId,
+  });
   const apiKey = process.env.OPEN_AI_SECRET_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return hardRiskSafetyFallback;
 
   // Load escalation conditions from Firestore
   console.log('[classifyEscalation] [STEP 1] Loading escalation conditions from Firestore...');
@@ -2434,7 +2517,7 @@ async function classifyEscalation(db, userId, message, recentMessages, conversat
     console.error('[classifyEscalation] [STEP 1] Error code:', queryError.code);
     console.error('[classifyEscalation] [STEP 1] Error stack:', queryError.stack);
     // If query fails (e.g., missing index), continue without conditions
-    return null;
+    return hardRiskSafetyFallback;
   }
 
   console.log('[classifyEscalation] [STEP 2] Processing conditions...');
@@ -2509,8 +2592,8 @@ CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
 ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
   
 
-  const conversationContext = recentMessages.length > 0
-    ? '\nRecent messages:\n' + recentMessages.slice(-5).map(m => 
+  const conversationContext = safeRecentMessages.length > 0
+    ? '\nRecent messages:\n' + safeRecentMessages.slice(-5).map(m =>
         `${m.isFromUser ? 'User' : 'AI'}: ${m.content}`
       ).join('\n')
     : '';
@@ -2519,15 +2602,14 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
     systemPromptLength: systemPrompt.length,
     userMessageLength: message.length,
     conversationContextLength: conversationContext.length,
-    recentMessagesCount: recentMessages.length
+    recentMessagesCount: safeRecentMessages.length
   });
 
   console.log('[classifyEscalation] [STEP 5] Calling OpenAI API for classification...');
   console.log('[classifyEscalation] [STEP 5] API request details:', {
     endpoint: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o-mini',
-    hasApiKey: !!apiKey,
-    apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING'
+    hasApiKey: Boolean(apiKey),
   });
 
   try {
@@ -2570,7 +2652,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
             error: errorText.substring(0, 500),
             headers: Object.fromEntries(res.headers.entries())
           });
-          return null;
+          return hardRiskSafetyFallback;
         }
       } else {
         const errorText = await res.text();
@@ -2581,7 +2663,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
           error: errorText.substring(0, 500),
           headers: Object.fromEntries(res.headers.entries())
         });
-        return null;
+        return hardRiskSafetyFallback;
       }
 
       const errorType = errorData?.error?.type || errorData?.error?.code;
@@ -2603,7 +2685,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
         console.error('[classifyEscalation] [STEP 5] ⚠️ RATE LIMIT EXCEEDED');
       }
       
-      return null;
+      return hardRiskSafetyFallback;
     }
 
     console.log('[classifyEscalation] [STEP 6] Parsing API response...');
@@ -2625,7 +2707,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
     if (!content) {
       console.warn('[classifyEscalation] [STEP 6] ⚠️ No content in response');
       console.warn('[classifyEscalation] [STEP 6] Full response:', JSON.stringify(data, null, 2));
-      return null;
+      return hardRiskSafetyFallback;
     }
     
     console.log('[classifyEscalation] [STEP 7] Parsing JSON content...');
@@ -2639,7 +2721,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
       const normalized = normalizeEscalationClassification(parsed, {
         userId,
         message,
-        recentMessages,
+        recentMessages: safeRecentMessages,
         conversationId,
       });
 
@@ -2649,7 +2731,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
         changed: parsed.tier !== normalized.tier || parsed.shouldEscalate !== normalized.shouldEscalate
       });
 
-      const suppressed = suppressBenignPerformanceEscalation(normalized, message, recentMessages, conversationId);
+      const suppressed = suppressBenignPerformanceEscalation(normalized, message, safeRecentMessages, conversationId);
       if (suppressed.tier !== normalized.tier || suppressed.shouldEscalate !== normalized.shouldEscalate) {
         console.log('[classifyEscalation] [STEP 8] Benign performance-support suppression applied:', {
           before: { tier: normalized.tier, shouldEscalate: normalized.shouldEscalate, category: normalized.category },
@@ -2669,7 +2751,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
       console.error('[classifyEscalation] [STEP 7] Raw content that failed to parse:', content);
       console.error('[classifyEscalation] [STEP 7] Content length:', content.length);
       console.error('[classifyEscalation] [STEP 7] Content type:', typeof content);
-      return null;
+      return hardRiskSafetyFallback;
     }
   } catch (err) {
     console.error('[classifyEscalation] ❌ CLASSIFICATION EXCEPTION');
@@ -2677,7 +2759,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
     console.error('[classifyEscalation] Error message:', err.message);
     console.error('[classifyEscalation] Error code:', err.code);
     console.error('[classifyEscalation] Error stack:', err.stack);
-    return null;
+    return hardRiskSafetyFallback;
   }
 }
 
@@ -3232,8 +3314,10 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 }
 
 exports.runtimeHelpers = {
+  buildTrustedEscalationOutcome,
   getRequestHeader,
   verifyPulseCheckCaller,
+  classifyEscalation,
   classifyResponseContext,
   isConversationAcknowledgment,
   getTodaysNoraAssignment,

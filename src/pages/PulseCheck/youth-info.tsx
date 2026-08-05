@@ -1000,7 +1000,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         <div className="yi-hero-shade" aria-hidden="true" />
         <div className="yi-grain" aria-hidden="true" />
         <div className="yi-hero-copy">
-          <p className="yi-kicker yi-kicker--light">A DAILY MENTAL PERFORMANCE SYSTEM</p>
+          <p className="yi-kicker yi-kicker--light">A DAILY MENTAL WORKOUT</p>
           <h1>
             TRAIN THE MIND<br />
             <span>LIKE THE BODY.</span>
@@ -1010,7 +1010,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               ? 'Build focus, confidence, and calm for presentations, exams, difficult conversations, competition, and important decisions.'
               : isPro
               ? 'Learn how to reset after mistakes, stay steady under pressure, and make the next decision with confidence.'
-              : 'Short mental skills for mistakes, pressure, focus, and confidence.'}
+              : '10 minutes or less. Every day.'}
           </p>
           <a className="yi-button yi-button--light" href="#dashboard">
             {isPerformers ? 'See how it works' : 'See the athlete experience'} <ArrowRight size={17} />

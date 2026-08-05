@@ -4,15 +4,18 @@ function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function nowIso() {
-  return new Date().toISOString();
+function resolveIntegerEnv(value, fallback, min, max) {
+  const parsed = Number.parseInt(normalizeString(value), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
 }
 
-function resolveBooleanEnv(...values) {
-  return values.some((value) => {
-    const normalized = normalizeString(value).toLowerCase();
-    return normalized === 'true' || normalized === '1' || normalized === 'yes';
-  });
+function resolveCredentialMode(apiKey) {
+  const normalized = normalizeString(apiKey).toLowerCase();
+  if (!normalized) return 'missing';
+  if (normalized.startsWith('ae_pk_test_')) return 'test';
+  if (normalized.startsWith('ae_pk_live_')) return 'live';
+  return 'unknown';
 }
 
 function normalizeBaseUrl(value) {
@@ -29,64 +32,67 @@ function resolveClinicalBridgeConfig() {
     || DEFAULT_AUNTEDNA_BASE_URL
   );
   const apiKey = normalizeString(process.env.CLINICAL_BRIDGE_API_KEY || process.env.AUNTEDNA_API_KEY);
-  const explicitMock = resolveBooleanEnv(process.env.CLINICAL_BRIDGE_MOCK, process.env.AUNTEDNA_MOCK);
-  const mock = explicitMock || !apiKey;
 
   return {
     provider,
     baseUrl,
     apiKey,
-    mock,
-    explicitMock,
     hasApiKey: Boolean(apiKey),
+    credentialMode: resolveCredentialMode(apiKey),
+    timeoutMs: resolveIntegerEnv(process.env.CLINICAL_BRIDGE_TIMEOUT_MS, 10000, 1000, 30000),
   };
 }
 
 function buildPulseCallbackUrl() {
   const explicit = normalizeString(process.env.CLINICAL_BRIDGE_CALLBACK_URL || process.env.PULSE_DEFAULT_CALLBACK_URL);
   if (explicit) return explicit;
-  const siteUrl = normalizeBaseUrl(process.env.URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai');
+  const siteUrl = normalizeBaseUrl(process.env.URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://pulsecheckmind.ai');
   return `${siteUrl}/.netlify/functions/clinical-callback`;
 }
 
-function unwrapPartnerResponse(raw, fallbackData = {}) {
+function unwrapPartnerResponse(raw) {
   if (!raw || typeof raw !== 'object') {
     return {
       success: false,
-      data: fallbackData,
+      data: {},
       error: { code: 'EMPTY_RESPONSE', message: 'Clinical provider returned an empty response.' },
       requestId: `clinical-empty-${Date.now()}`,
     };
   }
 
   if ('success' in raw || 'data' in raw || 'error' in raw) {
+    const hasError = raw.error !== null && raw.error !== undefined && raw.error !== false;
+    if (typeof raw.success !== 'boolean' && !hasError) {
+      return {
+        success: false,
+        data: {},
+        error: {
+          code: 'INVALID_RESPONSE_ENVELOPE',
+          message: 'Clinical provider response omitted the documented success field.',
+        },
+        requestId: raw.requestId || raw.request_id || `clinical-invalid-${Date.now()}`,
+      };
+    }
     return {
-      success: raw.success !== false,
-      data: raw.data || fallbackData,
+      success: typeof raw.success === 'boolean' ? raw.success : !hasError,
+      data: raw.data || {},
       error: raw.error || null,
       requestId: raw.requestId || raw.request_id || `clinical-${Date.now()}`,
     };
   }
 
   return {
-    success: true,
-    data: { ...fallbackData, ...raw },
-    error: null,
-    requestId: raw.requestId || raw.request_id || `clinical-${Date.now()}`,
+    success: false,
+    data: {},
+    error: {
+      code: 'INVALID_RESPONSE_ENVELOPE',
+      message: 'Clinical provider response did not use the documented response envelope.',
+    },
+    requestId: raw.requestId || raw.request_id || `clinical-invalid-${Date.now()}`,
   };
 }
 
-function buildMockResponse(data, requestIdPrefix = 'clinical-mock') {
-  return {
-    success: true,
-    data,
-    error: null,
-    requestId: `${requestIdPrefix}-${Date.now()}`,
-    mock: true,
-  };
-}
-
-function normalizeCreateEscalationResult(response, fallbackEscalationId) {
+function normalizeCreateEscalationResult(response) {
   const data = response.data || {};
   const escalationId =
     data.escalationId
@@ -95,7 +101,6 @@ function normalizeCreateEscalationResult(response, fallbackEscalationId) {
     || data.caseId
     || data.case_id
     || data.handoffId
-    || fallbackEscalationId
     || null;
 
   return {
@@ -119,22 +124,45 @@ class AuntEdnaClinicalBridge {
     return 'auntedna';
   }
 
+  requireCredential(operation) {
+    if (this.config.apiKey) return;
+    const error = new Error(`Clinical bridge API key is required for ${operation}.`);
+    error.code = 'CLINICAL_BRIDGE_API_KEY_MISSING';
+    throw error;
+  }
+
   async request(method, endpoint, body, options = {}) {
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${this.config.baseUrl}${path}`;
     const headers = {
       'Content-Type': 'application/json',
       'X-Pulse-Integration': 'true',
-      ...(this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
+      ...(options.includeAuth !== false && this.config.apiKey ? { Authorization: `Bearer ${this.config.apiKey}` } : {}),
       ...(options.headers || {}),
     };
 
     const startedAt = Date.now();
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = new AbortController();
+    const timeoutMs = Number(this.config.timeoutMs) || 10000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response;
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        const timeoutError = new Error(`Clinical provider request timed out after ${timeoutMs} ms.`);
+        timeoutError.code = 'CLINICAL_BRIDGE_TIMEOUT';
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
     const text = await response.text();
     let raw = null;
     try {
@@ -146,6 +174,7 @@ class AuntEdnaClinicalBridge {
     const normalized = unwrapPartnerResponse(raw);
     return {
       ...normalized,
+      success: response.ok && normalized.success !== false,
       httpStatus: response.status,
       ok: response.ok && normalized.success !== false,
       endpoint: path,
@@ -154,35 +183,13 @@ class AuntEdnaClinicalBridge {
   }
 
   async healthCheck() {
-    if (this.config.explicitMock) {
-      return buildMockResponse({
-        provider: this.providerName,
-        status: 'mock',
-        baseUrl: this.config.baseUrl,
-        checkedAt: nowIso(),
-      }, 'clinical-health-mock');
-    }
-
-    const apiKey = this.config.apiKey;
-    this.config.apiKey = '';
-    try {
-      return await this.request('GET', '/health', null, { headers: {} });
-    } finally {
-      this.config.apiKey = apiKey;
-    }
+    return this.request('GET', '/health', null, { includeAuth: false });
   }
 
   async upsertAthlete(input = {}) {
     const externalId = normalizeString(input.externalId || input.pulseUserId || input.userId);
     if (!externalId) throw new Error('externalId is required for clinical athlete upsert.');
-    if (this.config.mock) {
-      return buildMockResponse({
-        athleteId: `ae-${externalId.slice(0, 12)}`,
-        externalId,
-        status: 'active',
-        createdAt: nowIso(),
-      }, 'clinical-athlete-mock');
-    }
+    this.requireCredential('athlete upsert');
 
     return this.request('POST', '/athletes', {
       externalId,
@@ -202,62 +209,33 @@ class AuntEdnaClinicalBridge {
     if (!escalationRecordId) throw new Error('escalationRecordId is required for clinical escalation idempotency.');
     const callbackUrl = normalizeString(payload.pulseApiCallback) || buildPulseCallbackUrl();
 
-    if (this.config.mock) {
-      const isCritical = Number(payload.tier) >= 3 || payload.escalationTier === 'critical';
-      return normalizeCreateEscalationResult(buildMockResponse({
-        escalationId: `ae-${escalationRecordId.slice(0, 12)}`,
-        status: isCritical ? 'assigned' : 'received',
-        estimatedContactTime: isCritical ? 'Within 15 minutes' : 'Within 24 hours',
-        clinicianAssigned: isCritical ? { id: 'mock-clinician', name: 'Mock Clinical Lane', role: 'Clinical Support' } : null,
-      }, 'clinical-escalation-mock'), `ae-${escalationRecordId.slice(0, 12)}`);
-    }
+    this.requireCredential('escalation creation');
 
     const response = await this.request('POST', '/escalations', {
       ...payload,
       pulseApiCallback: callbackUrl,
     });
-    return normalizeCreateEscalationResult(response, null);
+    return normalizeCreateEscalationResult(response);
   }
 
   async getAthleteStatus(externalId) {
     const id = normalizeString(externalId);
     if (!id) throw new Error('externalId is required for clinical athlete status.');
-    if (this.config.mock) {
-      return buildMockResponse({
-        athleteId: `ae-${id.slice(0, 12)}`,
-        externalId: id,
-        escalationStatus: 'none',
-        clinicianId: null,
-      }, 'clinical-status-mock');
-    }
+    this.requireCredential('athlete status lookup');
     return this.request('GET', `/athletes/${encodeURIComponent(id)}/status`);
   }
 
   async getCareState(externalId) {
     const id = normalizeString(externalId);
     if (!id) throw new Error('externalId is required for clinical care state.');
-    if (this.config.mock) {
-      return buildMockResponse({
-        athleteId: `ae-${id.slice(0, 12)}`,
-        externalId: id,
-        watchList: false,
-        appState: 'normal',
-        returnToTrainingStatus: 'cleared',
-      }, 'clinical-care-state-mock');
-    }
+    this.requireCredential('care-state lookup');
     return this.request('GET', `/athletes/${encodeURIComponent(id)}/care-state`);
   }
 
   async resolveEscalation(escalationId, resolution = {}) {
     const id = normalizeString(escalationId);
     if (!id) throw new Error('escalation id is required for clinical resolution.');
-    if (this.config.mock) {
-      return buildMockResponse({
-        escalationId: id,
-        resolved: true,
-        status: resolution.status || 'resolved',
-      }, 'clinical-resolve-mock');
-    }
+    this.requireCredential('escalation resolution');
     return this.request('POST', `/escalations/${encodeURIComponent(id)}/resolve`, {
       status: resolution.status || 'resolved',
       coachNote: resolution.coachNote,
@@ -278,5 +256,6 @@ module.exports = {
   buildPulseCallbackUrl,
   createClinicalBridge,
   normalizeCreateEscalationResult,
+  resolveCredentialMode,
   resolveClinicalBridgeConfig,
 };

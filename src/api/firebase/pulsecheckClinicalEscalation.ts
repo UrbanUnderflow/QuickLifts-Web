@@ -4,8 +4,8 @@
 // What this service does (and only does):
 //   1. Records an immutable Tier 3 escalation event in
 //      `pulsecheck-clinical-escalations`.
-//   2. Sets `crisisWallActive: true` on the athlete's user doc so iOS gates
-//      the app to a crisis wall surfacing 988 / 911 / Crisis Text Line.
+//   2. Sets `crisisWallActive: true` in the athlete's private safety-state doc
+//      so authorized clients can gate the app to crisis resources.
 //   3. Fans out to the team's designated clinician staff member (email +
 //      SMS via Twilio when phone on file).
 //   4. Mirrors the event into the existing `escalation-records` collection
@@ -39,11 +39,9 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  updateDoc,
   where,
-  type Timestamp,
 } from 'firebase/firestore';
-import { db } from './config';
+import { auth, db } from './config';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types
@@ -141,10 +139,12 @@ export interface RecordClinicalEscalationResult {
 
 export const CLINICAL_ESCALATIONS_COLLECTION = 'pulsecheck-clinical-escalations';
 export const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
-export const USERS_COLLECTION = 'users';
+export const ATHLETE_SAFETY_STATE_COLLECTION = 'pulsecheck-athlete-safety-state';
 export const LEGACY_ESCALATION_RECORDS_COLLECTION = 'escalation-records';
 export const RECORD_CLINICAL_ESCALATION_FUNCTION_PATH =
   '/.netlify/functions/record-clinical-escalation';
+export const PULSECHECK_ESCALATION_FUNCTION_PATH =
+  '/.netlify/functions/pulsecheck-escalation';
 
 const DEFAULT_DEDUPE_WINDOW_SECONDS = 60 * 60;
 
@@ -276,33 +276,28 @@ export const teamHasOperationalEscalationContact = async (
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Crisis wall state on the athlete user doc
+// Crisis wall state in the private athlete safety-state collection. Firestore
+// rules reject browser writes; these helpers remain for trusted/server-backed
+// runtimes and must not be used as a staff-page mutation path.
 // ──────────────────────────────────────────────────────────────────────────────
 
 export const setAthleteCrisisWallActive = async (
   athleteUserId: string,
-  context: { escalationId: string; reason: string },
+  context: { escalationId: string; reason: string; teamId?: string },
 ): Promise<void> => {
   const scopedAthleteId = requireString(athleteUserId, 'athleteUserId');
-  await updateDoc(doc(db, USERS_COLLECTION, scopedAthleteId), {
-    crisisWallActive: true,
-    crisisWallActivatedAt: serverTimestamp(),
-    crisisWallActiveEscalationId: context.escalationId,
-    crisisWallReason: context.reason,
-  });
-};
-
-export const clearAthleteCrisisWall = async (
-  athleteUserId: string,
-  context: { resolvedByUserId: string; resolutionNote?: string },
-): Promise<void> => {
-  const scopedAthleteId = requireString(athleteUserId, 'athleteUserId');
-  await updateDoc(doc(db, USERS_COLLECTION, scopedAthleteId), {
-    crisisWallActive: false,
-    crisisWallClearedAt: serverTimestamp(),
-    crisisWallClearedByUserId: context.resolvedByUserId,
-    crisisWallClearReason: context.resolutionNote || null,
-  });
+  await setDoc(
+    doc(db, ATHLETE_SAFETY_STATE_COLLECTION, scopedAthleteId),
+    stripUndefinedDeep({
+      athleteUserId: scopedAthleteId,
+      teamId: context.teamId,
+      crisisWallActive: true,
+      crisisWallActivatedAt: serverTimestamp(),
+      crisisWallActiveEscalationId: context.escalationId,
+      crisisWallReason: context.reason,
+    }),
+    { merge: true },
+  );
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -416,35 +411,63 @@ export const acknowledgeClinicalEscalation = async (
 };
 
 /**
- * Resolve an escalation — clinician (or admin) marks the issue as
- * addressed. Optionally clears the athlete's crisis wall.
+ * Resolve an escalation — clinician (or admin) marks the provider case as
+ * addressed. Resolution never clears the athlete's protective safety state;
+ * that requires an authoritative watchlist-removal or care-state signal.
  */
 export const resolveClinicalEscalation = async (
   escalationId: string,
   options: {
     resolvedByUserId: string;
     resolutionNote?: string;
-    clearCrisisWallForAthleteUserId?: string;
+    athleteUserId: string;
+    legacyEscalationRecordId?: string;
   },
-): Promise<void> => {
+): Promise<{
+  resolved: boolean;
+  crisisWallCleared: boolean;
+  clearancePending: boolean;
+  providerConfirmed: boolean;
+}> => {
   const scopedId = requireString(escalationId, 'escalationId');
   const scopedUser = requireString(options.resolvedByUserId, 'resolvedByUserId');
-  await setDoc(
-    doc(db, CLINICAL_ESCALATIONS_COLLECTION, scopedId),
-    stripUndefinedDeep({
-      resolvedAt: serverTimestamp(),
-      resolvedByUserId: scopedUser,
-      resolutionNote: options.resolutionNote,
-      deliveryStatus: 'resolved' as EscalationDeliveryStatus,
-    }),
-    { merge: true },
-  );
-  if (options.clearCrisisWallForAthleteUserId) {
-    await clearAthleteCrisisWall(options.clearCrisisWallForAthleteUserId, {
-      resolvedByUserId: scopedUser,
-      resolutionNote: options.resolutionNote,
-    });
+  const athleteUserId = requireString(options.athleteUserId, 'athleteUserId');
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    throw new Error('[ClinicalEscalation] Sign in is required to resolve an escalation.');
   }
+  const idToken = await firebaseUser.getIdToken();
+  const response = await fetch(PULSECHECK_ESCALATION_FUNCTION_PATH, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      action: 'resolve',
+      escalationId: options.legacyEscalationRecordId || scopedId,
+      clinicalEscalationId: scopedId,
+      userId: athleteUserId,
+      resolvedBy: scopedUser,
+      resolutionNote: options.resolutionNote,
+    }),
+  });
+  const payload = await response.json().catch(() => ({})) as {
+    resolved?: boolean;
+    crisisWallCleared?: boolean;
+    clearancePending?: boolean;
+    providerConfirmed?: boolean;
+    error?: string;
+  };
+  if (!response.ok || payload.resolved !== true) {
+    throw new Error(payload.error || '[ClinicalEscalation] The escalation could not be resolved.');
+  }
+  return {
+    resolved: true,
+    crisisWallCleared: false,
+    clearancePending: payload.clearancePending !== false,
+    providerConfirmed: payload.providerConfirmed === true,
+  };
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -497,6 +520,5 @@ export const pulsecheckClinicalEscalationService = {
   resolveDesignatedClinician,
   teamHasOperationalEscalationContact,
   setAthleteCrisisWallActive,
-  clearAthleteCrisisWall,
   CANONICAL_CRISIS_RESOURCES,
 };

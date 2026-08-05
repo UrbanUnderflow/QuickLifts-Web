@@ -158,6 +158,7 @@ service cloud.firestore {
         'athletic-mind-hub-change-log',
         'athlete-mental-progress',
         'beta-applications',
+        'clinical-bridge-smoke-test-runs',
         'coachAthletes',
         'coach-notifications',
         'coach-nora-vault',
@@ -176,12 +177,16 @@ service cloud.firestore {
         'pulsecheck-athlete-app-invite-checkout-locks',
         'pulsecheck-athlete-app-offers',
         'pulsecheck-athlete-app-revenue-events',
+        'pulsecheck-athlete-safety-state',
+        'pulsecheck-clinical-escalations',
+        'pulsecheck-clinical-webhook-events',
         'pulsecheck-referral-attributions',
         'coach-team-schedule',
         'company-config',
         'curriculum-notes',
         'dailySentimentAnalysis',
         'document-notes',
+        'escalation-conditions',
         'escalation-records',
         'health-context-source-records',
         'health-context-source-status',
@@ -423,6 +428,46 @@ service cloud.firestore {
             && athleteId in membership.allowedAthleteIds
           )
         );
+    }
+    function pcCanAccessClinicalEscalation(data) {
+      return isAdminUser()
+        || (
+          isSignedIn()
+          && data.teamId is string
+          && data.athleteUserId is string
+          && pcCanAccessClinicalTeamAthlete(
+            data.teamId,
+            data.athleteUserId
+          )
+        );
+    }
+    function pcClinicalEscalationAcknowledgementUpdateIsValid() {
+      return pcCanAccessClinicalEscalation(resource.data)
+        && resource.data.deliveryStatus in ['pending', 'clinician_paged']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'acknowledgedAt',
+          'acknowledgedByUserId',
+          'deliveryStatus'
+        ])
+        && request.resource.data.acknowledgedAt == request.time
+        && request.resource.data.acknowledgedByUserId == request.auth.uid
+        && request.resource.data.deliveryStatus == 'clinician_acknowledged';
+    }
+    function pcAthleteClinicalAcknowledgementCreateIsValid(escalationId) {
+      let escalationPath = /databases/$(database)/documents/pulsecheck-clinical-escalations/$(escalationId);
+      return isSignedIn()
+        && exists(escalationPath)
+        && get(escalationPath).data.athleteUserId == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'athleteUserId',
+          'acknowledgedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'athleteUserId',
+          'acknowledgedAt'
+        ])
+        && request.resource.data.athleteUserId == request.auth.uid
+        && request.resource.data.acknowledgedAt is timestamp;
     }
     function pcLegacyCoachProfileIsActive(coachId) {
       let coachPath = /databases/$(database)/documents/coaches/$(coachId);
@@ -1161,12 +1206,39 @@ service cloud.firestore {
         || isValidLegalAcceptanceValue(request.resource.data.legalAcceptance);
     }
 
+    function hasServerOwnedClinicalStateFields(data) {
+      return data.keys().hasAny([
+        'clinicalCareState',
+        'crisisWallActive',
+        'crisisWallActivatedAt',
+        'crisisWallActiveEscalationId',
+        'crisisWallClearReason',
+        'crisisWallClearedAt',
+        'crisisWallClearedByUserId',
+        'crisisWallReason'
+      ]);
+    }
+
+    function changesServerOwnedClinicalStateFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'clinicalCareState',
+        'crisisWallActive',
+        'crisisWallActivatedAt',
+        'crisisWallActiveEscalationId',
+        'crisisWallClearReason',
+        'crisisWallClearedAt',
+        'crisisWallClearedByUserId',
+        'crisisWallReason'
+      ]);
+    }
+
     function isCanonicalRootUserCreate(userId) {
       return isSignedIn()
         && request.auth.uid == userId
         && request.resource.data.id == userId
         && request.resource.data.email == request.auth.token.email
         && !('stripeCustomerIds' in request.resource.data)
+        && !hasServerOwnedClinicalStateFields(request.resource.data)
         && hasValidLegalAcceptanceOnCreate();
     }
 
@@ -1179,6 +1251,7 @@ service cloud.firestore {
         && request.resource.data.lifetimePulsePoints == resource.data.lifetimePulsePoints
         && request.resource.data.categoryPoints == resource.data.categoryPoints
         && request.resource.data.creator == resource.data.creator
+        && !changesServerOwnedClinicalStateFields()
         && (
           (
             !('stripeCustomerIds' in resource.data)
@@ -1809,6 +1882,65 @@ service cloud.firestore {
           && statusId == request.auth.uid + '_'
             + resource.data.sourceFamily
         );
+    }
+
+    // Classification conditions are administered through the protected admin
+    // surface. Runtime classifiers use the Admin SDK and bypass these client
+    // rules.
+    match /escalation-conditions/{conditionId} {
+      allow read, create, update, delete: if isAdminUser();
+    }
+
+    // Partner webhook receipts and smoke-test audit rows are server-authored.
+    // Admin clients may inspect the sanitized records but cannot mutate them.
+    match /pulsecheck-clinical-webhook-events/{eventId} {
+      allow read: if isAdminUser();
+      allow create, update, delete: if false;
+    }
+
+    match /clinical-bridge-smoke-test-runs/{runId} {
+      allow read: if isAdminUser();
+      allow create, update, delete: if false;
+    }
+
+    // Coarse athlete safety state is server-authored and intentionally kept
+    // outside the publicly readable root user document. The athlete, a
+    // platform admin, and explicitly scoped clinical staff may read it. All
+    // browser/mobile writes are denied; trusted services use the Admin SDK.
+    match /pulsecheck-athlete-safety-state/{athleteUserId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && request.auth.uid == athleteUserId
+        )
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == athleteUserId
+          && resource.data.teamId is string
+          && pcCanAccessClinicalTeamAthlete(
+            resource.data.teamId,
+            athleteUserId
+          )
+        );
+      allow create, update, delete: if false;
+    }
+
+    // Clinical escalation records are created by trusted services. Admins and
+    // scoped clinical-team members may read them. Client writes are limited to
+    // acknowledgement. Resolution must use the authenticated server route so
+    // linked provider confirmation runs before local state closes.
+    match /pulsecheck-clinical-escalations/{escalationId} {
+      allow read: if pcCanAccessClinicalEscalation(resource.data);
+      allow create: if false;
+      allow update: if pcClinicalEscalationAcknowledgementUpdateIsValid();
+      allow delete: if false;
+
+      match /athleteAcknowledgements/{acknowledgementId} {
+        allow create: if pcAthleteClinicalAcknowledgementCreateIsValid(
+          escalationId
+        );
+        allow read, update, delete: if false;
+      }
     }
 
     // Safety records are authored by trusted services. Athletes can read their

@@ -58,7 +58,6 @@ test('clinical escalation — service exports expected public surface', async ()
     'resolveDesignatedClinician',
     'teamHasOperationalEscalationContact',
     'setAthleteCrisisWallActive',
-    'clearAthleteCrisisWall',
   ]) {
     assert.equal(typeof (svc as any)[fn], 'function', `service.${fn} must be a function`);
   }

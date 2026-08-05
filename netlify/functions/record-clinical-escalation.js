@@ -25,7 +25,7 @@
 //   3. Resolves the team's designated clinician (role: clinician + active).
 //   4. Writes the immutable escalation doc to `pulsecheck-clinical-escalations`.
 //   5. Tier 3 only:
-//        a. Sets `crisisWallActive: true` on the athlete user doc.
+//        a. Sets `crisisWallActive: true` in the private athlete safety doc.
 //        b. Sends email to the clinician via Brevo.
 //        c. Sends SMS to the clinician via Twilio (when phone on file +
 //           Twilio creds present in env).
@@ -56,6 +56,7 @@ const CLINICAL_ESCALATIONS_COLLECTION = 'pulsecheck-clinical-escalations';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const USERS_COLLECTION = 'users';
+const ATHLETE_SAFETY_STATE_COLLECTION = 'pulsecheck-athlete-safety-state';
 const LEGACY_ESCALATION_RECORDS_COLLECTION = 'escalation-records';
 
 const DEFAULT_DEDUPE_WINDOW_SECONDS = 60 * 60;
@@ -273,9 +274,11 @@ async function sendClinicianSmsViaTwilio(phone, body) {
   return sendTwilioSms({ to: phone, body });
 }
 
-async function setAthleteCrisisWall(db, athleteUserId, escalationId, reason) {
-  await db.collection(USERS_COLLECTION).doc(athleteUserId).set(
+async function setAthleteCrisisWall(db, athleteUserId, teamId, escalationId, reason) {
+  await db.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(athleteUserId).set(
     {
+      athleteUserId,
+      teamId,
       crisisWallActive: true,
       crisisWallActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
       crisisWallActiveEscalationId: escalationId,
@@ -286,7 +289,7 @@ async function setAthleteCrisisWall(db, athleteUserId, escalationId, reason) {
 }
 
 async function mirrorToLegacyEscalationRecords(db, payload) {
-  await db.collection(LEGACY_ESCALATION_RECORDS_COLLECTION).add(
+  return db.collection(LEGACY_ESCALATION_RECORDS_COLLECTION).add(
     {
       ...payload,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -427,14 +430,19 @@ exports.handler = async (event) => {
     const escalationRef = await db.collection(CLINICAL_ESCALATIONS_COLLECTION).add(escalationDoc);
     const escalationId = escalationRef.id;
     const acknowledgeUrl = buildAcknowledgeUrl(escalationId);
+    let crisisWallActivated = false;
+    let crisisWallError = null;
 
     // 2. Tier 3 only: gate the athlete's app to the crisis wall
     if (tier === 3) {
       try {
-        await setAthleteCrisisWall(db, athleteUserId, escalationId, signalSource);
+        await setAthleteCrisisWall(db, athleteUserId, teamId, escalationId, signalSource);
+        crisisWallActivated = true;
       } catch (wallErr) {
         console.error('[record-clinical-escalation] crisis wall set failed:', wallErr?.message || wallErr);
-        // Non-blocking — athlete may not have a user doc; clinician page still goes out.
+        crisisWallError = wallErr?.message || 'Private athlete safety-state write failed.';
+        // Non-blocking for paging; the failed safety write remains visible in
+        // logs and must be reconciled before relying on the in-app wall.
       }
     }
 
@@ -506,7 +514,7 @@ exports.handler = async (event) => {
     // 5. Mirror into the legacy escalation-records collection so the
     // existing coach/admin escalation dashboard surfaces it.
     try {
-      await mirrorToLegacyEscalationRecords(db, {
+      const legacyRef = await mirrorToLegacyEscalationRecords(db, {
         escalationId,
         athleteUserId,
         userId: athleteUserId,
@@ -516,6 +524,10 @@ exports.handler = async (event) => {
         signalSource,
         evidence,
       });
+      await db.collection(CLINICAL_ESCALATIONS_COLLECTION).doc(escalationId).set(
+        { legacyEscalationRecordId: legacyRef.id },
+        { merge: true },
+      );
     } catch (mirrorErr) {
       console.warn('[record-clinical-escalation] legacy mirror failed (non-blocking):', mirrorErr?.message || mirrorErr);
     }
@@ -530,6 +542,17 @@ exports.handler = async (event) => {
       });
     }
 
+    if (tier === 3 && !crisisWallActivated) {
+      return json(502, {
+        error: 'The escalation was recorded and the clinician page was attempted, but the athlete safety state was not activated.',
+        recorded: true,
+        escalationId,
+        deliveryStatus,
+        crisisWallActivated: false,
+        safetyStateError: crisisWallError,
+      });
+    }
+
     return json(200, {
       recorded: true,
       escalationId,
@@ -540,7 +563,7 @@ exports.handler = async (event) => {
         email: clinician.email,
         phone: clinician.phone,
       },
-      crisisWallActivated: tier === 3,
+      crisisWallActivated,
     });
   } catch (error) {
     console.error('[record-clinical-escalation] Unexpected error:', error);

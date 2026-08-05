@@ -22,7 +22,7 @@
 //
 // What it does, in order:
 //   1. Verifies the HMAC-SHA256 signature against CLINICAL_BRIDGE_WEBHOOK_SECRET.
-//      Fails closed (503) when the secret is unset, unless CLINICAL_BRIDGE_MOCK=true.
+//      Fails closed (503) when the secret is unset.
 //   2. Dedupes on `webhookEventId` — an already-processed event is re-acked
 //      with 200 so AuntEdna's retry loop stops.
 //   3. Resolves the matching `escalation-records` doc (doc id from
@@ -54,6 +54,7 @@ const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase')
 
 const WEBHOOK_EVENTS_COLLECTION = 'pulsecheck-clinical-webhook-events';
 const ESCALATION_RECORDS_COLLECTION = 'escalation-records';
+const ATHLETE_SAFETY_STATE_COLLECTION = 'pulsecheck-athlete-safety-state';
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -135,14 +136,34 @@ function normalizeSignature(value) {
   return (sha256Part || trimmed).replace(/^sha256=/i, '').trim();
 }
 
+function parseTimestampedSignature(value) {
+  const fields = {};
+  for (const part of String(value || '').split(',')) {
+    const separator = part.indexOf('=');
+    if (separator <= 0) continue;
+    const key = part.slice(0, separator).trim().toLowerCase();
+    const candidate = part.slice(separator + 1).trim();
+    if (!key || !candidate) continue;
+    if (!fields[key]) fields[key] = [];
+    fields[key].push(candidate);
+  }
+  return {
+    timestamp: fields.t?.[0] || '',
+    signatures: fields.v1 || [],
+  };
+}
+
+function resolveWebhookToleranceSeconds() {
+  const parsed = Number.parseInt(String(process.env.CLINICAL_BRIDGE_WEBHOOK_TOLERANCE_SECONDS || ''), 10);
+  if (!Number.isFinite(parsed)) return 300;
+  return Math.min(3600, Math.max(30, parsed));
+}
+
 function verifyWebhookSignature(event, rawBody) {
   const secret = String(process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET || '').trim();
   if (!secret) {
-    // Clinical bridge fails closed: never accept unsigned partner traffic in
-    // a real deployment. Mock mode is the only exception.
-    if (process.env.CLINICAL_BRIDGE_MOCK === 'true' || process.env.AUNTEDNA_MOCK === 'true') {
-      return { ok: true, required: false, mode: 'mock_unsigned' };
-    }
+    // Clinical bridge always fails closed. Synthetic request bodies are
+    // allowed in the admin lab, but webhook responses must be genuinely signed.
     return { ok: false, required: true, mode: 'not_configured' };
   }
 
@@ -151,19 +172,60 @@ function verifyWebhookSignature(event, rawBody) {
     || getHeader(event.headers, 'auntedna-signature')
     || getHeader(event.headers, 'x-webhook-signature');
 
-  const normalizedSignature = normalizeSignature(signature);
-  if (!normalizedSignature) return { ok: false, required: true, mode: 'missing_signature' };
+  if (!signature) return { ok: false, required: true, mode: 'missing_signature' };
 
-  const expectedHex = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
-  const expectedBase64 = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
-  const matchesHex = timingSafeEqualString(normalizedSignature.toLowerCase(), expectedHex.toLowerCase());
-  const matchesBase64 = timingSafeEqualString(normalizedSignature, expectedBase64);
+  const timestamped = parseTimestampedSignature(signature);
+  if (timestamped.timestamp && timestamped.signatures.length > 0) {
+    const timestampSeconds = toUnixSeconds(timestamped.timestamp);
+    if (!timestampSeconds) {
+      return { ok: false, required: true, mode: 'invalid_timestamp' };
+    }
 
-  return {
-    ok: matchesHex || matchesBase64,
-    required: true,
-    mode: matchesHex ? 'hmac_sha256_hex' : matchesBase64 ? 'hmac_sha256_base64' : 'invalid_signature',
-  };
+    const toleranceSeconds = resolveWebhookToleranceSeconds();
+    const ageSeconds = Math.abs(Math.round(Date.now() / 1000) - timestampSeconds);
+    if (ageSeconds > toleranceSeconds) {
+      return {
+        ok: false,
+        required: true,
+        mode: 'stale_timestamp',
+        timestamp: timestampSeconds,
+        ageSeconds,
+        toleranceSeconds,
+      };
+    }
+
+    const signedPayload = `${timestamped.timestamp}.${rawBody}`;
+    const expectedHex = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('hex');
+    const expectedBase64 = crypto.createHmac('sha256', secret).update(signedPayload, 'utf8').digest('base64');
+    const matches = timestamped.signatures.some((candidate) => (
+      timingSafeEqualString(candidate.toLowerCase(), expectedHex.toLowerCase())
+      || timingSafeEqualString(candidate, expectedBase64)
+    ));
+
+    return {
+      ok: matches,
+      required: true,
+      mode: matches ? 'timestamped_hmac_sha256' : 'invalid_signature',
+      timestamp: timestampSeconds,
+      ageSeconds,
+      toleranceSeconds,
+    };
+  }
+
+  if (process.env.CLINICAL_BRIDGE_ALLOW_LEGACY_SIGNATURE === 'true') {
+    const normalizedSignature = normalizeSignature(signature);
+    const expectedHex = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
+    const expectedBase64 = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('base64');
+    const matchesHex = timingSafeEqualString(normalizedSignature.toLowerCase(), expectedHex.toLowerCase());
+    const matchesBase64 = timingSafeEqualString(normalizedSignature, expectedBase64);
+    return {
+      ok: matchesHex || matchesBase64,
+      required: true,
+      mode: matchesHex || matchesBase64 ? 'legacy_hmac_sha256' : 'invalid_signature',
+    };
+  }
+
+  return { ok: false, required: true, mode: 'unsupported_signature_format' };
 }
 
 function parsePayload(rawBody) {
@@ -186,8 +248,20 @@ function toUnixSeconds(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value > 1e12 ? Math.round(value / 1000) : Math.round(value);
   }
+  if (value && typeof value === 'object') {
+    if (typeof value.toMillis === 'function') {
+      const millis = Number(value.toMillis());
+      if (Number.isFinite(millis)) return Math.round(millis / 1000);
+    }
+    const seconds = Number(value.seconds ?? value._seconds);
+    if (Number.isFinite(seconds)) return Math.round(seconds);
+  }
   const asString = normalizeString(value);
   if (asString) {
+    if (/^\d{10,13}$/.test(asString)) {
+      const numeric = Number(asString);
+      return numeric > 1e12 ? Math.round(numeric / 1000) : Math.round(numeric);
+    }
     const parsed = Date.parse(asString);
     if (Number.isFinite(parsed)) return Math.round(parsed / 1000);
   }
@@ -234,7 +308,7 @@ async function resolveEscalationRef(db, webhookEvent) {
   if (webhookEvent.pulseEscalationId) {
     const ref = db.collection(ESCALATION_RECORDS_COLLECTION).doc(webhookEvent.pulseEscalationId);
     const snap = await ref.get();
-    if (snap.exists) return { ref, matchedBy: 'pulseEscalationId' };
+    if (snap.exists) return { ref, matchedBy: 'pulseEscalationId', data: snap.data() || {} };
   }
   if (webhookEvent.clinicalCaseId) {
     const snap = await db
@@ -242,9 +316,71 @@ async function resolveEscalationRef(db, webhookEvent) {
       .where('clinicalReferenceId', '==', webhookEvent.clinicalCaseId)
       .limit(1)
       .get();
-    if (!snap.empty) return { ref: snap.docs[0].ref, matchedBy: 'clinicalReferenceId' };
+    if (!snap.empty) {
+      return {
+        ref: snap.docs[0].ref,
+        matchedBy: 'clinicalReferenceId',
+        data: snap.docs[0].data() || {},
+      };
+    }
   }
   return null;
+}
+
+function buildUserCareStateMirror(webhookEvent, escalationData = {}, receivedAtSeconds) {
+  const athleteUserId = normalizeString(
+    webhookEvent.pulseUserId
+    || escalationData.userId
+    || escalationData.athleteId
+  );
+  if (!athleteUserId) return null;
+
+  const occurredAt = webhookEvent.occurredAt || receivedAtSeconds;
+  const update = { athleteUserId, clinicalCareStateOccurredAt: occurredAt };
+  const teamId = normalizeString(escalationData.teamId);
+  if (teamId) update.teamId = teamId;
+
+  if (webhookEvent.eventType === 'watchlist.entered' || webhookEvent.eventType === 'crisis.invoked') {
+    update.crisisWallActive = true;
+    update.crisisWallActivatedAt = occurredAt;
+    update.crisisWallActiveEscalationId = normalizeString(
+      webhookEvent.pulseEscalationId || escalationData.id
+    ) || null;
+    update.crisisWallReason = 'clinical_watchlist_active';
+  } else if (webhookEvent.eventType === 'watchlist.removed') {
+    update.crisisWallActive = false;
+    update.crisisWallClearedAt = occurredAt;
+    update.crisisWallClearReason = 'clinical_watchlist_removed';
+    update.crisisWallActiveEscalationId = null;
+    update.crisisWallReason = null;
+  } else {
+    return null;
+  }
+
+  return update;
+}
+
+function shouldApplyUserCareStateMirror(existingState = {}, incomingState = {}) {
+  const incomingOccurredAt = toUnixSeconds(incomingState.clinicalCareStateOccurredAt);
+  if (!incomingOccurredAt) return false;
+
+  const existingOccurredAt = [
+    existingState.clinicalCareStateOccurredAt,
+    existingState.careStateLastSyncedAt,
+    existingState.crisisWallActivatedAt,
+    existingState.crisisWallClearedAt,
+  ]
+    .map(toUnixSeconds)
+    .filter((value) => Number.isFinite(value))
+    .reduce((latest, value) => Math.max(latest, value), 0);
+
+  if (incomingOccurredAt > existingOccurredAt) return true;
+  if (incomingOccurredAt < existingOccurredAt) return false;
+
+  // When two authoritative events have the same timestamp, the protective
+  // state wins. A same-time removal must not undo an activation.
+  return incomingState.crisisWallActive === true
+    || existingState.crisisWallActive !== true;
 }
 
 // The coarse operational mirror per the contract's "PulseCheck mirror
@@ -375,6 +511,14 @@ exports.handler = async (event) => {
     const receivedAtSeconds = Math.round(Date.now() / 1000);
     const eventRef = db.collection(WEBHOOK_EVENTS_COLLECTION).doc(buildEventDocId(webhookEvent.webhookEventId));
     const escalation = await resolveEscalationRef(db, webhookEvent);
+    const userCareState = buildUserCareStateMirror(
+      webhookEvent,
+      escalation?.data || {},
+      receivedAtSeconds,
+    );
+    const safetyRef = userCareState
+      ? db.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userCareState.athleteUserId)
+      : null;
 
     // Single transaction: idempotency claim + mirror write. A failed mirror
     // leaves the event unclaimed so the provider retry can reprocess it.
@@ -384,8 +528,26 @@ exports.handler = async (event) => {
         return { deduped: true, matched: Boolean(existing.data()?.escalationRecordId) };
       }
 
+      const existingSafety = safetyRef ? await txn.get(safetyRef) : null;
+      const safetyStateApplied = Boolean(
+        userCareState
+        && shouldApplyUserCareStateMirror(
+          existingSafety?.exists ? existingSafety.data() || {} : {},
+          userCareState,
+        )
+      );
+
       if (escalation) {
         txn.set(escalation.ref, buildEscalationMirror(webhookEvent, receivedAtSeconds), { merge: true });
+      }
+
+      if (userCareState && safetyStateApplied) {
+        const { athleteUserId, ...safetyUpdate } = userCareState;
+        txn.set(
+          safetyRef,
+          { athleteUserId, ...safetyUpdate },
+          { merge: true },
+        );
       }
 
       txn.set(eventRef, {
@@ -403,10 +565,17 @@ exports.handler = async (event) => {
         verification,
         escalationRecordId: escalation ? escalation.ref.id : null,
         matchedBy: escalation ? escalation.matchedBy : null,
+        safetyStateApplied,
+        safetyStateSkippedAsStale: Boolean(userCareState && !safetyStateApplied),
         processingStatus: 'processed',
       }, { merge: true });
 
-      return { deduped: false, matched: Boolean(escalation) };
+      return {
+        deduped: false,
+        matched: Boolean(escalation),
+        safetyStateApplied,
+        safetyStateSkippedAsStale: Boolean(userCareState && !safetyStateApplied),
+      };
     });
 
     if (!outcome.matched && !outcome.deduped) {
@@ -420,6 +589,8 @@ exports.handler = async (event) => {
       eventId: webhookEvent.webhookEventId,
       deduped: outcome.deduped,
       matched: outcome.matched,
+      safetyStateApplied: outcome.safetyStateApplied === true,
+      safetyStateSkippedAsStale: outcome.safetyStateSkippedAsStale === true,
       escalationRecordId: escalation ? escalation.ref.id : null,
     });
   } catch (error) {
@@ -435,7 +606,9 @@ exports.handler = async (event) => {
 exports.__test = {
   buildEscalationMirror,
   buildEventDocId,
+  buildUserCareStateMirror,
   normalizeWebhookEvent,
+  shouldApplyUserCareStateMirror,
   toUnixSeconds,
   verifyWebhookSignature,
 };

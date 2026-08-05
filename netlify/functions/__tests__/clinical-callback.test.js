@@ -17,22 +17,25 @@ require.cache[firebaseConfigPath] = {
 const {
   buildEscalationMirror,
   buildEventDocId,
+  buildUserCareStateMirror,
   normalizeWebhookEvent,
+  shouldApplyUserCareStateMirror,
   toUnixSeconds,
   verifyWebhookSignature,
 } = require('../clinical-callback').__test;
 
 function signedEvent(rawBody, secret) {
-  const signature = crypto.createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
-  return { headers: { 'x-auntedna-signature': `sha256=${signature}` } };
+  const timestamp = String(Math.round(Date.now() / 1000));
+  const signature = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`, 'utf8').digest('hex');
+  return { headers: { 'x-auntedna-signature': `t=${timestamp},v1=${signature}` } };
 }
 
-test('verifyWebhookSignature accepts a valid HMAC hex signature', () => {
+test('verifyWebhookSignature accepts the MANAS timestamped t/v1 signature', () => {
   process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET = 'test-secret';
   const rawBody = JSON.stringify({ webhookEventId: 'evt-1' });
   const result = verifyWebhookSignature(signedEvent(rawBody, 'test-secret'), rawBody);
   assert.equal(result.ok, true);
-  assert.equal(result.mode, 'hmac_sha256_hex');
+  assert.equal(result.mode, 'timestamped_hmac_sha256');
 });
 
 test('verifyWebhookSignature rejects a tampered body', () => {
@@ -43,18 +46,23 @@ test('verifyWebhookSignature rejects a tampered body', () => {
   assert.equal(result.mode, 'invalid_signature');
 });
 
-test('verifyWebhookSignature fails closed when the secret is unset outside mock mode', () => {
+test('verifyWebhookSignature fails closed when the secret is unset', () => {
   delete process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET;
-  delete process.env.AUNTEDNA_MOCK;
   const result = verifyWebhookSignature({ headers: {} }, '{}');
   assert.equal(result.ok, false);
   assert.equal(result.mode, 'not_configured');
+});
 
-  process.env.AUNTEDNA_MOCK = 'true';
-  const mockResult = verifyWebhookSignature({ headers: {} }, '{}');
-  assert.equal(mockResult.ok, true);
-  assert.equal(mockResult.mode, 'mock_unsigned');
-  delete process.env.AUNTEDNA_MOCK;
+test('verifyWebhookSignature rejects a valid signature outside the replay window', () => {
+  process.env.CLINICAL_BRIDGE_WEBHOOK_SECRET = 'test-secret';
+  const rawBody = JSON.stringify({ webhookEventId: 'evt-stale' });
+  const timestamp = String(Math.round(Date.now() / 1000) - 600);
+  const signature = crypto.createHmac('sha256', 'test-secret').update(`${timestamp}.${rawBody}`, 'utf8').digest('hex');
+  const result = verifyWebhookSignature({
+    headers: { 'x-auntedna-signature': `t=${timestamp},v1=${signature}` },
+  }, rawBody);
+  assert.equal(result.ok, false);
+  assert.equal(result.mode, 'stale_timestamp');
 });
 
 test('normalizeWebhookEvent extracts allow-listed fields and drops everything else', () => {
@@ -90,9 +98,90 @@ test('normalizeWebhookEvent reads fields nested under data and maps event type t
 test('toUnixSeconds handles seconds, milliseconds, and ISO strings', () => {
   assert.equal(toUnixSeconds(1765432100), 1765432100);
   assert.equal(toUnixSeconds(1765432100000), 1765432100);
+  assert.equal(toUnixSeconds('1765432100'), 1765432100);
   assert.equal(toUnixSeconds('2025-12-11T06:28:20.000Z'), 1765434500);
+  assert.equal(toUnixSeconds({ seconds: 1765432100 }), 1765432100);
+  assert.equal(toUnixSeconds({ toMillis: () => 1765432100000 }), 1765432100);
   assert.equal(toUnixSeconds('not-a-date'), null);
   assert.equal(toUnixSeconds(undefined), null);
+});
+
+test('buildUserCareStateMirror activates and clears the native crisis wall from watch-list events', () => {
+  const entered = buildUserCareStateMirror(
+    normalizeWebhookEvent({
+      event: 'watchlist.entered',
+      webhookEventId: 'evt-entered',
+      pulseEscalationId: 'esc-1',
+      pulseUserId: 'athlete-1',
+    }),
+    {},
+    700,
+  );
+  assert.equal(entered.athleteUserId, 'athlete-1');
+  assert.equal(entered.crisisWallActive, true);
+  assert.equal(entered.crisisWallActiveEscalationId, 'esc-1');
+
+  const removed = buildUserCareStateMirror(
+    normalizeWebhookEvent({
+      event: 'watchlist.removed',
+      webhookEventId: 'evt-removed',
+      pulseUserId: 'athlete-1',
+    }),
+    {},
+    800,
+  );
+  assert.equal(removed.crisisWallActive, false);
+  assert.equal(removed.crisisWallClearReason, 'clinical_watchlist_removed');
+  assert.equal(removed.crisisWallActiveEscalationId, null);
+  assert.equal(removed.crisisWallReason, null);
+});
+
+test('out-of-order care-state events cannot regress a newer protective state', () => {
+  const newerProtectiveState = {
+    crisisWallActive: true,
+    clinicalCareStateOccurredAt: 900,
+  };
+  const olderRemoval = {
+    crisisWallActive: false,
+    clinicalCareStateOccurredAt: 800,
+  };
+  const sameTimeRemoval = {
+    crisisWallActive: false,
+    clinicalCareStateOccurredAt: 900,
+  };
+  const newerRemoval = {
+    crisisWallActive: false,
+    clinicalCareStateOccurredAt: 901,
+  };
+
+  assert.equal(shouldApplyUserCareStateMirror(newerProtectiveState, olderRemoval), false);
+  assert.equal(shouldApplyUserCareStateMirror(newerProtectiveState, sameTimeRemoval), false);
+  assert.equal(shouldApplyUserCareStateMirror(newerProtectiveState, newerRemoval), true);
+  assert.equal(
+    shouldApplyUserCareStateMirror(
+      { crisisWallActive: false, clinicalCareStateOccurredAt: 900 },
+      { crisisWallActive: true, clinicalCareStateOccurredAt: 900 },
+    ),
+    true,
+  );
+});
+
+test('buildUserCareStateMirror carries only trusted athlete/team routing fields into private safety state', () => {
+  const mirror = buildUserCareStateMirror(
+    normalizeWebhookEvent({
+      event: 'crisis.invoked',
+      webhookEventId: 'evt-crisis',
+      pulseEscalationId: 'esc-2',
+      pulseUserId: 'athlete-1',
+    }),
+    { teamId: 'team-1', clinicalNotes: 'must never cross the boundary' },
+    900,
+  );
+
+  assert.equal(mirror.athleteUserId, 'athlete-1');
+  assert.equal(mirror.teamId, 'team-1');
+  assert.equal(mirror.crisisWallActive, true);
+  assert.equal('clinicalNotes' in mirror, false);
 });
 
 test('buildEscalationMirror writes only the coarse clinicalCase map plus activity timestamp', () => {

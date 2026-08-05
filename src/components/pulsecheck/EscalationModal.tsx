@@ -23,6 +23,8 @@ interface EscalationModalProps {
   tier: EscalationTier;
   category: EscalationCategory;
   reason?: string;
+  handoffConfirmed?: boolean;
+  handoffStatus?: string;
   onAcceptConsent?: () => Promise<void>;
   onDeclineConsent?: () => Promise<void>;
   onClose?: () => void;
@@ -152,7 +154,9 @@ const Tier3Modal: React.FC<{
   category: EscalationCategory;
   reason?: string;
   isProcessing: boolean;
-}> = ({ category: _category, reason: _reason, isProcessing }) => {
+  handoffConfirmed: boolean;
+  handoffStatus?: string;
+}> = ({ category: _category, reason: _reason, isProcessing, handoffConfirmed, handoffStatus }) => {
   const [showResources, setShowResources] = useState(true);
 
   return (
@@ -167,7 +171,9 @@ const Tier3Modal: React.FC<{
           </div>
           <div>
             <h2 className="text-xl font-semibold text-white">Your safety matters most</h2>
-            <p className="text-sm text-red-300/80">Immediate support is being connected</p>
+            <p className="text-sm text-red-300/80">
+              {handoffConfirmed ? 'Urgent support path confirmed' : 'Use immediate crisis resources now'}
+            </p>
           </div>
         </div>
       </div>
@@ -176,16 +182,16 @@ const Tier3Modal: React.FC<{
       <div className="px-6 py-5 space-y-4">
         <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/20">
           <p className="text-white leading-relaxed">
-            I hear you, and I want you to know that what you're feeling matters. 
-            Your team&apos;s urgent support path is being activated right now, and the
-            crisis resources below are available immediately.
+            {handoffConfirmed
+              ? 'I hear you, and what you are feeling matters. The configured urgent support path was confirmed, and the crisis resources below are available immediately.'
+              : 'I hear you, and what you are feeling matters. PulseCheck could not confirm the care-team connection. Use the crisis resources below now; call 911 if you may be in immediate danger.'}
           </p>
         </div>
 
         {isProcessing && (
           <div className="flex items-center justify-center gap-3 py-4">
             <Loader2 className="w-6 h-6 text-red-400 animate-spin" />
-            <span className="text-zinc-300">Connecting you with support...</span>
+            <span className="text-zinc-300">Waiting for the live support response...</span>
           </div>
         )}
 
@@ -248,8 +254,8 @@ const Tier3Modal: React.FC<{
             <div>
               <p className="text-white font-medium mb-1">I'm still here</p>
               <p className="text-sm text-zinc-400">
-                While we wait for support, I'm here to listen. You don't have to 
-                face this alone. Would you like to continue talking?
+                While you use the immediate resources above, I&apos;m here to listen. You
+                don&apos;t have to face this alone. Would you like to continue talking?
               </p>
             </div>
           </div>
@@ -259,8 +265,9 @@ const Tier3Modal: React.FC<{
       {/* Footer Note */}
       <div className="px-6 py-4 border-t border-zinc-800 bg-zinc-900/50">
         <p className="text-xs text-zinc-500 text-center">
-          Your conversation has been secured and will be shared with the mental health 
-          professional to ensure they can provide the best support possible.
+          {handoffConfirmed
+            ? 'The configured escalation packet was accepted. Continue using the immediate resources above whenever you need them.'
+            : `No live clinical handoff was confirmed${handoffStatus ? ` (${handoffStatus})` : ''}. Use the immediate resources above now.`}
         </p>
       </div>
     </div>
@@ -276,6 +283,8 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
   tier,
   category,
   reason,
+  handoffConfirmed = false,
+  handoffStatus,
   onAcceptConsent,
   onDeclineConsent,
   onClose,
@@ -361,6 +370,8 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
                 category={category}
                 reason={reason}
                 isProcessing={isProcessing}
+                handoffConfirmed={handoffConfirmed}
+                handoffStatus={handoffStatus}
               />
             )}
           </motion.div>

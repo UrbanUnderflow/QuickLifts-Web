@@ -135,7 +135,95 @@ test('web athlete chat callers attach Firebase bearer tokens and canonical user 
   assert.match(componentSource, /Authorization: `Bearer \$\{await firebaseUser\.getIdToken\(\)\}`/);
   assert.equal(
     (componentSource.match(/headers: await pulseCheckChatHeaders\(currentUser\.id\)/g) || []).length,
-    2
+    4
+  );
+  assert.doesNotMatch(componentSource, /action:\s*['"]create['"]/);
+  assert.doesNotMatch(
+    fs.readFileSync(chatPath, 'utf8'),
+    /skipEscalation/
+  );
+});
+
+test('returns deterministic Tier 3 when hard-risk language is present during classifier outage', async () => {
+  const originalOpenAiKey = process.env.OPEN_AI_SECRET_KEY;
+  delete process.env.OPEN_AI_SECRET_KEY;
+
+  try {
+    const { classifyEscalation } = loadRuntimeHelpers();
+    const classification = await classifyEscalation(
+      {
+        collection() {
+          throw new Error('Classifier outage fallback should return before Firestore access.');
+        },
+      },
+      'athlete-1',
+      'I want to die tonight and I cannot stay safe.',
+      [],
+      'conversation-critical-outage'
+    );
+
+    assert.equal(classification?.tier, 3);
+    assert.equal(classification?.shouldEscalate, true);
+    assert.equal(classification?.classificationFamily, 'critical_safety');
+    assert.equal(classification?.requiresClinicalHandoff, true);
+    assert.equal(classification?.classificationSource, 'deterministic_hard_risk_fallback');
+  } finally {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPEN_AI_SECRET_KEY;
+    } else {
+      process.env.OPEN_AI_SECRET_KEY = originalOpenAiKey;
+    }
+  }
+});
+
+test('Tier 3 chat outcome preserves the record and partial-failure details', () => {
+  const { buildTrustedEscalationOutcome } = loadRuntimeHelpers();
+  const outcome = buildTrustedEscalationOutcome({
+    success: false,
+    recordCreated: true,
+    escalationId: 'escalation-1',
+    isCritical: true,
+    safetyStateWriteStatus: 'failed',
+    safetyStateError: { code: 'SAFETY_WRITE_FAILED', message: 'Safety write failed.' },
+    handoffStatus: 'completed',
+    handoffResult: {
+      success: true,
+      supportRoute: 'hotline',
+      hotlineResource: { name: '988 Suicide & Crisis Lifeline', phone: '988' },
+      message: 'Call or text 988 now.',
+    },
+    supportRoute: 'hotline',
+  });
+
+  assert.equal(outcome.success, false);
+  assert.equal(outcome.recordCreated, true);
+  assert.equal(outcome.escalationRecordId, 'escalation-1');
+  assert.equal(outcome.safetyStateWriteStatus, 'failed');
+  assert.equal(outcome.handoffStatus, 'completed');
+  assert.equal(outcome.hotlineResource.phone, '988');
+  assert.equal(outcome.message, 'Call or text 988 now.');
+});
+
+test('chat fails closed before deciding whether to create an escalation when classification is unavailable', () => {
+  const source = fs.readFileSync(chatPath, 'utf8');
+  const unavailableResponseIndex = source.indexOf('ESCALATION_CLASSIFICATION_UNAVAILABLE');
+  const persistenceIndex = source.indexOf('The live safety classification completed');
+  const escalationDecisionIndex = source.indexOf('const shouldCreateEscalation');
+
+  assert.notEqual(unavailableResponseIndex, -1);
+  assert.notEqual(persistenceIndex, -1);
+  assert.notEqual(escalationDecisionIndex, -1);
+  assert.ok(
+    unavailableResponseIndex < escalationDecisionIndex,
+    'The 503 classification-unavailable response must occur before escalation creation is evaluated.'
+  );
+  assert.ok(
+    unavailableResponseIndex < persistenceIndex,
+    'A failed live classification must return before the user or assistant turn is persisted.'
+  );
+  assert.match(
+    source.slice(Math.max(0, unavailableResponseIndex - 500), unavailableResponseIndex + 500),
+    /statusCode:\s*503/
   );
 });
 
@@ -834,6 +922,7 @@ test('elevates loss-of-function language into a true care escalation', async () 
         userId: 'athlete-1',
         message: 'My right arm went numb and I cannot grip the bar.',
         conversationId: 'conversation-loss-of-function',
+        skipEscalation: true,
         recentMessages: [
           { isFromUser: true, content: 'My right arm went numb and I cannot grip the bar.' },
         ],
@@ -845,8 +934,12 @@ test('elevates loss-of-function language into a true care escalation', async () 
     assert.equal(body.escalation.tier, 2);
     assert.equal(body.escalation.classificationFamily, 'care_escalation');
     assert.equal(body.escalation.requiresClinicalHandoff, true);
+    assert.equal(body.escalationOutcome.escalationRecordId, 'escalation-1');
+    assert.equal(body.escalationOutcome.consentRequired, true);
+    assert.equal(body.escalationOutcome.handoffStatus, 'pending');
+    assert.equal(body.escalationOutcome.success, true);
 
-    await waitFor(() => recordStore.size === 1);
+    assert.equal(recordStore.size, 1);
     const activeRecord = [...recordStore.values()].find((entry) => entry.conversationId === 'conversation-loss-of-function');
     assert.equal(activeRecord?.tier, 2);
     assert.equal(activeRecord?.classificationFamily, 'care_escalation');

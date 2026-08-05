@@ -12,6 +12,7 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
   for (const collectionName of [
     'admin-settings',
     'athlete-mental-progress',
+    'clinical-bridge-smoke-test-runs',
     'coachAthletes',
     'coach-notifications',
     'coach-nora-vault',
@@ -20,6 +21,7 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
     'coachScheduleImportJobs',
     'coach-team-schedule',
     'dailySentimentAnalysis',
+    'escalation-conditions',
     'escalation-records',
     'health-context-source-records',
     'health-context-source-status',
@@ -27,6 +29,8 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
     'mental-exercises',
     'mental-recommendations',
     'pulsecheck-assessment-purchases',
+    'pulsecheck-clinical-escalations',
+    'pulsecheck-clinical-webhook-events',
     'pulsecheck-coach-payout-requests',
     'pulsecheck-coach-payout-states',
     'pulsecheck-coach-service-orders',
@@ -90,6 +94,27 @@ test('readiness, device, sentiment, escalation, and user policies are explicit a
   assert.match(
     rules,
     /match \/escalation-records\/\{escalationId\}[\s\S]*pcCanAccessClinicalTeamAthlete[\s\S]*allow create, update, delete: if isAdminUser\(\)/
+  );
+  assert.match(
+    rules,
+    /match \/escalation-conditions\/\{conditionId\}[\s\S]*allow read, create, update, delete: if isAdminUser\(\)/
+  );
+  assert.match(
+    rules,
+    /match \/pulsecheck-clinical-escalations\/\{escalationId\}[\s\S]*allow update: if pcClinicalEscalationAcknowledgementUpdateIsValid\(\)[\s\S]*match \/athleteAcknowledgements\/\{acknowledgementId\}/
+  );
+  assert.doesNotMatch(rules, /pcClinicalEscalationResolutionUpdateIsValid/);
+  assert.match(
+    rules,
+    /match \/pulsecheck-clinical-webhook-events\/\{eventId\}[\s\S]*allow read: if isAdminUser\(\)[\s\S]*allow create, update, delete: if false/
+  );
+  assert.match(
+    rules,
+    /match \/clinical-bridge-smoke-test-runs\/\{runId\}[\s\S]*allow read: if isAdminUser\(\)[\s\S]*allow create, update, delete: if false/
+  );
+  assert.match(
+    rules,
+    /function changesServerOwnedClinicalStateFields\(\)[\s\S]*'clinicalCareState'[\s\S]*'crisisWallActive'[\s\S]*!changesServerOwnedClinicalStateFields\(\)/
   );
 });
 
