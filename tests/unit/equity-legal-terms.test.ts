@@ -90,3 +90,69 @@ test('EIP uses the explicit reserve and does not itself grant advisor equity', (
   assert.match(prompt, /every award requires separate Board approval and an award agreement/i);
   assert.match(prompt, /Do not name Valerie Alexander, Marques Zak, or any individual participant/i);
 });
+
+test('advisor agreement normalization repairs stale investor-introduction language', () => {
+  const staleContent = `
+Advisor Services
+The Advisor will provide strategic guidance, introductions to investors, partners, and customers, and periodic meetings.
+
+Section 5 - Acceptance
+Company:
+Advisor:
+`;
+
+  const normalized = __test.normalizeGeneratedContent('advisor_nso_agreement', staleContent, advisorGrant);
+  const issues = __test.collectGeneratedContentIssues('advisor_nso_agreement', normalized, advisorGrant);
+
+  assert.doesNotMatch(normalized, /introductions to investors/i);
+  assert.match(normalized, /services in connection with the offer or sale of securities/i);
+  assert.match(normalized, /corporate par value is legally distinct from fair market value/i);
+  assert.match(normalized, /Early exercise is not permitted/i);
+  assert.match(normalized, /83\(b\) election is not triggered merely by the grant/i);
+  assert.deepEqual(issues, []);
+});
+
+test('board consent normalization removes unsupported 409A phrasing and states early exercise', () => {
+  const staleContent = `
+WRITTEN CONSENT
+The Board determined the fair market value was $0.05 per share in accordance with Section 409A.
+
+IN WITNESS WHEREOF
+/s/ Tremaine Grant
+Date: August 2, 2026
+`;
+
+  const normalized = __test.normalizeGeneratedContent('board_consent', staleContent, advisorGrant);
+  const issues = __test.collectGeneratedContentIssues('board_consent', normalized, advisorGrant);
+
+  assert.doesNotMatch(normalized, /in accordance with Section 409A/i);
+  assert.match(normalized, /Fair Market Value Determination Date is August 2, 2026/i);
+  assert.match(normalized, /Early exercise is not permitted/i);
+  assert.deepEqual(issues, []);
+});
+
+test('EIP normalization adds required plan safeguards and removes named participants', () => {
+  const staleContent = `
+Equity Incentive Plan
+The plan has a reserve for awards. Valerie Alexander and Marques Zak may receive awards.
+
+/s/ Tremaine Grant
+`;
+
+  const normalized = __test.normalizeGeneratedContent('eip', staleContent, {
+    documentType: 'eip',
+    documentDate: 'August 2, 2026',
+    planShareReserve: 1_000_000,
+  });
+  const issues = __test.collectGeneratedContentIssues('eip', normalized, {
+    documentType: 'eip',
+    documentDate: 'August 2, 2026',
+    planShareReserve: 1_000_000,
+  });
+
+  assert.doesNotMatch(normalized, /Valerie Alexander|Marques Zak/i);
+  assert.match(normalized, /Plan reserve of 1,000,000 shares/i);
+  assert.match(normalized, /Rule 701/i);
+  assert.match(normalized, /Administrator must confirm the applicable securities-law exemption/i);
+  assert.deepEqual(issues, []);
+});

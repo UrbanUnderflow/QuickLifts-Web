@@ -220,13 +220,260 @@ const normalizeAdvisorAgreementOptionExpiration = (content: string, data: Reques
     );
 };
 
+const insertBeforeSignatureSection = (content: string, addition: string) => {
+  const trimmedAddition = addition.trim();
+  if (!trimmedAddition) return content;
+
+  const signaturePatterns = [
+    /\n#{1,6}\s*(?:SECTION\s*)?5\b[^\n]*(?:ACCEPTANCE|SIGNATURE)/i,
+    /\nSECTION\s+5\b[^\n]*(?:ACCEPTANCE|SIGNATURE)/i,
+    /\nIN WITNESS WHEREOF\b/i,
+    /\nSIGNATURES?\b/i,
+  ];
+
+  for (const pattern of signaturePatterns) {
+    const match = content.match(pattern);
+    if (match?.index) {
+      return `${content.slice(0, match.index).trimEnd()}\n\n${trimmedAddition}\n${content.slice(match.index)}`;
+    }
+  }
+
+  return `${content.trimEnd()}\n\n${trimmedAddition}\n`;
+};
+
+const removeUnsupportedSecuritiesServices = (content: string) =>
+  content
+    .replace(/introductions to investors,\s*partners,\s*and customers/gi, 'commercial partnership strategy, customer context, and partner context')
+    .replace(/investor introductions/gi, 'commercial partnership strategy')
+    .replace(/introductions to investors/gi, 'commercial partnership strategy')
+    .replace(/fundraising introductions/gi, 'commercial partnership strategy');
+
+const normalizeUnsupported409AClaims = (content: string) =>
+  content
+    .replace(/determined in accordance with Section 409A/gi, 'determined in good faith after considering the supporting valuation materials in the corporate records')
+    .replace(/in accordance with Section 409A/gi, 'after considering the supporting valuation materials in the corporate records')
+    .replace(/pursuant to Section 409A/gi, 'after considering the supporting valuation materials in the corporate records');
+
+const ensureAdvisorAgreementSafeguards = (content: string, data: RequestBody) => {
+  let result = normalizeAdvisorAgreementOptionExpiration(
+    normalizeUnsupported409AClaims(removeUnsupportedSecuritiesServices(content)),
+    data,
+  );
+  const lower = result.toLowerCase();
+  const additions: string[] = [];
+
+  if (!lower.includes('services in connection with the offer or sale of securities') || !lower.includes('promote or maintain a market')) {
+    additions.push(
+      `The services compensated by this Option are bona fide advisory services and do not include services in connection with the offer or sale of securities in a capital-raising transaction or services that directly or indirectly promote or maintain a market for the Company's securities.`,
+    );
+  }
+
+  if (!lower.includes('corporate par value is legally distinct from fair market value')) {
+    additions.push(
+      `Corporate par value is legally distinct from fair market value and is not being used as the exercise price. The exercise price is not less than the Board-determined fair market value on the Grant Date.`,
+    );
+  }
+
+  if (!lower.includes('fair market value determination date')) {
+    additions.push(`The Fair Market Value Determination Date is ${getValuationDate(data)}.`);
+  }
+
+  if (!lower.includes('formal section 409a appraisal')) {
+    additions.push(
+      `The Company is not representing in this Agreement that a formal Section 409A appraisal exists unless that appraisal is separately identified in the Company's corporate records.`,
+    );
+  }
+
+  if (data.grantDetails?.earlyExerciseAllowed) {
+    if (!lower.includes('form 15620') || !lower.includes('30 days after the shares are transferred') || !lower.includes('repurchase right')) {
+      additions.push(
+        `Early exercise is permitted only under the express mechanics in this Agreement. Shares acquired before vesting remain subject to the same vesting schedule and to a Company repurchase right at the Advisor's original exercise price upon cessation of service, subject to applicable law and the Plan. If the Advisor exercises for substantially nonvested shares, an 83(b) election may be available and generally must be filed with the IRS no later than 30 days after the shares are transferred using the then-current official IRS Form 15620 or other IRS-accepted written statement. The Company does not file the election for the Advisor.`,
+      );
+    }
+  } else if (!lower.includes('early exercise is not permitted') || !lower.includes('83(b) election is not triggered merely by the grant')) {
+    additions.push(
+      `Early exercise is not permitted. The Advisor may exercise only vested portions of the Option. An 83(b) election is not triggered merely by the grant of this ordinary NSO because no substantially nonvested shares are transferred by the grant itself.`,
+    );
+  }
+
+  if (!lower.includes('grant date') || !lower.includes('vesting commencement date')) {
+    additions.push(
+      `For clarity, the Grant Date / Board Approval Date is ${getGrantDate(data)} and the separate Vesting Commencement Date is ${getVestingCommencementDate(data)}.`,
+    );
+  }
+
+  if (!lower.includes('grant, exercise, and any later transfer or sale')) {
+    additions.push(
+      `Tax timing for an NSO can differ at grant, exercise, and any later transfer or sale of shares. The Advisor is responsible for consulting personal tax counsel.`,
+    );
+  }
+
+  if (!lower.includes('six (6) months') && !lower.includes('six months')) {
+    additions.push(
+      `For advisors, vested options remain exercisable for six (6) months after cessation of service, subject to earlier expiration under the Plan and this Agreement.`,
+    );
+  }
+
+  if (additions.length) {
+    result = insertBeforeSignatureSection(
+      result,
+      `## Advisor Option Compliance Terms\n${additions.map(item => `- ${item}`).join('\n')}`,
+    );
+  }
+
+  return result;
+};
+
+const ensureBoardConsentSafeguards = (content: string, data: RequestBody) => {
+  let result = normalizeBoardConsentResolutionNumbering(normalizeUnsupported409AClaims(content));
+  const lower = result.toLowerCase();
+  const additions: string[] = [];
+
+  if (!lower.includes('fair market value determination date')) {
+    additions.push(`The Fair Market Value Determination Date is ${getValuationDate(data)} for the Option.`);
+  }
+
+  if (!lower.includes('corporate par value') || !lower.includes('fair market value')) {
+    additions.push(
+      `Corporate par value is legally distinct from fair market value and is not being used as the Option exercise price.`,
+    );
+  }
+
+  if (data.grantDetails) {
+    const earlyExerciseText = data.grantDetails.earlyExerciseAllowed
+      ? `Early exercise is permitted only if and as stated in the award agreement, with any unvested shares subject to Company repurchase rights and participant tax notices.`
+      : `Early exercise is not permitted. The grantee may exercise only vested portions of the Option.`;
+    if (!lower.includes('early exercise')) additions.push(earlyExerciseText);
+  }
+
+  if (!lower.includes('formal section 409a appraisal')) {
+    additions.push(
+      `The Board is not stating that a formal Section 409A appraisal exists unless such appraisal is separately identified in the Company's corporate records.`,
+    );
+  }
+
+  if (additions.length) {
+    result = insertBeforeSignatureSection(
+      result,
+      `## Additional Grant Determinations\n${additions.map(item => `- ${item}`).join('\n')}`,
+    );
+  }
+
+  return result;
+};
+
+const ensureEipSafeguards = (content: string, data: RequestBody) => {
+  let result = content
+    .replace(/Valerie Alexander/gi, 'individual participant')
+    .replace(/Marques Zak/gi, 'individual participant');
+  const lower = result.toLowerCase();
+  const additions: string[] = [];
+  const reserve = (data.planShareReserve || 1_000_000).toLocaleString();
+
+  if (!lower.includes('plan reserve is not itself an issuance or grant')) {
+    additions.push(
+      `The Plan reserve is not itself an issuance or grant. The Plan reserve of ${reserve} shares of Common Stock only sets the maximum available pool. Every award requires separate Board approval and an award agreement.`,
+    );
+  }
+
+  if (!lower.includes('rule 701') || !lower.includes('capital-raising') || !lower.includes('promote or maintain a market')) {
+    additions.push(
+      `For reliance on Rule 701, consultant and advisor eligibility is limited to natural persons providing bona fide services that are not connected to a capital-raising securities transaction and do not directly or indirectly promote or maintain a market for Company securities.`,
+    );
+  }
+
+  if (!lower.includes('administrator must confirm the applicable securities-law exemption')) {
+    additions.push(
+      `The Administrator must confirm the applicable securities-law exemption for every grant. Plan eligibility alone does not supply an exemption.`,
+    );
+  }
+
+  if (!lower.includes('corporate par value is distinct from fair market value')) {
+    additions.push(
+      `Corporate par value is distinct from fair market value and must not be substituted for the Board-determined exercise price.`,
+    );
+  }
+
+  if (!lower.includes('83(b) election is not triggered merely by the grant')) {
+    additions.push(
+      `Early exercise is permitted only when an individual award agreement expressly permits it. An 83(b) election is not triggered merely by the grant of an unexercised option. If unvested shares are acquired, participant notices should address the possible 30-day Section 83(b) deadline after transfer of substantially nonvested shares.`,
+    );
+  }
+
+  if (additions.length) {
+    result = insertBeforeSignatureSection(
+      result,
+      `## Plan Administration Safeguards\n${additions.map(item => `- ${item}`).join('\n')}`,
+    );
+  }
+
+  return result;
+};
+
+const collectGeneratedContentIssues = (documentType: string, content: string, data: RequestBody) => {
+  const lower = content.toLowerCase();
+  const issues: string[] = [];
+
+  if (documentType === 'advisor_nso_agreement') {
+    if (/introductions to investors|investor introductions|fundraising introductions/i.test(content)) {
+      issues.push('Advisor services still include investor or fundraising introductions.');
+    }
+    if (!lower.includes('services in connection with the offer or sale of securities')) {
+      issues.push('Advisor Rule 701 capital-raising service limitation is missing.');
+    }
+    if (!lower.includes('promote or maintain a market')) {
+      issues.push('Advisor securities-market promotion limitation is missing.');
+    }
+    if (!lower.includes('corporate par value is legally distinct from fair market value')) {
+      issues.push('Advisor FMV/par-value distinction is missing.');
+    }
+    if (data.grantDetails?.earlyExerciseAllowed) {
+      if (!lower.includes('form 15620') || !lower.includes('30 days after the shares are transferred')) {
+        issues.push('Early-exercise 83(b) notice is incomplete.');
+      }
+    } else if (!lower.includes('early exercise is not permitted') || !lower.includes('83(b) election is not triggered merely by the grant')) {
+      issues.push('No-early-exercise and ordinary NSO 83(b) language is incomplete.');
+    }
+  }
+
+  if (documentType === 'board_consent') {
+    if (!lower.includes('fair market value determination date')) {
+      issues.push('Board Consent FMV determination date is missing.');
+    }
+    if (!lower.includes('early exercise')) {
+      issues.push('Board Consent early-exercise treatment is missing.');
+    }
+    if (/determined in accordance with section 409a|pursuant to section 409a/i.test(content)) {
+      issues.push('Board Consent includes an unsupported Section 409A appraisal claim.');
+    }
+  }
+
+  if (documentType === 'eip') {
+    if (!lower.includes('plan reserve is not itself an issuance or grant')) {
+      issues.push('EIP reserve/grant separation is missing.');
+    }
+    if (!lower.includes('rule 701') || !lower.includes('capital-raising') || !lower.includes('promote or maintain a market')) {
+      issues.push('EIP Rule 701 advisor limits are missing.');
+    }
+    if (/valerie alexander|marques zak/i.test(content)) {
+      issues.push('EIP names individual participants.');
+    }
+  }
+
+  return issues;
+};
+
 const normalizeGeneratedContent = (documentType: string, content: string, data: RequestBody) => {
   if (documentType === 'board_consent') {
-    return normalizeBoardConsentResolutionNumbering(content);
+    return ensureBoardConsentSafeguards(content, data);
   }
 
   if (documentType === 'advisor_nso_agreement') {
-    return normalizeAdvisorAgreementOptionExpiration(content, data);
+    return ensureAdvisorAgreementSafeguards(content, data);
+  }
+
+  if (documentType === 'eip') {
+    return ensureEipSafeguards(content, data);
   }
 
   return content;
@@ -757,6 +1004,10 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
     }
 
     const content = normalizeGeneratedContent(documentType, rawContent, body);
+    const contentIssues = collectGeneratedContentIssues(documentType, content, body);
+    if (contentIssues.length) {
+      throw new Error(`Generated document failed advisor equity safeguards: ${contentIssues.join(' ')}`);
+    }
 
     // Generate title based on document type and stakeholder
     const title = documentType === 'eip' 
@@ -784,6 +1035,8 @@ const __test = {
   getVestingCommencementDate,
   getEarlyExerciseInstructionBlock,
   getAdvisorServiceScope,
+  normalizeGeneratedContent,
+  collectGeneratedContentIssues,
 };
 
 export { handler, __test };

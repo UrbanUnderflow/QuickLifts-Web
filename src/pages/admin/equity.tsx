@@ -1194,7 +1194,7 @@ const EquityAdminPage: React.FC = () => {
   };
 
   // Load data
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (retryOnFailure = true): Promise<void> => {
     setLoading(true);
     try {
       // Load stakeholders (filter out any legacy "pool" entries)
@@ -1369,6 +1369,11 @@ const EquityAdminPage: React.FC = () => {
       
     } catch (error) {
       console.error('Error loading equity data:', error);
+      if (retryOnFailure) {
+        await new Promise(resolve => setTimeout(resolve, 900));
+        await loadData(false);
+        return;
+      }
       setMessage({ type: 'error', text: 'Failed to load equity data' });
     } finally {
       setLoading(false);
@@ -1378,6 +1383,32 @@ const EquityAdminPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const loadFreshEquityPacketData = async (): Promise<{
+    stakeholderList: Stakeholder[];
+    documentList: EquityDocument[];
+  }> => {
+    const [stakeholderSnapshot, documentSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'equity-stakeholders'), orderBy('createdAt', 'desc'))),
+      getDocs(query(collection(db, 'equity-documents'), orderBy('createdAt', 'desc'))),
+    ]);
+
+    const stakeholderList = stakeholderSnapshot.docs
+      .map(snapshotDoc => ({
+        id: snapshotDoc.id,
+        ...snapshotDoc.data(),
+      }))
+      .filter((stakeholder: any) => !stakeholder.isReservedPool) as Stakeholder[];
+    const documentList = documentSnapshot.docs.map(snapshotDoc => ({
+      ...snapshotDoc.data(),
+      id: snapshotDoc.id,
+    })) as EquityDocument[];
+
+    setStakeholders(stakeholderList);
+    setEquityDocuments(documentList);
+
+    return { stakeholderList, documentList };
+  };
 
   const createAdvisorBoardConsentDocument = async ({
     stakeholderId,
@@ -2060,7 +2091,7 @@ const EquityAdminPage: React.FC = () => {
     setIsEditEquityDocModalOpen(true);
   };
 
-  const regenerateCompanyApprovalDocCleanly = async (equityDoc: EquityDocument, nextTitle: string, additionalInstructions: string) => {
+  const regenerateCompanyApprovalDocCleanly = async (equityDoc: EquityDocument, nextTitle: string, additionalInstructions: string): Promise<EquityDocument> => {
     const founder = stakeholders.find(s => s.type === 'founder' && s.email);
     const preservedExecutionSource = equityDoc.autoSignedAt || equityDoc.createdAt;
     const preservedExecutionDate = formatLegalDate(preservedExecutionSource);
@@ -2137,12 +2168,39 @@ const EquityAdminPage: React.FC = () => {
       updatedAt: Timestamp.now(),
     });
 
+    const refreshedDoc: EquityDocument = {
+      ...equityDoc,
+      title: nextTitle,
+      prompt: storedPrompt,
+      content: result.content,
+      requiresSignature: false,
+      autoSigned: true,
+      autoSignedAt: preservedExecutionSource,
+      signingRequestId: undefined,
+      signingRequestIds: undefined,
+      needsResendSignature: false,
+      legalTemplateVersion: ADVISOR_PACKET_TEMPLATE_VERSION,
+      status: 'completed',
+      revisionHistory: [
+        ...convertedHistory,
+        {
+          prompt: additionalInstructions.trim()
+            ? `Clean regenerate: ${additionalInstructions.trim()}`
+            : 'Clean regenerate using the latest approved template language while preserving the original execution date and auto-signature.',
+          timestamp: Timestamp.now(),
+        },
+      ],
+      updatedAt: Timestamp.now(),
+    };
+
     setMessage({
       type: 'success',
       text: invalidatedRequestCount > 0
         ? 'Document regenerated cleanly. Old signature links were invalidated and the auto-executed version is now current.'
         : 'Document regenerated cleanly with the original date and auto-executed signature preserved.',
     });
+
+    return refreshedDoc;
   };
 
   const handleReviseEquityDoc = async () => {
@@ -2639,27 +2697,36 @@ const EquityAdminPage: React.FC = () => {
     setIsSigningModalOpen(true);
   };
 
-  const openSigningModal = async (docToSign: EquityDocument) => {
-    const stakeholder = docToSign.stakeholderId
-      ? stakeholders.find(candidate => candidate.id === docToSign.stakeholderId)
+  const prepareEquityDocumentForPreviewOrSend = async (docToPrepare: EquityDocument): Promise<EquityDocument> => {
+    const stakeholder = docToPrepare.stakeholderId
+      ? stakeholders.find(candidate => candidate.id === docToPrepare.stakeholderId)
       : null;
     const managedProfile = getManagedAdvisorEquityProfile(
-      docToSign.stakeholderName || stakeholder?.name,
+      docToPrepare.stakeholderName || stakeholder?.name,
     );
-    const isManagedUnsignedAdvisorAgreement =
+    const isManagedUnsignedAdvisorPacketDoc =
       Boolean(managedProfile) &&
       stakeholder?.type === 'advisor' &&
-      docToSign.documentType === 'advisor_nso_agreement' &&
-      !getEquityDocSignatureState(docToSign).isFullyExecuted;
+      ['advisor_nso_agreement', 'board_consent'].includes(docToPrepare.documentType) &&
+      !getEquityDocSignatureState(docToPrepare).isFullyExecuted;
 
-    if (!isManagedUnsignedAdvisorAgreement || !stakeholder || !managedProfile) {
-      openSigningModalWithDocument(docToSign);
-      return;
+    if (docToPrepare.documentType === 'eip' && isAutoExecutedCompanyDoc(docToPrepare)) {
+      return regenerateCompanyApprovalDocCleanly(
+        docToPrepare,
+        docToPrepare.title,
+        'Refresh automatically before opening the document preview.',
+      );
     }
 
-    if (preparingSigningDocId) return;
+    if (!isManagedUnsignedAdvisorPacketDoc || !stakeholder || !managedProfile) {
+      return docToPrepare;
+    }
 
-    setPreparingSigningDocId(docToSign.id);
+    if (preparingSigningDocId) {
+      throw new Error('Another equity document is already being prepared.');
+    }
+
+    setPreparingSigningDocId(docToPrepare.id);
     setMessage({
       type: 'info',
       text: `Preparing ${managedProfile.canonicalName}'s current 25,000-option packet...`,
@@ -2689,11 +2756,13 @@ const EquityAdminPage: React.FC = () => {
         earlyExerciseAllowed: Boolean(grantDetails.earlyExerciseAllowed),
       });
 
-      if (!saved) return;
+      if (!saved) {
+        throw new Error('Advisor packet refresh was not completed.');
+      }
 
-      const refreshedDocumentSnapshot = await getDoc(doc(db, 'equity-documents', docToSign.id));
+      const refreshedDocumentSnapshot = await getDoc(doc(db, 'equity-documents', docToPrepare.id));
       if (!refreshedDocumentSnapshot.exists()) {
-        throw new Error('The refreshed advisor agreement could not be found.');
+        throw new Error('The refreshed advisor document could not be found.');
       }
 
       const refreshedDocument = {
@@ -2702,21 +2771,47 @@ const EquityAdminPage: React.FC = () => {
       } as EquityDocument;
 
       await loadData();
-      openSigningModalWithDocument(refreshedDocument, false);
-      setSigningModalStatus({
-        type: 'success',
-        text: `Latest EIP, Board Consent, and 25,000-option advisor agreement loaded for ${managedProfile.canonicalName}.`,
-      });
       setMessage({
         type: 'success',
         text: `${managedProfile.canonicalName}'s 25,000-option packet is current and ready to preview or resend.`,
       });
+      return refreshedDocument;
     } catch (error) {
       console.error('Error preparing advisor signing packet:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to prepare the advisor signing packet.',
       });
+      throw error;
+    } finally {
+      setPreparingSigningDocId(null);
+    }
+  };
+
+  const openSigningModal = async (docToSign: EquityDocument) => {
+    try {
+      const refreshedDocument = await prepareEquityDocumentForPreviewOrSend(docToSign);
+      openSigningModalWithDocument(refreshedDocument, false);
+      if (refreshedDocument.id !== docToSign.id || refreshedDocument.updatedAt !== docToSign.updatedAt) {
+        setSigningModalStatus({
+          type: 'success',
+          text: 'Latest EIP, Board Consent, and advisor agreement loaded for this packet.',
+        });
+      }
+    } catch {
+      // prepareEquityDocumentForPreviewOrSend already shows the user-facing error.
+    }
+  };
+
+  const handlePreviewEquityDoc = async (docToPreview: EquityDocument) => {
+    if (preparingSigningDocId) return;
+
+    setPreparingSigningDocId(docToPreview.id);
+    try {
+      const refreshedDocument = await prepareEquityDocumentForPreviewOrSend(docToPreview);
+      window.open(`/equity-doc/${refreshedDocument.id}`, '_blank');
+    } catch {
+      // prepareEquityDocumentForPreviewOrSend already shows the user-facing error.
     } finally {
       setPreparingSigningDocId(null);
     }
@@ -2755,20 +2850,33 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    const missingPacketRequirements = getMissingSignaturePacketRequirements(signingDoc);
-    if (missingPacketRequirements.length) {
-      const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this signature request.`;
-      setSigningModalStatus({ type: 'error', text: message });
-      setMessage({ type: 'error', text: message });
-      return;
-    }
-
     setIsSending(true);
-    setSigningModalStatus({ type: 'info', text: `Sending signature request${normalized.length === 1 ? '' : 's'}...` });
+    setSigningModalStatus({ type: 'info', text: 'Refreshing the document packet before sending...' });
     try {
-      const signingGroupId = `${signingDoc.id}-${Date.now()}`;
+      const currentSigningDoc = await prepareEquityDocumentForPreviewOrSend(signingDoc);
+      setSigningDoc(currentSigningDoc);
+      const { stakeholderList, documentList } = await loadFreshEquityPacketData();
+
+      const missingPacketRequirements = getMissingSignaturePacketRequirements(
+        currentSigningDoc,
+        documentList,
+        stakeholderList,
+      );
+      if (missingPacketRequirements.length) {
+        const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this signature request.`;
+        setSigningModalStatus({ type: 'error', text: message });
+        setMessage({ type: 'error', text: message });
+        return;
+      }
+
+      setSigningModalStatus({ type: 'info', text: `Sending signature request${normalized.length === 1 ? '' : 's'}...` });
+      const signingGroupId = `${currentSigningDoc.id}-${Date.now()}`;
       const signingRequestIds: string[] = [];
-      const supportingDocuments = getSignaturePacketDocuments(signingDoc);
+      const supportingDocuments = getSignaturePacketDocuments(
+        currentSigningDoc,
+        documentList,
+        stakeholderList,
+      );
 
       // Create or reuse signing requests per signer, then send/resend emails
       for (let i = 0; i < normalized.length; i++) {
@@ -2777,14 +2885,14 @@ const EquityAdminPage: React.FC = () => {
         let requestId = signer.signingRequestId;
         if (!requestId) {
           const requestData: any = {
-            documentType: signingDoc.documentType,
-            documentName: signingDoc.title,
+            documentType: currentSigningDoc.documentType,
+            documentName: currentSigningDoc.title,
             recipientName: signer.name,
             recipientEmail: signer.email,
             status: 'pending',
             createdAt: serverTimestamp(),
-            equityDocumentId: signingDoc.id,
-            documentContent: signingDoc.content,
+            equityDocumentId: currentSigningDoc.id,
+            documentContent: currentSigningDoc.content,
             signerRole: signer.role,
             stakeholderId: signer.stakeholderId || null,
             signingGroupId,
@@ -2800,14 +2908,14 @@ const EquityAdminPage: React.FC = () => {
           requestId,
         );
         await updateDoc(doc(db, 'signingRequests', requestId), {
-          documentType: signingDoc.documentType,
-          documentName: signingDoc.title,
+          documentType: currentSigningDoc.documentType,
+          documentName: currentSigningDoc.title,
           recipientName: signer.name,
           recipientEmail: signer.email,
           signerRole: signer.role,
           stakeholderId: signer.stakeholderId || null,
-          equityDocumentId: signingDoc.id,
-          documentContent: signingDoc.content,
+          equityDocumentId: currentSigningDoc.id,
+          documentContent: currentSigningDoc.content,
           supportingDocuments: requestSupportingDocuments,
           updatedAt: serverTimestamp(),
         });
@@ -2819,8 +2927,8 @@ const EquityAdminPage: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             documentId: requestId,
-            documentName: signingDoc.title,
-            documentType: signingDoc.documentType,
+            documentName: currentSigningDoc.title,
+            documentType: currentSigningDoc.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
             supportingDocuments: requestSupportingDocuments,
@@ -2843,7 +2951,7 @@ const EquityAdminPage: React.FC = () => {
       }
 
       // Update equity document with signing request linkages
-      await updateDoc(doc(db, 'equity-documents', signingDoc.id), {
+      await updateDoc(doc(db, 'equity-documents', currentSigningDoc.id), {
         signingRequestId: signingRequestIds[0],
         signingRequestIds,
         requiresSignature: true,
@@ -2885,33 +2993,46 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    const missingPacketRequirements = getMissingSignaturePacketRequirements(signingDoc);
-    if (missingPacketRequirements.length) {
-      const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this preview.`;
-      setSigningModalStatus({ type: 'error', text: message });
-      setMessage({ type: 'error', text: message });
-      return;
-    }
-
     const company = getDefaultCompanySigner();
 
     setIsSending(true);
-    setSigningModalStatus({ type: 'info', text: `Sending preview email to ${previewEmail}...` });
+    setSigningModalStatus({ type: 'info', text: 'Refreshing the document packet before sending preview...' });
 
     try {
-      const supportingDocuments = getSignaturePacketDocuments(signingDoc);
+      const currentSigningDoc = await prepareEquityDocumentForPreviewOrSend(signingDoc);
+      setSigningDoc(currentSigningDoc);
+      const { stakeholderList, documentList } = await loadFreshEquityPacketData();
+
+      const missingPacketRequirements = getMissingSignaturePacketRequirements(
+        currentSigningDoc,
+        documentList,
+        stakeholderList,
+      );
+      if (missingPacketRequirements.length) {
+        const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this preview.`;
+        setSigningModalStatus({ type: 'error', text: message });
+        setMessage({ type: 'error', text: message });
+        return;
+      }
+
+      setSigningModalStatus({ type: 'info', text: `Sending preview email to ${previewEmail}...` });
+      const supportingDocuments = getSignaturePacketDocuments(
+        currentSigningDoc,
+        documentList,
+        stakeholderList,
+      );
       const previewRequestRef = await addDoc(collection(db, 'signingRequests'), {
-        documentType: signingDoc.documentType,
-        documentName: `${signingDoc.title} (Preview)`,
+        documentType: currentSigningDoc.documentType,
+        documentName: `${currentSigningDoc.title} (Preview)`,
         recipientName: previewName,
         recipientEmail: previewEmail,
         status: 'pending',
         createdAt: serverTimestamp(),
-        documentContent: signingDoc.content,
+        documentContent: currentSigningDoc.content,
         signerRole: 'Preview Recipient',
         companyName: company.name || 'Pulse Intelligence Labs, Inc.',
         previewMode: true,
-        previewSourceEquityDocumentId: signingDoc.id,
+        previewSourceEquityDocumentId: currentSigningDoc.id,
         supportingDocuments,
       });
       const requestSupportingDocuments = scopeSupportingDocumentsToRequest(
@@ -2928,14 +3049,14 @@ const EquityAdminPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentId: previewRequestRef.id,
-          documentName: `${signingDoc.title} (Preview)`,
-          documentType: signingDoc.documentType,
+          documentName: `${currentSigningDoc.title} (Preview)`,
+          documentType: currentSigningDoc.documentType,
           recipientName: previewName,
           recipientEmail: previewEmail,
           companyName: company.name || 'Pulse Intelligence Labs, Inc.',
           previewMode: true,
           supportingDocuments: requestSupportingDocuments,
-          sendAttemptId: `preview-${signingDoc.id}-${Date.now()}`,
+          sendAttemptId: `preview-${currentSigningDoc.id}-${Date.now()}`,
         }),
       });
 
@@ -3119,32 +3240,39 @@ const EquityAdminPage: React.FC = () => {
   };
 
   // Get exhibit documents for a document
-  const getExhibitDocuments = (documentId: string): EquityDocument[] => {
-    const equityDoc = equityDocuments.find(d => d.id === documentId);
+  const getExhibitDocuments = (documentId: string, documentList: EquityDocument[] = equityDocuments): EquityDocument[] => {
+    const equityDoc = documentList.find(d => d.id === documentId);
     if (!equityDoc?.exhibits?.length) return [];
-    return equityDocuments.filter(d => equityDoc.exhibits?.includes(d.id));
+    return documentList.filter(d => equityDoc.exhibits?.includes(d.id));
   };
 
-  const getLatestCompletedEquityDocumentByType = (documentType: string) =>
+  const getLatestCompletedEquityDocumentByType = (
+    documentType: string,
+    documentList: EquityDocument[] = equityDocuments,
+  ) =>
     getLatestRelevantDocuments(
-      equityDocuments.filter(d => d.documentType === documentType && d.status === 'completed')
+      documentList.filter(d => d.documentType === documentType && d.status === 'completed')
     )[0] || null;
 
   const requiresEquityReviewPacket = (equityDoc: EquityDocument) =>
     ['advisor_nso_agreement', 'option_agreement', 'fast_agreement'].includes(equityDoc.documentType);
 
-  const getMissingSignaturePacketRequirements = (equityDoc: EquityDocument) => {
+  const getMissingSignaturePacketRequirements = (
+    equityDoc: EquityDocument,
+    documentList: EquityDocument[] = equityDocuments,
+    stakeholderList: Stakeholder[] = stakeholders,
+  ) => {
     if (!requiresEquityReviewPacket(equityDoc)) return [];
 
     const missing: string[] = [];
-    if (!getLatestCompletedEquityDocumentByType('eip')) {
+    if (!getLatestCompletedEquityDocumentByType('eip', documentList)) {
       missing.push('completed Equity Incentive Plan');
     }
 
     if (equityDoc.stakeholderType === 'advisor' && equityDoc.stakeholderId) {
-      const stakeholder = stakeholders.find(s => s.id === equityDoc.stakeholderId);
+      const stakeholder = stakeholderList.find(s => s.id === equityDoc.stakeholderId);
       const linkedBoardConsent = stakeholder?.boardConsentDocId
-        ? equityDocuments.find(d => d.id === stakeholder.boardConsentDocId && d.status === 'completed')
+        ? documentList.find(d => d.id === stakeholder.boardConsentDocId && d.status === 'completed')
         : null;
 
       if (!linkedBoardConsent || !stakeholder?.boardConsentVerifiedAt) {
@@ -3154,7 +3282,11 @@ const EquityAdminPage: React.FC = () => {
     return missing;
   };
 
-  const getSignaturePacketDocuments = (equityDoc: EquityDocument): SignaturePacketDocument[] => {
+  const getSignaturePacketDocuments = (
+    equityDoc: EquityDocument,
+    documentList: EquityDocument[] = equityDocuments,
+    stakeholderList: Stakeholder[] = stakeholders,
+  ): SignaturePacketDocument[] => {
     const docsById = new Map<string, EquityDocument>();
     const addDocument = (document?: EquityDocument | null) => {
       if (document && document.id !== equityDoc.id && document.status === 'completed') {
@@ -3163,15 +3295,15 @@ const EquityAdminPage: React.FC = () => {
     };
 
     if (requiresEquityReviewPacket(equityDoc)) {
-      addDocument(getLatestCompletedEquityDocumentByType('eip'));
+      addDocument(getLatestCompletedEquityDocumentByType('eip', documentList));
 
       if (equityDoc.stakeholderId) {
-        const stakeholder = stakeholders.find(s => s.id === equityDoc.stakeholderId);
+        const stakeholder = stakeholderList.find(s => s.id === equityDoc.stakeholderId);
         const linkedBoardConsent = stakeholder?.boardConsentDocId
-          ? equityDocuments.find(d => d.id === stakeholder.boardConsentDocId)
+          ? documentList.find(d => d.id === stakeholder.boardConsentDocId)
           : null;
         const latestBoardConsent = getLatestRelevantDocuments(
-          equityDocuments.filter(d =>
+          documentList.filter(d =>
             d.stakeholderId === equityDoc.stakeholderId &&
             d.documentType === 'board_consent' &&
             d.status === 'completed'
@@ -3182,7 +3314,7 @@ const EquityAdminPage: React.FC = () => {
       }
     }
 
-    getExhibitDocuments(equityDoc.id).forEach(addDocument);
+    getExhibitDocuments(equityDoc.id, documentList).forEach(addDocument);
 
     return Array.from(docsById.values()).map(document => ({
       id: document.id,
@@ -5088,11 +5220,16 @@ const EquityAdminPage: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <button
-                                            onClick={(e) => { e.stopPropagation(); window.open(`/equity-doc/${edoc.id}`, '_blank'); }}
-                                            className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); handlePreviewEquityDoc(edoc); }}
+                                            disabled={preparingSigningDocId === edoc.id}
+                                            className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors disabled:opacity-60 disabled:cursor-wait"
                                           >
-                                            <Eye className="w-3 h-3" />
-                                            Preview
+                                            {preparingSigningDocId === edoc.id ? (
+                                              <Loader2 className="w-3 h-3 animate-spin" />
+                                            ) : (
+                                              <Eye className="w-3 h-3" />
+                                            )}
+                                            {preparingSigningDocId === edoc.id ? 'Updating...' : 'Preview'}
                                           </button>
                                           <button
                                             onClick={(e) => { e.stopPropagation(); openAuditModal(edoc); }}
@@ -5635,11 +5772,16 @@ const EquityAdminPage: React.FC = () => {
                         {edoc.status === 'completed' && (
                           <>
                             <button
-                              onClick={() => window.open(`/equity-doc/${edoc.id}`, '_blank')}
-                              className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                              onClick={() => handlePreviewEquityDoc(edoc)}
+                              disabled={preparingSigningDocId === edoc.id}
+                              className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors disabled:opacity-60 disabled:cursor-wait"
                             >
-                              <Eye className="w-4 h-4" />
-                              Preview
+                              {preparingSigningDocId === edoc.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Eye className="w-4 h-4" />
+                              )}
+                              {preparingSigningDocId === edoc.id ? 'Updating...' : 'Preview'}
                             </button>
                             <button
                               onClick={() => openEditEquityDocModal(edoc)}
@@ -5869,7 +6011,7 @@ const EquityAdminPage: React.FC = () => {
                 
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={loadData}
+                    onClick={() => loadData()}
                     disabled={loading}
                     className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors"
                   >
