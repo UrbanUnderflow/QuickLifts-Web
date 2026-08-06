@@ -306,30 +306,40 @@ const educationStories: EducationStory[] = [
     eyebrow: 'auntEDNA clinical support',
     title: 'When several hard days need a closer look.',
     intro:
-      'One hard day can happen to any athlete. When difficult check-ins, poor sleep, or concerning answers keep showing up, the program can bring a qualified clinician into the review.',
+      'One hard day can happen to any athlete. When difficult check-ins, poor sleep, or concerning answers keep showing up, auntEDNA.ai gives qualified clinicians a structured place to review what is happening.',
     sections: [
       {
         number: '01',
-        title: 'Several hard days appear.',
-        body: 'The system looks for repeated changes and answers that suggest extra support may be needed.',
+        title: 'Several hard days show a pattern.',
+        body: 'PulseCheck looks for repeated check-ins, sleep changes, and answers that suggest extra support may be needed.',
       },
       {
         number: '02',
-        title: 'Program rules guide the handoff.',
-        body: 'Each organization sets consent, safety, and escalation rules for the athletes it supports.',
+        title: 'The clinical layer has research backing.',
+        body: 'auntEDNA was supported by the National Science Foundation for Phase I studies focused on athlete mental health support.',
       },
       {
         number: '03',
-        title: 'A clinician reviews it.',
-        body: 'A qualified person looks at the repeated changes and uses human judgment to understand what may be happening.',
+        title: 'Athletes actually used it.',
+        body: 'Reported Phase I outcomes included 80% adherence for athlete check-ins, a higher benchmark than typical digital check-in engagement.',
       },
       {
         number: '04',
-        title: 'The athlete connects to care.',
-        body: 'The next step can be a check-in, a conversation with a trusted adult, or a connection to the right care.',
+        title: 'Adoption matters.',
+        body: 'A support system only works if athletes keep using it. Short, repeated check-ins lower friction and create enough signal for adults to see patterns.',
+      },
+      {
+        number: '05',
+        title: 'Performance gets better context.',
+        body: 'When athletes stay engaged, clinicians and performance staff can separate one rough day from a repeated pattern and choose the right next support step.',
       },
     ],
-    callout: 'PulseCheck can flag repeated changes. A qualified person decides what care is appropriate.',
+    callout:
+      'PulseCheck can flag repeated changes. auntEDNA.ai gives qualified clinicians a HIPAA-compliant place to review, coordinate, and connect the athlete to care.',
+    citation: {
+      label: 'View the NSF SBIR Phase I award',
+      href: 'https://www.sbir.gov/awards/208352',
+    },
   },
   {
     id: 'parent-trust',
@@ -622,7 +632,7 @@ const performersEducationStories: EducationStory[] = [
         return {
           ...story,
           intro:
-            'When difficult check-ins, poor sleep, or concerning answers continue, program rules can bring a qualified clinician into the review.',
+            'When difficult check-ins, poor sleep, or concerning answers continue, auntEDNA.ai gives qualified clinicians a structured place to review what is happening.',
           sections: [
             {
               number: '01',
@@ -631,22 +641,31 @@ const performersEducationStories: EducationStory[] = [
             },
             {
               number: '02',
-              title: 'Program rules guide the handoff.',
-              body: 'Each organization sets consent, safety, and escalation rules for the people it supports.',
+              title: 'The clinical layer has research backing.',
+              body: 'auntEDNA was supported by the National Science Foundation for Phase I studies focused on athlete mental health support.',
             },
             {
               number: '03',
-              title: 'A clinician reviews it.',
-              body: 'A qualified clinician looks at the changes and uses human judgment to understand what may be happening.',
+              title: 'Athletes actually used it.',
+              body: 'Reported Phase I outcomes included 80% adherence for athlete check-ins, a higher benchmark than typical digital check-in engagement.',
             },
             {
               number: '04',
-              title: 'The person connects to care.',
-              body: 'The next step can be a check-in, a conversation with a trusted person, or a connection to the right care.',
+              title: 'Adoption matters.',
+              body: 'A support system only works if people keep using it. Short, repeated check-ins lower friction and create enough signal for support teams to see patterns.',
+            },
+            {
+              number: '05',
+              title: 'Performance gets better context.',
+              body: 'When athletes stay engaged, clinicians and performance staff can separate one rough day from a repeated pattern and choose the right next support step.',
             },
           ],
           callout:
-            'PulseCheck can flag ongoing changes. A qualified clinician decides what care is appropriate.',
+            'PulseCheck can flag ongoing changes. auntEDNA.ai gives qualified clinicians a HIPAA-compliant place to review, coordinate, and connect people to care.',
+          citation: {
+            label: 'View the NSF SBIR Phase I award',
+            href: 'https://www.sbir.gov/awards/208352',
+          },
         };
       }
 
@@ -1403,10 +1422,39 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           />
         )}
         <div className="yi-support-overlay" aria-hidden="true" />
+        {isPro && (
+          <figure className="yi-nakayla-proof">
+            <img
+              src="/nakyala-cau.jpg"
+              alt="Nakayla James playing volleyball for Clark Atlanta University"
+            />
+            <figcaption>
+              <blockquote>
+                “There was a point in my volleyball journey where I suffered in silence, thinking
+                I needed to take it all on by myself.”
+              </blockquote>
+              <p>
+                “Prioritizing myself and my mental health has given me the power to know I am
+                stronger. It’s okay to not be okay, and it’s okay to ask for help.”
+              </p>
+              <div>
+                <span>Nakayla James</span>
+                <small>Clark Atlanta University Volleyball</small>
+              </div>
+            </figcaption>
+          </figure>
+        )}
         <div className="yi-support-content">
           <div className="yi-auntedna">
             <img src="/auntedna-mark.png" alt="auntEDNA" />
-            <span>auntEDNA / CLINICAL SUPPORT</span>
+            {isPro ? (
+              <span className="yi-auntedna-pro-wordmark">
+                <b>auntEDNA.ai</b>
+                <small>Clinical intelligence</small>
+              </span>
+            ) : (
+              <span>auntEDNA / CLINICAL SUPPORT</span>
+            )}
           </div>
           <h2>{isPerformers || isPro ? <>WHEN SEVERAL HARD DAYS<br />KEEP SHOWING UP.</> : <>WHEN SEVERAL HARD DAYS<br />NEED A CLOSER LOOK.</>}</h2>
           <p>
@@ -2414,12 +2462,106 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-support-content { position: relative; z-index: 2; width: min(760px, calc(100% - 68px)); margin-left: clamp(34px, 7vw, 110px); padding: 110px 0; }
         .yi-auntedna { display: flex; align-items: center; gap: 17px; margin-bottom: 34px; color: #e890c4; font-size: 10px; font-weight: 700; letter-spacing: .16em; }
         .yi-auntedna img { width: 46px; height: 46px; object-fit: contain; }
+        .yi-auntedna-pro-wordmark {
+          display: grid;
+          gap: 3px;
+          letter-spacing: 0;
+          line-height: 1;
+        }
+        .yi-auntedna-pro-wordmark b {
+          color: #fff;
+          font-size: 24px;
+          font-weight: 900;
+          letter-spacing: -.03em;
+        }
+        .yi-auntedna-pro-wordmark b::first-letter {
+          color: #d8b4fe;
+        }
+        .yi-auntedna-pro-wordmark small {
+          color: rgba(244,167,208,.72);
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: .22em;
+          text-transform: uppercase;
+        }
         .yi-support h2 { margin: 0 0 34px; font-size: clamp(70px, 8vw, 124px); line-height: .83; }
         .yi-support-content > p { max-width: 610px; margin: 0; color: #d1ced2; font-size: 17px; line-height: 1.7; }
         .yi-support-path { display: flex; align-items: center; max-width: 560px; margin-top: 55px; }
         .yi-support-path span { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
         .yi-support-path b { color: #e890c4; font-size: 9px; letter-spacing: .12em; }
         .yi-support-path i { height: 1px; flex: 1; margin: 0 13px; background: rgba(255,255,255,.32); }
+        .yi-nakayla-proof {
+          position: relative;
+          z-index: 2;
+          display: none;
+          min-height: 720px;
+          margin: 0;
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,.18);
+          border-radius: 42px;
+          background: #111217;
+          box-shadow: 0 34px 89px rgba(0,0,0,.32);
+        }
+        .yi-nakayla-proof img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: 50% 48%;
+          filter: contrast(1.04) brightness(.84);
+        }
+        .yi-nakayla-proof::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 23% 17%, rgba(232,144,196,.2), transparent 20rem),
+            linear-gradient(0deg, rgba(7,7,10,.9) 0%, rgba(7,7,10,.62) 44%, rgba(7,7,10,.16) 100%);
+          pointer-events: none;
+        }
+        .yi-nakayla-proof figcaption {
+          position: absolute;
+          z-index: 1;
+          left: 34px;
+          right: 34px;
+          bottom: 34px;
+          display: grid;
+          gap: 18px;
+          color: #fff;
+        }
+        .yi-nakayla-proof blockquote {
+          margin: 0;
+          max-width: 520px;
+          color: #fff;
+          font: 700 clamp(31px, 3.2vw, 52px)/.96 'Playfair Display', Georgia, serif;
+          letter-spacing: -.04em;
+        }
+        .yi-nakayla-proof p {
+          max-width: 520px;
+          margin: 0;
+          color: rgba(255,255,255,.78);
+          font-size: 16px;
+          line-height: 1.55;
+        }
+        .yi-nakayla-proof div {
+          display: grid;
+          gap: 5px;
+          padding-top: 16px;
+          border-top: 1px solid rgba(255,255,255,.28);
+        }
+        .yi-nakayla-proof div span {
+          font-size: 18px;
+          font-weight: 800;
+          letter-spacing: -.02em;
+        }
+        .yi-nakayla-proof div small {
+          max-width: 240px;
+          color: rgba(255,255,255,.74);
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: .14em;
+          line-height: 1.45;
+          text-transform: uppercase;
+        }
         .youth-info:not(.pro-info):not(.performers-info) .yi-support {
           color: #0d0d11;
           background: #f4f0e8;
@@ -2726,13 +2868,71 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .pro-info .yi-support-image { object-position: 58% center; }
         .pro-info .yi-support-overlay {
           background:
-            linear-gradient(90deg, rgba(7,7,10,.98) 0%, rgba(7,7,10,.9) 49%, rgba(7,7,10,.24) 82%),
-            linear-gradient(0deg, rgba(7,7,10,.78), transparent 60%);
+            radial-gradient(circle at 84% 18%, rgba(232,144,196,.18), transparent 26rem),
+            radial-gradient(circle at 12% 72%, rgba(229,117,46,.14), transparent 24rem),
+            linear-gradient(135deg, rgba(12,6,13,.98) 0%, rgba(28,13,28,.96) 100%);
         }
         .pro-info .yi-support {
+          display: grid;
+          grid-template-columns: minmax(360px, .92fr) minmax(0, .8fr);
+          align-items: center;
+          gap: clamp(34px, 6vw, 89px);
+          min-height: 900px;
+          padding: 110px clamp(34px, 7vw, 110px);
+          color: #fff;
           background:
-            radial-gradient(circle at 82% 28%, rgba(107,47,63,.3), transparent 28rem),
-            linear-gradient(135deg, #090a0e 0%, #17121b 100%);
+            radial-gradient(circle at 84% 18%, rgba(232,144,196,.18), transparent 26rem),
+            radial-gradient(circle at 12% 72%, rgba(229,117,46,.14), transparent 24rem),
+            linear-gradient(135deg, #080509 0%, #1c0d1c 100%);
+        }
+        .pro-info .yi-support-content {
+          width: auto;
+          max-width: 760px;
+          margin-left: 0;
+          padding: 0;
+        }
+        .pro-info .yi-nakayla-proof { display: block; }
+        .pro-info .yi-support h2 { font-size: clamp(62px, 6.1vw, 104px); }
+        .pro-info .yi-auntedna {
+          position: relative;
+          color: #f4a7d0;
+        }
+        .pro-info .yi-auntedna::before {
+          content: '';
+          position: absolute;
+          left: -13px;
+          top: 50%;
+          z-index: -1;
+          width: 76px;
+          height: 76px;
+          border-radius: 999px;
+          background:
+            radial-gradient(circle, rgba(255,248,236,.46) 0%, rgba(244,167,208,.26) 38%, rgba(229,117,46,.14) 58%, transparent 74%);
+          filter: blur(9px);
+          transform: translateY(-50%);
+        }
+        .pro-info .yi-auntedna img {
+          position: relative;
+          width: 55px;
+          height: 55px;
+          filter:
+            drop-shadow(0 0 7px rgba(255,248,236,.2))
+            drop-shadow(0 0 20px rgba(232,144,196,.28));
+        }
+        .pro-info .yi-support-content > p { color: rgba(255,255,255,.72); }
+        .pro-info .yi-support-path b { color: #f4a7d0; }
+        .pro-info .yi-support-path i { background: rgba(255,255,255,.26); }
+        .pro-info .yi-support .yi-learn-link {
+          color: #fff;
+          border-color: rgba(255,255,255,.42);
+        }
+        .pro-info .yi-support .yi-learn-link i {
+          border-color: rgba(255,255,255,.42);
+          color: #fff;
+        }
+        .pro-info .yi-support .yi-learn-link:hover i {
+          background: #fff;
+          color: #160a18;
         }
         .pro-info .yi-recovery {
           color: #f5f2ec;
@@ -2818,6 +3018,8 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           .yi-trust, .yi-recovery { grid-template-columns: 1fr; }
           .yi-research { grid-template-columns: 1fr; }
           .yi-research-stat { min-height: 620px; }
+          .pro-info .yi-support { grid-template-columns: 1fr; }
+          .pro-info .yi-nakayla-proof { min-height: 560px; }
         }
 
         @media (max-width: 680px) {
@@ -2986,6 +3188,39 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           .yi-support-path { align-items: stretch; gap: 8px; }
           .yi-support-path span { flex-direction: column; align-items: flex-start; gap: 3px; }
           .yi-support-path i { margin: 14px 4px 0; }
+          .pro-info .yi-support {
+            min-height: auto;
+            gap: 34px;
+            padding: 89px 21px;
+          }
+          .pro-info .yi-support-overlay {
+            background:
+              radial-gradient(circle at 84% 18%, rgba(232,144,196,.18), transparent 24rem),
+              radial-gradient(circle at 12% 72%, rgba(229,117,46,.14), transparent 22rem),
+              linear-gradient(135deg, rgba(12,6,13,.98) 0%, rgba(28,13,28,.96) 100%);
+          }
+          .pro-info .yi-support-content {
+            width: 100%;
+            margin: 0;
+            padding: 0;
+          }
+          .pro-info .yi-nakayla-proof {
+            min-height: 560px;
+            border-radius: 26px;
+          }
+          .yi-nakayla-proof figcaption {
+            left: 21px;
+            right: 21px;
+            bottom: 21px;
+            gap: 14px;
+          }
+          .yi-nakayla-proof blockquote {
+            font-size: 25px;
+            line-height: 1.02;
+          }
+          .yi-nakayla-proof p {
+            font-size: 15px;
+          }
 
           .yi-recovery { gap: 34px; padding: 89px 21px; }
           .yi-recovery h2 { font-size: 62px; }
