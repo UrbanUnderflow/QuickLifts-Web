@@ -49,7 +49,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   // PipeLists: extract structured list-item fields from a pasted lead URL.
   pipeListsLeadExtraction: { maxTokens: 1800, modelPattern: /gpt-4o-mini|gpt-4o|gpt-4/i },
   // PipeLists: find new leads with the Responses API web-search tool.
-  pipeListsLeadGeneration: { maxTokens: 6500, modelPattern: /gpt-5|gpt-4o|gpt-4|o[1-4]/i },
+  pipeListsLeadGeneration: { maxTokens: 14000, modelPattern: /gpt-5|gpt-4o|gpt-4|o[1-4]/i },
   // Default bounds for generic actions
   default: { maxTokens: 1000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4|gpt-3.5/i }
 };

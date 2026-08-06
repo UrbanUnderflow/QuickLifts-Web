@@ -156,9 +156,37 @@ const LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH = 20000;
 const LEAD_SEARCH_DEFAULT_COUNT = 6;
 const LEAD_SEARCH_MAX_COUNT = 30;
 
-const estimateLeadCountFromPrompt = (prompt: string) => {
+const extractPastedLeadEntries = (prompt: string) => {
+  const instructionPattern =
+    /\b(?:take|use|analy[sz]e|research|find|add|details?|list|leads?|prompt|entered|box|through|from|entire|weird|issue)\b/i;
+
+  const entries = prompt
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^\s*(?:[-*\u2022]|\d+[\).])\s*/, '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter((line) => {
+      if (line.length < 2 || line.length > 120) return false;
+      if (/https?:\/\//i.test(line) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line)) return true;
+      if (line.includes(':')) return false;
+      const wordCount = line.split(/\s+/).length;
+      if (wordCount > 8) return false;
+      if (/[.!?]$/.test(line)) return false;
+      if (instructionPattern.test(line) && wordCount > 5) return false;
+      return /[A-Za-z]/.test(line);
+    });
+
+  return Array.from(new Set(entries)).slice(0, LEAD_SEARCH_MAX_COUNT);
+};
+
+const estimateLeadCountFromPrompt = (prompt: string, pastedEntries = extractPastedLeadEntries(prompt)) => {
   const explicitCount = Array.from(
-    prompt.matchAll(/\b(\d{1,2})\s+(?:new\s+)?(?:early[- ]stage\s+)?(?:vc\s+)?(?:funds?|leads?|contacts?|investors?|organizations?)\b/gi),
+    prompt.matchAll(
+      /\b(\d{1,2})\s+(?:new\s+)?(?:early[- ]stage\s+)?(?:vc\s+)?(?:funds?|leads?|contacts?|investors?|organizations?|universities|schools?|programs?)\b/gi,
+    ),
   ).reduce((largest, match) => Math.max(largest, Number(match[1]) || 0), 0);
   const structuredCounts = [
     /^\s*AUM\s*:/gim,
@@ -167,7 +195,7 @@ const estimateLeadCountFromPrompt = (prompt: string) => {
     /^\s*Check size\s*:/gim,
     /^\s*Fund type\s*:/gim,
   ].map((pattern) => prompt.match(pattern)?.length || 0);
-  const estimatedCount = Math.max(explicitCount, ...structuredCounts);
+  const estimatedCount = Math.max(explicitCount, pastedEntries.length, ...structuredCounts);
 
   return Math.min(LEAD_SEARCH_MAX_COUNT, Math.max(LEAD_SEARCH_DEFAULT_COUNT, estimatedCount));
 };
@@ -5252,8 +5280,9 @@ Rules:
         sourceUrl: item.sourceUrl,
         dueDate: item.dueDate,
       }));
-      const requestedLeadCount = estimateLeadCountFromPrompt(searchPrompt);
-      const isStructuredExtraction = requestedLeadCount > LEAD_SEARCH_DEFAULT_COUNT;
+      const pastedEntries = extractPastedLeadEntries(searchPrompt);
+      const requestedLeadCount = estimateLeadCountFromPrompt(searchPrompt, pastedEntries);
+      const isStructuredExtraction = pastedEntries.length > 0 || requestedLeadCount > LEAD_SEARCH_DEFAULT_COUNT;
 
       const response = await fetch(getLeadSearchBridgeUrl(), {
         method: 'POST',
@@ -5286,7 +5315,9 @@ Current date: ${today}.
 Research rules:
 - Use the user's prompt as the primary instruction source. Do not add assumptions, targeting criteria, deadline requirements, product details, or opportunity types that the user did not provide.
 - When the prompt contains a pasted list or article with multiple named entries, extract every distinct named entry up to requestedLeadCount. Treat this as an extraction job, not a request to return a smaller sample.
+- When inputEntries is provided, research each input entry in order and return one lead for every input entry up to requestedLeadCount.
 - For pasted structured content, preserve the supplied names and facts. Use web search to locate and verify a supporting source for each entry rather than replacing the entries with different recommendations.
+- If a supplied name is shorthand, misspelled, or informal, use the verified official name in title/organization while keeping the returned lead clearly tied to the supplied entry.
 - Use web search and return leads supported by current sources.
 - Return only leads that are relevant to the active PipeList and the user's prompt.
 - Avoid duplicates already in the user's list.
@@ -5312,6 +5343,7 @@ Research rules:
                   templateLabel: templateCatalog[activeList.templateKey].label,
                   templateKey: activeList.templateKey,
                   searchPrompt,
+                  inputEntries: pastedEntries,
                   stageOptions,
                   existingItems,
                 },
@@ -5351,14 +5383,18 @@ Research rules:
           };
         });
       const unverifiedCount = nextLeads.filter((lead) => !lead.sourceVerified).length;
+      const expectedStructuredCount = isStructuredExtraction ? Math.min(requestedLeadCount, pastedEntries.length || requestedLeadCount) : 0;
+      const missingStructuredCount = expectedStructuredCount > nextLeads.length ? expectedStructuredCount - nextLeads.length : 0;
 
       setGeneratedLeads(nextLeads);
       setLeadGenMessage(
         nextLeads.length > 0
           ? {
-              type: 'success',
+              type: missingStructuredCount > 0 ? 'info' : 'success',
               text:
-                unverifiedCount > 0
+                missingStructuredCount > 0
+                  ? `Found ${formatCount(nextLeads.length, 'lead')} from ${formatCount(expectedStructuredCount, 'entry')}. ${formatCount(missingStructuredCount, 'entry')} still need another pass.`
+                  : unverifiedCount > 0
                   ? `Found ${formatCount(nextLeads.length, 'lead')}. ${formatCount(unverifiedCount, 'lead')} need source verification before they can be added.`
                   : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.`,
             }
