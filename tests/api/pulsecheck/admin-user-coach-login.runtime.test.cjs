@@ -8,6 +8,14 @@ const usersAdminSource = fs.readFileSync(
   path.join(repoRoot, 'src/pages/admin/users.tsx'),
   'utf8'
 );
+const remoteLoginSource = fs.readFileSync(
+  path.join(repoRoot, 'src/pages/remote-login.tsx'),
+  'utf8'
+);
+const adminBannerSource = fs.readFileSync(
+  path.join(repoRoot, 'src/components/admin/AdminNavBanner.tsx'),
+  'utf8'
+);
 
 test('user management can impersonate a user directly into the PulseCheck coach dashboard', () => {
   assert.match(
@@ -24,6 +32,36 @@ test('user management can impersonate a user directly into the PulseCheck coach 
     usersAdminSource,
     /next=\$\{encodeURIComponent\(remoteLoginTarget\.destination\)\}/,
     'the remote-login URL should preserve the selected destination'
+  );
+  assert.doesNotMatch(
+    usersAdminSource,
+    /customToken.*remote-login\?token|userId=\$\{targetUser\.id\}/s,
+    'the admin page should not put reusable Firebase custom tokens into remote-login URLs'
+  );
+  assert.match(
+    remoteLoginSource,
+    /browserSessionPersistence/,
+    'remote-login should scope impersonation to tab session persistence'
+  );
+  assert.match(
+    remoteLoginSource,
+    /setPersistence\(auth,\s*browserSessionPersistence\)/,
+    'remote-login should set session persistence before custom-token sign-in'
+  );
+  assert.match(
+    remoteLoginSource,
+    /consume-remote-login-token/,
+    'remote-login should consume one-time remote-login tokens in the target tab'
+  );
+  assert.match(
+    remoteLoginSource,
+    /replaceState/,
+    'remote-login should remove the token from browser history before sign-in'
+  );
+  assert.match(
+    adminBannerSource,
+    /signOutAndClearPulseAuthState\(auth\)/,
+    'admin sign-out should clear Firebase auth storage, not only call signOut(auth)'
   );
   assert.match(
     usersAdminSource,

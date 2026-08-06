@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { signOut } from 'firebase/auth';
 import {
   ChevronDown,
   Database,
@@ -22,6 +21,7 @@ import {
   isUsingDevFirebase,
   setPreferredFirebaseMode,
 } from '../../api/firebase/config';
+import { signOutAndClearPulseAuthState } from '../../utils/authSessionCleanup';
 
 const titleizeAdminPath = (pathname: string): string => {
   const cleaned = pathname
@@ -86,7 +86,8 @@ const AdminNavBanner: React.FC = () => {
   };
 
   const handleSignOut = async () => {
-    await signOut(auth);
+    await signOutAndClearPulseAuthState(auth);
+    window.location.assign('/admin');
   };
 
   const refreshAfterSignIn = () => {
@@ -194,7 +195,6 @@ const AdminNavBanner: React.FC = () => {
               <div className="inline-flex items-center overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
                 <div className="inline-flex min-w-0 items-center gap-2 px-3 py-2 text-sm text-zinc-200">
                   {profileImageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={profileImageUrl} alt={accountLabel} className="h-5 w-5 rounded-full object-cover" />
                   ) : (
                     <UserCircle2 className="h-4 w-4 text-zinc-400" />

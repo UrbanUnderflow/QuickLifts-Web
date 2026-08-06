@@ -10,7 +10,6 @@ import {
   sendSignInLinkToEmail,
   signInWithEmailLink,
   sendPasswordResetEmail,
-  signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
@@ -23,6 +22,7 @@ import {
   buildAppVersionWritePayload,
 } from '../../../utils/appVersioning';
 import { resolveGoogleProviderConflict } from './accountLinking';
+import { signOutAndClearPulseAuthState } from '../../../utils/authSessionCleanup';
 
 export const authMethods: AuthService = {
   async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
@@ -198,4 +198,4 @@ export const authMethods: AuthService = {
 };
 
 // Export signOut function for use in components
-export const signOut = () => firebaseSignOut(auth);
+export const signOut = () => signOutAndClearPulseAuthState(auth);

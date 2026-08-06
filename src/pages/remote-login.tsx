@@ -1,14 +1,15 @@
 // remote-login.tsx
 // Page to handle remote login authentication for admin impersonation
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { signInWithCustomToken } from 'firebase/auth';
+import { browserSessionPersistence, setPersistence, signInWithCustomToken } from 'firebase/auth';
 import { auth } from '../api/firebase/config';
 import Head from 'next/head';
 
 const RemoteLogin: React.FC = () => {
   const router = useRouter();
+  const remoteLoginStartedRef = useRef(false);
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Authenticating...');
   const [userInfo, setUserInfo] = useState<{ id: string; email: string } | null>(null);
@@ -23,29 +24,49 @@ const RemoteLogin: React.FC = () => {
           throw new Error('Missing required token parameter');
         }
 
-        let customToken = token;
-        let resolvedUserId = typeof userId === 'string' ? userId : '';
-        let resolvedEmail = typeof email === 'string' ? email : '';
+        const cleanUrl = nextPath === '/'
+          ? '/remote-login'
+          : `/remote-login?next=${encodeURIComponent(nextPath)}`;
+        window.history.replaceState(window.history.state, document.title, cleanUrl);
 
-        if (!resolvedUserId || !resolvedEmail) {
-          try {
-            const response = await fetch('/.netlify/functions/consume-remote-login-token', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ token }),
-            });
+        let customToken = '';
+        let resolvedUserId = '';
+        let resolvedEmail = '';
 
-            if (response.ok) {
+        try {
+          const response = await fetch('/.netlify/functions/consume-remote-login-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token }),
+          });
+
+          if (!response.ok) {
+            let errorMessage = 'Remote login token is invalid or expired.';
+            try {
               const payload = await response.json();
-              customToken = payload.customToken;
-              resolvedUserId = payload.user?.id || '';
-              resolvedEmail = payload.user?.email || '';
-            }
-          } catch (consumeError) {
-            console.warn('[RemoteLogin] Remote-login token consume fallback unavailable, trying direct Firebase custom-token sign-in.', consumeError);
+              errorMessage = payload?.error || errorMessage;
+            } catch {}
+            throw new Error(errorMessage);
           }
+
+          const payload = await response.json();
+          customToken = payload.customToken;
+          resolvedUserId = payload.user?.id || '';
+          resolvedEmail = payload.user?.email || '';
+        } catch (consumeError) {
+          const isLocalRuntime = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          const hasLegacyDirectCustomTokenContext = Boolean(userId || email);
+
+          if (!isLocalRuntime || !hasLegacyDirectCustomTokenContext) {
+            throw consumeError;
+          }
+
+          console.warn('[RemoteLogin] Local legacy direct custom-token fallback in use.', consumeError);
+          customToken = token;
+          resolvedUserId = typeof userId === 'string' ? userId : '';
+          resolvedEmail = typeof email === 'string' ? email : '';
         }
 
         if (resolvedUserId || resolvedEmail) {
@@ -55,7 +76,11 @@ const RemoteLogin: React.FC = () => {
           });
         }
 
-        // Sign in with the custom token
+        window.sessionStorage.setItem('pulse_remote_login_active', 'true');
+        window.sessionStorage.setItem('pulse_remote_login_target', resolvedEmail || resolvedUserId || 'unknown');
+        window.sessionStorage.setItem('pulse_remote_login_started_at', new Date().toISOString());
+
+        await setPersistence(auth, browserSessionPersistence);
         const userCredential = await signInWithCustomToken(auth, customToken);
         const user = userCredential.user;
 
@@ -81,6 +106,8 @@ const RemoteLogin: React.FC = () => {
     };
 
     if (router.isReady) {
+      if (remoteLoginStartedRef.current) return;
+      remoteLoginStartedRef.current = true;
       handleRemoteLogin();
     }
   }, [router]);

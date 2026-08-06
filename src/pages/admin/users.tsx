@@ -2771,24 +2771,9 @@ const UsersManagement: React.FC = () => {
 
       const { token } = await response.json();
 
-      // Consume the token and get custom token
-      const loginResponse = await fetch(getRemoteLoginFunctionUrl('consume-remote-login-token'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token })
-      });
-
-      if (!loginResponse.ok) {
-        const errorData = await loginResponse.json();
-        throw new Error(errorData.error || 'Failed to consume remote login token');
-      }
-
-      const { customToken, user: targetUser } = await loginResponse.json();
-
-      // Sign in with the custom token in a new tab
-      const loginUrl = `${window.location.origin}/remote-login?token=${customToken}&userId=${targetUser.id}&email=${encodeURIComponent(targetUser.email)}&next=${encodeURIComponent(remoteLoginTarget.destination)}`;
+      // Open a one-time remote-login token in the new tab. The target tab consumes
+      // it and keeps impersonation scoped to that tab's session storage.
+      const loginUrl = `${window.location.origin}/remote-login?token=${token}&next=${encodeURIComponent(remoteLoginTarget.destination)}`;
       window.open(loginUrl, '_blank', 'noopener,noreferrer');
 
       setToastMessage({ 

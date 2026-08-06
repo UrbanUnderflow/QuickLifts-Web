@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { signOut } from 'firebase/auth';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { isDevAuthBypassEnabled } from '../../utils/devAuthBypass';
 import AdminNavBanner from '../admin/AdminNavBanner';
 import SignInModal from '../SignInModal';
 import { auth } from '../../api/firebase/config';
+import { signOutAndClearPulseAuthState } from '../../utils/authSessionCleanup';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
@@ -77,7 +77,10 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBa
               </div>
               <button
                 type="button"
-                onClick={() => signOut(auth)}
+                onClick={async () => {
+                  await signOutAndClearPulseAuthState(auth);
+                  window.location.assign('/admin');
+                }}
                 className="inline-flex h-10 items-center border-l border-stone-200 px-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-50 hover:text-stone-950"
               >
                 Sign out
