@@ -303,7 +303,7 @@ const educationStories: EducationStory[] = [
   },
   {
     id: 'clinical-support',
-    eyebrow: 'AuntEdna clinical support',
+    eyebrow: 'auntEDNA clinical support',
     title: 'When several hard days need a closer look.',
     intro:
       'One hard day can happen to any athlete. When difficult check-ins, poor sleep, or concerning answers keep showing up, the program can bring a qualified clinician into the review.',
@@ -390,7 +390,7 @@ const educationStories: EducationStory[] = [
       },
     ],
     callout:
-      'Clinical experts guide physical clearance. PulseCheck supports the mental skills, daily engagement, and trend visibility around the return.',
+      'Clinical experts guide physical clearance. When extra support is needed, auntEDNA.ai gives qualified professionals a HIPAA-compliant place to review, coordinate, and document care.',
   },
 ];
 
@@ -1405,8 +1405,8 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         <div className="yi-support-overlay" aria-hidden="true" />
         <div className="yi-support-content">
           <div className="yi-auntedna">
-            <img src="/auntedna-mark.png" alt="AuntEdna" />
-            <span>AUNTEDNA / CLINICAL SUPPORT</span>
+            <img src="/auntedna-mark.png" alt="auntEDNA" />
+            <span>auntEDNA / CLINICAL SUPPORT</span>
           </div>
           <h2>{isPerformers || isPro ? <>WHEN SEVERAL HARD DAYS<br />KEEP SHOWING UP.</> : <>WHEN SEVERAL HARD DAYS<br />NEED A CLOSER LOOK.</>}</h2>
           <p>
@@ -1414,7 +1414,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               ? 'When difficult check-ins, poor sleep, or concerning answers continue, program rules can bring a qualified clinician into the review. The clinician uses human judgment and can help connect the person to care.'
               : isPro
               ? 'When difficult check-ins, poor sleep, or concerning answers continue, a qualified clinician can review what is happening and help connect the athlete to care.'
-              : <>When difficult check-ins or poor sleep keep showing up, AuntEdna helps a qualified
+              : <>When difficult check-ins or poor sleep keep showing up, auntEDNA helps a qualified
                   clinician review what is happening and connect the athlete to care.</>}
           </p>
           <div className="yi-support-path" aria-label="Support path">
@@ -1455,6 +1455,18 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
               <span>Clinical clearance stays with qualified professionals</span>
               <span>Daily check-ins help track motivation, sleep, and confidence</span>
               <span>Mental skills support running, practice, full play, and performance</span>
+            </div>
+          )}
+          {!isPerformers && !isPro && (
+            <div className="yi-auntedna-return-callout" aria-label="auntEDNA clinical workflow">
+              <img src="/auntedna-mark.png" alt="" aria-hidden="true" />
+              <div>
+                <span>auntEDNA.ai / clinical layer</span>
+                <p>
+                  When return-to-play support needs a clinician, auntEDNA.ai gives qualified
+                  professionals a HIPAA-compliant place to review, coordinate, and document care.
+                </p>
+              </div>
             </div>
           )}
           <button
@@ -2401,13 +2413,49 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-support-overlay { background: linear-gradient(90deg, rgba(9,9,13,.97) 0%, rgba(9,9,13,.82) 47%, rgba(9,9,13,.28) 78%), linear-gradient(0deg, rgba(9,9,13,.75), transparent 60%); }
         .yi-support-content { position: relative; z-index: 2; width: min(760px, calc(100% - 68px)); margin-left: clamp(34px, 7vw, 110px); padding: 110px 0; }
         .yi-auntedna { display: flex; align-items: center; gap: 17px; margin-bottom: 34px; color: #e890c4; font-size: 10px; font-weight: 700; letter-spacing: .16em; }
-        .yi-auntedna img { width: 46px; height: 46px; object-fit: contain; border-radius: 8px; background: #f5ddeb; }
+        .yi-auntedna img { width: 46px; height: 46px; object-fit: contain; }
         .yi-support h2 { margin: 0 0 34px; font-size: clamp(70px, 8vw, 124px); line-height: .83; }
         .yi-support-content > p { max-width: 610px; margin: 0; color: #d1ced2; font-size: 17px; line-height: 1.7; }
         .yi-support-path { display: flex; align-items: center; max-width: 560px; margin-top: 55px; }
         .yi-support-path span { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
         .yi-support-path b { color: #e890c4; font-size: 9px; letter-spacing: .12em; }
         .yi-support-path i { height: 1px; flex: 1; margin: 0 13px; background: rgba(255,255,255,.32); }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support {
+          color: #0d0d11;
+          background: #f4f0e8;
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support-image {
+          filter: saturate(.32) contrast(.94) brightness(1.08);
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support-overlay {
+          background:
+            linear-gradient(90deg, rgba(247,243,234,.96) 0%, rgba(247,243,234,.9) 48%, rgba(247,243,234,.7) 100%),
+            linear-gradient(0deg, rgba(247,243,234,.92), rgba(247,243,234,.62));
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-auntedna {
+          color: #111217;
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support-content > p {
+          color: #343139;
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support-path b {
+          color: var(--yi-purple);
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support-path i {
+          background: rgba(16,16,21,.3);
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support .yi-learn-link {
+          color: #111217;
+          border-color: rgba(16,16,21,.42);
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support .yi-learn-link i {
+          border-color: rgba(16,16,21,.42);
+          color: #111217;
+        }
+        .youth-info:not(.pro-info):not(.performers-info) .yi-support .yi-learn-link:hover i {
+          background: #111217;
+          color: #f4f0e8;
+        }
 
         .yi-recovery {
           display: grid;
@@ -2460,6 +2508,37 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           height: 7px;
           border: 1px solid currentColor;
           border-radius: 50%;
+        }
+        .yi-auntedna-return-callout {
+          display: flex;
+          gap: 13px;
+          align-items: flex-start;
+          max-width: 610px;
+          margin: 25px 0 0;
+          padding: 18px;
+          border: 1px solid rgba(16,16,21,.2);
+          border-radius: 13px;
+          background: rgba(255,255,255,.28);
+        }
+        .yi-auntedna-return-callout img {
+          flex: 0 0 auto;
+          width: 42px;
+          height: 42px;
+          object-fit: contain;
+        }
+        .yi-auntedna-return-callout span {
+          display: block;
+          margin-bottom: 8px;
+          color: #111217;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: .14em;
+        }
+        .yi-auntedna-return-callout p {
+          margin: 0;
+          color: #4f4956;
+          font-size: 14px;
+          line-height: 1.48;
         }
 
         .yi-close { display: flex; flex-direction: column; align-items: center; padding: 144px 34px; text-align: center; background: var(--yi-paper); }
