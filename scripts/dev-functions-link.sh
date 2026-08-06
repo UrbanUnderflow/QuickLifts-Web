@@ -87,6 +87,7 @@ CORE_FUNCTIONS=(
   generate-equity-document
   revise-equity-document
   audit-equity-document
+  verify-board-consent
   generate-legal-document
   revise-legal-document
 

@@ -1,6 +1,4 @@
 import { Handler } from '@netlify/functions';
-import OpenAI from 'openai';
-import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
 
 interface RequestBody {
   boardConsentContent: string;
@@ -13,11 +11,79 @@ interface RequestBody {
   expectedEarlyExerciseAllowed?: boolean;
 }
 
+interface ChatCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: string | null;
+    };
+  }>;
+  error?: {
+    message?: string;
+  };
+}
+
+const getHeader = (headers: Record<string, string | undefined> | undefined, headerName: string): string | undefined => {
+  if (!headers) return undefined;
+
+  const directMatch = headers[headerName];
+  if (directMatch) return directMatch;
+
+  const normalizedHeaderName = headerName.toLowerCase();
+  const matchedKey = Object.keys(headers).find((key) => key.toLowerCase() === normalizedHeaderName);
+  return matchedKey ? headers[matchedKey] : undefined;
+};
+
+const getRequestOrigin = (event: Parameters<Handler>[0]): string => {
+  const host = getHeader(event.headers, 'host');
+  const protocol = getHeader(event.headers, 'x-forwarded-proto') || (host?.includes('localhost') ? 'http' : 'https');
+  return host ? `${protocol}://${host}` : (process.env.URL || process.env.DEPLOY_URL || 'https://fitwithpulse.ai');
+};
+
+const extractBridgeErrorMessage = (responseBody: string): string => {
+  try {
+    const parsed = JSON.parse(responseBody);
+    return parsed?.error?.message || parsed?.error || responseBody;
+  } catch {
+    return responseBody;
+  }
+};
+
+const createBridgeChatCompletion = async (
+  event: Parameters<Handler>[0],
+  body: Record<string, unknown>,
+): Promise<ChatCompletionResponse> => {
+  const authorization = getHeader(event.headers, 'authorization');
+  if (!authorization) {
+    throw new Error('OpenAI bridge authentication is required. Please sign in again and retry.');
+  }
+
+  const response = await fetch(`${getRequestOrigin(event)}/api/openai/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json',
+      'openai-organization': 'equityBoardConsentVerification',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(`OpenAI bridge verification failed (${response.status}): ${extractBridgeErrorMessage(responseText)}`);
+  }
+
+  try {
+    return JSON.parse(responseText) as ChatCompletionResponse;
+  } catch {
+    throw new Error('OpenAI bridge returned an invalid verification response.');
+  }
+};
+
 const handler: Handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
@@ -38,12 +104,6 @@ const handler: Handler = async (event) => {
     if (!body.expectedStakeholderName?.trim()) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing expectedStakeholderName' }) };
     }
-
-    const openaiApiKey = resolveOpenAIApiKey();
-    if (!openaiApiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured.' }) };
-    }
-    const openai = new OpenAI({ apiKey: openaiApiKey });
 
     const expectedOptionsLine = typeof body.expectedNumberOfOptions === 'number'
       ? `Expected options amount: ${body.expectedNumberOfOptions.toLocaleString()}`
@@ -67,7 +127,7 @@ const handler: Handler = async (event) => {
         : null,
     ].filter(Boolean).join('\n');
 
-    const completion = await openai.chat.completions.create({
+    const completion = await createBridgeChatCompletion(event, {
       model: 'gpt-4o',
       messages: [
         {

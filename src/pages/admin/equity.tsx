@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
-import { getManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
+import { auth, db } from '../../api/firebase/config';
+import { getManagedAdvisorEquityProfile, type ManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
+import { formatEquityContentForPdf as formatContentForPdf } from '../../lib/equityDocumentFormatting';
 import { buildScopedEquityDocumentUrl } from '../../lib/equityDocumentPreview';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -420,6 +421,19 @@ const isAutoExecutedCompanyDocType = (documentType?: string | null): boolean =>
 const isAutoExecutedCompanyDoc = (document?: Pick<EquityDocument, 'documentType'> | null): boolean =>
   Boolean(document && isAutoExecutedCompanyDocType(document.documentType));
 
+const normalizeManagedAdvisorExercisePrice = (
+  price: number | undefined | null,
+  managedProfile: ManagedAdvisorEquityProfile | null,
+) => {
+  if (!managedProfile) return price ?? 0;
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) {
+    return managedProfile.fallbackExercisePrice;
+  }
+  return price < managedProfile.fallbackExercisePrice
+    ? managedProfile.fallbackExercisePrice
+    : price;
+};
+
 const formatLegalDate = (date?: Timestamp | Date): string => {
   if (!date) {
     return new Date().toLocaleDateString('en-US', {
@@ -567,9 +581,13 @@ const shouldRetryEquityFunctionRemotely = (
 };
 
 const postEquityFunctionJson = async <T = any>(functionPath: string, requestBody: unknown) => {
+  const idToken = await auth.currentUser?.getIdToken().catch(() => null);
   const requestInit: RequestInit = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+    },
     body: JSON.stringify(requestBody),
   };
 
@@ -601,108 +619,6 @@ const postEquityFunctionJson = async <T = any>(functionPath: string, requestBody
     result: payload.parsed as T,
     usedFallback,
   };
-};
-
-// Improved content formatter that properly handles markdown
-const formatContentForPdf = (content: string): string => {
-  // Normalize line endings
-  let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  
-  // Convert **bold** to <strong>
-  result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  
-  // Convert *italic* to <em>
-  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  
-  // Convert headers (must be done before other processing)
-  result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-  result = result.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  result = result.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  result = result.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-  
-  // Convert horizontal rules
-  result = result.replace(/^---+$/gm, '<hr>');
-  
-  // Process the content line by line for better list handling
-  const lines = result.split('\n');
-  const processedLines: string[] = [];
-  let inList = false;
-  let listType: 'ul' | 'ol' | null = null;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmedLine = line.trim();
-    
-    // Skip empty lines but close lists
-    if (!trimmedLine) {
-      if (inList) {
-        processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        inList = false;
-        listType = null;
-      }
-      processedLines.push('');
-      continue;
-    }
-    
-    // Check for bullet points (-, •, *, en-dash, em-dash). Allow missing space after marker.
-    const bulletMatch = trimmedLine.match(/^([-•*]|–|—)\s*(.+)$/);
-    if (bulletMatch) {
-      if (!inList || listType !== 'ul') {
-        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        processedLines.push('<ul>');
-        inList = true;
-        listType = 'ul';
-      }
-      processedLines.push(`<li>${bulletMatch[2]}</li>`);
-      continue;
-    }
-    
-    // Check for numbered lists (supports 1. and 1) formats)
-    const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)[\.\)]\s+(.+)$/i);
-    if (numberedMatch) {
-      if (!inList || listType !== 'ol') {
-        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        const startAttr = /^\d+$/.test(numberedMatch[1]) ? ` start="${numberedMatch[1]}"` : '';
-        processedLines.push(`<ol${startAttr}>`);
-        inList = true;
-        listType = 'ol';
-      }
-      processedLines.push(`<li>${numberedMatch[2]}</li>`);
-      continue;
-    }
-    
-    // Close list if we hit non-list content
-    if (inList) {
-      processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-      inList = false;
-      listType = null;
-    }
-    
-    // Pass through headers and hr unchanged
-    if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
-      processedLines.push(trimmedLine);
-      continue;
-    }
-    
-    // Regular text becomes a paragraph
-    processedLines.push(`<p>${trimmedLine}</p>`);
-  }
-  
-  // Close any open list
-  if (inList) {
-    processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-  }
-  
-  // Join and clean up
-  result = processedLines.join('\n');
-  
-  // Remove empty paragraphs
-  result = result.replace(/<p><\/p>/g, '');
-  
-  // Merge consecutive empty lines
-  result = result.replace(/\n{3,}/g, '\n\n');
-  
-  return result;
 };
 
 // Generate exhibits HTML for PDF
@@ -770,8 +686,9 @@ const generatePdfFromEquityDoc = (document: EquityDocument, exhibits: EquityDocu
           em { font-style: italic; }
           .exhibits-reference { margin-top: 40px; padding: 16px; border: 1px solid #ccc; }
           .exhibits-reference h3 { margin-top: 0; text-transform: uppercase; font-size: 12pt; }
-          .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; }
-          .confidential { font-size: 9pt; color: #999; text-align: center; margin-top: 20px; }
+          .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+          .footer p { margin: 0 0 6px 0; text-align: center; }
+          .footer .confidential { color: #999; }
           @media print { body { padding: 0; } }
         </style>
       </head>
@@ -797,8 +714,8 @@ const generatePdfFromEquityDoc = (document: EquityDocument, exhibits: EquityDocu
 
         <div class="footer">
           <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+          <p class="confidential">CONFIDENTIAL - This document contains proprietary information.</p>
         </div>
-        <div class="confidential">CONFIDENTIAL - This document contains proprietary information.</div>
         
         ${exhibitsHtml}
       </body>
@@ -1610,11 +1527,15 @@ const EquityAdminPage: React.FC = () => {
       const hasOptionGrant = isAdvisor && advisorOptionCount > 0;
       const stakeholderName = newStakeholder.name.trim();
       const stakeholderEmail = newStakeholder.email.toLowerCase().trim();
+      const advisorExercisePrice = normalizeManagedAdvisorExercisePrice(
+        newStakeholder.advisorStrikePrice,
+        managedAdvisorProfile,
+      );
       const grantDetails = {
         equityType: 'nso',
         numberOfShares: advisorOptionCount,
-        strikePrice: newStakeholder.advisorStrikePrice,
-        fairMarketValueAtGrant: newStakeholder.advisorStrikePrice,
+        strikePrice: advisorExercisePrice,
+        fairMarketValueAtGrant: advisorExercisePrice,
         valuationDate: newStakeholder.advisorValuationDate,
         earlyExerciseAllowed: newStakeholder.advisorEarlyExerciseAllowed,
         vestingSchedule: 'monthly',
@@ -1740,13 +1661,14 @@ const EquityAdminPage: React.FC = () => {
       ),
     )[0];
     const documentedGrantDetails = latestAdvisorAgreement?.grantDetails || {};
-    const strikePrice =
+    const rawStrikePrice =
       grant?.strikePrice ??
       grant?.fairMarketValueAtGrant ??
       documentedGrantDetails.strikePrice ??
       documentedGrantDetails.fairMarketValueAtGrant ??
       managedProfile?.fallbackExercisePrice ??
       0;
+    const strikePrice = normalizeManagedAdvisorExercisePrice(rawStrikePrice, managedProfile);
     const valuationDate =
       getDateInputValue(grant?.valuationDate) ||
       getDateInputValue(documentedGrantDetails.valuationDate) ||
@@ -1768,10 +1690,12 @@ const EquityAdminPage: React.FC = () => {
         stakeholder.totalShares ||
         0,
       strikePrice,
-      fairMarketValueAtGrant:
+      fairMarketValueAtGrant: normalizeManagedAdvisorExercisePrice(
         grant?.fairMarketValueAtGrant ??
         documentedGrantDetails.fairMarketValueAtGrant ??
         strikePrice,
+        managedProfile,
+      ),
       valuationDate,
       earlyExerciseAllowed: Boolean(
         grant?.earlyExerciseAllowed ?? documentedGrantDetails.earlyExerciseAllowed,
@@ -2697,7 +2621,25 @@ const EquityAdminPage: React.FC = () => {
     setIsSigningModalOpen(true);
   };
 
+  const openPreviewSigningModal = (docToSign: EquityDocument) => {
+    openSigningModalWithDocument(docToSign, false);
+    setSigningModalStatus({
+      type: 'info',
+      text: 'Enter the email address you want to receive the preview signing packet. Preview emails use a sandbox signing flow and do not change the live document state.',
+    });
+  };
+
   const prepareEquityDocumentForPreviewOrSend = async (docToPrepare: EquityDocument): Promise<EquityDocument> => {
+    if (preparingSigningDocId) {
+      throw new Error('Another equity document is already being prepared.');
+    }
+
+    setPreparingSigningDocId(docToPrepare.id);
+    setMessage({
+      type: 'info',
+      text: `Refreshing ${docToPrepare.title} before preview/send...`,
+    });
+
     const stakeholder = docToPrepare.stakeholderId
       ? stakeholders.find(candidate => candidate.id === docToPrepare.stakeholderId)
       : null;
@@ -2710,77 +2652,80 @@ const EquityAdminPage: React.FC = () => {
       ['advisor_nso_agreement', 'board_consent'].includes(docToPrepare.documentType) &&
       !getEquityDocSignatureState(docToPrepare).isFullyExecuted;
 
-    if (docToPrepare.documentType === 'eip' && isAutoExecutedCompanyDoc(docToPrepare)) {
-      return regenerateCompanyApprovalDocCleanly(
-        docToPrepare,
-        docToPrepare.title,
-        'Refresh automatically before opening the document preview.',
-      );
-    }
-
-    if (!isManagedUnsignedAdvisorPacketDoc || !stakeholder || !managedProfile) {
-      return docToPrepare;
-    }
-
-    if (preparingSigningDocId) {
-      throw new Error('Another equity document is already being prepared.');
-    }
-
-    setPreparingSigningDocId(docToPrepare.id);
-    setMessage({
-      type: 'info',
-      text: `Preparing ${managedProfile.canonicalName}'s current 25,000-option packet...`,
-    });
-
     try {
-      const currentEip = getLatestCompletedEquityDocumentByType('eip');
-      if (!currentEip) {
-        throw new Error('A completed Equity Incentive Plan is required before sending this advisor packet.');
+      if (isManagedUnsignedAdvisorPacketDoc && stakeholder && managedProfile) {
+        setMessage({
+          type: 'info',
+          text: `Preparing ${managedProfile.canonicalName}'s current 25,000-option packet...`,
+        });
+
+        const currentEip = getLatestCompletedEquityDocumentByType('eip');
+        if (!currentEip) {
+          throw new Error('A completed Equity Incentive Plan is required before sending this advisor packet.');
+        }
+
+        await regenerateCompanyApprovalDocCleanly(
+          currentEip,
+          currentEip.title,
+          'Refresh automatically for the current advisor resend and preview packet.',
+        );
+
+        const grantDetails = getAdvisorGrantDetails(stakeholder);
+        const saved = await saveGrantOptions(stakeholder, {
+          forceRegenerateDocuments: true,
+          optionsValue: managedProfile.numberOfOptions,
+          vestingStartDateValue:
+            getDateInputValue(grantDetails.vestingStartDate) || getDateInputValue(new Date()),
+          strikePriceValue: grantDetails.strikePrice,
+          valuationDateValue:
+            getDateInputValue(grantDetails.valuationDate) || getDateInputValue(new Date()),
+          earlyExerciseAllowed: Boolean(grantDetails.earlyExerciseAllowed),
+        });
+
+        if (!saved) {
+          throw new Error('Advisor packet refresh was not completed.');
+        }
+
+        const refreshedDocumentsSnapshot = await getDocs(query(
+          collection(db, 'equity-documents'),
+          where('stakeholderId', '==', stakeholder.id),
+          where('documentType', '==', docToPrepare.documentType),
+          where('status', '==', 'completed'),
+        ));
+        const refreshedDocuments = refreshedDocumentsSnapshot.docs.map(snapshot => ({
+          id: snapshot.id,
+          ...snapshot.data(),
+        })) as EquityDocument[];
+        const refreshedDocument = getLatestRelevantDocuments(refreshedDocuments)[0];
+
+        if (!refreshedDocument) {
+          throw new Error('The refreshed advisor document could not be found.');
+        }
+
+        await loadData();
+        setMessage({
+          type: 'success',
+          text: `${managedProfile.canonicalName}'s 25,000-option packet is current and ready to preview or resend.`,
+        });
+        return refreshedDocument;
       }
 
-      await regenerateCompanyApprovalDocCleanly(
-        currentEip,
-        currentEip.title,
-        'Refresh automatically for the current advisor resend and preview packet.',
-      );
-
-      const grantDetails = getAdvisorGrantDetails(stakeholder);
-      const saved = await saveGrantOptions(stakeholder, {
-        forceRegenerateDocuments: true,
-        optionsValue: managedProfile.numberOfOptions,
-        vestingStartDateValue:
-          getDateInputValue(grantDetails.vestingStartDate) || getDateInputValue(new Date()),
-        strikePriceValue: grantDetails.strikePrice,
-        valuationDateValue:
-          getDateInputValue(grantDetails.valuationDate) || getDateInputValue(new Date()),
-        earlyExerciseAllowed: Boolean(grantDetails.earlyExerciseAllowed),
-      });
-
-      if (!saved) {
-        throw new Error('Advisor packet refresh was not completed.');
+      if (isAutoExecutedCompanyDoc(docToPrepare)) {
+        const refreshedDocument = await regenerateCompanyApprovalDocCleanly(
+          docToPrepare,
+          docToPrepare.title,
+          'Refresh automatically before opening the document preview.',
+        );
+        await loadData();
+        return refreshedDocument;
       }
 
-      const refreshedDocumentSnapshot = await getDoc(doc(db, 'equity-documents', docToPrepare.id));
-      if (!refreshedDocumentSnapshot.exists()) {
-        throw new Error('The refreshed advisor document could not be found.');
-      }
-
-      const refreshedDocument = {
-        id: refreshedDocumentSnapshot.id,
-        ...refreshedDocumentSnapshot.data(),
-      } as EquityDocument;
-
-      await loadData();
-      setMessage({
-        type: 'success',
-        text: `${managedProfile.canonicalName}'s 25,000-option packet is current and ready to preview or resend.`,
-      });
-      return refreshedDocument;
+      return docToPrepare;
     } catch (error) {
-      console.error('Error preparing advisor signing packet:', error);
+      console.error('Error preparing equity document:', error);
       setMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to prepare the advisor signing packet.',
+        text: error instanceof Error ? error.message : 'Failed to prepare the equity document.',
       });
       throw error;
     } finally {
@@ -2806,14 +2751,92 @@ const EquityAdminPage: React.FC = () => {
   const handlePreviewEquityDoc = async (docToPreview: EquityDocument) => {
     if (preparingSigningDocId) return;
 
-    setPreparingSigningDocId(docToPreview.id);
+    const previewWindow = window.open('about:blank', '_blank');
+    if (previewWindow) {
+      previewWindow.document.title = 'Preparing document preview...';
+      previewWindow.document.body.style.margin = '0';
+      previewWindow.document.body.style.fontFamily = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      previewWindow.document.body.style.background = '#09090b';
+      previewWindow.document.body.style.color = '#f4f4f5';
+
+      const container = previewWindow.document.createElement('main');
+      container.style.minHeight = '100vh';
+      container.style.display = 'flex';
+      container.style.alignItems = 'center';
+      container.style.justifyContent = 'center';
+      container.style.padding = '32px';
+
+      const card = previewWindow.document.createElement('section');
+      card.style.maxWidth = '520px';
+      card.style.border = '1px solid #3f3f46';
+      card.style.borderRadius = '18px';
+      card.style.padding = '28px';
+      card.style.background = '#18181b';
+
+      const title = previewWindow.document.createElement('h1');
+      title.textContent = 'Preparing latest preview...';
+      title.style.margin = '0 0 12px';
+      title.style.fontSize = '22px';
+
+      const body = previewWindow.document.createElement('p');
+      body.textContent = 'Regenerating the document with the latest terms and cleanup rules. This tab will open the refreshed preview automatically.';
+      body.style.margin = '0';
+      body.style.lineHeight = '1.6';
+      body.style.color = '#d4d4d8';
+
+      card.append(title, body);
+      container.append(card);
+      previewWindow.document.body.replaceChildren(container);
+    }
+
     try {
       const refreshedDocument = await prepareEquityDocumentForPreviewOrSend(docToPreview);
-      window.open(`/equity-doc/${refreshedDocument.id}`, '_blank');
-    } catch {
+      const previewUrl = `/equity-doc/${refreshedDocument.id}?preview=${Date.now()}`;
+
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.location.href = previewUrl;
+      } else {
+        window.open(previewUrl, '_blank');
+      }
+    } catch (error) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.document.title = 'Preview failed';
+        previewWindow.document.body.style.margin = '0';
+        previewWindow.document.body.style.fontFamily = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        previewWindow.document.body.style.background = '#09090b';
+        previewWindow.document.body.style.color = '#f4f4f5';
+        previewWindow.document.body.innerHTML = '';
+
+        const container = previewWindow.document.createElement('main');
+        container.style.minHeight = '100vh';
+        container.style.display = 'flex';
+        container.style.alignItems = 'center';
+        container.style.justifyContent = 'center';
+        container.style.padding = '32px';
+
+        const card = previewWindow.document.createElement('section');
+        card.style.maxWidth = '560px';
+        card.style.border = '1px solid #7f1d1d';
+        card.style.borderRadius = '18px';
+        card.style.padding = '28px';
+        card.style.background = '#1f1111';
+
+        const title = previewWindow.document.createElement('h1');
+        title.textContent = 'Preview failed to refresh';
+        title.style.margin = '0 0 12px';
+        title.style.fontSize = '22px';
+
+        const body = previewWindow.document.createElement('p');
+        body.textContent = error instanceof Error ? error.message : 'The latest document could not be generated. Please return to the admin page and try again.';
+        body.style.margin = '0';
+        body.style.lineHeight = '1.6';
+        body.style.color = '#fecaca';
+
+        card.append(title, body);
+        container.append(card);
+        previewWindow.document.body.replaceChildren(container);
+      }
       // prepareEquityDocumentForPreviewOrSend already shows the user-facing error.
-    } finally {
-      setPreparingSigningDocId(null);
     }
   };
 
@@ -3032,6 +3055,7 @@ const EquityAdminPage: React.FC = () => {
         signerRole: 'Preview Recipient',
         companyName: company.name || 'Pulse Intelligence Labs, Inc.',
         previewMode: true,
+        equityDocumentId: currentSigningDoc.id,
         previewSourceEquityDocumentId: currentSigningDoc.id,
         supportingDocuments,
       });
@@ -3889,7 +3913,14 @@ const EquityAdminPage: React.FC = () => {
   ): Promise<boolean> => {
     const nextOptionsValue = options.optionsValue ?? editGrantOptionsValue;
     const nextVestingStartDateValue = options.vestingStartDateValue ?? editGrantDateValue;
-    const nextStrikePriceValue = options.strikePriceValue ?? editGrantStrikePriceValue;
+    const managedAdvisorProfile = getManagedAdvisorEquityProfile(stakeholder.name);
+    const nextStrikePriceValue =
+      stakeholder.type === 'advisor'
+        ? normalizeManagedAdvisorExercisePrice(
+            options.strikePriceValue ?? editGrantStrikePriceValue,
+            managedAdvisorProfile,
+          )
+        : options.strikePriceValue ?? editGrantStrikePriceValue;
     const nextValuationDateValue = options.valuationDateValue ?? editGrantValuationDateValue;
     const nextEarlyExerciseAllowed = options.earlyExerciseAllowed ?? editGrantEarlyExerciseAllowed;
     const forceRegenerateDocuments = Boolean(options.forceRegenerateDocuments);
@@ -4335,21 +4366,40 @@ const EquityAdminPage: React.FC = () => {
               : existingGrant,
           ),
         };
-        const verification = await verifyBoardConsentRecord(
-          verificationStakeholder,
-          effectiveBoardConsentDocId,
-          grantDetails,
-        );
-        effectiveBoardApprovalDate = verification.approvalDate;
-        boardConsentAutoVerified = true;
-        setBoardConsentVerification(prev => ({
-          ...prev,
-          [stakeholder.id]: {
-            status: 'verified',
-            approvalDate: verification.approvalDate,
-            issues: [],
-          },
-        }));
+        try {
+          const verification = await verifyBoardConsentRecord(
+            verificationStakeholder,
+            effectiveBoardConsentDocId,
+            grantDetails,
+          );
+          effectiveBoardApprovalDate = verification.approvalDate;
+          boardConsentAutoVerified = true;
+          setBoardConsentVerification(prev => ({
+            ...prev,
+            [stakeholder.id]: {
+              status: 'verified',
+              approvalDate: verification.approvalDate,
+              issues: [],
+            },
+          }));
+        } catch (verificationError) {
+          const issue = verificationError instanceof Error
+            ? verificationError.message
+            : 'Board Consent verification could not be completed.';
+          console.warn('[saveGrantOptions] Board Consent verification skipped after document refresh:', verificationError);
+          setBoardConsentVerification(prev => ({
+            ...prev,
+            [stakeholder.id]: {
+              status: 'failed',
+              approvalDate: effectiveBoardApprovalDate,
+              issues: [issue],
+            },
+          }));
+          setMessage({
+            type: 'info',
+            text: 'Documents were refreshed. Board Consent verification could not run, so please review the refreshed consent before sending.',
+          });
+        }
       }
 
       // ============================================
@@ -5366,25 +5416,42 @@ const EquityAdminPage: React.FC = () => {
                               }
 
                               return (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openSigningModal(primarySignatureDoc);
-                                  }}
-                                  disabled={preparingSigningDocId === primarySignatureDoc.id}
-                                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-500 transition-colors disabled:opacity-60 disabled:cursor-wait"
-                                >
-                                  {preparingSigningDocId === primarySignatureDoc.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Send className="w-4 h-4" />
-                                  )}
-                                  {preparingSigningDocId === primarySignatureDoc.id
-                                    ? 'Preparing Current Packet...'
-                                    : signingState.needsResend || signingRequest
-                                    ? 'Resend Signature Doc'
-                                    : 'Send Signature Doc'}
-                                </button>
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openSigningModal(primarySignatureDoc);
+                                    }}
+                                    disabled={preparingSigningDocId === primarySignatureDoc.id}
+                                    className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-500 transition-colors disabled:opacity-60 disabled:cursor-wait"
+                                  >
+                                    {preparingSigningDocId === primarySignatureDoc.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Send className="w-4 h-4" />
+                                    )}
+                                    {preparingSigningDocId === primarySignatureDoc.id
+                                      ? 'Preparing Current Packet...'
+                                      : signingState.needsResend || signingRequest
+                                      ? 'Resend Signature Doc'
+                                      : 'Send Signature Doc'}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openPreviewSigningModal(primarySignatureDoc);
+                                    }}
+                                    disabled={preparingSigningDocId === primarySignatureDoc.id}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-900/40 text-blue-300 border border-blue-800 rounded-lg font-medium hover:bg-blue-900/60 transition-colors disabled:opacity-60 disabled:cursor-wait"
+                                  >
+                                    {preparingSigningDocId === primarySignatureDoc.id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Eye className="w-4 h-4" />
+                                    )}
+                                    Preview Send
+                                  </button>
+                                </>
                               );
                             })()}
                             {/* For advisors: Generate the combined Advisor Agreement + NSO Grant directly (only if no doc exists) */}
@@ -6516,7 +6583,7 @@ const EquityAdminPage: React.FC = () => {
                   <p className="text-blue-300 text-sm flex items-start gap-2">
                     <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <span>
-                      Each signer will receive an email with a secure signing link plus the EIP, board consent, and selected exhibits when available. Existing links will be re-sent.
+                      Each signer will receive the Advisor Agreement signing link plus the EIP, Board Consent, and selected exhibits when available. Existing links will be re-sent.
                     </span>
                   </p>
                 </div>

@@ -8,12 +8,12 @@ const MANAGED_ADVISOR_EQUITY_PROFILES: Record<string, ManagedAdvisorEquityProfil
   'valerie alexander': {
     canonicalName: 'Valerie Alexander',
     numberOfOptions: 25_000,
-    fallbackExercisePrice: 0.001,
+    fallbackExercisePrice: 0.05,
   },
   'marques zak': {
     canonicalName: 'Marques Zak',
     numberOfOptions: 25_000,
-    fallbackExercisePrice: 0.001,
+    fallbackExercisePrice: 0.05,
   },
 };
 
@@ -24,4 +24,3 @@ export const getManagedAdvisorEquityProfile = (
   name?: string | null,
 ): ManagedAdvisorEquityProfile | null =>
   MANAGED_ADVISOR_EQUITY_PROFILES[normalizeAdvisorName(name)] || null;
-

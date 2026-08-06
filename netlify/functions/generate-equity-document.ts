@@ -1,6 +1,6 @@
 import { Handler } from '@netlify/functions';
-import OpenAI from 'openai';
 import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
+import { getManagedAdvisorEquityProfile } from '../../src/lib/equityAdvisorProfiles';
 
 interface RequestBody {
   stakeholderId?: string;
@@ -27,6 +27,148 @@ interface RequestBody {
     vestingMonths: number;
   };
 }
+
+type ChatCompletionRequest = {
+  model: string;
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+  temperature?: number;
+  max_tokens?: number;
+};
+
+type ChatCompletionResponse = {
+  choices?: Array<{ message?: { content?: string | null } }>;
+};
+
+const getHeader = (headers: Record<string, string | undefined> | undefined, headerName: string): string | undefined => {
+  if (!headers) return undefined;
+
+  const directMatch = headers[headerName];
+  if (directMatch) return directMatch;
+
+  const normalizedHeaderName = headerName.toLowerCase();
+  const matchedKey = Object.keys(headers).find(key => key.toLowerCase() === normalizedHeaderName);
+  return matchedKey ? headers[matchedKey] : undefined;
+};
+
+const getRequestOrigin = (event: Parameters<Handler>[0]) => {
+  const host = getHeader(event.headers, 'host');
+  if (!host) {
+    return (process.env.URL || process.env.DEPLOY_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai')
+      .replace(/\/+$/, '');
+  }
+
+  const forwardedProto = getHeader(event.headers, 'x-forwarded-proto');
+  const protocol = forwardedProto || (host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https');
+  return `${protocol}://${host}`;
+};
+
+const getRemoteBridgeOrigin = () =>
+  (process.env.OPENAI_BRIDGE_FALLBACK_ORIGIN || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai')
+    .replace(/\/+$/, '');
+
+const shouldTryRemoteBridgeFallback = (origin: string) => {
+  try {
+    const currentHost = new URL(origin).host.toLowerCase();
+    const remoteHost = new URL(getRemoteBridgeOrigin()).host.toLowerCase();
+    return currentHost !== remoteHost && (
+      currentHost.includes('localhost') ||
+      currentHost.includes('127.0.0.1') ||
+      currentHost.startsWith('0.0.0.0')
+    );
+  } catch (_error) {
+    return false;
+  }
+};
+
+const extractBridgeErrorMessage = (payload: any, fallback: string) => {
+  const candidates = [
+    payload?.error?.message,
+    payload?.error,
+    payload?.message,
+  ];
+  const message = candidates.find(candidate => typeof candidate === 'string' && candidate.trim());
+  return message || fallback;
+};
+
+const fetchChatCompletionJson = async (
+  url: string,
+  headers: Record<string, string>,
+  request: ChatCompletionRequest,
+) => {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(request),
+  });
+  const responseText = await response.text();
+  let payload: any = null;
+
+  try {
+    payload = responseText ? JSON.parse(responseText) : null;
+  } catch (_error) {
+    if (response.ok) {
+      throw new Error('OpenAI bridge returned an invalid response.');
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(extractBridgeErrorMessage(payload, `OpenAI bridge request failed (${response.status}).`));
+  }
+
+  return payload as ChatCompletionResponse;
+};
+
+const createChatCompletion = async (
+  event: Parameters<Handler>[0],
+  request: ChatCompletionRequest,
+) => {
+  const authHeader = getHeader(event.headers, 'authorization');
+
+  if (authHeader) {
+    const bridgeHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: authHeader,
+        'openai-organization': 'equityDocumentGeneration',
+    };
+    const requestOrigin = getRequestOrigin(event);
+
+    try {
+      return await fetchChatCompletionJson(
+        `${requestOrigin}/api/openai/v1/chat/completions`,
+        bridgeHeaders,
+        request,
+      );
+    } catch (error) {
+      if (!shouldTryRemoteBridgeFallback(requestOrigin)) throw error;
+
+      console.warn('[generate-equity-document] Local OpenAI bridge failed; retrying deployed bridge.', {
+        requestOrigin,
+        remoteBridgeOrigin: getRemoteBridgeOrigin(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      return fetchChatCompletionJson(
+        `${getRemoteBridgeOrigin()}/api/openai/v1/chat/completions`,
+        bridgeHeaders,
+        request,
+      );
+    }
+  }
+
+  const openaiApiKey = resolveOpenAIApiKey();
+  if (!openaiApiKey) {
+    throw new Error('OpenAI bridge authentication is required. Please sign in again and retry.');
+  }
+
+  return fetchChatCompletionJson(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${openaiApiKey}`,
+    },
+    request,
+  );
+};
 
 const formatHumanDate = (value?: string) => {
   if (!value) return null;
@@ -82,12 +224,56 @@ const getVestingCommencementDate = (data: RequestBody) => {
 const getValuationDate = (data: RequestBody) =>
   formatHumanDate(data.grantDetails?.valuationDate) || data.boardApprovalDate || getGrantDate(data);
 
+const getAdvisorValuationClarification = (data: RequestBody) => {
+  const valuationDate = getValuationDate(data);
+  const grantDate = getGrantDate(data);
+
+  if (valuationDate === grantDate) {
+    return `The Fair Market Value Determination Date is ${valuationDate}.`;
+  }
+
+  return `The Fair Market Value Determination Date / valuation materials date is ${valuationDate}. The Board reviewed those valuation materials and determined in good faith that the exercise price is not less than the fair market value of the Common Stock as of the Grant Date, ${grantDate}.`;
+};
+
 const formatPerSharePrice = (value?: number) => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null;
   return value.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 6,
   });
+};
+
+const normalizeManagedAdvisorRequestBody = (data: RequestBody): RequestBody => {
+  if (!data.grantDetails || !['advisor_nso_agreement', 'board_consent'].includes(data.documentType)) {
+    return data;
+  }
+
+  const managedProfile = getManagedAdvisorEquityProfile(data.stakeholderName);
+  if (!managedProfile) return data;
+
+  const rawStrikePrice = data.grantDetails.strikePrice;
+  const normalizedExercisePrice =
+    typeof rawStrikePrice === 'number' &&
+    Number.isFinite(rawStrikePrice) &&
+    rawStrikePrice >= managedProfile.fallbackExercisePrice
+      ? rawStrikePrice
+      : managedProfile.fallbackExercisePrice;
+
+  return {
+    ...data,
+    stakeholderName: data.stakeholderName || managedProfile.canonicalName,
+    grantDetails: {
+      ...data.grantDetails,
+      numberOfShares: managedProfile.numberOfOptions,
+      strikePrice: normalizedExercisePrice,
+      fairMarketValueAtGrant:
+        typeof data.grantDetails.fairMarketValueAtGrant === 'number' &&
+        Number.isFinite(data.grantDetails.fairMarketValueAtGrant) &&
+        data.grantDetails.fairMarketValueAtGrant >= managedProfile.fallbackExercisePrice
+          ? data.grantDetails.fairMarketValueAtGrant
+          : normalizedExercisePrice,
+    },
+  };
 };
 
 const getOptionExpirationDate = (data: RequestBody) => {
@@ -241,6 +427,26 @@ const insertBeforeSignatureSection = (content: string, addition: string) => {
   return `${content.trimEnd()}\n\n${trimmedAddition}\n`;
 };
 
+const insertAdvisorOptionComplianceTerms = (content: string, addition: string) => {
+  const trimmedAddition = addition.trim();
+  if (!trimmedAddition) return content;
+
+  const normalizedAddition = `2.2A Additional Option Compliance Terms\n${trimmedAddition}`;
+  const vestingSectionPatterns = [
+    /\n(?:#{1,6}\s*)?2\.3\b[^\n]*Vesting/i,
+    /\nSECTION\s+2\.3\b[^\n]*Vesting/i,
+  ];
+
+  for (const pattern of vestingSectionPatterns) {
+    const match = content.match(pattern);
+    if (match?.index) {
+      return `${content.slice(0, match.index).trimEnd()}\n\n${normalizedAddition}\n${content.slice(match.index)}`;
+    }
+  }
+
+  return insertBeforeSignatureSection(content, normalizedAddition);
+};
+
 const removeUnsupportedSecuritiesServices = (content: string) =>
   content
     .replace(/introductions to investors,\s*partners,\s*and customers/gi, 'commercial partnership strategy, customer context, and partner context')
@@ -254,13 +460,95 @@ const normalizeUnsupported409AClaims = (content: string) =>
     .replace(/in accordance with Section 409A/gi, 'after considering the supporting valuation materials in the corporate records')
     .replace(/pursuant to Section 409A/gi, 'after considering the supporting valuation materials in the corporate records');
 
+const normalizeAdvisorExercisePriceReferences = (content: string, data: RequestBody) => {
+  const expectedPrice = formatPerSharePrice(data.grantDetails?.strikePrice);
+  if (!expectedPrice || expectedPrice === '0.001') return content;
+
+  return content.replace(/\$0\.0010*(?=\s*(?:per share|for each share|\/share|\.|,|\s))/gi, `$${expectedPrice}`);
+};
+
+const normalizeEip83bTiming = (content: string) =>
+  content.replace(
+    /(?:potential|possible) 30-day Section 83\(b\) election deadline(?!\s+after (?:the )?transfer of substantially nonvested shares)/gi,
+    'possible 30-day Section 83(b) election deadline after transfer of substantially nonvested shares',
+  );
+
+const buildAdvisorAgreementRequiredTail = (data: RequestBody) => {
+  const advisorName = data.stakeholderName || 'Advisor';
+
+  return `
+SECTION 3 - TAX MATTERS AND INVESTMENT RISK
+- The Company makes no tax representations, and the Advisor is responsible for obtaining their own tax advice.
+- The tax timing of an NSO grant, exercise, and any later transfer or sale of shares is distinct and should be considered by the Advisor with the Advisor's own tax, legal, and financial advisors.
+- The Advisor acknowledges that the Option involves investment risk and that there is no guarantee of liquidity or value. The Advisor has had an opportunity to consult with their own legal and financial advisors.
+
+SECTION 4 - GENERAL PROVISIONS
+4.1 Governing Law
+- This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflict-of-law principles.
+
+4.2 Entire Agreement
+- This Agreement, together with the Plan, constitutes the entire agreement between the parties regarding the subject matter hereof.
+- This Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan'), which is hereby incorporated by reference.
+
+4.3 Amendment
+- This Agreement may be amended only by a written agreement signed by both parties, except as otherwise permitted by the Plan.
+
+4.4 Counterparts; Electronic Signature
+- This Agreement may be executed in counterparts and by electronic signature, each of which will be deemed an original and all of which together will constitute one instrument.
+
+4.5 Securities Law Compliance / Transfer Restrictions
+- The Option and any shares issued upon exercise have not been registered under the Securities Act of 1933 and may not be transferred except pursuant to an applicable exemption from registration and applicable securities laws.
+
+SECTION 5 - ACCEPTANCE
+COMPANY:
+Pulse Intelligence Labs, Inc.
+
+Signature: ______________________________
+Name: Tremaine Grant
+Title: Founder & Sole Director
+Date: ______________________________
+
+ADVISOR:
+Signature: ______________________________
+Name: ${advisorName}
+Date: ______________________________
+`.trim();
+};
+
+const ensureCompleteAdvisorAgreement = (content: string, data: RequestBody) => {
+  let result = content.trimEnd();
+  const hasGeneralProvisions = /(?:^|\n)(?:#{1,6}\s*)?SECTION\s+4\b/i.test(result);
+  const hasAcceptance = /(?:^|\n)(?:#{1,6}\s*)?SECTION\s+5\b[^\n]*(?:ACCEPTANCE|SIGNATURE)/i.test(result);
+  const hasCompanySignature = /Tremaine Grant[\s\S]{0,160}(?:Founder\s*&\s*Sole Director|Founder and Sole Director)/i.test(result);
+  const hasAdvisorSignature = new RegExp(`Name:\\s*${(data.stakeholderName || 'Advisor').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(result);
+
+  if (hasGeneralProvisions && hasAcceptance && hasCompanySignature && hasAdvisorSignature) {
+    return result;
+  }
+
+  const section3Match = result.match(/(?:^|\n)(?:#{1,6}\s*)?SECTION\s+3\b[^\n]*/i);
+  const section4Match = result.match(/(?:^|\n)(?:#{1,6}\s*)?SECTION\s+4\b[^\n]*/i);
+  const cutIndex = section3Match?.index ?? section4Match?.index;
+
+  if (typeof cutIndex === 'number') {
+    result = result.slice(0, cutIndex).trimEnd();
+  }
+
+  return `${result}\n\n${buildAdvisorAgreementRequiredTail(data)}`.trim();
+};
+
 const ensureAdvisorAgreementSafeguards = (content: string, data: RequestBody) => {
   let result = normalizeAdvisorAgreementOptionExpiration(
-    normalizeUnsupported409AClaims(removeUnsupportedSecuritiesServices(content)),
+    normalizeAdvisorExercisePriceReferences(
+      normalizeUnsupported409AClaims(removeUnsupportedSecuritiesServices(content)),
+      data,
+    ),
     data,
-  );
+  ).replace(/\n(?:#{1,6}\s*)?Advisor Option Compliance Terms\b/gi, '\n2.2A Additional Option Compliance Terms');
   const lower = result.toLowerCase();
   const additions: string[] = [];
+  const valuationDate = getValuationDate(data);
+  const grantDate = getGrantDate(data);
 
   if (!lower.includes('services in connection with the offer or sale of securities') || !lower.includes('promote or maintain a market')) {
     additions.push(
@@ -275,7 +563,13 @@ const ensureAdvisorAgreementSafeguards = (content: string, data: RequestBody) =>
   }
 
   if (!lower.includes('fair market value determination date')) {
-    additions.push(`The Fair Market Value Determination Date is ${getValuationDate(data)}.`);
+    additions.push(getAdvisorValuationClarification(data));
+  } else if (
+    valuationDate !== grantDate &&
+    !lower.includes('reviewed those valuation materials') &&
+    !lower.includes('reviewed valuation materials dated')
+  ) {
+    additions.push(getAdvisorValuationClarification(data));
   }
 
   if (!lower.includes('formal section 409a appraisal')) {
@@ -315,17 +609,19 @@ const ensureAdvisorAgreementSafeguards = (content: string, data: RequestBody) =>
   }
 
   if (additions.length) {
-    result = insertBeforeSignatureSection(
+    result = insertAdvisorOptionComplianceTerms(
       result,
-      `## Advisor Option Compliance Terms\n${additions.map(item => `- ${item}`).join('\n')}`,
+      additions.map(item => `- ${item}`).join('\n'),
     );
   }
 
-  return result;
+  return ensureCompleteAdvisorAgreement(result, data);
 };
 
 const ensureBoardConsentSafeguards = (content: string, data: RequestBody) => {
-  let result = normalizeBoardConsentResolutionNumbering(normalizeUnsupported409AClaims(content));
+  let result = normalizeBoardConsentResolutionNumbering(
+    normalizeAdvisorExercisePriceReferences(normalizeUnsupported409AClaims(content), data),
+  );
   const lower = result.toLowerCase();
   const additions: string[] = [];
 
@@ -362,8 +658,95 @@ const ensureBoardConsentSafeguards = (content: string, data: RequestBody) => {
   return result;
 };
 
+const buildEipRequiredTail = (data: RequestBody) => {
+  const effectiveDate = getDocumentDate(data);
+
+  return `
+7. Restricted Stock and RSUs
+7.1 Restricted Stock
+The Administrator may grant shares of Restricted Stock subject to vesting, forfeiture, transfer restrictions, repurchase rights, and other conditions established in the applicable award agreement.
+
+7.2 Restricted Stock Units
+The Administrator may grant restricted stock units payable in shares of Common Stock, cash, or a combination thereof, subject to the vesting and settlement terms set forth in the applicable award agreement.
+
+7.3 Vesting Conditions
+Restricted Stock and RSU awards may vest based on continued service, performance goals, time-based conditions, or any combination of conditions determined by the Administrator and stated in the applicable award agreement.
+
+8. Termination of Service
+Unless otherwise provided in an applicable award agreement or determined by the Administrator, unvested awards will terminate upon a participant's termination of service. Vested options and other exercisable awards will remain exercisable only for the period specified in the applicable award agreement and in no event beyond the original expiration date of the award.
+
+The Administrator may establish different post-termination exercise periods for death, disability, voluntary termination, termination without cause, or termination for cause, subject to applicable law and the terms of the applicable award agreement.
+
+9. Corporate Transactions
+In the event of a merger, consolidation, sale of substantially all assets, change in control, recapitalization, reclassification, stock split, reverse stock split, stock dividend, or similar corporate transaction, the Administrator may adjust the number and kind of shares reserved under the Plan, outstanding awards, exercise prices, vesting terms, or other award terms as the Administrator determines to be equitable.
+
+The Administrator may provide for assumption, substitution, continuation, acceleration, cash-out, cancellation, or other treatment of outstanding awards in connection with a corporate transaction, subject to the terms of the applicable award agreement and applicable law.
+
+10. General Provisions
+10.1 Non-Transferability
+Awards may not be sold, pledged, assigned, hypothecated, transferred, or disposed of except as permitted by the Administrator, the applicable award agreement, or applicable law.
+
+10.2 Tax Withholding
+The Company may require participants to satisfy all applicable tax withholding obligations before issuing shares, settling awards, or permitting exercise.
+
+10.3 No Right to Employment or Service
+Nothing in the Plan or any award agreement gives any participant a right to continued employment, service, consultancy, advisory relationship, or directorship with the Company.
+
+10.4 Governing Law
+The Plan shall be governed by the laws of the State of Delaware, without regard to conflict-of-law principles.
+
+10.5 Amendment and Termination
+The Board may amend, suspend, or terminate the Plan at any time, subject to any required stockholder approval and the limitations of applicable law. No amendment may materially impair a participant's rights under an outstanding award without the participant's consent, except as permitted by the Plan or applicable law.
+
+10.6 Securities Law Compliance
+No shares will be issued under the Plan unless the Company determines that issuance complies with applicable securities laws and any applicable exemption from registration. The Administrator must confirm the applicable securities-law exemption for every grant. Plan eligibility alone does not supply an exemption.
+
+11. Adoption and Approval
+The Plan was adopted and approved effective as of ${effectiveDate}. The Plan reserve is not itself an issuance or grant; individual grants remain ineffective until separately approved by the Board and documented in an award agreement.
+
+Any ISO provisions are subject to timely stockholder approval as required by applicable tax law.
+
+/s/ Tremaine Grant
+Tremaine Grant
+Founder & Sole Director
+Sole Stockholder
+Date: ${effectiveDate}
+`.trim();
+};
+
+const ensureCompleteEip = (content: string, data: RequestBody) => {
+  let result = content.trimEnd();
+  const hasTermination = /(?:^|\n)(?:#{1,6}\s*)?8[\.)]?\s+Termination of Service/i.test(result);
+  const hasCorporateTransactions = /(?:^|\n)(?:#{1,6}\s*)?9[\.)]?\s+Corporate Transactions/i.test(result);
+  const hasGeneralProvisions = /(?:^|\n)(?:#{1,6}\s*)?10[\.)]?\s+General Provisions/i.test(result);
+  const hasAdoption = /(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption/i.test(result);
+  const hasAdoptionSignature = /\/s\/\s*Tremaine Grant[\s\S]{0,220}Founder\s*&\s*Sole Director[\s\S]{0,160}Sole Stockholder/i.test(result);
+
+  if (hasTermination && hasCorporateTransactions && hasGeneralProvisions && hasAdoption && hasAdoptionSignature) {
+    return result;
+  }
+
+  const tailStartPatterns = [
+    /(?:^|\n)(?:#{1,6}\s*)?7[\.)]?\s+Restricted Stock/i,
+    /(?:^|\n)(?:#{1,6}\s*)?8[\.)]?\s+Termination of Service/i,
+    /(?:^|\n)(?:#{1,6}\s*)?9[\.)]?\s+Corporate Transactions/i,
+    /(?:^|\n)(?:#{1,6}\s*)?10[\.)]?\s+General Provisions/i,
+    /(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption/i,
+  ];
+  const tailStart = tailStartPatterns
+    .map(pattern => result.match(pattern)?.index)
+    .filter((index): index is number => typeof index === 'number')
+    .sort((a, b) => a - b)[0];
+
+  if (typeof tailStart === 'number') {
+    result = result.slice(0, tailStart).trimEnd();
+  }
+
+  return `${result}\n\n${buildEipRequiredTail(data)}`.trim();
+};
+
 const ensureEipSafeguards = (content: string, data: RequestBody) => {
-  let result = content
+  let result = normalizeEip83bTiming(content)
     .replace(/Valerie Alexander/gi, 'individual participant')
     .replace(/Marques Zak/gi, 'individual participant');
   const lower = result.toLowerCase();
@@ -407,7 +790,7 @@ const ensureEipSafeguards = (content: string, data: RequestBody) => {
     );
   }
 
-  return result;
+  return ensureCompleteEip(result, data);
 };
 
 const collectGeneratedContentIssues = (documentType: string, content: string, data: RequestBody) => {
@@ -426,6 +809,18 @@ const collectGeneratedContentIssues = (documentType: string, content: string, da
     }
     if (!lower.includes('corporate par value is legally distinct from fair market value')) {
       issues.push('Advisor FMV/par-value distinction is missing.');
+    }
+    if (!/(?:^|\n)(?:#{1,6}\s*)?SECTION\s+4\b/i.test(content)) {
+      issues.push('Advisor General Provisions section is missing.');
+    }
+    if (!/(?:^|\n)(?:#{1,6}\s*)?SECTION\s+5\b[^\n]*(?:ACCEPTANCE|SIGNATURE)/i.test(content)) {
+      issues.push('Advisor signature/acceptance section is missing.');
+    }
+    if (!/Tremaine Grant[\s\S]{0,160}(?:Founder\s*&\s*Sole Director|Founder and Sole Director)/i.test(content)) {
+      issues.push('Company signature block is missing.');
+    }
+    if (data.stakeholderName && !new RegExp(`Name:\\s*${data.stakeholderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(content)) {
+      issues.push('Advisor signature block is missing.');
     }
     if (data.grantDetails?.earlyExerciseAllowed) {
       if (!lower.includes('form 15620') || !lower.includes('30 days after the shares are transferred')) {
@@ -446,6 +841,10 @@ const collectGeneratedContentIssues = (documentType: string, content: string, da
     if (/determined in accordance with section 409a|pursuant to section 409a/i.test(content)) {
       issues.push('Board Consent includes an unsupported Section 409A appraisal claim.');
     }
+    const expectedPrice = formatPerSharePrice(data.grantDetails?.strikePrice);
+    if (expectedPrice && expectedPrice !== '0.001' && /\$0\.0010*(?=\s*(?:per share|for each share|\/share|\.|,|\s))/i.test(content)) {
+      issues.push('Board Consent still includes a par-value-like exercise price.');
+    }
   }
 
   if (documentType === 'eip') {
@@ -457,6 +856,28 @@ const collectGeneratedContentIssues = (documentType: string, content: string, da
     }
     if (/valerie alexander|marques zak/i.test(content)) {
       issues.push('EIP names individual participants.');
+    }
+    if (!/(?:^|\n)(?:#{1,6}\s*)?8[\.)]?\s+Termination of Service/i.test(content)) {
+      issues.push('EIP Termination of Service section is missing.');
+    }
+    if (!/(?:^|\n)(?:#{1,6}\s*)?9[\.)]?\s+Corporate Transactions/i.test(content)) {
+      issues.push('EIP Corporate Transactions section is missing.');
+    }
+    if (!/(?:^|\n)(?:#{1,6}\s*)?10[\.)]?\s+General Provisions/i.test(content)) {
+      issues.push('EIP General Provisions section is missing.');
+    }
+    if (!/(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption/i.test(content)) {
+      issues.push('EIP adoption section is missing.');
+    }
+    if (!/\/s\/\s*Tremaine Grant[\s\S]{0,220}Founder\s*&\s*Sole Director[\s\S]{0,160}Sole Stockholder/i.test(content)) {
+      issues.push('EIP executed adoption signature is missing.');
+    }
+    if (
+      lower.includes('section 83(b) election deadline') &&
+      !lower.includes('after transfer of substantially nonvested shares') &&
+      !lower.includes('after the transfer of substantially nonvested shares')
+    ) {
+      issues.push('EIP 83(b) transfer timing is incomplete.');
     }
   }
 
@@ -754,6 +1175,7 @@ SECTION 2 - GRANT OF NON-QUALIFIED STOCK OPTIONS:
 2.2 Exercise Price - Fair market value as determined by the Board
    - State that the exercise price is not less than the Board-determined fair market value on the Grant Date
    - State that corporate par value is legally distinct from fair market value and is not being used as the exercise price
+   - If the Fair Market Value Determination Date differs from the Grant Date, state that the Board reviewed the valuation materials dated ${getValuationDate(data)} and determined in good faith that the exercise price is not less than fair market value as of the Grant Date, ${getGrantDate(data)}
    - Do not claim that a formal Section 409A appraisal exists unless the additional instructions explicitly say one exists
 2.3 Vesting Schedule
 ${getVestingInstructionBlock(data.grantDetails, getVestingCommencementDate(data))}
@@ -893,7 +1315,7 @@ const handler: Handler = async (event) => {
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
@@ -906,19 +1328,8 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const body = JSON.parse(event.body || '{}') as RequestBody;
+    const body = normalizeManagedAdvisorRequestBody(JSON.parse(event.body || '{}') as RequestBody);
     const { documentType, stakeholderName } = body;
-    const openaiApiKey = resolveOpenAIApiKey();
-
-    if (!openaiApiKey) {
-      return {
-        statusCode: 500,
-        headers,
-        body: JSON.stringify({ error: 'OpenAI API key not configured. Set OPENAI_API_KEY or OPEN_AI_SECRET_KEY.' }),
-      };
-    }
-
-    const openai = new OpenAI({ apiKey: openaiApiKey });
 
     const template = DOCUMENT_TEMPLATES[documentType];
     
@@ -975,7 +1386,7 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
 - Use "## " for section headers, "### " for subsections
 - Use "**text**" for bold emphasis`;
 
-    const completion = await openai.chat.completions.create({
+    const completion = await createChatCompletion(event, {
       model: 'gpt-4o',
       messages: [
         {
@@ -994,7 +1405,7 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
         },
       ],
       temperature: 0.3,
-      max_tokens: 4000,
+      max_tokens: documentType === 'advisor_nso_agreement' || documentType === 'eip' ? 7000 : 4000,
     });
 
     const rawContent = completion.choices[0]?.message?.content;
@@ -1035,6 +1446,7 @@ const __test = {
   getVestingCommencementDate,
   getEarlyExerciseInstructionBlock,
   getAdvisorServiceScope,
+  normalizeManagedAdvisorRequestBody,
   normalizeGeneratedContent,
   collectGeneratedContentIssues,
 };

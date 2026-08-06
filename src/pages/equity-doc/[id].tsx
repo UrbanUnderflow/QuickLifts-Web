@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { Download, Loader2, FileText, AlertCircle } from 'lucide-react';
+import { formatEquityContentForPdf } from '../../lib/equityDocumentFormatting';
 
 interface EquityDocument {
   id: string;
@@ -35,107 +36,6 @@ const formatDate = (date: Timestamp | Date | string | undefined): string => {
   });
 };
 
-// Improved content formatter that properly handles markdown
-const formatContentForPdf = (content: string): string => {
-  // Normalize line endings
-  let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  
-  // Convert **bold** to <strong>
-  result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  
-  // Convert *italic* to <em>
-  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  
-  // Convert headers (must be done before other processing)
-  result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-  result = result.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  result = result.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  result = result.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-  
-  // Convert horizontal rules
-  result = result.replace(/^---+$/gm, '<hr>');
-  
-  // Process the content line by line for better list handling
-  const lines = result.split('\n');
-  const processedLines: string[] = [];
-  let inList = false;
-  let listType: 'ul' | 'ol' | null = null;
-  
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmedLine = line.trim();
-    
-    // Skip empty lines but close lists
-    if (!trimmedLine) {
-      if (inList) {
-        processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        inList = false;
-        listType = null;
-      }
-      processedLines.push('');
-      continue;
-    }
-    
-    // Check for bullet points (-, •, *)
-    const bulletMatch = trimmedLine.match(/^[-•*]\s+(.+)$/);
-    if (bulletMatch) {
-      if (!inList || listType !== 'ul') {
-        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        processedLines.push('<ul>');
-        inList = true;
-        listType = 'ul';
-      }
-      processedLines.push(`<li>${bulletMatch[1]}</li>`);
-      continue;
-    }
-    
-    // Check for numbered lists (1., 2., a., b., i., ii., etc.)
-    const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)\.\s+(.+)$/i);
-    if (numberedMatch) {
-      if (!inList || listType !== 'ol') {
-        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-        processedLines.push('<ol>');
-        inList = true;
-        listType = 'ol';
-      }
-      processedLines.push(`<li>${numberedMatch[2]}</li>`);
-      continue;
-    }
-    
-    // Close list if we hit non-list content
-    if (inList) {
-      processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-      inList = false;
-      listType = null;
-    }
-    
-    // Pass through headers and hr unchanged
-    if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
-      processedLines.push(trimmedLine);
-      continue;
-    }
-    
-    // Regular text becomes a paragraph
-    processedLines.push(`<p>${trimmedLine}</p>`);
-  }
-  
-  // Close any open list
-  if (inList) {
-    processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
-  }
-  
-  // Join and clean up
-  result = processedLines.join('\n');
-  
-  // Remove empty paragraphs
-  result = result.replace(/<p><\/p>/g, '');
-  
-  // Merge consecutive empty lines
-  result = result.replace(/\n{3,}/g, '\n\n');
-  
-  return result;
-};
-
 // Note: Signature lines are controlled by the AI-generated document content itself (based on requiresSignature flag during generation)
 const generatePdf = (document: EquityDocument) => {
   const html = `
@@ -161,8 +61,9 @@ const generatePdf = (document: EquityDocument) => {
           hr { border: none; border-top: 1px solid #999; margin: 20px 0; }
           strong { font-weight: bold; }
           em { font-style: italic; }
-          .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; }
-          .confidential { font-size: 9pt; color: #999; text-align: center; margin-top: 20px; }
+          .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 9pt; color: #666; text-align: center; break-inside: avoid; page-break-inside: avoid; }
+          .footer p { margin: 0 0 6px 0; text-align: center; }
+          .footer .confidential { color: #999; }
           @media print { body { padding: 0; } }
         </style>
       </head>
@@ -172,9 +73,11 @@ const generatePdf = (document: EquityDocument) => {
           <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
         </div>
         <h1>${document.title}</h1>
-        <div class="content">${formatContentForPdf(document.content)}</div>
-        <div class="footer"><p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p></div>
-        <div class="confidential">CONFIDENTIAL - This document contains proprietary information.</div>
+        <div class="content">${formatEquityContentForPdf(document.content)}</div>
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+          <p class="confidential">CONFIDENTIAL - This document contains proprietary information.</p>
+        </div>
       </body>
     </html>
   `;

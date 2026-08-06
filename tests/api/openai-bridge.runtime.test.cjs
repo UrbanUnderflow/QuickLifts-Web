@@ -312,6 +312,102 @@ test('openai-bridge falls back to OPEN_AI_SECRET_KEY and caps tokens by feature 
   });
 });
 
+test('openai-bridge allows long equity document generation through the equity feature policy', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: 'server-openai-key',
+    OPEN_AI_SECRET_KEY: null,
+  }, async () => {
+    const fetchCalls = [];
+    global.fetch = async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ choices: [{ message: { content: 'generated document' } }] });
+        },
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+          },
+        },
+      };
+    };
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock('admin-user'));
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        authorization: 'Bearer firebase-id-token',
+        'openai-organization': 'equityDocumentGeneration',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'Generate an equity incentive plan.' }],
+        max_tokens: 4000,
+      }),
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+
+    const forwardedBody = JSON.parse(fetchCalls[0].options.body);
+    assert.equal(forwardedBody.max_tokens, 4000);
+    assert.equal(forwardedBody.model, 'gpt-4o');
+  });
+});
+
+test('openai-bridge allows equity board consent verification through the equity verification policy', async () => {
+  await withPatchedEnvironment({
+    OPENAI_API_KEY: 'server-openai-key',
+    OPEN_AI_SECRET_KEY: null,
+  }, async () => {
+    const fetchCalls = [];
+    global.fetch = async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({ choices: [{ message: { content: '{"isValid":true,"approvalDate":"Jan 11, 2026","issues":[]}' } }] });
+        },
+        headers: {
+          get(name) {
+            return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+          },
+        },
+      };
+    };
+
+    const { handler } = loadOpenAIBridgeRuntime(createFirebaseMock('admin-user'));
+    const response = await handler({
+      httpMethod: 'POST',
+      path: '/api/openai/v1/chat/completions',
+      headers: {
+        authorization: 'Bearer firebase-id-token',
+        'openai-organization': 'equityBoardConsentVerification',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'Verify this board consent.' }],
+        max_tokens: 800,
+        response_format: { type: 'json_object' },
+      }),
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+
+    const forwardedBody = JSON.parse(fetchCalls[0].options.body);
+    assert.equal(forwardedBody.max_tokens, 800);
+    assert.equal(forwardedBody.model, 'gpt-4o');
+    assert.deepEqual(forwardedBody.response_format, { type: 'json_object' });
+  });
+});
+
 test('openai-bridge allows timeout-aware gpt-5-mini routine generation', async () => {
   await withPatchedEnvironment({
     OPENAI_API_KEY: 'server-openai-key',
