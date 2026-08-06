@@ -1,6 +1,6 @@
 // src/api/firebase/config.ts
 import { initializeApp, deleteApp, FirebaseApp } from 'firebase/app';
-import { getAuth, setPersistence, browserLocalPersistence, Auth } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersistence, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { installPulseE2EHarness } from './mentaltraining/e2eHarness';
@@ -44,6 +44,15 @@ const DEVELOPMENT_FIREBASE_ENV: FirebaseEnvConfig = {
 const isBrowserLocalhost = () =>
   typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const isRemoteLoginSessionActive = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem('pulse_remote_login_active') === 'true';
+  } catch {
+    return false;
+  }
+};
 
 const getEnvKeyForFirebaseField = (prefix: FirebaseConfigPrefix, field: FirebaseConfigField) =>
   `${prefix}${field.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`;
@@ -231,10 +240,17 @@ export const initializeFirebase = (isDev = false) => {
     firebaseDb = getFirestore(firebaseApp);
     firebaseStorage = getStorage(firebaseApp);
 
-    // Set persistence immediately after auth initialization
+    // Set persistence immediately after auth initialization. Remote-login
+    // impersonation must stay scoped to the current tab; otherwise a refresh
+    // can promote the impersonated user back into local persistent auth.
     if (typeof window !== 'undefined') {
-      setPersistence(firebaseAuth, browserLocalPersistence)
-        .then(() => console.log('[Firebase] Persistence set successfully to browserLocalPersistence'))
+      const persistence = isRemoteLoginSessionActive()
+        ? browserSessionPersistence
+        : browserLocalPersistence;
+      setPersistence(firebaseAuth, persistence)
+        .then(() => console.log('[Firebase] Persistence set successfully', {
+          mode: isRemoteLoginSessionActive() ? 'browserSessionPersistence' : 'browserLocalPersistence',
+        }))
         .catch((error) => console.error('[Firebase] Error setting persistence:', error));
     } else {
       console.log('[Firebase] Skipping persistence setup (non-browser environment)');

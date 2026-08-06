@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { browserSessionPersistence, setPersistence, signInWithCustomToken } from 'firebase/auth';
 import { auth } from '../api/firebase/config';
+import { signOutAndClearPulseAuthState } from '../utils/authSessionCleanup';
 import Head from 'next/head';
 
 const RemoteLogin: React.FC = () => {
@@ -76,11 +77,12 @@ const RemoteLogin: React.FC = () => {
           });
         }
 
+        await signOutAndClearPulseAuthState(auth);
+
+        await setPersistence(auth, browserSessionPersistence);
         window.sessionStorage.setItem('pulse_remote_login_active', 'true');
         window.sessionStorage.setItem('pulse_remote_login_target', resolvedEmail || resolvedUserId || 'unknown');
         window.sessionStorage.setItem('pulse_remote_login_started_at', new Date().toISOString());
-
-        await setPersistence(auth, browserSessionPersistence);
         const userCredential = await signInWithCustomToken(auth, customToken);
         const user = userCredential.user;
 

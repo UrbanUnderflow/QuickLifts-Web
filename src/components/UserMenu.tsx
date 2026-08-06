@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { getAuth, signOut } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { useDispatch, useSelector } from 'react-redux';
 import { useRouter } from 'next/router';
 import { setUser } from '../redux/userSlice';
 import { RootState } from '../redux/store';
 import { trackEvent } from '../lib/analytics';
+import { signOutAndClearPulseAuthState } from '../utils/authSessionCleanup';
 
 const UserMenu: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -36,8 +37,8 @@ const UserMenu: React.FC = () => {
       console.log('[UserMenu] Starting sign out process...');
       setIsMenuOpen(false); // Close the menu immediately
       
-      // Sign out from Firebase
-      await signOut(auth);
+      // Sign out from Firebase and clear any remote-login impersonation state.
+      await signOutAndClearPulseAuthState(auth);
       
       // Clear user state in Redux
       dispatch(setUser(null));

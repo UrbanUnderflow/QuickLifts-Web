@@ -16,6 +16,14 @@ const adminBannerSource = fs.readFileSync(
   path.join(repoRoot, 'src/components/admin/AdminNavBanner.tsx'),
   'utf8'
 );
+const firebaseConfigSource = fs.readFileSync(
+  path.join(repoRoot, 'src/api/firebase/config.ts'),
+  'utf8'
+);
+const authMethodsSource = fs.readFileSync(
+  path.join(repoRoot, 'src/api/firebase/auth/methods.ts'),
+  'utf8'
+);
 
 test('user management can impersonate a user directly into the PulseCheck coach dashboard', () => {
   assert.match(
@@ -50,6 +58,11 @@ test('user management can impersonate a user directly into the PulseCheck coach 
   );
   assert.match(
     remoteLoginSource,
+    /signOutAndClearPulseAuthState\(auth\)/,
+    'remote-login should clear any prior browser auth state before impersonating the target user'
+  );
+  assert.match(
+    remoteLoginSource,
     /consume-remote-login-token/,
     'remote-login should consume one-time remote-login tokens in the target tab'
   );
@@ -62,6 +75,26 @@ test('user management can impersonate a user directly into the PulseCheck coach 
     adminBannerSource,
     /signOutAndClearPulseAuthState\(auth\)/,
     'admin sign-out should clear Firebase auth storage, not only call signOut(auth)'
+  );
+  assert.match(
+    firebaseConfigSource,
+    /pulse_remote_login_active/,
+    'Firebase initialization should detect active remote-login sessions'
+  );
+  assert.match(
+    firebaseConfigSource,
+    /browserSessionPersistence/,
+    'Firebase initialization should keep remote-login sessions scoped to session persistence after refresh'
+  );
+  assert.match(
+    authMethodsSource,
+    /preparePrimaryAuthSignIn/,
+    'normal sign-in should clear remote-login state and restore local persistence before signing into a primary account'
+  );
+  assert.match(
+    authMethodsSource,
+    /setPersistence\(auth,\s*browserLocalPersistence\)/,
+    'normal sign-in should explicitly return Firebase auth to local persistence'
   );
   assert.match(
     usersAdminSource,

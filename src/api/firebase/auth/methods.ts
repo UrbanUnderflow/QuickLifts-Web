@@ -5,11 +5,13 @@ import {
   signInWithRedirect,
   GoogleAuthProvider,
   browserPopupRedirectResolver,
+  browserLocalPersistence,
   OAuthProvider,
   isSignInWithEmailLink,
   sendSignInLinkToEmail,
   signInWithEmailLink,
   sendPasswordResetEmail,
+  setPersistence,
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
@@ -22,11 +24,17 @@ import {
   buildAppVersionWritePayload,
 } from '../../../utils/appVersioning';
 import { resolveGoogleProviderConflict } from './accountLinking';
-import { signOutAndClearPulseAuthState } from '../../../utils/authSessionCleanup';
+import { clearPulseAuthStorage, signOutAndClearPulseAuthState } from '../../../utils/authSessionCleanup';
+
+const preparePrimaryAuthSignIn = async () => {
+  await clearPulseAuthStorage();
+  await setPersistence(auth, browserLocalPersistence);
+};
 
 export const authMethods: AuthService = {
   async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
     try {
+      await preparePrimaryAuthSignIn();
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const normalizedName = normalizeUsername(username);
 
@@ -55,6 +63,7 @@ export const authMethods: AuthService = {
   },
 
   async signInWithEmail(email: string, password: string) {
+    await preparePrimaryAuthSignIn();
     return signInWithEmailAndPassword(auth, email, password);
   },
 
@@ -88,6 +97,7 @@ export const authMethods: AuthService = {
       throw new Error('Please enter your email address to finish sign-in.');
     }
 
+    await preparePrimaryAuthSignIn();
     return signInWithEmailLink(auth, normalizedEmail, url);
   },
 
@@ -97,6 +107,7 @@ export const authMethods: AuthService = {
     provider.addScope('profile');
 
     try {
+      await preparePrimaryAuthSignIn();
       const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
       return result;
     } catch (error) {
@@ -133,6 +144,7 @@ export const authMethods: AuthService = {
     });
 
     try {
+      await preparePrimaryAuthSignIn();
       return await signInWithRedirect(auth, provider);
     } catch (error) {
       console.error('Error during Apple sign-in redirect:', error);

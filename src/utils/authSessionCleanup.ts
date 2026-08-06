@@ -10,16 +10,20 @@ const REMOTE_LOGIN_STORAGE_KEYS = [
 const removeMatchingStorageKeys = (storage: Storage | undefined) => {
   if (!storage) return;
 
-  const keysToRemove: string[] = [];
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index);
-    if (!key) continue;
-    if (key.startsWith(AUTH_STORAGE_KEY_PREFIX) || REMOTE_LOGIN_STORAGE_KEYS.includes(key)) {
-      keysToRemove.push(key);
+  try {
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key) continue;
+      if (key.startsWith(AUTH_STORAGE_KEY_PREFIX) || REMOTE_LOGIN_STORAGE_KEYS.includes(key)) {
+        keysToRemove.push(key);
+      }
     }
-  }
 
-  keysToRemove.forEach(key => storage.removeItem(key));
+    keysToRemove.forEach(key => storage.removeItem(key));
+  } catch (error) {
+    console.warn('[authSessionCleanup] Unable to clear browser auth storage:', error);
+  }
 };
 
 const deleteIndexedDbDatabase = (databaseName: string) =>
