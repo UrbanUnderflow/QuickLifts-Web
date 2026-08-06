@@ -2311,7 +2311,7 @@ const EquityAdminPage: React.FC = () => {
 
   const getSigningRequestsForEquityDoc = (equityDocId: string) => {
     return signingRequests
-      .filter(r => (r as any).equityDocumentId === equityDocId && !r.invalidatedAt)
+      .filter(r => (r as any).equityDocumentId === equityDocId && !r.invalidatedAt && !r.previewMode)
       .sort((a, b) => {
         const aOrder = typeof a.signingOrder === 'number' ? a.signingOrder : Number.MAX_SAFE_INTEGER;
         const bOrder = typeof b.signingOrder === 'number' ? b.signingOrder : Number.MAX_SAFE_INTEGER;
@@ -2901,30 +2901,32 @@ const EquityAdminPage: React.FC = () => {
         stakeholderList,
       );
 
-      // Create or reuse signing requests per signer, then send/resend emails
+      const company = getDefaultCompanySigner();
+
+      // Create fresh live signing requests per signer, then send emails.
+      // Preview requests are sandbox-only and should never be reused for the live signature packet.
       for (let i = 0; i < normalized.length; i++) {
         const signer = normalized[i];
 
-        let requestId = signer.signingRequestId;
-        if (!requestId) {
-          const requestData: any = {
-            documentType: currentSigningDoc.documentType,
-            documentName: currentSigningDoc.title,
-            recipientName: signer.name,
-            recipientEmail: signer.email,
-            status: 'pending',
-            createdAt: serverTimestamp(),
-            equityDocumentId: currentSigningDoc.id,
-            documentContent: currentSigningDoc.content,
-            signerRole: signer.role,
-            stakeholderId: signer.stakeholderId || null,
-            signingGroupId,
-            signingOrder: i + 1,
-            supportingDocuments,
-          };
-          const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
-          requestId = docRef.id;
-        }
+        const requestData: any = {
+          documentType: currentSigningDoc.documentType,
+          documentName: currentSigningDoc.title,
+          recipientName: signer.name,
+          recipientEmail: signer.email,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+          equityDocumentId: currentSigningDoc.id,
+          documentContent: currentSigningDoc.content,
+          signerRole: signer.role,
+          stakeholderId: signer.stakeholderId || null,
+          signingGroupId,
+          signingOrder: i + 1,
+          companyName: company.name || 'Pulse Intelligence Labs, Inc.',
+          previewMode: false,
+          supportingDocuments,
+        };
+        const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
+        const requestId = docRef.id;
 
         const requestSupportingDocuments = scopeSupportingDocumentsToRequest(
           supportingDocuments,
@@ -2939,6 +2941,8 @@ const EquityAdminPage: React.FC = () => {
           stakeholderId: signer.stakeholderId || null,
           equityDocumentId: currentSigningDoc.id,
           documentContent: currentSigningDoc.content,
+          companyName: company.name || 'Pulse Intelligence Labs, Inc.',
+          previewMode: false,
           supportingDocuments: requestSupportingDocuments,
           updatedAt: serverTimestamp(),
         });
@@ -2954,6 +2958,8 @@ const EquityAdminPage: React.FC = () => {
             documentType: currentSigningDoc.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
+            companyName: company.name || 'Pulse Intelligence Labs, Inc.',
+            previewMode: false,
             supportingDocuments: requestSupportingDocuments,
             sendAttemptId: `${signingGroupId}-${requestId}`,
           }),
@@ -4063,25 +4069,29 @@ const EquityAdminPage: React.FC = () => {
       // If stakeholder has grants, update the first grant's numberOfShares
       if (stakeholder.grants && stakeholder.grants.length > 0) {
         const grantId = stakeholder.grants[0].id;
-        try {
-          await updateDoc(doc(db, 'equity-grants', grantId), {
-            numberOfShares: nextOptionsValue,
-            unvestedShares: nextOptionsValue - (stakeholder.grants[0].vestedShares || 0),
-            ...(stakeholder.type === 'advisor'
-              ? {
-                  vestingStartDate: revisedVestingStartTimestamp,
-                  strikePrice: nextStrikePriceValue,
-                  fairMarketValueAtGrant: nextStrikePriceValue,
-                  valuationDate: valuationTimestamp,
-                  earlyExerciseAllowed: nextEarlyExerciseAllowed,
-                }
-              : {}),
-            updatedAt: serverTimestamp(),
-          });
-          console.log('[saveGrantOptions] Grant updated:', grantId);
-        } catch (grantError) {
-          console.warn('[saveGrantOptions] Failed to update grant (may not exist):', grantError);
-          // Continue even if grant update fails
+        if (grantId) {
+          try {
+            await updateDoc(doc(db, 'equity-grants', grantId), {
+              numberOfShares: nextOptionsValue,
+              unvestedShares: nextOptionsValue - (stakeholder.grants[0].vestedShares || 0),
+              ...(stakeholder.type === 'advisor'
+                ? {
+                    vestingStartDate: revisedVestingStartTimestamp,
+                    strikePrice: nextStrikePriceValue,
+                    fairMarketValueAtGrant: nextStrikePriceValue,
+                    valuationDate: valuationTimestamp,
+                    earlyExerciseAllowed: nextEarlyExerciseAllowed,
+                  }
+                : {}),
+              updatedAt: serverTimestamp(),
+            });
+            console.log('[saveGrantOptions] Grant updated:', grantId);
+          } catch (grantError) {
+            console.warn('[saveGrantOptions] Failed to update grant (may not exist):', grantError);
+            // Continue even if grant update fails
+          }
+        } else {
+          console.warn('[saveGrantOptions] Stakeholder grant has no standalone grant record ID; stakeholder grant snapshot was updated only.');
         }
       }
 
