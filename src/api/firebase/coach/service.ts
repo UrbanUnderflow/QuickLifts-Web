@@ -1061,6 +1061,7 @@ class CoachService {
             displayName: userData.displayName || userData.username || 'Unknown User',
             username: userData.username || '',
             email: userData.email || '',
+            accountCreatedAt: toDateOrNull(userData.createdAt),
             profileImageUrl: ownProfileImage || preloadedInviteImage || undefined,
             teamName: team?.displayName || '',
             sportOrProgram: team?.sportOrProgram || '',

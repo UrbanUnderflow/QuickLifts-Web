@@ -320,6 +320,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const isAthleticMindHubRoute =
     normalizedCheckoutBridgePath === '/athletic-mind-hub' ||
     normalizedCheckoutBridgePath.startsWith('/athletic-mind-hub/');
+  const isStandaloneAuthRoute =
+    normalizedCheckoutBridgePath === '/pipelists' ||
+    normalizedCheckoutBridgePath === '/simpbudget';
   const isCheckoutBridgeRoute =
     normalizedCheckoutBridgePath === '/checkout-redirect' ||
     (
@@ -364,6 +367,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   // This is the main auth effect that should contain our logs
   useEffect(() => {
+    if (isStandaloneAuthRoute) {
+      setShowSignInModal(false);
+      dispatch(setLoading(false));
+      setAuthChecked(true);
+      return;
+    }
+
     if (isCheckoutBridgeRoute) {
       setShowSignInModal(false);
       dispatch(setLoading(false));
@@ -586,7 +596,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       dispatch(setLoading(false));
       setAuthChecked(true);
     }
-  }, [auth, dispatch, router.pathname, router, isCheckoutBridgeRoute]);
+  }, [auth, dispatch, router.pathname, router, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
 
   // Open sign-in modal immediately if URL has ?signin or ?signup
   useEffect(() => {
@@ -597,7 +607,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         Object.prototype.hasOwnProperty.call(query, 'signup');
 
       if (wantsSignIn) {
-        if (isCheckoutBridgeRoute) {
+        if (isCheckoutBridgeRoute || isStandaloneAuthRoute) {
           setShowSignInModal(false);
           return;
         }
@@ -616,7 +626,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     } catch (e) {
       console.warn('[AuthWrapper] Error processing auth query params', e);
     }
-  }, [router?.query, router?.asPath, router?.pathname, currentUser, isCheckoutBridgeRoute]);
+  }, [router?.query, router?.asPath, router?.pathname, currentUser, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
 
   const handleSignInSuccess = () => {
     // Modal will auto-close based on Redux state
@@ -636,6 +646,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     );
 
   if (isPILHost && !isAthleticMindHubRoute) {
+    return <>{children}</>;
+  }
+
+  // These pages intentionally use a separate Firebase project and own their
+  // signed-out experience. Render them even if the main app auth listener is
+  // delayed or blocked by a stale browser session.
+  if (isStandaloneAuthRoute) {
     return <>{children}</>;
   }
 

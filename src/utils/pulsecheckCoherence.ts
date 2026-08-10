@@ -10,6 +10,7 @@ export type PulseCheckCoherenceDay = {
 export type PulseCheckCoherenceSnapshot = {
   windowDays: number;
   observedDays: number;
+  isStillForming: boolean;
   showingUpDays: number;
   consistencyPercent: number | null;
   completedTrainingCount: number;
@@ -20,6 +21,10 @@ export type PulseCheckCoherenceSnapshot = {
   feelingCheckInDays: number;
   feelingGoodPercent: number | null;
   coherencePercent: number | null;
+};
+
+export type PulseCheckCoherenceOptions = {
+  activatedAt?: Date | number | string | null;
 };
 
 export type PulseCheckTeamCoherenceSnapshot = {
@@ -64,17 +69,82 @@ const reportedFeelingGood = (day: PulseCheckCoherenceDay): boolean | null => {
   return level ? POSITIVE_LEVELS.has(normalizeLevel(level)) : null;
 };
 
+const dateFromDateKey = (dateKey: string): Date | null => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const activationDateFrom = (value: PulseCheckCoherenceOptions['activatedAt']): Date | null => {
+  if (!value) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return dateFromDateKey(value);
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+};
+
+const isWithinInitialWindow = (
+  activatedAt: PulseCheckCoherenceOptions['activatedAt'],
+  latestDateKey: string | undefined,
+  windowDays: number
+): boolean => {
+  const activationDate = activationDateFrom(activatedAt);
+  const latestDate = latestDateKey ? dateFromDateKey(latestDateKey) : null;
+  if (!activationDate || !latestDate) return true;
+
+  const activationStart = new Date(
+    activationDate.getFullYear(),
+    activationDate.getMonth(),
+    activationDate.getDate()
+  );
+  const latestStart = new Date(
+    latestDate.getFullYear(),
+    latestDate.getMonth(),
+    latestDate.getDate()
+  );
+  const elapsedDays = Math.floor(
+    (latestStart.getTime() - activationStart.getTime()) / (24 * 60 * 60 * 1000)
+  );
+  return elapsedDays < windowDays;
+};
+
 export const calculatePulseCheckCoherence = (
   days: PulseCheckCoherenceDay[],
-  windowDays = 14
+  windowDays = 14,
+  options: PulseCheckCoherenceOptions = {}
 ): PulseCheckCoherenceSnapshot => {
   const sortedDays = [...days].sort((left, right) => left.dateKey.localeCompare(right.dateKey));
+  const isStillForming = isWithinInitialWindow(
+    options.activatedAt,
+    sortedDays[sortedDays.length - 1]?.dateKey,
+    windowDays
+  );
   const firstEvidenceIndex = sortedDays.findIndex(hasEvidence);
 
   if (firstEvidenceIndex < 0) {
+    if (!isStillForming && sortedDays.length > 0) {
+      return {
+        windowDays,
+        observedDays: sortedDays.length,
+        isStillForming: false,
+        showingUpDays: 0,
+        consistencyPercent: 0,
+        completedTrainingCount: 0,
+        eligibleTrainingCount: 0,
+        followThroughPercent: null,
+        followThroughBasis: 'unavailable',
+        feelingGoodDays: 0,
+        feelingCheckInDays: 0,
+        feelingGoodPercent: null,
+        coherencePercent: 0,
+      };
+    }
+
     return {
       windowDays,
       observedDays: 0,
+      isStillForming: true,
       showingUpDays: 0,
       consistencyPercent: null,
       completedTrainingCount: 0,
@@ -88,7 +158,7 @@ export const calculatePulseCheckCoherence = (
     };
   }
 
-  const observedDays = sortedDays.slice(firstEvidenceIndex);
+  const observedDays = isStillForming ? sortedDays.slice(firstEvidenceIndex) : sortedDays;
   const showingUpDays = observedDays.filter(
     (day) => isCheckedIn(day) || day.completedTraining === true
   ).length;
@@ -134,13 +204,14 @@ export const calculatePulseCheckCoherence = (
     feelingGoodPercent,
   ].filter((value): value is number => value !== null);
   const coherencePercent =
-    observedDays.length >= 3 && availableScores.length >= 2
+    (isStillForming ? observedDays.length >= 3 && availableScores.length >= 2 : availableScores.length > 0)
       ? Math.round(availableScores.reduce((sum, value) => sum + value, 0) / availableScores.length)
       : null;
 
   return {
     windowDays,
     observedDays: observedDays.length,
+    isStillForming: coherencePercent === null && isStillForming,
     showingUpDays,
     consistencyPercent,
     completedTrainingCount,
@@ -171,4 +242,3 @@ export const calculatePulseCheckTeamCoherence = (
     coherencePercent: averagePercent(scoredSnapshots.map((snapshot) => snapshot.coherencePercent)),
   };
 };
-

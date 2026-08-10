@@ -63,6 +63,49 @@ test('coherence stays in building state until enough evidence exists', () => {
   ]);
 
   assert.equal(result.coherencePercent, null);
+  assert.equal(result.isStillForming, true);
+});
+
+test('coherence treats silence as a low-activity pattern after the first window', () => {
+  const result = calculatePulseCheckCoherence(
+    Array.from({ length: 14 }, (_, index) => ({
+      dateKey: `2026-07-${String(index + 1).padStart(2, '0')}`,
+    })),
+    14,
+    { activatedAt: '2026-06-15' }
+  );
+
+  assert.equal(result.isStillForming, false);
+  assert.equal(result.observedDays, 14);
+  assert.equal(result.consistencyPercent, 0);
+  assert.equal(result.coherencePercent, 0);
+});
+
+test('coherence counts missing days in the window after onboarding', () => {
+  const result = calculatePulseCheckCoherence(
+    Array.from({ length: 14 }, (_, index) => {
+      const day: PulseCheckCoherenceDay = {
+        dateKey: `2026-07-${String(index + 1).padStart(2, '0')}`,
+        eligibleTaskCount: 1,
+      };
+      if (index === 13) {
+        day.morningLevel = 'solid';
+        day.completedTraining = true;
+        day.completedTaskCount = 1;
+      }
+      return day;
+    }),
+    14,
+    { activatedAt: '2026-06-15' }
+  );
+
+  assert.equal(result.isStillForming, false);
+  assert.equal(result.observedDays, 14);
+  assert.equal(result.showingUpDays, 1);
+  assert.equal(result.consistencyPercent, 7);
+  assert.equal(result.followThroughPercent, 7);
+  assert.equal(result.feelingGoodPercent, 100);
+  assert.equal(result.coherencePercent, 38);
 });
 
 test('team coherence averages established athlete scores and tracks building athletes', () => {

@@ -117,7 +117,20 @@ test('dashboard deep links and secondary surfaces stay on the selected team', ()
   const coachServices = read('src/api/firebase/pulsecheckCoachServices.ts');
 
   assert.match(dashboardSource, /const isViewKey/);
-  assert.match(dashboardSource, /query: \{ \.\.\.router\.query, view: nextView \}/);
+  assert.match(dashboardSource, /const mergeLatestCoachDashboardQuery/);
+  assert.match(dashboardSource, /new URLSearchParams\(window\.location\.search\)/);
+  assert.match(
+    dashboardSource,
+    /query: mergeLatestCoachDashboardQuery\(router\.query, \{ view: nextView \}\)/
+  );
+  assert.match(
+    dashboardSource,
+    /query: mergeLatestCoachDashboardQuery\(router\.query, \{\s*teamId: initialTeam\.context\.teamId,\s*\}\)/
+  );
+  assert.match(
+    dashboardSource,
+    /query: mergeLatestCoachDashboardQuery\(router\.query, \{ teamId \}\)/
+  );
   assert.match(
     dashboardSource,
     /isViewKey\(rawView\)[\s\S]*navItems\.some\(\(item\) => item\.key === rawView\)/

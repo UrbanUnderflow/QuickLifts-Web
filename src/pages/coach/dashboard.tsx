@@ -158,6 +158,7 @@ type CoachAthlete = {
   teamName?: string;
   sportOrProgram?: string;
   athleteAge?: number;
+  accountCreatedAt?: Date | number | string | null;
   lastActiveDate?: Date;
   conversationCount: number;
   totalSessions: number;
@@ -285,6 +286,7 @@ const averageTeamAdherence = (breakdowns: AthleteAdherenceBreakdown[]): TeamAdhe
 });
 
 const deriveAthleteCoherence = (
+  athlete: CoachAthlete,
   details: AthleteReadinessDailyDetail[],
   windowDays = 14
 ): PulseCheckCoherenceSnapshot =>
@@ -297,7 +299,8 @@ const deriveAthleteCoherence = (
       eligibleTaskCount: detail.coherenceEligibleTaskCount,
       completedTaskCount: detail.coherenceCompletedTaskCount,
     })),
-    windowDays
+    windowDays,
+    { activatedAt: athlete.accountCreatedAt }
   );
 
 const relativeWhen = (d?: Date): string => {
@@ -653,6 +656,30 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
 const isViewKey = (value: unknown): value is ViewKey =>
   typeof value === 'string' && NAV.some((item) => item.key === value);
 
+const mergeLatestCoachDashboardQuery = (
+  fallbackQuery: Record<string, string | string[] | undefined>,
+  updates: Record<string, string | string[] | undefined>
+) => {
+  const nextQuery: Record<string, string | string[] | undefined> = { ...fallbackQuery };
+
+  if (typeof window !== 'undefined') {
+    const currentParams = new URLSearchParams(window.location.search);
+    currentParams.forEach((value, key) => {
+      nextQuery[key] = value;
+    });
+  }
+
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value == null || value === '') {
+      delete nextQuery[key];
+      return;
+    }
+    nextQuery[key] = value;
+  });
+
+  return nextQuery;
+};
+
 const todayLabel = () =>
   new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -874,7 +901,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       void router.replace(
         {
           pathname: router.pathname,
-          query: { ...router.query, view: nextView },
+          query: mergeLatestCoachDashboardQuery(router.query, { view: nextView }),
         },
         undefined,
         { shallow: true }
@@ -897,7 +924,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       void router.replace(
         {
           pathname: router.pathname,
-          query: { ...router.query, view: nextView },
+          query: mergeLatestCoachDashboardQuery(router.query, { view: nextView }),
         },
         undefined,
         { shallow: true }
@@ -918,6 +945,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             : 'bg-red-500/20 text-red-400 border-red-500/25';
         return (
           <button
+            type="button"
             key={item.key}
             data-nav={item.key}
             onClick={() => {
@@ -1449,7 +1477,9 @@ const CoachDashboard: React.FC = () => {
             void router.replace(
               {
                 pathname: router.pathname,
-                query: { ...router.query, teamId: initialTeam.context.teamId },
+                query: mergeLatestCoachDashboardQuery(router.query, {
+                  teamId: initialTeam.context.teamId,
+                }),
               },
               undefined,
               { shallow: true, scroll: false }
@@ -1762,7 +1792,7 @@ const CoachDashboard: React.FC = () => {
                 void router.replace(
                   {
                     pathname: router.pathname,
-                    query: { ...router.query, teamId },
+                    query: mergeLatestCoachDashboardQuery(router.query, { teamId }),
                   },
                   undefined,
                   { shallow: true, scroll: false }
@@ -1860,7 +1890,7 @@ const HomeSection: React.FC<{
           .catch((): AthleteReadinessDailyDetail[] => []);
         return {
           adherence: deriveAthleteAdherenceBreakdown(athlete, details, 14),
-          coherence: deriveAthleteCoherence(details, 14),
+          coherence: deriveAthleteCoherence(athlete, details, 14),
         };
       })
     )
@@ -8627,7 +8657,8 @@ const CoherenceTile: React.FC<{
       <p className="mt-6 text-sm leading-6 text-zinc-400">
         Coherence combines showing up, completing assigned training, and days the athlete reports
         feeling Solid or Locked In. A rising score means those pieces are lining up more often.
-        “Building” means PulseCheck is still collecting the roster&apos;s first usable pattern.
+        “Building” is only the first 14-day grace window. After that, low activity counts as a
+        real pattern.
       </p>
 
       {snapshot.athleteCount > 0 && (
@@ -8636,7 +8667,7 @@ const CoherenceTile: React.FC<{
             <div>
               <div className="text-xs font-semibold text-white">Team coherence</div>
               <div className="text-[10px] text-zinc-500">
-                Average of established 14-day athlete patterns
+                Average of current 14-day athlete patterns
               </div>
             </div>
             <div className="text-right">
@@ -8655,8 +8686,8 @@ const CoherenceTile: React.FC<{
 
           <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2 text-[10px] leading-4 text-zinc-400">
             PulseCheck combines showing up, assigned training, and Solid or Locked In check-ins.
-            Each athlete needs three observed days and two available measures before their score
-            joins the roster average.
+            First-window athletes need three observed days and two available measures. After that,
+            missed days stay in the pattern instead of disappearing from the score.
           </div>
         </div>
       )}
