@@ -31,3 +31,23 @@ test('standalone Firebase auth pages bypass the global AuthWrapper gate', () => 
     'standalone-auth routes should not open the generic sign-in modal from query params',
   );
 });
+
+test('passive public pages render while Firebase auth initializes', () => {
+  const authWrapper = read('src/components/AuthWrapper.tsx');
+
+  assert.match(
+    authWrapper,
+    /const isPassivePublicRoute =[\s\S]*isPublicRoute\(router\.asPath \|\| router\.pathname\)[\s\S]*!routeWantsAuthModal/,
+    'public routes without explicit signin/signup should be classified as passive public routes',
+  );
+  assert.match(
+    authWrapper,
+    /if \(isPassivePublicRoute\) \{[\s\S]*return <>\{children\}<\/>;/,
+    'passive public routes should render children instead of waiting on the auth spinner',
+  );
+  assert.match(
+    authWrapper,
+    /protected pages and explicit[\s\S]*\?signin\/\?signup routes keep the normal gate/,
+    'the bypass comment should preserve the protected-route and explicit-auth intent',
+  );
+});

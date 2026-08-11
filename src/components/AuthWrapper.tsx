@@ -333,6 +333,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         (router.asPath || '').includes('source=pulse_ritual_ios_paywall')
       )
     );
+  const routeWantsAuthModal =
+    Object.prototype.hasOwnProperty.call(router?.query || {}, 'signin') ||
+    Object.prototype.hasOwnProperty.call(router?.query || {}, 'signup');
+  const isPassivePublicRoute =
+    isPublicRoute(router.asPath || router.pathname) &&
+    !isCheckoutBridgeRoute &&
+    !isStandaloneAuthRoute &&
+    !routeWantsAuthModal;
 
   // Add debug useEffect to track currentUser changes with Safari-specific logging
   useEffect(() => {
@@ -601,12 +609,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   // Open sign-in modal immediately if URL has ?signin or ?signup
   useEffect(() => {
     try {
-      const query = router?.query || {};
-      const wantsSignIn =
-        Object.prototype.hasOwnProperty.call(query, 'signin') ||
-        Object.prototype.hasOwnProperty.call(query, 'signup');
-
-      if (wantsSignIn) {
+      if (routeWantsAuthModal) {
         if (isCheckoutBridgeRoute || isStandaloneAuthRoute) {
           setShowSignInModal(false);
           return;
@@ -626,7 +629,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     } catch (e) {
       console.warn('[AuthWrapper] Error processing auth query params', e);
     }
-  }, [router?.query, router?.asPath, router?.pathname, currentUser, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
+  }, [
+    router?.asPath,
+    router?.pathname,
+    routeWantsAuthModal,
+    currentUser,
+    isCheckoutBridgeRoute,
+    isStandaloneAuthRoute,
+    dispatch,
+  ]);
 
   const handleSignInSuccess = () => {
     // Modal will auto-close based on Redux state
@@ -653,6 +664,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   // signed-out experience. Render them even if the main app auth listener is
   // delayed or blocked by a stale browser session.
   if (isStandaloneAuthRoute) {
+    return <>{children}</>;
+  }
+
+  // Public pages should never be trapped behind Firebase auth initialization.
+  // Auth still resolves in the background; protected pages and explicit
+  // ?signin/?signup routes keep the normal gate.
+  if (isPassivePublicRoute) {
     return <>{children}</>;
   }
 

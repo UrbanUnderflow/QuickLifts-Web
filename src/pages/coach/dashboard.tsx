@@ -846,6 +846,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     () => athletes.find((a) => a.id === selectedAthleteId) ?? null,
     [athletes, selectedAthleteId]
   );
+  const routeView = useMemo<ViewKey | null>(() => {
+    const rawView = Array.isArray(router.query.view) ? router.query.view[0] : router.query.view;
+    return isViewKey(rawView) ? rawView : null;
+  }, [router.query.view]);
 
   const alertCount = alerts.length;
   const inboxUnread = useMemo(
@@ -890,47 +894,58 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     [can, earningsEnabled, referralLinksEnabled]
   );
 
-  const navItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
+  const permissionsReady = isDemo || !teamContextLoading;
+  const allowedNavItems = useMemo(() => NAV.filter((item) => navAllowed(item.key)), [navAllowed]);
+  const pendingNavItems = useMemo(() => {
+    const pendingView = routeView || view;
+    return NAV.filter((item) => item.key === pendingView || item.key === 'settings');
+  }, [routeView, view]);
+  const navItems = permissionsReady ? allowedNavItems : pendingNavItems;
   const canManageAthleteInvites = can('admin') || can('coaching') || can('administrative');
 
   const selectView = useCallback(
     (nextView: ViewKey) => {
       if (!navAllowed(nextView)) return;
       setView(nextView);
-      if (!router.isReady || router.query.view === nextView) return;
+      if (!router.isReady || routeView === nextView) return;
       void router.replace(
         {
           pathname: router.pathname,
-          query: mergeLatestCoachDashboardQuery(router.query, { view: nextView }),
+          query: mergeLatestCoachDashboardQuery({}, { view: nextView }),
         },
         undefined,
         { shallow: true }
       );
     },
-    [navAllowed, router]
+    [navAllowed, routeView, router]
   );
 
   // Keep dashboard tabs deep-linkable while refusing unknown or unauthorized
   // views. Capability changes always replace the URL with the first safe tab.
   useEffect(() => {
     if (!router.isReady || navItems.length === 0) return;
-    const rawView = Array.isArray(router.query.view) ? router.query.view[0] : router.query.view;
+    if (!permissionsReady) {
+      if (routeView) {
+        setView((current) => (current === routeView ? current : routeView));
+      }
+      return;
+    }
     const nextView =
-      isViewKey(rawView) && navItems.some((item) => item.key === rawView)
-        ? rawView
+      routeView && navItems.some((item) => item.key === routeView)
+        ? routeView
         : navItems[0].key;
     setView((current) => (current === nextView ? current : nextView));
-    if (rawView !== nextView) {
+    if (routeView !== nextView) {
       void router.replace(
         {
           pathname: router.pathname,
-          query: mergeLatestCoachDashboardQuery(router.query, { view: nextView }),
+          query: mergeLatestCoachDashboardQuery({}, { view: nextView }),
         },
         undefined,
         { shallow: true }
       );
     }
-  }, [navItems, router.isReady, router.pathname, router.query]);
+  }, [navItems, permissionsReady, routeView, router]);
 
   const NavList = ({ onPick }: { onPick?: () => void }) => (
     <nav className="flex-1 space-y-0.5">
