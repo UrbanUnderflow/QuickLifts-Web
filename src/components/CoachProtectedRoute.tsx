@@ -24,19 +24,40 @@ const CoachProtectedRoute: React.FC<Props> = ({
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [_coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const redirectPath = (router.asPath || router.pathname || '/coach/dashboard').split('?')[0].split('#')[0] || '/coach/dashboard';
+  const routePathname = router.pathname;
 
   useEffect(() => {
+    if (userLoading) {
+      setLoading(true);
+      setAccessError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      setAccessError('Coach access is taking longer than expected. Refresh the session or sign in again.');
+      setLoading(false);
+    }, 12000);
+
+    const finishLoading = () => {
+      if (cancelled) return;
+      window.clearTimeout(timeoutId);
+      setLoading(false);
+    };
+
     const checkCoachAccess = async () => {
-      // Wait for auth to finish initializing to avoid false redirects
-      if (userLoading) {
-        return;
-      }
+      setAccessError(null);
       // If no user, send them to the coach login and return them here after.
       // `!auth.currentUser` also catches the sign-out race where Redux still
       // holds a stale user but Firebase auth has already cleared — without it,
       // the coach-doc read below throws and bounces to the marketing home.
       if (!currentUser || !auth.currentUser) {
-        const dest = router.asPath || '/coach/dashboard';
+        const dest = redirectPath;
+        window.clearTimeout(timeoutId);
         router.replace(`/coach/login?redirect=${encodeURIComponent(dest)}`);
         return;
       }
@@ -89,16 +110,18 @@ const CoachProtectedRoute: React.FC<Props> = ({
 
         if (!coachDoc.exists()) {
           if (await hasPulseCheckStaffAccess()) {
-            setLoading(false);
+            finishLoading();
             return;
           }
           // If no profile exists, fall back to role to decide where to go
           if (currentUser.role === 'coach') {
             // Coach role but missing profile → send to setup
+            window.clearTimeout(timeoutId);
             router.push('/coach/setup');
             return;
           } else {
             // Not a coach and no coach profile → home
+            window.clearTimeout(timeoutId);
             router.push('/');
             return;
           }
@@ -113,9 +136,10 @@ const CoachProtectedRoute: React.FC<Props> = ({
           (!rawCoachData.userId || rawCoachData.userId === currentUser.id);
         if (!legacyCoachIsActive) {
           if (await hasPulseCheckStaffAccess()) {
-            setLoading(false);
+            finishLoading();
             return;
           }
+          window.clearTimeout(timeoutId);
           router.push('/');
           return;
         }
@@ -131,38 +155,74 @@ const CoachProtectedRoute: React.FC<Props> = ({
 
           if (!hasActiveSubscription) {
             // Redirect to subscription page
+            window.clearTimeout(timeoutId);
             router.push('/coach/subscription-required');
             return;
           }
         }
 
-        setLoading(false);
+        finishLoading();
       } catch (error) {
         console.error('Error checking coach access:', error);
         // On sign-out, Firebase auth clears before the Redux `currentUser` flips
         // to null, so the coach-doc read fails with permission-denied here. Don't
         // bounce to the marketing home — send them to the coach login.
         if (!auth.currentUser) {
+          window.clearTimeout(timeoutId);
           router.replace('/coach/login');
           return;
         }
         if (await hasPulseCheckStaffAccess()) {
-          setLoading(false);
+          finishLoading();
           return;
         }
+        window.clearTimeout(timeoutId);
         router.push('/');
       }
     };
 
     checkCoachAccess();
-  }, [currentUser, router, requiresActiveSubscription, userLoading]);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentUser?.id, currentUser?.role, redirectPath, requiresActiveSubscription, retryNonce, routePathname, userLoading]);
 
-  if (loading) {
+  if (loading || accessError) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E0FE10] mx-auto mb-4"></div>
-          <div className="text-white text-lg">Verifying coach access...</div>
+        <div className="max-w-sm px-6 text-center">
+          {loading ? (
+            <>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E0FE10] mx-auto mb-4"></div>
+              <div className="text-white text-lg">Verifying coach access...</div>
+            </>
+          ) : (
+            <>
+              <div className="text-white text-lg font-semibold">We could not verify coach access.</div>
+              <p className="mt-2 text-sm text-zinc-400">{accessError}</p>
+              <div className="mt-5 flex justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(true);
+                    setAccessError(null);
+                    setRetryNonce((value) => value + 1);
+                  }}
+                  className="rounded-lg bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black"
+                >
+                  Retry
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.replace(`/coach/login?redirect=${encodeURIComponent(redirectPath)}`)}
+                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200"
+                >
+                  Sign in again
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );

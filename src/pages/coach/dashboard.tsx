@@ -680,6 +680,25 @@ const mergeLatestCoachDashboardQuery = (
   return nextQuery;
 };
 
+const replaceCoachDashboardUrlQuery = (
+  updates: Record<string, string | string[] | undefined>
+) => {
+  if (typeof window === 'undefined') return;
+  const nextQuery = mergeLatestCoachDashboardQuery({}, updates);
+  const params = new URLSearchParams();
+  Object.entries(nextQuery).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => params.append(key, entry));
+      return;
+    }
+    if (typeof value === 'string' && value.length > 0) {
+      params.set(key, value);
+    }
+  });
+  const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
+  window.history.replaceState(window.history.state, '', nextUrl);
+};
+
 const todayLabel = () =>
   new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -908,16 +927,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       if (!navAllowed(nextView)) return;
       setView(nextView);
       if (!router.isReady || routeView === nextView) return;
-      void router.replace(
-        {
-          pathname: router.pathname,
-          query: mergeLatestCoachDashboardQuery({}, { view: nextView }),
-        },
-        undefined,
-        { shallow: true }
-      );
+      replaceCoachDashboardUrlQuery({ view: nextView });
     },
-    [navAllowed, routeView, router]
+    [navAllowed, routeView, router.isReady]
   );
 
   // Keep dashboard tabs deep-linkable while refusing unknown or unauthorized
@@ -936,16 +948,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         : navItems[0].key;
     setView((current) => (current === nextView ? current : nextView));
     if (routeView !== nextView) {
-      void router.replace(
-        {
-          pathname: router.pathname,
-          query: mergeLatestCoachDashboardQuery({}, { view: nextView }),
-        },
-        undefined,
-        { shallow: true }
-      );
+      replaceCoachDashboardUrlQuery({ view: nextView });
     }
-  }, [navItems, permissionsReady, routeView, router]);
+  }, [navItems, permissionsReady, routeView, router.isReady]);
 
   const NavList = ({ onPick }: { onPick?: () => void }) => (
     <nav className="flex-1 space-y-0.5">
@@ -1489,16 +1494,7 @@ const CoachDashboard: React.FC = () => {
           setTeamAccesses(activeAccesses);
           setSelectedTeamId(initialTeam.context.teamId);
           if (requestedTeamId !== initialTeam.context.teamId) {
-            void router.replace(
-              {
-                pathname: router.pathname,
-                query: mergeLatestCoachDashboardQuery(router.query, {
-                  teamId: initialTeam.context.teamId,
-                }),
-              },
-              undefined,
-              { shallow: true, scroll: false }
-            );
+            replaceCoachDashboardUrlQuery({ teamId: initialTeam.context.teamId });
           }
         }
       } catch (error) {
@@ -1612,7 +1608,6 @@ const CoachDashboard: React.FC = () => {
         }
         return;
       }
-      const hasServicePayouts = Boolean(currentUser.creator?.stripeAccountId);
       try {
         const { membership, context } = selectedTeamAccess;
         const cfg = context.commercialConfig;
@@ -1629,15 +1624,17 @@ const CoachDashboard: React.FC = () => {
         const athleteAppEarningsEnabled =
           isPulseCheckCoachPricedAthleteOfferActive(cfg) &&
           cfg.athleteAppSubscriptionRevenueRecipientUserId === currentUser.id;
+        const additionalServiceEarningsEnabled =
+          cfg.additionalServicesEnabled === true && isRevenueRecipient;
 
         if (!cancelled) {
           setEarnings({
-            enabled: referralEarningsEnabled || athleteAppEarningsEnabled || hasServicePayouts,
+            enabled: referralEarningsEnabled || athleteAppEarningsEnabled || additionalServiceEarningsEnabled,
             athleteAppEnabled: athleteAppEarningsEnabled,
             sharePct: referralEarningsEnabled ? cfg.referralRevenueSharePct || 0 : 0,
           });
           setAdditionalServices({
-            enabled: Boolean(isRevenueRecipient && (cfg.additionalServicesEnabled || cfg.referralKickbackEnabled)),
+            enabled: additionalServiceEarningsEnabled,
             teamId: isRevenueRecipient ? context.teamId : '',
             organizationId: isRevenueRecipient ? context.organizationId : '',
           });
@@ -1655,7 +1652,6 @@ const CoachDashboard: React.FC = () => {
       cancelled = true;
     };
   }, [
-    currentUser?.creator?.stripeAccountId,
     currentUser?.id,
     selectedTeamAccess,
     trainingMode,
@@ -1804,14 +1800,7 @@ const CoachDashboard: React.FC = () => {
             if (teamAccesses.some((access) => access.context.teamId === teamId)) {
               setSelectedTeamId(teamId);
               if (router.query.teamId !== teamId) {
-                void router.replace(
-                  {
-                    pathname: router.pathname,
-                    query: mergeLatestCoachDashboardQuery(router.query, { teamId }),
-                  },
-                  undefined,
-                  { shallow: true, scroll: false }
-                );
+                replaceCoachDashboardUrlQuery({ teamId });
               }
             }
           }}
@@ -8428,51 +8417,58 @@ const SettingsSection: React.FC<{
   onCommercialConfigChanged,
   onLeaderboardChanged,
   isDemo = false,
-}) => (
-  <div className="space-y-4">
-    <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Settings</div>
-    <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <div className="text-xs text-zinc-500 mb-1">Coach name</div>
-        <div className="bg-zinc-800/60 rounded-lg px-3 py-2 text-sm">{coachName}</div>
-      </div>
-      <div>
-        <div className="text-xs text-zinc-500 mb-1">Email</div>
-        <div className="bg-zinc-800/60 rounded-lg px-3 py-2 text-sm break-all">{email || '—'}</div>
-      </div>
-    </div>
-    <AccountSignInMethods compact />
-    <TeamLeaderboardSettingsPanel
-      teamContext={teamContext}
-      canManage={canManageTeamSettings}
-      isDemo={isDemo}
-      onChanged={onLeaderboardChanged}
-    />
-    <AthleteAppSubscriptionOfferPanel
-      teamContext={teamContext}
-      canManage={canManageCommercialization}
-      isDemo={isDemo}
-      onCommercialConfigChanged={onCommercialConfigChanged}
-    />
-    {servicesEnabled && (
-      <div className="rounded-2xl border border-emerald-400/20 bg-emerald-950/10 p-4">
-        <div className="mb-4 flex flex-col gap-1">
-          <div className="text-sm font-bold text-white">Additional Services</div>
-          <div className="text-xs text-zinc-500">
-            Add one-time services athletes can buy from their coach conversation.
-          </div>
+}) => {
+  const showAthleteAppSubscriptionOffer =
+    isDemo || teamContext?.commercialConfig.athleteAppSubscriptionEnabled === true;
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Settings</div>
+      <div className="rounded-2xl border border-white/10 bg-zinc-900/50 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <div className="text-xs text-zinc-500 mb-1">Coach name</div>
+          <div className="bg-zinc-800/60 rounded-lg px-3 py-2 text-sm">{coachName}</div>
         </div>
-        <CoachServicesSection
-          coachId={coachId}
-          teamId={servicesTeamId}
-          organizationId={servicesOrganizationId}
-          isDemo={isDemo}
-        />
+        <div>
+          <div className="text-xs text-zinc-500 mb-1">Email</div>
+          <div className="bg-zinc-800/60 rounded-lg px-3 py-2 text-sm break-all">{email || '—'}</div>
+        </div>
       </div>
-    )}
-    <LocalFirebaseEnvironmentPanel />
-  </div>
-);
+      <AccountSignInMethods compact />
+      <TeamLeaderboardSettingsPanel
+        teamContext={teamContext}
+        canManage={canManageTeamSettings}
+        isDemo={isDemo}
+        onChanged={onLeaderboardChanged}
+      />
+      {showAthleteAppSubscriptionOffer && (
+        <AthleteAppSubscriptionOfferPanel
+          teamContext={teamContext}
+          canManage={canManageCommercialization}
+          isDemo={isDemo}
+          onCommercialConfigChanged={onCommercialConfigChanged}
+        />
+      )}
+      {servicesEnabled && (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-950/10 p-4">
+          <div className="mb-4 flex flex-col gap-1">
+            <div className="text-sm font-bold text-white">Additional Services</div>
+            <div className="text-xs text-zinc-500">
+              Add one-time services athletes can buy from their coach conversation.
+            </div>
+          </div>
+          <CoachServicesSection
+            coachId={coachId}
+            teamId={servicesTeamId}
+            organizationId={servicesOrganizationId}
+            isDemo={isDemo}
+          />
+        </div>
+      )}
+      <LocalFirebaseEnvironmentPanel />
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // Small shared pieces

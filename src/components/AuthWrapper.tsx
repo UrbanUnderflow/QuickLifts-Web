@@ -604,7 +604,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       dispatch(setLoading(false));
       setAuthChecked(true);
     }
-  }, [auth, dispatch, router.pathname, router, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
+  }, [auth, dispatch, router.pathname, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
 
   // Open sign-in modal immediately if URL has ?signin or ?signup
   useEffect(() => {

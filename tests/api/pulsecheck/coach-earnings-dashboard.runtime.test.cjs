@@ -95,3 +95,28 @@ test('provisioning exposes athlete subscription pricing and saves through the pr
     'the browser should not advertise a new active offer before Stripe succeeds'
   );
 });
+
+test('coach dashboard commercial surfaces follow provisioning switches', () => {
+  const dashboardSource = read('src/pages/coach/dashboard.tsx');
+
+  assert.doesNotMatch(
+    dashboardSource,
+    /enabled:\s*referralEarningsEnabled \|\| athleteAppEarningsEnabled \|\| hasServicePayouts/,
+    'a connected Stripe account alone should not show the coach dashboard earnings tab'
+  );
+  assert.match(
+    dashboardSource,
+    /enabled:\s*referralEarningsEnabled \|\| athleteAppEarningsEnabled \|\| additionalServiceEarningsEnabled/,
+    'earnings should be visible only when a team commercial revenue stream is enabled'
+  );
+  assert.match(
+    dashboardSource,
+    /const showAthleteAppSubscriptionOffer =[\s\S]*teamContext\?\.commercialConfig\.athleteAppSubscriptionEnabled === true/,
+    'the athlete subscription panel should follow the provisioning athlete subscription switch'
+  );
+  assert.match(
+    dashboardSource,
+    /\{showAthleteAppSubscriptionOffer && \([\s\S]*<AthleteAppSubscriptionOfferPanel/,
+    'the settings page should not render the athlete subscription panel when the switch is off'
+  );
+});
