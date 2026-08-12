@@ -36,6 +36,7 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
+  CheckSquare,
   ClipboardList,
   Clock,
   Copy,
@@ -57,6 +58,7 @@ import {
   ShieldCheck,
   Sparkles,
   Share2,
+  Square,
   Target,
   Trash2,
   TrendingUp,
@@ -155,6 +157,9 @@ type StageOutcome = 'open' | 'won' | 'lost';
 const LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH = 20000;
 const LEAD_SEARCH_DEFAULT_COUNT = 6;
 const LEAD_SEARCH_MAX_COUNT = 30;
+const LEAD_SEARCH_BATCH_SIZE = 1;
+const DEFAULT_LEAD_RESEARCH_PROMPT =
+  'For each lead, research strategic fit, relevant department or buyer, likely first outreach path, useful source-backed notes, official source URL, and a concrete next step.';
 
 const extractPastedLeadEntries = (prompt: string) => {
   const instructionPattern =
@@ -180,6 +185,14 @@ const extractPastedLeadEntries = (prompt: string) => {
     });
 
   return Array.from(new Set(entries)).slice(0, LEAD_SEARCH_MAX_COUNT);
+};
+
+const chunkLeadSearchEntries = (entries: string[]) => {
+  const chunks: string[][] = [];
+  for (let index = 0; index < entries.length; index += LEAD_SEARCH_BATCH_SIZE) {
+    chunks.push(entries.slice(index, index + LEAD_SEARCH_BATCH_SIZE));
+  }
+  return chunks;
 };
 
 const estimateLeadCountFromPrompt = (prompt: string, pastedEntries = extractPastedLeadEntries(prompt)) => {
@@ -303,6 +316,9 @@ type PipeList = {
   id: string;
   name: string;
   description: string;
+  objective: string;
+  leadDefinition: string;
+  researchBrief: string;
   accent: string;
   templateKey: TemplateKey;
   stages: StageConfig[];
@@ -887,6 +903,35 @@ const isInvestorUpdateContactList = (list: Pick<PipeList, 'templateKey' | 'name'
 const isContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
   list.templateKey === 'contacts' || isInvestorUpdateContactList(list);
 const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) => (isContactList(list) ? 'contact' : 'opportunity');
+const defaultListObjective = (templateKey: TemplateKey, listName: string) => {
+  if (templateKey === 'university-pilot') {
+    return `Identify universities where PulseCheck can earn a pilot conversation, prove athlete engagement, and convert into a paid team or department agreement.`;
+  }
+  if (templateKey === 'vc') return `Track investors and funds that could be a credible fit for PulseCheck fundraising or strategic introductions.`;
+  if (templateKey === 'grant') return `Track non-dilutive funding opportunities that align with PulseCheck's health, sports, safety, research, or youth-wellbeing work.`;
+  if (templateKey === 'pitch') return `Track pitch competitions, showcases, and accelerator opportunities where PulseCheck can gain capital, visibility, pilots, or partner access.`;
+  if (templateKey === 'contacts' || templateKey === 'investor-metrics') return `Maintain a relationship list for timely follow-up, relevant updates, and warm outreach.`;
+  return `Track and qualify opportunities for ${listName}.`;
+};
+const defaultLeadDefinition = (templateKey: TemplateKey) => {
+  if (templateKey === 'university-pilot') {
+    return 'A strong university lead has athletics, student wellbeing, sports medicine, counseling, performance, or innovation stakeholders who could sponsor or influence a PulseCheck pilot.';
+  }
+  if (templateKey === 'vc') return 'A strong investor lead has health, sports, AI, youth, mental health, SaaS, enterprise, or university-network relevance and a plausible check size or intro path.';
+  if (templateKey === 'grant') return 'A strong grant lead has eligibility, funding scope, deadline timing, and mission alignment with PulseCheck research, safety, wellbeing, or youth athlete support.';
+  if (templateKey === 'pitch') return 'A strong pitch lead offers capital, pilots, customers, credibility, or investor access and has a realistic application path.';
+  if (templateKey === 'contacts' || templateKey === 'investor-metrics') return 'A strong contact has a clear relationship reason, current role, reachable context, and a useful next step.';
+  return 'A strong lead has a clear fit, a credible source, an identifiable next step, and enough context to decide whether to pursue it.';
+};
+const defaultResearchBriefForList = (list: Pick<PipeList, 'templateKey' | 'name' | 'objective' | 'leadDefinition' | 'description'>) => {
+  const objective = list.objective || defaultListObjective(list.templateKey, list.name);
+  const leadDefinition = list.leadDefinition || defaultLeadDefinition(list.templateKey);
+  return [
+    `PipeList objective: ${objective}`,
+    `Ideal lead definition: ${leadDefinition}`,
+    'For each lead, research why it fits this PipeList, the most relevant department or buyer, likely first outreach path, useful source-backed notes, official source URL, and a concrete next step.',
+  ].join('\n\n');
+};
 const itemPrimaryDate = (
   list: Pick<PipeList, 'templateKey' | 'name'>,
   item: Pick<PipelineItem, 'dueDate' | 'expectedCloseDate' | 'pilotEnd'>,
@@ -1580,6 +1625,16 @@ const generatedLeadKey = (lead: Pick<ItemDraft, 'title' | 'organization' | 'sour
     ? normalizeOpportunityKey(lead.sourceUrl)
     : normalizeOpportunityKey(`${lead.title} ${lead.organization}`);
 
+const leadSearchDuplicateKeysForItem = (item: Pick<ItemDraft, 'title' | 'organization' | 'sourceUrl'>) =>
+  [
+    item.title,
+    item.organization,
+    `${item.title} ${item.organization}`,
+    item.sourceUrl,
+  ]
+    .map((value) => normalizeOpportunityKey(value || ''))
+    .filter(Boolean);
+
 const leadSearchStringFields = [
   'title',
   'organization',
@@ -1807,6 +1862,15 @@ const createList = (
     id: makeId(),
     name,
     description: template.description,
+    objective: defaultListObjective(templateKey, name),
+    leadDefinition: defaultLeadDefinition(templateKey),
+    researchBrief: defaultResearchBriefForList({
+      templateKey,
+      name,
+      description: template.description,
+      objective: defaultListObjective(templateKey, name),
+      leadDefinition: defaultLeadDefinition(templateKey),
+    }),
     accent: template.accent || accentClasses[index % accentClasses.length],
     templateKey,
     stages: template.stages,
@@ -1979,6 +2043,9 @@ const getStage = (list: PipeList, stageId: string) =>
 
 const isClosedStage = (list: PipeList, stageId: string) => getStage(list, stageId).outcome === 'won' || getStage(list, stageId).outcome === 'lost';
 const isWonStage = (list: PipeList, stageId: string) => getStage(list, stageId).outcome === 'won';
+const isLostStage = (list: PipeList, stageId: string) => getStage(list, stageId).outcome === 'lost';
+const isIdentifiedStage = (stage: StageConfig) =>
+  normalizeOpportunityKey(stage.id) === 'identified' || normalizeOpportunityKey(stage.label) === 'identified';
 
 const normalizeStageId = (stage: string, listStages: StageConfig[]) => {
   if (listStages.some((stageConfig) => stageConfig.id === stage)) return stage;
@@ -2159,6 +2226,17 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
     id: list.id || makeId(),
     name: list.name || template.defaultName,
     description: list.description || template.description,
+    objective: list.objective || defaultListObjective(templateKey, list.name || template.defaultName),
+    leadDefinition: list.leadDefinition || defaultLeadDefinition(templateKey),
+    researchBrief:
+      list.researchBrief ||
+      defaultResearchBriefForList({
+        templateKey,
+        name: list.name || template.defaultName,
+        description: list.description || template.description,
+        objective: list.objective || defaultListObjective(templateKey, list.name || template.defaultName),
+        leadDefinition: list.leadDefinition || defaultLeadDefinition(templateKey),
+      }),
     accent: list.accent || template.accent || accentClasses[index % accentClasses.length],
     templateKey,
     stages,
@@ -2420,7 +2498,7 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 };
 
 interface PipeListsLoginProps {
-  authReady: boolean;
+  canAttemptAuth: boolean;
   authMessage: { type: MessageTone; text: string } | null;
   magicEmail: string;
   sendingMagicLink: boolean;
@@ -2430,7 +2508,7 @@ interface PipeListsLoginProps {
 }
 
 const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
-  authReady,
+  canAttemptAuth,
   authMessage,
   magicEmail,
   sendingMagicLink,
@@ -2489,7 +2567,7 @@ const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
             <button
               type="button"
               onClick={onGoogleSignIn}
-              disabled={!authReady}
+              disabled={!canAttemptAuth}
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <ShieldCheck className="h-4 w-4" />
@@ -2517,7 +2595,7 @@ const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
             <button
               type="button"
               onClick={onSendMagicLink}
-              disabled={!authReady || sendingMagicLink}
+              disabled={!canAttemptAuth || sendingMagicLink}
               className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Mail className="h-4 w-4" />
@@ -2630,6 +2708,13 @@ const PipelinePage: NextPage = () => {
   const [newListName, setNewListName] = useState('');
   const [newListTemplateKey, setNewListTemplateKey] = useState<TemplateKey>('university-pilot');
   const [isDeleteListModalOpen, setIsDeleteListModalOpen] = useState(false);
+  const [isListProfileModalOpen, setIsListProfileModalOpen] = useState(false);
+  const [listProfileDraft, setListProfileDraft] = useState({
+    description: '',
+    objective: '',
+    leadDefinition: '',
+    researchBrief: '',
+  });
   const [draft, setDraft] = useState<ItemDraft>(defaultDraft(initialLists[0].stages[0].id));
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -2644,9 +2729,15 @@ const PipelinePage: NextPage = () => {
   const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isLeadGenModalOpen, setIsLeadGenModalOpen] = useState(false);
   const [leadSearchPrompt, setLeadSearchPrompt] = useState('');
+  const [leadResearchPrompt, setLeadResearchPrompt] = useState(DEFAULT_LEAD_RESEARCH_PROMPT);
   const [isGeneratingLeads, setIsGeneratingLeads] = useState(false);
   const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
   const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
+  const [openedGeneratedLeadSourceKeys, setOpenedGeneratedLeadSourceKeys] = useState<string[]>([]);
+  const [isBulkSelectionMode, setIsBulkSelectionMode] = useState(false);
+  const [selectedBulkItemIds, setSelectedBulkItemIds] = useState<string[]>([]);
+  const [bulkMoveTargetListId, setBulkMoveTargetListId] = useState('');
+  const [bulkActionMessage, setBulkActionMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [leadGenMessage, setLeadGenMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isPastedLeadListModalOpen, setIsPastedLeadListModalOpen] = useState(false);
   const [pastedLeadList, setPastedLeadList] = useState('');
@@ -2707,6 +2798,7 @@ const PipelinePage: NextPage = () => {
   const [logDraft, setLogDraft] = useState<ActivityLogDraft>(defaultLogDraft(initialLists[0].templateKey));
   const [nextStepTooltip, setNextStepTooltip] = useState<NextStepTooltip | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [authReadyTimedOut, setAuthReadyTimedOut] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [dataReady, setDataReady] = useState(false);
   const [personalStateReady, setPersonalStateReady] = useState(false);
@@ -2799,6 +2891,7 @@ const PipelinePage: NextPage = () => {
   const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
   const isContactListActive = isContactList(activeList);
   const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
+  const canAttemptAuth = authReady || authReadyTimedOut;
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -2808,9 +2901,21 @@ const PipelinePage: NextPage = () => {
   }, [toastMessage]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(simpBudgetAuth, async (currentUser) => {
-      setAuthReady(true);
-      setUser(currentUser);
+    if (authReady) {
+      setAuthReadyTimedOut(false);
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => setAuthReadyTimedOut(true), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [authReady]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      simpBudgetAuth,
+      async (currentUser) => {
+        setAuthReady(true);
+        setUser(currentUser);
 
       if (shareId || leadShareId) {
         if (!currentUser) {
@@ -2944,7 +3049,17 @@ const PipelinePage: NextPage = () => {
           text: readFirestoreError(error, 'Unable to initialize PipeLists.'),
         });
       }
-    });
+      },
+      (error) => {
+        console.error('PipeLists auth listener failed:', error);
+        setAuthReady(true);
+        setUser(null);
+        setAuthMessage({
+          type: 'error',
+          text: readAuthError(error, 'Unable to check the current PipeLists session. You can still try signing in.'),
+        });
+      },
+    );
 
     return unsubscribe;
   }, [leadShareId, shareId]);
@@ -3649,6 +3764,10 @@ const PipelinePage: NextPage = () => {
       ),
     [activeListItems],
   );
+  const activeLeadSearchEntryKeys = useMemo(
+    () => new Set(activeListItems.flatMap((item) => leadSearchDuplicateKeysForItem(item))),
+    [activeListItems],
+  );
 
   const allLogRows = useMemo(
     () =>
@@ -3721,12 +3840,40 @@ const PipelinePage: NextPage = () => {
         return matchesStage && matchesQuery;
       })
       .sort((left, right) => {
+        const stageRank = (item: PipelineItem) => {
+          if (isLostStage(activeList, item.stage)) return 2;
+          return isIdentifiedStage(getStage(activeList, item.stage)) ? 1 : 0;
+        };
+        const stageRankDifference = stageRank(left) - stageRank(right);
+        if (stageRankDifference !== 0) return stageRankDifference;
+
         const dateDifference = dueTime(left) - dueTime(right);
         if (dateDifference !== 0) return dateDifference;
 
         return left.title.localeCompare(right.title);
       });
   }, [activeList, activeListItems, isInvestorUpdateContactsList, query, stageFilter]);
+
+  const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
+  const filteredItemIdSet = useMemo(() => new Set(filteredItemIds), [filteredItemIds]);
+  const selectedVisibleItemIds = useMemo(
+    () => selectedBulkItemIds.filter((itemId) => filteredItemIdSet.has(itemId)),
+    [filteredItemIdSet, selectedBulkItemIds],
+  );
+  const selectedBulkItems = useMemo(
+    () => activeListItems.filter((item) => selectedBulkItemIds.includes(item.id)),
+    [activeListItems, selectedBulkItemIds],
+  );
+  const allVisibleItemsSelected = filteredItemIds.length > 0 && selectedVisibleItemIds.length === filteredItemIds.length;
+  const someVisibleItemsSelected = selectedVisibleItemIds.length > 0 && !allVisibleItemsSelected;
+  const bulkMoveTargetOptions = useMemo(
+    () =>
+      lists.filter((list) => {
+        if (list.id === activeList.id) return false;
+        return !sharedListIds.has(list.id) || editableListIds.has(list.id);
+      }),
+    [activeList.id, editableListIds, lists, sharedListIds],
+  );
 
   const countsByStage = useMemo(
     () =>
@@ -3811,6 +3958,12 @@ const PipelinePage: NextPage = () => {
       setDetailModalMode('details');
     }
   }, [activeList.items, selectedDetailItemId]);
+
+  useEffect(() => {
+    setSelectedBulkItemIds((currentIds) => currentIds.filter((itemId) => activeListItems.some((item) => item.id === itemId)));
+    setBulkMoveTargetListId('');
+    setBulkActionMessage(null);
+  }, [activeList.id, activeListItems]);
 
   const applySyncedEmailStatus = (args: {
     listId: string;
@@ -4880,8 +5033,10 @@ Preserve the identity of the existing record unless a source corrects it. Popula
   const openLeadGenModal = () => {
     if (!canModify) return;
     setLeadSearchPrompt('');
+    setLeadResearchPrompt(activeList.researchBrief || defaultResearchBriefForList(activeList));
     setGeneratedLeads([]);
     setAddedGeneratedLeadKeys([]);
+    setOpenedGeneratedLeadSourceKeys([]);
     setLeadGenMessage(null);
     setIsLeadGenModalOpen(true);
     setSelectedDetailItemId('');
@@ -4893,6 +5048,7 @@ Preserve the identity of the existing record unless a source corrects it. Popula
     if (isGeneratingLeads) return;
     setIsLeadGenModalOpen(false);
     setLeadSearchPrompt('');
+    setLeadResearchPrompt(activeList.researchBrief || defaultResearchBriefForList(activeList));
   };
 
   const openPastedLeadListModal = () => {
@@ -5252,13 +5408,38 @@ Rules:
 
     const searchPrompt = leadSearchPrompt.trim();
     if (!searchPrompt) {
-      setLeadGenMessage({ type: 'error', text: 'Add a prompt describing the leads you want to find.' });
+      setLeadGenMessage({ type: 'error', text: 'Add the leads or lead type you want to research.' });
+      return;
+    }
+    const researchPrompt = leadResearchPrompt.trim() || DEFAULT_LEAD_RESEARCH_PROMPT;
+
+    const pastedEntries = extractPastedLeadEntries(searchPrompt);
+    const researchablePastedEntries =
+      pastedEntries.length > 0
+        ? pastedEntries.filter((entry) => !activeLeadSearchEntryKeys.has(normalizeOpportunityKey(entry)))
+        : [];
+    const skippedExistingEntryCount = pastedEntries.length - researchablePastedEntries.length;
+    const requestedLeadCount = estimateLeadCountFromPrompt(
+      searchPrompt,
+      researchablePastedEntries.length > 0 ? researchablePastedEntries : pastedEntries,
+    );
+    const isStructuredExtraction = pastedEntries.length > 0 || requestedLeadCount > LEAD_SEARCH_DEFAULT_COUNT;
+
+    if (pastedEntries.length > 0 && researchablePastedEntries.length === 0) {
+      setGeneratedLeads([]);
+      setAddedGeneratedLeadKeys([]);
+      setOpenedGeneratedLeadSourceKeys([]);
+      setLeadGenMessage({
+        type: 'info',
+        text: `All ${formatCount(pastedEntries.length, 'entry')} are already in ${activeList.name}.`,
+      });
       return;
     }
 
     setIsGeneratingLeads(true);
     setGeneratedLeads([]);
     setAddedGeneratedLeadKeys([]);
+    setOpenedGeneratedLeadSourceKeys([]);
     setLeadGenMessage(null);
 
     try {
@@ -5268,7 +5449,6 @@ Rules:
         throw new Error('Please sign in again before generating leads.');
       }
 
-      const today = getEasternDate();
       const stageOptions = activeList.stages.map((stage) => ({
         id: stage.id,
         label: stage.label,
@@ -5280,88 +5460,74 @@ Rules:
         sourceUrl: item.sourceUrl,
         dueDate: item.dueDate,
       }));
-      const pastedEntries = extractPastedLeadEntries(searchPrompt);
-      const requestedLeadCount = estimateLeadCountFromPrompt(searchPrompt, pastedEntries);
-      const isStructuredExtraction = pastedEntries.length > 0 || requestedLeadCount > LEAD_SEARCH_DEFAULT_COUNT;
 
-      const response = await fetch(getLeadSearchBridgeUrl(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
-          'x-pulsecheck-firebase-mode': 'prod',
-        },
-        body: JSON.stringify({
-          model: PIPELISTS_LEAD_SEARCH_MODEL,
-          temperature: 0.15,
-          max_output_tokens: Math.min(14000, Math.max(5000, requestedLeadCount * 450)),
-          tools: [{ type: 'web_search' }],
-          text: {
-            format: {
-              type: 'json_schema',
-              name: 'pipelists_lead_generation',
-              strict: true,
-              schema: leadSearchResponseSchema,
+      const entryBatches = isStructuredExtraction && researchablePastedEntries.length > 0
+        ? chunkLeadSearchEntries(researchablePastedEntries)
+        : [pastedEntries];
+      const rawLeads: Partial<GeneratedLead>[] = [];
+      const batchErrors: string[] = [];
+      let rawLeadCount = 0;
+      let exactRetryUsed = false;
+      let filteredDuplicateCount = 0;
+      let filteredAggregateCount = 0;
+      let filteredInvalidCount = 0;
+
+      for (const entryBatch of entryBatches) {
+        const batchSearchPrompt = entryBatch.length > 0 ? entryBatch.join('\n') : searchPrompt;
+        try {
+          const response = await fetch('/api/pipelists/generate-leads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
             },
-          },
-          input: [
-            {
-              role: 'system',
-              content: `You are a lead-generation researcher for PipeLists, a CRM-style opportunity tracker.
+            body: JSON.stringify({
+              requestedLeadCount: entryBatch.length > 0 ? entryBatch.length : requestedLeadCount,
+              taskMode: isStructuredExtraction ? 'extract_all_named_entries' : 'discover_leads',
+              listName: activeList.name,
+              templateLabel: templateCatalog[activeList.templateKey].label,
+              templateKey: activeList.templateKey,
+              listDescription: activeList.description,
+              listObjective: activeList.objective,
+              leadDefinition: activeList.leadDefinition,
+              searchPrompt: batchSearchPrompt,
+              researchPrompt,
+              inputEntries: entryBatch,
+              stageOptions,
+              existingItems,
+            }),
+          });
 
-Current date: ${today}.
+          const payload = await readApiJson(response, 'Search leads returned an unexpected response. Refresh and try again.');
+          if (!response.ok) {
+            batchErrors.push(getApiErrorMessage(payload, 'Unable to generate leads.'));
+            continue;
+          }
 
-Research rules:
-- Use the user's prompt as the primary instruction source. Do not add assumptions, targeting criteria, deadline requirements, product details, or opportunity types that the user did not provide.
-- When the prompt contains a pasted list or article with multiple named entries, extract every distinct named entry up to requestedLeadCount. Treat this as an extraction job, not a request to return a smaller sample.
-- When inputEntries is provided, research each input entry in order and return one lead for every input entry up to requestedLeadCount.
-- For pasted structured content, preserve the supplied names and facts. Use web search to locate and verify a supporting source for each entry rather than replacing the entries with different recommendations.
-- If a supplied name is shorthand, misspelled, or informal, use the verified official name in title/organization while keeping the returned lead clearly tied to the supplied entry.
-- Use web search and return leads supported by current sources.
-- Return only leads that are relevant to the active PipeList and the user's prompt.
-- Avoid duplicates already in the user's list.
-- Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
-- Every sourceUrl must be a real, current, reachable page supporting that exact lead. Do not return a 404, dead, placeholder, search-result, directory, or generic homepage URL, and never construct a URL from a name.
-- Only include contactEmails when the source visibly provides valid email addresses. Never invent contact emails.
-- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD.
-- dueDate can be "" unless the source provides a real deadline or the user's prompt explicitly requires one.
-- Pick stage from the provided stage ids only. If unsure, use the first stage id.
-- description must concisely summarize what the entity is in 1-2 source-supported sentences. Keep fit analysis, prep angle, and recommendations in notes or rationale instead.
-- Keep notes blank unless there is deal-moving context: risk, eligibility nuance, budget/funding detail, buyer angle, procurement constraint, strategic fit, or prep detail. Do not summarize what the page is. Do not write generic "may be relevant" notes or "AI confidence".
-- sourceEvidence must briefly name the source support used, including the deadline when relevant.
-- deadlineStatus must state whether the lead has a future deadline, no fixed deadline, or an optional follow-up date.
-- Return JSON only.`,
-            },
-            {
-              role: 'user',
-              content: JSON.stringify(
-                {
-                  requestedLeadCount,
-                  taskMode: isStructuredExtraction ? 'extract_all_named_entries' : 'discover_leads',
-                  listName: activeList.name,
-                  templateLabel: templateCatalog[activeList.templateKey].label,
-                  templateKey: activeList.templateKey,
-                  searchPrompt,
-                  inputEntries: pastedEntries,
-                  stageOptions,
-                  existingItems,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        }),
-      });
-
-      const payload = await readApiJson(response, 'Search leads returned an unexpected response. Refresh and try again.');
-      if (!response.ok) {
-        throw new Error(getApiErrorMessage(payload, 'Unable to generate leads.'));
+          const batchLeads = payload && typeof payload === 'object' && Array.isArray((payload as { leads?: unknown }).leads)
+            ? (payload as { leads: Partial<GeneratedLead>[] }).leads
+            : [];
+          const filterStats =
+            payload && typeof payload === 'object' && (payload as { filtered?: unknown }).filtered && typeof (payload as { filtered?: unknown }).filtered === 'object'
+              ? ((payload as { filtered: { duplicate?: unknown; aggregate?: unknown; invalid?: unknown } }).filtered)
+              : null;
+          rawLeadCount += payload && typeof payload === 'object' && typeof (payload as { rawLeadCount?: unknown }).rawLeadCount === 'number'
+            ? (payload as { rawLeadCount: number }).rawLeadCount
+            : batchLeads.length;
+          exactRetryUsed = exactRetryUsed || Boolean(payload && typeof payload === 'object' && (payload as { retryUsed?: unknown }).retryUsed);
+          filteredDuplicateCount += typeof filterStats?.duplicate === 'number' ? filterStats.duplicate : 0;
+          filteredAggregateCount += typeof filterStats?.aggregate === 'number' ? filterStats.aggregate : 0;
+          filteredInvalidCount += typeof filterStats?.invalid === 'number' ? filterStats.invalid : 0;
+          rawLeads.push(...batchLeads);
+        } catch (batchError) {
+          batchErrors.push(batchError instanceof Error ? batchError.message : 'Unable to generate leads.');
+        }
       }
 
-      const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
-      const rawLeads = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads : [];
+      if (rawLeads.length === 0 && batchErrors.length > 0) {
+        throw new Error(batchErrors[0]);
+      }
+
       const sanitizedLeads: GeneratedLead[] = rawLeads.length > 0
         ? rawLeads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
         : [];
@@ -5383,8 +5549,23 @@ Research rules:
           };
         });
       const unverifiedCount = nextLeads.filter((lead) => !lead.sourceVerified).length;
-      const expectedStructuredCount = isStructuredExtraction ? Math.min(requestedLeadCount, pastedEntries.length || requestedLeadCount) : 0;
+      const expectedStructuredCount = isStructuredExtraction
+        ? Math.min(requestedLeadCount, researchablePastedEntries.length || requestedLeadCount)
+        : 0;
       const missingStructuredCount = expectedStructuredCount > nextLeads.length ? expectedStructuredCount - nextLeads.length : 0;
+      const hasAddableGeneratedLead = nextLeads.some((lead) => lead.sourceVerified !== false);
+      const skippedExistingMessage =
+        skippedExistingEntryCount > 0 ? ` Skipped ${formatCount(skippedExistingEntryCount, 'entry')} already in ${activeList.name}.` : '';
+      const filteredDropMessage =
+        filteredDuplicateCount > 0
+          ? ` ${formatCount(filteredDuplicateCount, 'lead')} matched something already in ${activeList.name}.`
+          : filteredAggregateCount > 0
+          ? ` ${formatCount(filteredAggregateCount, 'result')} came back as a list or directory source, so it was held back.`
+          : filteredInvalidCount > 0
+          ? ` ${formatCount(filteredInvalidCount, 'result')} was missing a usable title or source link.`
+          : exactRetryUsed && rawLeadCount === 0
+          ? ' I tried an exact-name retry, but the research service still returned no usable candidate.'
+          : '';
 
       setGeneratedLeads(nextLeads);
       setLeadGenMessage(
@@ -5393,17 +5574,23 @@ Research rules:
               type: missingStructuredCount > 0 ? 'info' : 'success',
               text:
                 missingStructuredCount > 0
-                  ? `Found ${formatCount(nextLeads.length, 'lead')} from ${formatCount(expectedStructuredCount, 'entry')}. ${formatCount(missingStructuredCount, 'entry')} still need another pass.`
+                  ? `Found ${formatCount(nextLeads.length, 'lead')} from ${formatCount(expectedStructuredCount, 'entry')} that were not already in ${activeList.name}. ${formatCount(missingStructuredCount, 'entry')} still need another pass.${skippedExistingMessage}`
+                  : batchErrors.length > 0
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Some batches still need another pass.${skippedExistingMessage}`
+                  : !hasAddableGeneratedLead
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}, but each one needs source verification before it can be added.${skippedExistingMessage}`
                   : unverifiedCount > 0
-                  ? `Found ${formatCount(nextLeads.length, 'lead')}. ${formatCount(unverifiedCount, 'lead')} need source verification before they can be added.`
-                  : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.`,
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. ${formatCount(unverifiedCount, 'lead')} need source verification before they can be added.${skippedExistingMessage}`
+                  : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.${skippedExistingMessage}`,
             }
           : {
               type: 'info',
               text:
                 sanitizedLeads.length > 0
-                  ? 'The search found leads, but their source links could not be verified. Try revising the prompt to request official or direct sources.'
-                  : 'No new leads matched this search. Try revising the prompt.',
+                  ? `The search found leads, but their source links could not be verified. Try revising the prompt to request official or direct sources.${skippedExistingMessage}`
+                  : skippedExistingEntryCount > 0
+                  ? `No new leads matched this search. Skipped ${formatCount(skippedExistingEntryCount, 'entry')} already in ${activeList.name}.`
+                  : `No new leads matched this search.${filteredDropMessage || ' Try revising the prompt.'}`,
             },
       );
     } catch (error) {
@@ -5469,6 +5656,17 @@ Research rules:
     setStageFilter('all');
     setViewMode('pipeline');
     setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
+  };
+
+  const handleOpenGeneratedLeadSource = (lead: GeneratedLead) => {
+    const key = generatedLeadKey(lead);
+    setOpenedGeneratedLeadSourceKeys((currentKeys) =>
+      currentKeys.includes(key) ? currentKeys : [...currentKeys, key],
+    );
+    setLeadGenMessage({
+      type: 'info',
+      text: `Source opened for ${lead.title}. Review the page, then add the lead when it looks right.`,
+    });
   };
 
   const handleAddAnalyzedPastedLead = (lead: GeneratedLead) => {
@@ -6436,6 +6634,51 @@ Research rules:
     resetEditor();
   };
 
+  const openListProfileModal = () => {
+    if (!canModify) return;
+    setListProfileDraft({
+      description: activeList.description || templateCatalog[activeList.templateKey].description,
+      objective: activeList.objective || defaultListObjective(activeList.templateKey, activeList.name),
+      leadDefinition: activeList.leadDefinition || defaultLeadDefinition(activeList.templateKey),
+      researchBrief: activeList.researchBrief || defaultResearchBriefForList(activeList),
+    });
+    setIsListProfileModalOpen(true);
+  };
+
+  const handleSaveListProfile = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const description = listProfileDraft.description.trim() || templateCatalog[activeList.templateKey].description;
+    const objective = listProfileDraft.objective.trim() || defaultListObjective(activeList.templateKey, activeList.name);
+    const leadDefinition = listProfileDraft.leadDefinition.trim() || defaultLeadDefinition(activeList.templateKey);
+    const researchBrief =
+      listProfileDraft.researchBrief.trim() ||
+      defaultResearchBriefForList({
+        ...activeList,
+        description,
+        objective,
+        leadDefinition,
+      });
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              description,
+              objective,
+              leadDefinition,
+              researchBrief,
+            }
+          : list,
+      ),
+    );
+    setLeadResearchPrompt(researchBrief);
+    setIsListProfileModalOpen(false);
+    setToastMessage({ type: 'success', text: 'PipeList profile saved.' });
+  };
+
   const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify) return;
@@ -6571,6 +6814,39 @@ Research rules:
     }
   };
 
+  const toggleBulkSelectionMode = () => {
+    setIsBulkSelectionMode((current) => {
+      const next = !current;
+      if (!next) {
+        setSelectedBulkItemIds([]);
+        setBulkMoveTargetListId('');
+        setBulkActionMessage(null);
+      }
+      return next;
+    });
+  };
+
+  const toggleBulkItemSelection = (itemId: string) => {
+    setSelectedBulkItemIds((currentIds) =>
+      currentIds.includes(itemId)
+        ? currentIds.filter((currentId) => currentId !== itemId)
+        : [...currentIds, itemId],
+    );
+  };
+
+  const toggleSelectVisibleItems = () => {
+    if (filteredItemIds.length === 0) return;
+    setSelectedBulkItemIds((currentIds) => {
+      const currentSet = new Set(currentIds);
+      if (allVisibleItemsSelected) {
+        filteredItemIds.forEach((itemId) => currentSet.delete(itemId));
+      } else {
+        filteredItemIds.forEach((itemId) => currentSet.add(itemId));
+      }
+      return Array.from(currentSet);
+    });
+  };
+
   const handleRestoreDeletedItem = (listId: string, itemId: string) => {
     if (!canModify) return;
     const now = new Date().toISOString();
@@ -6672,6 +6948,119 @@ Research rules:
       type: 'success',
       text: `Moved ${movedItem.title} from ${sourceList.name} to ${targetList.name}.`,
     });
+  };
+
+  const handleBulkDeleteSelected = () => {
+    if (!canModify || selectedBulkItems.length === 0) return;
+    const confirmed = window.confirm(`Delete ${formatCount(selectedBulkItems.length, listItemNoun(activeList))} from ${activeList.name}?`);
+    if (!confirmed) return;
+
+    const selectedIds = new Set(selectedBulkItems.map((item) => item.id));
+    const now = new Date();
+    const deletedAt = now.toISOString();
+    const restorableUntil = addDays(now, SOFT_DELETE_RESTORE_DAYS).toISOString();
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) => {
+                if (!selectedIds.has(item.id) || isItemDeleted(item)) return item;
+                const deletionLog = createSystemLog(
+                  item,
+                  'item-deleted',
+                  `Deleted ${item.title} from ${list.name}.`,
+                  restorableUntil,
+                );
+                return {
+                  ...item,
+                  deletedAt,
+                  deletedByLogId: deletionLog.id,
+                  restorableUntil,
+                  weeklyLogs: [deletionLog, ...item.weeklyLogs],
+                  updatedAt: deletedAt,
+                };
+              }),
+            }
+          : list,
+      ),
+    );
+
+    setSelectedBulkItemIds([]);
+    setBulkActionMessage({
+      type: 'success',
+      text: `Deleted ${formatCount(selectedBulkItems.length, listItemNoun(activeList))}.`,
+    });
+    if (selectedDetailItemId && selectedIds.has(selectedDetailItemId)) {
+      setSelectedDetailItemId('');
+      setDetailModalMode('details');
+    }
+  };
+
+  const handleBulkMoveSelected = () => {
+    if (!canModify || selectedBulkItems.length === 0 || !bulkMoveTargetListId || bulkMoveTargetListId === activeList.id) return;
+    const cannotEditSource = sharedListIds.has(activeList.id) && !editableListIds.has(activeList.id);
+    const cannotEditTarget = sharedListIds.has(bulkMoveTargetListId) && !editableListIds.has(bulkMoveTargetListId);
+    if (cannotEditSource || cannotEditTarget) {
+      setBulkActionMessage({ type: 'error', text: 'You need edit access on both PipeLists to move selected items.' });
+      return;
+    }
+
+    const sourceList = lists.find((list) => list.id === activeList.id);
+    const targetList = lists.find((list) => list.id === bulkMoveTargetListId);
+    if (!sourceList || !targetList) {
+      setBulkActionMessage({ type: 'error', text: 'Choose a PipeList to move selected items into.' });
+      return;
+    }
+
+    const selectedIds = new Set(selectedBulkItems.map((item) => item.id));
+    const now = new Date().toISOString();
+    const movedItems = selectedBulkItems.map((item) => ({
+      ...item,
+      stage: normalizeStageId(item.stage, targetList.stages),
+      updatedAt: now,
+      weeklyLogs: [
+        createSystemLog(
+          item,
+          'item-moved',
+          `Moved ${item.title} from ${sourceList.name} to ${targetList.name}.`,
+        ),
+        ...item.weeklyLogs,
+      ],
+    }));
+
+    setLists((currentLists) =>
+      currentLists.map((list) => {
+        if (list.id === sourceList.id) {
+          return {
+            ...list,
+            items: list.items.filter((item) => !selectedIds.has(item.id)),
+          };
+        }
+
+        if (list.id === targetList.id) {
+          const withoutExistingCopies = list.items.filter((item) => !selectedIds.has(item.id));
+          return {
+            ...list,
+            items: [...movedItems, ...withoutExistingCopies],
+          };
+        }
+
+        return list;
+      }),
+    );
+
+    setSelectedBulkItemIds([]);
+    setBulkMoveTargetListId('');
+    setBulkActionMessage({
+      type: 'success',
+      text: `Moved ${formatCount(movedItems.length, listItemNoun(activeList))} to ${targetList.name}.`,
+    });
+    if (selectedDetailItemId && selectedIds.has(selectedDetailItemId)) {
+      setSelectedDetailItemId('');
+      setDetailModalMode('details');
+    }
   };
 
   const handleDeleteList = () => {
@@ -7970,7 +8359,7 @@ Research rules:
           pageOgImage="/pil-og.png"
         />
         <PipeListsLogin
-          authReady={authReady}
+          canAttemptAuth={canAttemptAuth}
           authMessage={authMessage}
           magicEmail={magicEmail}
           sendingMagicLink={sendingMagicLink}
@@ -8356,17 +8745,29 @@ Research rules:
                 )}
               </div>
 
-              {canManageActiveList && (
-                <button
-                  type="button"
-                  onClick={() => setIsDeleteListModalOpen(true)}
-                  disabled={lists.length <= 1}
-                  title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete List
-                </button>
+              {canModify && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openListProfileModal}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
+                  >
+                    <Target className="h-4 w-4" />
+                    PipeList Profile
+                  </button>
+                  {canManageActiveList && (
+                    <button
+                      type="button"
+                      onClick={() => setIsDeleteListModalOpen(true)}
+                      disabled={lists.length <= 1}
+                      title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete List
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -8750,6 +9151,20 @@ Research rules:
                             {isEnrichingVcSources ? 'Analyzing...' : 'Analyze sources'}
                           </button>
                         )}
+                        {filteredItems.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={toggleBulkSelectionMode}
+                            className={`inline-flex h-11 items-center gap-2 rounded-md border px-4 text-sm font-semibold transition ${
+                              isBulkSelectionMode
+                                ? 'border-stone-900 bg-stone-900 text-white hover:bg-stone-700'
+                                : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:text-stone-950'
+                            }`}
+                          >
+                            {isBulkSelectionMode ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                            {isBulkSelectionMode ? 'Done' : 'Select'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={openLeadGenModal}
@@ -8783,6 +9198,59 @@ Research rules:
 
                 {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
                 {activeList.templateKey === 'vc' && <MessageBanner message={vcSourceEnrichmentMessage} />}
+                <MessageBanner message={bulkActionMessage} />
+
+                {isBulkSelectionMode && (
+                  <div className="mb-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleSelectVisibleItems}
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                      >
+                        {allVisibleItemsSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                        {allVisibleItemsSelected ? 'Unselect visible' : someVisibleItemsSelected ? 'Select remaining' : 'Select visible'}
+                      </button>
+                      <span className="text-sm font-medium text-stone-500">
+                        {formatCount(selectedBulkItems.length, listItemNoun(activeList))} selected
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={bulkMoveTargetListId}
+                        onChange={(event) => setBulkMoveTargetListId(event.target.value)}
+                        className="h-10 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-semibold text-stone-700 outline-none transition focus:border-stone-400"
+                        aria-label="Move selected items to PipeList"
+                      >
+                        <option value="">Move selected to...</option>
+                        {bulkMoveTargetOptions.map((list) => (
+                          <option key={list.id} value={list.id}>
+                            {list.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleBulkMoveSelected}
+                        disabled={selectedBulkItems.length === 0 || !bulkMoveTargetListId}
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Layers className="h-4 w-4" />
+                        Move
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteSelected}
+                        disabled={selectedBulkItems.length === 0}
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {!isInvestorUpdateContactsList && (
                   <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
@@ -8845,25 +9313,36 @@ Research rules:
                         const hasItemValue = Boolean(tableValueText);
                         const dueDate = itemPrimaryDate(activeList, item);
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
+                        const isSelectedForBulkAction = selectedBulkItemIds.includes(item.id);
 
                         return (
                           <article
                             key={item.id}
                             role="button"
                             tabIndex={0}
-                            aria-label={`Open details for ${item.title}`}
+                            aria-label={isBulkSelectionMode ? `Select ${item.title}` : `Open details for ${item.title}`}
                             onClick={() => {
-                              setSelectedDetailItemId(item.id);
-                              setDetailModalMode('details');
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
+                              if (isBulkSelectionMode) {
+                                toggleBulkItemSelection(item.id);
+                              } else {
                                 setSelectedDetailItemId(item.id);
                                 setDetailModalMode('details');
                               }
                             }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                if (isBulkSelectionMode) {
+                                  toggleBulkItemSelection(item.id);
+                                } else {
+                                  setSelectedDetailItemId(item.id);
+                                  setDetailModalMode('details');
+                                }
+                              }
+                            }}
                             className={`grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:items-center lg:gap-4 ${
+                              isSelectedForBulkAction ? 'bg-stone-50 ring-1 ring-inset ring-stone-300' : ''
+                            } ${
                               isInvestorUpdateContactsList
                                 ? 'lg:grid-cols-[280px_240px_160px_140px_280px_104px]'
                                 : isContactListActive
@@ -8872,6 +9351,24 @@ Research rules:
                             }`}
                           >
                             <div className="flex min-w-0 items-center gap-3">
+                              {isBulkSelectionMode && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleBulkItemSelection(item.id);
+                                  }}
+                                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${
+                                    isSelectedForBulkAction
+                                      ? 'border-stone-900 bg-stone-900 text-white'
+                                      : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:text-stone-900'
+                                  }`}
+                                  title={isSelectedForBulkAction ? 'Unselect item' : 'Select item'}
+                                  aria-pressed={isSelectedForBulkAction}
+                                >
+                                  {isSelectedForBulkAction ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                                </button>
+                              )}
                               {item.imageUrl && (
                                 <img
                                   src={item.imageUrl}
@@ -9141,7 +9638,7 @@ Research rules:
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
-                disabled={!authReady}
+                disabled={!canAttemptAuth}
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ShieldCheck className="h-4 w-4" />
@@ -9169,7 +9666,7 @@ Research rules:
               <button
                 type="button"
                 onClick={sendMagicLink}
-                disabled={!authReady || sendingMagicLink}
+                disabled={!canAttemptAuth || sendingMagicLink}
                 className="inline-flex h-11 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
@@ -9816,6 +10313,104 @@ Research rules:
         </div>
       )}
 
+      {isListProfileModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsListProfileModalOpen(false);
+          }}
+        >
+          <form
+            onSubmit={handleSaveListProfile}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-3xl overflow-y-auto rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <Target className="h-4 w-4" />
+                </div>
+                <h3 className="text-xl font-bold text-stone-950">{activeList.name} Profile</h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Define what this list is trying to do. Find leads uses this profile to prefill the research brief.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsListProfileModalOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block" htmlFor="pipe-list-profile-description">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Short description</span>
+                <textarea
+                  id="pipe-list-profile-description"
+                  value={listProfileDraft.description}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, description: event.target.value }))}
+                  className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={templateCatalog[activeList.templateKey].description}
+                />
+              </label>
+
+              <label className="block" htmlFor="pipe-list-profile-objective">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Objective</span>
+                <textarea
+                  id="pipe-list-profile-objective"
+                  value={listProfileDraft.objective}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, objective: event.target.value }))}
+                  className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={defaultListObjective(activeList.templateKey, activeList.name)}
+                />
+              </label>
+
+              <label className="block" htmlFor="pipe-list-profile-lead-definition">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Ideal lead definition</span>
+                <textarea
+                  id="pipe-list-profile-lead-definition"
+                  value={listProfileDraft.leadDefinition}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, leadDefinition: event.target.value }))}
+                  className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={defaultLeadDefinition(activeList.templateKey)}
+                />
+              </label>
+
+              <label className="block" htmlFor="pipe-list-profile-research-brief">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Default research brief</span>
+                <textarea
+                  id="pipe-list-profile-research-brief"
+                  value={listProfileDraft.researchBrief}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, researchBrief: event.target.value }))}
+                  className="min-h-36 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={defaultResearchBriefForList(activeList)}
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2 border-t border-stone-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsListProfileModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Save Profile
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {isDeleteListModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
@@ -10118,7 +10713,7 @@ Research rules:
               <form onSubmit={handleGenerateLeads} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
                 <label className="block" htmlFor="pipe-lead-search-prompt">
                   <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
-                    <span>Prompt</span>
+                    <span>Lead targets</span>
                     <span
                       className={
                         leadSearchPrompt.length > LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH
@@ -10136,13 +10731,25 @@ Research rules:
                     autoFocus
                     value={leadSearchPrompt}
                     onChange={(event) => setLeadSearchPrompt(event.target.value)}
-                    className="min-h-52 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    className="min-h-44 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Paste a list, one per line, or describe the type of leads to find."
                   />
                   {leadSearchPrompt.length > LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH && (
                     <span className="mt-2 block rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium normal-case text-amber-800">
                       This prompt is over the recommended 20,000-character limit. You can still search, but results may be incomplete or unpredictable.
                     </span>
                   )}
+                </label>
+
+                <label className="mt-4 block" htmlFor="pipe-lead-research-prompt">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Research brief</span>
+                  <textarea
+                    id="pipe-lead-research-prompt"
+                    value={leadResearchPrompt}
+                    onChange={(event) => setLeadResearchPrompt(event.target.value)}
+                    className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={DEFAULT_LEAD_RESEARCH_PROMPT}
+                  />
                 </label>
 
                 <div className="mt-4">
@@ -10165,7 +10772,9 @@ Research rules:
                         const alreadyAdded = addedGeneratedLeadKeys.includes(key);
                         const alreadyInList = activeLeadKeys.has(key);
                         const sourceNeedsVerification = lead.sourceVerified === false;
-                        const addDisabled = alreadyAdded || alreadyInList || sourceNeedsVerification;
+                        const sourceOpened = openedGeneratedLeadSourceKeys.includes(key);
+                        const sourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || '';
+                        const addDisabled = alreadyAdded || alreadyInList;
 
                         return (
                           <article
@@ -10188,22 +10797,47 @@ Research rules:
                                     {stage.label}
                                   </span>
                                   {sourceNeedsVerification && (
-                                    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">
-                                      Source needs verification
+                                    <span
+                                      className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${
+                                        sourceOpened
+                                          ? 'border-sky-200 bg-sky-50 text-sky-700'
+                                          : 'border-amber-200 bg-amber-50 text-amber-700'
+                                      }`}
+                                    >
+                                      {sourceOpened ? 'Source opened for review' : 'Source needs verification'}
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleAddGeneratedLead(lead)}
-                                disabled={addDisabled}
-                                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
-                              >
-                                {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                                {alreadyAdded ? 'Added' : alreadyInList ? 'In list' : sourceNeedsVerification ? 'Verify source' : 'Add'}
-                              </button>
+                              {sourceNeedsVerification && !sourceOpened && !alreadyAdded && !alreadyInList && sourceUrl ? (
+                                <a
+                                  href={sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => handleOpenGeneratedLeadSource(lead)}
+                                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                  Verify source
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddGeneratedLead(lead)}
+                                  disabled={addDisabled || (sourceNeedsVerification && !sourceOpened)}
+                                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                                >
+                                  {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                  {alreadyAdded
+                                    ? 'Added'
+                                    : alreadyInList
+                                      ? 'In list'
+                                      : sourceNeedsVerification && !sourceOpened
+                                        ? 'Source unavailable'
+                                        : 'Add lead'}
+                                </button>
+                              )}
                             </div>
 
                             <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
@@ -10247,7 +10881,9 @@ Research rules:
                                 </a>
                               )}
                               {sourceNeedsVerification && lead.sourceVerificationReason && (
-                                <span className="text-amber-700">{lead.sourceVerificationReason}</span>
+                                <span className={sourceOpened ? 'text-stone-500' : 'text-amber-700'}>
+                                  {lead.sourceVerificationReason}
+                                </span>
                               )}
                             </div>
                           </article>

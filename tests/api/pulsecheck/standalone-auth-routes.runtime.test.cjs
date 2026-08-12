@@ -51,3 +51,33 @@ test('passive public pages render while Firebase auth initializes', () => {
     'the bypass comment should preserve the protected-route and explicit-auth intent',
   );
 });
+
+test('PipeLists login controls recover when standalone auth readiness stalls', () => {
+  const pipeLists = read('src/pages/PipeLists.tsx');
+
+  assert.match(
+    pipeLists,
+    /const \[authReadyTimedOut, setAuthReadyTimedOut\] = useState\(false\)/,
+    'PipeLists should track a stalled standalone auth readiness callback',
+  );
+  assert.match(
+    pipeLists,
+    /setTimeout\(\(\) => setAuthReadyTimedOut\(true\), 2500\)/,
+    'PipeLists should unlock sign-in attempts after a short auth readiness delay',
+  );
+  assert.match(
+    pipeLists,
+    /const canAttemptAuth = authReady \|\| authReadyTimedOut/,
+    'login buttons should use a recoverable auth attempt state',
+  );
+  assert.doesNotMatch(
+    pipeLists,
+    /disabled=\{!authReady\}/,
+    'Google sign-in buttons should not stay disabled solely because authReady is false',
+  );
+  assert.doesNotMatch(
+    pipeLists,
+    /disabled=\{!authReady \|\| sendingMagicLink\}/,
+    'magic link buttons should not stay disabled solely because authReady is false',
+  );
+});
