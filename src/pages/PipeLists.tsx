@@ -9306,7 +9306,7 @@ Rules:
 
                   {filteredItems.length > 0 ? (
                     <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1180px]' : isContactListActive ? 'lg:min-w-[1320px]' : 'lg:min-w-[1280px]'}`}>
-                      {filteredItems.map((item) => {
+                      {filteredItems.map((item, itemIndex) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
                         const tableValueText = isContactListActive ? item.contactEmails[0] || '' : itemValueText;
@@ -9314,6 +9314,7 @@ Rules:
                         const dueDate = itemPrimaryDate(activeList, item);
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
                         const isSelectedForBulkAction = selectedBulkItemIds.includes(item.id);
+                        const visibleRowNumber = itemIndex + 1;
 
                         return (
                           <article
@@ -9351,6 +9352,9 @@ Rules:
                             }`}
                           >
                             <div className="flex min-w-0 items-center gap-3">
+                              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold text-stone-500">
+                                {visibleRowNumber}
+                              </span>
                               {isBulkSelectionMode && (
                                 <button
                                   type="button"

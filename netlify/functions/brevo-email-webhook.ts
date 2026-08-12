@@ -1,5 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import { admin } from './config/firebase';
+import { getSimpBudgetFirestore } from './utils/getSimpBudgetServiceAccount';
 
 const {
   MACRA_MIXPANEL_EVENTS,
@@ -434,7 +435,8 @@ const updatePipeListsContactEmailStatus = async (args: {
   const targetEmail = String(args.email || '').trim().toLowerCase();
   if (!ownerUid || !listId || (!targetItemIds.size && !targetEmail)) return;
 
-  const stateRef = db
+  const simpBudgetDb = await getSimpBudgetFirestore();
+  const stateRef = simpBudgetDb
     .collection(SIMPBUDGET_USERS_COLLECTION)
     .doc(ownerUid)
     .collection(PIPELISTS_SUBCOLLECTION)

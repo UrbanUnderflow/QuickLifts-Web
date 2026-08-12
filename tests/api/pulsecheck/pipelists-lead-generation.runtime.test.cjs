@@ -198,6 +198,26 @@ test('PipeLists visible rows sort progressed stages before Identified and lost s
   );
 });
 
+test('PipeLists visible rows show their current sorted row number', () => {
+  const pipeLists = read('src/pages/PipeLists.tsx');
+
+  assert.match(
+    pipeLists,
+    /filteredItems\.map\(\(item, itemIndex\) =>/,
+    'PipeLists should have access to the current visible row index',
+  );
+  assert.match(
+    pipeLists,
+    /const visibleRowNumber = itemIndex \+ 1/,
+    'PipeLists should convert the zero-based row index into a user-facing number',
+  );
+  assert.match(
+    pipeLists,
+    /\{visibleRowNumber\}/,
+    'PipeLists should render the row number in each visible row',
+  );
+});
+
 test('PipeLists opens an unverified source before allowing the lead to be added', () => {
   const pipeLists = read('src/pages/PipeLists.tsx');
 

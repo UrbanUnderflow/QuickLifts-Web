@@ -1,11 +1,14 @@
 import type { Handler } from '@netlify/functions';
+import type { firestore } from 'firebase-admin';
 
 import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
-import { getFirestore, initAdmin } from './utils/getServiceAccount';
+import { initAdmin } from './utils/getServiceAccount';
+import { getSimpBudgetAuth, getSimpBudgetFirestore } from './utils/getSimpBudgetServiceAccount';
 
 const APP_URL = 'https://fitwithpulse.ai/PipeLists';
 const SENDER = { email: 'info@fitwithpulse.ai', name: 'Pulse PipeLists' };
-const REMINDER_DAYS = new Set([7, 2, 1]);
+const UPCOMING_REMINDER_DAYS = new Set([7, 2, 1]);
+const MAX_OVERDUE_REMINDER_DAYS = 30;
 const DATE_FIELDS = ['expectedCloseDate', 'dueDate', 'pilotEnd'] as const;
 const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 
@@ -67,16 +70,32 @@ function validEmail(value: unknown): value is string {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function reminderLabel(daysUntil: number): string {
-  if (daysUntil === 7) return 'in 1 week';
-  if (daysUntil === 2) return 'in 2 days';
-  return 'tomorrow';
+function shouldSendDeadlineReminder(daysUntil: number): boolean {
+  return UPCOMING_REMINDER_DAYS.has(daysUntil) || (daysUntil <= 0 && daysUntil >= -MAX_OVERDUE_REMINDER_DAYS);
+}
+
+function reminderStatusText(daysUntil: number): string {
+  if (daysUntil === 7) return 'due in 1 week';
+  if (daysUntil === 2) return 'due in 2 days';
+  if (daysUntil === 1) return 'due tomorrow';
+  if (daysUntil === 0) return 'due today';
+  const daysOverdue = Math.abs(daysUntil);
+  return `overdue by ${daysOverdue} ${daysOverdue === 1 ? 'day' : 'days'}`;
 }
 
 function reminderSubject(daysUntil: number, itemName: string): string {
   if (daysUntil === 7) return `Due in 1 week: ${itemName}`;
   if (daysUntil === 2) return `Due in 2 days: ${itemName}`;
-  return `Due tomorrow: ${itemName}`;
+  if (daysUntil === 1) return `Due tomorrow: ${itemName}`;
+  if (daysUntil === 0) return `Due today: ${itemName}`;
+  const daysOverdue = Math.abs(daysUntil);
+  return `Overdue by ${daysOverdue} ${daysOverdue === 1 ? 'day' : 'days'}: ${itemName}`;
+}
+
+function reminderHeading(daysUntil: number): string {
+  if (daysUntil < 0) return 'A PipeLists deadline is overdue';
+  if (daysUntil === 0) return 'A PipeLists deadline is due today';
+  return 'A PipeLists deadline is approaching';
 }
 
 function logTimestampMs(log: Record<string, any>): number {
@@ -140,8 +159,8 @@ function buildEmail(args: {
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;color:#1c1917;line-height:1.55;max-width:640px;margin:0 auto;padding:28px;">
       <p style="margin:0 0 18px;">${greeting}</p>
-      <h1 style="font-size:24px;line-height:1.25;margin:0 0 14px;">A PipeLists deadline is approaching</h1>
-      <p style="margin:0 0 22px;"><strong>${escapeHtml(args.itemName)}</strong> in <strong>${escapeHtml(args.listName)}</strong> is due ${reminderLabel(args.daysUntil)}.</p>
+      <h1 style="font-size:24px;line-height:1.25;margin:0 0 14px;">${escapeHtml(reminderHeading(args.daysUntil))}</h1>
+      <p style="margin:0 0 22px;"><strong>${escapeHtml(args.itemName)}</strong> in <strong>${escapeHtml(args.listName)}</strong> is ${reminderStatusText(args.daysUntil)}.</p>
       <p style="margin:0 0 12px;"><strong>Deadline:</strong> ${escapeHtml(formatDate(args.deadline))}</p>
       ${nextStep}
       <a href="${APP_URL}" style="display:inline-block;background:#1c1917;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-weight:700;">Open PipeLists</a>
@@ -196,8 +215,11 @@ function buildNextActionEmail(args: {
   `;
 }
 
-async function getOwnerIdentity(ownerUid: string, stateData: Record<string, any>): Promise<{ email?: string; name?: string }> {
-  const db = await getFirestore();
+async function getOwnerIdentity(
+  db: firestore.Firestore,
+  ownerUid: string,
+  stateData: Record<string, any>,
+): Promise<{ email?: string; name?: string }> {
   const ownerSnapshot = await db.collection('simpbudget-users').doc(ownerUid).get();
   const ownerData = ownerSnapshot.data() || {};
   const emailCandidates = [
@@ -211,7 +233,8 @@ async function getOwnerIdentity(ownerUid: string, stateData: Record<string, any>
   if (email) return { email, name };
 
   try {
-    const user = await initAdmin().auth().getUser(ownerUid);
+    const auth = await getSimpBudgetAuth();
+    const user = await auth.getUser(ownerUid);
     return { email: user.email?.trim().toLowerCase(), name: user.displayName || name };
   } catch {
     return { name };
@@ -219,12 +242,12 @@ async function getOwnerIdentity(ownerUid: string, stateData: Record<string, any>
 }
 
 async function createOrUpdateLeadShare(args: {
+  db: firestore.Firestore;
   ownerUid: string;
   ownerEmail?: string;
   list: Record<string, any>;
   item: Record<string, any>;
 }): Promise<string> {
-  const db = await getFirestore();
   const itemId = String(args.item.id || '').trim();
   if (!itemId) return APP_URL;
 
@@ -239,7 +262,7 @@ async function createOrUpdateLeadShare(args: {
     items: [args.item],
   };
 
-  await db.collection(PIPELEAD_SHARES_COLLECTION).doc(shareId).set(
+  await args.db.collection(PIPELEAD_SHARES_COLLECTION).doc(shareId).set(
     {
       id: shareId,
       ownerUid: args.ownerUid,
@@ -275,7 +298,7 @@ function latestOpenActionLogForToday(item: Record<string, any>, today: string): 
 }
 
 export const handler: Handler = async () => {
-  const db = await getFirestore();
+  const db = await getSimpBudgetFirestore();
   const today = dateKeyInEasternTime(new Date());
   const stats = { states: 0, reminders: 0, actionReminders: 0, sent: 0, skipped: 0, failed: 0 };
 
@@ -289,7 +312,7 @@ export const handler: Handler = async () => {
 
       stats.states += 1;
       const stateData = stateDocument.data() || {};
-      const owner = await getOwnerIdentity(ownerUid, stateData);
+      const owner = await getOwnerIdentity(db, ownerUid, stateData);
       const lists = Array.isArray(stateData.lists) ? stateData.lists : [];
 
       for (const list of lists) {
@@ -320,6 +343,7 @@ export const handler: Handler = async () => {
             stats.actionReminders += 1;
             try {
               const leadUrl = await createOrUpdateLeadShare({
+                db,
                 ownerUid,
                 ownerEmail: owner.email,
                 list,
@@ -383,7 +407,7 @@ export const handler: Handler = async () => {
           if (!deadline) continue;
 
           const daysUntil = dayNumber(deadline) - dayNumber(today);
-          if (!REMINDER_DAYS.has(daysUntil)) continue;
+          if (!shouldSendDeadlineReminder(daysUntil)) continue;
 
           stats.reminders += 1;
 
