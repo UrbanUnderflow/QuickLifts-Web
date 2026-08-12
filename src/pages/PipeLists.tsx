@@ -281,6 +281,8 @@ type PipelineItem = {
   priority: PipelinePriority;
   amount: string;
   dueDate: string;
+  deadlineSource: string;
+  deadlineEmailNotificationsEnabled: boolean;
   nextStep: string;
   notes: string;
   sourceUrl: string;
@@ -936,6 +938,18 @@ const itemPrimaryDate = (
   list: Pick<PipeList, 'templateKey' | 'name'>,
   item: Pick<PipelineItem, 'dueDate' | 'expectedCloseDate' | 'pilotEnd'>,
 ) => (isContactList(list) ? item.dueDate : item.expectedCloseDate || item.dueDate || item.pilotEnd);
+const reminderDateFields = ['expectedCloseDate', 'dueDate', 'pilotEnd'] as const;
+const hasReminderDate = (item: Pick<PipelineItem, (typeof reminderDateFields)[number]>) =>
+  reminderDateFields.some((field) => item[field]?.trim());
+const normalizeDeadlineSourceForSave = (
+  item: Pick<PipelineItem, 'deadlineSource' | (typeof reminderDateFields)[number]>,
+  currentItem?: Pick<PipelineItem, 'deadlineSource'>,
+) => {
+  if (!hasReminderDate(item)) return '';
+  if (currentItem?.deadlineSource === 'explicit' && item.deadlineSource === 'explicit') return 'explicit';
+  if (item.deadlineSource === 'explicit') return 'explicit';
+  return 'manual';
+};
 
 const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
@@ -1216,6 +1230,8 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   priority: 'medium',
   amount: '',
   dueDate: '',
+  deadlineSource: '',
+  deadlineEmailNotificationsEnabled: false,
   nextStep: '',
   notes: '',
   sourceUrl: '',
@@ -2148,6 +2164,8 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     priority: item.priority || 'medium',
     amount: item.amount || '',
     dueDate: item.dueDate || '',
+    deadlineSource: item.deadlineSource || '',
+    deadlineEmailNotificationsEnabled: item.deadlineEmailNotificationsEnabled === true,
     nextStep: item.nextStep || '',
     notes: cleanDealNotes(item.notes),
     sourceUrl: item.sourceUrl || '',
@@ -5206,6 +5224,8 @@ Preserve the identity of the existing record unless a source corrects it. Popula
 
     const title = normalizeResearchText(lead.title) || normalizeResearchText(lead.organization) || 'Untitled opportunity';
     const organization = normalizeResearchText(lead.organization);
+    const deadlineSource = normalizeResearchText(lead.deadlineSource).toLowerCase() === 'explicit' ? 'explicit' : 'none';
+    const dueDate = deadlineSource === 'explicit' ? normalizeResearchText(lead.dueDate) : '';
 
     return {
       ...defaultDraft(stage),
@@ -5219,19 +5239,20 @@ Preserve the identity of the existing record unless a source corrects it. Popula
       stage,
       priority,
       amount: normalizeResearchText(lead.amount),
-      dueDate: normalizeResearchText(lead.dueDate),
+      dueDate,
+      deadlineSource,
       nextStep: normalizeResearchText(lead.nextStep),
       notes: cleanDealNotes(normalizeResearchText(lead.notes)),
       sourceUrl: normalizeLeadInputUrl(normalizeResearchText(lead.sourceUrl))?.toString() || '',
       segment: normalizeResearchText(lead.segment),
       decisionMaker: normalizeResearchText(lead.decisionMaker),
       acv: normalizeResearchText(lead.acv),
-      expectedCloseDate: normalizeResearchText(lead.expectedCloseDate),
+      expectedCloseDate: '',
       contractTerm: normalizeResearchText(lead.contractTerm),
       pilotScope: normalizeResearchText(lead.pilotScope),
       athleteCount: normalizeResearchText(lead.athleteCount),
-      pilotStart: normalizeResearchText(lead.pilotStart),
-      pilotEnd: normalizeResearchText(lead.pilotEnd),
+      pilotStart: '',
+      pilotEnd: '',
       conversionLikelihood: normalizeResearchText(lead.conversionLikelihood),
       grossMargin: normalizeResearchText(lead.grossMargin),
       partnerCost: normalizeResearchText(lead.partnerCost),
@@ -6694,11 +6715,16 @@ Rules:
 
     const normalizedContactEmails = Array.from(new Set([...draft.contactEmails, ...pendingContactTokens]));
     const inferredContactName = normalizedContactEmails.map(contactNameFromEmail).find(Boolean) || '';
-    const draftToSave = {
+    const currentEditingItem = editingItemId ? activeList.items.find((item) => item.id === editingItemId) : undefined;
+    const baseDraftToSave = {
       ...draft,
       title: isContactListActive && !draft.title.trim() && inferredContactName ? inferredContactName : draft.title,
       contactEmails: normalizedContactEmails,
       notes: cleanDealNotes(draft.notes),
+    };
+    const draftToSave = {
+      ...baseDraftToSave,
+      deadlineSource: normalizeDeadlineSourceForSave(baseDraftToSave, currentEditingItem),
     };
     if (!draftToSave.title.trim() && !draftToSave.organization.trim()) return;
     setContactEmailInput('');
@@ -8097,6 +8123,21 @@ Rules:
             onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
             className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
           />
+        </label>
+
+        <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
+          <input
+            type="checkbox"
+            checked={draft.deadlineEmailNotificationsEnabled}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                deadlineEmailNotificationsEnabled: event.target.checked,
+              }))
+            }
+            className="h-4 w-4 rounded border-stone-300 text-stone-950 focus:ring-stone-400"
+          />
+          <span>Email deadline notifications</span>
         </label>
       </div>
 
@@ -12336,6 +12377,10 @@ Rules:
                         { label: 'Relationship Context', value: selectedDetailItem.decisionMaker },
                         { label: isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', value: selectedDetailItem.expectedCloseDate },
                         { label: 'Follow-Up Date', value: selectedDetailItem.dueDate },
+                        {
+                          label: 'Email Notifications',
+                          value: selectedDetailItem.deadlineEmailNotificationsEnabled ? 'On' : 'Off',
+                        },
                         { label: 'First Contacted', value: selectedDetailItem.pilotStart },
                         { label: 'Last Contacted', value: selectedDetailItem.pilotEnd },
                         ...(isInvestorUpdateContactsList ? [{ label: 'Update Cadence', value: selectedDetailItem.athleteCount }] : []),
@@ -12354,6 +12399,10 @@ Rules:
                             ]),
                         { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
                         { label: 'Due Date', value: selectedDetailItem.dueDate },
+                        {
+                          label: 'Email Notifications',
+                          value: selectedDetailItem.deadlineEmailNotificationsEnabled ? 'On' : 'Off',
+                        },
                         { label: 'Contract Term', value: selectedDetailItem.contractTerm },
                         { label: 'Margin Notes', value: selectedDetailItem.grossMargin },
                         { label: 'Partner Cost', value: selectedDetailItem.partnerCost },

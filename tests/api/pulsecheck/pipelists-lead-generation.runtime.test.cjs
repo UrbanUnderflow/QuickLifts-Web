@@ -72,6 +72,36 @@ test('PipeLists Find leads routes pasted university batches through the local AP
   );
   assert.match(
     pipeLists,
+    /const deadlineSource = normalizeResearchText\(lead\.deadlineSource\)\.toLowerCase\(\) === 'explicit' \? 'explicit' : 'none'/,
+    'Find leads should not trust generated dates unless the API marks them as source-explicit',
+  );
+  assert.match(
+    pipeLists,
+    /\n\s+dueDate,\n\s+deadlineSource,/,
+    'generated leads should save only the due date that passed the explicit deadline guard',
+  );
+  assert.match(
+    pipeLists,
+    /expectedCloseDate: '',/,
+    'generated leads should not invent expected close dates for reminders',
+  );
+  assert.match(
+    pipeLists,
+    /deadlineSource: normalizeDeadlineSourceForSave\(baseDraftToSave, currentEditingItem\)/,
+    'manual item edits should mark user-entered dates as manual reminder dates',
+  );
+  assert.match(
+    pipeLists,
+    /deadlineEmailNotificationsEnabled: false/,
+    'new leads should have deadline email notifications off by default',
+  );
+  assert.match(
+    pipeLists,
+    /checked=\{draft\.deadlineEmailNotificationsEnabled\}/,
+    'lead editing should expose a per-lead email notification toggle',
+  );
+  assert.match(
+    pipeLists,
     /chunkLeadSearchEntries\(researchablePastedEntries\)/,
     'Find leads should only spend research attempts on pasted entries that are not already in the list',
   );
@@ -153,6 +183,12 @@ test('PipeLists generate-leads API accepts larger structured pasted lists', () =
   assert.match(apiRoute, /decisionMaker: lead\.decisionMaker \|\| originalTitle/);
   assert.match(apiRoute, /Use the user's research brief to decide what insight to yield for each lead/);
   assert.match(apiRoute, /Use listObjective and leadDefinition as the qualification lens/);
+  assert.match(apiRoute, /deadlineSource must be "explicit"/);
+  assert.match(apiRoute, /set deadlineSource to "none"/);
+  assert.match(apiRoute, /Never create internal follow-up dates, expected-close dates, pilot dates, or relationship deadlines during research/);
+  assert.match(apiRoute, /const hasExplicitDeadline = rawDeadlineSource === 'explicit'/);
+  assert.match(apiRoute, /const dueDate = hasExplicitDeadline \? rawDueDate : ''/);
+  assert.match(apiRoute, /deadlineSource: dueDate \? 'explicit' : 'none'/);
 });
 
 test('PipeLists supports bulk select, delete, and move from the list toolbar', () => {

@@ -8,8 +8,9 @@ import { getSimpBudgetAuth, getSimpBudgetFirestore } from './utils/getSimpBudget
 const APP_URL = 'https://fitwithpulse.ai/PipeLists';
 const SENDER = { email: 'info@fitwithpulse.ai', name: 'Pulse PipeLists' };
 const UPCOMING_REMINDER_DAYS = new Set([7, 2, 1]);
-const MAX_OVERDUE_REMINDER_DAYS = 30;
+const OVERDUE_REMINDER_DAYS = new Set([0, -1, -3, -7, -14, -30]);
 const DATE_FIELDS = ['expectedCloseDate', 'dueDate', 'pilotEnd'] as const;
+const LEGACY_EXPLICIT_DEADLINE_TEMPLATE_KEYS = new Set(['grant', 'pitch']);
 const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 
 function escapeHtml(value: unknown): string {
@@ -71,7 +72,35 @@ function validEmail(value: unknown): value is string {
 }
 
 function shouldSendDeadlineReminder(daysUntil: number): boolean {
-  return UPCOMING_REMINDER_DAYS.has(daysUntil) || (daysUntil <= 0 && daysUntil >= -MAX_OVERDUE_REMINDER_DAYS);
+  return UPCOMING_REMINDER_DAYS.has(daysUntil) || OVERDUE_REMINDER_DAYS.has(daysUntil);
+}
+
+function normalizeDeadlineSource(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function shouldUseDeadlineFieldForReminder(
+  list: Record<string, any>,
+  item: Record<string, any>,
+  field: (typeof DATE_FIELDS)[number],
+): boolean {
+  if (item.deadlineEmailNotificationsEnabled !== true) return false;
+  if (!normalizeDateKey(item[field])) return false;
+
+  const deadlineSource = normalizeDeadlineSource(item.deadlineSource);
+  if (deadlineSource === 'manual' || deadlineSource === 'explicit') return true;
+  if (deadlineSource === 'none' || deadlineSource === 'inferred' || deadlineSource === 'generated') return false;
+
+  return field === 'dueDate' && LEGACY_EXPLICIT_DEADLINE_TEMPLATE_KEYS.has(String(list.templateKey || ''));
+}
+
+function deadlineForReminder(list: Record<string, any>, item: Record<string, any>): string | null {
+  for (const field of DATE_FIELDS) {
+    if (!shouldUseDeadlineFieldForReminder(list, item, field)) continue;
+    const date = normalizeDateKey(item[field]);
+    if (date) return date;
+  }
+  return null;
 }
 
 function reminderStatusText(daysUntil: number): string {
@@ -403,7 +432,7 @@ export const handler: Handler = async () => {
             }
           }
 
-          const deadline = DATE_FIELDS.map((field) => normalizeDateKey(item[field])).find(Boolean) || null;
+          const deadline = deadlineForReminder(list, item);
           if (!deadline) continue;
 
           const daysUntil = dayNumber(deadline) - dayNumber(today);

@@ -12,8 +12,8 @@ test('standalone Firebase auth pages bypass the global AuthWrapper gate', () => 
 
   assert.match(
     authWrapper,
-    /const isStandaloneAuthRoute =[\s\S]*normalizedCheckoutBridgePath === '\/pipelists'[\s\S]*normalizedCheckoutBridgePath === '\/simpbudget'/,
-    'PipeLists and SimpBudget should be recognized as standalone-auth routes',
+    /const isStandaloneAuthRoute =[\s\S]*normalizedCheckoutBridgePath === '\/pipelists'[\s\S]*normalizedCheckoutBridgePath === '\/simpbudget'[\s\S]*normalizedCheckoutBridgePath === '\/noranotetaker'/,
+    'PipeLists, SimpBudget, and NoraNotetaker should be recognized as standalone-auth routes',
   );
   assert.match(
     authWrapper,
@@ -29,6 +29,32 @@ test('standalone Firebase auth pages bypass the global AuthWrapper gate', () => 
     authWrapper,
     /isCheckoutBridgeRoute \|\| isStandaloneAuthRoute/,
     'standalone-auth routes should not open the generic sign-in modal from query params',
+  );
+});
+
+test('NoraNotetaker uses the SimpBudget Firebase account tree', () => {
+  const noraNotetaker = read('src/pages/NoraNotetaker.tsx');
+  const simpBudgetRules = read('firestore.simpbudget.rules');
+
+  assert.match(
+    noraNotetaker,
+    /const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users'/,
+    'NoraNotetaker should store user-scoped data in the SimpBudget users collection',
+  );
+  assert.match(
+    noraNotetaker,
+    /const NORA_MEETINGS_SUBCOLLECTION = 'noraNotetakerMeetings'/,
+    'NoraNotetaker should keep meeting notes in its own user subcollection',
+  );
+  assert.match(
+    noraNotetaker,
+    /collection\(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, uid, NORA_MEETINGS_SUBCOLLECTION\)/,
+    'NoraNotetaker should read and write through the standalone SimpBudget Firestore app',
+  );
+  assert.match(
+    simpBudgetRules,
+    /match \/\{document=\*\*\} \{[\s\S]*allow read, write: if isOwner\(userId\);[\s\S]*\}/,
+    'SimpBudget rules should allow owned nested app subcollections under simpbudget-users/{uid}',
   );
 });
 

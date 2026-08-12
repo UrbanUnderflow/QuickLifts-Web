@@ -85,8 +85,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/delete-account', '/deleteAccount',
     '/checkout-redirect', '/subscription-success', '/subscription-error',
     '/group-meet', '/group-meet/privacy', '/group-meet/terms',
-    // SimpBudget owns its own Firebase project auth and signed-out desktop view.
+    // SimpBudget-owned standalone tools manage their own Firebase auth and signed-out views.
     '/SimpBudget',
+    '/NoraNotetaker',
     // Lightweight operator surface for partner, funding, and contract pipelines.
     '/PipeLists',
     // Public onboarding/marketing entry points
@@ -322,7 +323,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     normalizedCheckoutBridgePath.startsWith('/athletic-mind-hub/');
   const isStandaloneAuthRoute =
     normalizedCheckoutBridgePath === '/pipelists' ||
-    normalizedCheckoutBridgePath === '/simpbudget';
+    normalizedCheckoutBridgePath === '/simpbudget' ||
+    normalizedCheckoutBridgePath === '/noranotetaker';
   const isCheckoutBridgeRoute =
     normalizedCheckoutBridgePath === '/checkout-redirect' ||
     (

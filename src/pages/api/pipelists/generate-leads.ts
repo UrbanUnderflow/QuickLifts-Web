@@ -72,6 +72,7 @@ type LeadCandidate = {
   rationale: string;
   sourceEvidence: string;
   deadlineStatus: string;
+  deadlineSource: string;
 };
 
 const leadStringFields = [
@@ -103,6 +104,7 @@ const leadStringFields = [
   'rationale',
   'sourceEvidence',
   'deadlineStatus',
+  'deadlineSource',
 ] as const;
 
 const leadProperties = leadStringFields.reduce<Record<string, unknown>>((properties, field) => {
@@ -307,7 +309,10 @@ const sanitizeLead = (
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
   const sourceUrl = cleanString(record.sourceUrl, 800);
-  const dueDate = cleanString(record.dueDate, 24);
+  const rawDueDate = cleanString(record.dueDate, 24);
+  const rawDeadlineSource = cleanString(record.deadlineSource, 40).toLowerCase();
+  const hasExplicitDeadline = rawDeadlineSource === 'explicit';
+  const dueDate = hasExplicitDeadline ? rawDueDate : '';
 
   if (!cleanString(record.title, 240) || !isValidUrl(sourceUrl)) return null;
   if (dueDate && (!isIsoDate(dueDate) || dueDate < today)) return null;
@@ -331,12 +336,12 @@ const sanitizeLead = (
     segment: cleanString(record.segment, 180),
     decisionMaker: cleanString(record.decisionMaker, 180),
     acv: cleanString(record.acv, 120),
-    expectedCloseDate: cleanString(record.expectedCloseDate, 24),
+    expectedCloseDate: '',
     contractTerm: cleanString(record.contractTerm, 120),
     pilotScope: cleanString(record.pilotScope, 500),
     athleteCount: cleanString(record.athleteCount, 120),
-    pilotStart: cleanString(record.pilotStart, 24),
-    pilotEnd: cleanString(record.pilotEnd, 24),
+    pilotStart: '',
+    pilotEnd: '',
     conversionLikelihood: cleanString(record.conversionLikelihood, 160),
     grossMargin: cleanString(record.grossMargin, 120),
     partnerCost: cleanString(record.partnerCost, 120),
@@ -347,6 +352,7 @@ const sanitizeLead = (
     rationale: cleanString(record.rationale, 700),
     sourceEvidence: cleanString(record.sourceEvidence, 700),
     deadlineStatus: cleanString(record.deadlineStatus, 300),
+    deadlineSource: dueDate ? 'explicit' : 'none',
   };
 };
 
@@ -435,7 +441,9 @@ Research rules:
 - Avoid exact duplicates already in the user's list. For inputEntries, do not suppress a supplied entry unless it clearly matches an existing title plus organization or sourceUrl.
 - Never invent deadlines, prizes, contacts, amounts, fit claims, or organizations.
 - Only include contactEmails when a current source visibly provides valid public email addresses. Never invent contact emails.
-- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD.
+- If a source has an explicit deadline, dueDate must use ISO format YYYY-MM-DD and deadlineSource must be "explicit".
+- If a source does not visibly list a deadline, leave dueDate, expectedCloseDate, pilotStart, and pilotEnd empty and set deadlineSource to "none".
+- Never create internal follow-up dates, expected-close dates, pilot dates, or relationship deadlines during research.
 - If requireFutureDeadline is true, every returned lead must have a verified dueDate on or after ${today}.
 - If requireFutureDeadline is false, dueDate can be "" unless the source provides a real deadline.
 - If officialSourcesOnly is true, prefer official/current sources and verify against official pages before returning a lead.
