@@ -16,6 +16,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -77,19 +78,47 @@ interface NoraMeetingRecord {
   botName: string;
   productName: string;
   consentMode: string;
-  providerBotId?: string;
-  providerRecordingId?: string;
-  providerTranscriptId?: string;
-  providerStatus?: string;
+  workerJobId?: string;
+  workerMode?: string;
+  workerStatus?: string;
+  workerError?: string;
+  calendarEventId?: string;
+  calendarHtmlLink?: string;
+  source?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
+
+type GoogleCalendarEvent = {
+  id?: string;
+  htmlLink?: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  hangoutLink?: string;
+  start?: {
+    date?: string;
+    dateTime?: string;
+  };
+  attendees?: Array<{
+    email?: string;
+    displayName?: string;
+  }>;
+  conferenceData?: {
+    entryPoints?: Array<{
+      uri?: string;
+      entryPointType?: string;
+    }>;
+  };
+};
 
 const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
 const NORA_MEETINGS_SUBCOLLECTION = 'noraNotetakerMeetings';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'nora.notetaker.pendingMagicEmail';
 const BOT_NAME = 'Nora';
 const PRODUCT_NAME = 'NoraNotetaker';
+const GOOGLE_CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const GOOGLE_CALENDAR_SYNC_DAYS = 14;
 
 const PLATFORM_OPTIONS: Array<{ value: MeetingPlatform; label: string }> = [
   { value: 'zoom', label: 'Zoom' },
@@ -171,6 +200,78 @@ const detectPlatform = (url: string): MeetingPlatform => {
   return 'other';
 };
 
+const stripHtml = (value: string) =>
+  value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractMeetingUrl = (event: GoogleCalendarEvent) => {
+  const conferenceUrl = event.conferenceData?.entryPoints?.find((entryPoint) => {
+    const uri = typeof entryPoint.uri === 'string' ? entryPoint.uri : '';
+    return uri && detectPlatform(uri) !== 'other';
+  })?.uri;
+
+  const candidates = [
+    event.hangoutLink,
+    conferenceUrl,
+    event.location,
+    stripHtml(event.description || ''),
+  ]
+    .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+    .join('\n');
+
+  const urlMatches = candidates.match(/https?:\/\/[^\s<>"')]+/gi) || [];
+  return urlMatches.find((url) => detectPlatform(url) !== 'other') || '';
+};
+
+const calendarEventStartsAt = (event: GoogleCalendarEvent) => {
+  const raw = event.start?.dateTime || event.start?.date || '';
+  if (!raw) return createDefaultStartsAt();
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? createDefaultStartsAt() : toDatetimeLocalInput(date);
+};
+
+const buildCalendarMeetingPayload = (event: GoogleCalendarEvent, meetingUrl: string, ownerEmail: string) => {
+  const platform = detectPlatform(meetingUrl);
+  const attendees = (event.attendees || [])
+    .map((attendee) => attendee.displayName || attendee.email || '')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return {
+    title: event.summary?.trim() || `${formatPlatform(platform)} meeting`,
+    meetingUrl,
+    platform,
+    startsAt: calendarEventStartsAt(event),
+    attendees,
+    agenda: stripHtml(event.description || ''),
+    status: 'scheduled' as MeetingStatus,
+    rawTranscript: '',
+    summary: '',
+    decisions: [],
+    actionItems: [],
+    followUps: [],
+    botName: BOT_NAME,
+    productName: PRODUCT_NAME,
+    consentMode: 'host-approved',
+    worker: {
+      status: 'not-queued',
+      provider: 'nora-owned-worker',
+      targetDisplayName: BOT_NAME,
+      requestedPlatforms: ['google-meet', 'zoom', 'teams'],
+    },
+    source: 'google-calendar',
+    calendarEventId: event.id || '',
+    calendarHtmlLink: event.htmlLink || '',
+    ownerEmail,
+    updatedAt: serverTimestamp(),
+  };
+};
+
 const formatMeetingTime = (value: string) => {
   if (!value) return 'Time not set';
   const date = new Date(value);
@@ -238,10 +339,13 @@ const normalizeMeetingRecord = (id: string, raw: Record<string, unknown>): NoraM
     typeof raw.consentMode === 'string' && raw.consentMode.trim()
       ? raw.consentMode
       : 'host-approved',
-  providerBotId: typeof raw.providerBotId === 'string' ? raw.providerBotId : undefined,
-  providerRecordingId: typeof raw.providerRecordingId === 'string' ? raw.providerRecordingId : undefined,
-  providerTranscriptId: typeof raw.providerTranscriptId === 'string' ? raw.providerTranscriptId : undefined,
-  providerStatus: typeof raw.providerStatus === 'string' ? raw.providerStatus : undefined,
+  workerJobId: typeof raw.workerJobId === 'string' ? raw.workerJobId : undefined,
+  workerMode: typeof raw.workerMode === 'string' ? raw.workerMode : undefined,
+  workerStatus: typeof raw.workerStatus === 'string' ? raw.workerStatus : undefined,
+  workerError: typeof raw.workerError === 'string' ? raw.workerError : undefined,
+  calendarEventId: typeof raw.calendarEventId === 'string' ? raw.calendarEventId : undefined,
+  calendarHtmlLink: typeof raw.calendarHtmlLink === 'string' ? raw.calendarHtmlLink : undefined,
+  source: typeof raw.source === 'string' ? raw.source : undefined,
   createdAt: raw.createdAt,
   updatedAt: raw.updatedAt,
 });
@@ -266,11 +370,13 @@ const buildMeetingPayload = (draft: NoraMeetingDraft, ownerEmail: string) => {
     botName: BOT_NAME,
     productName: PRODUCT_NAME,
     consentMode: 'host-approved',
-    provider: {
-      status: 'not-connected',
+    worker: {
+      status: 'not-queued',
+      provider: 'nora-owned-worker',
       targetDisplayName: BOT_NAME,
-      requestedPlatforms: ['zoom', 'google-meet', 'teams'],
+      requestedPlatforms: ['google-meet', 'zoom', 'teams'],
     },
+    source: 'manual',
     ownerEmail,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -332,6 +438,7 @@ const NoraNotetakerPage: React.FC = () => {
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [meetingDraft, setMeetingDraft] = useState<NoraMeetingDraft>(createEmptyMeetingDraft);
   const [noteDraft, setNoteDraft] = useState<NoraNoteDraft>(createEmptyNoteDraft);
   const [meetings, setMeetings] = useState<NoraMeetingRecord[]>([]);
@@ -525,6 +632,124 @@ const NoraNotetakerPage: React.FC = () => {
     await signOut(simpBudgetAuth);
   };
 
+  const syncGoogleCalendar = async () => {
+    if (!user) return;
+
+    setSyncingCalendar(true);
+    setAppMessage(null);
+
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope(GOOGLE_CALENDAR_READONLY_SCOPE);
+      provider.setCustomParameters({ prompt: 'consent select_account' });
+
+      const result = await signInWithPopup(simpBudgetAuth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      const accessToken = credential?.accessToken;
+      const syncUser = result.user || user;
+
+      if (!accessToken) {
+        throw new Error('Google did not return Calendar access. Please approve calendar read access and try again.');
+      }
+
+      const timeMin = new Date();
+      const timeMax = new Date();
+      timeMax.setDate(timeMax.getDate() + GOOGLE_CALENDAR_SYNC_DAYS);
+      const params = new URLSearchParams({
+        singleEvents: 'true',
+        orderBy: 'startTime',
+        maxResults: '100',
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        fields:
+          'items(id,htmlLink,summary,description,location,hangoutLink,start,attendees(email,displayName),conferenceData(entryPoints(uri,entryPointType)))',
+      });
+
+      const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(readApiError(payload, 'Unable to read Google Calendar events.'));
+      }
+
+      const events = Array.isArray(payload?.items) ? (payload.items as GoogleCalendarEvent[]) : [];
+      const existingMeetingsSnapshot = await getDocs(meetingsCollectionRef(syncUser.uid));
+      const existingKeys = new Set<string>();
+      existingMeetingsSnapshot.docs.forEach((meetingDoc) => {
+        const data = meetingDoc.data() as Record<string, unknown>;
+        if (typeof data.calendarEventId === 'string' && data.calendarEventId) {
+          existingKeys.add(`event:${data.calendarEventId}`);
+        }
+        if (typeof data.meetingUrl === 'string' && data.meetingUrl) {
+          existingKeys.add(`url:${data.meetingUrl}`);
+        }
+      });
+
+      let importedCount = 0;
+      let skippedCount = 0;
+
+      for (const event of events) {
+        const meetingUrl = extractMeetingUrl(event);
+        if (!meetingUrl) {
+          skippedCount += 1;
+          continue;
+        }
+
+        const eventKey = event.id ? `event:${event.id}` : '';
+        const urlKey = `url:${meetingUrl}`;
+        if ((eventKey && existingKeys.has(eventKey)) || existingKeys.has(urlKey)) {
+          skippedCount += 1;
+          continue;
+        }
+
+        const meetingPayload = {
+          ...buildCalendarMeetingPayload(event, meetingUrl, syncUser.email || user.email || ''),
+          createdAt: serverTimestamp(),
+        };
+        await addDoc(meetingsCollectionRef(syncUser.uid), meetingPayload);
+        if (eventKey) existingKeys.add(eventKey);
+        existingKeys.add(urlKey);
+        importedCount += 1;
+      }
+
+      await setDoc(
+        userDocRef(syncUser.uid),
+        {
+          noraNotetaker: {
+            googleCalendar: {
+              lastApprovedSync: true,
+              accessMode: 'popup-readonly-token',
+              scope: GOOGLE_CALENDAR_READONLY_SCOPE,
+              lastSyncedAt: serverTimestamp(),
+              syncWindowDays: GOOGLE_CALENDAR_SYNC_DAYS,
+            },
+          },
+        },
+        { merge: true }
+      );
+
+      await loadMeetings(syncUser.uid);
+      setAppMessage({
+        type: importedCount ? 'success' : 'info',
+        text: importedCount
+          ? `Imported ${importedCount} calendar meeting${importedCount === 1 ? '' : 's'} for Nora.`
+          : `No new video meetings found. Nora skipped ${skippedCount} calendar event${skippedCount === 1 ? '' : 's'}.`,
+      });
+    } catch (error) {
+      console.error('Unable to sync Google Calendar:', error);
+      setAppMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to sync Google Calendar.',
+      });
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
+
   const updateMeetingDraft = (field: keyof NoraMeetingDraft, value: string) => {
     setMeetingDraft((currentDraft) => {
       const nextDraft = { ...currentDraft, [field]: value };
@@ -597,27 +822,23 @@ const NoraNotetakerPage: React.FC = () => {
         throw new Error(readApiError(payload, 'Nora could not be sent to this meeting.'));
       }
 
-      const recording = Array.isArray(payload.recordings)
-        ? payload.recordings.find((candidate: { id?: unknown }) => typeof candidate?.id === 'string')
-        : null;
-      const statusChange = Array.isArray(payload.statusChanges)
-        ? payload.statusChanges[payload.statusChanges.length - 1]
-        : null;
-
       await setDoc(
         doc(meetingsCollectionRef(user.uid), selectedMeeting.id),
         {
           status: 'queued',
-          provider: {
+          worker: {
             status: 'queued',
-            name: payload.provider || 'recall.ai',
+            provider: payload.provider || 'nora-owned-worker',
             targetDisplayName: BOT_NAME,
-            requestedPlatforms: ['zoom', 'google-meet', 'teams'],
+            mode: payload.workerMode || 'caption-browser',
+            requestedPlatforms: ['google-meet', 'zoom', 'teams'],
+            queuePath: typeof payload.workerQueuePath === 'string' ? payload.workerQueuePath : '',
           },
-          providerBotId: typeof payload.providerBotId === 'string' ? payload.providerBotId : '',
-          providerRecordingId: typeof recording?.id === 'string' ? recording.id : '',
-          providerStatus: typeof statusChange?.code === 'string' ? statusChange.code : 'queued',
-          providerJoinAt: typeof payload.providerJoinAt === 'string' ? payload.providerJoinAt : '',
+          workerJobId: typeof payload.workerJobId === 'string' ? payload.workerJobId : selectedMeeting.id,
+          workerMode: typeof payload.workerMode === 'string' ? payload.workerMode : 'caption-browser',
+          workerStatus: typeof payload.workerStatus === 'string' ? payload.workerStatus : 'queued',
+          workerJoinAt: typeof payload.workerJoinAt === 'string' ? payload.workerJoinAt : '',
+          workerError: '',
           queuedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         },
@@ -638,8 +859,8 @@ const NoraNotetakerPage: React.FC = () => {
 
   const syncSelectedMeeting = async () => {
     if (!user || !selectedMeeting) return;
-    if (!selectedMeeting.providerBotId) {
-      setAppMessage({ type: 'error', text: 'Queue Nora before syncing provider notes.' });
+    if (!selectedMeeting.workerJobId) {
+      setAppMessage({ type: 'error', text: 'Queue Nora before refreshing worker notes.' });
       return;
     }
 
@@ -660,7 +881,7 @@ const NoraNotetakerPage: React.FC = () => {
         },
         body: JSON.stringify({
           meetingId: selectedMeeting.id,
-          providerBotId: selectedMeeting.providerBotId,
+          workerJobId: selectedMeeting.workerJobId,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -668,35 +889,21 @@ const NoraNotetakerPage: React.FC = () => {
         throw new Error(readApiError(payload, 'Nora could not sync this meeting yet.'));
       }
 
-      const rawTranscript = typeof payload.rawTranscript === 'string' ? payload.rawTranscript : '';
-      const draftedNotes = rawTranscript ? createDraftNotesFromTranscript(rawTranscript) : createEmptyNoteDraft();
+      const refreshedSnapshot = await getDoc(doc(meetingsCollectionRef(user.uid), selectedMeeting.id));
+      const refreshedMeeting = refreshedSnapshot.exists()
+        ? normalizeMeetingRecord(refreshedSnapshot.id, refreshedSnapshot.data() as Record<string, unknown>)
+        : selectedMeeting;
+      const rawTranscript = refreshedMeeting.rawTranscript || '';
       if (rawTranscript) {
+        const draftedNotes = createDraftNotesFromTranscript(rawTranscript);
         setNoteDraft(draftedNotes);
       }
-
-      await setDoc(
-        doc(meetingsCollectionRef(user.uid), selectedMeeting.id),
-        {
-          rawTranscript: rawTranscript || selectedMeeting.rawTranscript || '',
-          summary: rawTranscript ? draftedNotes.summary : selectedMeeting.summary || '',
-          decisions: rawTranscript ? splitLines(draftedNotes.decisionsText) : selectedMeeting.decisions,
-          actionItems: rawTranscript ? splitLines(draftedNotes.actionItemsText) : selectedMeeting.actionItems,
-          followUps: rawTranscript ? splitLines(draftedNotes.followUpsText) : selectedMeeting.followUps,
-          status: rawTranscript ? 'notes-ready' : selectedMeeting.status,
-          providerRecordingId:
-            typeof payload.providerRecordingId === 'string' ? payload.providerRecordingId : selectedMeeting.providerRecordingId || '',
-          providerTranscriptId:
-            typeof payload.providerTranscriptId === 'string' ? payload.providerTranscriptId : selectedMeeting.providerTranscriptId || '',
-          providerStatus:
-            typeof payload.providerStatus === 'string' ? payload.providerStatus : selectedMeeting.providerStatus || '',
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
       await loadMeetings(user.uid);
       setAppMessage({
         type: rawTranscript ? 'success' : 'info',
-        text: rawTranscript ? 'Nora transcript synced and drafted.' : 'Nora is not finished with the transcript yet.',
+        text: rawTranscript
+          ? 'Nora transcript refreshed and drafted.'
+          : payload?.message || 'Nora has not written a transcript yet.',
       });
     } catch (error) {
       console.error('Unable to sync Nora meeting:', error);
@@ -921,6 +1128,15 @@ const NoraNotetakerPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={syncGoogleCalendar}
+              disabled={syncingCalendar}
+              className={`${actionButtonClassName} bg-emerald-700 text-white hover:bg-emerald-800`}
+            >
+              {syncingCalendar ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
+              Sync Google Calendar
+            </button>
+            <button
+              type="button"
               onClick={() => loadMeetings(user.uid)}
               disabled={loadingData}
               className={`${actionButtonClassName} border border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50`}
@@ -1105,7 +1321,7 @@ const NoraNotetakerPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={syncSelectedMeeting}
-                        disabled={saving || !selectedMeeting.providerBotId}
+                        disabled={saving || !selectedMeeting.workerJobId}
                         className={`${actionButtonClassName} border border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50`}
                       >
                         <RefreshCcw className="h-4 w-4" />
@@ -1125,12 +1341,15 @@ const NoraNotetakerPage: React.FC = () => {
 
                   <div className="mt-5 grid gap-3 md:grid-cols-3">
                     <div className="rounded-md bg-zinc-50 p-3">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Provider</div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Worker</div>
                       <div className="mt-2 text-sm text-zinc-700">
-                        {selectedMeeting.providerBotId
-                          ? selectedMeeting.providerStatus || 'Queued'
+                        {selectedMeeting.workerJobId
+                          ? selectedMeeting.workerStatus || 'Queued'
                           : 'Not queued'}
                       </div>
+                      {selectedMeeting.workerError ? (
+                        <div className="mt-1 text-xs text-rose-700">{selectedMeeting.workerError}</div>
+                      ) : null}
                     </div>
                     <div className="rounded-md bg-zinc-50 p-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Attendees</div>

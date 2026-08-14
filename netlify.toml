@@ -227,6 +227,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/nora-notetaker/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/nora-notetaker/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/outreach/*"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/outreach/:splat"
   status = 200

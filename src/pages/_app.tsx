@@ -41,6 +41,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/about': 'About — Pulse',
   '/Macra': 'Macra — Scan any food. Get your macros instantly.',
   '/PulseCheck': 'PulseCheck — The Mental Performance OS for Elite Programs',
+  '/NCAA-Compliance': 'NCAA Mental Health Compliance — PulseCheck + AuntEdna.ai',
   '/performers-info': 'PulseCheck | Mental Performance for Work, School, Sport, and Life',
   '/testimonials': 'PulseCheck Testimonials',
   '/pricing': 'Pricing — Pulse',

@@ -107,3 +107,38 @@ test('PipeLists login controls recover when standalone auth readiness stalls', (
     'magic link buttons should not stay disabled solely because authReady is false',
   );
 });
+
+test('PipeLists Google login falls back to redirect when the popup is blocked or closed', () => {
+  const pipeLists = read('src/pages/PipeLists.tsx');
+
+  assert.match(
+    pipeLists,
+    /browserPopupRedirectResolver/,
+    'PipeLists popup sign-in should use Firebase browser popup resolver when it uses popups',
+  );
+  assert.match(
+    pipeLists,
+    /const isProductionHost = window\.location\.hostname === 'fitwithpulse\.ai' \|\| window\.location\.hostname\.endsWith\('\.netlify\.app'\)/,
+    'production PipeLists should prefer redirect sign-in over a popup',
+  );
+  assert.match(
+    pipeLists,
+    /const shouldRetryGoogleSignInWithRedirect = \(error: unknown\) =>/,
+    'PipeLists should classify recoverable popup failures',
+  );
+  assert.match(
+    pipeLists,
+    /code === 'auth\/popup-closed-by-user'[\s\S]*code === 'auth\/cancelled-popup-request'[\s\S]*code === 'auth\/popup-blocked'/,
+    'PipeLists should recover from the Firebase popup failure codes users see in Chrome',
+  );
+  assert.match(
+    pipeLists,
+    /if \(shouldRetryGoogleSignInWithRedirect\(error\)\) \{[\s\S]*await signInWithRedirect\(simpBudgetAuth, provider\)/,
+    'PipeLists should fall back to redirect sign-in after a popup failure',
+  );
+  assert.match(
+    pipeLists,
+    /const \[isGoogleSignInStarting, setIsGoogleSignInStarting\] = useState\(false\)/,
+    'PipeLists should prevent repeated Google sign-in clicks while auth is starting',
+  );
+});

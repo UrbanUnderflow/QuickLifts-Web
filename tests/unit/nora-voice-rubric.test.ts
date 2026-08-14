@@ -48,6 +48,14 @@ test('Nora voice rubric rejects physical programming prescriptions in sports int
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
 });
 
+test('Nora voice rubric rejects unsafe health-data pivots', () => {
+  const issues = validateNoraVoiceRubric(
+    'Lower calorie burn suggests limited activity. Increasing movement could significantly boost your energy expenditure.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.healthDataPullOnly'));
+});
+
 test('Nora voice rubric rejects negation-led corrective contrast', () => {
   const examples = [
     'Mental rehearsal strengthens physical preparation; it does not replace it.',

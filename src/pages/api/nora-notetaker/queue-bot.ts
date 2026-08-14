@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { getRecallAiApiKey, getRecallAiBaseUrl } from '../../../lib/noraNotetakerProviderSecrets';
 
 type QueueBotRequest = {
   meetingId?: string;
@@ -19,6 +18,7 @@ const SIMPBUDGET_FIREBASE_API_KEY =
   'AIzaSyCBoCQ4J9xoIhZuaUjFMPq_zltkXDQ_0e8';
 
 const NORA_BOT_NAME = 'Nora';
+const OWNED_WORKER_PROVIDER = 'nora-owned-worker';
 
 const cleanText = (value: unknown, maxLength = 500) =>
   typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -101,84 +101,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, error: 'A valid Zoom, Google Meet, or Teams link is required.' });
   }
 
-  const recallPayload: Record<string, unknown> = {
-    meeting_url: meetingUrl,
-    bot_name: NORA_BOT_NAME,
-    recording_config: {
-      transcript: {
-        provider: {
-          recallai_streaming: {
-            language_code: 'auto',
-            mode: 'prioritize_accuracy',
-          },
-        },
-      },
-      video_mixed_layout: 'audio_only',
-      participant_events: {},
-      meeting_metadata: {},
-      start_recording_on: 'participant_join',
-    },
-    metadata: {
-      source: 'quicklifts-nora-notetaker',
-      ownerUid: verifiedUser.uid,
-      ownerEmail: verifiedUser.email,
-      meetingId,
-      title,
-    },
-  };
-
-  if (joinAt) {
-    recallPayload.join_at = joinAt;
-  }
-
-  try {
-    const recallApiKey = await getRecallAiApiKey();
-    const response = await fetch(`${getRecallAiBaseUrl()}/api/v1/bot/`, {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        authorization: recallApiKey,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify(recallPayload),
-    });
-
-    const responseText = await response.text();
-    let payload: any = null;
-    try {
-      payload = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      payload = null;
-    }
-
-    if (!response.ok) {
-      console.error('[nora-notetaker-queue-bot] Recall create bot failed:', {
-        status: response.status,
-        body: responseText.slice(0, 600),
-      });
-      return res.status(502).json({
-        success: false,
-        error: payload?.detail || payload?.message || 'Nora could not be sent to this meeting.',
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      provider: 'recall.ai',
-      providerBotId: typeof payload?.id === 'string' ? payload.id : '',
-      providerJoinAt: typeof payload?.join_at === 'string' ? payload.join_at : joinAt,
-      statusChanges: Array.isArray(payload?.status_changes) ? payload.status_changes.slice(-5) : [],
-      recordings: Array.isArray(payload?.recordings) ? payload.recordings : [],
-    });
-  } catch (error) {
-    console.error('[nora-notetaker-queue-bot] Recall request failed:', error);
-    const message = error instanceof Error ? error.message : '';
-    const isSecretError = /secret manager|secret|credential|access token|permission/i.test(message);
-    return res.status(isSecretError ? 501 : 502).json({
-      success: false,
-      error: isSecretError
-        ? 'Nora meeting bot credentials are not available to this server yet.'
-        : 'Nora could not reach the meeting bot provider.',
-    });
-  }
+  return res.status(200).json({
+    success: true,
+    provider: OWNED_WORKER_PROVIDER,
+    botName: NORA_BOT_NAME,
+    workerJobId: meetingId,
+    workerStatus: 'queued',
+    workerMode: 'caption-browser',
+    workerJoinAt: joinAt,
+    workerQueuePath: `simpbudget-users/${verifiedUser.uid}/noraNotetakerMeetings/${meetingId}`,
+    ownerUid: verifiedUser.uid,
+    ownerEmail: verifiedUser.email,
+    title,
+  });
 }

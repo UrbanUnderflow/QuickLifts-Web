@@ -1,6 +1,7 @@
 {
   "firestore": {
-    "rules": "firestore.simpbudget.rules"
+    "rules": "firestore.simpbudget.rules",
+    "indexes": "firestore.simpbudget.indexes.json"
   },
   "storage": {
     "rules": "storage.simpbudget.rules"

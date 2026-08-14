@@ -54,6 +54,14 @@ test('firebase-next-api exposes the full migrated route count and matches dynami
     '/api/admin/nora-guard/revoke'
   );
   assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/nora-notetaker/queue-bot'),
+    '/api/nora-notetaker/queue-bot'
+  );
+  assert.equal(
+    proxyModule.__test.resolveRoutePattern('/api/nora-notetaker/sync-bot'),
+    '/api/nora-notetaker/sync-bot'
+  );
+  assert.equal(
     proxyModule.__test.resolveRoutePattern(
       '/api/pulsecheck/team-invite/native-handoff/create'
     ),

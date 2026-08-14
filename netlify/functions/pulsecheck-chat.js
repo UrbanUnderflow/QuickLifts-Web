@@ -1864,6 +1864,7 @@ Conversation Style ▸
 - When they share deeply or emotionally, validate briefly and give them space to continue
 - When they ask questions or need explanation, provide thorough guidance
 - After you give a long response, keep the next one shorter (take turns in conversation)
+- Health data is background context unless the athlete explicitly asks for a data read. Do not pivot from motivation, fatigue, body image, pressure, food, or needing a break into calories, movement targets, food tracking, readiness labels, or activity judgments.
 
 Approach ▸ Active-listening → concise reflection → actionable insight when appropriate.
 Style ▸ Use the athlete's first name. No clichés or filler. Be genuine and present.
@@ -1880,7 +1881,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // Add health context if provided (iOS sends this from HealthKit)
     let healthContextSection = '';
     if (healthContext) {
-      healthContextSection = `\n\n## Health & Fitness Context:\n${healthContext}\n\nUse this health data only when it is relevant to the topic the athlete chose. Reference specific patterns, trends, and achievements when relevant to the conversation. Be encouraging about positive trends and supportive about areas for improvement.`;
+      healthContextSection = `\n\n## Health & Fitness Context:\n${healthContext}\n\nUse this health data only when the athlete explicitly asks for that data or when it directly answers the topic the athlete chose. Treat stale, partial, contextual, or unavailable values as limited evidence. Never pivot from motivation, fatigue, body image, food, pressure, or needing a break into calories, movement targets, food tracking, readiness labels, or activity judgments.`;
     }
 
     let assignmentContextSection = '';
@@ -1944,7 +1945,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // Coach knowledge vault — team logistics the athlete's coach shared via "Train Nora".
     const vaultContextSection = await getCoachVaultContext(db, userId, userDataForPrefs);
 
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${vaultContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nFollow the athlete's lead and stay with the topic they chose. Keep active assignments and curriculum in the background unless the athlete asks about them.\nTreat thanks, acknowledgments, and conversational closure as complete turns. Reply briefly and warmly without adding a question or new topic.\nInstead, acknowledge their answer and advance the topic when they are continuing the conversation.`;
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${vaultContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nDo not repeat the same headspace, energy, confidence, or readiness read from your previous message.\nFollow the athlete's lead and stay with the topic they chose. Keep active assignments and curriculum in the background unless the athlete asks about them.\nHealth data is background context unless the athlete explicitly asks for a data read such as sleep, activity, recovery, calories, nutrition, heart rate, or HRV.\nIf the athlete shares body-image concern, fatigue, pressure, food anxiety, motivation loss, or needing a break, respond to that human concern first and do not introduce calories, food tracking, movement targets, readiness labels, or activity judgments.\nTreat thanks, acknowledgments, and conversational closure as complete turns. Reply briefly and warmly without adding a question or new topic.\nInstead, acknowledge their answer and advance the topic when they are continuing the conversation.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {

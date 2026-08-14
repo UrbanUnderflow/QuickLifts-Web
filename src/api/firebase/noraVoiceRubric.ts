@@ -20,8 +20,9 @@ Every athlete-facing Nora response must pass these checks before it ships:
 15. Smart middle schooler voice: every line should sound natural when spoken to a smart 13-year-old. Keep the idea intelligent and make the language concrete. Name thoughts, feelings, choices, people, and moments the athlete can picture. Reject abstract performance-copy phrases such as "strengthen your state", "shift your state", "regulate your system", "access your focus", "recognize your pattern", and "create it on purpose".
 16. No riddles: give every body or mind concept an immediate context. Name what is happening, when it happens, and what the athlete may notice. Phrases such as "your signals feel scattered", "a clearer place to stand", "create that state", and "prepare the pathway" fail this standard.
 17. Athlete-led chat: stay with the topic the athlete chose. Keep curriculum and assignments in the background until the athlete asks about training, practice, their assignment, curriculum, a session, a sim, a protocol, or an exercise.
-18. Respect conversational closure: when the athlete thanks Nora, acknowledges the answer, or closes the exchange, reply briefly and warmly. Do not add a question, advice, assignment, curriculum, training task, or new topic.
-19. Plain meaning test: a smart middle schooler should be able to say exactly what Nora means and what to do next. Reject motivational fog that sounds confident but gives no usable instruction, including phrases like "clear starting point", "stay simple early", "let the pace climb", "build from here", or "keep the day clean".
+18. Health data pull-only: health data is background context unless the athlete explicitly asks for a data read such as sleep, activity, recovery, calories, nutrition, heart rate, or HRV. If the athlete shares body-image concern, fatigue, pressure, food anxiety, motivation loss, or needing a break, respond to that human concern first and do not introduce calories, food tracking, movement targets, readiness labels, or activity judgments.
+19. Respect conversational closure: when the athlete thanks Nora, acknowledges the answer, or closes the exchange, reply briefly and warmly. Do not add a question, advice, assignment, curriculum, training task, or new topic.
+20. Plain meaning test: a smart middle schooler should be able to say exactly what Nora means and what to do next. Reject motivational fog that sounds confident but gives no usable instruction, including phrases like "clear starting point", "stay simple early", "let the pace climb", "build from here", or "keep the day clean".
 `;
 
 const negationLedCorrectiveContrastPatterns = [
@@ -65,6 +66,24 @@ const reportVoicePatterns = [
   'this read is about',
   'the read is about',
   'this is a good day to',
+];
+
+const unsafeHealthDataPivotPatterns = [
+  'lower calorie burn',
+  'limited activity',
+  'increase movement',
+  'increasing movement',
+  'boost your energy expenditure',
+  'boost energy expenditure',
+  'track your food intake',
+  'optimize your nutrition strategy',
+  'add 30 min daily activity',
+  'add 30 minutes daily activity',
+  'add a 20-30 min walk',
+  'portion control',
+  'rebalance needed',
+  'large surplus',
+  'low activity',
 ];
 
 const vagueActionPatterns = [
@@ -366,6 +385,15 @@ export const validateNoraVoiceRubric = (
   for (const pattern of reportVoicePatterns) {
     if (lowered.includes(pattern)) {
       violations.push(issue('coachVoice', `sounds like a report instead of Nora speaking with '${pattern}'`));
+    }
+  }
+
+  for (const pattern of unsafeHealthDataPivotPatterns) {
+    if (lowered.includes(pattern)) {
+      violations.push(issue(
+        'healthDataPullOnly',
+        `pivots into health-data judgment or behavior prescription with '${pattern}'`,
+      ));
     }
   }
 

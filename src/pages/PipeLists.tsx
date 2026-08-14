@@ -12,6 +12,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  browserPopupRedirectResolver,
 } from 'firebase/auth';
 import {
   FieldPath,
@@ -1203,8 +1204,22 @@ const shouldUseRedirectSignIn = () => {
   const userAgent = window.navigator.userAgent || '';
   const isMobileUserAgent = /Android|iPhone|iPad|iPod|CriOS|FxiOS|Mobile/i.test(userAgent);
   const isTouchFirst = window.matchMedia?.('(pointer: coarse)').matches || false;
+  const isProductionHost = window.location.hostname === 'fitwithpulse.ai' || window.location.hostname.endsWith('.netlify.app');
 
-  return isMobileUserAgent || isTouchFirst;
+  return isProductionHost || isMobileUserAgent || isTouchFirst;
+};
+
+const shouldRetryGoogleSignInWithRedirect = (error: unknown) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  return (
+    code === 'auth/popup-closed-by-user' ||
+    code === 'auth/cancelled-popup-request' ||
+    code === 'auth/popup-blocked'
+  );
 };
 
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
@@ -2821,6 +2836,7 @@ const PipelinePage: NextPage = () => {
   const [dataReady, setDataReady] = useState(false);
   const [personalStateReady, setPersonalStateReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isGoogleSignInStarting, setIsGoogleSignInStarting] = useState(false);
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [magicEmail, setMagicEmail] = useState(() => {
@@ -7834,6 +7850,8 @@ Rules:
   };
 
   const handleGoogleSignIn = async () => {
+    if (isGoogleSignInStarting) return;
+    setIsGoogleSignInStarting(true);
     setAuthMessage(null);
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
@@ -7845,7 +7863,7 @@ Rules:
         return;
       }
 
-      const result = await signInWithPopup(simpBudgetAuth, provider);
+      const result = await signInWithPopup(simpBudgetAuth, provider, browserPopupRedirectResolver);
       const email = result.user.email?.toLowerCase() || '';
       if (
         isSharedView &&
@@ -7859,11 +7877,28 @@ Rules:
         });
       }
     } catch (error) {
+      if (shouldRetryGoogleSignInWithRedirect(error)) {
+        try {
+          setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
+          await signInWithRedirect(simpBudgetAuth, provider);
+          return;
+        } catch (redirectError) {
+          console.error('PipeLists Google redirect fallback failed:', redirectError);
+          setAuthMessage({
+            type: 'error',
+            text: readAuthError(redirectError, 'Unable to open Google sign-in.'),
+          });
+          return;
+        }
+      }
+
       console.error('PipeLists Google sign-in failed:', error);
       setAuthMessage({
         type: 'error',
         text: readAuthError(error, 'Unable to sign in with Google.'),
       });
+    } finally {
+      setIsGoogleSignInStarting(false);
     }
   };
 
@@ -8400,7 +8435,7 @@ Rules:
           pageOgImage="/pil-og.png"
         />
         <PipeListsLogin
-          canAttemptAuth={canAttemptAuth}
+          canAttemptAuth={canAttemptAuth && !isGoogleSignInStarting}
           authMessage={authMessage}
           magicEmail={magicEmail}
           sendingMagicLink={sendingMagicLink}
@@ -8740,7 +8775,8 @@ Rules:
                         <button
                           type="button"
                           onClick={handleGoogleSignIn}
-                          className="inline-flex h-9 w-full items-center justify-center rounded-full bg-stone-900 px-3 text-sm font-semibold text-white transition hover:bg-stone-700"
+                          disabled={isGoogleSignInStarting}
+                          className="inline-flex h-9 w-full items-center justify-center rounded-full bg-stone-900 px-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Sign in with Google
                         </button>

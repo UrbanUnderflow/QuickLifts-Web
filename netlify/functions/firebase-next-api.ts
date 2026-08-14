@@ -473,6 +473,16 @@ const ROUTE_ENTRIES: RouteEntry[] = [
     loadHandler: () => import("../../src/pages/api/invest/record-view.ts"),
   },
   {
+    pattern: "/api/nora-notetaker/queue-bot",
+    loadHandler: () =>
+      import("../../src/pages/api/nora-notetaker/queue-bot.ts"),
+  },
+  {
+    pattern: "/api/nora-notetaker/sync-bot",
+    loadHandler: () =>
+      import("../../src/pages/api/nora-notetaker/sync-bot.ts"),
+  },
+  {
     pattern: "/api/migrate/fitness-seeker-leads",
     loadHandler: () =>
       import("../../src/pages/api/migrate/fitness-seeker-leads.ts"),
