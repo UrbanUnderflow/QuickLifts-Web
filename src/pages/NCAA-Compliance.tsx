@@ -568,17 +568,37 @@ const NcaaCompliancePage: NextPage = () => {
         <section className="four-year-section" id="four-year-review" aria-labelledby="four-year-title">
           <div className="four-year-heading">
             <div>
-              <p className="eyebrow dark">The four-year comprehensive review</p>
-              <h2 id="four-year-title">Your first four-year review should not start with a blank page.</h2>
+              <p className="eyebrow dark">NCAA Bylaw 20.2.4.23 · Comprehensive institutional review</p>
+              <h2 id="four-year-title">
+                Every four years, the NCAA requires your university to review its full athlete health, safety and
+                performance system.
+              </h2>
             </div>
             <div className="four-year-intro">
               <span><CalendarDays size={18} /> Due November 3, 2028</span>
               <p>
-                PulseCheck and AuntEdna.ai turn the mental-health portion into a guided review workspace. The same
-                system organizes the broader university records so every area, owner, gap and supporting document is
-                visible in one place.
+                This is separate from the annual attestation. The university completes the broader review, then its
+                president or chancellor, athletics director and campus athletics health care administrator confirm it
+                was completed. PulseCheck and AuntEdna.ai keep the mental-health evidence organized year after year.
               </p>
             </div>
+          </div>
+
+          <div className="review-comparison" aria-label="Annual attestation compared with the four-year comprehensive review">
+            <article>
+              <span>Every year</span>
+              <strong>Annual attestation</strong>
+              <p>Confirm that care, education and services follow NCAA consensus-based guidance.</p>
+            </article>
+            <div className="comparison-arrow" aria-hidden="true">
+              <ArrowRight size={22} />
+              <span>Broader scope</span>
+            </div>
+            <article>
+              <span>At least every four years</span>
+              <strong>Comprehensive institutional review</strong>
+              <p>Examine mental and physical health, safety and performance support services across the university.</p>
+            </article>
           </div>
 
           <div className="four-year-flow">
@@ -1794,10 +1814,69 @@ const NcaaCompliancePage: NextPage = () => {
             line-height: 1.65;
           }
 
+          .review-comparison {
+            display: grid;
+            grid-template-columns: 1fr 120px 1.25fr;
+            margin-top: 48px;
+            border-top: 1px solid var(--ink);
+            border-bottom: 1px solid var(--ink);
+          }
+
+          .review-comparison article {
+            min-height: 172px;
+            padding: 24px 26px;
+          }
+
+          .review-comparison article:last-child {
+            background: rgba(216, 255, 82, .25);
+          }
+
+          .review-comparison article > span,
+          .review-comparison article > strong {
+            display: block;
+          }
+
+          .review-comparison article > span {
+            color: #527068;
+            font-size: 11px;
+            font-weight: 900;
+            text-transform: uppercase;
+          }
+
+          .review-comparison article > strong {
+            margin-top: 10px;
+            font-size: 22px;
+            line-height: 1.25;
+          }
+
+          .review-comparison article > p {
+            margin: 12px 0 0;
+            color: #52605b;
+            font-size: 14px;
+            line-height: 1.55;
+          }
+
+          .comparison-arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 10px;
+            color: var(--green);
+            background: var(--ink);
+          }
+
+          .comparison-arrow span {
+            color: rgba(255, 255, 255, .62);
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+          }
+
           .four-year-flow {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            margin-top: 58px;
+            margin-top: 42px;
             border-top: 1px solid var(--ink);
             border-bottom: 1px solid var(--ink);
           }
@@ -2838,6 +2917,30 @@ const NcaaCompliancePage: NextPage = () => {
 
             .four-year-intro {
               margin-top: 28px;
+            }
+
+            .review-comparison {
+              grid-template-columns: 1fr;
+              margin-top: 36px;
+            }
+
+            .review-comparison article {
+              min-height: auto;
+              padding: 22px 0;
+            }
+
+            .review-comparison article:last-child {
+              padding-right: 18px;
+              padding-left: 18px;
+            }
+
+            .comparison-arrow {
+              min-height: 64px;
+              flex-direction: row;
+            }
+
+            .comparison-arrow svg {
+              transform: rotate(90deg);
             }
 
             .four-year-flow {
