@@ -46,10 +46,11 @@ type ReadinessItem = {
   record: string;
 };
 
-const PAGE_TITLE = 'NCAA Mental Health Compliance';
+const PAGE_TITLE = 'NCAA Mental Health Compliance | PulseCheck + AuntEdna.ai';
 const PAGE_DESCRIPTION =
   'PulseCheck and AuntEdna.ai make NCAA mental-health compliance easier to manage by connecting athlete education, screening, early detection, clinical care and documentation.';
 const PAGE_URL = 'https://pulseintelligencelabs.com/NCAA-Compliance';
+const PAGE_OG_IMAGE = 'https://fitwithpulse.ai/ncaa-mental-health-compliance-og.png';
 
 const requirements: Requirement[] = [
   {
@@ -280,13 +281,13 @@ const NcaaCompliancePage: NextPage = () => {
           metaDescription: PAGE_DESCRIPTION,
           ogTitle: PAGE_TITLE,
           ogDescription: PAGE_DESCRIPTION,
-          ogImage: '/pulsecheck-og.png',
+          ogImage: PAGE_OG_IMAGE,
           ogUrl: PAGE_URL,
           ogType: 'website',
           twitterCard: 'summary_large_image',
           twitterTitle: PAGE_TITLE,
           twitterDescription: PAGE_DESCRIPTION,
-          twitterImage: '/pulsecheck-og.png',
+          twitterImage: PAGE_OG_IMAGE,
           lastUpdated: '2026-08-14T00:00:00.000Z',
         }}
         pageOgUrl={PAGE_URL}
@@ -3052,6 +3053,17 @@ const NcaaCompliancePage: NextPage = () => {
   );
 };
 
-export const getStaticProps: GetStaticProps = async () => ({ props: {} });
+export const getStaticProps: GetStaticProps = async () => ({
+  props: {
+    ogMeta: {
+      title: 'NCAA Mental Health Compliance — PulseCheck + AuntEdna.ai',
+      description: PAGE_DESCRIPTION,
+      image: PAGE_OG_IMAGE,
+      url: PAGE_URL,
+      type: 'website',
+      siteName: 'Pulse Intelligence Labs',
+    },
+  },
+});
 
 export default NcaaCompliancePage;
