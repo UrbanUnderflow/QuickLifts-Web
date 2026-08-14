@@ -46,7 +46,7 @@ type ReadinessItem = {
   record: string;
 };
 
-const PAGE_TITLE = 'NCAA Mental Health Compliance | PulseCheck + AuntEdna.ai';
+const PAGE_TITLE = 'NCAA Mental Health Compliance';
 const PAGE_DESCRIPTION =
   'PulseCheck and AuntEdna.ai make NCAA mental-health compliance easier to manage by connecting athlete education, screening, early detection, clinical care and documentation.';
 const PAGE_URL = 'https://pulseintelligencelabs.com/NCAA-Compliance';
