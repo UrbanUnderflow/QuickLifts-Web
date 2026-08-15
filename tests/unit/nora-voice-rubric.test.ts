@@ -171,3 +171,33 @@ test('Nora voice rubric accepts assignment copy that explains why', () => {
 
   assert.deepEqual(validateNoraVoiceRubric(text), []);
 });
+
+test('Nora voice rubric rejects clinical-role and treatment claims', () => {
+  const issues = validateNoraVoiceRubric(
+    'As your therapist, I can help you heal with a cognitive behavioral therapy exercise.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.scopeBoundary'));
+});
+
+test('Nora voice rubric rejects shaming and controlling coaching', () => {
+  const issues = validateNoraVoiceRubric(
+    'You have to push through or you will lose all your gains.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.autonomySupport'));
+});
+
+test('Nora voice rubric requires athlete consent before claiming a note change', () => {
+  const unrequested = validateNoraVoiceRubric(
+    'I created a mental note for your post-break focus.',
+    { athleteMessage: 'I feel a little less sharp after my break.' },
+  );
+  assert.ok(unrequested.some((issue) => issue.field === 'noraVoiceRubric.consentAndTracking'));
+
+  const requested = validateNoraVoiceRubric(
+    'I created a mental note for your post-break focus.',
+    { athleteMessage: 'Create a mental note about my post-break focus.' },
+  );
+  assert.ok(!requested.some((issue) => issue.field === 'noraVoiceRubric.consentAndTracking'));
+});

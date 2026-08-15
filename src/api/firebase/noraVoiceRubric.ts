@@ -1,6 +1,18 @@
 import type { ValidationIssue } from './adaptiveFramingLayer/types';
 
 export const NORA_VOICE_RUBRIC_PROMPT = `
+## Nora Engagement Scope Gate
+Nora is an AI mental-performance coach for sport. Nora supports sport-performance reflection, mental skills, routines, and support navigation. Nora does not provide therapy, psychotherapy, counseling, diagnosis, treatment, treatment plans, clinical interpretation, or clinical decision-making.
+
+Choose one lane before responding:
+1. PERFORMANCE: stay with the athlete's named sport moment, goal, routine, focus, confidence, motivation, composure, or decision.
+2. HEALTH DATA: read only the sleep, activity, recovery, heart-rate, HRV, calorie, or nutrition field the athlete explicitly requested. State missing, partial, or stale-data limits.
+3. CLINICAL CARE: do not probe or coach. Route therapy, counseling, diagnosis, treatment, medication, trauma, eating-disorder, or loss-of-function needs to a licensed professional and the institution's support options.
+4. CRITICAL SAFETY: give direct 911 and 988 guidance and activate the support pathway. Stop performance coaching.
+5. CLOSURE: reply briefly and stop.
+
+Use only the Nora Engagement Loop steps the turn needs: Notice the exact sport detail; Reflect it without inferring a hidden emotion; Clarify with at most one useful question; Connect it to stated context; Offer one bounded skill with permission; Track only an athlete-stated recurring performance pattern after explicit consent. Nora may use evidence-informed, non-clinical principles from autonomy-supportive coaching, psychological skills training, self-regulation, implementation intentions, imagery, self-talk, and attention training. Nora must never claim to deliver Motivational Interviewing, CBT, ACT, psychotherapy, or another clinical treatment.
+
 ## Nora Conversation Rubric
 Every athlete-facing Nora response must pass these checks before it ships:
 1. Takeaway: respond to what the athlete chose to discuss. Advice and questions are optional when a simple acknowledgment is the natural response.
@@ -85,6 +97,41 @@ const unsafeHealthDataPivotPatterns = [
   'large surplus',
   'low activity',
 ];
+
+const prohibitedClinicalOutputPatterns = [
+  'as your therapist',
+  'i can diagnose',
+  'i will diagnose',
+  'your symptoms suggest',
+  'clinical assessment',
+  'treatment plan',
+  'therapy exercise',
+  'therapy technique',
+  'therapy session',
+  'trauma processing',
+  'exposure therapy',
+  'cognitive behavioral therapy',
+  'i can help you heal',
+];
+
+const shamingOrControllingPatterns = [
+  'bad athlete',
+  'lazy',
+  'weak minded',
+  'throwing it all away',
+  'throw it all away',
+  'lose all your gains',
+  'lose all the gains',
+  'you should be ashamed',
+  'you have to',
+  'you need to',
+  'you must',
+  'just push through',
+  'no excuses',
+];
+
+const noteWriteClaimPattern = /\b(?:i|we) (?:saved|created|added|consolidated|updated) (?:a |your |the )?(?:mental )?note\b/i;
+const noteRequestPattern = /\b(?:create|make|add|save|remember|track)\b[^.?!]{0,40}\b(?:mental )?note\b|\btrack this for me\b|\bremember this\b/i;
 
 const vagueActionPatterns = [
   'train clean',
@@ -342,15 +389,15 @@ const repetitiveDialogueViolation = (
 };
 
 const normalizeOptions = (
-  optionsOrPrevious: { previousAssistantMessages?: string[] } | string[] = {},
-): { previousAssistantMessages?: string[] } =>
+  optionsOrPrevious: { previousAssistantMessages?: string[]; athleteMessage?: string } | string[] = {},
+): { previousAssistantMessages?: string[]; athleteMessage?: string } =>
   Array.isArray(optionsOrPrevious)
     ? { previousAssistantMessages: optionsOrPrevious }
     : optionsOrPrevious;
 
 export const validateNoraVoiceRubric = (
   text: string,
-  optionsOrPrevious: { previousAssistantMessages?: string[] } | string[] = {},
+  optionsOrPrevious: { previousAssistantMessages?: string[]; athleteMessage?: string } | string[] = {},
 ): ValidationIssue[] => {
   const options = normalizeOptions(optionsOrPrevious);
   const trimmed = String(text || '').trim();
@@ -395,6 +442,22 @@ export const validateNoraVoiceRubric = (
         `pivots into health-data judgment or behavior prescription with '${pattern}'`,
       ));
     }
+  }
+
+  for (const pattern of prohibitedClinicalOutputPatterns) {
+    if (lowered.includes(pattern)) {
+      violations.push(issue('scopeBoundary', `claims a clinical role or method with '${pattern}'`));
+    }
+  }
+
+  for (const pattern of shamingOrControllingPatterns) {
+    if (lowered.includes(pattern)) {
+      violations.push(issue('autonomySupport', `uses shaming or controlling language with '${pattern}'`));
+    }
+  }
+
+  if (noteWriteClaimPattern.test(trimmed) && !noteRequestPattern.test(options.athleteMessage || '')) {
+    violations.push(issue('consentAndTracking', 'claims a note change without an explicit athlete request'));
   }
 
   for (const pattern of vagueActionPatterns) {
@@ -466,6 +529,7 @@ export const enforceNoraVoiceRubric = (
   options: {
     fallback?: string;
     previousAssistantMessages?: string[];
+    athleteMessage?: string;
     onViolation?: (event: {
       original: string;
       repaired: string;

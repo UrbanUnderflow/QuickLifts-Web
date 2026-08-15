@@ -120,6 +120,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/pulseintelligencelabs',
     '/elite-athlete-support-readiness-assessments',
     '/NCAA-Compliance',
+    '/nora-engagement-model',
     // Education courses (public so people can reach training from assessment results)
     '/parent-training',
     '/coach-training',

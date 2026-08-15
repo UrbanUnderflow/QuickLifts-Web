@@ -756,7 +756,7 @@ const NcaaCompliancePage: NextPage = () => {
             <img src="/pulse-logo-green.svg" alt="" />
             <span>Pulse Intelligence Labs</span>
           </a>
-          <span>PulseCheck + AuntEdna.ai</span>
+          <a href="/nora-engagement-model">Nora methods and evidence</a>
           <span>© 2026 Pulse Intelligence Labs, Inc.</span>
         </footer>
 
@@ -2271,6 +2271,11 @@ const NcaaCompliancePage: NextPage = () => {
 
           .page-footer .brand {
             color: var(--white);
+          }
+
+          .page-footer > a:not(.brand) {
+            color: rgba(255, 255, 255, .72);
+            text-decoration: none;
           }
 
           .report-layer {
