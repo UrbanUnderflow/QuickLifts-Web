@@ -25,6 +25,7 @@
 
 import { SEEDED_EXERCISES } from './exerciseLibraryService';
 import type { MentalExercise, ModuleInteraction } from './types';
+import { getSimSpecByLegacyExerciseId } from './taxonomy';
 import { BODY_SCAN_SETTLE_TEXT } from '../../../content/bodyScanScript';
 
 export const MODULE_NARRATION_ENGINE_KEY = 'pulsecheck-module-narration';
@@ -49,8 +50,8 @@ export function hashNarrationText(input: string): string {
   return (hash >>> 0).toString(16);
 }
 
-// The six self-contained sims render through SimRuntimePlayerView /
-// ResetSwitchGameView; everything else uses GenericExercisePlayerView.
+// The six self-contained sims render through their dedicated runtime engines;
+// everything else uses GenericExercisePlayerView.
 const SIM_MODULE_IDS = new Set([
   'focus-3-second-reset',
   'focus-noise-gate',
@@ -60,22 +61,12 @@ const SIM_MODULE_IDS = new Set([
   'focus-endurance-lock',
 ]);
 
-// The Reset game renders through ResetSwitchGameView, which has NO intro or
-// completion narration — only in-game phase cues (see RESET_GAME_CUES).
+// Reset uses a small set of fixed phase cues in addition to dynamic round text.
 const RESET_MODULE_ID = 'focus-3-second-reset';
 
-// Mirrors PulseCheckFallbackSimDescriptor.coreMetricName (SimRuntimePlayerView.swift)
-// after iOS's `.replacingOccurrences(of: "_", with: " ").capitalized`. The seeded
-// modules have no stored buildArtifact, so iOS always narrates the fallback
-// descriptor's metric label. Sims built with a CUSTOM artifact (variantName or
-// athleteLabels.description differing from the seed) fall back to live TTS.
-const SIM_CORE_METRIC_LABELS: Record<string, string> = {
-  'focus-noise-gate': 'Decision Latency',
-  'decision-brake-point': 'Stop Latency',
-  'decision-signal-window': 'Timing Accuracy',
-  'decision-sequence-shift': 'Switch Accuracy',
-  'focus-endurance-lock': 'Late Session Stability',
-};
+function simMetricLabel(exercise: MentalExercise): string {
+  return getSimSpecByLegacyExerciseId(exercise.id)?.athleteMetricLabel ?? 'Task performance';
+}
 
 // Mirrors each engine's static pre-round rule readout
 // (SimRuntimeEngineViews.swift introNarrationText). These are spoken once the
@@ -84,38 +75,27 @@ const SIM_CORE_METRIC_LABELS: Record<string, string> = {
 // runtime can produce gets its own clip.
 const SIM_ENGINE_RULE_READOUTS: Record<string, string[]> = {
   'focus-noise-gate': [
-    'Noise Gate. Memorize the live target before clutter starts. When the options appear, select the live target and ignore the distractors. Ready. Set. Begin.',
+    'Noise Gate. A number stays at the top. Find that same number in the field and tap it. Some rounds add a flashing marker or crowd sound. Those are distractions. Ready. Set. Begin.',
   ],
   'decision-brake-point': [
-    'Brake Point. Tap Commit for go, green, clear, or open. Tap Brake for stop, red, brake, fake, hold, check, brake now, or abort. One tap decides the round. Ready. Set. Begin.',
+    'Brake Point. Match each arrow with left or right. On some trials, a delayed red stop signal appears. If it appears, do not tap. Ready. Set. Begin.',
   ],
   'decision-signal-window': [
-    'Signal Window. Pick the live target before the window closes. Ignore plausible wrong decoys. One choice decides the round. Ready. Set. Begin.',
+    'Signal Window. Decide whether most arrows point left or right, then choose that direction. Ready. Set. Begin.',
   ],
   'decision-sequence-shift': [
-    'Sequence Shift. Follow the active rule. When the rule changes, drop the old rule and answer using the new one. Ready. Set. Begin.',
+    'Sequence Shift. Use the letter or number rule shown. Left means vowel or odd. Right means consonant or even. Ready. Set. Begin.',
   ],
   'focus-endurance-lock': [
-    'Hold clean execution as fatigue accumulates across the session. Wait for the pulse window, tap inside the active window, and stay with the cadence as fatigue rises. Ready. Set. Begin.',
-    'Hold the same task cleanly while the display state gets noisier. Wait for the pulse window, tap inside the active window, and stay with the cadence as fatigue rises. Ready. Set. Begin.',
-    'Hold form while the final blocks become more consequential. Wait for the pulse window, tap inside the active window, and stay with the cadence as fatigue rises. Ready. Set. Begin.',
+    'Endurance Lock. Wait for the center visual signal, then tap it once. The waiting time changes, but the signal and rule stay the same. Ready. Set. Begin.',
   ],
 };
 
-// Mirrors ResetSwitchGameView's static phase cues (lockInNarrationCue,
-// resetPhaseMessage, disruption/reset/second-chance calls). Round counters
-// and score readouts stay live TTS by design.
+// Static Reset phase cues. Round counters and interruption labels stay live TTS.
 const RESET_GAME_CUES: string[] = [
-  'Tap the pulse.',
-  'Watch the path. Remember the shape it draws.',
-  'Remember the sequence.',
-  'Disruption. Hold steady.',
-  'Reset. Breathe. Re-engage.',
-  'Re-anchor now.',
-  'Match the path.',
-  'Repeat the sequence.',
-  'Second chance. Tap the target.',
-  'Second chance. Repeat it.',
+  'Reset. Match each arrow with left or right. Some trials add an interruption and a fixed reset interval before the same arrow task returns.',
+  'Interruption.',
+  'Reset interval. Pause. Reorient. Return.',
 ];
 
 // Mirrors GenericExercisePlayerView narrationScriptForCurrentPhase (.cueWord).
@@ -165,15 +145,17 @@ function genericCompletionText(exercise: MentalExercise): string {
 // builds a fallback runtime artifact for every seeded sim (variantName =
 // exercise.name, description = exercise.description, coreMetricName from
 // PulseCheckFallbackSimDescriptor), so the spoken metric label is the
-// per-engine one, never the "Clean execution" default.
+// per-engine one, never the generic task-performance fallback.
 function simIntroText(exercise: MentalExercise): string {
+  const spec = getSimSpecByLegacyExerciseId(exercise.id);
   return [
     'Nora here.',
     `${exercise.name}.`,
-    exercise.description,
-    `Your core metric today is ${SIM_CORE_METRIC_LABELS[exercise.id] ?? 'Clean execution'}.`,
+    spec?.athleteTaskDescription ?? exercise.description,
+    `Your core metric today is ${simMetricLabel(exercise)}.`,
+    spec?.resultBoundary,
     "Tap begin when you're ready.",
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 function sportPackSimIntroText(
@@ -181,11 +163,12 @@ function sportPackSimIntroText(
   description: string | undefined,
   applicationCue: string,
 ): string {
+  const spec = getSimSpecByLegacyExerciseId(exercise.id);
   return [
     'Nora here.',
     `${exercise.name}.`,
-    description || exercise.description,
-    `Your core metric today is ${SIM_CORE_METRIC_LABELS[exercise.id] ?? 'Clean execution'}.`,
+    description || spec?.athleteTaskDescription || exercise.description,
+    `Your core metric today is ${simMetricLabel(exercise)}.`,
     applicationCue,
     "Tap begin when you're ready.",
   ].join(' ');
@@ -337,17 +320,13 @@ export function buildModuleNarrationScripts(): ModuleNarrationScript[] {
       category: String(exercise.category ?? ''),
     };
 
-    // ResetSwitchGameView never narrates an intro or completion — emitting
-    // those slots would fake coverage for clips iOS can never play.
-    if (!isResetGame) {
-      scripts.push({
-        ...base,
-        slot: 'intro',
-        cueKey: `${exercise.id}-narration-intro`,
-        label: `${exercise.name} — Intro`,
-        text: isSim ? simIntroText(exercise) : genericIntroText(exercise),
-      });
-    }
+    scripts.push({
+      ...base,
+      slot: 'intro',
+      cueKey: `${exercise.id}-narration-intro`,
+      label: `${exercise.name} — Intro`,
+      text: isSim ? simIntroText(exercise) : genericIntroText(exercise),
+    });
 
     if (!isSim) {
       // Modules with an interaction config render the interactive mechanic —
@@ -427,7 +406,7 @@ export function buildModuleNarrationScripts(): ModuleNarrationScript[] {
       }
     }
 
-    if (isSim && !isResetGame) {
+    if (isSim) {
       (exercise.sportContentPacks ?? []).forEach((pack) => {
         const slot = `sport-${pack.archetype}-intro`;
         scripts.push({
@@ -481,15 +460,13 @@ export function buildModuleNarrationScripts(): ModuleNarrationScript[] {
       });
     }
 
-    if (!isResetGame) {
-      scripts.push({
-        ...base,
-        slot: 'complete',
-        cueKey: `${exercise.id}-narration-complete`,
-        label: `${exercise.name} — Completion`,
-        text: isSim ? simCompletionText(exercise) : genericCompletionText(exercise),
-      });
-    }
+    scripts.push({
+      ...base,
+      slot: 'complete',
+      cueKey: `${exercise.id}-narration-complete`,
+      label: `${exercise.name} — Completion`,
+      text: isSim ? simCompletionText(exercise) : genericCompletionText(exercise),
+    });
   });
 
   return scripts;

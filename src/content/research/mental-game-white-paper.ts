@@ -10,18 +10,18 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_SLUG =
 export const TRAINING_MENTAL_GAME_WHITE_PAPER_METADATA = {
   title: 'Training the Mental Game: A Protocol and Simulation Architecture for Mental Performance in Sport',
   subtitle:
-    'How PulseCheck combines state-regulation protocols, pressure simulations, curriculum planning, and automaticity science to build a structured mental training system for athletes.',
+    'How PulseCheck combines state-regulation protocols, evidence-informed task practice, curriculum planning, and governed validation for athletes.',
   excerpt:
-    'A white paper on PulseCheck as a two-lane mental performance system: protocols for regulation, simulations for sharpening, and curriculum that builds automaticity over time.',
+    'A white paper on PulseCheck as a two-lane mental performance system, including the exact task, calculation, minimum-data rule, and evidence boundary for each simulation family.',
   category: 'Performance Science',
   author: 'Tremaine Grant',
   authorTitle: 'Founder of Pulse Intelligence Labs',
-  readTime: '34 min read',
+  readTime: '42 min read',
   contentType: 'white-paper' as const,
   featured: false,
   status: 'published' as const,
   createdAt: '2026-06-05T00:00:00.000Z',
-  updatedAt: '2026-06-05T00:00:00.000Z',
+  updatedAt: '2026-08-15T00:00:00.000Z',
   publishedAt: '2026-06-05T00:00:00.000Z',
   featuredImage: '/research-training-mental-game-white-paper.webp',
 };
@@ -51,7 +51,7 @@ export const TRAINING_MENTAL_GAME_WHITE_PAPER_CONTENT = `
 :::abstract
 Mental performance is widely acknowledged as a critical factor in athletic competition, yet the tools available to train it have not kept pace with the systems used to develop physical capacity. Most existing approaches fall into one of two categories: clinical sport psychology delivered through conversation, or consumer-facing brain training apps built on generic cognitive tasks with limited evidence of transfer to sport-specific contexts. Neither approach provides athletes and coaches with a structured, measurable, progressive training system for the cognitive-perceptual and state-regulation skills that determine performance under pressure.
 
-This paper introduces PulseCheck as a protocol and simulation architecture for mental performance training. The system operates through two coordinated lanes. Protocols are bounded mental regulation, priming, and recovery interventions that help an athlete change state before, between, or after demanding performance moments. Simulations are instrumented pressure-training environments that sharpen and measure Focus, Composure, and Decision skills under controlled challenge. Nora, the adaptive planning engine, reads state signals, profile history, protocol responsiveness, simulation outcomes, and curriculum progress before assigning the next useful action.
+This paper introduces PulseCheck as a protocol and simulation architecture for mental performance training. The system operates through two coordinated lanes. Protocols are bounded mental regulation, priming, and recovery interventions that help an athlete change state before, between, or after demanding performance moments. Simulations are instrumented, evidence-informed tasks designed to rehearse specific cognitive-perceptual demands and observe behavior under controlled conditions. They do not, by themselves, establish a stable trait, neural change, clinical condition, readiness state, or transfer to competition. Nora, the adaptive planning engine, reads state signals, profile history, protocol responsiveness, simulation outcomes, and curriculum progress before assigning the next useful action.
 
 The core thesis is that athletes do not need a one-day competition trick. They need a curriculum that builds automaticity over time. PulseCheck therefore keeps a small active slate of protocols and simulations in flight, rotates them as mastery emerges, and uses repeated, state-aware practice to make useful responses easier to retrieve when pressure taxes attention. This paper describes the scientific foundations, system architecture, protocol and simulation design principles, curriculum model, automaticity framework, physiology-cognition roadmap, and validation discipline that govern PulseCheck.
 :::
@@ -68,17 +68,17 @@ The mental side of sport is usually less organized. Sport psychology has produce
 
 None of those approaches, by themselves, create a complete training system. A conversation can be powerful, but it is not the same as instrumented practice. A breathing exercise can help, but it does not automatically become available under pressure unless it is rehearsed and embedded into the athlete's performance routine. A generic reaction game may improve performance on that game without teaching the athlete how to regulate state or execute inside sport-relevant pressure.
 
-PulseCheck addresses that gap by combining two complementary forms of training. Simulations create serious mental training environments that target and measure cognitive-perceptual skills under controlled stress. Protocols provide bounded mental interventions that help athletes regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
+PulseCheck addresses that gap by combining two complementary forms of training. Simulations create repeatable task environments that engage defined cognitive-perceptual processes and record task-specific behavior under controlled challenge. Protocols provide bounded mental interventions that help athletes regulate, prime, recover, and apply the right state before a simulation, trial, practice exposure, or competition moment.
 
-PulseCheck is a protocol and simulation system. Protocols help the athlete change state. Simulations test and sharpen execution under pressure. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a practiced response that has already been rehearsed, measured, and refined.
+PulseCheck is a protocol and simulation system. Protocols help the athlete work with state. Simulations provide structured practice and task-specific observations. Curriculum ties both together over time so the athlete is not hoping to remember a tool on competition day; they are building a response that has already been rehearsed and reviewed.
 
 ## 1.1 What This Looks Like in Practice
 
 Consider an athlete who opens PulseCheck after a difficult practice. They report feeling keyed up, frustrated by a mistake, and unsure whether they should push into another pressure challenge. If a connected device is available, the state layer may also see that recovery markers are below that athlete's recent baseline. A generic app might serve a relaxation clip or a reaction game. PulseCheck should do something more specific.
 
-Nora first reads the current state pattern. If the main bottleneck is overactivation, Nora may assign a short regulation protocol such as Box Breathing or Nerves to Excitement. The athlete practices the intervention inside a bounded exchange, and the system records whether the athlete can name the body signal, apply the technique, and describe a useful shift. If the athlete becomes more available for challenge, Nora can then assign The Reset Switch to test whether the athlete can return to task focus after disruption.
+Nora first reads the current state pattern. If the athlete wants help with overactivation, Nora may offer a short regulation protocol such as Box Breathing or Nerves to Excitement. The athlete practices the intervention inside a bounded exchange, and the system records whether the athlete can name the body signal, apply the technique, and describe a useful shift. If the athlete wants a task afterward, Nora can offer The Reset Switch to practice returning to the same left-right classification task after a controlled interruption.
 
-The output is not a vague claim that the athlete "worked on mindset." The system can compare pre-protocol state, protocol completion quality, recovery latency, first-post-reset accuracy, false starts, and stability across repeated disruptions. The coach can see whether regulation improved the quality of the following simulation, whether the athlete needs another exposure, or whether the next useful action is recovery rather than pressure work.
+The output is not a vague claim that the athlete "worked on mindset." The system can preserve the athlete's pre-protocol report, protocol completion, condition accuracy, premature responses, timeouts, and the median within-pair response-time difference between matched reference and post-interruption trials. Those observations can support a coaching conversation. They do not prove emotional recovery, resilience, or the cause of a change.
 
 That is the product thesis in miniature: read state, choose a bounded intervention, test execution under pressure, and use the result to shape the next training decision.
 
@@ -92,13 +92,13 @@ Attentional Control Theory, developed by Eysenck, Derakshan, Santos, and Calvo, 
 
 Under pressure, the stimulus-driven system gains influence. The athlete may know what matters, but attention becomes easier to capture. The mind searches for threat, the body reacts to urgency, and execution quality can degrade. This is not a lack of character. It is a predictable shift in cognitive control.
 
-PulseCheck simulations train this directly. Noise Gate asks whether an athlete can keep the right signal active while irrelevant stimuli compete for attention. Reset asks whether the athlete can return to goal-directed focus after disruption. Signal Window and Sequence Shift ask whether the athlete can read, update, and act while time and ambiguity compress the decision window.
+PulseCheck translates this theory into bounded task hypotheses. Noise Gate compares performance in matched visible-target fields with and without an added distractor. Reset compares the same left-right classification task after a neutral hold and after a controlled interruption. Signal Window varies the strength of perceptual evidence while holding its response window constant. Sequence Shift compares cued rule-repeat and rule-switch trials. These are evidence-informed task designs, not proof that the product has measured a general attention capacity.
 
 ## 2.2 Stress Inoculation Training
 
 Stress Inoculation Training, associated with Meichenbaum, provides the pedagogical logic for pressure exposure. The core principle is that controlled, graduated exposure to stressors, paired with skill rehearsal, can build more stable performance when real stressors appear. [cite:3]
 
-In PulseCheck, this appears through modifiers and curriculum progression. The system does not simply make tasks harder. It changes the psychological context: time pressure, evaluative threat, ambiguity, distraction, consequence, and fatigue load. The goal is not to eliminate stress. The goal is to build the capacity to perform through it.
+In PulseCheck, this appears through carefully bounded modifiers and curriculum progression. A modifier is allowed only when it preserves the family's canonical rule, timing contract, response mapping, and core calculation. Modifier conditions are labeled and analyzed separately; the system does not silently tighten timing, add visual load, or change scoring and then attribute a difference to pressure or fatigue. The goal is not to eliminate stress. The design hypothesis is that graduated, well-specified practice may help athletes apply useful responses while stress remains present, a transfer claim that must be tested rather than assumed.
 
 This matters because competition does not wait until the athlete feels perfectly calm. A useful mental training system has to teach athletes how to regulate when regulation is needed, and how to execute when stress remains present.
 
@@ -142,7 +142,7 @@ The central architectural principle is the separation between protocols and simu
 
 Protocols are bounded state interventions. They are not lightweight content cards and they are not simulation variants. A protocol exists to change athlete state so a following action becomes more useful. It may regulate overactivation, prime readiness, narrow attention, build confidence, rehearse imagery, or support recovery. Each protocol needs a mechanism, use window, expected state shift, contraindications, evidence posture, and runtime eligibility.
 
-Simulations are instrumented mental performance challenges. They create controlled environments where Focus, Composure, and Decision skills can be sharpened and measured. Each simulation has a family, variants, mechanics, score outputs, modifier compatibility, difficulty rules, and evidence status.
+Simulations are instrumented mental performance tasks. They create controlled environments where athletes can practice a defined demand and where PulseCheck can record task-specific behavior. Each simulation has a family, variants, mechanics, observed outputs, modifier compatibility, minimum-data rules, exclusion rules, and evidence status.
 
 The two lanes are siblings. Protocols regulate or prepare the state. Simulations challenge and measure execution. Nora can assign one alone or sequence them together when the athlete needs both.
 
@@ -158,12 +158,12 @@ In practice, this means Nora does not invent interventions at runtime. Nora choo
 
 The simulation system is organized around six locked initial families:
 
-- Reset: mental recovery after disruption, measuring how quickly and cleanly the athlete returns to goal-directed execution.
-- Noise Gate: selective attention under escalating irrelevant stimuli.
-- Brake Point: response inhibition and cancellation of the wrong action.
-- Signal Window: signal discrimination under compressed time and incomplete information.
-- Sequence Shift: working-memory updating and task switching under load.
-- Endurance Lock: sustained attention, fatigability, and late-session deterioration.
+- Reset: matched left-right classification before and after one controlled interruption, observing task re-entry without labeling it emotional recovery.
+- Noise Gate: matched visible-target search with and without a defined distractor, observing a task-specific distraction effect.
+- Brake Point: left-right go responses with a delayed stop signal on a minority of trials, observing go behavior and stop success.
+- Signal Window: majority-direction decisions across balanced levels of visual evidence, observing accuracy and correct response time separately.
+- Sequence Shift: cued switching between stable letter and number rules, observing repeat-versus-switch differences.
+- Endurance Lock: one constant visual response task across six blocks, observing within-session change without assigning fatigue as the cause.
 
 Each family can have variants, sport-context expressions, pressure modifiers, and assessment modes. The system can expand, but expansion is governed. Additional families must demonstrate that they are meaningfully distinct from established families rather than merely a different visual wrapper.
 
@@ -189,9 +189,9 @@ This is important because two athletes can both look "Yellow" but need different
 
 ## 3.6 Score Architecture and Modifiers
 
-PulseCheck's score system operates in layers. At the top are pillar composites for Focus, Composure, and Decision. Beneath them are skill scores, such as selective attention, error recovery speed, pressure stability, response inhibition, working-memory updating, and signal discrimination. Beneath those are raw metrics: response time, accuracy, false starts, recovery latency, variance, degradation slope, and modifier-stratified performance.
+PulseCheck's score system operates in layers. At the top are coaching-facing pillar composites for Focus, Composure, and Decision. Beneath them are construct hypotheses that require validation. Beneath those are the observed task measures: correct and incorrect responses, response time on valid correct trials, premature responses, false starts, timeouts, within-condition variability, and prespecified condition differences. The raw observations remain available so a composite never hides what was actually recorded.
 
-Modifiers change the psychological context of a simulation without changing the underlying target skill. Time pressure, evaluative threat, ambiguity, distraction, fatigue load, and consequence allow the system to distinguish baseline ability from pressure-sensitive performance.
+Modifiers may change the psychological context of a simulation only when they leave its measurement contract intact. A supported comparison can describe performance in the labeled task conditions; it cannot distinguish a general baseline ability from pressure sensitivity until reliability, construct validity, and transfer have been established.
 
 # 4. Protocol Design Principles
 
@@ -240,7 +240,7 @@ Responsiveness also stays subordinate to current state. If the latest state snap
 
 # 5. Simulation Design Principles
 
-Simulations are the mental sharpening side of PulseCheck. They create controlled, instrumented challenges that let the system train and measure cognitive-perceptual skills under pressure.
+Simulations are the structured task-practice side of PulseCheck. They create controlled, instrumented challenges that let athletes rehearse defined demands and let the system observe task-specific behavior. Whether that practice changes a broader cognitive construct or transfers to sport is a research question, not an assumption built into the score.
 
 ## 5.1 The Sim Specification Template
 
@@ -250,35 +250,81 @@ This prevents the most common failure mode in cognitive training products: build
 
 ## 5.2 Example: The Reset Switch
 
-The Reset Switch is the flagship Reset-family simulation. It is a mental recovery training simulation that asks one essential question: how fast and how cleanly can the athlete recover after something goes wrong?
+The Reset Switch is the flagship Reset-family task. It asks a narrower, answerable question: within this session, how does performance on the same left-right arrow classification differ after a controlled interruption compared with a neutral hold?
 
-The simulation follows a three-phase loop.
+Two unscored practice trials come first. Scored trials are counterbalanced matched pairs. Both conditions use the same arrow task, response keys, 1,700 millisecond pre-target interval, and 1,500 millisecond response window. In the post-interruption condition, a 900 millisecond interruption replaces part of the neutral hold and is followed by a fixed 800 millisecond reset interval. The task therefore changes the interruption condition while preserving total pre-target time.
 
-Lock In establishes a sustained attention task. The athlete narrows attention and performs a simple but measurable action with rhythm, target tracking, or sequence control.
+The core result is the median within-pair difference between valid correct responses: post-interruption response time minus reference response time. It is unavailable until the session contains at least six valid correct matched pairs. Condition accuracy, the accuracy difference, first post-interruption correctness, premature responses, timeouts, and the observed reset interval remain separate.
 
-Disruption breaks that focus without warning. The system may introduce visual noise, audio interference, cognitive provocation, rule change, or combined pressure.
+This design is informed by attentional-control and task-reorientation research, including evidence that post-error slowing can reflect orienting or response caution rather than one simple recovery mechanism. [cite:1,29,30] PulseCheck can describe task re-entry after this controlled interruption. It cannot infer emotional recovery, resilience, mental toughness, neural recovery, or competition behavior from this task alone.
 
-Reset asks the athlete to re-engage with the task as quickly and accurately as possible. The key output is not whether disruption happens. Disruption is expected. The key output is recovery quality: recovery time, first-post-reset accuracy, false starts, pattern confirmation, missed recovery, and stability across repeated disruptions.
+## 5.3 Canonical Measurement Contracts
 
-The scientific basis comes from attentional control, stress inoculation, refocusing-speed literature, and applied distraction-refocusing practice. The athlete is not just practicing calm. They are building a measurable recovery response that can become faster, cleaner, and more reliable over time. [cite:1,3,6]
+Every family uses one canonical contract across web, iOS, and Android. A family name is not treated as evidence that a psychological construct was measured. Each contract keeps four layers separate:
 
-## 5.3 The Initial Simulation Portfolio
+- **Task:** what appears and what the athlete does.
+- **Observed measure:** what is calculated from recorded behavior.
+- **Construct hypothesis:** the process the task is intended to engage.
+- **Transfer hypothesis:** a possibility that requires a separate sport-relevant study.
+
+Practice trials do not enter scored results. Accuracy, correct-response time, wrong responses, premature responses, false starts, and timeouts remain separate. Responses below the 150 millisecond artifact floor do not enter response-time estimates. A result can be unavailable when its minimum-data or quality rules are not met; the product does not manufacture a score from insufficient observations.
+
+| Family | Canonical task | Standard core result | Minimum-data rule | Interpretation boundary |
+| --- | --- | --- | --- | --- |
+| Noise Gate | Find one visible called number in matched reference and distraction fields. | Reference accuracy minus distraction accuracy. | Core reporting requires equal condition counts and at least five rounds per condition; response-time shift requires three valid correct matched pairs. | Task-specific distraction effect, not a general attention trait. |
+| Reset | Classify matched left-right arrows before or after one controlled interruption and fixed reset interval. | Median post-interruption minus reference response-time difference. | Requires six valid correct matched pairs. | Task re-entry observation, not emotional recovery or resilience. |
+| Brake Point | Make left-right go responses and withhold when a delayed STOP signal appears. | Stop success beside go accuracy and correct go response time. | Core reporting requires the standard 48 go and 16 stop trials; a stop-time estimate requires 150 valid go trials, 50 stop trials, and all quality checks. | Stop-signal task behavior, not trait impulsivity. |
+| Signal Window | Choose the majority direction in a balanced nine-arrow field. | Decision accuracy beside correct response time. | Reporting requires all 24 scored trials; overall response time requires six valid correct responses and each evidence level requires two. | Brief perceptual decision, not sport vision or tactical intelligence. |
+| Sequence Shift | Switch between cued Letter and Number rules with stable response keys. | Switch minus repeat correct-response-time difference, with accuracy beside it. | Requires eight valid correct repeat and eight valid correct switch trials. | Cued task switching, not broad flexibility or working-memory capacity. |
+| Endurance Lock | Tap for one constant visual signal after unpredictable foreperiods across six blocks. | Fitted response-time change per elapsed minute. | Requires 24 valid responses and at least three in every block. | This session's sustained-attention behavior, not proof of fatigue or its cause. |
+
+### Noise Gate
+
+Noise Gate is a visible-target visual-search task, not a word-memory game. A number remains visible at the top while the athlete finds that same number in a field. Each scored target appears once in a reference condition and once in the configured distraction condition. In the visual condition, one wrong option may be highlighted; the correct option is never highlighted. Audio and combined variants preserve the same search rule and must use separately balanced channel conditions.
+
+The standard core result is the reference accuracy minus distraction accuracy. Program and evidence-layer reporting requires equal condition counts and at least five scored rounds per condition. A secondary correct-response-time shift is the median distraction-minus-reference latency within valid correct matched pairs and remains unavailable below three pairs. Wrong taps, highlighted-distractor taps, timeouts, input method, device class, and channel are kept separate. Attentional-control and visual-search research support the interference hypothesis, not a claim that one mobile session measures a general filtering ability or predicts performance under sport pressure. [cite:1,5,9]
+
+### Brake Point
+
+Brake Point follows the stop-signal structure. Most trials require a left or right response to an arrow. On 25 percent of trials, STOP appears after the arrow has begun and the athlete must withhold the response. There is no Brake button. Four unscored practice trials precede the standard 64 scored trials. The stop-signal delay begins at 250 milliseconds, moves in 50 millisecond steps, and remains between 100 and 700 milliseconds. Successful withholding makes the next stop harder by increasing the delay; any failed stop response, including a premature response, decreases it. [cite:24,25]
+
+The standard training result is stop success, reported beside go accuracy and correct go response time. Program and evidence-layer reporting requires the standard 48 go and 16 stop trials. That is an implementation-completeness rule, not a claim of individual reliability. PulseCheck does not report a stop-signal reaction-time estimate from the standard rep. A research-length stop-time estimate requires at least 150 valid go trials and 50 stop trials, complete stop-delay capture, stop success between 25 and 75 percent, no more than 10 percent go omissions, at least 80 percent go accuracy, and failed-stop responses that are faster on average than correct go responses. Even when those checks pass, the estimate is task-specific and may not support reliable individual inference without additional validation. It does not establish impulsivity, diagnosis, safety risk, readiness, or on-field inhibition. [cite:24,25]
+
+### Signal Window
+
+Signal Window presents nine arrows for 650 milliseconds. Five, six, or seven arrows agree with the target direction, and the athlete chooses whether the majority points left or right. Direction and evidence count are balanced, the clock begins at field onset, and the 1,600 millisecond response window remains fixed. This avoids revealing the answer through option order and avoids confounding weaker evidence with a shorter deadline.
+
+Decision accuracy and correct response time are co-primary task observations; they are not collapsed into an arbitrary speed-accuracy score. Program and evidence-layer reporting accepts decision accuracy only when all 24 scored trials are present. That is an implementation-completeness rule, not validation evidence. Overall correct response time is unavailable below six valid correct responses, and evidence-level response time is unavailable below two valid correct responses at that level. Wrong choices, premature responses, and timeouts remain separate. Psychophysical evidence supports the expectation that stimulus strength can affect decision speed and accuracy. It does not make this a measure of sport vision, tactical intelligence, readiness, or game-day decision quality. [cite:26]
+
+### Sequence Shift
+
+Sequence Shift uses stable keys and changing rules. A neutral Letter or Number cue appears 400 milliseconds before a letter-number pair. Left always means vowel or odd; right always means consonant or even. Six practice trials teach the mapping. Scored trials balance repeat-versus-switch status, active rule, response side, and congruency under one 1,800 millisecond response window.
+
+The core result is mean valid correct switch response time minus repeat response time and remains unavailable below eight valid correct trials in either condition. Repeat accuracy, switch accuracy, the accuracy difference, premature responses, and timeouts remain separate. An old-rule response is counted as perseveration only on an eligible incongruent switch trial. Classic task-switching research supports this repeat-versus-switch comparison. The task does not establish working-memory capacity, broad cognitive flexibility, readiness, sport intelligence, or transfer to play changes. [cite:27,28]
+
+### Endurance Lock
+
+Endurance Lock holds the task constant from start to finish. After four practice trials, the athlete responds to the same center visual signal across six scored blocks. The rule, display load, 1,500 millisecond response window, scoring, and feedback remain constant. Only the foreperiod varies unpredictably between 1,500 and 3,500 milliseconds. Legacy profile names cannot introduce tighter cadence, shorter windows, extra visual load, or late-session stakes and then call the resulting difference fatigue.
+
+The core result is a fitted change in valid response time, expressed in milliseconds per elapsed minute. It remains unavailable below 24 valid responses or when any block contains fewer than three. Median response time, variability, responses at or above the declared 500 millisecond threshold, false starts, timeouts, and valid counts by block remain separate. Vigilance research supports response-time distributions and time-on-task trends as observations. A short mobile run cannot determine whether a change came from sleep, fatigue, motivation, boredom, context, or device input, and it does not establish a stable endurance trait or late-game transfer. [cite:31,32]
+
+## 5.4 The Initial Simulation Portfolio
 
 The initial simulation library covers the three pillars with a small, coherent set of serious simulation families.
 
-Reset targets error recovery, attentional shifting, and composure under disruption.
+Reset rehearses and observes task re-entry after a controlled interruption.
 
-Noise Gate targets selective attention and interference filtering.
+Noise Gate rehearses visible-target search with a controlled distractor.
 
-Brake Point targets response inhibition and premature action control.
+Brake Point rehearses go responses and stopping after a delayed signal.
 
-Signal Window targets signal discrimination and decision quality under incomplete information.
+Signal Window rehearses perceptual majority decisions at balanced evidence levels.
 
-Sequence Shift targets working-memory updating and flexible rule switching.
+Sequence Shift rehearses switching between two cued classification rules.
 
-Endurance Lock targets sustained attention and cognitive fatigability over time.
+Endurance Lock observes performance across time while the visual task remains constant.
 
-Together, these families give the system enough coverage to train and measure the major mental performance skills without turning the library into an unfocused collection of mini-games.
+Together, these families provide a bounded starting portfolio of cognitive-perceptual task practice. Their construct and sport-transfer hypotheses remain subject to reliability, validity, and transfer studies; breadth of family coverage is not evidence of efficacy.
 
 # 6. Curriculum, Mastery, and Automaticity
 
@@ -317,7 +363,7 @@ PulseCheck supports this in three ways.
 
 First, protocols create compact state-response mappings. Box Breathing maps a steadying need to a known breathing cadence. Cognitive Reframing maps pressure sensations to challenge language. Visualization maps a coming action to a refreshed internal model. Cue-Word Anchoring maps a short phrase to a trained attentional target.
 
-Second, simulations create pressure-context exposure. It is not enough to practice a reset response in a calm environment. The athlete has to practice returning to task focus after disruption, noise, time pressure, ambiguity, and fatigue load. Simulations let the system introduce those conditions gradually and measure whether the response holds.
+Second, simulations can create labeled context exposure while preserving the canonical task contract. An athlete can practice the same response in a reference condition and in a compatible challenge condition. PulseCheck can compare behavior within those specified conditions; it cannot assume that a task difference represents pressure tolerance or that improvement will transfer to competition.
 
 Third, curriculum creates spacing and recurrence. Skills become more durable when they are revisited across time instead of crammed into one intense session. The six-exercise slate gives Nora a way to balance repetition, variation, state fit, and progression.
 
@@ -329,7 +375,7 @@ Competition day is not the best time to learn a mental tool. It is the time to r
 
 That is why a curriculum matters. A breathing protocol becomes useful because the athlete has already practiced it. A reframe becomes useful because the athlete has already attached pressure sensations to challenge language. A visualization sequence becomes useful because the athlete has already rehearsed the desired action. A cue word becomes useful because it has already been connected to focus.
 
-The same principle applies to simulations. Reset trains recovery after disruption before the disruption carries real competitive cost. Noise Gate trains filtering before the environment becomes loud. Brake Point trains inhibition before a false action matters. Endurance Lock trains late-session stability before fatigue arrives in competition.
+The same principle applies to simulations as a practice hypothesis. Reset rehearses re-entry into the same task after interruption. Noise Gate rehearses locating a visible target while a distractor competes for attention. Brake Point rehearses withholding after a delayed stop signal. Endurance Lock repeats one constant visual response rule across time. These tasks can make the demand familiar; whether that familiarity improves competitive execution must be tested in representative sport tasks.
 
 The curriculum is therefore not a content schedule. It is an automaticity engine. It turns protocols and simulations into practiced responses that the athlete can retrieve under load.
 
@@ -374,7 +420,7 @@ Protocol-focused plans are used when regulation, priming, or recovery must stabi
 
 Mixed plans are used when state and skill both matter and the athlete needs protocol-to-simulation sequencing.
 
-Assessment plans are used for baseline, reassessment, or diagnostic calibration windows.
+Assessment plans are used for baseline, reassessment, or measurement-calibration windows. They are not diagnostic evaluations.
 
 The six-exercise active slate sits inside this larger plan architecture. A plan defines the development goal. The slate defines the active toolkit Nora is building and rotating as mastery emerges.
 
@@ -402,7 +448,8 @@ PulseCheck uses an evidence framework because citations alone are not enough. A 
 The system distinguishes between:
 
 - Mechanism support: published evidence supports the underlying cognitive, physiological, or behavioral mechanism.
-- Internal validity: PulseCheck's implementation reliably measures what it claims to measure inside the platform.
+- Implementation conformance: the released task follows its locked schedule, timing, event, exclusion, and calculation contract.
+- Measurement validity: reliability and construct-validity studies support the interpretation of a PulseCheck task result.
 - Transfer validity: improvements generalize to higher-fidelity environments or real-world performance contexts.
 - Protocol effectiveness: a protocol produces the intended state shift and improves the usefulness of downstream execution.
 - Curriculum effectiveness: the system's plan structure improves durability, adherence, automaticity, and performance over time.
@@ -414,7 +461,7 @@ The evidence posture should be visible at the level of each major product claim.
 | Product claim | Mechanism support | PulseCheck implementation | Current evidence posture | Next validation step |
 | --- | --- | --- | --- | --- |
 | Protocols can help athletes shift state before or after demanding moments. | Slow breathing, reappraisal, self-talk, and imagery have mechanism-level and intervention support. [cite:16,17,18,19] | Published protocol registry, target state shifts, bounded practice, pre/post state capture, downstream simulation comparison. | Mechanism-supported. Product-specific effectiveness still needs pilot data. | Compare protocol-to-simulation sequences against simulation-only assignments within similar state windows. |
-| Simulations can train and measure cognitive-perceptual pressure skills. | Attentional control, executive function, and stress inoculation support the target mechanisms, while sport cognitive-training reviews warn that transfer is not automatic. [cite:1,3,4,23] | Reset, Noise Gate, Brake Point, Signal Window, Sequence Shift, and Endurance Lock with raw metrics and pressure modifiers. | Mechanism-supported and internally instrumentable. Transfer validity remains an earned claim. | Establish reliability, construct validity, and sport-relevant transfer signals across pilot cohorts. |
+| Simulations can create repeatable task practice and task-specific behavioral observations. | Attentional control, visual search, stop-signal, perceptual-decision, task-switching, and vigilance research support the family hypotheses, while cognitive-training research warns that transfer is not automatic. [cite:1,5,9,23,24,25,26,27,28,29,30,31,32,33] | Six locked task contracts with practice exclusion, balanced or matched schedules, a 150 millisecond response-time artifact floor, explicit minimum-data rules, and separate accuracy, timing, premature-response, and timeout metrics. | Implementation-conformant and evidence-informed. Product-specific reliability, construct validity, and transfer validity are not yet established. | Run cross-platform timing calibration, shared golden fixtures, test-retest studies, convergent-validity studies, and representative sport-transfer studies. |
 | A small active slate can support automaticity without overwhelming the athlete. | Automatic processing, working-memory limits, choice-overload findings, and distributed practice support compact recurring practice. [cite:9,10,11,12,20,21,22] | Three active protocols plus three active simulations, with mastery, maintenance, and rotation. | Design-supported. The exact slate size should remain adjustable if pilot evidence shows a better operating range. | Track adherence, mastery speed, retention, and athlete-reported usability across different slate sizes. |
 | State-aware planning should improve assignment fit. | Self-regulation and pressure-performance research support matching interventions to state, but assignment logic must be validated. [cite:2,3,17] | Nora reads state snapshots, profile history, protocol responsiveness, simulation outcomes, and coach constraints before choosing from approved inventory. | Strong product hypothesis. It should not be framed as proven personalization until compared against simpler rules. | Compare state-aware planning against static curriculum and coach-selected assignment baselines. |
 | Physiology can improve interpretation of mental performance data. | Wearables can inform body-state context, but body-state relationships should be treated as correlations unless stronger designs support causal claims. | Health-context records, source freshness, personal thresholds, simulation outcomes, and protocol responsiveness feed the correlation roadmap. | Correlation-only roadmap. Useful for interpretation, not standalone readiness authority. | Run preregistered pilot analyses that control for sleep, training load, injury status, sport, and schedule context. |
@@ -424,6 +471,12 @@ Validation must also include pilot outcome metrics. Enrollment, adherence, menta
 For research readouts, PulseCheck uses frozen evidence frames. A readout locks to one pilot, one date window, one cohort filter, one read-model version, and one set of metrics. Claims are tagged as observed, inferred, or speculative. Unsupported sections are suppressed rather than dressed up with confident language. Human review remains the authority before stronger claims become official.
 
 This is not just legal caution. It is scientific discipline. The system earns its claims.
+
+## 9.2 Cross-Platform Implementation Status
+
+The six canonical tasks and their calculation rules are implemented on web, iOS, and Android. Source-level agreement and automated fixtures verify that the intended formulas and minimum-data rules are represented in each codebase. They do not prove that browser and device timing are equivalent or that the tasks have psychometric validity.
+
+Noise Gate's visual condition is implemented across all three platforms. Web and iOS also support separately labeled audio and combined conditions; Android audio and combined-channel parity remains future work. Until a shared device-timing study and cross-platform golden-fixture program are complete, platform and input method remain part of the recorded context and cross-platform scores should not be treated as interchangeable.
 
 # 10. Why This Architecture Over Alternatives
 
@@ -437,13 +490,19 @@ A chatbot can personalize language, but conversation alone does not create measu
 
 A generic brain-training game can improve the practiced task, but may not train state regulation or sport-relevant pressure response.
 
-PulseCheck combines the missing pieces. Protocols give the athlete concrete state tools. Simulations create measurable pressure practice. Nora ties both to state, profile, and curriculum. The active slate turns one-off assignments into repeated practice. The validation layer keeps claims constrained by evidence.
+PulseCheck combines the missing pieces. Protocols give the athlete concrete state tools. Simulations create instrumented task practice. Nora ties both to state, profile, and curriculum. The active slate turns one-off assignments into repeated practice. The validation layer keeps claims constrained by evidence.
 
 # 11. What We Are Not Claiming
 
 PulseCheck is not claiming that the full system has already been validated through randomized controlled trials. The claims in this paper are structural and mechanistic. Efficacy claims must follow data.
 
-PulseCheck is not claiming that simulation gains automatically transfer to competition. Transfer is a real problem in cognitive training. The system is designed with transfer in mind, but transfer has to be tested.
+PulseCheck is not claiming that simulation gains automatically transfer to competition. Transfer is a documented limitation in cognitive training. The system is designed with transfer studies in mind, but transfer has to be tested in representative sport tasks. [cite:23,33]
+
+PulseCheck is not claiming that a simulation result diagnoses a condition, measures brain change, reveals a stable personality or cognitive trait, or determines readiness. The family names are training language; the task-level observations and their limits govern interpretation.
+
+PulseCheck is not claiming that the standard Brake Point rep produces a valid individual stop-time estimate. Its core result is stop success alongside go accuracy and correct go response time. Research-length estimates remain gated by trial-count and quality requirements.
+
+PulseCheck is not claiming that an Endurance Lock trend proves fatigue. It is a within-session performance trend on a constant visual task, and the task cannot determine why behavior changed.
 
 PulseCheck is not claiming that protocols replace sport psychology, therapy, medical care, or human coaching. Protocols are performance-state interventions. They can complement professional support, but they do not replace clinical or relational work.
 
@@ -485,6 +544,16 @@ Mental performance training deserves the same rigor as physical performance trai
 [21] Iyengar, S. S., & Lepper, M. R. (2000). When choice is demotivating: Can one desire too much of a good thing? Journal of Personality and Social Psychology, 79(6), 995-1006.
 [22] Cepeda, N. J., Pashler, H., Vul, E., Wixted, J. T., & Rohrer, D. (2006). Distributed practice in verbal recall tasks: A review and quantitative synthesis. Psychological Bulletin, 132(3), 354-380.
 [23] Harris, D. J., Wilson, M. R., & Vine, S. J. (2018). A systematic review of commercial cognitive training devices: Implications for use in sport. Frontiers in Psychology, 9, 709.
+[24] Verbruggen, F., Aron, A. R., Band, G. P. H., Beste, C., Bissett, P. G., Brockett, A. T., et al. (2019). A consensus guide to capturing the ability to inhibit actions and impulsive behaviors in the stop-signal task. eLife, 8, e46323.
+[25] Logan, G. D., Cowan, W. B., & Davis, K. A. (1984). On the ability to inhibit simple and choice reaction time responses: A model and a method. Journal of Experimental Psychology: Human Perception and Performance, 10(2), 276-291.
+[26] Palmer, J., Huk, A. C., & Shadlen, M. N. (2005). The effect of stimulus strength on the speed and accuracy of a perceptual decision. Journal of Vision, 5(5), 376-404.
+[27] Rogers, R. D., & Monsell, S. (1995). Costs of a predictable switch between simple cognitive tasks. Journal of Experimental Psychology: General, 124(2), 207-231.
+[28] Meiran, N. (1996). Reconfiguration of processing mode prior to task performance. Journal of Experimental Psychology: Learning, Memory, and Cognition, 22(6), 1423-1442.
+[29] Notebaert, W., Houtman, F., Van Opstal, F., Gevers, W., Fias, W., & Verguts, T. (2009). Post-error slowing: An orienting account. Cognition, 111(2), 275-279.
+[30] Dutilh, G., Vandekerckhove, J., Forstmann, B. U., Keuleers, E., Brysbaert, M., & Wagenmakers, E.-J. (2012). Testing theories of post-error slowing. Attention, Perception, & Psychophysics, 74(2), 454-465.
+[31] Dinges, D. F., & Powell, J. W. (1985). Microcomputer analyses of performance on a portable, simple visual response-time task during sustained operations. Behavior Research Methods, Instruments, & Computers, 17, 652-655.
+[32] Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology from chronic sleep restriction and total sleep deprivation. Sleep, 26(2), 117-126.
+[33] Owen, A. M., Hampshire, A., Grahn, J. A., Stenton, R., Dajani, S., Burns, A. S., et al. (2010). Putting brain training to the test. Nature, 465, 775-778.
 :::
 `;
 

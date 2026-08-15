@@ -1,11 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Pause, Play, ShieldAlert, TimerReset, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
-import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
+import {
+  DurationMode,
+  type ProfileSnapshotMilestone,
+  PressureType,
+  SessionType,
+  TaxonomySkill,
+} from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltraining/types';
-import { useInputIntegrity } from './useInputIntegrity';
+import {
+  buildBrakePointRounds,
+  calculateBrakePointMeasurement,
+  nextBrakePointStopSignalDelay,
+  type BrakeDirection,
+  type BrakePointMeasurement,
+  type BrakePointResponseContract,
+} from './simulationFamilyMeasurement';
 
 interface BrakePointGameProps {
   exercise: SimModule;
@@ -20,39 +33,11 @@ interface BrakePointGameProps {
   initialSoundEnabled?: boolean;
 }
 
-type RoundStage = 'intro' | 'ready' | 'response' | 'feedback' | 'summary';
-type BrakeCueType = 'go' | 'obvious' | 'fakeout' | 'late_reveal';
+type GameStage = 'intro' | 'ready' | 'go' | 'feedback' | 'summary';
 
-interface BrakeRound {
-  id: string;
-  cueType: BrakeCueType;
-  signalLabel: string;
-  instruction: string;
-  correctAction: 'commit' | 'brake';
-  pressureTag: 'neutral' | 'pressure';
-  laneShift: 'center' | 'left' | 'right';
-}
-
-interface BrakeResponse {
-  roundId: string;
-  cueType: BrakeCueType;
-  correctAction: 'commit' | 'brake';
-  response: 'commit' | 'brake' | 'timeout';
-  correct: boolean;
-  latencyMs: number;
-}
-
-const GO_LABELS = ['GREEN', 'CLEAR', 'GO', 'OPEN'];
-const NO_GO_LABELS: Record<Exclude<BrakeCueType, 'go'>, string[]> = {
-  obvious: ['RED', 'STOP', 'BRAKE'],
-  fakeout: ['HOLD', 'FAKE', 'CHECK'],
-  late_reveal: ['LATE STOP', 'BRAKE NOW', 'ABORT'],
-};
-
-function parseRoundCount(targetSessionStructure?: string, durationMinutes?: number) {
+function parseTrialCount(targetSessionStructure?: string) {
   const match = targetSessionStructure?.match(/(\d+)/);
-  if (match) return Math.max(18, Number(match[1]));
-  return Math.max(20, (durationMinutes ?? 5) * 12);
+  return Math.max(64, match ? Number(match[1]) : 64);
 }
 
 function getDurationMode(durationMinutes: number) {
@@ -63,50 +48,6 @@ function getDurationMode(durationMinutes: number) {
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, value));
-}
-
-function inferCueType(index: number, archetype: string) {
-  if (archetype === 'decoy_discrimination') {
-    return index % 4 === 0 ? 'late_reveal' : index % 2 === 0 ? 'fakeout' : 'go';
-  }
-  if (archetype === 'sport_context') {
-    return index % 5 === 0 ? 'late_reveal' : index % 3 === 0 ? 'obvious' : 'go';
-  }
-  if (archetype === 'fatigue_load') {
-    return index % 4 === 0 ? 'obvious' : index % 6 === 0 ? 'late_reveal' : 'go';
-  }
-  return index % 4 === 0 ? 'fakeout' : index % 5 === 0 ? 'obvious' : 'go';
-}
-
-function buildBrakeRounds(buildArtifact: SimBuildArtifact): BrakeRound[] {
-  const total = parseRoundCount(buildArtifact.sessionModel.targetSessionStructure, buildArtifact.sessionModel.durationMinutes);
-  const archetype = String(buildArtifact.sessionModel.archetype ?? 'baseline');
-
-  return Array.from({ length: total }, (_, index) => {
-    const cueType = inferCueType(index, archetype) as BrakeCueType;
-    const correctAction = cueType === 'go' ? 'commit' : 'brake';
-    const pressureTag = index > Math.floor(total * 0.55) ? 'pressure' : 'neutral';
-    const laneShift = index % 3 === 0 ? 'left' : index % 2 === 0 ? 'right' : 'center';
-    const labelPool = cueType === 'go' ? GO_LABELS : NO_GO_LABELS[cueType];
-    const signalLabel = labelPool[index % labelPool.length];
-    const instruction = cueType === 'go'
-      ? 'GO, GREEN, CLEAR, or OPEN means Commit.'
-      : cueType === 'late_reveal'
-        ? 'LATE STOP or ABORT means Brake.'
-        : cueType === 'fakeout'
-          ? 'FAKE, HOLD, or CHECK means Brake.'
-          : 'STOP, RED, or BRAKE means Brake.';
-
-    return {
-      id: `brake-round-${index + 1}`,
-      cueType,
-      signalLabel,
-      instruction,
-      correctAction,
-      pressureTag,
-      laneShift,
-    };
-  });
 }
 
 export const BrakePointGame: React.FC<BrakePointGameProps> = ({
@@ -123,502 +64,326 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
 }) => {
   const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact as SimBuildArtifact;
-  const rounds = useMemo(() => buildBrakeRounds(buildArtifact), [buildArtifact]);
-  const durationMinutes = buildArtifact.sessionModel.durationMinutes as number;
-  const targetRoundStructure = buildArtifact.sessionModel.targetSessionStructure as string;
-  const stageDurations = useMemo(() => ({ ready: 1200, response: 1600, feedback: 800 }), []);
+  const durationMinutes = Number(buildArtifact.sessionModel.durationMinutes ?? 4);
+  const rounds = useMemo(
+    () => buildBrakePointRounds(parseTrialCount(buildArtifact.sessionModel.targetSessionStructure)),
+    [buildArtifact.sessionModel.targetSessionStructure]
+  );
 
-  const [stage, setStage] = useState<RoundStage>('intro');
+  const [stage, setStage] = useState<GameStage>('intro');
   const [roundIndex, setRoundIndex] = useState(0);
-  const [responses, setResponses] = useState<BrakeResponse[]>([]);
-  const [feedback, setFeedback] = useState<{ title: string; detail: string; success: boolean } | null>(null);
-  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [responses, setResponses] = useState<BrakePointResponseContract[]>([]);
+  const [stopSignalVisible, setStopSignalVisible] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [measurement, setMeasurement] = useState<BrakePointMeasurement | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
-  const {
-    warningActive,
-    warningMessage,
-    registerInputAttempt,
-    resetSession,
-    finalizeRound,
-    spamDetected,
-    spamFlags,
-    spamRounds,
-  } = useInputIntegrity();
 
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const stageEndsAtRef = useRef<number | null>(null);
-  const stageRemainingRef = useRef<number>(0);
-  const stageStartRef = useRef<number>(Date.now());
+  const timersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const responsesRef = useRef<BrakePointResponseContract[]>([]);
+  const responseStartedAtRef = useRef(0);
+  const activeStopSignalDelayRef = useRef<number | null>(null);
+  const stopSignalDelayRef = useRef(250);
   const roundResolvedRef = useRef(false);
-  const sessionStartedAtRef = useRef<number>(Date.now());
+  const roundGenerationRef = useRef(0);
   const recordedRef = useRef(false);
+  const pausedRoundRef = useRef(false);
+  const sessionStartedAtRef = useRef(Date.now());
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const currentRound = rounds[roundIndex] ?? null;
+  const scoredResponses = responses.filter((response) => !response.isPractice);
+  const progress = rounds.length ? (roundIndex / rounds.length) * 100 : 0;
 
-  const beginStage = useCallback((nextStage: Exclude<RoundStage, 'intro' | 'summary'>, durationMs: number | null) => {
-    setStage(nextStage);
-    stageStartRef.current = Date.now();
-    if (durationMs === null) {
-      stageEndsAtRef.current = null;
-      stageRemainingRef.current = 0;
-      setRemainingMs(null);
-      return;
-    }
-    stageEndsAtRef.current = Date.now() + durationMs;
-    stageRemainingRef.current = durationMs;
-    setRemainingMs(durationMs);
+  const clearTimers = useCallback(() => {
+    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current = [];
   }, []);
 
-  const playCue = useCallback((cueType: BrakeCueType) => {
+  const schedule = useCallback((callback: () => void, delayMs: number) => {
+    const timer = setTimeout(() => {
+      timersRef.current = timersRef.current.filter((candidate) => candidate !== timer);
+      callback();
+    }, delayMs);
+    timersRef.current.push(timer);
+  }, []);
+
+  const playStopSignal = useCallback(() => {
     if (!soundEnabled || typeof window === 'undefined') return;
     const BrowserAudioContext = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext
       || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!BrowserAudioContext) return;
     const context = audioContextRef.current ?? new BrowserAudioContext();
     audioContextRef.current = context;
-    if (context.state === 'suspended') {
-      context.resume().catch(() => undefined);
-    }
-    const now = context.currentTime;
-    const base = cueType === 'go' ? 420 : cueType === 'late_reveal' ? 210 : 280;
+    if (context.state === 'suspended') context.resume().catch(() => undefined);
     const oscillator = context.createOscillator();
     const gain = context.createGain();
-    oscillator.type = cueType === 'go' ? 'triangle' : 'square';
-    oscillator.frequency.setValueAtTime(base, now);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.1, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + (cueType === 'late_reveal' ? 0.22 : 0.14));
+    oscillator.type = 'square';
+    oscillator.frequency.value = 190;
+    gain.gain.setValueAtTime(0.08, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
     oscillator.connect(gain);
     gain.connect(context.destination);
-    oscillator.start(now);
-    oscillator.stop(now + (cueType === 'late_reveal' ? 0.24 : 0.16));
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.2);
   }, [soundEnabled]);
 
-  const finishSession = useCallback(async (finalResponses: BrakeResponse[]) => {
-    const total = Math.max(1, finalResponses.length);
-    const correctCount = finalResponses.filter((response) => response.correct).length;
-    const brakeTrials = finalResponses.filter((response) => response.correctAction === 'brake');
-    const goTrials = finalResponses.filter((response) => response.correctAction === 'commit');
-    const successfulBrakes = brakeTrials.filter((response) => response.correct && response.response === 'brake');
-    const falseAlarms = brakeTrials.filter((response) => response.response === 'commit').length;
-    const overInhibition = goTrials.filter((response) => response.response !== 'commit' || !response.correct).length;
-    const avgStopLatency = successfulBrakes.length
-      ? Math.round(successfulBrakes.reduce((sum, response) => sum + response.latencyMs, 0) / successfulBrakes.length)
-      : stageDurations.response;
-    const avgGoLatency = goTrials.length
-      ? Math.round(goTrials.reduce((sum, response) => sum + response.latencyMs, 0) / goTrials.length)
-      : stageDurations.response;
-    const normalizedScore = clampScore(Math.round((correctCount / total) * 100) - Math.round(((falseAlarms + overInhibition) / total) * 20));
+  const recordSession = useCallback((result: BrakePointMeasurement, finalResponses: BrakePointResponseContract[]) => {
+    if (previewMode || !currentUser?.id || recordedRef.current) return;
+    recordedRef.current = true;
+    const scored = finalResponses.filter((response) => !response.isPractice);
+    const correctOutcomes = scored.filter((response) => (
+      response.trialKind === 'go'
+        ? response.outcome === 'response' && response.responseDirection === response.direction
+        : response.outcome === 'withheld'
+    )).length;
+    simSessionService.recordSession({
+      userId: currentUser.id,
+      simId: buildArtifact.variantId,
+      simName: buildArtifact.variantName,
+      legacyExerciseId: exercise.id,
+      sessionType: SessionType.TrainingRep,
+      durationMode: getDurationMode(durationMinutes),
+      durationSeconds: Math.max(1, Math.round((Date.now() - sessionStartedAtRef.current) / 1000)),
+      coreMetricName: 'stop_success_rate',
+      coreMetricValue: result.stopSuccessRate ?? 0,
+      supportingMetrics: {
+        provisional_ssrt_ms: result.provisionalSsrtMs ?? 0,
+        ssrt_estimate_available: result.estimateAvailable ? 1 : 0,
+        go_accuracy: result.goAccuracy ?? 0,
+        correct_go_rt_ms: result.correctGoRtMs ?? 0,
+        go_omission_rate: result.goOmissionRate ?? 0,
+        stop_success_rate: result.stopSuccessRate ?? 0,
+        mean_stop_signal_delay_ms: result.meanStopSignalDelayMs ?? 0,
+        go_choice_error_rate: result.goChoiceErrorRate ?? 0,
+        failed_stop_rt_ms: result.failedStopRtMs ?? 0,
+        race_model_check_passed: result.raceModelCheckPassed ? 1 : 0,
+        premature_response_rate: result.prematureResponseRate ?? 0,
+        valid_go_trials: result.validGoTrials,
+        valid_stop_trials: result.validStopTrials,
+      },
+      normalizedScore: clampScore(Math.round((correctOutcomes / Math.max(1, scored.length)) * 100)),
+      targetSkills: [TaxonomySkill.ResponseInhibition],
+      pressureTypes: [PressureType.Time, PressureType.Uncertainty],
+      profileSnapshotMilestone,
+      createdAt: Date.now(),
+    }).catch((error) => console.error('Failed to record Brake Point session:', error));
+  }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, profileSnapshotMilestone]);
 
-    if (!previewMode && currentUser?.id && !recordedRef.current) {
-      recordedRef.current = true;
-      simSessionService.recordSession({
-        userId: currentUser.id,
-        simId: buildArtifact.variantId,
-        simName: buildArtifact.variantName,
-        legacyExerciseId: exercise.id,
-        sessionType: buildArtifact.sessionModel.archetype === 'trial' ? SessionType.Reassessment : SessionType.TrainingRep,
-        durationMode: getDurationMode(durationMinutes),
-        durationSeconds: Math.max(1, Math.round((Date.now() - sessionStartedAtRef.current) / 1000)),
-        coreMetricName: 'stop_latency',
-        coreMetricValue: avgStopLatency,
-        supportingMetrics: {
-          false_alarm_rate: Number((falseAlarms / Math.max(1, brakeTrials.length)).toFixed(3)),
-          over_inhibition: Number((overInhibition / Math.max(1, goTrials.length)).toFixed(3)),
-          go_rt_balance: Math.max(0, avgGoLatency - avgStopLatency),
-          successful_brakes: successfulBrakes.length,
-          rapid_input_flags: spamFlags,
-          rapid_input_rounds: spamRounds,
-          flagged_for_spam: spamDetected ? 1 : 0,
-        },
-        normalizedScore: spamDetected ? Math.max(0, normalizedScore - 25) : normalizedScore,
-        targetSkills: [TaxonomySkill.ResponseInhibition, TaxonomySkill.PressureStability],
-        pressureTypes: [PressureType.Time, PressureType.Uncertainty],
-        profileSnapshotMilestone,
-        createdAt: Date.now(),
-      }).catch((error) => {
-        console.error('Failed to record Brake Point session:', error);
-      });
-    }
-
-    setFeedback({
-      title: `${correctCount}/${finalResponses.length} correct choices`,
-      detail: `Stop Latency ${avgStopLatency}ms · False Alarm ${Math.round((falseAlarms / Math.max(1, brakeTrials.length)) * 100)}% · Over-Inhibition ${Math.round((overInhibition / Math.max(1, goTrials.length)) * 100)}%${spamDetected ? ' · Session flagged for rapid input' : ''}`,
-      success: normalizedScore >= 70 && !spamDetected,
-    });
+  const finishSession = useCallback((finalResponses: BrakePointResponseContract[]) => {
+    roundGenerationRef.current += 1;
+    clearTimers();
+    const result = calculateBrakePointMeasurement(finalResponses);
+    setMeasurement(result);
+    recordSession(result, finalResponses);
     setStage('summary');
-  }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, spamDetected, spamFlags, spamRounds, stageDurations.response]);
+  }, [clearTimers, recordSession]);
 
-  const resolveRound = useCallback((response: 'commit' | 'brake' | null) => {
-    if (!currentRound || roundResolvedRef.current) return;
+  const beginRound = useCallback((index: number) => {
+    clearTimers();
+    const generation = ++roundGenerationRef.current;
+    const round = rounds[index];
+    if (!round) return;
+    roundResolvedRef.current = false;
+    setStopSignalVisible(false);
+    setFeedback('');
+    setStage('ready');
+    schedule(() => {
+      if (generation !== roundGenerationRef.current) return;
+      responseStartedAtRef.current = Date.now();
+      activeStopSignalDelayRef.current = round.trialKind === 'stop' ? stopSignalDelayRef.current : null;
+      setStage('go');
+      if (round.trialKind === 'stop') {
+        schedule(() => {
+          if (generation !== roundGenerationRef.current || roundResolvedRef.current) return;
+          setStopSignalVisible(true);
+          playStopSignal();
+        }, stopSignalDelayRef.current);
+      }
+      schedule(() => {
+        if (generation !== roundGenerationRef.current || roundResolvedRef.current) return;
+        roundResolvedRef.current = true;
+        const response: BrakePointResponseContract = {
+          ...round,
+          responseDirection: null,
+          responseLatencyMs: null,
+          stopSignalDelayMs: activeStopSignalDelayRef.current,
+          outcome: round.trialKind === 'stop' ? 'withheld' : 'timeout',
+        };
+        const nextResponses = [...responsesRef.current, response];
+        responsesRef.current = nextResponses;
+        setResponses(nextResponses);
+        if (!round.isPractice && round.trialKind === 'stop') {
+          stopSignalDelayRef.current = nextBrakePointStopSignalDelay(stopSignalDelayRef.current, 'withheld');
+        }
+        setFeedback(round.isPractice
+          ? round.trialKind === 'stop' ? 'You did not tap after STOP appeared.' : 'No response was recorded.'
+          : 'Trial recorded.');
+        setStage('feedback');
+        schedule(() => {
+          if (generation !== roundGenerationRef.current) return;
+          if (index >= rounds.length - 1) finishSession(nextResponses);
+          else {
+            setRoundIndex(index + 1);
+            beginRound(index + 1);
+          }
+        }, round.isPractice ? 800 : 260);
+      }, round.responseWindowMs);
+    }, 500 + Math.floor(Math.random() * 350));
+  }, [clearTimers, finishSession, playStopSignal, rounds, schedule]);
+
+  const handleDirection = useCallback((direction: BrakeDirection) => {
+    if (stage !== 'go' || !currentRound || roundResolvedRef.current || isPaused) return;
     roundResolvedRef.current = true;
-    const latencyMs = Math.max(150, Date.now() - stageStartRef.current);
-    const nextResponse: BrakeResponse = {
-      roundId: currentRound.id,
-      cueType: currentRound.cueType,
-      correctAction: currentRound.correctAction,
-      response: response ?? 'timeout',
-      correct: response === currentRound.correctAction,
-      latencyMs,
+    const generation = roundGenerationRef.current;
+    clearTimers();
+    const latencyMs = Date.now() - responseStartedAtRef.current;
+    const response: BrakePointResponseContract = {
+      ...currentRound,
+      responseDirection: direction,
+      responseLatencyMs: latencyMs,
+      stopSignalDelayMs: activeStopSignalDelayRef.current,
+      outcome: latencyMs < 150 ? 'premature' : 'response',
     };
-    finalizeRound();
-    const nextResponses = [...responses, nextResponse];
+    const nextResponses = [...responsesRef.current, response];
+    responsesRef.current = nextResponses;
     setResponses(nextResponses);
-    setFeedback({
-      title: nextResponse.correct ? (currentRound.correctAction === 'brake' ? 'Brake Held' : 'Commit Landed') : response === null ? 'Window Missed' : 'Wrong Button',
-      detail: nextResponse.correct
-        ? currentRound.correctAction === 'brake'
-          ? 'Correct. Stop and fake words mean Brake.'
-          : 'Correct. Go words mean Commit.'
-        : response === null
-          ? 'The response window closed before a committed action.'
-          : response === 'commit'
-            ? 'That word needed Brake, not Commit.'
-            : 'That word needed Commit, not Brake.',
-      success: nextResponse.correct,
-    });
-    beginStage('feedback', stageDurations.feedback);
-
-    if (roundIndex >= rounds.length - 1) {
-      window.setTimeout(() => finishSession(nextResponses), stageDurations.feedback);
-      return;
+    const correctGo = currentRound.trialKind === 'go' && direction === currentRound.direction && latencyMs >= 150;
+    if (!currentRound.isPractice && currentRound.trialKind === 'stop') {
+      stopSignalDelayRef.current = nextBrakePointStopSignalDelay(stopSignalDelayRef.current, 'responded');
     }
-
-    window.setTimeout(() => {
-      setRoundIndex((current) => current + 1);
-      roundResolvedRef.current = false;
-      setFeedback(null);
-      beginStage('ready', stageDurations.ready);
-    }, stageDurations.feedback);
-  }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length, stageDurations.feedback, stageDurations.ready]);
-
-  const handleActionSelect = useCallback((action: 'commit' | 'brake') => {
-    if (stage !== 'response') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Read the lane before committing or braking again.' })) {
-      return;
-    }
-    resolveRound(action);
-  }, [registerInputAttempt, resolveRound, stage]);
-
-  useEffect(() => {
-    if (stage !== 'ready' && stage !== 'response' && stage !== 'feedback') {
-      return undefined;
-    }
-    if (isPaused) {
-      if (stageEndsAtRef.current) {
-        stageRemainingRef.current = Math.max(0, stageEndsAtRef.current - Date.now());
+    setFeedback(currentRound.isPractice
+      ? currentRound.trialKind === 'stop'
+        ? 'When STOP appears, do not tap.'
+        : correctGo ? 'Direction matched.' : 'Match the arrow direction.'
+      : 'Trial recorded.');
+    setStage('feedback');
+    schedule(() => {
+      if (generation !== roundGenerationRef.current) return;
+      if (roundIndex >= rounds.length - 1) finishSession(nextResponses);
+      else {
+        setRoundIndex(roundIndex + 1);
+        beginRound(roundIndex + 1);
       }
-      stageEndsAtRef.current = null;
-      return undefined;
-    }
-    if (!stageEndsAtRef.current && remainingMs !== null) {
-      stageEndsAtRef.current = Date.now() + stageRemainingRef.current;
-    }
-    const tick = window.setInterval(() => {
-      if (!stageEndsAtRef.current) return;
-      const remaining = Math.max(0, stageEndsAtRef.current - Date.now());
-      setRemainingMs(remaining);
-      if (remaining > 0) return;
-      window.clearInterval(tick);
-      stageEndsAtRef.current = null;
-      if (stage === 'ready') {
-        beginStage('response', stageDurations.response);
-        if (currentRound) playCue(currentRound.cueType);
-        return;
-      }
-      if (stage === 'response') {
-        resolveRound(null);
-      }
-    }, 100);
-    return () => window.clearInterval(tick);
-  }, [beginStage, currentRound, isPaused, playCue, remainingMs, resolveRound, stage, stageDurations.feedback, stageDurations.ready, stageDurations.response]);
-
-  useEffect(() => {
-    return () => {
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => undefined);
-        audioContextRef.current = null;
-      }
-    };
-  }, []);
+    }, currentRound.isPractice ? 800 : 260);
+  }, [beginRound, clearTimers, currentRound, finishSession, isPaused, roundIndex, rounds.length, schedule, stage]);
 
   const startSession = useCallback(() => {
-    sessionStartedAtRef.current = Date.now();
+    clearTimers();
     recordedRef.current = false;
-    resetSession();
-    setRoundIndex(0);
+    sessionStartedAtRef.current = Date.now();
+    responsesRef.current = [];
     setResponses([]);
-    setFeedback(null);
-    roundResolvedRef.current = false;
-    beginStage('ready', stageDurations.ready);
-  }, [beginStage, resetSession, stageDurations.ready]);
+    setMeasurement(null);
+    setRoundIndex(0);
+    stopSignalDelayRef.current = 250;
+    beginRound(0);
+  }, [beginRound, clearTimers]);
 
   useEffect(() => {
-    if (!skipIntro || stage !== 'intro') return;
-    startSession();
+    if (skipIntro && stage === 'intro') startSession();
   }, [skipIntro, stage, startSession]);
 
-  const progressPercent = ((roundIndex + (stage === 'summary' ? 1 : 0)) / rounds.length) * 100;
-  const correctPct = responses.length ? Math.round((responses.filter((response) => response.correct).length / responses.length) * 100) : 100;
-  const laneOffset = currentRound?.laneShift === 'left' ? '-14%' : currentRound?.laneShift === 'right' ? '14%' : '0%';
-  const isBrakeCue = currentRound?.correctAction === 'brake';
-  const cueToneClass = isBrakeCue ? 'from-emerald-500/25 to-green-500/10 border-emerald-400/25' : 'from-[#E0FE10]/20 to-lime-500/10 border-[#E0FE10]/25';
+  useEffect(() => {
+    if (isPaused) {
+      if (stage === 'ready' || stage === 'go') {
+        clearTimers();
+        pausedRoundRef.current = true;
+        setStage('ready');
+      }
+      return;
+    }
+    if (pausedRoundRef.current) {
+      pausedRoundRef.current = false;
+      beginRound(roundIndex);
+    }
+  }, [beginRound, clearTimers, isPaused, roundIndex, stage]);
+
+  useEffect(() => () => {
+    roundGenerationRef.current += 1;
+    clearTimers();
+    audioContextRef.current?.close().catch(() => undefined);
+  }, [clearTimers]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-[#09090b] overflow-hidden text-white"
-    >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,197,94,0.14),transparent_36%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.10),transparent_30%)]" />
-
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-5">
-        <button onClick={onClose} className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors">
-          <X className="w-5 h-5 text-white/70" />
-        </button>
-        <div className="flex items-center gap-1.5">
-          {rounds.map((round, index) => (
-            <div
-              key={round.id}
-              className={`w-2.5 h-2.5 rounded-full transition-colors ${index < roundIndex ? 'bg-[#E0FE10]' : index === roundIndex ? 'bg-emerald-400' : 'bg-white/15'}`}
-            />
-          ))}
-        </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 overflow-hidden bg-[#07090d] text-white">
+      <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 py-5">
+        <button aria-label="Close" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5"><X className="h-5 w-5" /></button>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSoundEnabled((current) => !current)}
-            className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
-          >
-            {soundEnabled ? <Volume2 className="w-5 h-5 text-white/70" /> : <VolumeX className="w-5 h-5 text-white/70" />}
+          <button aria-label={soundEnabled ? 'Mute' : 'Unmute'} onClick={() => setSoundEnabled((value) => !value)} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5">
+            {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
           {stage !== 'intro' && stage !== 'summary' && (
-            <button
-              onClick={isPaused ? onResume : onPause}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
-            >
-              {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-              {isPaused ? 'Resume' : 'Pause'}
+            <button aria-label={isPaused ? 'Resume' : 'Pause'} onClick={isPaused ? onResume : onPause} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5">
+              {isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
             </button>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="relative z-10 h-full flex items-center justify-center p-6">
+      <main className="relative flex h-full items-center justify-center px-5 pb-8 pt-24">
         <AnimatePresence mode="wait">
           {stage === 'intro' && (
-            <motion.div
-              key="intro"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              className="w-full max-w-4xl rounded-[32px] border border-white/10 bg-black/35 backdrop-blur-xl p-8 space-y-6"
-            >
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.35em] text-white/40">Brake Point</p>
-                <h1 className="text-4xl font-black">{buildArtifact.variantName}</h1>
-                <p className="text-white/60 max-w-2xl">The word decides the button: Commit for GO, GREEN, CLEAR, or OPEN; Brake for STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, or ABORT.</p>
+            <motion.section key="intro" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="w-full max-w-2xl space-y-7">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">Brake Point</p>
+                <h1 className="mt-3 text-4xl font-semibold">Stop after you start</h1>
+                <p className="mt-4 max-w-xl text-lg leading-relaxed text-white/65">Tap left or right to match each arrow. On some trials, a red STOP appears after the arrow starts. When it appears, do not tap.</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/40">Structure</p>
-                  <p className="text-lg font-semibold mt-2">{targetRoundStructure}</p>
-                  <p className="text-xs text-white/45 mt-1">{durationMinutes} minute module</p>
-                </div>
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/40">Core Metric</p>
-                  <p className="text-lg font-semibold mt-2">Stop Latency</p>
-                  <p className="text-xs text-white/45 mt-1">How fast you tap Brake on stop/fake words</p>
-                </div>
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/40">Pressure</p>
-                  <p className="text-lg font-semibold mt-2">{String(buildArtifact.sessionModel.archetype).replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-white/45 mt-1">Stop and fake words punish early Commit taps</p>
-                </div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="border border-white/10 bg-white/[0.04] p-4"><ArrowLeft className="mx-auto h-7 w-7" /><p className="mt-2 text-sm text-white/65">Left arrow</p></div>
+                <div className="border border-red-400/30 bg-red-500/10 p-4"><span className="text-lg font-bold text-red-300">STOP</span><p className="mt-2 text-sm text-white/65">Do not tap</p></div>
+                <div className="border border-white/10 bg-white/[0.04] p-4"><ArrowRight className="mx-auto h-7 w-7" /><p className="mt-2 text-sm text-white/65">Right arrow</p></div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-2">
-                <p className="text-xs uppercase tracking-[0.3em] text-white/35">How it works</p>
-                <p className="text-white/75">Each round shows one word. Tap Commit for GO, GREEN, CLEAR, or OPEN. Tap Brake for STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, or ABORT. One tap decides the round.</p>
-              </div>
-              <button
-                onClick={startSession}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#E0FE10] text-black font-semibold"
-              >
-                <Play className="w-4 h-4" />
-                Start Brake Point
-              </button>
-            </motion.div>
+              <p className="text-sm text-white/45">The first four trials are practice. This standard session reports arrow accuracy and how often you do not tap after STOP. A longer research session is required before a stop-time estimate is shown.</p>
+              <button onClick={startSession} className="inline-flex items-center gap-2 bg-[#E0FE10] px-5 py-3 font-semibold text-black"><Play className="h-4 w-4" />Start practice</button>
+            </motion.section>
           )}
 
-          {(stage === 'ready' || stage === 'response' || stage === 'feedback') && currentRound && (
-            <motion.div
-              key={`round-${currentRound.id}-${stage}`}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -14 }}
-              className="w-full max-w-5xl rounded-[32px] border border-white/10 bg-black/35 backdrop-blur-xl p-8 space-y-6"
-            >
-              <div className="flex items-center justify-between gap-4 text-sm text-white/55">
-                <div>
-                  Round {roundIndex + 1} / {rounds.length}
-                  <span className="ml-3 uppercase tracking-[0.25em] text-[11px] text-emerald-300">{currentRound.cueType.replace('_', ' ')}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span>Clean rate {correctPct}%</span>
-                  {remainingMs !== null && <span>{(remainingMs / 1000).toFixed(1)}s</span>}
-                </div>
+          {(stage === 'ready' || stage === 'go' || stage === 'feedback') && currentRound && (
+            <motion.section key={`${roundIndex}-${stage}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full max-w-2xl">
+              <div className="mb-8 flex items-center justify-between text-sm text-white/45">
+                <span>{currentRound.isPractice ? `Practice ${roundIndex + 1} of 4` : `Trial ${roundIndex - 3} of ${rounds.length - 4}`}</span>
+                <span>{currentRound.isPractice ? 'Practice' : 'Scored'}</span>
               </div>
-
-              <div className="w-full h-1 rounded-full bg-white/10 overflow-hidden">
-                <motion.div
-                  className="h-full bg-emerald-400"
-                  animate={{ width: `${progressPercent}%` }}
-                  transition={{ duration: 0.3 }}
-                />
+              <div className="mb-10 h-1 overflow-hidden bg-white/10"><div className="h-full bg-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div>
+              <div className="flex min-h-[360px] flex-col items-center justify-center border border-white/10 bg-white/[0.035] p-8">
+                {stage === 'ready' && <p className="text-lg text-white/45">Get ready</p>}
+                {stage === 'go' && (
+                  <div className="relative grid h-52 w-52 place-items-center">
+                    <span className="text-[8rem] font-light leading-none">{currentRound.direction === 'left' ? '←' : '→'}</span>
+                    {stopSignalVisible && (
+                      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute inset-0 grid place-items-center border-4 border-red-400 bg-[#190b0d]/95 text-3xl font-bold text-red-300">STOP</motion.div>
+                    )}
+                  </div>
+                )}
+                {stage === 'feedback' && <p className="text-xl text-white/70">{feedback}</p>}
               </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-[0.44fr_0.56fr] gap-6">
-                <div className="rounded-[28px] border border-emerald-500/20 bg-emerald-500/10 p-6 space-y-5">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Brake Word</p>
-                    <motion.div
-                      animate={stage === 'response' ? { x: laneOffset, scale: currentRound.pressureTag === 'pressure' ? [1, 1.02, 1] : 1 } : { x: 0, scale: 1 }}
-                      transition={{ duration: 0.55, repeat: stage === 'response' && currentRound.pressureTag === 'pressure' ? Infinity : 0, repeatType: 'mirror' }}
-                      className={`mt-3 rounded-3xl border bg-gradient-to-br px-6 py-8 text-center ${cueToneClass}`}
-                    >
-                      <p className="text-4xl font-black tracking-[0.18em]">{currentRound.signalLabel}</p>
-                    </motion.div>
-                  </div>
-                  <div className="space-y-2 text-sm text-white/65">
-                    <p>{stage === 'ready' ? 'Wait for the word, then choose one button.' : currentRound.instruction}</p>
-                    <p>{currentRound.correctAction === 'commit' ? 'GO, GREEN, CLEAR, OPEN = Commit.' : 'STOP, RED, BRAKE, HOLD, FAKE, CHECK, BRAKE NOW, ABORT = Brake.'}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 space-y-5 relative overflow-hidden">
-                  {currentRound.pressureTag === 'pressure' && stage === 'response' && (
-                    <div className="absolute top-4 right-4 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">
-                      pressure active
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Action Field</p>
-                    <h3 className="text-2xl font-semibold mt-2">
-                      {stage === 'ready' ? 'Get ready.' : stage === 'response' ? 'Choose the matching button.' : feedback?.title}
-                    </h3>
-                    <p className="text-sm text-white/55 mt-2">
-                      {stage === 'feedback'
-                        ? feedback?.detail
-                        : currentRound.correctAction === 'commit'
-                          ? 'This word means Commit.'
-                          : 'This word means Brake.'}
-                    </p>
-                  </div>
-
-                  {stage === 'ready' ? (
-                    <div className="rounded-3xl border border-white/10 bg-black/20 p-8 text-center text-white/55">
-                      Signal window opens automatically.
-                    </div>
-                  ) : stage === 'response' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <motion.button
-                        onClick={() => handleActionSelect('commit')}
-                        whileHover={{ scale: isPaused ? 1 : 1.02 }}
-                        whileTap={{ scale: isPaused ? 1 : 0.98 }}
-                        disabled={isPaused}
-                        className={`rounded-3xl border px-5 py-8 text-left transition-colors border-[#E0FE10]/30 bg-[#E0FE10]/10 ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#E0FE10]/15'}`}
-                      >
-                        <p className="text-2xl font-black tracking-[0.14em]">COMMIT</p>
-                        <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">Go word</p>
-                      </motion.button>
-                      <motion.button
-                        onClick={() => handleActionSelect('brake')}
-                        whileHover={{ scale: isPaused ? 1 : 1.02 }}
-                        whileTap={{ scale: isPaused ? 1 : 0.98 }}
-                        disabled={isPaused}
-                        className={`rounded-3xl border px-5 py-8 text-left transition-colors border-emerald-400/30 bg-emerald-400/10 ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:bg-emerald-400/15'}`}
-                      >
-                        <p className="text-2xl font-black tracking-[0.14em]">BRAKE</p>
-                        <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">Stop or fake word</p>
-                      </motion.button>
-                    </div>
-                  ) : (
-                    <div className={`rounded-3xl border px-6 py-8 ${feedback?.success ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-red-500/20 bg-red-500/10'}`}>
-                      <p className="text-lg font-semibold">{feedback?.title}</p>
-                      <p className="text-sm text-white/60 mt-2">{feedback?.detail}</p>
-                    </div>
-                  )}
-                  {warningActive && (
-                    <div className="rounded-2xl border border-orange-400/30 bg-orange-500/10 px-4 py-3 text-sm font-medium text-orange-200">
-                      {warningMessage}
-                    </div>
-                  )}
-                </div>
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <button aria-label="Respond left" onClick={() => handleDirection('left')} disabled={stage !== 'go' || isPaused} className="grid h-24 place-items-center border border-white/12 bg-white/[0.05] disabled:opacity-30"><ArrowLeft className="h-9 w-9" /></button>
+                <button aria-label="Respond right" onClick={() => handleDirection('right')} disabled={stage !== 'go' || isPaused} className="grid h-24 place-items-center border border-white/12 bg-white/[0.05] disabled:opacity-30"><ArrowRight className="h-9 w-9" /></button>
               </div>
-            </motion.div>
+            </motion.section>
           )}
 
-          {stage === 'summary' && feedback && (
-            <motion.div
-              key="summary"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              className="w-full max-w-4xl rounded-[32px] border border-white/10 bg-black/35 backdrop-blur-xl p-8 space-y-6"
-            >
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-6">
-                <div className="flex items-center gap-3">
-                  <TimerReset className="w-6 h-6 text-emerald-300" />
-                  <div>
-                    <p className="text-sm text-emerald-200">Brake Point complete</p>
-                    <h4 className="text-2xl font-semibold text-white mt-1">{feedback.title}</h4>
-                  </div>
-                </div>
-                <p className="text-sm text-white/70 mt-4">{feedback.detail}</p>
+          {stage === 'summary' && measurement && (
+            <motion.section key="summary" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-2xl space-y-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-300">Session summary</p>
+                <h2 className="mt-3 text-3xl font-semibold">Stopping task recorded</h2>
+                <p className="mt-3 text-white/60">These results describe only how you responded to arrows and STOP in this session. They do not describe how you act in competition.</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Core Metric</p>
-                  <p className="text-lg font-semibold mt-2">Stop Latency</p>
-                  <p className="text-sm text-white/65 mt-1">Derived from successful Brake taps on stop/fake words.</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">False Alarms</p>
-                  <p className="text-lg font-semibold mt-2">{responses.filter((response) => response.correctAction === 'brake' && response.response === 'commit').length}</p>
-                  <p className="text-sm text-white/65 mt-1">Commit taps on Brake words.</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Over-Inhibition</p>
-                  <p className="text-lg font-semibold mt-2">{responses.filter((response) => response.correctAction === 'commit' && response.response !== 'commit').length}</p>
-                  <p className="text-sm text-white/65 mt-1">Brake taps on Commit words, or freezing.</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:col-span-3">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Input Integrity</p>
-                  <p className="text-lg font-semibold mt-2">{spamDetected ? `${spamFlags} rapid-input flags across ${spamRounds} round(s)` : 'No rapid-input flags detected'}</p>
-                </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="border border-white/10 bg-white/[0.04] p-4"><p className="text-xs uppercase tracking-wider text-white/40">Go accuracy</p><p className="mt-2 text-2xl font-semibold">{measurement.goAccuracy === null ? 'Unavailable' : `${Math.round(measurement.goAccuracy * 100)}%`}</p></div>
+                <div className="border border-white/10 bg-white/[0.04] p-4"><p className="text-xs uppercase tracking-wider text-white/40">Stop success</p><p className="mt-2 text-2xl font-semibold">{measurement.stopSuccessRate === null ? 'Unavailable' : `${Math.round(measurement.stopSuccessRate * 100)}%`}</p></div>
+                <div className="border border-white/10 bg-white/[0.04] p-4"><p className="text-xs uppercase tracking-wider text-white/40">Correct go response time</p><p className="mt-2 text-2xl font-semibold">{measurement.correctGoRtMs === null ? 'Unavailable' : `${measurement.correctGoRtMs} ms`}</p></div>
+                <div className="border border-white/10 bg-white/[0.04] p-4"><p className="text-xs uppercase tracking-wider text-white/40">Stop-time estimate</p><p className="mt-2 text-2xl font-semibold">{measurement.estimateAvailable ? `${measurement.provisionalSsrtMs}ms` : 'Unavailable'}</p></div>
               </div>
-
-              <div className="space-y-2">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
-                  {responses.filter((response) => response.correct).length}/{responses.length} total signals were handled cleanly.
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
-                  {responses.filter((response) => response.cueType === 'late_reveal').length} late-reveal words were logged for pressure-sensitive inhibition.
-                </div>
-              </div>
-
-              <button
-                onClick={onComplete}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#E0FE10] text-black font-semibold"
-              >
-                <ShieldAlert className="w-4 h-4" />
-                Finish Brake Point
-              </button>
-            </motion.div>
+              {!measurement.estimateAvailable && <p className="border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">{measurement.estimateUnavailableReason}</p>}
+              <button onClick={onComplete} className="bg-[#E0FE10] px-5 py-3 font-semibold text-black">Finish</button>
+            </motion.section>
           )}
         </AnimatePresence>
-      </div>
+      </main>
     </motion.div>
   );
 };

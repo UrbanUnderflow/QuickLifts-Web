@@ -21,7 +21,7 @@ const FAMILY_SPECS: FamilySpecEntry[] = [
     {
         id: 'reset',
         label: 'Reset',
-        subtitle: 'Mental recovery sim — disruption, re-engagement, Recovery Time.',
+        subtitle: 'Matched arrow task with neutral-hold and post-interruption conditions.',
         icon: Zap,
         accent: '#ef4444',
     },

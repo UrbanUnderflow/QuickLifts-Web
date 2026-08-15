@@ -27,7 +27,7 @@ function createVariantRecord(overrides = {}) {
     moduleDraft: {
       moduleId: 'reset-module-1',
       name: 'Sport-Context Reset',
-      description: 'A live reset simulation.',
+      description: 'A reset-and-return simulation.',
       category: 'focus',
       difficulty: 'advanced',
       durationMinutes: 5,
@@ -74,7 +74,7 @@ function createEnduranceVariantRecord(overrides = {}) {
       category: 'focus',
       difficulty: 'advanced',
       durationMinutes: 6,
-      benefits: ['finish cleaner'],
+      benefits: ['maintain steady responses'],
       bestFor: ['late session breakdowns'],
       origin: 'Pulse',
       neuroscience: 'Tracks sustained attention under fatigue.',
@@ -179,6 +179,41 @@ test('buildVariantRecordForBuild compiles a build artifact and updates status me
   assert.equal(built.buildMeta.engineVersion, 'registry-runtime/v1');
 });
 
+test('family contracts override generated task and scoring drift', () => {
+  const cases = [
+    ['Reset', 'matched_left_right_arrow_classification', 'post_disruption_reengagement_cost_ms'],
+    ['Noise Gate', 'visible_number_match_visual_search', 'distractor_cost'],
+    ['Brake Point', 'two_choice_stop_signal', 'stop_success_rate'],
+    ['Signal Window', 'nine_arrow_majority_discrimination', 'decision_accuracy'],
+    ['Sequence Shift', 'cued_letter_number_task_switching', 'switch_rt_cost_ms'],
+    ['Endurance Lock', 'constant_visual_signal_detection', 'correct_rt_slope_ms_per_min'],
+  ];
+
+  for (const [family, primaryTask, coreMetricName] of cases) {
+    const built = simBuild.buildVariantRecordForBuild(createVariantRecord({
+      id: `${family.toLowerCase().replaceAll(' ', '-')}-drift-check`,
+      family,
+      name: `${family} Drift Check`,
+      runtimeConfig: {
+        stimuli: {
+          primaryTask: 'memorize_a_word_then_guess',
+          responseWindowMs: 9999,
+        },
+        scoring: {
+          coreMetricName: 'generic_brain_score',
+          artifactFloorMs: 0,
+          supportingMetrics: ['variant_context_tag'],
+        },
+      },
+    }));
+
+    assert.equal(built.buildArtifact.stimulusModel.primaryTask, primaryTask, `${family} task identity drifted`);
+    assert.equal(built.buildArtifact.scoringModel.coreMetricName, coreMetricName, `${family} core metric drifted`);
+    assert.equal(built.buildArtifact.scoringModel.artifactFloorMs, 150, `${family} artifact floor drifted`);
+    assert.ok(built.buildArtifact.scoringModel.supportingMetrics.includes('variant_context_tag'));
+  }
+});
+
 test('buildPublishedVariantRecord stamps published snapshot, fingerprints, and status invariants', () => {
   const publishedAt = 123456789;
   const published = simBuild.buildPublishedVariantRecord(createVariantRecord(), publishedAt);
@@ -193,20 +228,23 @@ test('buildPublishedVariantRecord stamps published snapshot, fingerprints, and s
   assert.equal(published.buildArtifact.sourceFingerprint, published.sourceFingerprint);
 });
 
-test('Endurance Lock late-pressure variants compile a named pressure profile and six-block schedule', () => {
+test('Endurance Lock variants compile a fixed six-block visual signal task', () => {
   const built = simBuild.buildVariantRecordForBuild(createEnduranceVariantRecord());
-  const runtimeProfile = built.buildArtifact.stimulusModel.runtimeProfile;
+  const stimulusModel = built.buildArtifact.stimulusModel;
+  const scoringModel = built.buildArtifact.scoringModel;
 
   assert.equal(built.engineKey, 'endurance_lock');
-  assert.equal(runtimeProfile.flavor, 'late_pressure');
-  assert.equal(runtimeProfile.profileId, 'clock_compression_v1');
-  assert.equal(runtimeProfile.scheduleVersion, 'clock_compression_v1_schedule');
-  assert.equal(runtimeProfile.blockPlans.length, 6);
-  assert.equal(runtimeProfile.blockPlans[4].phaseTag, 'finish');
-  assert.equal(runtimeProfile.blockPlans[5].windowMs, 320);
+  assert.equal(stimulusModel.primaryTask, 'constant_visual_signal_detection');
+  assert.equal(stimulusModel.blockCount, 6);
+  assert.deepEqual(stimulusModel.foreperiodRangeMs, [1500, 3500]);
+  assert.equal(stimulusModel.responseWindowMs, 1500);
+  assert.equal(stimulusModel.cueChannel, 'visual_only');
+  assert.equal(stimulusModel.runtimeProfile, undefined);
+  assert.equal(scoringModel.coreMetricName, 'correct_rt_slope_ms_per_min');
+  assert.equal(built.buildArtifact.sessionModel.adaptiveDifficulty, false);
 });
 
-test('Endurance Lock visual-channel variants compile a named visual profile and fixed recipe', () => {
+test('Endurance Lock packaging cannot change the scored cue, display, or timing contract', () => {
   const built = simBuild.buildVariantRecordForBuild(createEnduranceVariantRecord({
     id: 'endurance-lock-branch-clutter-fatigue-endurance-lock',
     name: 'Clutter-Fatigue Endurance Lock',
@@ -215,6 +253,17 @@ test('Endurance Lock visual-channel variants compile a named visual profile and 
       session: {
         durationMinutes: 6,
         feedbackMode: 'coached',
+        adaptiveDifficulty: true,
+      },
+      stimuli: {
+        primaryTask: 'clutter_ramp',
+        cueChannel: 'audio_visual',
+        responseWindowMs: 300,
+        blockCount: 12,
+        runtimeProfile: {
+          profileId: 'clutter_ramp_v1',
+          activeModifiers: ['visual_density'],
+        },
       },
       analytics: {
         focus: ['degradation_slope', 'visual_channel_performance'],
@@ -243,13 +292,12 @@ test('Endurance Lock visual-channel variants compile a named visual profile and 
       sortOrder: 1,
     },
   }));
-  const runtimeProfile = built.buildArtifact.stimulusModel.runtimeProfile;
+  const stimulusModel = built.buildArtifact.stimulusModel;
 
-  assert.equal(runtimeProfile.flavor, 'visual_channel');
-  assert.equal(runtimeProfile.profileId, 'clutter_ramp_v1');
-  assert.equal(runtimeProfile.scheduleVersion, 'clutter_ramp_v1_schedule');
-  assert.equal(runtimeProfile.blockPlans.length, 6);
-  assert.equal(runtimeProfile.blockPlans[2].visualDensityTier, 'medium');
-  assert.equal(runtimeProfile.blockPlans[4].visualDensityTier, 'high');
-  assert.deepEqual(runtimeProfile.blockPlans[4].activeModifiers, ['visual_density']);
+  assert.equal(stimulusModel.primaryTask, 'constant_visual_signal_detection');
+  assert.equal(stimulusModel.cueChannel, 'visual_only');
+  assert.equal(stimulusModel.responseWindowMs, 1500);
+  assert.equal(stimulusModel.blockCount, 6);
+  assert.equal(stimulusModel.runtimeProfile, undefined);
+  assert.equal(built.buildArtifact.sessionModel.adaptiveDifficulty, false);
 });

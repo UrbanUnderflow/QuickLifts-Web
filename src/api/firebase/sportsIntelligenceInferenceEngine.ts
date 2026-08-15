@@ -526,16 +526,15 @@ const buildTrainingLoadInterpretation = (
 // Cognitive movement interpretation (Focus / Composure / Decisioning deltas)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const buildCognitiveMovementInterpretation = (
+export const buildCognitiveMovementInterpretation = (
   snapshot: AthleteHealthContextSnapshot,
   sport: PulseCheckSportConfigurationEntry,
 ): CognitiveMovementInterpretation => {
   const evidence: InterpretationEvidenceRef[] = [];
 
-  // Cognitive movement comes from the Correlation Engine, which writes
-  // into the snapshot's behavioral domain (or a future `cognitive` block).
-  // For v1 we read from behavioral.subjectiveReadiness as a coarse proxy
-  // until the Correlation Engine writes cognitive deltas directly.
+  // Subjective readiness may provide context, while simulation results remain
+  // task-specific observations. Broad cognitive deltas stay unset until a
+  // program-level study validates reliability and the intended interpretation.
   const behavioral = snapshot.domains.behavioral?.data as BehavioralContext | undefined;
 
   let confidenceTier = summarizeDomainConfidence(snapshot, 'behavioral');
@@ -547,13 +546,13 @@ const buildCognitiveMovementInterpretation = (
   if (behavioral?.subjectiveReadiness !== undefined) {
     evidence.push({
       domain: 'behavioral',
-      label: 'subjectiveReadiness (cognitive proxy until sim data is wired)',
+      label: 'subjectiveReadiness (context only, separate from simulation evidence)',
       value: behavioral.subjectiveReadiness,
     });
   }
 
   const reviewerNote =
-    `Cognitive movement v1 uses behavioral proxies; awaiting Correlation Engine sim deltas. Sport: ${sport.name}.`;
+    `Cognitive movement is held unset for ${sport.name}. Canonical simulation metrics remain task-specific, and sport interpretation requires validated representative evidence.`;
 
   return {
     athleteUserId: snapshot.athleteUserId,
@@ -561,7 +560,7 @@ const buildCognitiveMovementInterpretation = (
     focusDelta: undefined,
     composureDelta: undefined,
     decisioningDelta: undefined,
-    simEvidenceCount: undefined,
+    simEvidenceCount: 0,
     confidenceTier,
     evidence,
     reviewerNote,

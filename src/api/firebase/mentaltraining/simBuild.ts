@@ -8,7 +8,6 @@ import {
   type SimSyncStatus,
 } from './types';
 import { getDisplayFamilyName, getDisplaySimText, getDisplayVariantName } from './displayNames';
-import { resolveEnduranceLockRuntimeProfile } from './enduranceLockProfiles';
 import type {
   SimVariantArchetype,
   SimVariantLockedSpec,
@@ -148,7 +147,7 @@ function buildSessionModel(record: SimVariantRecord, engineKey: SimEngineKey, ar
     durationMinutes: minutes,
     durationSeconds: minutes * 60,
     feedbackMode: getRuntimeConfigValue(record, 'session.feedbackMode', 'coached'),
-    adaptiveDifficulty: getRuntimeConfigValue(record, 'session.adaptiveDifficulty', true),
+    adaptiveDifficulty: false,
     targetSessionStructure: record.lockedSpec?.targetSessionStructure ?? getRuntimeConfigValue(record, 'session.targetSessionStructure', `${Math.max(12, minutes * 10)} rounds`),
     archetype,
     engineKey,
@@ -159,52 +158,53 @@ function buildSessionModel(record: SimVariantRecord, engineKey: SimEngineKey, ar
 function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   const runtimeStimuli = getRuntimeConfigValue<Record<string, any>>(record, 'stimuli', {});
   const emphasis = getRuntimeConfigValue<string[]>(record, 'stimuli.emphasis', []);
+  const variantType = typeof runtimeStimuli.variantType === 'string' ? runtimeStimuli.variantType : undefined;
   const priority = record.priority === 'high' ? 'high' : record.priority === 'medium' ? 'medium' : 'low';
   const archetype = record.archetypeOverride ?? record.runtimeConfig?.archetype ?? 'baseline';
-  const enduranceRuntimeProfile = engineKey === 'endurance_lock'
-    ? resolveEnduranceLockRuntimeProfile({
-        archetype,
-        variantName: record.name,
-        runtimeConfig: record.runtimeConfig ?? null,
-      })
-    : null;
   const defaults: Record<SimEngineKey, Record<string, any>> = {
     reset: {
-      primaryTask: 'reset_to_same_task',
-      disruptionChannels: ['visual', 'audio', 'cognitive'],
-      resetCue: 're-engage immediately',
+      primaryTask: 'matched_left_right_arrow_classification',
+      conditions: ['reference', 'post_disruption'],
+      disruptionChannels: ['visual', 'audio'],
+      resetIntervalMs: 800,
     },
     noise_gate: {
-      primaryTask: 'maintain_live_target',
+      primaryTask: 'visible_number_match_visual_search',
+      conditions: ['reference', 'visual_distraction', 'audio_distraction'],
       distractorChannels: ['visual', 'audio'],
       overlapProfile: emphasis,
     },
     brake_point: {
-      primaryTask: 'go_no_go',
-      stopSignalProfile: 'fixed_distribution',
-      lureTypes: ['obvious', 'fakeout', 'late-reveal'],
+      primaryTask: 'two_choice_stop_signal',
+      goToStopRatio: '3:1',
+      stopSignalProfile: 'adaptive_50_ms_staircase',
+      stopSignalDelayRangeMs: [100, 700],
     },
     signal_window: {
-      primaryTask: 'cue_discrimination',
-      cueWindowProfile: 'shrinking_or_fixed_window',
-      decoyProfile: ['plausible_wrong', 'neutral_miss'],
+      primaryTask: 'nine_arrow_majority_discrimination',
+      evidenceCounts: [5, 6, 7],
+      stimulusExposureMs: 650,
+      responseWindowMs: 1600,
+      latencyOrigin: 'stimulus_onset',
     },
     sequence_shift: {
-      primaryTask: 'rule_update',
-      shiftProfile: 'scheduled_rule_changes',
-      intrusionProfile: ['old_rule', 'novel_error'],
+      primaryTask: 'cued_letter_number_task_switching',
+      cueStimulusIntervalMs: 400,
+      responseWindowMs: 1800,
+      conditions: ['repeat_congruent', 'repeat_incongruent', 'switch_congruent', 'switch_incongruent'],
     },
     endurance_lock: {
-      primaryTask: 'sustained_execution',
-      blockProfile: 'baseline_mid_final',
-      fatigueProfile: emphasis,
-      runtimeProfile: enduranceRuntimeProfile,
+      primaryTask: 'constant_visual_signal_detection',
+      blockCount: 6,
+      foreperiodRangeMs: [1500, 3500],
+      responseWindowMs: 1500,
+      cueChannel: 'visual_only',
     },
   };
 
   return {
     ...defaults[engineKey],
-    ...runtimeStimuli,
+    ...(variantType ? { variantType } : {}),
     priority,
     emphasis,
     audioAssets: getRuntimeConfigValue<Record<string, any>>(record, 'audioAssets', {}),
@@ -215,34 +215,61 @@ function buildScoringModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   const runtimeScoring = getRuntimeConfigValue<Record<string, any>>(record, 'scoring', {});
   const scoringByEngine: Record<SimEngineKey, Record<string, any>> = {
     reset: {
-      coreMetricName: 'recovery_time',
-      supportingMetrics: ['first_post_reset_accuracy', 'false_start_count', 'pressure_stability'],
+      coreMetricName: 'post_disruption_reengagement_cost_ms',
+      supportingMetrics: [
+        'matched_pair_count',
+        'reference_accuracy',
+        'post_disruption_accuracy',
+        'post_disruption_accuracy_cost',
+        'first_post_disruption_correct_rate',
+        'premature_response_rate',
+        'timeout_rate',
+        'mean_reset_interval_ms',
+      ],
     },
     noise_gate: {
       coreMetricName: 'distractor_cost',
-      supportingMetrics: ['rt_shift', 'false_alarm_rate', 'channel_vulnerability'],
+      supportingMetrics: [
+        'correct_response_rt_shift',
+        'wrong_tap_rate',
+        'highlighted_distractor_tap_rate',
+        'timeout_rate',
+        'reference_accuracy',
+        'distraction_accuracy',
+        'scored_reference_rounds',
+        'scored_distraction_rounds',
+      ],
     },
     brake_point: {
-      coreMetricName: 'stop_latency',
-      supportingMetrics: ['false_alarm_rate', 'over_inhibition', 'go_rt_balance'],
+      coreMetricName: 'stop_success_rate',
+      supportingMetrics: ['provisional_ssrt_ms', 'ssrt_estimate_available', 'go_accuracy', 'correct_go_rt_ms', 'go_omission_rate', 'go_choice_error_rate', 'mean_stop_signal_delay_ms', 'failed_stop_rt_ms', 'race_model_check_passed', 'premature_response_rate', 'valid_go_trials', 'valid_stop_trials'],
     },
     signal_window: {
-      coreMetricName: 'correct_read_under_time_pressure',
-      supportingMetrics: ['decision_latency', 'decoy_susceptibility', 'window_utilization'],
+      coreMetricName: 'decision_accuracy',
+      supportingMetrics: ['correct_decision_rt_ms', 'wrong_choice_rate', 'timeout_rate', 'premature_response_rate', 'accuracy_by_evidence', 'correct_rt_by_evidence_ms', 'scored_trial_count'],
     },
     sequence_shift: {
-      coreMetricName: 'update_accuracy_after_rule_change',
-      supportingMetrics: ['switch_cost', 'old_rule_intrusion_rate', 'post_shift_accuracy'],
+      coreMetricName: 'switch_rt_cost_ms',
+      supportingMetrics: ['switch_rt_available', 'switch_accuracy_cost', 'repeat_accuracy', 'switch_accuracy', 'perseverative_error_rate', 'timeout_rate', 'premature_response_rate', 'valid_repeat_rt_count', 'valid_switch_rt_count'],
     },
     endurance_lock: {
-      coreMetricName: 'degradation_slope',
-      supportingMetrics: ['baseline_performance', 'degradation_onset', 'final_phase_challenge'],
+      coreMetricName: 'correct_rt_slope_ms_per_min',
+      supportingMetrics: ['slope_estimate_available', 'median_correct_rt_ms', 'rt_variability_ms', 'lapse_rate', 'false_start_rate', 'timeout_rate', 'valid_response_count', 'block_valid_trial_counts'],
     },
   };
 
+  const canonical = scoringByEngine[engineKey];
+  const additionalSupportingMetrics = Array.isArray(runtimeScoring.supportingMetrics)
+    ? runtimeScoring.supportingMetrics.filter((metric: unknown): metric is string => typeof metric === 'string' && metric.trim().length > 0)
+    : [];
+
   return {
-    ...scoringByEngine[engineKey],
     ...runtimeScoring,
+    ...canonical,
+    supportingMetrics: Array.from(new Set([
+      ...canonical.supportingMetrics,
+      ...additionalSupportingMetrics,
+    ])),
     artifactFloorMs: 150,
     lockedRuleSet: record.lockedSpec ?? null,
   };

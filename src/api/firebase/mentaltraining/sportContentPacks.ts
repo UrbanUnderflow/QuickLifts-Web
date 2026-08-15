@@ -5,6 +5,7 @@ import type {
   SportContentPack,
   SportScenarioArchetype,
 } from './types';
+import { getSimSpecByLegacyExerciseId, type SimSpec } from './taxonomy';
 
 type SupportedArchetype = Exclude<SportScenarioArchetype, 'general'>;
 
@@ -498,7 +499,7 @@ function guidedInteraction(
       ],
       loops: 5,
       loopSeconds: 20,
-      loopPrompt: `Run the action in your mind at real speed. When the key detail feels clean, lock it in.`,
+      loopPrompt: `Run the action in your mind at real speed. When the key detail feels clear, lock it in.`,
       lockCue: 'Lock It In',
       closePrompt: 'Five clear mental repetitions are complete. Take the same cue into your next physical repetition.',
     };
@@ -531,6 +532,11 @@ function applicationCueFor(
   exercise: Pick<MentalExercise, 'id' | 'name'>,
   context: SportContext,
 ): string {
+  const simSpec = getSimSpecByLegacyExerciseId(exercise.id);
+  if (simSpec) {
+    return `${simSportContextFor(simSpec, context)} ${simSpec.resultBoundary}`;
+  }
+
   const cues: Record<string, (sport: SportContext) => string> = {
     'breathing-box': (sport) => `Use this steady rhythm ${sport.beforeEvent} when you want your attention ready for ${sport.skill}.`,
     'breathing-physiological-sigh': (sport) => `Use this quick reset ${sport.resetMoment} when tension builds faster than you expected.`,
@@ -552,16 +558,29 @@ function applicationCueFor(
     'confidence-power-pose': (sport) => `Use an open, grounded posture ${sport.beforeEvent} to remind your body how you want to enter the moment.`,
     'confidence-affirmations': (sport) => `Build true statements from the work you have done on ${sport.skill}.`,
     'confidence-inventory': (sport) => `Review the preparation you bring to this ${sport.event}, including ${sport.skill}.`,
-    'focus-3-second-reset': (sport) => `Train a fast return to ${sport.skill} ${sport.resetMoment}.`,
-    'focus-noise-gate': (sport) => `Practice finding the cue that matters while ${sport.people} and the environment compete for your attention.`,
-    'decision-brake-point': (sport) => `Practice slowing down just enough to read the moment before you ${sport.perform}.`,
-    'decision-signal-window': (sport) => `Train yourself to recognize the useful signal before you commit to ${sport.perform}.`,
-    'decision-sequence-shift': (sport) => `Practice adjusting ${sport.skill} when the plan changes during a ${sport.event}.`,
-    'focus-endurance-lock': (sport) => `Train your attention to stay with ${sport.skill} as fatigue builds late in the ${sport.event}.`,
   };
 
   return cues[exercise.id]?.(context)
     ?? `Use ${exercise.name} to prepare for ${context.skill} in your ${context.event}.`;
+}
+
+function simSportContextFor(spec: SimSpec, context: SportContext): string {
+  switch (spec.id) {
+    case 'reset':
+      return `Use ${context.resetMoment} as a familiar example for the pause-and-return routine.`;
+    case 'noise_gate':
+      return `Think about moments when ${context.people} or the surroundings compete for your attention during a ${context.event}.`;
+    case 'brake_point':
+      return `Think about moments when a clear cue tells you to hold before you ${context.perform}.`;
+    case 'signal_window':
+      return `Think about moments when brief visual information guides how you ${context.perform}.`;
+    case 'sequence_shift':
+      return `Think about a plan change during a ${context.event} that asks you to use a different rule.`;
+    case 'endurance_lock':
+      return `Think about staying with one simple cue across the later part of a ${context.event}.`;
+    default:
+      return `Use a moment from your ${context.event} as familiar context for this task.`;
+  }
 }
 
 function promptsFor(

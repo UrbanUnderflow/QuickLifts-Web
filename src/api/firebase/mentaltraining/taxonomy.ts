@@ -95,6 +95,14 @@ export interface SimSpec {
   pressureTypes: PressureType[];
   executionTask: string;
   coreMetric: string;
+  /** Plain athlete-facing description of the scored task. */
+  athleteTaskDescription: string;
+  /** Plain athlete-facing label for the core metric. */
+  athleteMetricLabel: string;
+  /** The strongest interpretation the current product may make from one session. */
+  resultBoundary: string;
+  measurementScope: 'task_specific_session';
+  sportTransferStatus: 'requires_validation';
   supportingMetrics: string[];
   prescriptionRoles: SimPrescriptionRole[];
   scientificBasis: string;
@@ -125,8 +133,27 @@ export interface TaxonomyProfile {
   pressureSensitivity: Partial<Record<PressureType, number>>;
   strongestSkills: TaxonomySkill[];
   weakestSkills: TaxonomySkill[];
+  taskEvidence?: TaxonomyTaskEvidenceSummary;
   trendSummary: string[];
   updatedAt: number;
+}
+
+export interface TaxonomyTaskEvidenceObservation {
+  simId: string;
+  coreMetricName: string;
+  coreMetricValue: number;
+  observedAt: number;
+}
+
+export interface TaxonomyTaskEvidenceSummary {
+  sessionCount: number;
+  usableSessionCount: number;
+  excludedSessionCount: number;
+  metricNames: string[];
+  latestObservedAt: number | null;
+  interpretation: 'task_specific_session_evidence';
+  sportTransferStatus: 'requires_validation';
+  observations: TaxonomyTaskEvidenceObservation[];
 }
 
 export interface ProgramPrescription {
@@ -192,26 +219,31 @@ export const SIM_REGISTRY: SimSpec[] = [
     id: 'reset',
     legacyExerciseId: 'focus-3-second-reset',
     name: 'Reset',
-    purpose: 'Train rapid recovery and re-engagement after disruption.',
+    purpose: 'Rehearse a consistent reset routine and observe task re-entry after a controlled interruption.',
     primaryPillar: TaxonomyPillar.Composure,
     secondaryPillar: TaxonomyPillar.Focus,
     targetSkills: [
-      TaxonomySkill.ErrorRecoverySpeed,
       TaxonomySkill.AttentionalShifting,
-      TaxonomySkill.PressureStability,
     ],
     pressureTypes: [
-      PressureType.Evaluative,
-      PressureType.CompoundingError,
       PressureType.Visual,
     ],
-    executionTask: 'Tracking, tapping, and re-locking onto the live task after disruption.',
-    coreMetric: 'recovery_time',
+    executionTask: 'Classify the same left-or-right arrow task in matched reference and post-interruption trials, with a fixed reset interval before the post-interruption arrow.',
+    coreMetric: 'post_disruption_reengagement_cost_ms',
+    athleteTaskDescription: 'Match the same left-or-right arrow task after a neutral hold and after a brief interruption plus a fixed reset interval.',
+    athleteMetricLabel: 'Post-interruption response-time difference',
+    resultBoundary: 'This result describes response time and accuracy on the matched arrow task. Emotional recovery, readiness, resilience, and sport transfer require separate evidence.',
+    measurementScope: 'task_specific_session',
+    sportTransferStatus: 'requires_validation',
     supportingMetrics: [
-      'recovery_trend',
-      'disruption_resilience_score',
-      'consistency_index',
-      'worst_to_best_delta',
+      'matched_pair_count',
+      'reference_accuracy',
+      'post_disruption_accuracy',
+      'post_disruption_accuracy_cost',
+      'first_post_disruption_correct_rate',
+      'premature_response_rate',
+      'timeout_rate',
+      'mean_reset_interval_ms',
     ],
     prescriptionRoles: [
       SimPrescriptionRole.DailyProbe,
@@ -219,10 +251,10 @@ export const SIM_REGISTRY: SimSpec[] = [
       SimPrescriptionRole.PressureExposure,
       SimPrescriptionRole.Reassessment,
     ],
-    scientificBasis: 'Attentional Control Theory, stress inoculation, and distraction-refocusing drills.',
+    scientificBasis: 'Experimental work on post-error behavior, attentional reorientation, and response caution.',
     evidenceStatus: SimEvidenceStatus.Adjacent,
-    transferHypothesis: 'Athletes reset faster after mistakes and return to execution with less dwell time.',
-    validationPlan: 'Compare recovery time against coach-rated reset quality and video-coded re-engagement after errors.',
+    transferHypothesis: 'Practicing a reset-and-return routine may make that routine easier to use after sport disruptions; transfer must be demonstrated.',
+    validationPlan: 'Establish task reliability, then compare task-specific re-entry measures with blinded video coding of sport-relevant post-error behavior.',
     recommendedDurations: {
       [DurationMode.QuickProbe]: 120,
       [DurationMode.StandardRep]: 180,
@@ -233,7 +265,7 @@ export const SIM_REGISTRY: SimSpec[] = [
     id: 'noise_gate',
     legacyExerciseId: 'focus-noise-gate',
     name: 'Noise Gate',
-    purpose: 'Train selective attention under clutter and interference.',
+    purpose: 'Practice goal-directed visual search while salient, irrelevant cues compete for attention.',
     primaryPillar: TaxonomyPillar.Focus,
     secondaryPillar: TaxonomyPillar.Decision,
     targetSkills: [
@@ -241,14 +273,28 @@ export const SIM_REGISTRY: SimSpec[] = [
       TaxonomySkill.CueDiscrimination,
     ],
     pressureTypes: [PressureType.Visual, PressureType.Audio],
-    executionTask: 'Read the correct target while filtering noise, bait, and irrelevant signals.',
+    executionTask: 'Keep a called number visible, find its exact match in a field of similar markers, and ignore a flashing wrong marker or crowd sound.',
     coreMetric: 'distractor_cost',
-    supportingMetrics: ['accuracy_under_clutter', 'lapse_rate', 'channel_variance'],
+    athleteTaskDescription: 'Keep the number at the top in view, find its exact match, and ignore a flashing wrong marker or crowd sound.',
+    athleteMetricLabel: 'Distraction accuracy difference',
+    resultBoundary: 'This result describes accuracy and response-time changes in the number-search task. General attention, readiness, and sport transfer require separate evidence.',
+    measurementScope: 'task_specific_session',
+    sportTransferStatus: 'requires_validation',
+    supportingMetrics: [
+      'correct_response_rt_shift',
+      'wrong_tap_rate',
+      'highlighted_distractor_tap_rate',
+      'timeout_rate',
+      'reference_accuracy',
+      'distraction_accuracy',
+      'scored_reference_rounds',
+      'scored_distraction_rounds',
+    ],
     prescriptionRoles: [SimPrescriptionRole.SkillRep, SimPrescriptionRole.PressureExposure],
-    scientificBasis: 'Attention systems research and sport concentration training.',
-    evidenceStatus: SimEvidenceStatus.Foundational,
-    transferHypothesis: 'Athletes hold the right target more effectively in noisy and cluttered environments.',
-    validationPlan: 'Compare distractor cost to coach-designed drills with crowd noise, motion clutter, and visual bait.',
+    scientificBasis: 'Attentional Control Theory, visual-search inhibition training, and representative learning design.',
+    evidenceStatus: SimEvidenceStatus.Adjacent,
+    transferHypothesis: 'Repeated visual-search practice may reduce task-specific distraction effects; transfer to sport performance must be demonstrated.',
+    validationPlan: 'Establish test-retest reliability, then compare distraction effects with coach-designed sport tasks that preserve relevant information and actions.',
     recommendedDurations: {
       [DurationMode.QuickProbe]: 110,
       [DurationMode.StandardRep]: 180,
@@ -259,19 +305,24 @@ export const SIM_REGISTRY: SimSpec[] = [
     id: 'brake_point',
     legacyExerciseId: 'decision-brake-point',
     name: 'Brake Point',
-    purpose: 'Train response inhibition and cleaner cancellation of bad actions.',
+    purpose: 'Practice withholding an initiated response when a delayed stop signal appears.',
     primaryPillar: TaxonomyPillar.Decision,
     secondaryPillar: TaxonomyPillar.Composure,
     targetSkills: [TaxonomySkill.ResponseInhibition],
     pressureTypes: [PressureType.Time, PressureType.Uncertainty],
-    executionTask: 'Cancel prepotent responses in go/no-go and fake-out sequences.',
-    coreMetric: 'stop_latency',
-    supportingMetrics: ['commission_errors', 'false_start_rate', 'recovery_after_cancel'],
+    executionTask: 'Make fast left/right go responses, but withhold the response when a delayed stop signal appears.',
+    coreMetric: 'stop_success_rate',
+    athleteTaskDescription: 'Match each arrow with left or right, then withhold the response when a delayed red STOP signal appears.',
+    athleteMetricLabel: 'Stop success',
+    resultBoundary: 'This result describes stopping and going on the arrow task. Impulsivity, competition behavior, readiness, and sport transfer require separate evidence.',
+    measurementScope: 'task_specific_session',
+    sportTransferStatus: 'requires_validation',
+    supportingMetrics: ['provisional_ssrt_ms', 'ssrt_estimate_available', 'go_accuracy', 'correct_go_rt_ms', 'go_omission_rate', 'go_choice_error_rate', 'mean_stop_signal_delay_ms', 'failed_stop_rt_ms', 'race_model_check_passed', 'valid_go_trials', 'valid_stop_trials'],
     prescriptionRoles: [SimPrescriptionRole.SkillRep, SimPrescriptionRole.Reassessment],
-    scientificBasis: 'Executive-function research on inhibitory control.',
-    evidenceStatus: SimEvidenceStatus.Foundational,
-    transferHypothesis: 'Athletes show fewer impulsive errors and cleaner cancellation of bad actions.',
-    validationPlan: 'Relate stop latency and false starts to practice film and coach ratings of impulsive errors.',
+    scientificBasis: 'Independent race-model research and consensus methods for the stop-signal task.',
+    evidenceStatus: SimEvidenceStatus.Adjacent,
+    transferHypothesis: 'Task practice may improve performance on similar stopping tasks; reduced impulsive sport errors must be demonstrated separately.',
+    validationPlan: 'Verify implementation assumptions and reliability against an established stop-signal task before testing associations with blinded sport-film coding.',
     recommendedDurations: {
       [DurationMode.QuickProbe]: 90,
       [DurationMode.StandardRep]: 150,
@@ -282,7 +333,7 @@ export const SIM_REGISTRY: SimSpec[] = [
     id: 'signal_window',
     legacyExerciseId: 'decision-signal-window',
     name: 'Signal Window',
-    purpose: 'Train signal discrimination and decision clarity in compressed time windows.',
+    purpose: 'Practice a two-alternative perceptual decision while visual evidence is brief and imperfect.',
     primaryPillar: TaxonomyPillar.Decision,
     secondaryPillar: TaxonomyPillar.Focus,
     targetSkills: [
@@ -290,14 +341,19 @@ export const SIM_REGISTRY: SimSpec[] = [
       TaxonomySkill.SelectiveAttention,
     ],
     pressureTypes: [PressureType.Time, PressureType.Uncertainty, PressureType.Visual],
-    executionTask: 'Read the live signal from decoys and ambiguity before the window closes.',
-    coreMetric: 'correct_read_under_time_pressure',
-    supportingMetrics: ['choice_latency', 'decision_accuracy', 'decoy_susceptibility'],
+    executionTask: 'View nine arrows and choose the majority direction; response time starts when the arrow field appears.',
+    coreMetric: 'decision_accuracy',
+    athleteTaskDescription: 'Read a field of nine arrows and choose whether most point left or right.',
+    athleteMetricLabel: 'Decision accuracy',
+    resultBoundary: 'This result describes choices on the nine-arrow task. Tactical judgment, sport intelligence, readiness, and sport transfer require separate evidence.',
+    measurementScope: 'task_specific_session',
+    sportTransferStatus: 'requires_validation',
+    supportingMetrics: ['correct_decision_rt_ms', 'wrong_choice_rate', 'timeout_rate', 'accuracy_by_evidence', 'scored_trial_count'],
     prescriptionRoles: [SimPrescriptionRole.SkillRep, SimPrescriptionRole.Reassessment],
-    scientificBasis: 'Attention systems, signal selection, and executive-function diversity.',
+    scientificBasis: 'Psychophysical research on sensory evidence strength, response time, and decision accuracy.',
     evidenceStatus: SimEvidenceStatus.Adjacent,
-    transferHypothesis: 'Athletes make cleaner reads faster when time windows are tight.',
-    validationPlan: 'Compare results against coach-graded video decision tasks and recognition drills.',
+    transferHypothesis: 'Task practice may improve similar brief perceptual discriminations; sport decision transfer must be demonstrated.',
+    validationPlan: 'Establish psychometric sensitivity and reliability before comparison with representative coach-graded video decision tasks.',
     recommendedDurations: {
       [DurationMode.QuickProbe]: 100,
       [DurationMode.StandardRep]: 165,
@@ -308,22 +364,26 @@ export const SIM_REGISTRY: SimSpec[] = [
     id: 'sequence_shift',
     legacyExerciseId: 'decision-sequence-shift',
     name: 'Sequence Shift',
-    purpose: 'Train working-memory updating and rapid re-stabilization after rule changes.',
+    purpose: 'Practice switching between two cued classification rules while response keys remain stable.',
     primaryPillar: TaxonomyPillar.Decision,
     secondaryPillar: TaxonomyPillar.Focus,
     targetSkills: [
-      TaxonomySkill.WorkingMemoryUpdating,
       TaxonomySkill.AttentionalShifting,
     ],
     pressureTypes: [PressureType.Uncertainty, PressureType.CompoundingError],
-    executionTask: 'Update rules, sequences, and priorities in-flight while continuing execution.',
-    coreMetric: 'update_accuracy_after_rule_change',
-    supportingMetrics: ['update_latency', 'post_change_accuracy', 'invalid_sequence_recovery'],
+    executionTask: 'Classify bivalent letter-number stimuli using balanced repeat and switch trials.',
+    coreMetric: 'switch_rt_cost_ms',
+    athleteTaskDescription: 'Use the shown letter or number rule while the left and right response keys stay in the same place.',
+    athleteMetricLabel: 'Switch response-time difference',
+    resultBoundary: 'This result describes switching between letter and number rules. General flexibility, working-memory capacity, readiness, and sport transfer require separate evidence.',
+    measurementScope: 'task_specific_session',
+    sportTransferStatus: 'requires_validation',
+    supportingMetrics: ['switch_accuracy_cost', 'repeat_accuracy', 'switch_accuracy', 'perseverative_error_rate'],
     prescriptionRoles: [SimPrescriptionRole.SkillRep, SimPrescriptionRole.Reassessment],
-    scientificBasis: 'Executive-function research on updating and shifting.',
-    evidenceStatus: SimEvidenceStatus.Foundational,
-    transferHypothesis: 'Athletes re-stabilize faster after assignments, patterns, or play rules change.',
-    validationPlan: 'Compare against install work, audible-change drills, and coach observations after mid-rep changes.',
+    scientificBasis: 'Experimental task-switching research on repeat and switch costs.',
+    evidenceStatus: SimEvidenceStatus.Adjacent,
+    transferHypothesis: 'Task practice may improve similar cued rule switching; transfer to sport assignments or play changes must be demonstrated.',
+    validationPlan: 'Establish task reliability and convergent behavior with an established task-switching paradigm before representative sport tests.',
     recommendedDurations: {
       [DurationMode.QuickProbe]: 100,
       [DurationMode.StandardRep]: 180,
@@ -334,22 +394,26 @@ export const SIM_REGISTRY: SimSpec[] = [
     id: 'endurance_lock',
     legacyExerciseId: 'focus-endurance-lock',
     name: 'Endurance Lock',
-    purpose: 'Reveal fatigability and late-session breakdown that short reps can hide.',
+    purpose: 'Observe response speed, variability, responses at or above a declared threshold, and early responses while one task remains constant over time.',
     primaryPillar: TaxonomyPillar.Focus,
     secondaryPillar: TaxonomyPillar.Composure,
     targetSkills: [
       TaxonomySkill.SustainedAttention,
-      TaxonomySkill.PressureStability,
     ],
-    pressureTypes: [PressureType.Fatigue, PressureType.Time],
-    executionTask: 'Maintain disciplined attention and choice quality as time-on-task accumulates.',
-    coreMetric: 'degradation_slope_over_time',
-    supportingMetrics: ['reaction_time_variability', 'lapse_rate', 'accuracy_decay'],
+    pressureTypes: [PressureType.Time],
+    executionTask: 'Respond to the same visual signal across six blocks with a constant response window and variable foreperiod.',
+    coreMetric: 'correct_rt_slope_ms_per_min',
+    athleteTaskDescription: 'Wait for the same visual signal and tap once when it appears while the rule and response window stay constant.',
+    athleteMetricLabel: 'Within-session response-time change',
+    resultBoundary: 'This result describes response changes during the visual task. Fatigue, sleep loss, motivation, readiness, and sport transfer require separate evidence.',
+    measurementScope: 'task_specific_session',
+    sportTransferStatus: 'requires_validation',
+    supportingMetrics: ['median_correct_rt_ms', 'rt_variability_ms', 'lapse_rate', 'false_start_rate', 'timeout_rate'],
     prescriptionRoles: [SimPrescriptionRole.FatigabilityTest, SimPrescriptionRole.Reassessment],
-    scientificBasis: 'Attention systems, concentration training, and mental-fatigue literature.',
+    scientificBasis: 'Psychomotor-vigilance and sustained-attention research using response-time thresholds and variability.',
     evidenceStatus: SimEvidenceStatus.Adjacent,
-    transferHypothesis: 'Athletes preserve cleaner execution late in practice, games, and cognitively demanding sessions.',
-    validationPlan: 'Compare degradation slope to late-practice error rates and coach evaluations of late-session sharpness.',
+    transferHypothesis: 'Task practice may improve performance on similar vigilance tasks; late-practice and competition transfer must be demonstrated.',
+    validationPlan: 'Establish task reliability and sensitivity while holding difficulty constant, then compare with prespecified late-practice measures.',
     recommendedDurations: {
       [DurationMode.QuickProbe]: 120,
       [DurationMode.StandardRep]: 240,
@@ -367,14 +431,23 @@ export function getSimSpecByLegacyExerciseId(exerciseId?: string | null): SimSpe
   return SIM_REGISTRY.find((spec) => spec.legacyExerciseId === exerciseId);
 }
 
+export function getSimSpecByCoreMetric(coreMetric?: string | null): SimSpec | undefined {
+  if (!coreMetric) return undefined;
+  return SIM_REGISTRY.find((spec) => spec.coreMetric === coreMetric);
+}
+
+export const CANONICAL_SIMULATION_CORE_METRICS = new Set(
+  SIM_REGISTRY.map((spec) => spec.coreMetric)
+);
+
 export function clampScore(score: number, min = 0, max = 100): number {
   return Math.max(min, Math.min(max, Math.round(score * 10) / 10));
 }
 
-export function scoreToLabel(score: number): 'weak' | 'developing' | 'strong' {
+export function scoreToLabel(score: number): 'building' | 'developing' | 'strong' {
   if (score >= 70) return 'strong';
   if (score >= 45) return 'developing';
-  return 'weak';
+  return 'building';
 }
 
 export function computePillarScores(

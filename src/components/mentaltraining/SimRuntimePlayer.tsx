@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Pause, Play, Timer, Target, BarChart3, Volume2, VolumeX, X } from 'lucide-react';
-import { useUser } from '../../hooks/useUser';
-import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
+import { motion } from 'framer-motion';
+import { Play, Volume2, VolumeX, X } from 'lucide-react';
+import { useSelector } from 'react-redux';
 import {
-  DurationMode,
+  getSimSpecByCoreMetric,
+  getSimSpecByLegacyExerciseId,
   type ProfileSnapshotMilestone,
-  PressureType,
-  SessionType,
-  TaxonomySkill,
+  type SimSpec,
 } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimModule, SimBuildArtifact } from '../../api/firebase/mentaltraining/types';
+import { scenarioArchetypeForSport } from '../../api/firebase/mentaltraining/sportScenarioArchetypes';
+import type { RootState } from '../../redux/store';
 import { ResetGame } from './ResetGame';
 import { NoiseGateGame } from './NoiseGateGame';
 import { BrakePointGame } from './BrakePointGame';
@@ -30,78 +30,50 @@ interface SimRuntimePlayerProps {
   previewMode?: boolean;
 }
 
-interface RuntimeRound {
-  id: string;
-  prompt: string;
-  subPrompt: string;
-  options: string[];
-  correctOption: string;
-  tags: string[];
-}
-
-interface RuntimeResponse {
-  roundId: string;
-  response: string;
-  latencyMs: number;
-  correct: boolean;
-  tags: string[];
-}
-
-interface RuntimeAdapter {
-  initialize: (artifact: SimBuildArtifact) => RuntimeRound[];
-  score: (artifact: SimBuildArtifact, responses: RuntimeResponse[]) => {
-    coreMetricValue: number;
-    normalizedScore: number;
-    supportingMetrics: Record<string, number>;
-  };
-  summarize: (artifact: SimBuildArtifact, responses: RuntimeResponse[]) => string[];
-  telemetrySchema: (artifact: SimBuildArtifact) => { targetSkills: TaxonomySkill[]; pressureTypes: PressureType[] };
-}
-
 const ENGINE_THEME: Record<SimBuildArtifact['engineKey'], {
   accent: string;
   glow: string;
   panel: string;
   badge: string;
 }> = {
-  reset: { accent: '#ef4444', glow: 'from-red-500/20 to-orange-500/10', panel: 'border-red-500/20 bg-red-500/8', badge: 'RESET LOOP' },
-  noise_gate: { accent: '#f59e0b', glow: 'from-amber-500/20 to-orange-500/10', panel: 'border-amber-500/20 bg-amber-500/8', badge: 'FILTER UNDER NOISE' },
-  brake_point: { accent: '#22c55e', glow: 'from-emerald-500/20 to-green-500/10', panel: 'border-emerald-500/20 bg-emerald-500/8', badge: 'INHIBIT THE WRONG ACTION' },
-  signal_window: { accent: '#3b82f6', glow: 'from-blue-500/20 to-cyan-500/10', panel: 'border-blue-500/20 bg-blue-500/8', badge: 'COMMIT INSIDE THE WINDOW' },
-  sequence_shift: { accent: '#8b5cf6', glow: 'from-violet-500/20 to-fuchsia-500/10', panel: 'border-violet-500/20 bg-violet-500/8', badge: 'RULE UPDATE' },
-  endurance_lock: { accent: '#06b6d4', glow: 'from-cyan-500/20 to-sky-500/10', panel: 'border-cyan-500/20 bg-cyan-500/8', badge: 'HOLD FORM LATE' },
+  reset: { accent: '#ef4444', glow: 'from-red-500/20 to-orange-500/10', panel: 'border-red-500/20 bg-red-500/8', badge: 'INTERRUPT AND RETURN' },
+  noise_gate: { accent: '#f59e0b', glow: 'from-amber-500/20 to-orange-500/10', panel: 'border-amber-500/20 bg-amber-500/8', badge: 'VISUAL SEARCH WITH DISTRACTION' },
+  brake_point: { accent: '#22c55e', glow: 'from-emerald-500/20 to-green-500/10', panel: 'border-emerald-500/20 bg-emerald-500/8', badge: 'DELAYED STOP SIGNAL' },
+  signal_window: { accent: '#3b82f6', glow: 'from-blue-500/20 to-cyan-500/10', panel: 'border-blue-500/20 bg-blue-500/8', badge: 'READ THE MAJORITY' },
+  sequence_shift: { accent: '#8b5cf6', glow: 'from-violet-500/20 to-fuchsia-500/10', panel: 'border-violet-500/20 bg-violet-500/8', badge: 'SWITCH THE RULE' },
+  endurance_lock: { accent: '#06b6d4', glow: 'from-cyan-500/20 to-sky-500/10', panel: 'border-cyan-500/20 bg-cyan-500/8', badge: 'SAME TASK OVER TIME' },
 };
 
-const PREVIEW_ENGINES = new Set<SimBuildArtifact['engineKey']>([
-  'reset',
-  'noise_gate',
-  'brake_point',
-  'signal_window',
-  'sequence_shift',
-  'endurance_lock',
-]);
+function evidenceAlignedSportCue(cue: string | undefined): string | undefined {
+  const normalized = cue?.trim();
+  if (!normalized) return undefined;
+  return normalized.toLowerCase().includes('this result describes')
+    && normalized.toLowerCase().includes('require separate evidence')
+    ? normalized
+    : undefined;
+}
 
-function buildSimPreflightBriefing(exercise: SimModule, buildArtifact: SimBuildArtifact) {
+export function buildSimPreflightBriefing(
+  exercise: SimModule,
+  buildArtifact: SimBuildArtifact,
+  simSpec?: SimSpec,
+  sportCue?: string,
+) {
   const variantName = buildArtifact.variantName || exercise.name || 'this sim';
   const durationMinutes = buildArtifact.sessionModel?.durationMinutes ?? 5;
-  const commonFinish = `You've got ${durationMinutes} minutes. Stay steady and finish clean.`;
-
-  switch (buildArtifact.engineKey) {
-    case 'reset':
-      return `Nora here. This one is ${variantName}. A distraction is going to knock you off your line for a moment. When it hits, don't panic and don't chase it. Settle yourself fast, find the same target again, and make the next clean response. ${commonFinish}`;
-    case 'noise_gate':
-      return `Nora here. This one is ${variantName}. You will have one real target, and the screen will try to pull your eyes away from it. Your job is simple: stay on the true target and let the clutter be noise. Clean attention beats busy attention here. ${commonFinish}`;
-    case 'brake_point':
-      return `Nora here. This one is ${variantName}. Most words will tempt you to go, but some are traps. Your job is to move with conviction when it's real and hit the brakes the instant it isn't. Fast is good, but only if it's under control. ${commonFinish}`;
-    case 'signal_window':
-      return `Nora here. This one is ${variantName}. You get a short window to read the display and make one choice. Read it, trust what is actually there, and commit before the window closes. Don't guess early and don't freeze late. ${commonFinish}`;
-    case 'sequence_shift':
-      return `Nora here. This one is ${variantName}. The rule will change while you're in motion. Your job is to spot the change, let go of the old pattern right away, and switch cleanly to the new one. The mistake to avoid is dragging the old rule into the next decision. ${commonFinish}`;
-    case 'endurance_lock':
-      return `Nora here. This one is ${variantName}. The task stays the same, but staying clean gets harder as the run goes on. Your job is to hold your rhythm, keep your form, and not let the late stretch pull you off your game. ${commonFinish}`;
-    default:
-      return `Nora here. This one is ${variantName}. Stay with the main task, ignore the extra pressure, and keep your responses clean from start to finish. ${commonFinish}`;
-  }
+  const task = simSpec?.athleteTaskDescription
+    ?? buildArtifact.feedbackModel.athleteLabels.description
+    ?? exercise.description;
+  const metric = simSpec?.athleteMetricLabel ?? 'Task performance';
+  const boundary = evidenceAlignedSportCue(sportCue) ?? simSpec?.resultBoundary;
+  return [
+    'Nora here.',
+    `This one is ${variantName}.`,
+    task,
+    `Your result will be labeled ${metric}.`,
+    boundary,
+    `You have ${durationMinutes} minutes. Start when you are ready.`,
+  ].filter(Boolean).join(' ');
 }
 
 function getPreflightCueEnvelope(engineKey: SimBuildArtifact['engineKey']) {
@@ -123,249 +95,6 @@ function getPreflightCueEnvelope(engineKey: SimBuildArtifact['engineKey']) {
   }
 }
 
-function parseRoundCount(targetSessionStructure?: string, durationMinutes?: number) {
-  const match = targetSessionStructure?.match(/(\d+)/);
-  if (match) return Math.max(6, Number(match[1]));
-  return Math.max(8, (durationMinutes ?? 5) * 8);
-}
-
-function createBinaryRounds(
-  count: number,
-  promptFactory: (index: number) => Pick<RuntimeRound, 'prompt' | 'subPrompt' | 'tags'>,
-  goLabel: string,
-  holdLabel: string,
-  bias: 'go' | 'hold' = 'go'
-): RuntimeRound[] {
-  return Array.from({ length: count }, (_, index) => {
-    const prompt = promptFactory(index);
-    const correctOption = index % (bias === 'go' ? 3 : 2) === 0 ? holdLabel : goLabel;
-    return {
-      id: `round-${index + 1}`,
-      prompt: prompt.prompt,
-      subPrompt: prompt.subPrompt,
-      options: [goLabel, holdLabel],
-      correctOption,
-      tags: prompt.tags,
-    };
-  });
-}
-
-function clampScore(value: number) {
-  return Math.max(0, Math.min(100, value));
-}
-
-function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeAdapter {
-  const telemetryLookup: Record<SimBuildArtifact['engineKey'], { targetSkills: TaxonomySkill[]; pressureTypes: PressureType[] }> = {
-    reset: {
-      targetSkills: [TaxonomySkill.ErrorRecoverySpeed, TaxonomySkill.AttentionalShifting, TaxonomySkill.PressureStability],
-      pressureTypes: [PressureType.Visual, PressureType.Evaluative, PressureType.CompoundingError],
-    },
-    noise_gate: {
-      targetSkills: [TaxonomySkill.SelectiveAttention, TaxonomySkill.CueDiscrimination],
-      pressureTypes: [PressureType.Audio, PressureType.Visual],
-    },
-    brake_point: {
-      targetSkills: [TaxonomySkill.ResponseInhibition, TaxonomySkill.PressureStability],
-      pressureTypes: [PressureType.Time, PressureType.Uncertainty],
-    },
-    signal_window: {
-      targetSkills: [TaxonomySkill.CueDiscrimination, TaxonomySkill.PressureStability],
-      pressureTypes: [PressureType.Time, PressureType.Uncertainty],
-    },
-    sequence_shift: {
-      targetSkills: [TaxonomySkill.WorkingMemoryUpdating, TaxonomySkill.PressureStability],
-      pressureTypes: [PressureType.Uncertainty, PressureType.Time],
-    },
-    endurance_lock: {
-      targetSkills: [TaxonomySkill.SustainedAttention, TaxonomySkill.PressureStability],
-      pressureTypes: [PressureType.Fatigue, PressureType.Time],
-    },
-  };
-
-  const adapters: Record<Exclude<SimBuildArtifact['engineKey'], 'reset'>, RuntimeAdapter> = {
-    noise_gate: {
-      initialize: (artifact) => createBinaryRounds(
-        parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
-        (index) => ({
-          prompt: index % 3 === 0 ? 'Ignore the distractor and keep the live target.' : 'Hold the target under noise.',
-          subPrompt: index % 4 === 0 ? 'Commentary and crowd rise together.' : 'Keep your read on the primary signal.',
-          tags: [index % 2 === 0 ? 'audio' : 'visual', index % 3 === 0 ? 'overlap' : 'single_channel'],
-        }),
-        'Track Live Target',
-        'Chase Distractor',
-      ),
-      score: (artifact, responses) => {
-        const total = Math.max(1, responses.length);
-        const accuracy = responses.filter((response) => response.correct).length / total;
-        const avgLatency = responses.reduce((sum, response) => sum + response.latencyMs, 0) / total;
-        const falseAlarms = responses.filter((response) => response.response === 'Chase Distractor').length;
-        const distractorCost = Number((1 - accuracy).toFixed(3));
-        return {
-          coreMetricValue: distractorCost,
-          normalizedScore: clampScore(Math.round(accuracy * 100)),
-          supportingMetrics: {
-            rt_shift: Math.round(avgLatency),
-            false_alarm_rate: Number((falseAlarms / total).toFixed(3)),
-            channel_vulnerability: Number((responses.filter((response) => response.tags.includes('overlap') && !response.correct).length / total).toFixed(3)),
-          },
-        };
-      },
-      summarize: (_artifact, responses) => {
-        const misses = responses.filter((response) => !response.correct).length;
-        return [
-          `${responses.length - misses}/${responses.length} clean target holds under noise.`,
-          `${responses.filter((response) => response.tags.includes('overlap')).length} layered-noise rounds were logged for channel breakdowns.`,
-        ];
-      },
-      telemetrySchema: () => telemetryLookup.noise_gate,
-    },
-    brake_point: {
-      initialize: (artifact) => createBinaryRounds(
-        parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
-        (index) => ({
-          prompt: index % 3 === 0 ? 'Stop when the fakeout appears.' : 'Commit only if the lane stays green.',
-          subPrompt: index % 4 === 0 ? 'Late reveal pressure is active.' : 'Brake cleanly on the wrong action.',
-          tags: [index % 3 === 0 ? 'late_reveal' : index % 2 === 0 ? 'fakeout' : 'obvious'],
-        }),
-        'Go',
-        'Brake',
-      ),
-      score: (_artifact, responses) => {
-        const total = Math.max(1, responses.length);
-        const avgLatency = responses.reduce((sum, response) => sum + response.latencyMs, 0) / total;
-        const falseAlarms = responses.filter((response) => !response.correct && response.response === 'Go').length;
-        const overInhibition = responses.filter((response) => !response.correct && response.response === 'Brake').length;
-        return {
-          coreMetricValue: Math.round(avgLatency),
-          normalizedScore: clampScore(100 - Math.round(((falseAlarms + overInhibition) / total) * 100)),
-          supportingMetrics: {
-            false_alarm_rate: Number((falseAlarms / total).toFixed(3)),
-            over_inhibition: Number((overInhibition / total).toFixed(3)),
-            go_rt_balance: Math.round(avgLatency),
-          },
-        };
-      },
-      summarize: (_artifact, responses) => [
-        `${responses.filter((response) => response.correct).length}/${responses.length} stop decisions stayed clean.`,
-        `${responses.filter((response) => response.tags.includes('late_reveal')).length} late-reveal lures were logged.`,
-      ],
-      telemetrySchema: () => telemetryLookup.brake_point,
-    },
-    signal_window: {
-      initialize: (artifact) => createBinaryRounds(
-        parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
-        (index) => ({
-          prompt: index % 3 === 0 ? 'Commit before the late-clock window closes.' : 'Read the signal and commit cleanly.',
-          subPrompt: index % 4 === 0 ? 'The window is shrinking.' : 'First commitment is final.',
-          tags: [index % 3 === 0 ? 'late_window' : 'standard_window', index % 2 === 0 ? 'plausible_wrong' : 'neutral'],
-        }),
-        'Correct Read',
-        'Wrong Read',
-      ),
-      score: (_artifact, responses) => {
-        const total = Math.max(1, responses.length);
-        const correct = responses.filter((response) => response.correct).length;
-        const avgLatency = responses.reduce((sum, response) => sum + response.latencyMs, 0) / total;
-        return {
-          coreMetricValue: Number((correct / total).toFixed(3)),
-          normalizedScore: clampScore(Math.round((correct / total) * 100)),
-          supportingMetrics: {
-            decision_latency: Math.round(avgLatency),
-            decoy_susceptibility: Number((responses.filter((response) => response.tags.includes('plausible_wrong') && !response.correct).length / total).toFixed(3)),
-            window_utilization: Number((responses.filter((response) => response.tags.includes('late_window')).length / total).toFixed(3)),
-          },
-        };
-      },
-      summarize: (_artifact, responses) => [
-        `${responses.filter((response) => response.correct).length}/${responses.length} first commitments stayed correct.`,
-        `${responses.filter((response) => response.tags.includes('late_window')).length} late-window decisions were tagged for review.`,
-      ],
-      telemetrySchema: () => telemetryLookup.signal_window,
-    },
-    sequence_shift: {
-      initialize: (artifact) => createBinaryRounds(
-        parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
-        (index) => ({
-          prompt: index % 3 === 0 ? 'The rule just changed. Update immediately.' : 'Stay with the active rule until the shift.',
-          subPrompt: index % 4 === 0 ? 'Old-rule carryover is part of this block.' : 'First correct response after shift matters.',
-          tags: [index % 3 === 0 ? 'post_shift' : 'steady_state', index % 2 === 0 ? 'old_rule' : 'novel_error'],
-        }),
-        'Updated Rule',
-        'Old Rule',
-      ),
-      score: (_artifact, responses) => {
-        const total = Math.max(1, responses.length);
-        const correct = responses.filter((response) => response.correct).length;
-        const avgLatency = responses.reduce((sum, response) => sum + response.latencyMs, 0) / total;
-        const oldRuleIntrusions = responses.filter((response) => response.response === 'Old Rule').length;
-        return {
-          coreMetricValue: Number((correct / total).toFixed(3)),
-          normalizedScore: clampScore(Math.round((correct / total) * 100)),
-          supportingMetrics: {
-            switch_cost: Math.round(avgLatency),
-            old_rule_intrusion_rate: Number((oldRuleIntrusions / total).toFixed(3)),
-            post_shift_accuracy: Number((responses.filter((response) => response.tags.includes('post_shift') && response.correct).length / Math.max(1, responses.filter((response) => response.tags.includes('post_shift')).length)).toFixed(3)),
-          },
-        };
-      },
-      summarize: (_artifact, responses) => [
-        `${responses.filter((response) => response.correct).length}/${responses.length} rule updates landed correctly.`,
-        `${responses.filter((response) => response.response === 'Old Rule').length} old-rule intrusions were captured.`,
-      ],
-      telemetrySchema: () => telemetryLookup.sequence_shift,
-    },
-    endurance_lock: {
-      initialize: (artifact) => createBinaryRounds(
-        parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
-        (index) => ({
-          prompt: index > Math.floor(parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes) * 0.66)
-            ? 'Maintain clean execution in the finish phase.'
-            : 'Hold steady execution through fatigue buildup.',
-          subPrompt: index % 4 === 0 ? 'Late-session stakes are rising.' : 'Track the same task without drift.',
-          tags: [index > Math.floor(parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes) * 0.66) ? 'final_phase' : index > Math.floor(parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes) * 0.33) ? 'mid_block' : 'baseline_block'],
-        }),
-        'Clean Execution',
-        'Break Form',
-      ),
-      score: (_artifact, responses) => {
-        const baseline = responses.filter((response) => response.tags.includes('baseline_block'));
-        const finalPhase = responses.filter((response) => response.tags.includes('final_phase'));
-        const baselineAccuracy = baseline.filter((response) => response.correct).length / Math.max(1, baseline.length);
-        const finalAccuracy = finalPhase.filter((response) => response.correct).length / Math.max(1, finalPhase.length);
-        const degradationSlope = Number((baselineAccuracy - finalAccuracy).toFixed(3));
-        return {
-          coreMetricValue: degradationSlope,
-          normalizedScore: clampScore(Math.round(finalAccuracy * 100)),
-          supportingMetrics: {
-            baseline_performance: Number(baselineAccuracy.toFixed(3)),
-            degradation_onset: responses.findIndex((response) => !response.correct) + 1,
-            final_phase_challenge: Number(finalAccuracy.toFixed(3)),
-          },
-        };
-      },
-      summarize: (_artifact, responses) => [
-        `${responses.filter((response) => response.tags.includes('final_phase') && response.correct).length}/${responses.filter((response) => response.tags.includes('final_phase')).length || 0} finish-phase responses stayed clean.`,
-        `${responses.filter((response) => response.tags.includes('baseline_block')).length} baseline rounds anchor the degradation curve.`,
-      ],
-      telemetrySchema: () => telemetryLookup.endurance_lock,
-    },
-  };
-
-  return adapters[engineKey as Exclude<SimBuildArtifact['engineKey'], 'reset'>];
-}
-
-function getDurationMode(durationMinutes: number) {
-  if (durationMinutes <= 3) return DurationMode.QuickProbe;
-  if (durationMinutes <= 8) return DurationMode.StandardRep;
-  return DurationMode.ExtendedStressTest;
-}
-
-function getSessionType(buildArtifact: SimBuildArtifact) {
-  if (buildArtifact.sessionModel.archetype === 'trial') return SessionType.Reassessment;
-  if (buildArtifact.engineKey === 'endurance_lock') return SessionType.PressureExposure;
-  return SessionType.TrainingRep;
-}
-
 export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   exercise,
   isPaused,
@@ -376,93 +105,48 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   profileSnapshotMilestone,
   previewMode = false,
 }) => {
-  const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact;
-  const [runtimePhase, setRuntimePhase] = useState<'intro' | 'active' | 'summary'>('intro');
-  const [rounds, setRounds] = useState<RuntimeRound[]>([]);
-  const [roundIndex, setRoundIndex] = useState(0);
-  const [responses, setResponses] = useState<RuntimeResponse[]>([]);
-  const [roundStartMs, setRoundStartMs] = useState<number>(Date.now());
-  const [recorded, setRecorded] = useState(false);
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const [runtimePhase, setRuntimePhase] = useState<'intro' | 'active'>('intro');
   const [preflightState, setPreflightState] = useState<'intro' | 'briefing' | 'ready'>('intro');
   const [preflightSoundEnabled, setPreflightSoundEnabled] = useState(true);
   const [preflightMessage, setPreflightMessage] = useState<string>('Nora will explain the sim before you begin.');
 
   useEffect(() => {
-    if (!buildArtifact) {
-      setRounds([]);
-      setRoundIndex(0);
-      setResponses([]);
-      setRuntimePhase('intro');
-      setRoundStartMs(Date.now());
-      setRecorded(false);
-      setPreflightState('intro');
-      setPreflightMessage('Nora will explain the sim before you begin.');
-      return undefined;
-    }
-    if (buildArtifact.engineKey === 'reset') {
-      setRounds([]);
-    } else {
-      const adapter = buildDefaultAdapter(buildArtifact.engineKey);
-      const initializedRounds = adapter.initialize(buildArtifact);
-      setRounds(initializedRounds);
-    }
-    setRoundIndex(0);
-    setResponses([]);
     setRuntimePhase('intro');
-    setRoundStartMs(Date.now());
-    setRecorded(false);
     setPreflightState('intro');
     setPreflightMessage('Nora will explain the sim before you begin.');
-    return undefined;
   }, [buildArtifact]);
 
   useEffect(() => () => {
     stopNarration();
   }, []);
 
-  useEffect(() => {
-    if (!buildArtifact || buildArtifact.engineKey === 'reset' || runtimePhase !== 'summary' || recorded || !currentUser?.id || previewMode) {
-      return undefined;
-    }
-    const adapter = buildDefaultAdapter(buildArtifact.engineKey);
-    const score = adapter.score(buildArtifact, responses);
-    const telemetry = adapter.telemetrySchema(buildArtifact);
-    simSessionService.recordSession({
-      userId: currentUser.id,
-      simId: buildArtifact.variantId,
-      simName: buildArtifact.variantName,
-      legacyExerciseId: exercise.id,
-      sessionType: getSessionType(buildArtifact),
-      durationMode: getDurationMode(buildArtifact.sessionModel.durationMinutes),
-      durationSeconds: Math.round((responses.reduce((sum, response) => sum + response.latencyMs, 0) / 1000) + buildArtifact.sessionModel.durationSeconds),
-      coreMetricName: String(buildArtifact.scoringModel.coreMetricName),
-      coreMetricValue: score.coreMetricValue,
-      supportingMetrics: score.supportingMetrics,
-      normalizedScore: score.normalizedScore,
-      targetSkills: telemetry.targetSkills,
-      pressureTypes: telemetry.pressureTypes,
-      profileSnapshotMilestone,
-      createdAt: Date.now(),
-    }).catch((error) => {
-      console.error('Failed to record sim runtime session:', error);
-    });
-    setRecorded(true);
-    return undefined;
-  }, [buildArtifact, currentUser?.id, exercise.id, previewMode, recorded, responses, runtimePhase]);
-
-  const adapter = useMemo(
-    () => (buildArtifact && buildArtifact.engineKey !== 'reset' ? buildDefaultAdapter(buildArtifact.engineKey) : null),
-    [buildArtifact]
-  );
   const engineTheme = buildArtifact ? ENGINE_THEME[buildArtifact.engineKey] : ENGINE_THEME.noise_gate;
+  const simSpec = useMemo(
+    () => getSimSpecByCoreMetric(buildArtifact?.scoringModel?.coreMetricName)
+      ?? getSimSpecByLegacyExerciseId(exercise.id),
+    [buildArtifact?.scoringModel?.coreMetricName, exercise.id]
+  );
+  const athleteSport = typeof currentUser?.sport === 'string' ? currentUser.sport.trim() : '';
+  const sportPack = useMemo(() => {
+    const archetype = scenarioArchetypeForSport(athleteSport);
+    if (archetype === 'general') return undefined;
+    return exercise.sportContentPacks?.find((pack) => pack.archetype === archetype);
+  }, [athleteSport, exercise.sportContentPacks]);
+  const boundedSportCue = evidenceAlignedSportCue(sportPack?.applicationCue);
+  const evidenceBoundary = boundedSportCue ?? simSpec?.resultBoundary;
+  const taskDescription = simSpec?.athleteTaskDescription
+    ?? buildArtifact?.feedbackModel.athleteLabels.description
+    ?? exercise.description;
+  const metricLabel = simSpec?.athleteMetricLabel ?? 'Task performance';
   const audioAssets = useMemo(
     () => ((buildArtifact?.stimulusModel?.audioAssets ?? exercise.runtimeConfig?.audioAssets ?? {}) as Record<string, { downloadURL?: string }>),
     [buildArtifact, exercise.runtimeConfig?.audioAssets]
   );
   const preflightBriefing = useMemo(
-    () => (buildArtifact ? buildSimPreflightBriefing(exercise, buildArtifact) : ''),
-    [buildArtifact, exercise]
+    () => (buildArtifact ? buildSimPreflightBriefing(exercise, buildArtifact, simSpec, boundedSportCue) : ''),
+    [boundedSportCue, buildArtifact, exercise, simSpec]
   );
   const preflightCueUrl = useMemo(() => {
     const preferredKeys = [
@@ -480,11 +164,6 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
     }
     return Object.values(audioAssets).find((asset) => asset?.downloadURL)?.downloadURL;
   }, [audioAssets]);
-
-  const score = useMemo(
-    () => (buildArtifact && adapter ? adapter.score(buildArtifact, responses) : null),
-    [adapter, buildArtifact, responses]
-  );
 
   if (!buildArtifact) {
     return null;
@@ -572,9 +251,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
     }
   };
 
-  const usesDedicatedEngine = PREVIEW_ENGINES.has(buildArtifact.engineKey);
-
-  if (preflightState !== 'ready' || (usesDedicatedEngine && runtimePhase !== 'active')) {
+  if (preflightState !== 'ready' || runtimePhase !== 'active') {
     return (
       <div className="w-full h-full flex items-center justify-center text-white relative overflow-hidden bg-[#05070d]">
         <div className={`absolute inset-0 bg-gradient-to-br ${engineTheme.glow} opacity-70 pointer-events-none`} />
@@ -600,8 +277,11 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
             <p className="text-xs uppercase tracking-[0.35em]" style={{ color: engineTheme.accent }}>{buildArtifact.family}</p>
             <h2 className="text-4xl font-semibold mt-3">{buildArtifact.variantName}</h2>
             <p className="mt-4 text-lg text-white/75 max-w-2xl">
-              {buildArtifact.feedbackModel.athleteLabels.description || 'Nora will frame the sim before you begin.'}
+              {taskDescription}
             </p>
+            {boundedSportCue && athleteSport && (
+              <p className="mt-3 text-xs uppercase tracking-[0.2em] text-white/45">Sport context: {athleteSport}</p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-white/45">Duration</p>
@@ -609,7 +289,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-white/45">Metric</p>
-                <p className="mt-2 text-2xl font-semibold">{String(buildArtifact.scoringModel.coreMetricName).replace(/_/g, ' ')}</p>
+                <p className="mt-2 text-2xl font-semibold">{metricLabel}</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-white/45">Structure</p>
@@ -620,6 +300,12 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
               <p className="text-xs uppercase tracking-[0.3em] text-white/35">Nora Briefing</p>
               <p className="mt-3 text-white/75 leading-relaxed">{preflightBriefing}</p>
             </div>
+            {evidenceBoundary && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/35">Result boundary</p>
+                <p className="mt-2 text-sm text-white/60 leading-relaxed">{evidenceBoundary}</p>
+              </div>
+            )}
             <div className="flex items-center gap-3 mt-8">
               <button
                 onClick={() => {
@@ -634,7 +320,6 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
                   if (preflightState === 'ready') {
                     stopNarration();
                     setRuntimePhase('active');
-                    setRoundStartMs(Date.now());
                   }
                 }}
                 disabled={preflightState === 'briefing'}
@@ -755,195 +440,5 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
     );
   }
 
-  const currentRound = rounds[roundIndex];
-  const summaryLines = adapter ? adapter.summarize(buildArtifact, responses) : [];
-
-  const handleAdvance = (responseLabel: string) => {
-    if (!currentRound || !adapter) return;
-    const latencyMs = Math.max(150, Date.now() - roundStartMs);
-    const nextResponses = [
-      ...responses,
-      {
-        roundId: currentRound.id,
-        response: responseLabel,
-        latencyMs,
-        correct: responseLabel === currentRound.correctOption,
-        tags: currentRound.tags,
-      },
-    ];
-    setResponses(nextResponses);
-    if (roundIndex >= rounds.length - 1) {
-      setRuntimePhase('summary');
-      return;
-    }
-    setRoundIndex((current) => current + 1);
-    setRoundStartMs(Date.now());
-  };
-
-  return (
-    <div className="w-full h-full flex items-center justify-center">
-      <div className="w-full max-w-4xl rounded-3xl border border-white/10 bg-black/35 backdrop-blur-xl p-6 md:p-8 text-white space-y-6 relative overflow-hidden">
-        <div className={`absolute inset-0 bg-gradient-to-br ${engineTheme.glow} opacity-80 pointer-events-none`} />
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative z-10">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/45">Compiled Runtime</p>
-            <h3 className="text-2xl font-semibold">{buildArtifact.variantName}</h3>
-            <p className="text-sm text-white/55 mt-1">{buildArtifact.family} · {String(buildArtifact.engineKey).replace('_', ' ')}</p>
-            <div
-              className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full border ${engineTheme.panel}`}
-              style={{ color: engineTheme.accent }}
-            >
-              <span className="w-2 h-2 rounded-full" style={{ background: engineTheme.accent }} />
-              <span className="text-[10px] font-bold tracking-[0.25em] uppercase">{engineTheme.badge}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 relative z-10">
-            <button
-              onClick={isPaused ? onResume : onPause}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors text-sm"
-            >
-              {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-              {isPaused ? 'Resume' : 'Pause'}
-            </button>
-          </div>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {runtimePhase === 'intro' && (
-            <motion.div
-              key="intro"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              className="space-y-5"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className={`rounded-2xl border p-4 ${engineTheme.panel}`}>
-                  <div className="flex items-center gap-2 text-sm text-white/60"><Timer className="w-4 h-4" /> Session</div>
-                  <p className="text-lg font-semibold mt-2">{buildArtifact.sessionModel.durationMinutes} min</p>
-                  <p className="text-xs text-white/45 mt-1">{buildArtifact.sessionModel.targetSessionStructure}</p>
-                </div>
-                <div className={`rounded-2xl border p-4 ${engineTheme.panel}`}>
-                  <div className="flex items-center gap-2 text-sm text-white/60"><Target className="w-4 h-4" /> Core Metric</div>
-                  <p className="text-lg font-semibold mt-2">{String(buildArtifact.scoringModel.coreMetricName).replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-white/45 mt-1">{buildArtifact.feedbackModel.feedbackMode} feedback</p>
-                </div>
-                <div className={`rounded-2xl border p-4 ${engineTheme.panel}`}>
-                  <div className="flex items-center gap-2 text-sm text-white/60"><BarChart3 className="w-4 h-4" /> Build</div>
-                  <p className="text-lg font-semibold mt-2">{buildArtifact.engineVersion}</p>
-                  <p className="text-xs text-white/45 mt-1">{buildArtifact.sourceFingerprint}</p>
-                </div>
-              </div>
-
-              <div className={`rounded-2xl border p-4 ${engineTheme.panel}`}>
-                <p className="text-sm leading-relaxed" style={{ color: `${engineTheme.accent}` }}>
-                  {buildArtifact.feedbackModel.athleteLabels.description || 'This compiled module runs from the registry build artifact and records family-specific telemetry when completed.'}
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  setRuntimePhase('active');
-                  setRoundStartMs(Date.now());
-                }}
-                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-[#E0FE10] text-black font-semibold"
-              >
-                <Play className="w-4 h-4" />
-                Start Built Module
-              </button>
-            </motion.div>
-          )}
-
-          {runtimePhase === 'active' && currentRound && (
-            <motion.div
-              key="active"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              className="space-y-5"
-            >
-              <div className="flex items-center justify-between text-sm text-white/50">
-                <span>Round {roundIndex + 1} / {rounds.length}</span>
-                <span>{currentRound.tags.join(' · ')}</span>
-              </div>
-              <div className={`rounded-3xl border p-8 space-y-3 ${engineTheme.panel}`}>
-                <p className="text-xs uppercase tracking-[0.3em] text-white/40">Live Prompt</p>
-                <h4 className="text-2xl font-semibold leading-tight">{currentRound.prompt}</h4>
-                <p className="text-sm text-white/55">{currentRound.subPrompt}</p>
-              </div>
-              {isPaused ? (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                  Runtime paused. Resume to continue this round.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentRound.options.map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => handleAdvance(option)}
-                      className={`rounded-2xl border px-4 py-4 text-left transition-colors ${engineTheme.panel} hover:bg-white/[0.08]`}
-                    >
-                      <p className="font-semibold">{option}</p>
-                      <p className="text-xs text-white/45 mt-1">Commit this response for the current round.</p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {runtimePhase === 'summary' && score && (
-            <motion.div
-              key="summary"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              className="space-y-5"
-            >
-              <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-6">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-300" />
-                  <div>
-                    <p className="text-sm text-emerald-200">Built module complete</p>
-                    <h4 className="text-2xl font-semibold text-white mt-1">{Math.round(score.normalizedScore)} overall score</h4>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.25em] text-white/45">Core Metric</p>
-                    <p className="text-lg font-semibold mt-2">{String(buildArtifact.scoringModel.coreMetricName).replace(/_/g, ' ')}</p>
-                    <p className="text-sm text-white/65 mt-1">{score.coreMetricValue}</p>
-                  </div>
-                  {Object.entries(score.supportingMetrics).slice(0, 2).map(([key, value]) => (
-                    <div key={key} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                      <p className="text-xs uppercase tracking-[0.25em] text-white/45">{key.replace(/_/g, ' ')}</p>
-                      <p className="text-lg font-semibold mt-2">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {summaryLines.map((line) => (
-                  <div key={line} className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
-                    {line}
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={onComplete}
-                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-[#E0FE10] text-black font-semibold"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Finish Module
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
+  return null;
 };
-
-export default SimRuntimePlayer;

@@ -19,7 +19,7 @@ import type {
   CorrelationThresholdWindow,
 } from './correlationEngineTypes';
 import { sanitizeFirestoreValue } from './types';
-import { TaxonomyPillar, TaxonomySkill } from './taxonomy';
+import { TaxonomyPillar } from './taxonomy';
 
 const ENGINE_VERSION = 'correlation_engine_v0_1';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,43 +72,15 @@ function extractFromMap(
 }
 
 function hasDecisionDomain(record: CorrelationEvidenceRecord): boolean {
-  const skill = record.simOutcome.skillDomain;
-  const family = `${record.simOutcome.simFamily || ''} ${record.simOutcome.simVariant || ''}`.toLowerCase();
-  return (
-    skill === TaxonomySkill.ResponseInhibition ||
-    skill === TaxonomySkill.CueDiscrimination ||
-    skill === TaxonomySkill.WorkingMemoryUpdating ||
-    family.includes('decision') ||
-    family.includes('brake') ||
-    family.includes('sequence')
-  );
+  return record.simOutcome.coreMetricName === 'decision_accuracy';
 }
 
 function hasFocusDomain(record: CorrelationEvidenceRecord): boolean {
-  const skill = record.simOutcome.skillDomain;
-  const family = `${record.simOutcome.simFamily || ''} ${record.simOutcome.simVariant || ''}`.toLowerCase();
-  return (
-    skill === TaxonomySkill.SustainedAttention ||
-    skill === TaxonomySkill.SelectiveAttention ||
-    skill === TaxonomySkill.AttentionalShifting ||
-    family.includes('focus') ||
-    family.includes('signal') ||
-    family.includes('noise')
-  );
+  return record.simOutcome.coreMetricName === 'distractor_cost';
 }
 
 function hasComposureDomain(record: CorrelationEvidenceRecord): boolean {
-  const skill = record.simOutcome.skillDomain;
-  const family = `${record.simOutcome.simFamily || ''} ${record.simOutcome.simVariant || ''}`.toLowerCase();
-  const coreMetric = `${record.simOutcome.coreMetricName || ''}`.toLowerCase();
-  return (
-    skill === TaxonomySkill.ErrorRecoverySpeed ||
-    skill === TaxonomySkill.EmotionalInterferenceControl ||
-    skill === TaxonomySkill.PressureStability ||
-    family.includes('reset') ||
-    family.includes('composure') ||
-    coreMetric.includes('recovery')
-  );
+  return record.simOutcome.coreMetricName === 'post_disruption_reengagement_cost_ms';
 }
 
 function extractNormalizedScore(record: CorrelationEvidenceRecord): number | null {
@@ -179,13 +151,6 @@ function extractSleepTimingHour(record: CorrelationEvidenceRecord): number | nul
 }
 
 function extractResetSpeedOutcome(record: CorrelationEvidenceRecord): number | null {
-  const metricName = `${record.simOutcome.coreMetricName || ''}`.toLowerCase();
-  const coreMetric = extractFromMap(record.simOutcome.scores, ['coreMetricValue']);
-  if (metricName.includes('recovery') || metricName.includes('reset') || metricName.includes('time')) {
-    if (coreMetric != null && coreMetric > 0) {
-      return Math.max(0, 100 - coreMetric);
-    }
-  }
   return extractNormalizedScore(record);
 }
 
@@ -392,21 +357,6 @@ function computeConfidenceScore(params: {
   return Math.round(((sampleScore * 0.4) + (diversityScore * 0.25) + (contradictionScore * 0.2) + (freshnessScore * 0.15)) * 100) / 100;
 }
 
-function mapEligibility(tier: CorrelationConfidenceTier): CorrelationRecommendationEligibility {
-  switch (tier) {
-    case 'high_confidence':
-      return 'coach_ready';
-    case 'stable':
-      return 'runtime_ready';
-    case 'emerging':
-      return 'athlete_safe';
-    case 'directional':
-      return 'monitor_only';
-    default:
-      return 'not_eligible';
-  }
-}
-
 function mapSupportedConsumers(eligibility: CorrelationRecommendationEligibility): CorrelationConsumer[] {
   switch (eligibility) {
     case 'coach_ready':
@@ -431,32 +381,32 @@ function deriveDirectionality(correlation: number, contradictionRate: number): A
 function summarizeRelationship(definition: PatternDefinition, directionality: AthletePatternModel['directionality'], eligibility: CorrelationRecommendationEligibility): { observed: string; athlete: string; coach: string } {
   if (eligibility === 'not_eligible') {
     return {
-      observed: `PulseCheck does not have enough linked ${definition.summaryLabel} evidence yet.`,
-      athlete: `Nora is still learning how your ${definition.athleteLabel} relates to this part of your game.`,
-      coach: `Insufficient linked ${definition.coachLabel} evidence to estimate an athlete-specific pattern yet.`,
+      observed: `Linked ${definition.summaryLabel} and task evidence is still too limited for an athlete-specific pattern.`,
+      athlete: `Nora is still gathering sessions that connect your ${definition.athleteLabel} with this task.`,
+      coach: `The linked ${definition.coachLabel} and task evidence remains below the research threshold.`,
     };
   }
 
   if (directionality === 'positive') {
     return {
-      observed: `Higher ${definition.summaryLabel} is generally associated with stronger ${definition.targetDomain}.`,
-      athlete: `When your ${definition.athleteLabel} is stronger, this part of your game usually looks sharper.`,
-      coach: `Positive relationship observed: stronger ${definition.coachLabel} tends to coincide with stronger ${definition.targetDomain}.`,
+      observed: `Higher ${definition.summaryLabel} has appeared with higher linked task scores in the available sessions.`,
+      athlete: `Your linked task score has often been higher when your ${definition.athleteLabel} is higher. This remains a task pattern under study.`,
+      coach: `A positive task-specific association is present for ${definition.coachLabel}. Competition meaning requires representative validation.`,
     };
   }
 
   if (directionality === 'negative') {
     return {
-      observed: `Higher ${definition.summaryLabel} is generally associated with weaker ${definition.targetDomain}.`,
-      athlete: `When your ${definition.athleteLabel} drifts higher, this part of your game usually gets less stable.`,
-      coach: `Negative relationship observed: elevated ${definition.coachLabel} tends to coincide with weaker ${definition.targetDomain}.`,
+      observed: `Higher ${definition.summaryLabel} has appeared with lower linked task scores in the available sessions.`,
+      athlete: `Your linked task score has often been lower when your ${definition.athleteLabel} is higher. This remains a task pattern under study.`,
+      coach: `A negative task-specific association is present for ${definition.coachLabel}. Competition meaning requires representative validation.`,
     };
   }
 
   return {
-    observed: `${definition.summaryLabel} appears to matter, but the pattern is still mixed or context-dependent.`,
-    athlete: `Your ${definition.athleteLabel} seems to matter here, but Nora needs more reps before calling it a stable pattern.`,
-    coach: `Relationship is present but currently mixed or context-dependent; avoid treating it as a settled threshold yet.`,
+    observed: `The linked ${definition.summaryLabel} and task scores currently form a mixed or context-dependent pattern.`,
+    athlete: `Your ${definition.athleteLabel} and this task still show a mixed pattern. Nora needs more comparable sessions.`,
+    coach: `The task-specific relationship remains mixed or context-dependent. Keep it in research monitoring.`,
   };
 }
 
@@ -526,11 +476,7 @@ function buildBestTrainingWindow(samples: PatternSample[]): string | null {
       if (right.mean !== left.mean) return right.mean - left.mean;
       return right.count - left.count;
     })[0];
-  return best ? `${best.label} tends to be your cleanest window.` : null;
-}
-
-function domainFallback(samples: PatternSample[], allSamples: PatternSample[]): PatternSample[] {
-  return samples.length ? samples : allSamples;
+  return best ? `The highest average linked task score currently falls in the ${best.label} window.` : null;
 }
 
 function materialPatternChange(existing: AthletePatternModel | null, next: AthletePatternModel): boolean {
@@ -575,6 +521,8 @@ function buildSamples(definition: PatternDefinition, evidence: CorrelationEviden
   const matchedSamples: PatternSample[] = [];
 
   evidence.forEach((record) => {
+    if (record.simOutcome.completionQuality === 'excluded') return;
+    if (record.simOutcome.measurementScope !== 'task_specific_session') return;
     const inputValue = definition.extractInput(record);
     const outcomeValue = definition.extractOutcome(record);
     if (inputValue == null || outcomeValue == null) return;
@@ -602,7 +550,7 @@ function buildPatternModel(
 ): AthletePatternModel {
   const now = Date.now();
   const { allSamples, matchedSamples } = buildSamples(definition, evidence);
-  const workingSamples = domainFallback(matchedSamples, allSamples);
+  const workingSamples = matchedSamples;
   const distinctDays = new Set(workingSamples.map((sample) => sample.athleteLocalDate));
   const lastValidatedAt = workingSamples.length
     ? Math.max(...workingSamples.map((sample) => sample.sessionTimestamp))
@@ -618,10 +566,9 @@ function buildPatternModel(
     contradictionRate,
     freshnessTier,
   });
-  const recommendationEligibility =
-    workingSamples.length === 0
-      ? 'not_eligible'
-      : mapEligibility(confidenceTier);
+  // Simulation correlations remain research observations until a program-level
+  // validation study supports a broader consumer or sport-transfer claim.
+  const recommendationEligibility = workingSamples.length === 0 ? 'not_eligible' : 'monitor_only';
   const directionality =
     workingSamples.length === 0
       ? 'mixed'
@@ -632,7 +579,9 @@ function buildPatternModel(
     ...(stateDiversityScore < 35 ? ['low_state_diversity'] : []),
     ...(contradictionRate >= 0.45 ? ['recent_contradiction'] : []),
     ...(freshnessTier === 'stale' || freshnessTier === 'expired' ? ['stale_evidence'] : []),
-    ...(matchedSamples.length === 0 && allSamples.length > 0 ? ['domain_fallback_used'] : []),
+    ...(matchedSamples.length === 0 && allSamples.length > 0 ? ['no_matching_canonical_task'] : []),
+    'task_specific_only',
+    'sport_transfer_requires_validation',
   ];
 
   return {

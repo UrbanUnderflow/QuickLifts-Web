@@ -5,6 +5,11 @@ import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
 import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltraining/types';
+import {
+  buildNoiseGateRounds,
+  calculateNoiseGateMeasurement,
+  type NoiseResponse,
+} from './noiseGateMeasurement';
 import { useInputIntegrity } from './useInputIntegrity';
 
 interface NoiseGateGameProps {
@@ -20,39 +25,12 @@ interface NoiseGateGameProps {
   initialSoundEnabled?: boolean;
 }
 
-type RoundStage = 'intro' | 'prime' | 'noise' | 'feedback' | 'summary';
-type NoiseChannel = 'baseline' | 'visual' | 'audio' | 'combined';
-
-interface NoiseRound {
-  id: string;
-  targetLabel: string;
-  options: string[];
-  correctOption: string;
-  channel: NoiseChannel;
-  tags: string[];
-  audioCue?: string;
-  visualPattern?: string;
-}
-
-interface NoiseResponse {
-  roundId: string;
-  channel: NoiseChannel;
-  correct: boolean;
-  response: string;
-  latencyMs: number;
-  falseAlarm: boolean;
-  timedOut: boolean;
-}
-
-const TARGET_LABELS = ['ALPHA', 'ORBIT', 'PULSE', 'VECTOR'];
-const AUDIO_CUES = ['Crowd Surge', 'Commentary Burst', 'Whistle Blast', 'Buzzer Shock'];
-const VISUAL_PATTERNS = ['scatter', 'flash', 'scramble', 'peripheral'];
-
-function parseRoundCount(targetSessionStructure?: string, durationMinutes?: number) {
-  const match = targetSessionStructure?.match(/(\d+)/);
-  if (match) return Math.max(12, Number(match[1]));
-  return Math.max(16, (durationMinutes ?? 5) * 10);
-}
+type RoundStage = 'intro' | 'ready' | 'search' | 'feedback' | 'summary';
+const MARKER_POSITIONS = [
+  [18, 19], [50, 18], [82, 22],
+  [20, 50], [52, 48], [80, 52],
+  [17, 81], [49, 80], [83, 78],
+] as const;
 
 function getDurationMode(durationMinutes: number) {
   if (durationMinutes <= 3) return DurationMode.QuickProbe;
@@ -62,41 +40,6 @@ function getDurationMode(durationMinutes: number) {
 
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, value));
-}
-
-function buildNoiseRounds(buildArtifact: SimBuildArtifact): NoiseRound[] {
-  const total = parseRoundCount(buildArtifact.sessionModel.targetSessionStructure, buildArtifact.sessionModel.durationMinutes);
-  const archetype = buildArtifact.sessionModel.archetype as string;
-  const baselineCount = Math.max(4, Math.floor(total * 0.25));
-  const noiseChannel: NoiseChannel = archetype === 'visual_channel'
-    ? 'visual'
-    : archetype === 'audio_channel'
-      ? 'audio'
-      : archetype === 'combined_channel'
-        ? 'combined'
-        : 'visual';
-
-  return Array.from({ length: total }, (_, index) => {
-    const targetLabel = TARGET_LABELS[index % TARGET_LABELS.length];
-    const distractors = TARGET_LABELS.filter((label) => label !== targetLabel);
-    const options = [targetLabel, ...distractors.slice(0, 2)];
-    const shuffled = options.sort(() => Math.random() - 0.5);
-    const channel = index < baselineCount ? 'baseline' : noiseChannel;
-    return {
-      id: `noise-round-${index + 1}`,
-      targetLabel,
-      options: shuffled,
-      correctOption: targetLabel,
-      channel,
-      tags: [
-        channel,
-        channel === 'baseline' ? 'baseline_phase' : 'noise_phase',
-        channel === 'combined' ? 'overlap' : 'single_channel',
-      ],
-      audioCue: channel === 'audio' || channel === 'combined' ? AUDIO_CUES[index % AUDIO_CUES.length] : undefined,
-      visualPattern: channel === 'visual' || channel === 'combined' ? VISUAL_PATTERNS[index % VISUAL_PATTERNS.length] : undefined,
-    };
-  });
 }
 
 export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
@@ -113,10 +56,14 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
 }) => {
   const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact as SimBuildArtifact;
-  const rounds = useMemo(() => buildNoiseRounds(buildArtifact), [buildArtifact]);
+  const rounds = useMemo(() => buildNoiseGateRounds({
+    targetSessionStructure: buildArtifact.sessionModel.targetSessionStructure,
+    durationMinutes: buildArtifact.sessionModel.durationMinutes,
+    archetype: buildArtifact.sessionModel.archetype,
+  }), [buildArtifact]);
   const durationMinutes = buildArtifact.sessionModel.durationMinutes as number;
   const targetRoundStructure = buildArtifact.sessionModel.targetSessionStructure as string;
-  const stageDurations = useMemo(() => ({ prime: 1400, noise: 2400, feedback: 900 }), []);
+  const stageDurations = useMemo(() => ({ ready: 650, search: 2800, feedback: 850 }), []);
   const pressureTypes = useMemo<PressureType[]>(() => {
     const archetype = buildArtifact.sessionModel.archetype as string;
     if (archetype === 'audio_channel') return [PressureType.Audio];
@@ -220,17 +167,24 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
   }, [getAudioCueAssetUrl, soundEnabled]);
 
   const finishSession = useCallback(async (finalResponses: NoiseResponse[]) => {
-    const baselineResponses = finalResponses.filter((response) => response.channel === 'baseline');
-    const noiseResponses = finalResponses.filter((response) => response.channel !== 'baseline');
-    const baselineAccuracy = baselineResponses.filter((response) => response.correct).length / Math.max(1, baselineResponses.length);
-    const noiseAccuracy = noiseResponses.filter((response) => response.correct).length / Math.max(1, noiseResponses.length);
-    const baselineLatency = baselineResponses.reduce((sum, response) => sum + response.latencyMs, 0) / Math.max(1, baselineResponses.length);
-    const noiseLatency = noiseResponses.reduce((sum, response) => sum + response.latencyMs, 0) / Math.max(1, noiseResponses.length);
-    const distractorCost = Number((baselineAccuracy - noiseAccuracy).toFixed(3));
-    const falseAlarmRate = Number((noiseResponses.filter((response) => response.falseAlarm).length / Math.max(1, noiseResponses.length)).toFixed(3));
-    const channelVulnerability = Number((noiseResponses.filter((response) => !response.correct).length / Math.max(1, noiseResponses.length)).toFixed(3));
-    const rtShift = Math.round(noiseLatency - baselineLatency);
-    const normalizedScore = clampScore(Math.round(noiseAccuracy * 100));
+    const measurement = calculateNoiseGateMeasurement(finalResponses);
+    const normalizedScore = clampScore(Math.round(measurement.distractionAccuracy * 100));
+    const accuracyPointChange = Math.round((measurement.distractionAccuracy - measurement.referenceAccuracy) * 100);
+    const accuracyComparison = accuracyPointChange === 0
+      ? 'Accuracy was the same across the matched reference and distraction rounds.'
+      : accuracyPointChange > 0
+        ? `Accuracy was ${accuracyPointChange} points higher in the matched distraction rounds.`
+        : `Accuracy was ${Math.abs(accuracyPointChange)} points lower in the matched distraction rounds.`;
+    const speedComparison = measurement.correctResponseRtShiftMs === null
+      ? 'At least three matched pairs need correct responses in both conditions before response speed is compared.'
+      : Math.abs(measurement.correctResponseRtShiftMs) < 10
+        ? 'Correct-response speed was about the same across conditions.'
+        : measurement.correctResponseRtShiftMs > 0
+          ? `Correct responses were ${measurement.correctResponseRtShiftMs} ms slower in distraction rounds.`
+          : `Correct responses were ${Math.abs(measurement.correctResponseRtShiftMs)} ms faster in distraction rounds.`;
+    const highlightedDistractorDetail = measurement.highlightedDistractorTapRate === null
+      ? ''
+      : ` Highlighted-marker taps: ${Math.round(measurement.highlightedDistractorTapRate * 100)}%.`;
 
     if (!previewMode && currentUser?.id && !recordedRef.current) {
       recordedRef.current = true;
@@ -243,13 +197,22 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
         durationMode: getDurationMode(durationMinutes),
         durationSeconds: Math.max(1, Math.round((Date.now() - sessionStartedAtRef.current) / 1000)),
         coreMetricName: 'distractor_cost',
-        coreMetricValue: distractorCost,
+        coreMetricValue: measurement.accuracyCost,
         supportingMetrics: {
-          rt_shift: rtShift,
-          false_alarm_rate: falseAlarmRate,
-          channel_vulnerability: channelVulnerability,
-          baseline_accuracy: Number(baselineAccuracy.toFixed(3)),
-          noise_accuracy: Number(noiseAccuracy.toFixed(3)),
+          correct_response_rt_shift: measurement.correctResponseRtShiftMs ?? 0,
+          correct_response_rt_shift_available: measurement.correctResponseRtShiftMs === null ? 0 : 1,
+          matched_correct_pair_count: measurement.matchedCorrectPairCount,
+          wrong_tap_rate: measurement.wrongTapRate,
+          highlighted_distractor_tap_rate: measurement.highlightedDistractorTapRate ?? 0,
+          highlighted_distractor_tap_rate_available: measurement.highlightedDistractorTapRate === null ? 0 : 1,
+          timeout_rate: measurement.timeoutRate,
+          reference_accuracy: measurement.referenceAccuracy,
+          distraction_accuracy: measurement.distractionAccuracy,
+          scored_reference_rounds: measurement.scoredReferenceRounds,
+          scored_distraction_rounds: measurement.scoredDistractionRounds,
+          ...(measurement.activeChannel
+            ? { [`${measurement.activeChannel}_distraction_accuracy`]: measurement.distractionAccuracy }
+            : {}),
           rapid_input_flags: spamFlags,
           rapid_input_rounds: spamRounds,
           flagged_for_spam: spamDetected ? 1 : 0,
@@ -265,9 +228,9 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
     }
 
     setFeedback({
-      title: `${Math.round(noiseAccuracy * 100)}% clean under noise`,
-      detail: `Distractor Cost ${distractorCost.toFixed(3)} · RT Shift ${rtShift}ms · False Alarm ${Math.round(falseAlarmRate * 100)}%${spamDetected ? ' · Session flagged for rapid input' : ''}`,
-      success: noiseAccuracy >= 0.7 && !spamDetected,
+      title: `${measurement.correctWithDistractions} of ${measurement.scoredDistractionRounds} correct in distraction rounds`,
+      detail: `${accuracyComparison} ${speedComparison} Wrong taps: ${Math.round(measurement.wrongTapRate * 100)}%. Timeouts: ${Math.round(measurement.timeoutRate * 100)}%.${highlightedDistractorDetail}${spamDetected ? ' Session flagged for rapid input.' : ''}`,
+      success: !spamDetected,
     });
     setStage('summary');
   }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, pressureTypes, spamDetected, spamFlags, spamRounds]);
@@ -276,28 +239,32 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
     if (!currentRound || noiseResolvedRef.current) return;
     noiseResolvedRef.current = true;
     const now = Date.now();
-    const latencyMs = Math.max(150, now - stageStartRef.current);
+    const latencyMs = Math.max(0, now - stageStartRef.current);
     const timedOut = responseLabel === null;
     const correct = responseLabel === currentRound.correctOption;
     const nextResponse: NoiseResponse = {
       roundId: currentRound.id,
+      pairId: currentRound.pairId,
+      isPractice: currentRound.isPractice,
       channel: currentRound.channel,
       response: responseLabel ?? 'Timed Out',
       latencyMs,
       correct,
-      falseAlarm: Boolean(responseLabel && responseLabel !== currentRound.correctOption),
+      wrongTap: Boolean(responseLabel && responseLabel !== currentRound.correctOption),
+      selectedHighlightedDistractor: Boolean(responseLabel && responseLabel === currentRound.distractorOption),
+      hadHighlightedDistractor: Boolean(currentRound.distractorOption),
       timedOut,
     };
     finalizeRound();
     const nextResponses = [...responses, nextResponse];
     setResponses(nextResponses);
     setFeedback({
-      title: correct ? 'Clean Hold' : timedOut ? 'Missed Target' : 'Distractor Chase',
+      title: correct ? 'Found It' : timedOut ? 'Time Ran Out' : 'Wrong Number',
       detail: correct
-        ? `${currentRound.targetLabel} stayed live under ${currentRound.channel === 'baseline' ? 'baseline' : currentRound.channel} pressure.`
+        ? `You matched ${currentRound.targetLabel}.`
         : timedOut
-          ? 'No commitment landed before the noise window closed.'
-          : `${responseLabel} pulled attention off the live target.`,
+          ? `The matching number was ${currentRound.targetLabel}.`
+          : `You tapped ${responseLabel}. The matching number was ${currentRound.targetLabel}.`,
       success: correct,
     });
     beginStage('feedback', stageDurations.feedback);
@@ -309,20 +276,20 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
       setRoundIndex((current) => current + 1);
       noiseResolvedRef.current = false;
       setFeedback(null);
-      beginStage('prime', stageDurations.prime);
+      beginStage('ready', stageDurations.ready);
     }, stageDurations.feedback);
-  }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length, stageDurations.feedback, stageDurations.prime]);
+  }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length, stageDurations.feedback, stageDurations.ready]);
 
   const handleOptionSelect = useCallback((option: string) => {
-    if (stage !== 'noise') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Hold the live target before committing again.' })) {
+    if (stage !== 'search') return;
+    if (!registerInputAttempt({ blockedMessage: 'One choice per round. Wait for the next field.' })) {
       return;
     }
     resolveRound(option);
   }, [registerInputAttempt, resolveRound, stage]);
 
   useEffect(() => {
-    if (stage !== 'prime' && stage !== 'noise' && stage !== 'feedback') {
+    if (stage !== 'ready' && stage !== 'search' && stage !== 'feedback') {
       return undefined;
     }
     if (isPaused) {
@@ -342,19 +309,19 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
       if (remaining > 0) return;
       window.clearInterval(tick);
       stageEndsAtRef.current = null;
-      if (stage === 'prime') {
-        beginStage('noise', stageDurations.noise);
+      if (stage === 'ready') {
+        beginStage('search', stageDurations.search);
         if (currentRound?.audioCue && (currentRound.channel === 'audio' || currentRound.channel === 'combined')) {
           playAudioCue(currentRound.audioCue);
         }
         return;
       }
-      if (stage === 'noise') {
+      if (stage === 'search') {
         resolveRound(null);
       }
     }, 100);
     return () => window.clearInterval(tick);
-  }, [beginStage, currentRound, isPaused, playAudioCue, remainingMs, resolveRound, stage, stageDurations.noise, stageDurations.prime]);
+  }, [beginStage, currentRound, isPaused, playAudioCue, remainingMs, resolveRound, stage, stageDurations.ready, stageDurations.search]);
 
   useEffect(() => {
     return () => {
@@ -377,19 +344,17 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
     setResponses([]);
     setFeedback(null);
     noiseResolvedRef.current = false;
-    beginStage('prime', stageDurations.prime);
-  }, [beginStage, resetSession, stageDurations.prime]);
+    beginStage('ready', stageDurations.ready);
+  }, [beginStage, resetSession, stageDurations.ready]);
 
   useEffect(() => {
     if (!skipIntro || stage !== 'intro') return;
     startSession();
   }, [skipIntro, stage, startSession]);
 
-  const noiseRounds = responses.filter((response) => response.channel !== 'baseline');
-  const noiseAccuracy = noiseRounds.filter((response) => response.correct).length / Math.max(1, noiseRounds.length);
+  const measurement = useMemo(() => calculateNoiseGateMeasurement(responses), [responses]);
   const progressPercent = ((roundIndex + (stage === 'summary' ? 1 : 0)) / rounds.length) * 100;
 
-  const visualNoiseActive = currentRound?.channel === 'visual' || currentRound?.channel === 'combined';
   const audioNoiseActive = currentRound?.channel === 'audio' || currentRound?.channel === 'combined';
 
   return (
@@ -400,34 +365,6 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
       className="fixed inset-0 z-50 bg-[#09090b] overflow-hidden text-white"
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(249,115,22,0.12),transparent_32%)]" />
-      <AnimatePresence>
-        {visualNoiseActive && stage === 'noise' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 pointer-events-none"
-          >
-            {Array.from({ length: 18 }).map((_, index) => (
-              <motion.div
-                key={`clutter-${index}`}
-                initial={{ opacity: 0.12 }}
-                animate={{ opacity: [0.08, 0.24, 0.1], x: [0, Math.random() * 18 - 9, 0], y: [0, Math.random() * 18 - 9, 0] }}
-                transition={{ duration: 0.8 + (index % 4) * 0.15, repeat: Infinity, repeatType: 'mirror' }}
-                className="absolute rounded-2xl border border-amber-400/10 bg-amber-400/5"
-                style={{
-                  width: `${80 + (index % 3) * 24}px`,
-                  height: `${48 + (index % 4) * 16}px`,
-                  left: `${5 + ((index * 11) % 85)}%`,
-                  top: `${8 + ((index * 7) % 78)}%`,
-                  transform: `rotate(${index * 17}deg)`,
-                }}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-5">
         <button onClick={onClose} className="p-3 rounded-full bg-white/5 hover:bg-white/10 transition-colors">
           <X className="w-5 h-5 text-white/70" />
@@ -450,6 +387,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
           {stage !== 'intro' && stage !== 'summary' && (
             <button
               onClick={isPaused ? onResume : onPause}
+              aria-label={isPaused ? 'Resume' : 'Pause'}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
             >
               {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
@@ -482,18 +420,18 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
                 </div>
                 <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/40">Core Metric</p>
-                  <p className="text-lg font-semibold mt-2">Distractor Cost</p>
-                  <p className="text-xs text-white/45 mt-1">Baseline accuracy minus noise accuracy</p>
+                  <p className="text-lg font-semibold mt-2">Accuracy Change</p>
+                  <p className="text-xs text-white/45 mt-1">Reference rounds compared with distraction rounds</p>
                 </div>
                 <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/40">Channel</p>
                   <p className="text-lg font-semibold mt-2">{String(buildArtifact.sessionModel.archetype).replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-white/45 mt-1">Live target stays constant while distractors rise</p>
+                  <p className="text-xs text-white/45 mt-1">The search task stays the same while distractions are added</p>
                 </div>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 space-y-2">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/35">How it works</p>
-                <p className="text-white/75">Memorize the live target, then keep selecting it once clutter or sound pressure comes in. Baseline rounds establish clean tracking first. Noise rounds measure how much the distractors degrade your read.</p>
+                <p className="text-white/75">A number stays visible at the top. Find and tap that same number in the field. You get two unscored practice rounds, then matched reference and distraction rounds in a mixed order.</p>
               </div>
               <button
                 onClick={startSession}
@@ -505,7 +443,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
             </motion.div>
           )}
 
-          {(stage === 'prime' || stage === 'noise' || stage === 'feedback') && currentRound && (
+          {(stage === 'ready' || stage === 'search' || stage === 'feedback') && currentRound && (
             <motion.div
               key={`round-${currentRound.id}-${stage}`}
               initial={{ opacity: 0, y: 14 }}
@@ -516,10 +454,9 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
               <div className="flex items-center justify-between gap-4 text-sm text-white/55">
                 <div>
                   Round {roundIndex + 1} / {rounds.length}
-                  <span className="ml-3 uppercase tracking-[0.25em] text-[11px] text-amber-300">{currentRound.channel === 'baseline' ? 'baseline' : `${currentRound.channel} noise`}</span>
+                  <span className="ml-3 uppercase tracking-[0.25em] text-[11px] text-amber-300">{currentRound.isPractice ? 'practice' : currentRound.channel === 'baseline' ? 'reference' : 'distractions'}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span>Noise accuracy {Math.round(noiseAccuracy * 100)}%</span>
                   {remainingMs !== null && <span>{(remainingMs / 1000).toFixed(1)}s</span>}
                 </div>
               </div>
@@ -535,59 +472,65 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-[0.45fr_0.55fr] gap-6">
                 <div className="rounded-[28px] border border-amber-500/20 bg-amber-500/10 p-6 space-y-5">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Live Target</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Find This Number</p>
                     <div className="mt-3 rounded-3xl border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-6 py-8 text-center">
-                      <p className="text-4xl font-black tracking-[0.2em] text-[#E0FE10]">{currentRound.targetLabel}</p>
+                      <p className="text-5xl font-black tabular-nums text-[#E0FE10]">{currentRound.targetLabel}</p>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm text-white/65">
-                    <p>{stage === 'prime' ? 'Lock in on this target before the noise phase starts.' : 'Keep this target live once the distractors hit.'}</p>
-                    <p>{currentRound.channel === 'baseline' ? 'Baseline round: no heavy distractors, just establish the clean read.' : currentRound.audioCue ? `${currentRound.audioCue} is active.` : 'Visual clutter is active.'}</p>
+                    <p>This number stays visible for the whole round.</p>
+                    <p>{currentRound.isPractice ? 'This round is practice and does not count toward your result.' : currentRound.channel === 'baseline' ? 'No added distractions this round.' : currentRound.channel === 'combined' ? 'Ignore the flashing marker and the crowd sound.' : currentRound.audioCue ? 'Keep reading the field while the crowd sound plays.' : 'Ignore the flashing marker.'}</p>
                   </div>
                 </div>
 
                 <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 space-y-5 relative overflow-hidden">
-                  {audioNoiseActive && currentRound.audioCue && stage === 'noise' && (
+                  {audioNoiseActive && currentRound.audioCue && stage === 'search' && (
                     <div className="absolute top-4 right-4 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                      {currentRound.audioCue}
+                      Crowd sound playing
                     </div>
                   )}
                   <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Decision Field</p>
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/40">Search Field</p>
                     <h3 className="text-2xl font-semibold mt-2">
-                      {stage === 'prime' ? 'Memorize the live target.' : stage === 'noise' ? 'Select the live target under noise.' : feedback?.title}
+                      {stage === 'ready' ? 'Get ready.' : stage === 'search' ? 'Tap the matching number.' : feedback?.title}
                     </h3>
                     <p className="text-sm text-white/55 mt-2">
                       {stage === 'feedback'
                         ? feedback?.detail
                         : currentRound.channel === 'baseline'
-                          ? 'Establish the clean read before distractors appear.'
-                          : 'Ignore the distractors and commit to the original target.'}
+                          ? 'Find the exact match.'
+                          : 'Ignore the flashing marker and crowd sound. Tap the number shown on the left.'}
                     </p>
                   </div>
 
-                  {stage === 'prime' ? (
+                  {stage === 'ready' ? (
                     <div className="rounded-3xl border border-white/10 bg-black/20 p-8 text-center text-white/55">
-                      Noise phase will begin automatically.
+                      The field appears next.
                     </div>
-                  ) : stage === 'noise' ? (
-                    <div className={`grid grid-cols-1 sm:grid-cols-3 gap-4 transition-all ${visualNoiseActive ? 'rotate-[0.6deg]' : ''}`}>
+                  ) : stage === 'search' ? (
+                    <div className="relative aspect-[4/3] min-h-[360px] overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.035]">
+                      <div className="absolute inset-y-5 left-1/2 w-px bg-white/10" />
+                      <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10" />
                       {currentRound.options.map((option, index) => (
-                        <motion.button
+                        <div
                           key={`${currentRound.id}-${option}`}
-                          onClick={() => handleOptionSelect(option)}
-                          whileHover={{ scale: isPaused ? 1 : 1.02 }}
-                          whileTap={{ scale: isPaused ? 1 : 0.98 }}
-                          disabled={isPaused}
-                          animate={visualNoiseActive ? { y: [0, index % 2 === 0 ? -4 : 5, 0], x: [0, index === 1 ? -5 : 4, 0] } : undefined}
-                          transition={visualNoiseActive ? { duration: 0.8 + index * 0.08, repeat: Infinity, repeatType: 'mirror' } : undefined}
-                          className={`rounded-3xl border px-5 py-8 text-left transition-colors ${option === currentRound.correctOption ? 'border-[#E0FE10]/30 bg-[#E0FE10]/10' : 'border-white/10 bg-white/[0.04]'} ${isPaused ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/[0.08]'}`}
+                          className="absolute -translate-x-1/2 -translate-y-1/2"
+                          style={{ left: `${MARKER_POSITIONS[index][0]}%`, top: `${MARKER_POSITIONS[index][1]}%` }}
                         >
-                          <p className="text-2xl font-black tracking-[0.16em]">{option}</p>
-                          <p className="text-xs text-white/45 mt-3 uppercase tracking-[0.25em]">
-                            {option === currentRound.correctOption ? 'Live target' : 'Distractor'}
-                          </p>
-                        </motion.button>
+                          <motion.button
+                            onClick={() => handleOptionSelect(option)}
+                            whileHover={{ scale: isPaused ? 1 : 1.04 }}
+                            whileTap={{ scale: isPaused ? 1 : 0.96 }}
+                            disabled={isPaused}
+                            animate={option === currentRound.distractorOption ? { scale: [1, 1.12, 1] } : undefined}
+                            transition={option === currentRound.distractorOption ? { duration: 0.7, repeat: Infinity, repeatType: 'mirror' } : undefined}
+                            aria-label={`Number ${option}`}
+                            className={`flex h-[68px] w-[74px] flex-col items-center justify-center rounded-[20px] border-2 transition-colors ${option === currentRound.distractorOption ? 'border-orange-400/80 bg-orange-400/25 shadow-[0_0_28px_rgba(251,146,60,0.28)]' : 'border-white/15 bg-white/[0.07] hover:bg-white/[0.12]'} ${isPaused ? 'cursor-not-allowed opacity-50' : ''}`}
+                          >
+                            <span className="mb-1 h-2 w-2 rounded-full bg-current opacity-60" />
+                            <span className="text-2xl font-black tabular-nums">{option}</span>
+                          </motion.button>
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -628,16 +571,16 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Noise Accuracy</p>
-                  <p className="text-2xl font-semibold mt-2">{Math.round(noiseAccuracy * 100)}%</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">With Distractions</p>
+                  <p className="text-2xl font-semibold mt-2">{Math.round(measurement.distractionAccuracy * 100)}%</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Completed Rounds</p>
-                  <p className="text-2xl font-semibold mt-2">{responses.length}</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Matched Difference</p>
+                  <p className="text-2xl font-semibold mt-2">{Math.abs(Math.round(measurement.accuracyCost * 100))} pts</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Channel Mix</p>
-                  <p className="text-2xl font-semibold mt-2">{buildArtifact.sessionModel.archetype}</p>
+                  <p className="text-xs uppercase tracking-[0.25em] text-white/45">Scored Rounds</p>
+                  <p className="text-2xl font-semibold mt-2">{measurement.scoredReferenceRounds + measurement.scoredDistractionRounds}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:col-span-3">
                   <p className="text-xs uppercase tracking-[0.25em] text-white/45">Input Integrity</p>

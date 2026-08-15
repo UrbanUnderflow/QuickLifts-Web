@@ -40,7 +40,6 @@ function compileMentalTrainingRuntime() {
 
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ql-mentaltraining-runtime-'));
   const compileArgs = [
-    'tsc',
     '--module', 'commonjs',
     '--target', 'es2020',
     '--moduleResolution', 'node',
@@ -58,10 +57,14 @@ function compileMentalTrainingRuntime() {
     path.join(repoRoot, 'src/pages/api/mentaltraining/evaluate-protocol-practice.ts'),
   ];
 
-  const result = spawnSync('npx', compileArgs, {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(repoRoot, 'node_modules/typescript/bin/tsc'), ...compileArgs],
+    {
     cwd: repoRoot,
     encoding: 'utf8',
-  });
+    }
+  );
 
   const simBuildPath = findFileRecursive(outDir, 'simBuild.js');
   const variantRegistryPath = findFileRecursive(outDir, 'variantRegistryService.js');
@@ -72,7 +75,7 @@ function compileMentalTrainingRuntime() {
   const protocolPracticeEvaluatorPath = findFileRecursive(outDir, 'evaluate-protocol-practice.js');
 
   if ((!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !dailyTaskTrainingPlanReadModelPath || !trainingPlanAuthoringSharedPath || !trainingPlanAuthoringServicePath || !protocolPracticeEvaluatorPath) && result.status !== 0) {
-    throw new Error(`Failed to compile mental training runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`);
+    throw new Error(`Failed to compile mental training runtime:\n${result.stderr || result.stdout || result.error?.message || 'Unknown tsc failure'}`);
   }
 
   if (!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !dailyTaskTrainingPlanReadModelPath || !trainingPlanAuthoringSharedPath || !trainingPlanAuthoringServicePath || !protocolPracticeEvaluatorPath) {

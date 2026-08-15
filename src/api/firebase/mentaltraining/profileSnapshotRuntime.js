@@ -1,4 +1,4 @@
-const PROFILE_VERSION = 'taxonomy-v1';
+const PROFILE_VERSION = 'taxonomy-v2-task-evidence';
 const SNAPSHOT_WRITER_VERSION = 'profile-snapshot-writer-v1';
 
 const BIGGEST_CHALLENGE = {
@@ -55,8 +55,9 @@ const SIM_REGISTRY = {
     id: 'reset',
     name: 'Reset',
     legacyExerciseId: 'focus-3-second-reset',
-    targetSkills: ['error_recovery_speed', 'attentional_shifting', 'pressure_stability'],
-    pressureTypes: ['evaluative_threat', 'compounding_error', 'visual_distraction'],
+    coreMetric: 'post_disruption_reengagement_cost_ms',
+    targetSkills: ['attentional_shifting'],
+    pressureTypes: ['visual_distraction'],
     recommendedDurations: {
       quick_probe: 120,
       standard_rep: 180,
@@ -67,6 +68,7 @@ const SIM_REGISTRY = {
     id: 'noise_gate',
     name: 'Noise Gate',
     legacyExerciseId: 'focus-noise-gate',
+    coreMetric: 'distractor_cost',
     targetSkills: ['selective_attention', 'cue_discrimination'],
     pressureTypes: ['visual_distraction', 'audio_distraction'],
     recommendedDurations: {
@@ -79,6 +81,7 @@ const SIM_REGISTRY = {
     id: 'brake_point',
     name: 'Brake Point',
     legacyExerciseId: 'decision-brake-point',
+    coreMetric: 'stop_success_rate',
     targetSkills: ['response_inhibition'],
     pressureTypes: ['time_pressure', 'uncertainty'],
     recommendedDurations: {
@@ -91,6 +94,7 @@ const SIM_REGISTRY = {
     id: 'signal_window',
     name: 'Signal Window',
     legacyExerciseId: 'decision-signal-window',
+    coreMetric: 'decision_accuracy',
     targetSkills: ['cue_discrimination', 'selective_attention'],
     pressureTypes: ['time_pressure', 'uncertainty', 'visual_distraction'],
     recommendedDurations: {
@@ -103,7 +107,8 @@ const SIM_REGISTRY = {
     id: 'sequence_shift',
     name: 'Sequence Shift',
     legacyExerciseId: 'decision-sequence-shift',
-    targetSkills: ['working_memory_updating', 'attentional_shifting'],
+    coreMetric: 'switch_rt_cost_ms',
+    targetSkills: ['attentional_shifting'],
     pressureTypes: ['uncertainty', 'compounding_error'],
     recommendedDurations: {
       quick_probe: 100,
@@ -115,8 +120,9 @@ const SIM_REGISTRY = {
     id: 'endurance_lock',
     name: 'Endurance Lock',
     legacyExerciseId: 'focus-endurance-lock',
-    targetSkills: ['sustained_attention', 'pressure_stability'],
-    pressureTypes: ['fatigue', 'time_pressure'],
+    coreMetric: 'correct_rt_slope_ms_per_min',
+    targetSkills: ['sustained_attention'],
+    pressureTypes: ['time_pressure'],
     recommendedDurations: {
       quick_probe: 120,
       standard_rep: 240,
@@ -124,6 +130,80 @@ const SIM_REGISTRY = {
     },
   },
 };
+
+const SIM_SPECS_BY_METRIC = Object.values(SIM_REGISTRY).reduce((acc, spec) => {
+  acc[spec.coreMetric] = spec;
+  return acc;
+}, {});
+
+function sessionHasUsableTaskEstimate(session, spec) {
+  if (!spec || session.coreMetricName !== spec.coreMetric) return false;
+  if (typeof session.coreMetricValue !== 'number' || !Number.isFinite(session.coreMetricValue)) return false;
+  const metrics = session.supportingMetrics || {};
+  switch (spec.id) {
+    case 'reset':
+      return (metrics.estimate_available ?? 0) > 0 && (metrics.matched_pair_count ?? 0) >= 6;
+    case 'noise_gate':
+      return session.coreMetricValue >= -1
+        && session.coreMetricValue <= 1
+        && typeof metrics.reference_accuracy === 'number'
+        && metrics.reference_accuracy >= 0
+        && metrics.reference_accuracy <= 1
+        && typeof metrics.distraction_accuracy === 'number'
+        && metrics.distraction_accuracy >= 0
+        && metrics.distraction_accuracy <= 1
+        && (metrics.scored_reference_rounds ?? 0) >= 5
+        && metrics.scored_reference_rounds === metrics.scored_distraction_rounds;
+    case 'brake_point':
+      return session.coreMetricValue >= 0
+        && session.coreMetricValue <= 1
+        && (metrics.valid_go_trials ?? 0) >= 48
+        && (metrics.valid_stop_trials ?? 0) >= 16;
+    case 'signal_window':
+      return session.coreMetricValue >= 0
+        && session.coreMetricValue <= 1
+        && (metrics.scored_trial_count ?? 0) >= 24;
+    case 'sequence_shift':
+      return (metrics.switch_rt_available ?? 0) > 0
+        && (metrics.valid_repeat_rt_count ?? 0) >= 8
+        && (metrics.valid_switch_rt_count ?? 0) >= 8;
+    case 'endurance_lock':
+      return (metrics.slope_estimate_available ?? 0) > 0
+        && (metrics.valid_response_count ?? 0) >= 24;
+    default:
+      return false;
+  }
+}
+
+function summarizeTaskEvidence(simSessions) {
+  const observations = [];
+  let excludedSessionCount = 0;
+  for (const session of simSessions) {
+    const spec = SIM_SPECS_BY_METRIC[session.coreMetricName];
+    if (!sessionHasUsableTaskEstimate(session, spec)) {
+      excludedSessionCount += 1;
+      continue;
+    }
+    observations.push({
+      simId: spec.id,
+      coreMetricName: spec.coreMetric,
+      coreMetricValue: session.coreMetricValue,
+      observedAt: session.createdAt,
+    });
+  }
+  return {
+    sessionCount: simSessions.length,
+    usableSessionCount: observations.length,
+    excludedSessionCount,
+    metricNames: Array.from(new Set(observations.map((entry) => entry.coreMetricName))),
+    latestObservedAt: observations.length
+      ? Math.max(...observations.map((entry) => Number(entry.observedAt || 0)))
+      : null,
+    interpretation: 'task_specific_session_evidence',
+    sportTransferStatus: 'requires_validation',
+    observations,
+  };
+}
 
 function humanizeTaxonomyLabel(value) {
   return String(value || '').split('_').join(' ');
@@ -136,7 +216,7 @@ function clampScore(score, min = 0, max = 100) {
 function scoreToLabel(score) {
   if (score >= 70) return 'strong';
   if (score >= 45) return 'developing';
-  return 'weak';
+  return 'building';
 }
 
 function createEmptySkillScores(initial = 50) {
@@ -184,13 +264,6 @@ function average(values, fallback = 50) {
   return clampScore(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
-function averageFromSessions(sessions, key, fallback = 50) {
-  const values = sessions
-    .map((session) => session.supportingMetrics?.[key])
-    .filter((value) => typeof value === 'number' && Number.isFinite(value));
-  return average(values, fallback);
-}
-
 function createTrendSummary(profile) {
   const strongest = profile.strongestSkills[0];
   const weakest = profile.weakestSkills[0];
@@ -199,13 +272,16 @@ function createTrendSummary(profile) {
   const summary = [];
 
   if (strongest) {
-    summary.push(`${humanizeTaxonomyLabel(strongest)} is currently a ${scoreToLabel(profile.skillScores[strongest])} skill.`);
+    summary.push(`${humanizeTaxonomyLabel(strongest)} is currently the highest practice area in this internal profile and is in the ${scoreToLabel(profile.skillScores[strongest])} range.`);
   }
   if (weakest) {
-    summary.push(`${humanizeTaxonomyLabel(weakest)} is the current bottleneck in the program.`);
+    summary.push(`${humanizeTaxonomyLabel(weakest)} is currently the lowest practice area in this internal profile and is a place to gather more observations.`);
   }
   if (pressure?.[0]) {
-    summary.push(`${humanizeTaxonomyLabel(pressure[0])} is the most disruptive pressure channel right now.`);
+    summary.push(`${humanizeTaxonomyLabel(pressure[0])} is the most frequently tagged pressure context in recent sessions.`);
+  }
+  if ((profile.taskEvidence?.usableSessionCount ?? 0) > 0) {
+    summary.push(`${profile.taskEvidence.usableSessionCount} simulation session${profile.taskEvidence.usableSessionCount === 1 ? '' : 's'} are stored as task-specific observations. Sport transfer requires separate validation.`);
   }
 
   return summary;
@@ -274,6 +350,7 @@ function bootstrapTaxonomyProfile(assessment) {
     pressureSensitivity: {},
     strongestSkills: rankSkills(skillScores, 'desc').slice(0, 3),
     weakestSkills: rankSkills(skillScores, 'asc').slice(0, 3),
+    taskEvidence: summarizeTaskEvidence([]),
     trendSummary: [],
     updatedAt: Date.now(),
   };
@@ -325,6 +402,7 @@ function bootstrapMentalSkillsBaselineProfile(baseline) {
     },
     strongestSkills: rankSkills(skillScores, 'desc').slice(0, 3),
     weakestSkills: rankSkills(skillScores, 'asc').slice(0, 3),
+    taskEvidence: summarizeTaskEvidence([]),
     trendSummary: [],
     updatedAt: Number(baseline.completedAt || Date.now()),
   };
@@ -380,35 +458,10 @@ function deriveTaxonomyProfile({ baselineAssessment, mentalSkillsBaseline, check
     ? bootstrapMentalSkillsBaselineProfile(mentalSkillsBaseline)
     : bootstrapTaxonomyProfile(baselineAssessment);
 
-  for (const session of simSessions) {
-    const contribution = clampScore((Number(session.normalizedScore ?? 0) - 50) * 0.2, -20, 20);
-    for (const skill of session.targetSkills || []) {
-      if (typeof profile.skillScores[skill] === 'number') {
-        profile.skillScores[skill] = clampScore(profile.skillScores[skill] + contribution);
-      }
-    }
-
-    const consistencyIndex = session.supportingMetrics?.consistency_index ?? session.supportingMetrics?.consistencyIndex;
-    if (typeof consistencyIndex === 'number') {
-      profile.modifierScores.consistency = clampScore(
-        average([profile.modifierScores.consistency, 100 - consistencyIndex * 40])
-      );
-    }
-
-    const degradation = session.supportingMetrics?.degradation_slope_over_time ?? session.supportingMetrics?.degradationSlope;
-    if (typeof degradation === 'number') {
-      profile.modifierScores.fatigability = clampScore(
-        average([profile.modifierScores.fatigability, 100 - degradation * 30])
-      );
-    }
-
-    for (const pressureType of session.pressureTypes || []) {
-      const current = profile.pressureSensitivity[pressureType] ?? 0;
-      profile.pressureSensitivity[pressureType] = clampScore(
-        average([current, 100 - Number(session.normalizedScore ?? 0)], current || 40)
-      );
-    }
-  }
+  // Simulation sessions remain task-specific observations. They are retained
+  // for reliability and association studies without changing broad skills,
+  // readiness, pressure sensitivity, consistency, or fatigability.
+  profile.taskEvidence = summarizeTaskEvidence(simSessions);
 
   profile.modifierScores.readiness = average(
     checkIns
@@ -420,13 +473,6 @@ function deriveTaxonomyProfile({ baselineAssessment, mentalSkillsBaseline, check
   profile.modifierScores.pressure_sensitivity = average(
     Object.values(profile.pressureSensitivity).filter((value) => typeof value === 'number'),
     profile.modifierScores.pressure_sensitivity
-  );
-
-  profile.modifierScores.consistency = average(
-    [
-      profile.modifierScores.consistency,
-      averageFromSessions(simSessions, 'consistencyIndex', profile.modifierScores.consistency),
-    ]
   );
 
   profile.pillarScores = computePillarScores(profile.skillScores);
@@ -486,8 +532,8 @@ function prescribeNextSession({ profile, checkInState }) {
     durationSeconds: sim?.recommendedDurations?.[durationMode] ?? 180,
     rationale:
       sessionType === 'recovery_rep'
-        ? `Today reads as a lower-readiness day, so Nora should use ${sim?.name || humanizeTaxonomyLabel(recommendedSimId)} as a lighter rep that still measures the bottleneck.`
-        : `The current bottleneck is ${humanizeTaxonomyLabel(weakestSkill)}, so Nora should prescribe ${sim?.name || humanizeTaxonomyLabel(recommendedSimId)} next.`,
+        ? `Today reads as a lower-readiness day, so Nora should use ${sim?.name || humanizeTaxonomyLabel(recommendedSimId)} as a shorter task session.`
+        : `${humanizeTaxonomyLabel(weakestSkill)} is the current practice area in the internal profile, so Nora should offer ${sim?.name || humanizeTaxonomyLabel(recommendedSimId)} next.`,
     targetSkills: sim?.targetSkills ?? [],
     targetPressureTypes: sim?.pressureTypes ?? [],
     generatedAt: Date.now(),
@@ -771,6 +817,7 @@ module.exports = {
   buildTaxonomyCheckInState,
   bootstrapTaxonomyProfile,
   bootstrapMentalSkillsBaselineProfile,
+  summarizeTaskEvidence,
   deriveTaxonomyProfile,
   prescribeNextSession,
   calculateTransferGap,

@@ -116,7 +116,11 @@ export interface CorrelationEvidenceSimBlock {
   simSessionId: string;
   simFamily?: string | null;
   simVariant?: string | null;
+  canonicalSimId?: string | null;
   coreMetricName?: string | null;
+  metricLabel?: string | null;
+  measurementScope?: 'task_specific_session' | 'legacy_unclassified';
+  sportTransferStatus?: 'requires_validation';
   skillDomain?: TaxonomySkill | null;
   pillarDomain?: TaxonomyPillar | null;
   scores: Record<string, number | string | null>;

@@ -256,16 +256,17 @@ export type ModuleInteraction = {
  * Curriculum-wide sport content overlay.
  *
  * Every seeded skill carries one pack for each supported scenario archetype.
- * The application cue explains where the skill belongs in that sport. Skills
- * whose actual decisions change by sport can also replace their player
- * interaction wholesale. This keeps sport context explicit and prevents
- * generic team-sport copy from leaking into individual or judged sports.
+ * The application cue gives the athlete a familiar sport example. For
+ * simulations, the cue also preserves the task-specific result boundary.
+ * Skills whose actual decisions change by sport can replace their player
+ * interaction wholesale. This keeps context explicit and prevents generic
+ * team-sport copy from leaking into individual or judged sports.
  */
 export type SportContentPack = {
   archetype: Exclude<SportScenarioArchetype, 'general'>;
   /** Admin-facing family label, e.g. "Stage sports". */
   label: string;
-  /** Short athlete-facing line connecting this skill to the sport. */
+  /** Athlete-facing sport context plus the simulation boundary when relevant. */
   applicationCue: string;
   /** Optional sport-native intro copy. */
   description?: string;

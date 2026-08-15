@@ -69,6 +69,33 @@ const VOICE_SAMPLES: VoiceSample[] = [
   },
 ];
 
+const NORA_METHOD_CARDS = [
+  {
+    k: 'SCOPE',
+    t: 'Mental performance, not therapy',
+    d: 'Nora supports sport reflection, focus, confidence, routines, motivation, and composure. Clinical care, diagnosis, treatment, and clearance stay with licensed professionals.',
+    hue: 95,
+  },
+  {
+    k: 'LANES',
+    t: 'Every turn is routed first',
+    d: 'Performance, health data, clinical care, critical safety, and closure each have different rules before Nora is allowed to answer.',
+    hue: 165,
+  },
+  {
+    k: 'RUBRIC',
+    t: '10/10 before delivery',
+    d: 'Responses are checked for scope, lane fit, topic continuity, question discipline, health-data humility, non-shaming language, autonomy, clarity, repetition, and consent.',
+    hue: 220,
+  },
+  {
+    k: 'EVIDENCE',
+    t: 'Evidence-informed, claim-limited',
+    d: 'Nora uses principles from autonomy-supportive coaching, self-determination theory, mental-skills training, implementation intentions, and athlete monitoring without claiming clinical validation.',
+    hue: 285,
+  },
+];
+
 // Per-focus copy + gating. Kept tight — only the strings that need to shift.
 const FOCUS_NARRATIVE: Record<
   Focus,
@@ -459,6 +486,7 @@ const NoraLanding: React.FC = () => {
         <div className="nr-nav-links">
           <a href="#voice">Voice</a>
           <a href="#who">Who she is</a>
+          <a href="#methods">Methods</a>
           <a href="#inside">{focus === 'all' ? 'Inside each app' : narrative.insideLabel}</a>
           {narrative.showMemory && <a href="#memory">One memory</a>}
           <a href="#reach" className="nr-nav-cta">
@@ -703,19 +731,20 @@ const NoraLanding: React.FC = () => {
                 <em>you'd call a friend.</em>
               </h2>
               <p className="nr-section-sub">
-                Nora isn't a chatbot layer. She's a sport-psychology-informed companion with eyes
-                on your biometrics, your training, your nutrition, and your mental check-ins —
-                continuously, quietly, and privately.
+                Nora isn't a chatbot layer. She's an evidence-informed mental-performance
+                companion with eyes on the sport context you choose to share, the health data you
+                ask her to read, and the boundaries that keep clinical care with the right humans.
               </p>
             </div>
             <div className="nr-dossier nr-reveal">
               {[
                 { k: 'Role', v: 'AI mental performance coach' },
-                { k: 'Trained on', v: 'Elite sport psychology · CBT fundamentals · IPAP frameworks' },
+                { k: 'Informed by', v: 'Autonomy-supportive coaching · self-determination theory · mental skills' },
                 { k: 'Always-on', v: '2-minute check-ins · game-day jitters · reset scripts' },
-                { k: 'Reads', v: 'HealthKit · WHOOP · Oura · training data · meal logs' },
+                { k: 'Reads when asked', v: 'Sleep · recovery · training · nutrition signals' },
                 { k: 'Privacy', v: 'Athlete-controlled. Nora shares trends, not transcripts.' },
-                { k: 'Escalates', v: 'Routes to human clinicians when needed' },
+                { k: 'Stops at', v: 'No therapy · no diagnosis · no treatment · no medical clearance' },
+                { k: 'Escalates', v: 'Routes clinical, medical, and critical-safety concerns to humans' },
               ].map((row, i) => (
                 <div
                   key={row.k}
@@ -788,6 +817,49 @@ const NoraLanding: React.FC = () => {
                 />
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── METHODS / GOVERNANCE ── */}
+      <section className="nr-section nr-methods" id="methods">
+        <div className="nr-section-inner">
+          <div className="nr-methods-head nr-reveal">
+            <span className="nr-label">How Nora engages</span>
+            <h2 className="nr-h2">
+              Warm on the surface.<br />
+              <em>Strict underneath.</em>
+            </h2>
+            <p className="nr-section-sub">
+              Nora follows an evidence-informed conversation loop: notice the athlete's actual
+              sport detail, reflect it plainly, ask one useful question only when needed, connect it
+              to their stated goal, offer one bounded skill with autonomy, and track patterns only
+              with consent.
+            </p>
+          </div>
+
+          <div className="nr-methods-grid">
+            {NORA_METHOD_CARDS.map((card) => (
+              <article
+                key={card.k}
+                className="nr-method-card nr-reveal"
+                style={{ ['--m-hue' as string]: card.hue }}
+              >
+                <span className="nr-method-k">{card.k}</span>
+                <h3>{card.t}</h3>
+                <p>{card.d}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="nr-methods-foot nr-reveal">
+            <div>
+              <span className="nr-methods-score">10/10</span>
+              <p>required across the runtime response rubric before Nora's answer can be delivered.</p>
+            </div>
+            <a href="/nora-engagement-model" className="nr-product-cta">
+              Read the full engagement model →
+            </a>
           </div>
         </div>
       </section>
@@ -1790,6 +1862,102 @@ const NoraLanding: React.FC = () => {
           line-height: 1.7;
         }
 
+        /* ── METHODS / GOVERNANCE ── */
+        .nr-methods {
+          background:
+            radial-gradient(ellipse at 18% 20%, rgba(190,242,100,0.09), transparent 54%),
+            radial-gradient(ellipse at 82% 72%, rgba(120,120,255,0.08), transparent 58%),
+            rgba(255,255,255,0.012);
+        }
+        .nr-methods-head {
+          max-width: 760px;
+          margin: 0 auto 56px;
+          text-align: center;
+        }
+        .nr-methods-head .nr-section-sub {
+          margin-right: auto;
+          margin-left: auto;
+          margin-bottom: 0;
+        }
+        .nr-methods-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 16px;
+        }
+        .nr-method-card {
+          --m-hue: 120;
+          position: relative;
+          min-height: 245px;
+          padding: 26px 22px;
+          overflow: hidden;
+          border-radius: 22px;
+          background:
+            radial-gradient(circle at 22% 0%, hsla(var(--m-hue), 90%, 62%, 0.16), transparent 48%),
+            rgba(255,255,255,0.026);
+          border: 1px solid hsla(var(--m-hue), 88%, 62%, 0.18);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .nr-method-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(255,255,255,0.035), transparent 38%);
+          pointer-events: none;
+        }
+        .nr-method-k {
+          position: relative;
+          display: inline-flex;
+          margin-bottom: 34px;
+          font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.18em;
+          color: hsl(var(--m-hue), 88%, 72%);
+        }
+        .nr-method-card h3 {
+          position: relative;
+          margin-bottom: 12px;
+          color: #fff;
+          font-size: 21px;
+          line-height: 1.18;
+          letter-spacing: -0.02em;
+        }
+        .nr-method-card p {
+          position: relative;
+          color: rgba(255,255,255,0.58);
+          font-size: 14px;
+          line-height: 1.65;
+        }
+        .nr-methods-foot {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 22px;
+          margin-top: 18px;
+          padding: 22px 24px;
+          border-radius: 22px;
+          background: rgba(190,242,100,0.055);
+          border: 1px solid rgba(190,242,100,0.18);
+        }
+        .nr-methods-foot div {
+          display: flex;
+          align-items: center;
+          gap: 18px;
+        }
+        .nr-methods-score {
+          flex: 0 0 auto;
+          font-size: 34px;
+          font-weight: 800;
+          letter-spacing: -0.04em;
+          color: hsl(95,95%,62%);
+        }
+        .nr-methods-foot p {
+          max-width: 620px;
+          color: rgba(255,255,255,0.62);
+          font-size: 14px;
+          line-height: 1.55;
+        }
+
         /* ── SURFACES ── */
         .nr-surfaces {
           display: grid; grid-template-columns: repeat(3,1fr); gap: 20px;
@@ -2560,7 +2728,7 @@ const NoraLanding: React.FC = () => {
           .nr-nav, .nr-nav--scrolled { padding: 14px 24px; }
           .nr-nav-links a:not(.nr-nav-cta) { display: none; }
           .nr-section { padding: 90px 28px; }
-          .nr-voice-grid, .nr-caps-grid, .nr-surfaces { grid-template-columns: 1fr; gap: 14px; }
+          .nr-voice-grid, .nr-caps-grid, .nr-methods-grid, .nr-surfaces { grid-template-columns: 1fr; gap: 14px; }
           .nr-who-grid { grid-template-columns: 1fr; gap: 36px; }
           .nr-footer { padding: 56px 28px 32px; }
           .nr-footer-inner { grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -2575,6 +2743,7 @@ const NoraLanding: React.FC = () => {
           .nr-inside-head { margin-bottom: 64px; }
           .nr-memory { padding: 100px 28px; }
           .nr-cross-grid { grid-template-columns: 1fr; gap: 14px; }
+          .nr-methods-foot { align-items: flex-start; flex-direction: column; }
           .nr-constellation { height: 340px; max-width: 420px; }
           .nr-node--fwp { top: 22%; left: 18%; }
           .nr-node--pc { top: 22%; left: 82%; }
@@ -2586,6 +2755,7 @@ const NoraLanding: React.FC = () => {
           .nr-orb-rings { width: 300px; height: 300px; }
           .nr-dossier-row { grid-template-columns: 90px 1fr; gap: 12px; padding: 12px 14px; }
           .nr-phone { width: 100%; max-width: 320px; }
+          .nr-methods-foot div { align-items: flex-start; flex-direction: column; gap: 8px; }
           .nr-constellation { height: 300px; }
           .nr-node strong { font-size: 12px; }
           .nr-node em { font-size: 9px; }

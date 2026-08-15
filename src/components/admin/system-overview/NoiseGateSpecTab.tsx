@@ -48,40 +48,40 @@ const ACCENT = '#38bdf8'; // sky blue
 const GAME_PHASES = [
     {
         phase: '1',
-        name: 'Signal Lock',
+        name: 'Practice and Pairing',
         color: '#60a5fa',
-        duration: '5–10 sec',
-        description: 'Clean primary task stream establishes baseline accuracy and response rhythm.',
+        duration: '2 practice rounds',
+        description: 'Two unscored rounds teach the interaction. Each scored target is then scheduled once in a reference condition and once with the configured distraction channel.',
         tiers: [
-            'Beginner: Respond to a single target type in a fixed location',
-            'Intermediate: Track a primary target that moves across the screen',
-            'Advanced: Multi-step response pattern while the primary stream varies in timing and location',
+            'Practice responses never enter the score',
+            'Matched conditions use the same target with a changed field layout',
+            'Reference and distraction order is counterbalanced across pairs',
         ],
     },
     {
         phase: '2',
-        name: 'Noise Injection',
+        name: 'Field Scan',
         color: '#f59e0b',
-        duration: 'Sustained',
-        description: 'Salient but task-irrelevant distractors are introduced. Athlete must continue responding to the primary stream.',
+        duration: '2–3 sec',
+        description: 'The athlete taps the matching number while reference and distraction conditions are mixed. The focus cue remains visible throughout every round.',
         tiers: [
-            'Visual: Peripheral movement, color flashes, decoy targets',
-            'Audio: Crowd noise, commentary, off-rhythm sounds',
-            'Mixed-channel: Visual and audio simultaneously',
-            'Baited (advanced): Distractors that closely resemble the real target',
+            'Visual: One wrong marker flashes or pulses',
+            'Audio: Crowd, whistle, or commentary sounds play during the search',
+            'Mixed-channel: Visual and audio distractions appear together',
+            'Advanced: The flashing wrong marker closely resembles the called number',
         ],
     },
     {
         phase: '3',
-        name: 'Score Capture',
+        name: 'Condition Estimate',
         color: '#38bdf8',
         duration: 'Per round',
-        description: 'Accuracy and RT during noise phase compared against clean baseline. Distractor Cost = the difference.',
+        description: 'Matched reference and distraction rounds are compared after the session. The result is a task-specific within-session estimate, not evidence of sport transfer or a clinical measure.',
         tiers: [
-            'Distractor Cost = baseline accuracy − noise-phase accuracy (%)',
-            'Response time shift also captured and reported',
-            'Channel Vulnerability broken down by distractor type',
-            'Training Mode: athlete sees cost + trend after each round',
+            'Matched accuracy cost = reference accuracy − distraction accuracy',
+            'Correct-response RT shift excludes errors, timeouts, and implausibly fast inputs',
+            'Wrong taps, highlighted-distractor taps, and timeouts are reported separately',
+            'A channel-specific comparison requires separate balanced channel conditions',
         ],
     },
 ];
@@ -90,84 +90,89 @@ const SCIENTIFIC_FOUNDATIONS = [
     {
         name: 'Attentional Control Theory',
         authors: 'Eysenck et al., 2007',
-        summary: 'Anxiety shifts processing toward stimulus-driven capture. Noise Gate trains goal-directed attention to maintain priority over irrelevant stimuli — directly targeting the inhibition function ACT identifies.',
+        summary: 'ACT proposes that anxiety can weaken goal-directed attention and increase stimulus-driven capture. This supports the target mechanism; it does not validate Noise Gate by itself.',
     },
     {
-        name: 'Attentional Networks',
-        authors: 'Posner & Petersen, 1990',
-        summary: 'The executive attention network resolves conflict between competing stimuli. Noise Gate loads this network by presenting simultaneous relevant and irrelevant information streams.',
+        name: 'Visual-Search Attentional Training',
+        authors: 'Ducrocq et al., 2016',
+        summary: 'A visual-search task with task-irrelevant distractors improved inhibition measures and showed promising transfer to pressured tennis tasks. The new field scan follows that tested task structure more closely than word recall did.',
     },
     {
-        name: 'Executive Function: Inhibition',
-        authors: 'Miyake et al., 2000',
-        summary: 'Inhibition is a separable executive function. Noise Gate isolates it by requiring suppression of task-irrelevant distractors while maintaining primary task performance.',
+        name: 'Executive Attention',
+        authors: 'Posner & Petersen, 1990; Miyake et al., 2000',
+        summary: 'Executive attention and inhibition provide a mechanism for resolving competing information. Noise Gate measures performance change when a salient but irrelevant cue is added to the same search task.',
     },
     {
-        name: 'Distraction Drills',
-        authors: 'Nideffer & Sagal, 2006; APA Division 47',
-        summary: 'Applied sport psychology recommends deliberate distraction exposure as a training method. Noise Gate is the structured, measurable, repeatable version.',
+        name: 'Representative Learning Design',
+        authors: 'Pinder et al., 2011; Krause et al., 2019',
+        summary: 'Transfer is more plausible when practice preserves sport-relevant information and actions. The mobile field scan is a controlled attention drill; sport-specific transfer must still be tested and should not be assumed.',
     },
 ];
 
 const SKILL_SCORES = [
-    { skill: 'Distractor Filtering', pillar: 'Focus', description: 'Accuracy maintained during noise phases vs. clean baseline. Primary skill score for Noise Gate. Lower Distractor Cost = stronger filter.', color: ACCENT },
-    { skill: 'Interference Control', pillar: 'Focus', description: 'Inverse of false alarm rate. How often the athlete responds to distractors rather than the primary target. Feeds per-channel vulnerability breakdown.', color: '#60a5fa' },
-    { skill: 'Pressure Stability', pillar: 'Composure', description: 'Distractor Cost under evaluative threat and consequence modifiers vs. baseline. Stratified by modifier condition per Standards Addendum §9.', color: '#c084fc' },
+    { skill: 'Task-Specific Distraction Control', pillar: 'Focus', description: 'Accuracy difference between matched reference and distraction conditions in Noise Gate. This does not by itself establish a general attention trait.', color: ACCENT },
+    { skill: 'Response Selection', pillar: 'Focus', description: 'Wrong taps and highlighted-distractor taps are kept separate so salience-driven errors are not inferred from every mistake.', color: '#60a5fa' },
+    { skill: 'Pressure Stability Candidate', pillar: 'Composure', description: 'May be studied only in a separately balanced neutral-versus-pressure design. It is not produced by the standard Noise Gate session.', color: '#c084fc' },
 ];
 
 const RAW_METRICS = [
-    { metric: 'Distractor Cost', description: 'Baseline accuracy − noise-phase accuracy (%), combined with RT shift. Headline metric.', primary: true },
-    { metric: 'False Alarm Rate', description: 'Responses directed at distractors rather than the primary target. Logged per distractor channel.' },
-    { metric: 'Baseline Accuracy', description: 'Accuracy during the clean signal phase, establishing the per-round reference.' },
-    { metric: 'Noise-Phase Accuracy', description: 'Accuracy during the distractor injection phase.' },
-    { metric: 'RT Shift', description: 'Noise-phase response time minus baseline RT, in milliseconds.' },
-    { metric: 'Channel Vulnerability', description: 'Distractor Cost broken down by distractor type — visual, audio, mixed, baited. Required output.' },
+    { metric: 'Matched Accuracy Cost', description: 'Matched reference accuracy − distraction accuracy. Headline task metric.', primary: true },
+    { metric: 'Reference Accuracy', description: 'Accuracy in scored rounds without an intentional distraction.' },
+    { metric: 'Distraction Accuracy', description: 'Accuracy in scored rounds using the configured visual, audio, or combined condition.' },
+    { metric: 'Correct-Response RT Shift', description: 'Median within-pair RT difference for matched correct distraction and reference responses.' },
+    { metric: 'Wrong-Tap Rate', description: 'Any selected marker that does not match the visible target. Timeouts are excluded.' },
+    { metric: 'Highlighted-Distractor Tap Rate', description: 'Selections of the flashing wrong marker among trials where one was present.' },
+    { metric: 'Timeout Rate', description: 'Trials with no response before the window closes, reported separately from wrong taps.' },
+    { metric: 'Channel Condition Tag', description: 'Identifies the active distraction channel. It is not a channel-comparison score.' },
     { metric: 'Modifier Condition Tag', description: 'Which modifiers were active, enabling pressure-stratified analysis.' },
 ];
 
 const CROSSCUTTING_CONTRIBUTIONS = [
-    { modifier: 'Readiness', contribution: 'Session-opening Distractor Cost vs. rolling baseline. Lower opening cost = higher readiness.' },
-    { modifier: 'Consistency', contribution: 'Distractor Cost variance within session. Low variance = high consistency score.' },
-    { modifier: 'Fatigability', contribution: 'Distractor Cost increase from early to late rounds within a session.' },
-    { modifier: 'Pressure Sensitivity', contribution: 'Gap between cost under neutral vs. pressure modifier conditions.' },
+    { modifier: 'Readiness', contribution: 'Not inferred from a single Noise Gate session. Predictive validity against an independent readiness criterion would be required.' },
+    { modifier: 'Consistency', contribution: 'May be described across repeated valid sessions after reliability is established; a low variance is not automatically a high skill score.' },
+    { modifier: 'Fatigability', contribution: 'Requires enough counterbalanced early and late trials to separate time-on-task from condition order. The standard session does not estimate it.' },
+    { modifier: 'Pressure Sensitivity', contribution: 'Requires separately balanced neutral and pressure conditions. It cannot be inferred from a standard distraction session.' },
 ];
 
 const MODIFIER_COMPAT = [
-    { modifier: 'Distraction', behavior: 'Increases visual/audio distractor density and salience beyond the standard noise injection.', levels: 'Low / Medium / High' },
-    { modifier: 'Time Pressure', behavior: 'Shorter response windows for the primary task, increasing urgency.', levels: 'Standard / Tight / Extreme' },
-    { modifier: 'Evaluative Threat', behavior: 'Stakes messaging during noise phases. Raises social pressure.', levels: 'Subtle / Moderate / Direct' },
-    { modifier: 'Consequence', behavior: 'Failed filtering costs something. Raises emotional stakes.', levels: 'Low / Medium / High' },
-    { modifier: 'Ambiguity', behavior: 'Noise injection timing unpredictable; channel type not signaled in advance.', levels: 'Slight / Moderate / Full' },
-    { modifier: 'Fatigue Load', behavior: 'Longer sessions or higher cognitive load to measure fatigue-driven filter degradation.', levels: 'Standard / Elevated / Extended' },
+    { modifier: 'Distraction Channel', behavior: 'Visual, audio, or combined distraction while the search task remains constant.', levels: 'Visual / Audio / Combined', status: 'Implemented' },
+    { modifier: 'Response Window', behavior: 'Changes the available search time. Comparisons require the same window within a matched estimate.', levels: 'Fixed per configured session', status: 'Implemented' },
+    { modifier: 'Evaluative Threat', behavior: 'Would add stakes messaging under a separately approved protocol.', levels: 'Not calibrated', status: 'Proposed' },
+    { modifier: 'Consequence', behavior: 'Would add a meaningful response consequence without changing the target task.', levels: 'Not calibrated', status: 'Proposed' },
+    { modifier: 'Ambiguity', behavior: 'Would vary distraction timing or predictability under a controlled schedule.', levels: 'Not calibrated', status: 'Proposed' },
+    { modifier: 'Fatigue Load', behavior: 'Would require a longer, counterbalanced protocol designed to estimate time-on-task effects.', levels: 'Not calibrated', status: 'Proposed' },
 ];
 
 const DIFFICULTY_TIERS = [
-    { tier: 1, name: 'Foundation', color: '#94a3b8', target: '< 15% Cost', task: 'Single target, fixed location', distractors: 'Single-channel visual', modifiers: 'None' },
-    { tier: 2, name: 'Sharpening', color: '#60a5fa', target: '< 10% Cost', task: 'Tracking-based primary task', distractors: 'Multi-channel', modifiers: 'Distraction + Time Pressure' },
-    { tier: 3, name: 'Pressure', color: '#c084fc', target: '< 7% Cost', task: 'Pattern-based task', distractors: 'Baited distractors', modifiers: 'Evaluative Threat + Ambiguity + Consequence' },
-    { tier: 4, name: 'Elite', color: '#22c55e', target: '< 5% Cost', task: 'Complex task', distractors: 'All types at max density', modifiers: 'All at high intensity' },
+    { tier: 1, name: 'Foundation', color: '#94a3b8', target: 'Learn the interaction', task: 'Visible call with a nine-marker field', distractors: 'Unscored practice, then a low-salience visual cue', modifiers: 'Fixed response window' },
+    { tier: 2, name: 'Single Channel', color: '#60a5fa', target: 'Stable valid sessions', task: 'Matched layouts and targets', distractors: 'Visual or audio, tested separately', modifiers: 'One configured channel' },
+    { tier: 3, name: 'Combined Channel', color: '#c084fc', target: 'Calibrated personal progression', task: 'Same matched search task', distractors: 'Visual and audio together', modifiers: 'Combined channel only' },
+    { tier: 4, name: 'Representative Variant', color: '#22c55e', target: 'Validation required', task: 'Sport-relevant information and response mapping', distractors: 'Protocol-defined', modifiers: 'Planned, not assumed equivalent' },
 ];
 
 const VARIANTS = [
-    { name: 'Visual Noise', description: 'Peripheral movement, color flashes, decoy targets only. Default Tier 1–2.', status: 'Registered' },
-    { name: 'Audio Noise', description: 'Crowd noise, commentary, off-rhythm sounds. Sport-atmosphere variant.', status: 'Registered' },
-    { name: 'Mixed Noise', description: 'Simultaneous visual and audio distractors. Default Tier 3–4.', status: 'Registered' },
-    { name: 'Baited Noise', description: 'Distractors closely resembling real targets. Discrimination under noise.', status: 'Registered' },
+    { name: 'Field Scan', description: 'Visible number call, nine-marker field, and one flashing wrong marker. Default mobile mechanic.', status: 'Registered' },
+    { name: 'Crowd Audio', description: 'The same field search with crowd, whistle, or commentary sounds and no visual change.', status: 'Registered' },
+    { name: 'Mixed Distraction', description: 'The same field search with a flashing wrong marker and crowd audio together.', status: 'Registered' },
+    { name: 'Near-Match Field', description: 'The flashing wrong marker closely resembles the called number.', status: 'Registered' },
     { name: 'Extended Noise Gate Trial', description: 'Standardized 10–15 min at fixed Tier 3. Trial-layer assessment.', status: 'Registered' },
-    { name: 'Crowd Tunnel (Vision Pro)', description: 'Immersive spatial audio and 3D clutter. Transfer fidelity variant.', status: 'Planned' },
+    { name: 'Sport-Specific Field', description: 'Uses sport-relevant visual information and an action mapping selected through validation work.', status: 'Planned' },
 ];
 
 const MEASUREMENT_RULES = [
-    { rule: 'Valid response definition', detail: 'Correct response to the primary target during the noise phase, within the target response window and above 150ms. Responses to distractors classified separately as false alarms.' },
-    { rule: 'Distractor Cost calculation', detail: 'DC = (baseline accuracy − noise-phase accuracy) as percentage, combined with RT shift. Both components reported; accuracy is the headline number.' },
-    { rule: 'False alarm definition', detail: 'Response directed at a distractor rather than the primary target. Classified by distractor type — required, not optional.' },
-    { rule: 'Channel Vulnerability isolation', detail: 'Distractor Cost broken down by distractor type (visual, audio, mixed, baited). Required output, not optional.' },
-    { rule: 'Minimum reaction time', detail: '150ms floor. Responses below are motor artifacts. Per Standards Addendum §2.1.' },
+    { rule: 'Practice exclusion', detail: 'The first two rounds teach the interaction and never enter accuracy, RT, or error estimates.' },
+    { rule: 'Matched condition schedule', detail: 'Every scored target appears once in a reference condition and once in the configured distraction condition. Layout changes and condition order is counterbalanced.' },
+    { rule: 'Matched accuracy cost', detail: 'Accuracy cost = matched reference accuracy − distraction accuracy. It is reported as a within-session task estimate, not a causal or clinical conclusion.' },
+    { rule: 'Correct-response RT shift', detail: 'Median of distraction RT − reference RT within matched correct pairs. Errors, timeouts, practice, and responses below 150 ms are excluded; at least three valid correct matched pairs are required.' },
+    { rule: 'Wrong-tap definition', detail: 'Any selected marker that does not match the visible target. Timeouts are reported separately.' },
+    { rule: 'Highlighted-distractor tap definition', detail: 'A wrong tap specifically on the flashing marker, divided by trials where a flashing marker was present. This is not available for audio-only sessions.' },
+    { rule: 'Channel reporting guardrail', detail: 'The standard variant tags one configured channel. Channel-specific comparisons require enough separate balanced conditions and are not inferred from a single mixed or audio session.' },
+    { rule: 'Minimum RT integrity rule', detail: 'Responses below 150 ms may still be retained for accuracy review but are excluded from RT estimates as anticipatory or implausibly fast inputs.' },
 ];
 
 const EXPERIENCE_PRINCIPLES = [
     { title: 'Feel like training, not therapy', detail: 'The sim should feel like a drill. The athlete should want to beat their last score. Competitive energy is the engine.' },
-    { title: 'Minimal UI during gameplay', detail: 'Clean, immersive screen. No navigation, no settings beyond intentional distractors. The sim owns the screen.' },
+    { title: 'Minimal UI during gameplay', detail: 'Focused, immersive screen. No navigation and no settings beyond intentional distractors. The sim owns the screen.' },
     { title: 'Data after, not during', detail: 'Performance shown between rounds (Training) or only at session end (Trial). Focus on performing, not monitoring.' },
     { title: 'Sound design matters', detail: 'Audio signals, ambient sound, feedback tones support immersion and signal state changes clearly.' },
     { title: 'Celebrate improvement, not perfection', detail: 'Highlight personal bests and trend improvements, not absolute scores. Progress is the reward.' },
@@ -182,6 +187,9 @@ const REFERENCES = [
     { id: 6, text: 'Nideffer, R., & Sagal, M. (2006). Concentration and attention control training. In J. M. Williams (Ed.), Applied Sport Psychology (pp. 382–403). McGraw-Hill.' },
     { id: 7, text: 'APA Division 47. (2014). Concentration and Attention in Sport. Sport Psychology Works Fact Sheet.' },
     { id: 8, text: 'United States Olympic Committee, Performance Services Division. (2008). Sport Psychology Mental Training Manual.' },
+    { id: 9, text: 'Ducrocq, E., Wilson, M., Vine, S., & Derakshan, N. (2016). Training attentional control improves cognitive and motor task performance. Journal of Sport & Exercise Psychology, 38(5), 521–533.' },
+    { id: 10, text: 'Pinder, R. A., Davids, K., Renshaw, I., & Araújo, D. (2011). Representative learning design and functionality of research and practice in sport. Journal of Sport & Exercise Psychology, 33(1), 146–155.' },
+    { id: 11, text: 'Krause, L., Farrow, D., Pinder, R., Buszard, T., Kovalchik, S., & Reid, M. (2019). Enhancing skill transfer in tennis using representative learning design. Journal of Sports Sciences, 37(22), 2560–2568.' },
 ];
 
 const GOVERNING_DOCS = [
@@ -203,7 +211,7 @@ const NoiseGateSpecTab: React.FC = () => {
                     <div>
                         <p className="text-[10px] uppercase tracking-widest font-bold" style={{ color: ACCENT }}>PULSE CHECK · SIM SPECIFICATION</p>
                         <h2 className="text-xl font-semibold">Noise Gate</h2>
-                        <p className="text-xs text-zinc-500">Selective Attention Training Simulation · Spec v2.0 · March 2025</p>
+                        <p className="text-xs text-zinc-500">Selective Attention Training Simulation · Spec v3.1 · August 2026</p>
                     </div>
                 </div>
             </div>
@@ -215,7 +223,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Noise Gate trains the athlete&apos;s ability to hold attention on the right signal while irrelevant information competes for processing. In every sport, the environment is full of noise. The athletes who perform best are not the ones who experience less noise — they are the ones whose <span className="text-white font-semibold">attentional filter is strong enough to keep the live target in focus while the noise fades to background</span>. Noise Gate makes that filter measurable and trainable.
+                        Noise Gate is a visual-search drill. <span className="text-white font-semibold">A number stays visible at the top while the athlete finds and taps that same number in a field of similar markers.</span> After two unscored practice rounds, matched reference and distraction conditions appear in a counterbalanced order. The comparison estimates the within-session difference in task accuracy and correct-response speed. The drill is designed to practice goal-directed selection under interference; sport transfer remains a validation question, not a product claim.
                     </p>
                 </div>
             </section>
@@ -242,7 +250,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Gamepad2 className="w-4 h-4 text-blue-400" /> Game Flow
                 </h3>
-                <p className="text-sm text-zinc-400">Continuous rounds. 8–12 rounds per session, 3–5 minutes for daily training.</p>
+                <p className="text-sm text-zinc-400">At least 12 total rounds: two unscored practice rounds plus an even number of matched scored rounds.</p>
                 <div className="flex items-center gap-1 overflow-x-auto pb-2">
                     {GAME_PHASES.map((gp, i) => (
                         <React.Fragment key={gp.phase}>
@@ -345,7 +353,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 </CollapsibleSection>
                 <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                     <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-600 mb-1">Longitudinal Tracking</p>
-                    <p className="text-[10px] text-zinc-400">7-day and 30-day Distractor Cost trend lines. Declining cost over time means the filter is getting stronger.</p>
+                    <p className="text-[10px] text-zinc-400">7-day and 30-day matched accuracy-cost trends may describe performance on this task after reliability and minimum-valid-session rules are established. A declining value does not by itself prove a stronger brain filter or transfer to sport.</p>
                 </div>
             </section>
 
@@ -354,7 +362,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-amber-400" /> Modifier Compatibility Matrix
                 </h3>
-                <p className="text-sm text-zinc-400">Supports all six cross-cutting modifiers. Nora selects based on athlete profile and graduated exposure principle.</p>
+                <p className="text-sm text-zinc-400">Only the configured distraction channel and response window are implemented. Proposed pressure modifiers require protocol review, calibration, and validation before use.</p>
                 <div className="overflow-x-auto border border-zinc-800 rounded-xl">
                     <table className="w-full text-xs min-w-[600px]">
                         <thead className="bg-black/30 text-zinc-500 uppercase text-[9px] tracking-wider">
@@ -362,6 +370,7 @@ const NoiseGateSpecTab: React.FC = () => {
                                 <th className="text-left px-3 py-2">Modifier</th>
                                 <th className="text-left px-3 py-2">Behavior</th>
                                 <th className="text-left px-3 py-2">Levels</th>
+                                <th className="text-left px-3 py-2">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -370,6 +379,7 @@ const NoiseGateSpecTab: React.FC = () => {
                                     <td className="px-3 py-2 font-semibold text-white whitespace-nowrap">{mc.modifier}</td>
                                     <td className="px-3 py-2 text-zinc-400">{mc.behavior}</td>
                                     <td className="px-3 py-2 text-zinc-500 font-mono text-[9px]">{mc.levels}</td>
+                                    <td className="px-3 py-2 text-zinc-500 text-[9px]">{mc.status}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -382,7 +392,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-cyan-400" /> Difficulty Progression
                 </h3>
-                <p className="text-sm text-zinc-400">Four tiers. Athletes advance automatically based on sustained performance. Nora manages assignment.</p>
+                <p className="text-sm text-zinc-400">These are progression concepts, not validated mastery bands. No universal percentage threshold or automatic advancement is authorized until reliability and calibration work is complete.</p>
                 <div className="flex items-center gap-1 overflow-x-auto pb-2">
                     {DIFFICULTY_TIERS.map((dt, i) => (
                         <React.Fragment key={dt.tier}>
@@ -457,17 +467,17 @@ const NoiseGateSpecTab: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
                             <p className="text-xs font-bold text-cyan-400 mb-1">Extended Trial Noise Gate</p>
-                            <p className="text-[10px] text-zinc-400 leading-relaxed">Standardized at Tier 3, 10–15 minutes, non-adaptive. Per Standards Addendum §6.</p>
+                            <p className="text-[10px] text-zinc-400 leading-relaxed">Proposed non-adaptive reliability protocol. Duration, trial count, and condition schedule must be set before data collection and held constant.</p>
                         </div>
                         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
-                            <p className="text-xs font-bold text-purple-400 mb-1">Crowd Tunnel (Vision Pro)</p>
-                            <p className="text-[10px] text-zinc-400 leading-relaxed">Immersive Transfer Trial — spatial audio and 3D clutter. Tests filter strength in more realistic environments.</p>
+                            <p className="text-xs font-bold text-purple-400 mb-1">Representative Environment Study</p>
+                            <p className="text-[10px] text-zinc-400 leading-relaxed">Planned study using sport-relevant information and actions. Greater visual realism alone would not establish representative design or transfer.</p>
                         </div>
                     </div>
                     <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                         <p className="text-xs font-semibold text-white mb-1">Transfer Gap</p>
                         <p className="text-[10px] text-zinc-400 leading-relaxed">
-                            Difference between Distractor Cost in daily training and in the Trial variant. <span className="text-green-400">Small gap</span> = internalized skill. <span className="text-red-400">Large gap</span> = improved in drill, not yet stable under realistic conditions.
+                            A difference between daily-task and representative-task performance may be explored only after both measures are reliable and comparable. A small gap does not prove an internalized skill, and a large gap has several possible explanations.
                         </p>
                     </div>
                 </div>
@@ -495,7 +505,7 @@ const NoiseGateSpecTab: React.FC = () => {
                     </div>
                     <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                         <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-600 mb-1">Next Milestone</p>
-                        <p className="text-[10px] text-zinc-400">Stage 2: Internal Reliability — demonstrate test-retest ICC ≥ 0.70 across athlete populations.</p>
+                        <p className="text-[10px] text-zinc-400">Stage 2: Internal reliability — preregister minimum valid trials, inspect score distributions and practice effects, and estimate test-retest reliability with confidence intervals across intended athlete groups.</p>
                     </div>
                 </div>
             </section>
@@ -509,7 +519,7 @@ const NoiseGateSpecTab: React.FC = () => {
                     <div className="bg-[#090f1c] border border-blue-500/20 rounded-2xl p-4 space-y-2">
                         <p className="text-xs font-bold text-blue-400">Training Mode</p>
                         <div className="space-y-1">
-                            {['Round-by-round Distractor Cost shown between rounds', 'Compared to personal average', 'Summary data + trend lines at session end', 'Adaptive difficulty active'].map((item) => (
+                            {['No live score during scored rounds', 'Correct/incorrect feedback after each training round', 'Matched-condition summary at session end', 'No automatic mastery or difficulty decision from one session'].map((item) => (
                                 <div key={item} className="flex items-start gap-1.5">
                                     <CheckCircle2 className="w-3 h-3 text-blue-400 flex-shrink-0 mt-0.5" />
                                     <p className="text-[10px] text-zinc-400">{item}</p>
@@ -538,7 +548,7 @@ const NoiseGateSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        Measures <span className="text-white font-semibold">cognitive-perceptual skill</span>, not motor speed. Physical responses kept simple. Per Standards Addendum §7: motor baseline captured at session start, device type and input method logged as covariates in research analysis.
+                        Noise Gate combines visual search, decision, and tapping time. The simple response reduces motor demands but does not remove them. The current standard session does not capture a separate motor baseline, so RT must be interpreted as task response time rather than pure attentional speed. Research exports should add device and input-method metadata before cross-device RT comparisons are attempted.
                     </p>
                 </div>
             </section>

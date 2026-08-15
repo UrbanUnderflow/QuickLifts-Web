@@ -23,7 +23,7 @@ import type {
   CorrelationFreshnessTier,
 } from './correlationEngineTypes';
 import { sanitizeFirestoreValue, pulseCheckStateSnapshotFromFirestore, type PulseCheckStateSnapshot } from './types';
-import type { SimSessionRecord } from './taxonomy';
+import { getSimSpecByCoreMetric, type SimSessionRecord } from './taxonomy';
 
 type EvidenceWriteReason = 'initial_join' | 'backfill' | 'correction' | 'recompute';
 
@@ -91,8 +91,46 @@ function deriveSourceType(snapshot: PulseCheckStateSnapshot): string {
   return 'pulsecheck_state_snapshot';
 }
 
-function deriveCompletionQuality(session: SimSessionRecord): CorrelationEvidenceRecord['simOutcome']['completionQuality'] {
-  if (!Number.isFinite(session.normalizedScore)) return 'excluded';
+export function hasUsableCanonicalTaskEstimate(session: SimSessionRecord): boolean {
+  const spec = getSimSpecByCoreMetric(session.coreMetricName);
+  if (!spec || !Number.isFinite(session.coreMetricValue)) return false;
+  const metrics = session.supportingMetrics || {};
+  switch (spec.id) {
+    case 'reset':
+      return (metrics.estimate_available ?? 0) > 0 && (metrics.matched_pair_count ?? 0) >= 6;
+    case 'noise_gate':
+      return session.coreMetricValue >= -1
+        && session.coreMetricValue <= 1
+        && Number.isFinite(metrics.reference_accuracy)
+        && metrics.reference_accuracy >= 0
+        && metrics.reference_accuracy <= 1
+        && Number.isFinite(metrics.distraction_accuracy)
+        && metrics.distraction_accuracy >= 0
+        && metrics.distraction_accuracy <= 1
+        && (metrics.scored_reference_rounds ?? 0) >= 5
+        && metrics.scored_reference_rounds === metrics.scored_distraction_rounds;
+    case 'brake_point':
+      return session.coreMetricValue >= 0
+        && session.coreMetricValue <= 1
+        && (metrics.valid_go_trials ?? 0) >= 48
+        && (metrics.valid_stop_trials ?? 0) >= 16;
+    case 'signal_window':
+      return session.coreMetricValue >= 0
+        && session.coreMetricValue <= 1
+        && (metrics.scored_trial_count ?? 0) >= 24;
+    case 'sequence_shift':
+      return (metrics.switch_rt_available ?? 0) > 0
+        && (metrics.valid_repeat_rt_count ?? 0) >= 8
+        && (metrics.valid_switch_rt_count ?? 0) >= 8;
+    case 'endurance_lock':
+      return (metrics.slope_estimate_available ?? 0) > 0 && (metrics.valid_response_count ?? 0) >= 24;
+    default:
+      return false;
+  }
+}
+
+export function deriveCompletionQuality(session: SimSessionRecord): CorrelationEvidenceRecord['simOutcome']['completionQuality'] {
+  if (!hasUsableCanonicalTaskEstimate(session) || !Number.isFinite(session.normalizedScore)) return 'excluded';
   if (Object.keys(session.supportingMetrics || {}).length >= 2 && session.durationSeconds > 0) return 'high';
   if (session.durationSeconds > 0) return 'medium';
   return 'low';
@@ -120,13 +158,15 @@ function buildMissingSignals(snapshot: PulseCheckStateSnapshot, session: SimSess
   if (!snapshot.enrichedInterpretation) missing.push('enriched_interpretation');
   if (!session.supportingMetrics || !Object.keys(session.supportingMetrics).length) missing.push('supporting_metrics');
   if (!session.targetSkills?.length) missing.push('target_skills');
+  if (!getSimSpecByCoreMetric(session.coreMetricName)) missing.push('canonical_task_metric');
   return missing;
 }
 
 function buildQualityFlags(
   snapshot: PulseCheckStateSnapshot,
   selection: SnapshotSelection,
-  sourceFamily: CorrelationEvidenceRecord['physiology']['sourceFamily']
+  sourceFamily: CorrelationEvidenceRecord['physiology']['sourceFamily'],
+  session: SimSessionRecord
 ): string[] {
   const flags = new Set<string>();
   if (snapshot.freshness === 'degraded') flags.add('freshness_degraded');
@@ -137,6 +177,9 @@ function buildQualityFlags(
     flags.add('explicit_self_report_only');
   }
   if (snapshot.rawSignalSummary?.contradictionFlags?.length) flags.add('contradiction_flags_present');
+  flags.add('task_specific_measurement');
+  flags.add('sport_transfer_requires_validation');
+  if (!hasUsableCanonicalTaskEstimate(session)) flags.add('task_estimate_excluded');
   return Array.from(flags);
 }
 
@@ -191,6 +234,8 @@ function selectBestSnapshotForSession(session: SimSessionRecord, snapshots: Puls
 function buildEvidenceRecord(session: SimSessionRecord, selection: SnapshotSelection, options: Required<EvidenceWriteOptions>): CorrelationEvidenceRecord {
   const now = Date.now();
   const sourceFamily = deriveSourceFamily(selection.snapshot);
+  const simSpec = getSimSpecByCoreMetric(session.coreMetricName);
+  const completionQuality = deriveCompletionQuality(session);
   const evidenceId = correlationEngineService.buildEvidenceId({
     sourceWindowStart: selection.sourceWindowStart,
     sourceWindowEnd: selection.sourceWindowEnd,
@@ -239,7 +284,11 @@ function buildEvidenceRecord(session: SimSessionRecord, selection: SnapshotSelec
       simSessionId: session.id || `${session.userId}_${session.createdAt}`,
       simFamily: session.simId,
       simVariant: session.simName,
+      canonicalSimId: simSpec?.id ?? null,
       coreMetricName: session.coreMetricName,
+      metricLabel: simSpec?.athleteMetricLabel ?? null,
+      measurementScope: simSpec ? 'task_specific_session' : 'legacy_unclassified',
+      sportTransferStatus: 'requires_validation',
       skillDomain: session.targetSkills?.[0] ?? null,
       pillarDomain: null,
       scores: {
@@ -248,7 +297,7 @@ function buildEvidenceRecord(session: SimSessionRecord, selection: SnapshotSelec
         durationSeconds: session.durationSeconds,
         ...session.supportingMetrics,
       },
-      completionQuality: deriveCompletionQuality(session),
+      completionQuality,
       sessionTimestamp: session.createdAt,
     },
     alignment: {
@@ -262,7 +311,10 @@ function buildEvidenceRecord(session: SimSessionRecord, selection: SnapshotSelec
       dataConfidence: mapConfidence(selection.snapshot),
       varietyTags: buildVarietyTags(selection.snapshot, session),
       missingSignals: buildMissingSignals(selection.snapshot, session),
-      qualityFlags: buildQualityFlags(selection.snapshot, selection, sourceFamily),
+      qualityFlags: buildQualityFlags(selection.snapshot, selection, sourceFamily, session),
+      ...(completionQuality === 'excluded'
+        ? { exclusionReason: simSpec ? 'task_estimate_quality_requirements_not_met' : 'noncanonical_sim_metric' }
+        : {}),
     },
     lineage: {
       healthSnapshotRevision: selection.snapshot.id,

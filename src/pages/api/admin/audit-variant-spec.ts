@@ -74,22 +74,22 @@ function getFamilyAuditFocus(variant: VariantMetadata) {
 
     switch (family) {
         case 'Reset':
-            focus.push('verify valid re-engagement, false-start logic, multi-source Attentional Shifting, and modifier-stratified Pressure Stability');
+            focus.push('verify the matched left-or-right task, counterbalanced reference and post-interruption pairs, median within-pair response-time calculation, six-valid-pair minimum, separate accuracy and artifact reporting, and prohibited recovery or readiness inferences');
             break;
         case 'Noise Gate':
-            focus.push('verify Distractor Cost formula, distractor-directed false alarms, and channel-vulnerability breakdowns');
+            focus.push('verify the visible-call visual-search contract, matching reference and distraction tasks, Distractor Cost formula, median matched-pair response-time shift with a three-pair minimum, wrong-marker taps, and channel-vulnerability breakdowns');
             break;
         case 'Brake Point':
-            focus.push('verify valid Go rules, No-Go subtype classification, Stop Latency precision, and over-inhibition handling');
+            focus.push('verify the two-choice go task, one-quarter delayed stop trials, adaptive 50 ms staircase including premature stop failures, no Brake button, stop-success standard core, 150-go/50-stop estimate minimum plus every distribution and race-model quality check, and separate go and stop measures');
             break;
         case 'Signal Window':
-            focus.push('verify first-commit rules, read-versus-latency decomposition, decoy handling, and window-utilization logic');
+            focus.push('verify the nine-arrow majority task, balanced direction and evidence levels, response timing from field onset, six-valid overall and two-valid per-level response-time gates, separate accuracy and correct response time, and no answer-revealing UI');
             break;
         case 'Sequence Shift':
-            focus.push('verify post-shift window definition, old-rule intrusion handling, switch-cost logic, and artifact-floor precision');
+            focus.push('verify stable response keys, fixed cue-to-stimulus timing, cross-balanced rule, side, switch status, and congruency, eight-valid-per-condition switch-cost gate, and eligible perseverative errors');
             break;
         case 'Endurance Lock':
-            focus.push('verify fixed or formulaic block segmentation, reproducible baseline/mid/finish logic, normalized fatigue or late-pressure profiles, and schema-grade analytics vocabularies');
+            focus.push('verify one constant visual-only task across six blocks, variable foreperiod only, 24-valid overall and three-valid-per-block fitted-slope gates, separate 500 ms threshold and artifact measures, and no causal fatigue inference');
             break;
         default:
             break;
@@ -97,7 +97,7 @@ function getFamilyAuditFocus(variant: VariantMetadata) {
 
     switch (archetype) {
         case 'visual_channel':
-            focus.push('flag any visual-channel variant that lacks concrete modifier definitions, co-occurrence tiers, or display-state enums');
+            focus.push('flag any visual-channel variant that changes the canonical scored task or timing without a separately balanced protocol');
             break;
         case 'audio_channel':
             focus.push('flag missing audio-route, output-device, or sound-subtype schema');
@@ -109,7 +109,7 @@ function getFamilyAuditFocus(variant: VariantMetadata) {
             focus.push('flag any sport-context draft that changes the underlying task instead of just contextual packaging');
             break;
         case 'fatigue_load':
-            focus.push('flag flexible windows, undefined modifier profiles, missing block enums, or unclear training-mode adaptation boundaries');
+            focus.push('flag any fatigue-load variant that ramps difficulty, stakes, clutter, cadence, rest, or display load over canonical scored trials or makes a causal fatigue claim');
             break;
         case 'trial':
             focus.push('flag any missing fixed-profile, validity, seed, or device constraints');
@@ -119,7 +119,11 @@ function getFamilyAuditFocus(variant: VariantMetadata) {
     }
 
     if (family === 'Endurance Lock' && archetype === 'visual_channel') {
-        focus.push('flag any Endurance Lock visual-channel draft that reverts to flexible baseline windows, placeholder modifier matrices, or non-schema visual vocabularies');
+        focus.push('flag any Endurance Lock visual-channel draft that changes the visual signal, display load, response rule, response window, or scoring across the six scored blocks');
+    }
+
+    if (focus.length > 0) {
+        focus.push('flag athlete-facing riddles, live-target metaphors, unexplained RT abbreviations, moralized labels such as clean, poor, weak, or failed, and any result copy that overstates task-to-sport transfer');
     }
 
     return focus;

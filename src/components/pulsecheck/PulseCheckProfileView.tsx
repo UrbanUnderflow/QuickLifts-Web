@@ -817,6 +817,17 @@ const PulseCheckProfileView: React.FC = () => {
               </section>
 
               <section>
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">Integrations</p>
+                <div className="mt-3 space-y-3">
+                  <SettingsRow
+                    title="Wearable Setup"
+                    subtitle="Connect or troubleshoot Apple Watch, Health Connect, Polar, Fitbit, Oura, and WHOOP."
+                    onClick={() => void router.push('/PulseCheck/wearables')}
+                  />
+                </div>
+              </section>
+
+              <section>
                 <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">Account</p>
                 <div className="mt-3 space-y-3">
                   <div className="rounded-[26px] border border-white/[0.07] bg-white/[0.03] p-4">

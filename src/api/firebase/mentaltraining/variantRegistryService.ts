@@ -26,6 +26,13 @@ import { applyDraftSyncState, buildPublishedVariantRecord, buildPublishedModuleF
 
 const VISION_RUNTIME_PACKAGES_COLLECTION = 'vision-runtime-packages';
 const SPEC_VERSIONS_COLLECTION = 'spec_versions';
+let lastSpecVersionCreatedAt = 0;
+
+function nextSpecVersionCreatedAt() {
+  const now = Date.now();
+  lastSpecVersionCreatedAt = Math.max(now, lastSpecVersionCreatedAt + 1);
+  return lastSpecVersionCreatedAt;
+}
 
 export type SimVariantSpecStatus = 'needs-spec' | 'in-progress' | 'complete' | 'not-required';
 export type SimVariantFamilyStatus = 'locked' | 'candidate';
@@ -889,7 +896,7 @@ function writeSpecVersion(
   }
 
   const specVersionDoc = doc(buildSpecVersionRef(nextRecord.id));
-  const createdAt = Date.now();
+  const createdAt = nextSpecVersionCreatedAt();
   batch.set(
     specVersionDoc,
     specVersionToFirestore({

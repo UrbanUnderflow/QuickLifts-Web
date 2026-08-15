@@ -23,13 +23,15 @@ const installFirebaseEnv = () => {
 
 const loadModules = async () => {
   installFirebaseEnv();
-  const [archetypes, library, narration, sportConfig] = await Promise.all([
+  const [archetypes, library, narration, sportConfig, taxonomy, runtime] = await Promise.all([
     import('../../src/api/firebase/mentaltraining/sportScenarioArchetypes'),
     import('../../src/api/firebase/mentaltraining/exerciseLibraryService'),
     import('../../src/api/firebase/mentaltraining/moduleNarrationScripts'),
     import('../../src/api/firebase/pulsecheckSportConfig'),
+    import('../../src/api/firebase/mentaltraining/taxonomy'),
+    import('../../src/components/mentaltraining/SimRuntimePlayer'),
   ]);
-  return { archetypes, library, narration, sportConfig };
+  return { archetypes, library, narration, sportConfig, taxonomy, runtime };
 };
 
 const ADVERSITY_ID = 'viz-adversity-response';
@@ -208,6 +210,104 @@ test('every seeded skill carries a complete curriculum-wide sport pack set', asy
     );
     for (const pack of packs) {
       assert.ok(pack.applicationCue?.trim(), `${exercise.id}/${pack.archetype} has an application cue`);
+    }
+  }
+});
+
+test('all six simulations keep sport packs inside the task-specific evidence boundary', async () => {
+  const { library, taxonomy } = await loadModules();
+  const required = ['attempt', 'combat', 'invasion', 'judged', 'net_racket', 'precision', 'race', 'stage'];
+  const staleTransferClaims = [
+    /train a fast return/i,
+    /slowing down just enough/i,
+    /recognize the useful signal/i,
+    /as fatigue builds/i,
+    /train your attention/i,
+    /train yourself/i,
+  ];
+
+  for (const spec of taxonomy.SIM_REGISTRY) {
+    const exercise = (library as any).SEEDED_EXERCISES.find(
+      (item: any) => item.id === spec.legacyExerciseId,
+    );
+    assert.ok(exercise, `${spec.id} has a seeded exercise`);
+    assert.deepEqual(
+      exercise.sportContentPacks.map((pack: any) => pack.archetype).sort(),
+      required,
+      `${spec.id} covers every sport archetype`,
+    );
+
+    for (const pack of exercise.sportContentPacks) {
+      assert.ok(
+        pack.applicationCue.includes(spec.resultBoundary),
+        `${spec.id}/${pack.archetype} carries the canonical result boundary`,
+      );
+      assert.doesNotMatch(pack.applicationCue, /\bclean\b/i);
+      assert.doesNotMatch(pack.applicationCue, /—/);
+      for (const pattern of staleTransferClaims) {
+        assert.doesNotMatch(
+          pack.applicationCue,
+          pattern,
+          `${spec.id}/${pack.archetype} avoids an unsupported transfer claim`,
+        );
+      }
+    }
+  }
+});
+
+test('the visible web preflight uses canonical task labels and a bounded sport cue', async () => {
+  const { library, runtime, taxonomy } = await loadModules();
+
+  for (const spec of taxonomy.SIM_REGISTRY) {
+    const exercise = (library as any).SEEDED_EXERCISES.find(
+      (item: any) => item.id === spec.legacyExerciseId,
+    );
+    const sportCue = exercise.sportContentPacks[0].applicationCue;
+    const briefing = runtime.buildSimPreflightBriefing(
+      exercise,
+      {
+        engineKey: spec.id,
+        variantName: exercise.name,
+        sessionModel: { durationMinutes: 3 },
+        feedbackModel: { athleteLabels: { description: 'stale generated description' } },
+      } as any,
+      spec,
+      sportCue,
+    );
+
+    assert.ok(briefing.includes(spec.athleteTaskDescription), `${spec.id} names the canonical task`);
+    assert.ok(briefing.includes(spec.athleteMetricLabel), `${spec.id} names the canonical metric label`);
+    assert.ok(briefing.includes(spec.resultBoundary), `${spec.id} carries the canonical result boundary`);
+    assert.doesNotMatch(briefing, /stale generated description/i);
+  }
+});
+
+test('every configured sport receives a bounded pack or the neutral general fallback', async () => {
+  const { archetypes, library, narration, sportConfig, taxonomy } = await loadModules();
+  const catalog = sportConfig.getDefaultPulseCheckSports();
+  const scripts = narration.buildModuleNarrationScripts();
+  const simExercises = taxonomy.SIM_REGISTRY.map((spec: any) => ({
+    spec,
+    exercise: (library as any).SEEDED_EXERCISES.find((item: any) => item.id === spec.legacyExerciseId),
+  }));
+
+  for (const sport of catalog) {
+    const archetype = archetypes.resolveScenarioArchetype(sport.name, catalog);
+    for (const { spec, exercise } of simExercises) {
+      const pack = exercise.sportContentPacks.find((item: any) => item.archetype === archetype);
+      if (archetype === 'general') {
+        assert.equal(pack, undefined, `${sport.name}/${spec.id} stays neutral`);
+        const intro = scripts.find(
+          (item: any) => item.moduleId === spec.legacyExerciseId && item.slot === 'intro',
+        );
+        assert.ok(intro?.text.includes(spec.resultBoundary), `${sport.name}/${spec.id} uses the neutral bounded intro`);
+        continue;
+      }
+      assert.ok(pack, `${sport.name}/${spec.id} resolves to a sport pack`);
+      assert.ok(
+        pack.applicationCue.includes(spec.resultBoundary),
+        `${sport.name}/${spec.id} keeps sport transfer unclaimed`,
+      );
     }
   }
 });
@@ -547,9 +647,6 @@ test('narration scripts — enumerate every curriculum-wide packed interaction',
   for (const exercise of (library as any).SEEDED_EXERCISES) {
     const moduleScripts = scripts.filter((script: any) => script.moduleId === exercise.id);
     for (const pack of exercise.sportContentPacks ?? []) {
-      if (exercise.id === 'focus-3-second-reset') {
-        continue;
-      }
       assert.ok(
         moduleScripts.some((script: any) => script.slot === `sport-${pack.archetype}-intro`),
         `${exercise.id}/${pack.archetype} intro narration is enumerable`,
@@ -561,6 +658,28 @@ test('narration scripts — enumerate every curriculum-wide packed interaction',
           assert.equal(script?.text, round.prompt.trim(), `${exercise.id} missing ${slot}`);
         });
       }
+    }
+  }
+});
+
+test('Nora narration uses the canonical task and evidence boundary for all six simulations', async () => {
+  const { narration, taxonomy } = await loadModules();
+  const scripts = narration.buildModuleNarrationScripts();
+
+  for (const spec of taxonomy.SIM_REGISTRY) {
+    const moduleScripts = scripts.filter((script: any) => script.moduleId === spec.legacyExerciseId);
+    const intro = moduleScripts.find((script: any) => script.slot === 'intro');
+    assert.ok(intro, `${spec.id} has a normal intro narration`);
+    assert.match(intro.text, new RegExp(spec.athleteMetricLabel, 'i'));
+    assert.ok(intro.text.includes(spec.athleteTaskDescription));
+    assert.ok(intro.text.includes(spec.resultBoundary));
+
+    for (const archetype of ['attempt', 'combat', 'invasion', 'judged', 'net_racket', 'precision', 'race', 'stage']) {
+      const sportIntro = moduleScripts.find((script: any) => script.slot === `sport-${archetype}-intro`);
+      assert.ok(sportIntro, `${spec.id}/${archetype} has sport-context narration`);
+      assert.match(sportIntro.text, new RegExp(spec.athleteMetricLabel, 'i'));
+      assert.ok(sportIntro.text.includes(spec.athleteTaskDescription));
+      assert.ok(sportIntro.text.includes(spec.resultBoundary));
     }
   }
 });

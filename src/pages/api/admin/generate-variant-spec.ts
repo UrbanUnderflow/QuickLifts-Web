@@ -61,46 +61,54 @@ function getFamilyGoldStandardGuidance(variant: VariantMetadata) {
     switch (family) {
         case 'Reset':
             guidance.push(
-                'Reset specs must define valid re-engagement as two consecutive correct responses on the refocused task.',
-                'Reset specs must define false starts as responses during the disruption phase before the reset signal.',
-                'Attentional Shifting must stay multi-source and Pressure Stability must stay modifier-stratified.',
+                'Reset specs must keep one left-or-right classification task in matched reference and post-interruption trials.',
+                'Reset specs must define post-disruption re-engagement cost as the median within-pair response-time difference using only valid correct responses and withhold it unless six valid correct matched pairs remain.',
+                'Reference and post-interruption accuracy, premature responses, timeouts, and the actual reset interval must stay separate from the response-time estimate.',
+                'The task may support an Attentional Shifting hypothesis, but it must not produce recovery, resilience, readiness, or mental-toughness labels.',
                 'Do not let modifier packaging change the task identity; if the disruption creates a new problem, treat it as a build defect.'
             );
             break;
         case 'Noise Gate':
             guidance.push(
-                'Noise Gate specs must define Distractor Cost explicitly and report RT shift beside it.',
+                'Noise Gate must keep the called number visible and use the same visual-search field in reference and distraction rounds; do not turn it into a memory task.',
+                'A visual condition may add one salient wrong marker and an audio condition may add crowd sound, but neither may hide or replace the matching number.',
+                'Noise Gate specs must define Distractor Cost explicitly and calculate response-time shift as the median within-pair difference from at least three valid correct matched pairs.',
                 'False alarms must be distractor-directed responses and must be classified by distractor type.',
                 'Channel Vulnerability must be broken down by channel or distractor class, not flattened into one unlabeled score.'
             );
             break;
         case 'Brake Point':
             guidance.push(
-                'Brake Point specs must define valid Go behavior, Stop Latency, and the 150 ms artifact floor explicitly.',
-                'False alarms must be classified by No-Go type such as obvious, fakeout, and late-reveal.',
-                'Over-inhibition must be tracked so slowing down cannot masquerade as better inhibitory control.'
+                'Brake Point must use a dominant left-or-right go task and delayed stop signals on one quarter of scored trials; no Brake response button is allowed.',
+                'The stop-signal delay must use the declared 50 ms staircase within the 100-700 ms range; every failed stop response, including a premature response, moves the next delay down.',
+                'The standard 64-trial rep uses stop success as its core measure and never emits a stop-time estimate.',
+                'A stop-time estimate may be emitted only after at least 150 valid go trials and 50 stop trials, 25-75% stop success, complete stop-signal-delay capture, no more than 10% go omissions, at least 80% go accuracy, and a passed failed-stop-versus-go race-model check.',
+                'Go accuracy, correct go RT, omissions, stop success, mean stop-signal delay, and premature responses must remain separate.'
             );
             break;
         case 'Signal Window':
             guidance.push(
-                'Signal Window specs must define the valid response as the first committed response after display onset.',
-                'Correct Read Under Time Pressure must preserve both read quality and decision latency instead of reducing to generic speed.',
-                'Window Utilization and decoy susceptibility must remain interpretable supporting outputs.'
+                'Signal Window must use a nine-arrow majority-direction task with balanced left and right answers and 5/9, 6/9, and 7/9 evidence levels.',
+                'Response time must begin at arrow-field onset, and response keys must remain available while the field is visible.',
+                'Decision accuracy and correct-response time must remain separate, with condition-level results and wrong-choice, timeout, and premature-response rates.',
+                'Withhold overall correct-response time unless six valid correct responses remain and withhold an evidence-level response time unless two valid correct responses remain in that level.',
+                'Position, labels, styling, or accessibility text must never reveal the correct direction.'
             );
             break;
         case 'Sequence Shift':
             guidance.push(
-                'Sequence Shift specs must define the post-shift scoring window explicitly, usually the first 3-5 trials after a rule change.',
-                'Old-rule intrusions must be separated from novel errors.',
-                'Switch Cost must remain visible beside update accuracy, and the 150 ms artifact floor must be preserved.'
+                'Sequence Shift must use cued letter-number classification with stable vowel-or-odd and consonant-or-even response keys.',
+                'Rule, response side, repeat or switch status, and congruency must be cross-balanced with one fixed cue-to-stimulus interval and response window.',
+                'Switch response-time cost must use correct artifact-valid trials, require at least eight valid repeat and eight valid switch trials, and keep accuracy visible beside response time.',
+                'Old-rule responses count as perseverative errors only on eligible incongruent switch trials.'
             );
             break;
         case 'Endurance Lock':
             guidance.push(
-                'Endurance Lock specs must use fixed or formulaic block segmentation rather than flexible prose like "first 2-3 minutes."',
-                'Define baseline, middle, and finish blocks explicitly so Baseline Performance, Degradation Onset, and Degradation Slope are reproducible.',
-                'If late-session pressure exists, define named normalized pressure profiles rather than treating scoring weight, consequence, and time pressure as interchangeable.',
-                'Training-mode adaptation may tune load inside family bounds, but it may not change the task identity, block schema, or headline measurement logic.'
+                'Endurance Lock must use one visual-only signal-detection task with the same display, rule, 1500 ms response window, and scoring across six blocks.',
+                'Only the 1500-3500 ms foreperiod may vary unpredictably within the scored session.',
+                'The headline response-time change must be a fitted slope and must be withheld unless at least 24 valid responses remain and every scored block contains at least three.',
+                'Responses at or above the declared 500 ms threshold, false starts, timeouts, variability, and per-block valid counts must stay separate, and the task must not identify fatigue or its cause.'
             );
             break;
         default:
@@ -110,8 +118,8 @@ function getFamilyGoldStandardGuidance(variant: VariantMetadata) {
     switch (archetype) {
         case 'visual_channel':
             guidance.push(
-                'Visual-channel variants should define runtime modifiers concretely, including modifier co-occurrence and tier rules.',
-                'Analytics vocabularies should enumerate display-state tags such as contrast, density, and peripheral load instead of using vague placeholders.'
+                'Visual-channel packaging may change framing or assets outside scored trials, but it may not change the canonical scored task or timing.',
+                'Any scored visual manipulation requires a separately balanced protocol and cannot silently replace the family measurement contract.'
             );
             break;
         case 'audio_channel':
@@ -131,7 +139,7 @@ function getFamilyGoldStandardGuidance(variant: VariantMetadata) {
             break;
         case 'fatigue_load':
             guidance.push(
-                'Fatigue-load variants should define one named modifier profile, one fixed or formulaic block structure, and one schema-grade analytics vocabulary for block identity, device class, delivery surface, and modifier profile identifiers.'
+                'Fatigue-load naming is packaging only: it may not ramp difficulty, stakes, clutter, cadence, rest, or display load over canonical scored trials or support a causal fatigue claim.'
             );
             break;
         case 'trial':
@@ -145,9 +153,16 @@ function getFamilyGoldStandardGuidance(variant: VariantMetadata) {
 
     if (family === 'Endurance Lock' && archetype === 'visual_channel') {
         guidance.push(
-            'Endurance Lock visual-channel variants must still use fixed or formulaic six-block segmentation with explicit baseline, middle, and finish windows.',
-            'Define one named visual profile per published module and do not mix clutter, peripheral-bait, or contrast-decay profile ids inside a single build.',
-            'Use schema-grade enums for visual profile id, visual density tier, peripheral load tier, contrast profile, block identity, device class, and delivery surface.'
+            'Endurance Lock visual-channel packaging must keep the same visual signal, display load, rule, response window, and scoring in all six scored blocks.',
+            'If visual load is the research question, define a separate counterbalanced protocol; do not call its condition effect a time-on-task or fatigue effect.'
+        );
+    }
+
+    if (guidance.length > 0) {
+        guidance.push(
+            'Athlete-facing instructions must say exactly what appears and what action to take; do not use metaphors such as live target or pressure starts.',
+            'Athlete-facing copy must not moralize performance with labels such as clean, poor, weak, failed, or elite brain, and must spell out response time instead of RT.',
+            'Every result explanation must remain task-specific and state what the task does not establish about competition, readiness, diagnosis, or stable traits.'
         );
     }
 

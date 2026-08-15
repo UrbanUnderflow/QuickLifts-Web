@@ -348,22 +348,20 @@ function parseCommaTags(raw: string) {
 
 const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
     'Reset': {
-        mechanism: 'timer-led disruption -> reset -> rapid re-engagement to the same primary task',
-        coreMetric: 'Recovery Time',
-        skillTargets: 'Attentional Shifting, Error Recovery Speed, Target Reacquisition, Pattern Discrimination, and Pressure Stability',
-        boundaryRule: 'the athlete must always return to the same task rather than pivoting into a new problem or secondary challenge, and phone/web/native mobile builds may not imply handheld camera gaze detection',
+        mechanism: 'matched left/right arrow classification in neutral-hold and post-interruption conditions',
+        coreMetric: 'post_disruption_reengagement_cost_ms',
+        skillTargets: 'Attentional Shifting hypothesis with task-specific response-time and accuracy observations',
+        boundaryRule: 'the arrow task, response keys, pre-target interval, and response window must remain matched; only the interruption and fixed reset interval may differ',
         trainingModeDefaults: [
-            'show a visible session countdown and run repeated reps until the timer expires',
-            'auto-advance between reps so the athlete is not blocked by a manual next-round gate',
-            'show compact recovery feedback and reinforce fast, clean re-engagement',
-            'use audio-first concise phase signals so athletes are not asked to read long instructions while tracking',
-            'allow light adaptation inside family limits without changing the recovery mechanic',
-            'keep the session compact enough to feel like a competitive drill rather than a benchmark battery',
+            'label two practice trials and exclude them from every scored measure',
+            'counterbalance neutral-hold and post-interruption order within matched pairs',
+            'show response time and accuracy separately and explain that faster is not automatically better',
+            'keep interruptions concise and keep the fixed reset interval reproducible',
         ],
         trialModeDefaults: [
-            'suppress intra-session feedback and lock the disruption schedule for comparison-grade consistency',
-            'standardize duration, seed, device logging, and modifier profile',
-            'report results only after the full assessment completes',
+            'suppress correctness feedback and lock the matched-pair schedule',
+            'standardize timing, seed, device logging, and interruption labels',
+            'report only valid correct matched-pair differences with separate accuracy and artifact rates',
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
@@ -373,14 +371,14 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Noise Gate': {
-        mechanism: 'maintain the live target while filtering irrelevant noise',
+        mechanism: 'find a visible called number among similar markers while irrelevant visual or audio cues compete for attention',
         coreMetric: 'Distractor Cost',
         skillTargets: 'Selective Attention, Interference Control, and Pressure Stability',
-        boundaryRule: 'distractors must stay irrelevant and may not become a second monitored target or a divided-attention task',
+        boundaryRule: 'the called number must remain visible, the search task must stay identical across reference and distraction rounds, and distractors may not become a second monitored goal',
         trainingModeDefaults: [
-            'show round-level distractor filtering feedback with channel-specific coaching language',
-            'adapt density and timing only inside approved family boundaries',
-            'treat the session like a drill for staying clean under noise, not like a new rule-learning exercise',
+            'show a numbered search field and ask the athlete to tap the exact match',
+            'add one flashing wrong marker, crowd audio, or both only after reference rounds',
+            'describe results as accuracy with distractions, accuracy change, response-time change, and wrong taps',
         ],
         trialModeDefaults: [
             'hide intra-session scores and keep overlap schedules fixed or seeded',
@@ -395,19 +393,20 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Brake Point': {
-        mechanism: 'cancel or inhibit the wrong action when the stop signal appears',
-        coreMetric: 'Stop Latency',
-        skillTargets: 'Response Inhibition, Impulse Control, and Pressure Stability',
-        boundaryRule: 'the task must remain response cancellation rather than shifting into a signal-reading or multi-step decision task',
+        mechanism: 'make dominant left/right go responses and withhold when a delayed stop signal appears',
+        coreMetric: 'stop_success_rate, with provisional_ssrt_ms available only in research-length runs that pass every quality gate',
+        skillTargets: 'Response Inhibition hypothesis with separate go and stop behavior',
+        boundaryRule: 'the runtime must remain a two-choice stop-signal task with no Brake button and no trait-impulsivity interpretation',
         trainingModeDefaults: [
-            'surface stop-quality feedback without overwhelming the athlete with analytics',
-            'scale stop-signal timing or decoy intensity inside fixed family boundaries',
-            'maintain the feeling of urgent control, not deliberative puzzle solving',
+            'use four labeled practice trials before at least 64 scored trials',
+            'reserve one quarter of scored trials for delayed stop signals',
+            'move the 100-700 ms stop delay by 50 ms after valid scored stop outcomes',
+            'use stop success as the standard-rep headline and show go accuracy beside it',
         ],
         trialModeDefaults: [
-            'lock stop-signal timing, difficulty tier, and modifier settings',
-            'remove intra-session feedback to prevent self-monitoring effects',
-            'export false starts and motor artifacts separately from the headline score',
+            'lock the schedule generator, staircase bounds, and artifact floor',
+            'remove scored-trial correctness feedback',
+            'require at least 150 valid go trials and 50 stop trials, then withhold SSRT whenever any quality check fails',
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
@@ -417,19 +416,20 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Signal Window': {
-        mechanism: 'identify and commit to the correct signal before the decision window closes',
-        coreMetric: 'Correct Read Under Time Pressure',
-        skillTargets: 'Rapid Signal Recognition, Decision Accuracy, and Pressure Stability',
-        boundaryRule: 'the task must remain signal discrimination with a clearly correct answer rather than a blind or ambiguous commitment task',
+        mechanism: 'choose the majority direction in a nine-arrow field with controlled evidence strength',
+        coreMetric: 'decision_accuracy with correct_decision_rt_ms shown beside it',
+        skillTargets: 'Perceptual discrimination hypothesis with task-specific accuracy and response time',
+        boundaryRule: 'left/right direction and 5/9, 6/9, and 7/9 evidence levels must be balanced, and response timing must begin at field onset',
         trainingModeDefaults: [
-            'show concise decision feedback and reinforce fast-but-correct reads',
-            'adapt signal complexity and window duration only within family limits',
-            'keep the sim feeling like a read, not a memorization or inhibition task',
+            'use four labeled practice trials before scored trials',
+            'keep response keys available while the arrow field is visible',
+            'show accuracy and correct-response time separately',
+            'keep response mapping and timing constant across evidence levels',
         ],
         trialModeDefaults: [
-            'fix signal timing, presentation order, and difficulty tier for standardized comparison',
-            'suppress feedback until the session ends',
-            'log signal type, ambiguity level, and response timing for analysis',
+            'lock exposure time, response window, schedule version, and evidence levels',
+            'suppress scored-trial correctness feedback',
+            'log direction, evidence count, wrong choices, premature responses, and timeouts',
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
@@ -439,19 +439,19 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Sequence Shift': {
-        mechanism: 'update immediately to the new rule when the sequence or rule changes',
-        coreMetric: 'Update Accuracy After Rule Change',
-        skillTargets: 'Cognitive Flexibility, Rule Updating, and Pressure Stability',
-        boundaryRule: 'each shift must preserve a clearly correct answer and may not drift into unresolved ambiguity or chaos-read logic',
+        mechanism: 'switch between cued letter and number classification while two response keys remain stable',
+        coreMetric: 'switch_rt_cost_ms with switch_accuracy_cost beside it',
+        skillTargets: 'Task-set switching hypothesis with task-specific repeat and switch behavior',
+        boundaryRule: 'rule, response side, repeat or switch status, and congruency must be cross-balanced with one fixed cue interval and response window',
         trainingModeDefaults: [
-            'show clean post-shift feedback and reinforce correct updates over guessing',
-            'adapt change frequency and rule complexity inside family bounds',
-            'frame difficulty as rapid updating, not raw speed alone',
+            'teach vowel-or-odd and consonant-or-even key mappings during practice',
+            'show the rule cue for 400 ms before the letter-number pair',
+            'keep scored feedback neutral and keep response time beside accuracy',
         ],
         trialModeDefaults: [
-            'standardize the shift schedule, difficulty tier, and response windows',
-            'suppress intra-session feedback and use fixed sequences or seeds',
-            'report post-shift accuracy as the primary lens',
+            'standardize the balanced schedule, 400 ms cue interval, 1800 ms response window, and seed',
+            'suppress scored-trial correctness feedback',
+            'report switch and repeat accuracy, valid RT counts, and eligible old-rule responses separately',
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
@@ -461,19 +461,20 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
     },
     'Endurance Lock': {
-        mechanism: 'preserve clean execution as time, monotony, and fatigue load accumulate',
-        coreMetric: 'Degradation Slope',
-        skillTargets: 'Sustained Attention, Fatigability Control, and Pressure Stability',
-        boundaryRule: 'difficulty should rise through duration or load, not by changing the underlying task into another family',
+        mechanism: 'respond to one constant visual signal after unpredictable foreperiods across six blocks',
+        coreMetric: 'correct_rt_slope_ms_per_min with an explicit availability flag',
+        skillTargets: 'Sustained Attention hypothesis with task-specific response-time, lapse, and artifact observations',
+        boundaryRule: 'only the 1500-3500 ms foreperiod may vary; the visual signal, 1500 ms response window, display, rule, and scoring must remain constant',
         trainingModeDefaults: [
-            'show trend-oriented feedback across blocks rather than overreacting to single moments',
-            'adjust duration and pacing while preserving the same task identity',
-            'reinforce late-session discipline and clean maintenance',
+            'use four labeled practice trials before six scored blocks',
+            'use no simultaneous audio cue',
+            'show fitted response-time change only when enough valid responses span enough blocks',
+            'describe possible explanations without assigning fatigue or readiness',
         ],
         trialModeDefaults: [
-            'fix duration, pacing, and modifier profile to expose deterioration cleanly',
-            'suppress intra-session feedback so the late-session curve stays interpretable',
-            'log early, mid, and late block behavior separately',
+            'fix the six-block schedule, foreperiod distribution, visual cue, response window, and input logging',
+            'suppress scored-trial correctness feedback',
+            'log valid counts and medians by block plus lapses, false starts, and timeouts',
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
@@ -1196,6 +1197,22 @@ function pushArchetypeRequirementFinding(
     }
 }
 
+function pushArchetypeAllRequirementsFinding(
+    findings: SpecAuditFinding[],
+    lowerRaw: string,
+    code: string,
+    message: string,
+    phrases: string[]
+) {
+    if (phrases.some((phrase) => !lowerRaw.includes(phrase.toLowerCase()))) {
+        findings.push({
+            severity: 'warning',
+            code,
+            message,
+        });
+    }
+}
+
 function runNonTrialArchetypeAudit(variant: VariantEntry, lowerRaw: string, findings: SpecAuditFinding[]) {
     const archetype = resolveVariantArchetype(variant);
 
@@ -1402,30 +1419,30 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'reset_missing_valid_reengagement',
-            'Reset specs should explicitly define valid re-engagement as two consecutive correct responses.',
-            ['two consecutive correct responses', 'confirmed re-engagement']
+            'reset_missing_matched_task',
+            'Reset specs must use the same left-or-right arrow task in matched reference and post-interruption trials.',
+            ['matched reference', 'post-interruption', 'left-or-right arrow']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'reset_missing_false_start_logic',
-            'Reset specs should explicitly define false starts as responses during the disruption phase.',
-            ['false start', 'responses during the disruption phase', 'response during disruption']
+            'reset_missing_matched_timing',
+            'Reset specs must keep the total pre-target interval and response window identical across both conditions.',
+            ['same total pre-target', 'response window', 'matched timing']
+        );
+        pushArchetypeAllRequirementsFinding(
+            findings,
+            lowerRaw,
+            'reset_missing_pairwise_metric',
+            'Reset specs must define post-disruption re-engagement cost as the median within-pair response-time difference and require six valid correct matched pairs.',
+            ['median within-pair', 'post-disruption re-engagement cost', 'six valid correct matched pairs']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'reset_missing_attentional_shift_sourcing',
-            'Reset specs should explicitly describe Attentional Shifting as multi-source.',
-            ['attentional shifting', 'multi-source', 'first-post-reset accuracy']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'reset_missing_pressure_stability_sourcing',
-            'Reset specs should explicitly describe Pressure Stability as modifier-stratified.',
-            ['pressure stability', 'modifier-stratified', 'modifier condition']
+            'reset_missing_bounded_interpretation',
+            'Reset specs must keep accuracy, premature responses, timeouts, and the observed reset interval separate and prohibit recovery, resilience, readiness, or mental-toughness labels.',
+            ['premature response', 'timeout', 'observed reset interval', 'does not measure recovery']
         );
 
         if (archetype === 'sport_context') {
@@ -1443,30 +1460,30 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
+            'noise_gate_missing_visible_match_task',
+            'Noise Gate specs must keep the called number visible and preserve the same number-search field in reference and distraction trials.',
+            ['called number remains visible', 'same number-search field', 'reference and distraction']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'noise_gate_missing_distractor_contract',
+            'Noise Gate visual trials may highlight one wrong option, but the highlight must never identify or replace the correct answer.',
+            ['one highlighted wrong option', 'never the correct answer', 'same matching number']
+        );
+        pushArchetypeAllRequirementsFinding(
+            findings,
+            lowerRaw,
             'noise_gate_missing_cost_formula',
-            'Noise Gate specs should explicitly define Distractor Cost and mention RT shift, not just name the family metric.',
-            ['distractor cost =', 'rt shift', 'response time shift']
+            'Noise Gate specs must define Distractor Cost as reference accuracy minus distraction accuracy and calculate response-time change from at least three valid correct matched pairs.',
+            ['reference accuracy minus distraction accuracy', 'distractor cost', 'median within-pair', 'three valid correct matched pairs']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'noise_gate_missing_false_alarm_logic',
-            'Noise Gate specs should explicitly define false alarms as distractor-directed responses.',
-            ['false alarm', 'responses directed at distractors', 'distractor rather than the primary target']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'noise_gate_missing_channel_vulnerability',
-            'Noise Gate specs should explicitly require channel-vulnerability breakdowns by distractor type.',
-            ['channel vulnerability', 'broken down by distractor type', 'per distractor channel']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'noise_gate_missing_valid_response_rule',
-            'Noise Gate specs should include the family valid-response definition and 150 ms artifact floor.',
-            ['valid response = correct response to the primary target', 'above 150 ms', '150 ms']
+            'noise_gate_missing_artifact_reporting',
+            'Noise Gate specs must report wrong taps, highlighted-distractor taps, timeouts, and sub-150 ms responses separately from correct-response timing.',
+            ['wrong tap', 'highlighted-distractor tap', 'timeout', '150 ms']
         );
 
         if (archetype === 'audio_channel') {
@@ -1494,23 +1511,30 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'brake_point_missing_valid_response_rule',
-            'Brake Point specs should explicitly define valid Go behavior and the 150 ms artifact floor.',
-            ['valid go response', 'above 150 ms', '150 ms']
+            'brake_point_missing_stop_signal_task',
+            'Brake Point specs must use a two-choice left-or-right go task with delayed STOP signals on one quarter of scored trials and no Brake button.',
+            ['two-choice', 'one quarter', 'delayed stop', 'no brake button']
+        );
+        pushArchetypeAllRequirementsFinding(
+            findings,
+            lowerRaw,
+            'brake_point_missing_staircase',
+            'Brake Point specs must define the 50 ms stop-signal staircase, its 100-700 ms bounds, and that every failed stop response, including a premature response, moves the delay down.',
+            ['50 ms', '100-700 ms', 'every failed stop', 'including a premature response']
+        );
+        pushArchetypeAllRequirementsFinding(
+            findings,
+            lowerRaw,
+            'brake_point_missing_ssrt_gate',
+            'Brake Point specs must withhold the stop-time estimate unless research-length trial counts and every distribution and race-model quality check pass.',
+            ['150 valid go', '50 stop', '25% and 75%', 'go omission', '80%', 'failed-stop responses']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'brake_point_missing_false_alarm_classification',
-            'Brake Point specs should classify false alarms by No-Go type.',
-            ['false alarm', 'no-go type', 'obvious', 'fakeout', 'late-reveal']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'brake_point_missing_over_inhibition',
-            'Brake Point specs should include over-inhibition handling so athletes cannot solve inhibition by slowing down.',
-            ['over-inhibition', 'go miss', 'go reaction time']
+            'brake_point_missing_separate_outputs',
+            'Brake Point specs must keep go accuracy, correct go response time, omissions, stop success, stop-signal delay, and premature responses separate.',
+            ['go accuracy', 'correct go response time', 'stop success', 'premature response']
         );
     }
 
@@ -1518,23 +1542,30 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'signal_window_missing_valid_commit_rule',
-            'Signal Window specs should define the valid response as the first committed response after display onset.',
-            ['first committed response', 'display onset', 'one response per trial']
+            'signal_window_missing_majority_task',
+            'Signal Window specs must use a nine-arrow majority-direction task with balanced left and right answers and 5/9, 6/9, and 7/9 majorities.',
+            ['nine-arrow', 'balanced left and right', '5/9', '6/9', '7/9']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'signal_window_missing_correct_read_formula',
-            'Signal Window specs should define the combined read metric and latency logic explicitly.',
-            ['correct read under time pressure', 'decision latency', 'weighted by decision latency']
+            'signal_window_missing_timing_contract',
+            'Signal Window response timing must begin at arrow-field onset, with the same response keys available while the field is visible.',
+            ['arrow-field onset', 'response keys remain available', '650 ms']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'signal_window_missing_window_utilization',
-            'Signal Window specs should include window-utilization tracking for strategy analysis.',
-            ['window utilization', 'available display window', 'decision strategy']
+            'signal_window_missing_separate_outputs',
+            'Signal Window specs must report accuracy and correct-response time separately, including wrong choices, timeouts, premature responses, and results by majority size.',
+            ['decision accuracy', 'correct-response time', 'wrong choice', 'premature response', 'majority size']
+        );
+        pushArchetypeAllRequirementsFinding(
+            findings,
+            lowerRaw,
+            'signal_window_missing_rt_gate',
+            'Signal Window specs must require six valid correct responses for the overall response-time summary and two within each evidence level.',
+            ['six valid correct responses', 'two within each evidence level', 'withhold']
         );
 
         if (archetype === 'sport_context') {
@@ -1552,124 +1583,72 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'sequence_shift_missing_post_shift_window',
-            'Sequence Shift specs should explicitly define the post-shift measurement window.',
-            ['post-shift', 'first 3–5 trials', 'first 3-5 trials']
+            'sequence_shift_missing_task_contract',
+            'Sequence Shift specs must use cued letter-number classification with stable left equals vowel or odd and right equals consonant or even mappings.',
+            ['letter-number', 'vowel or odd', 'consonant or even', 'stable']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'sequence_shift_missing_intrusion_logic',
-            'Sequence Shift specs should classify old-rule intrusions separately from novel errors.',
-            ['old-rule intrusion', 'intrusion', 'novel error']
+            'sequence_shift_missing_balance',
+            'Sequence Shift specs must balance rule, response side, repeat or switch status, and congruency while keeping one 400 ms cue interval and 1800 ms response window.',
+            ['repeat or switch', 'congruency', '400 ms', '1800 ms']
         );
-        pushArchetypeRequirementFinding(
+        pushArchetypeAllRequirementsFinding(
             findings,
             lowerRaw,
             'sequence_shift_missing_switch_cost',
-            'Sequence Shift specs should include switch-cost logic, not just update accuracy alone.',
-            ['switch cost', 'pre-shift rolling average']
+            'Sequence Shift specs must calculate switch response-time cost from correct artifact-valid switch versus repeat trials, require eight valid trials per condition, and show accuracy beside it.',
+            ['correct artifact-valid', 'eight valid', 'switch', 'repeat', 'switch accuracy cost']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'sequence_shift_missing_artifact_floor',
-            'Sequence Shift specs should include the 150 ms artifact floor on post-shift trials.',
-            ['150 ms', 'post-shift trials', 'motor artifacts']
+            'sequence_shift_missing_error_scope',
+            'Sequence Shift specs must count old-rule responses as perseverative errors only on eligible incongruent switch trials.',
+            ['perseverative', 'eligible incongruent switch', '150 ms']
         );
     }
 
     if (variant.family === 'Endurance Lock') {
-        if (archetype === 'fatigue_load') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_constant_task',
+            'Endurance Lock specs must use one constant visual-only signal-detection task with the same display, rule, response window, and scoring across six blocks.',
+            ['constant visual-only', 'same display', 'six blocks', '1500 ms response window']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_foreperiod_contract',
+            'Endurance Lock specs must allow only the unpredictable 1500-3500 ms foreperiod to vary within a scored session and must not add an audio cue.',
+            ['1500-3500 ms', 'foreperiod', 'visual-only', 'no audio cue']
+        );
+        pushArchetypeAllRequirementsFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_slope_gate',
+            'Endurance Lock specs must use fitted correct-response-time change and withhold it unless at least 24 valid responses remain and every scored block contains at least three.',
+            ['fitted', '24 valid responses', 'every scored block', 'at least three', 'estimate is unavailable']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_bounded_outputs',
+            'Endurance Lock specs must keep median response time, variability, lapses, false starts, timeouts, and valid block counts separate and must not infer fatigue, readiness, or a stable trait.',
+            ['median response time', 'variability', 'false start', 'valid block counts', 'does not identify fatigue']
+        );
+
+        if (archetype === 'visual_channel' || archetype === 'fatigue_load') {
             pushArchetypeRequirementFinding(
                 findings,
                 lowerRaw,
-                'endurance_missing_fixed_block_schema',
-                'Endurance Lock fatigue-load variants should define a fixed or formulaic block structure for baseline, middle, and finish segmentation.',
-                ['6 fixed pacing blocks', 'blocks 1-2', 'blocks 3-4', 'blocks 5-6', 'six-block']
-            );
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_missing_schema_grade_vocab',
-                'Endurance Lock fatigue-load variants should define schema-grade analytics fields and enums for block identity, device class, delivery surface, and modifier profile.',
-                ['modifier_profile_id', 'block_identity', 'device_class', 'delivery_surface']
-            );
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_missing_training_adaptation_guardrails',
-                'Endurance Lock fatigue-load variants should explicitly constrain what Training Mode adaptation may change so the family mechanic does not drift.',
-                ['training-mode adaptation may', 'may change pacing', 'may not change the task identity', 'may not change the block schema']
+                'endurance_modifier_must_not_change_task',
+                'Endurance Lock packaging may change context or presentation outside scored trials, but it may not alter the scored display, cue, rule, or difficulty by block.',
+                ['may not alter the scored display', 'same cue', 'same rule', 'same difficulty']
             );
         }
-
-        if (archetype === 'visual_channel') {
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_visual_missing_fixed_block_schema',
-                'Endurance Lock visual-channel variants should define a fixed or formulaic block structure for baseline, middle, and finish segmentation.',
-                ['blocks 1-2', 'blocks 3-4', 'blocks 5-6', 'six-block', 'clean-reference baseline']
-            );
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_visual_missing_modifier_profiles',
-                'Endurance Lock visual-channel variants should define named visual modifier profiles, co-occurrence tiers, and display-state constraints.',
-                ['visual_profile_id', 'visual_density', 'peripheral_bait', 'contrast_drift']
-            );
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_visual_missing_profile_schedule',
-                'Endurance Lock visual-channel variants should define a fixed per-block display-state recipe for each approved visual profile.',
-                ['clutter_ramp_v1', 'peripheral_bait_v1', 'contrast_decay_v1', 'fixed recipe', 'blocks 1-2', 'blocks 3-4', 'blocks 5-6']
-            );
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_visual_missing_schema_grade_vocab',
-                'Endurance Lock visual-channel variants should define schema-grade analytics fields and enums for block identity, visual state, device class, and delivery surface.',
-                ['block_identity', 'visual_density_tier', 'peripheral_load_tier', 'contrast_profile', 'device_class', 'delivery_surface']
-            );
-            pushArchetypeRequirementFinding(
-                findings,
-                lowerRaw,
-                'endurance_visual_missing_training_adaptation_guardrails',
-                'Endurance Lock visual-channel variants should explicitly constrain what Training Mode adaptation may change so the family mechanic does not drift.',
-                ['training-mode adaptation may', 'density step size', 'may not change the task identity', 'may not change the block schema']
-            );
-        }
-
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'endurance_missing_baseline_period',
-            'Endurance Lock specs should explicitly define the baseline period before degradation is measured.',
-            ['first 2-3 minutes', 'first 2–3 minutes', 'baseline period', '100% baseline', 'baseline performance = mean accuracy across blocks 1-2', 'block 1-2 baseline', 'blocks 1-2 baseline', 'baseline (blocks 1-2)', 'blocks 1-2']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'endurance_missing_onset_definition',
-            'Endurance Lock specs should explicitly define degradation onset, not just mention late-session fatigue.',
-            ['below 90% of baseline', 'degradation onset', 'one full block']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'endurance_missing_slope_definition',
-            'Endurance Lock specs should explicitly define Degradation Slope over the session second half.',
-            ['second half', '% drop per minute', 'degradation slope']
-        );
-        pushArchetypeRequirementFinding(
-            findings,
-            lowerRaw,
-            'endurance_missing_block_outputs',
-            'Endurance Lock specs should include block-level tracking and attribution.',
-            ['block-by-block', 'early, mid, and late', 'embedded task attribution']
-        );
     }
 }
 
@@ -1714,7 +1693,22 @@ function runSpecAuditPipeline(variant: VariantEntry, raw: string): SpecAuditRepo
     const parsed = parseVariantSpec(fixedRaw);
     const normalizedHeadings = parsed.rawSections.map((section) => section.heading.trim());
     const lowerRaw = fixedRaw.toLowerCase();
+    const athleteFlowLower = parsed.athleteFlow.toLowerCase();
     const lockedSpec = ensureLockedSpec(variant);
+
+    const prohibitedAthleteCopy: Array<{ code: string; pattern: RegExp; message: string }> = [
+        { code: 'athlete_copy_live_target', pattern: /\blive target\b/i, message: 'Athlete instructions must name the actual cue or object instead of calling it a live target.' },
+        { code: 'athlete_copy_moralized_clean', pattern: /\bclean(?:ly|er|est)?\b/i, message: 'Athlete instructions must describe the observable response instead of labeling performance clean.' },
+        { code: 'athlete_copy_moralized_rating', pattern: /\b(?:poor|weak|failed|elite brain)\b/i, message: 'Athlete instructions must not use moralized or trait-like performance labels.' },
+        { code: 'athlete_copy_unexplained_rt', pattern: /\brt\b/i, message: 'Athlete instructions must spell out response time instead of using the RT abbreviation.' },
+        { code: 'athlete_copy_pressure_riddle', pattern: /\bpressure starts\b/i, message: 'Athlete instructions must state the visible event and required action instead of using pressure-starts shorthand.' },
+    ];
+
+    prohibitedAthleteCopy.forEach(({ code, pattern, message }) => {
+        if (pattern.test(athleteFlowLower)) {
+            findings.push({ severity: 'error', code, message });
+        }
+    });
 
     expectedSections.forEach((heading) => {
         if (!normalizedHeadings.some((value) => value.toLowerCase() === heading.toLowerCase())) {
@@ -2263,7 +2257,7 @@ function buildArchetypeProfile(
                     'the target rule should remain clear even when the screen gets noisier',
                 ],
                 artifactRisks: [
-                    'overdesigned clutter can blur the live target and accidentally change the task itself',
+                    'overdesigned clutter can hide the matching number and accidentally change the task itself',
                     'display lag, peripheral scaling, or contrast issues can distort difficulty',
                 ],
                 runtimeDefaults: {
@@ -2431,7 +2425,172 @@ function buildArchetypeProfile(
     };
 }
 
+function getEvidenceAlignedFamilyProfileOverride(
+    variant: VariantEntry,
+    archetype: SimVariantArchetype
+): VariantProfileOverride | null {
+    const packagingBoundary = `The ${ARCHETYPE_LABELS[archetype].toLowerCase()} may change framing, assets, or context outside scored trials, but it may not change the canonical task, timing, response mapping, or scoring contract.`;
+
+    switch (variant.family) {
+        case 'Reset':
+            return {
+                purpose: 'Rehearse one fixed reset-and-return routine between otherwise matched left-or-right arrow trials.',
+                expectedBenefit: 'Give the athlete a repeatable interruption-and-return drill while keeping the observed result limited to this task.',
+                bestUse: [
+                    'the athlete wants to rehearse returning to a simple task after an interruption',
+                    'the program needs matched reference and post-interruption behavior rather than a resilience or readiness label',
+                ],
+                changes: [packagingBoundary, 'Only the declared interruption and fixed 800 ms reset interval may differ between matched conditions.'],
+                athleteFlow: [
+                    'Complete two unscored practice trials.',
+                    'Classify the same left-or-right arrow task in counterbalanced reference and post-interruption pairs.',
+                    'Review accuracy separately from the median response-time difference across valid correct matched pairs.',
+                ],
+                scoringNotes: [
+                    'Post-disruption re-engagement cost is the median within-pair response-time difference.',
+                    'Withhold that estimate unless six valid correct matched pairs remain.',
+                    'Keep accuracy, premature responses, timeouts, and the fixed reset interval separate.',
+                ],
+                runtimeDefaults: {
+                    adaptiveDifficulty: false,
+                    emphasis: ['matched reference and post-interruption arrow trials', 'fixed reset routine'],
+                    analyticsFocus: ['post_disruption_reengagement_cost_ms', 'accuracy by condition', 'valid matched-pair count'],
+                },
+            };
+        case 'Noise Gate':
+            return {
+                purpose: 'Practice finding one visible called number in the same search field while a declared irrelevant visual, audio, or combined distraction is present on matched rounds.',
+                expectedBenefit: 'Describe how performance on this number-search task changes when an irrelevant cue is added.',
+                bestUse: [
+                    'the athlete wants a short selective-attention drill with a clear target',
+                    'the program needs matched reference and distraction observations rather than a general attention score',
+                ],
+                changes: [packagingBoundary, 'A visual distraction may highlight one wrong option, never the correct answer; audio and combined variants must preserve the same search task.'],
+                athleteFlow: [
+                    'Complete two unscored practice rounds.',
+                    'Keep the called number visible and tap its exact match in counterbalanced reference and distraction pairs.',
+                    'Review matched accuracy change, matched correct-response-time change, wrong taps, highlighted-distractor taps, and timeouts separately.',
+                ],
+                scoringNotes: [
+                    'Distractor Cost is reference accuracy minus distraction accuracy.',
+                    'Correct-response-time shift is the median within-pair difference and requires three valid correct matched pairs.',
+                    'Do not infer a general attention trait, pressure readiness, or sport transfer.',
+                ],
+                runtimeDefaults: {
+                    adaptiveDifficulty: false,
+                    emphasis: ['visible called number', 'matched reference and distraction pairs'],
+                    analyticsFocus: ['matched_accuracy_cost', 'correct_response_rt_shift_ms', 'matched_correct_pair_count'],
+                },
+            };
+        case 'Brake Point':
+            return {
+                purpose: 'Practice withholding a prepared left-or-right response when a delayed stop signal appears.',
+                expectedBenefit: 'Provide a stop-signal-aligned training task with go and stop behavior kept visible as separate observations.',
+                bestUse: [
+                    'the athlete wants to practice responding quickly while preserving the ability to stop',
+                    'the program needs a real delayed-stop task rather than a Brake-button choice task',
+                ],
+                changes: [packagingBoundary, 'There is no Brake button, fakeout class, or alternate no-go mechanic inside the canonical scored task.'],
+                athleteFlow: [
+                    'Complete four unscored practice trials.',
+                    'Respond left or right on go trials and withhold on the quarter of trials where STOP appears after the arrow begins.',
+                    'Review stop success beside go accuracy and go response time; standard training reps do not produce a stop-time estimate.',
+                ],
+                scoringNotes: [
+                    'The standard-rep core measure is stop_success_rate.',
+                    'A stop-time estimate requires at least 150 valid go trials, 50 stop trials, and every declared quality check.',
+                    'Every failed stop response, including a premature response, moves the 50 ms staircase down.',
+                ],
+                runtimeDefaults: {
+                    adaptiveDifficulty: false,
+                    emphasis: ['two-choice go task', 'delayed stop signal', 'adaptive stop-signal delay'],
+                    analyticsFocus: ['stop_success_rate', 'go_accuracy', 'correct_go_rt_ms', 'stop-time estimate availability'],
+                },
+            };
+        case 'Signal Window':
+            return {
+                purpose: 'Practice a brief two-choice visual decision using a nine-arrow field with controlled majority strength.',
+                expectedBenefit: 'Describe accuracy and correct response time as the majority signal becomes stronger or weaker.',
+                bestUse: [
+                    'the athlete wants a short visual discrimination drill',
+                    'the program needs controlled evidence strength without answer-revealing labels or a hidden combined score',
+                ],
+                changes: [packagingBoundary, 'Variant names such as decoy, shot-clock, or sport-read are context only unless a separate validated manipulation is designed.'],
+                athleteFlow: [
+                    'Complete four unscored practice trials.',
+                    'Choose whether most of nine arrows point left or right while 5/9, 6/9, and 7/9 conditions are balanced.',
+                    'Review decision accuracy and correct response time separately.',
+                ],
+                scoringNotes: [
+                    'Overall correct-response time requires six valid correct responses.',
+                    'A response-time summary within one evidence level requires two valid correct responses in that level.',
+                    'Wrong choices, timeouts, and premature responses remain separate.',
+                ],
+                runtimeDefaults: {
+                    adaptiveDifficulty: false,
+                    emphasis: ['nine-arrow majority decision', 'balanced evidence strength'],
+                    analyticsFocus: ['decision_accuracy', 'correct_decision_rt_ms', 'results by evidence count'],
+                },
+            };
+        case 'Sequence Shift':
+            return {
+                purpose: 'Practice switching between cued letter and number classification rules while the two response keys remain stable.',
+                expectedBenefit: 'Describe repeat-versus-switch behavior on one balanced cued task-switching task.',
+                bestUse: [
+                    'the athlete wants to rehearse following a changed rule without changing the response keys',
+                    'the program needs task-switching observations rather than a working-memory or sport-IQ score',
+                ],
+                changes: [packagingBoundary, 'Variant names may change context, but may not add sequence-memory scoring, answer labels, or a different rule family.'],
+                athleteFlow: [
+                    'Practice the stable vowel-or-odd and consonant-or-even key mapping.',
+                    'Use the Letter or Number cue, then classify the same letter-number stimulus on balanced repeat and switch trials.',
+                    'Review switch response-time cost beside repeat and switch accuracy.',
+                ],
+                scoringNotes: [
+                    'Switch response-time cost uses correct artifact-valid trials only.',
+                    'Withhold that cost unless eight valid correct repeat trials and eight valid correct switch trials remain.',
+                    'Count old-rule responses only on eligible incongruent switch trials.',
+                ],
+                runtimeDefaults: {
+                    adaptiveDifficulty: false,
+                    emphasis: ['cued letter-number task switching', 'stable response mapping'],
+                    analyticsFocus: ['switch_rt_cost_ms', 'switch_accuracy_cost', 'perseverative_error_rate'],
+                },
+            };
+        case 'Endurance Lock':
+            return {
+                purpose: 'Observe response speed and variability over time while one simple visual response task remains constant.',
+                expectedBenefit: 'Describe sustained-attention performance during this session without assigning fatigue, readiness, or a stable trait.',
+                bestUse: [
+                    'the athlete wants a short constant-task sustained-attention drill',
+                    'the program needs a time trend that is not confounded by rising late-session difficulty',
+                ],
+                changes: [packagingBoundary, 'Late-pressure, clutter, contrast, audio, and difficulty ramps may not change the six scored blocks; build a separately balanced protocol if one of those effects is the research question.'],
+                athleteFlow: [
+                    'Complete four unscored practice trials.',
+                    'Wait through unpredictable 1500-3500 ms foreperiods and tap when the same visual signal appears across six blocks.',
+                    'Review the fitted response-time trend only when enough valid observations cover every block.',
+                ],
+                scoringNotes: [
+                    'The fitted trend requires at least 24 valid responses and at least three valid responses in every scored block.',
+                    'Median response time, variability, responses at or above 500 ms, false starts, and timeouts remain separate.',
+                    'The result describes this task session and does not identify the cause of performance change.',
+                ],
+                runtimeDefaults: {
+                    adaptiveDifficulty: false,
+                    emphasis: ['constant visual signal task', 'unpredictable foreperiod', 'six fixed scored blocks'],
+                    analyticsFocus: ['correct_rt_slope_ms_per_min', 'valid responses by block', 'response artifacts'],
+                },
+            };
+        default:
+            return null;
+    }
+}
+
 function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: SimVariantArchetype): VariantProfileOverride | null {
+    const evidenceAlignedOverride = getEvidenceAlignedFamilyProfileOverride(variant, archetype);
+    if (evidenceAlignedOverride) return evidenceAlignedOverride;
+
     const name = variant.name.toLowerCase();
 
     if (variant.family === 'Reset') {
@@ -2625,7 +2784,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
         if (name.includes('peripheral bait')) {
             return {
                 purpose: 'This variant stresses Noise Gate through peripheral lure stimuli that compete for attention while the true target remains central.',
-                expectedBenefit: 'Reduce peripheral bait errors and improve discipline around the live target.',
+                expectedBenefit: 'Reduce taps on attention-grabbing wrong markers while the called number remains visible.',
                 runtimeDefaults: {
                     emphasis: ['peripheral lure signals', 'attention bait', 'central-target discipline'],
                     analyticsFocus: ['Distractor Cost', 'peripheral bait error rate', 'target-lock consistency'],
@@ -3263,6 +3422,48 @@ function getArtifactRiskPattern(variant: VariantEntry, theme: VariantTheme) {
 }
 
 function getVariantSpecificModifierMatrix(variant: VariantEntry) {
+    switch (variant.family) {
+        case 'Reset':
+            return [
+                '`condition`: `reference` or `post_disruption`; each pair uses the same arrow direction, response keys, 1700 ms pre-target interval, and 1500 ms response window.',
+                '`post_disruption` replaces the neutral hold with one 900 ms interruption followed by the fixed 800 ms reset interval.',
+                'Context, sport, visual, or audio packaging may be tagged outside the scored interval but may not change the arrow task or matched timing.',
+            ];
+        case 'Noise Gate':
+            return [
+                '`condition`: `reference` or `distraction`; every scored pair uses the same visible called number with a separately randomized marker layout.',
+                '`distraction_channel`: `visual`, `audio`, or `combined`; one wrong marker may be highlighted on visual trials, but the correct marker may never be highlighted.',
+                'Channel comparisons require separately balanced conditions. A mixed-channel session cannot be decomposed into causal channel effects.',
+            ];
+        case 'Brake Point':
+            return [
+                '`trial_kind`: `go` or `stop`; 25% of scored trials are delayed-stop trials and no Brake button is displayed.',
+                '`stop_signal_delay_ms`: begins at 250 ms, changes by 50 ms after every scored stop outcome, and remains between 100 and 700 ms.',
+                'Successful withholding moves the next delay up; every failed stop response, including a premature response, moves it down.',
+                'Variant packaging may not add fakeout, alternate no-go, spatial-cancel, or late-reveal mechanics to the canonical scored task.',
+            ];
+        case 'Signal Window':
+            return [
+                '`direction`: `left` or `right`; `evidence_count`: `5`, `6`, or `7` agreeing arrows in a nine-arrow field.',
+                'Direction and evidence count are balanced while the 650 ms exposure, 1600 ms response window, and response mapping remain fixed.',
+                'Sport, shot-clock, ambiguity, or decoy names may supply context only; they may not reveal the answer or alter the canonical evidence manipulation.',
+            ];
+        case 'Sequence Shift':
+            return [
+                '`rule`: `letter` or `number`; `trial_type`: `repeat` or `switch`; `congruent`: true or false.',
+                'Rule, response side, repeat or switch status, and congruency are balanced with a fixed 400 ms cue interval and 1800 ms response window.',
+                'Variant packaging may not add sequence-memory scoring, different response labels, or post-shift-only timing windows.',
+            ];
+        case 'Endurance Lock':
+            return [
+                '`block_index`: `0` through `5`; every scored block uses the same visual signal, response rule, display load, 1500 ms response window, and scoring.',
+                '`foreperiod_ms`: the only within-session manipulation and is sampled unpredictably from 1500-3500 ms.',
+                'Late pressure, clutter, contrast, audio, cadence, and difficulty may not ramp across scored blocks. Those questions require a separately balanced protocol.',
+            ];
+        default:
+            break;
+    }
+
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             '`flash` = a full-field luminance pulse, strobe burst, or abrupt overlay that competes with the live target for <= 500 ms without changing the task rule or the correct target.',
@@ -3408,6 +3609,41 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
 }
 
 function getVariantSpecificTrialProfile(variant: VariantEntry) {
+    switch (variant.family) {
+        case 'Reset':
+            return [
+                'Lock two unscored practice trials followed by at least six counterbalanced scored pairs; more scheduled pairs are needed when errors or artifacts would leave fewer than six valid correct matched pairs.',
+                'Fix the arrow mapping, 1700 ms pre-target interval, 900 ms interruption, 800 ms reset interval, 1500 ms response window, schedule version, seed, and device class.',
+            ];
+        case 'Noise Gate':
+            return [
+                'Lock two unscored practice rounds followed by an even, counterbalanced set of reference and distraction pairs using the same visible target values.',
+                'Fix the channel, response window, schedule version, seed, audio route when used, and device class; require at least three valid correct matched pairs for the response-time estimate.',
+            ];
+        case 'Brake Point':
+            return [
+                'Standard training profile: four unscored practice trials and 64 scored trials with 25% stop trials; report stop success beside go behavior and do not emit a stop-time estimate.',
+                'Research-length profile: at least 200 scored trials yielding at least 150 valid go trials and 50 stop trials, with the 50 ms adaptive staircase, schedule version, seed, and device class locked.',
+            ];
+        case 'Signal Window':
+            return [
+                'Lock four unscored practice trials followed by balanced left/right 5/9, 6/9, and 7/9 scored trials with fixed exposure and response timing.',
+                'Require six valid correct responses for the overall response-time summary and two within each evidence level before showing a condition response time.',
+            ];
+        case 'Sequence Shift':
+            return [
+                'Lock six unscored practice trials followed by balanced repeat/switch and congruent/incongruent scored trials with fixed cue and response timing.',
+                'Require at least eight valid correct repeat trials and eight valid correct switch trials before reporting switch response-time cost.',
+            ];
+        case 'Endurance Lock':
+            return [
+                'Lock four unscored practice trials followed by six scored blocks with the same visual signal, response rule, display load, response window, and scoring.',
+                'Require at least 24 valid responses and at least three valid responses in every scored block before reporting the fitted response-time trend.',
+            ];
+        default:
+            break;
+    }
+
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             'If this variant is run in Trial Mode, lock a single Tier 3 profile: 5 minutes, adaptive difficulty off, coached feedback suppressed, fixed seed, fixed device logging, and one approved visual modifier schedule.',
@@ -3493,6 +3729,53 @@ function getVariantSpecificTrialProfile(variant: VariantEntry) {
 }
 
 function getCanonicalAnalyticsTagVocabulary(variant: VariantEntry) {
+    const common = [
+        '`schedule_version`, `runtime_version`, `input_method`, `device_class`, and `delivery_surface`: required session provenance fields.',
+        'Derived measures are stored as named outputs with availability flags and may not be recreated from unlabeled free-form tags.',
+    ];
+
+    switch (variant.family) {
+        case 'Reset':
+            return [
+                ...common,
+                '`pair_id`, `condition`, `direction`, `response_latency_ms`, `outcome`, and `reset_interval_ms`: trial fields.',
+                '`post_disruption_reengagement_cost_ms`, `estimate_available`, `matched_pair_count`, condition accuracy, `premature_response_rate`, and `timeout_rate`: derived outputs.',
+            ];
+        case 'Noise Gate':
+            return [
+                ...common,
+                '`pair_id`, `condition`, `target_value`, `selected_value`, `distraction_channel`, `highlighted_distractor_value`, `response_latency_ms`, and `outcome`: trial fields.',
+                '`matched_accuracy_cost`, `correct_response_rt_shift_ms`, `correct_response_rt_shift_available`, `matched_correct_pair_count`, wrong-tap rate, highlighted-distractor-tap rate, and timeout rate: derived outputs.',
+            ];
+        case 'Brake Point':
+            return [
+                ...common,
+                '`trial_kind`, `direction`, `response_direction`, `response_latency_ms`, `stop_signal_delay_ms`, and `outcome`: trial fields.',
+                '`stop_success_rate`: standard-rep core output.',
+                '`provisional_ssrt_ms`, `ssrt_estimate_available`, go behavior, failed-stop response time, race-model check, and valid trial counts: supporting outputs.',
+            ];
+        case 'Signal Window':
+            return [
+                ...common,
+                '`direction`, `evidence_count`, `arrow_directions`, `response_direction`, `response_latency_ms`, and `outcome`: trial fields.',
+                '`decision_accuracy`, `correct_decision_rt_ms`, results by evidence count, wrong-choice rate, timeout rate, and premature-response rate: derived outputs.',
+            ];
+        case 'Sequence Shift':
+            return [
+                ...common,
+                '`rule`, `previous_rule`, `trial_type`, `letter`, `number`, `correct_side`, `response_side`, `congruent`, `response_latency_ms`, and `outcome`: trial fields.',
+                '`switch_rt_cost_ms`, valid repeat/switch response-time counts, condition accuracy, perseverative-error rate, timeout rate, and premature-response rate: derived outputs.',
+            ];
+        case 'Endurance Lock':
+            return [
+                ...common,
+                '`block_index`, `foreperiod_ms`, `signal_onset_ms`, `response_latency_ms`, and `outcome`: trial fields.',
+                '`correct_rt_slope_ms_per_min`, `slope_estimate_available`, median response time, variability, `lapse_rate` using the declared 500 ms threshold, false-start rate, timeout rate, and valid counts by block: derived outputs.',
+            ];
+        default:
+            break;
+    }
+
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             '`session_duration_seconds`: session field; default training value = `300` for Visual Disruption Reset unless registry override is present.',
@@ -3650,6 +3933,53 @@ function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilyS
 }
 
 function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme) {
+    switch (variant.family) {
+        case 'Reset':
+            return [
+                'Post-disruption re-engagement cost = the median within-pair post-interruption minus reference response-time difference from valid correct responses.',
+                'The estimate is unavailable unless six valid correct matched pairs remain after excluding practice, errors, timeouts, and responses below 150 ms.',
+                'Reference accuracy, post-interruption accuracy, accuracy difference, first post-interruption correctness, premature responses, timeouts, and the observed reset interval remain separate.',
+                'This observed task difference does not measure recovery, resilience, mental toughness, readiness, or neural recovery.',
+            ];
+        case 'Noise Gate':
+            return [
+                'Distractor Cost = reference accuracy minus distraction accuracy across the matched scored conditions.',
+                'Correct-response-time shift = the median within-pair distraction minus reference difference and is unavailable unless three valid correct matched pairs remain.',
+                'Wrong taps, highlighted-distractor taps, timeouts, sub-150 ms responses, and the active distraction channel remain separate.',
+                'The result describes this number-search task and does not establish a general attention trait, pressure readiness, or sport transfer.',
+            ];
+        case 'Brake Point':
+            return [
+                'Stop success rate is the standard training-rep core measure and must be interpreted beside go accuracy and correct go response time.',
+                'The stop-time estimate is unavailable unless at least 150 valid go trials and 50 stop trials remain, stop success is between 25% and 75%, stop-signal delay is present on every stop trial, go omission is at most 10%, and go accuracy is at least 80%.',
+                'The race-model check also requires failed-stop responses to be faster on average than correct go responses; otherwise no estimate is emitted.',
+                'Go choice errors, omissions, premature responses, stop success, failed-stop response time, and mean stop-signal delay remain separate.',
+            ];
+        case 'Signal Window':
+            return [
+                'Decision accuracy and correct-response time are reported separately for the nine-arrow majority task; they are not collapsed into one hidden score.',
+                'Withhold the overall response-time summary unless six valid correct responses remain; each evidence-level response-time summary requires two within each evidence level.',
+                'Accuracy and correct-response time are stratified by 5/9, 6/9, and 7/9 majority size, with wrong choices, premature responses, and timeouts kept separate.',
+                'The task does not measure sport vision, tactical intelligence, readiness, or game-day decision quality.',
+            ];
+        case 'Sequence Shift':
+            return [
+                'Switch response-time cost = mean correct artifact-valid switch response time minus mean correct artifact-valid repeat response time.',
+                'The estimate is unavailable unless eight valid correct repeat trials and eight valid correct switch trials remain.',
+                'Switch accuracy cost, repeat accuracy, switch accuracy, premature responses, and timeouts remain separate.',
+                'A perseverative error is an old-rule response only on an eligible incongruent switch trial; the task does not estimate working-memory capacity, sport IQ, or broad cognitive flexibility.',
+            ];
+        case 'Endurance Lock':
+            return [
+                'Correct response-time change is a fitted trend across artifact-valid responses over elapsed minutes, not a baseline-minus-finish shortcut.',
+                'The estimate is unavailable unless 24 valid responses remain and every scored block contains at least three valid responses.',
+                'Median response time, response-time variability, responses at or above the declared 500 ms threshold, false starts, timeouts, and valid counts by block remain separate.',
+                'The result describes sustained-attention performance in this session and does not identify fatigue, sleep loss, boredom, motivation, readiness, or a stable trait.',
+            ];
+        default:
+            break;
+    }
+
     if (variant.family === 'Reset') {
         const archetype = resolveVariantArchetype(variant);
         const contextTagNote = archetype === 'visual_channel'
@@ -3788,6 +4118,39 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
     const archetype = resolveVariantArchetype(variant);
     const trainingMode = [...theme.trainingMode];
     const trialMode = [...theme.trialMode, ...getVariantSpecificTrialProfile(variant)];
+    const canonicalModeNotes: Partial<Record<string, { training: string[]; trial: string[] }>> = {
+        'Reset': {
+            training: ['Use feedback only to teach the response mapping and fixed reset routine; never call a faster response better recovery.'],
+            trial: ['Suppress scored-trial correctness feedback and preserve the counterbalanced matched-pair schedule.'],
+        },
+        'Noise Gate': {
+            training: ['Feedback may identify wrong taps or highlighted-distractor taps without turning the distractor into a second goal.'],
+            trial: ['Suppress scored-round correctness feedback and preserve the matched channel, timing, schedule, and audio route when applicable.'],
+        },
+        'Brake Point': {
+            training: ['Use stop success as the standard-rep headline beside go accuracy; do not display a stop-time estimate for the 64-trial training rep.'],
+            trial: ['Suppress scored-trial feedback and emit a stop-time estimate only when the research-length profile passes every quality check.'],
+        },
+        'Signal Window': {
+            training: ['Teach the stable left/right mapping in practice, then keep scored feedback neutral and show speed beside accuracy only after the run.'],
+            trial: ['Suppress scored-trial feedback and preserve the balanced direction and evidence-count schedule.'],
+        },
+        'Sequence Shift': {
+            training: ['Teach both rules in practice, then keep scored feedback neutral and never label which option matches the active or previous rule.'],
+            trial: ['Suppress scored-trial feedback and preserve the fixed cue interval, response window, balanced schedule, and response mapping.'],
+        },
+        'Endurance Lock': {
+            training: ['Keep all six scored blocks constant and describe the result as this session\'s task performance, not fatigue or readiness.'],
+            trial: ['Suppress scored-trial feedback and preserve the same visual signal, display load, rule, response window, and scoring for the full run.'],
+        },
+    };
+    const canonical = canonicalModeNotes[variant.family];
+    if (canonical) {
+        return {
+            trainingMode: [...trainingMode, ...canonical.training],
+            trialMode: [...trialMode, ...canonical.trial],
+        };
+    }
 
     if (variant.family === 'Brake Point') {
         return {
@@ -3917,6 +4280,35 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
 }
 
 function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
+    const canonicalBuildNotes: Partial<Record<string, string[]>> = {
+        'Reset': [
+            'Build from the shared Reset round generator and calculator; do not substitute path tracking, gaze, sequence recall, or tier-specific tasks.',
+            'Store pair id, condition, timing, response, outcome, reset interval, schedule version, input method, and device class for every scored trial.',
+        ],
+        'Noise Gate': [
+            'Build from the shared matched number-search generator and calculator; keep the called number visible and never highlight the correct answer.',
+            'Store pair id, condition, channel, target, selected marker, highlighted marker, timing, outcome, schedule version, audio route when used, and device class.',
+        ],
+        'Brake Point': [
+            'Build from the shared delayed-stop generator and calculator; there is no Brake button and no alternate fakeout or no-go scoring path.',
+            'Store every go and stop outcome, response direction and latency, stop-signal delay, schedule version, input method, and device class so quality gates are reproducible.',
+        ],
+        'Signal Window': [
+            'Build from the shared nine-arrow majority generator and calculator; option position, styling, copy, and accessibility labels may not reveal the answer.',
+            'Store arrow field, direction, evidence count, response, timing, outcome, schedule version, input method, and device class.',
+        ],
+        'Sequence Shift': [
+            'Build from the shared cued letter-number generator and calculator; both rules use the same two neutral response keys.',
+            'Store rule, previous rule, repeat/switch status, congruency, stimulus, response, timing, outcome, schedule version, input method, and device class.',
+        ],
+        'Endurance Lock': [
+            'Build from the shared constant-task generator and calculator; do not use legacy fatigue-load or visual-ramp profiles inside scored blocks.',
+            'Store block, foreperiod, signal onset, response timing, outcome, schedule version, input method, device class, and interruption state.',
+        ],
+    };
+    const canonical = canonicalBuildNotes[variant.family];
+    if (canonical) return [...theme.buildNotes, ...canonical];
+
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             ...theme.buildNotes,
