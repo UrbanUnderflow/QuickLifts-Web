@@ -741,7 +741,11 @@ const WearablesSetupPage: React.FC = () => {
           property="og:description"
           content="Choose your phone and wearable, then follow the complete PulseCheck connection guide."
         />
-        <meta property="og:image" content="https://fitwithpulse.ai/pulsecheck-og.png" />
+        <meta property="og:image" content="https://fitwithpulse.ai/pulsecheck-wearable-guide-og.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content="https://fitwithpulse.ai/pulsecheck-wearable-guide-og.png" />
       </Head>
 
       <header className={styles.header}>
