@@ -61,6 +61,19 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   '/delete-account': 'Delete PulseCheck Account — Pulse Intelligence Labs',
 };
 
+const PAGE_META_MAP: Record<
+  string,
+  { title: string; description: string; image: string; siteName?: string }
+> = {
+  '/PulseCheck/wearables': {
+    title: 'Wearable Setup | PulseCheck',
+    description:
+      'Choose your phone and wearable, then follow the complete PulseCheck connection guide.',
+    image: 'https://fitwithpulse.ai/pulsecheck-wearable-guide-og.png',
+    siteName: 'PulseCheck',
+  },
+};
+
 function humanizeSlug(slug: string): string {
   return slug
     .replace(/\.(html?|md)$/i, '')
@@ -211,17 +224,20 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   const ogMeta = (pageProps as any)?.ogMeta as
     | { title: string; description: string; image: string; url: string; type?: string; siteName?: string }
     | undefined;
+  const routeMeta = PAGE_META_MAP[router?.pathname || ''];
 
   const derivedTitle = ogMeta?.title
     ? ogMeta.title
+    : routeMeta?.title
+      ? routeMeta.title
     : deriveDefaultTitle(router?.pathname || '/', router?.asPath || '/');
 
   const ogTitle = derivedTitle;
-  const ogDescription = ogMeta?.description || DEFAULT_DESCRIPTION;
-  const ogImage = ogMeta?.image || DEFAULT_OG_IMAGE;
+  const ogDescription = ogMeta?.description || routeMeta?.description || DEFAULT_DESCRIPTION;
+  const ogImage = ogMeta?.image || routeMeta?.image || DEFAULT_OG_IMAGE;
   const ogUrl = ogMeta?.url || '';
   const ogType = ogMeta?.type || (ogMeta ? 'article' : 'website');
-  const ogSiteName = ogMeta?.siteName || 'Pulse Intelligence Labs';
+  const ogSiteName = ogMeta?.siteName || routeMeta?.siteName || 'Pulse Intelligence Labs';
 
   return (
     <>
