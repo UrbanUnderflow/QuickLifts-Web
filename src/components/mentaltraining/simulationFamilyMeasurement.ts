@@ -381,6 +381,17 @@ export interface SignalWindowMeasurement {
   correctRtByEvidenceMs: Record<SignalEvidenceCount, number | null>;
 }
 
+export const SIGNAL_WINDOW_TIMING = Object.freeze({
+  protocolVersionMetric: 3.1,
+  readyMs: 1000,
+  practiceExposureMs: 2000,
+  scoredExposureMs: 1400,
+  practiceResponseWindowMs: 4000,
+  scoredResponseWindowMs: 3000,
+  practiceFeedbackMs: 1200,
+  scoredFeedbackMs: 900,
+});
+
 function buildArrowField(direction: SignalDirection, evidenceCount: SignalEvidenceCount, random: RandomSource) {
   const opposite: SignalDirection = direction === 'left' ? 'right' : 'left';
   return shuffled([
@@ -405,8 +416,8 @@ export function buildSignalWindowRounds(
     direction,
     evidenceCount,
     arrowDirections: buildArrowField(direction, evidenceCount, random),
-    exposureMs: 800,
-    responseWindowMs: 1600,
+    exposureMs: SIGNAL_WINDOW_TIMING.practiceExposureMs,
+    responseWindowMs: SIGNAL_WINDOW_TIMING.practiceResponseWindowMs,
   }));
   const total = Math.max(12, Math.ceil(scoredTrialCount / 6) * 6);
   const templates = Array.from({ length: total / 6 }, () => ([5, 6, 7] as SignalEvidenceCount[]).flatMap((evidenceCount) => [
@@ -418,8 +429,8 @@ export function buildSignalWindowRounds(
     index: practice.length + offset,
     isPractice: false,
     arrowDirections: buildArrowField(template.direction, template.evidenceCount, random),
-    exposureMs: 650,
-    responseWindowMs: 1600,
+    exposureMs: SIGNAL_WINDOW_TIMING.scoredExposureMs,
+    responseWindowMs: SIGNAL_WINDOW_TIMING.scoredResponseWindowMs,
   }));
   return [...practice, ...scored];
 }

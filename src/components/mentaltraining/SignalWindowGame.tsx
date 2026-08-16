@@ -14,6 +14,7 @@ import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltrain
 import {
   buildSignalWindowRounds,
   calculateSignalWindowMeasurement,
+  SIGNAL_WINDOW_TIMING,
   type SignalDirection,
   type SignalWindowMeasurement,
   type SignalWindowResponseContract,
@@ -137,6 +138,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
         evidence_6_accuracy: result.accuracyByEvidence[6] ?? 0,
         evidence_7_accuracy: result.accuracyByEvidence[7] ?? 0,
         scored_trial_count: finalResponses.filter((response) => !response.isPractice).length,
+        signal_window_protocol_version: SIGNAL_WINDOW_TIMING.protocolVersionMetric,
       },
       normalizedScore: Math.round((result.decisionAccuracy ?? 0) * 100),
       targetSkills: [TaxonomySkill.CueDiscrimination, TaxonomySkill.SelectiveAttention],
@@ -161,7 +163,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
         setRoundIndex(index + 1);
         setStage('ready');
       }
-    }, rounds[index]?.isPractice ? 800 : 280);
+    }, rounds[index]?.isPractice ? SIGNAL_WINDOW_TIMING.practiceFeedbackMs : SIGNAL_WINDOW_TIMING.scoredFeedbackMs);
   }, [finishSession, rounds, schedule]);
 
   const beginRound = useCallback((index: number) => {
@@ -196,7 +198,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
         setStage('feedback');
         advance(index, nextResponses);
       }, round.responseWindowMs);
-    }, 550);
+    }, SIGNAL_WINDOW_TIMING.readyMs);
   }, [advance, clearTimers, playSignal, rounds, schedule]);
 
   const handleChoice = useCallback((direction: SignalDirection) => {
@@ -287,9 +289,10 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
               <div className="mb-7 flex justify-between text-sm text-white/45"><span>{currentRound.isPractice ? `Practice ${roundIndex + 1} of 4` : `Trial ${roundIndex - 3} of ${rounds.length - 4}`}</span><span>{currentRound.isPractice ? 'Practice' : 'Scored'}</span></div>
               <div className="mb-8 h-1 bg-white/10"><div className="h-full bg-cyan-400 transition-all" style={{ width: `${progress}%` }} /></div>
               <div className="flex min-h-[360px] flex-col items-center justify-center border border-white/10 bg-white/[0.035] p-7">
-                {stage === 'ready' && <p className="text-lg text-white/45">Get ready</p>}
+                {stage !== 'feedback' && <p className="mb-6 text-center text-2xl font-semibold">Which direction do most arrows point?</p>}
+                {stage === 'ready' && <p className="text-lg text-white/45">Get ready. The arrows appear next.</p>}
                 {stage === 'stimulus' && <div className="grid w-full max-w-sm grid-cols-3 gap-3">{currentRound.arrowDirections.map((direction, index) => <motion.div key={index} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid aspect-square place-items-center border border-cyan-300/20 bg-cyan-300/5 text-4xl">{direction === 'left' ? '←' : '→'}</motion.div>)}</div>}
-                {stage === 'response' && <div className="text-center"><p className="text-2xl font-semibold">Which direction did most arrows point?</p><p className="mt-3 text-sm text-white/45">Choose once before the window closes.</p></div>}
+                {stage === 'response' && <p className="text-lg text-white/55">Choose left or right.</p>}
                 {stage === 'feedback' && <p className="text-xl text-white/70">{feedback}</p>}
               </div>
               <div className="mt-5 grid grid-cols-2 gap-4">

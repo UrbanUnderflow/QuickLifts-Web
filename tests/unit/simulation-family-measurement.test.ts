@@ -12,6 +12,7 @@ import {
   calculateSequenceShiftMeasurement,
   calculateSignalWindowMeasurement,
   nextBrakePointStopSignalDelay,
+  SIGNAL_WINDOW_TIMING,
   type BrakePointResponseContract,
   type EnduranceLockResponseContract,
   type SequenceShiftResponseContract,
@@ -141,9 +142,16 @@ test('Brake Point withholds an SSRT estimate for a standard short training rep',
 
 test('Signal Window balances direction and evidence without revealing a fixed answer position', () => {
   const rounds = buildSignalWindowRounds(24, fixedRandom);
+  const practice = rounds.filter((round) => round.isPractice);
   const scored = rounds.filter((round) => !round.isPractice);
 
   assert.equal(rounds.filter((round) => round.isPractice).length, 4);
+  assert.ok(practice.every((round) => round.exposureMs === SIGNAL_WINDOW_TIMING.practiceExposureMs));
+  assert.ok(practice.every((round) => round.responseWindowMs === SIGNAL_WINDOW_TIMING.practiceResponseWindowMs));
+  assert.ok(scored.every((round) => round.exposureMs === SIGNAL_WINDOW_TIMING.scoredExposureMs));
+  assert.ok(scored.every((round) => round.responseWindowMs === SIGNAL_WINDOW_TIMING.scoredResponseWindowMs));
+  assert.ok(SIGNAL_WINDOW_TIMING.scoredExposureMs > 1000);
+  assert.ok(SIGNAL_WINDOW_TIMING.scoredResponseWindowMs > SIGNAL_WINDOW_TIMING.scoredExposureMs);
   assert.equal(scored.filter((round) => round.direction === 'left').length, 12);
   assert.equal(scored.filter((round) => round.direction === 'right').length, 12);
   for (const evidenceCount of [5, 6, 7] as const) {

@@ -399,10 +399,44 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       timestamp: new Date().toISOString()
     });
 
+    let authFallbackTimeout: number | null = null;
+    let authStateResolved = false;
+
     try {
       dispatch(setLoading(true));
+      setAuthChecked(false);
+
+      authFallbackTimeout = window.setTimeout(() => {
+        if (authStateResolved) return;
+
+        const routePath = router.asPath || router.pathname;
+        const isProtectedRoute = !isPublicRoute(routePath);
+        console.warn('[AuthWrapper] Auth state check timed out. Releasing loading gate.', {
+          routePath,
+          isProtectedRoute,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (isProtectedRoute) {
+          dispatch(setLoginRedirectPath(routePath));
+          if (routePath.toLowerCase().startsWith('/coach')) {
+            router.replace(`/coach/login?redirect=${encodeURIComponent(routePath)}`);
+          } else {
+            setShowSignInModal(true);
+          }
+        }
+
+        dispatch(setLoading(false));
+        setAuthChecked(true);
+      }, 10000);
 
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        authStateResolved = true;
+        if (authFallbackTimeout) {
+          window.clearTimeout(authFallbackTimeout);
+          authFallbackTimeout = null;
+        }
+
         console.log('Auth state changed:', {
           hasFirebaseUser: !!firebaseUser,
           email: firebaseUser?.email,
@@ -602,13 +636,21 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         }
       });
 
-      return () => unsubscribe();
+      return () => {
+        if (authFallbackTimeout) {
+          window.clearTimeout(authFallbackTimeout);
+        }
+        unsubscribe();
+      };
     } catch (error) {
       console.error('Auth wrapper error:', error);
+      if (authFallbackTimeout) {
+        window.clearTimeout(authFallbackTimeout);
+      }
       dispatch(setLoading(false));
       setAuthChecked(true);
     }
-  }, [auth, dispatch, router.pathname, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
+  }, [auth, dispatch, router.pathname, router.asPath, isCheckoutBridgeRoute, isStandaloneAuthRoute]);
 
   // Open sign-in modal immediately if URL has ?signin or ?signup
   useEffect(() => {
