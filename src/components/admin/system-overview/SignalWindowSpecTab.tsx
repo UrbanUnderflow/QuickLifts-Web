@@ -3,7 +3,7 @@ import EvidenceAlignedSimSpec, { type EvidenceAlignedSimSpecConfig } from './Evi
 
 const config: EvidenceAlignedSimSpecConfig = {
   family: 'Signal Window',
-  version: 'Spec v3.0 · August 2026',
+  version: 'Spec v3.1 · August 2026',
   accent: '#38bdf8',
   purpose: 'Practice a two-alternative perceptual decision while visual evidence is brief and varies in strength.',
   task: 'Nine arrows appear. Five, six, or seven arrows point in the target direction and the remainder point the other way. The athlete selects the majority direction using fixed left/right response keys, and response time starts at arrow-field onset.',
@@ -17,6 +17,7 @@ const config: EvidenceAlignedSimSpecConfig = {
   evidenceStatus: 'Adjacent evidence. Psychophysics supports the evidence-strength manipulation; the PulseCheck task and any sport transfer are not externally validated.',
   scheduleRules: [
     'Four practice trials precede scored trials.',
+    'The decision instruction is visible before the field appears. Practice uses a 2,000 ms field and 4,000 ms total response window; scored trials use a 1,400 ms field and 3,000 ms total response window.',
     'Target direction and 5/9, 6/9, and 7/9 evidence levels are balanced.',
     'Response keys are available while the field is visible; hiding the field does not restart the response clock.',
     'Response mapping and response window remain constant within the scored session.',

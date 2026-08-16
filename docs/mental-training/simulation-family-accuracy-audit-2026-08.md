@@ -103,8 +103,10 @@ The prior text-choice task revealed the answer through option order and labels, 
 ### Final contract
 
 - Four unscored practice trials.
-- Nine arrows appear for 650 ms; five, six, or seven agree with the target direction.
-- Direction and evidence count are balanced. The response clock begins at field onset, and the 1600 ms response window stays fixed.
+- The instruction appears before the field. Four practice trials use a 2000 ms field and 4000 ms total response window so the athlete can learn the task.
+- Scored trials use a fixed 1400 ms field and 3000 ms total response window; five, six, or seven arrows agree with the target direction.
+- Direction and evidence count are balanced. The response clock begins at field onset, and timing never changes with evidence strength or trial order.
+- This timing contract is Signal Window protocol v3.1. Sessions recorded under the prior 650/1600 ms contract must not be pooled with v3.1 response-time observations without an explicit version adjustment.
 - Core pair: `decision_accuracy` and `correct_decision_rt_ms`; neither replaces the other.
 - Program and evidence-layer reporting accepts decision accuracy only when all 24 scored trials are present. This is an implementation-completeness rule, not validation evidence.
 - Overall correct response time is unavailable below six valid correct responses.
