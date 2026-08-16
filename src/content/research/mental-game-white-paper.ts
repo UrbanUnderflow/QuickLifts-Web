@@ -3,6 +3,11 @@ import {
   AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,
   AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG,
 } from './auntedna-escalation-white-paper';
+import {
+  COHERENCE_SCORE_WHITE_PAPER_CONTENT,
+  COHERENCE_SCORE_WHITE_PAPER_METADATA,
+  COHERENCE_SCORE_WHITE_PAPER_SLUG,
+} from './coherence-score-whitepaper';
 
 export const TRAINING_MENTAL_GAME_WHITE_PAPER_SLUG =
   'training-the-mental-game-a-simulation-based-architecture-for-mental-performance-in-sport';
@@ -558,6 +563,13 @@ Mental performance training deserves the same rigor as physical performance trai
 `;
 
 export const getResearchArticleOverride = (slug: string): ResearchArticleOverride | null => {
+  if (slug === COHERENCE_SCORE_WHITE_PAPER_SLUG) {
+    return {
+      ...COHERENCE_SCORE_WHITE_PAPER_METADATA,
+      content: COHERENCE_SCORE_WHITE_PAPER_CONTENT,
+    };
+  }
+
   if (slug === AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG) {
     return {
       ...AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,
@@ -574,6 +586,10 @@ export const getResearchArticleOverride = (slug: string): ResearchArticleOverrid
 };
 
 export const getLocalResearchArticleListItems = () => [
+  {
+    slug: COHERENCE_SCORE_WHITE_PAPER_SLUG,
+    ...COHERENCE_SCORE_WHITE_PAPER_METADATA,
+  },
   {
     slug: AUNTEDNA_ESCALATION_WHITE_PAPER_SLUG,
     ...AUNTEDNA_ESCALATION_WHITE_PAPER_METADATA,

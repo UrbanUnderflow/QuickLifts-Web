@@ -8,21 +8,18 @@ import type { ConversationBranch, TranslationDomain } from '../../src/api/fireba
 /**
  * POST /.netlify/functions/record-morning-checkin
  *
- * Athlete tapped a readiness emoji on the home screen. Two things happen
- * server-side as a single transaction:
+ * Athlete completed the two-part morning check-in on the home screen.
  *
  *   1. Persist the readiness pick to `pulsecheck-morning-checkins/{userId}_{dayKey}`
  *      so the rest of the system (curriculum, coach reports, framing
  *      layer) can read the tone signal.
  *
- *   2. Open a Nora conversation via the Phase D orchestrator with
- *      trigger='morning-checkin-tone' and the level-specific opener
- *      pulled from the matched branch (synthesized in-memory until
- *      Phase B seed promotes them to Firestore).
+ *   2. Only when `startConversation` is true, open the athlete-requested
+ *      Nora conversation with a level-specific question.
  *
- * Returns the conversation id so iOS can deep-link the athlete into
- * NoraInboxView. The opener turn is already populated; athlete sees
- * Nora's level-specific message + can reply naturally.
+ * A completed check-in otherwise returns a warm acknowledgement and no
+ * conversation id. This keeps the check-in athlete-led and avoids turning
+ * every self-report into an unsolicited probe.
  *
  * Doctrine alignment: instead of static in-place noraResponse text, the
  * check-in becomes a real conversation that flows through Phase D's
@@ -30,11 +27,13 @@ import type { ConversationBranch, TranslationDomain } from '../../src/api/fireba
  *
  * Body:
  *   { level: 'drained' | 'low' | 'okay' | 'solid' | 'locked',
+ *     subjectiveRecoveryLevel?: 1 | 2 | 3 | 4 | 5,
  *     levelLabel?: string,        // optional display label override
  *     timezone?: string,
  *     openerText?: string,        // optional iOS context-selected opener
  *     probeText?: string,         // optional iOS context-selected probe
  *     probeVariant?: string,
+ *     startConversation?: boolean,
  *     replaceExisting?: boolean } // same-day athlete correction
  */
 
@@ -47,6 +46,7 @@ const RESPONSE_HEADERS = {
 
 type CheckinLevel = 'drained' | 'low' | 'okay' | 'solid' | 'locked';
 const VALID_LEVELS: ReadonlyArray<CheckinLevel> = ['drained', 'low', 'okay', 'solid', 'locked'];
+const CHECKIN_ACKNOWLEDGEMENT = 'Thanks for checking in. If you have a little time, we can talk more about what is behind it.';
 
 // In-memory branch synthesis. Mirrors the iOS `noraResponse` strings
 // 1:1 so the athlete sees the same opener text regardless of where they
@@ -86,29 +86,18 @@ const stripUndefinedDeep = (value: unknown): unknown => {
   return value;
 };
 
-const primeMorningCheckinProbe = async (
+const markMorningConversationAwaitingReply = async (
   db: admin.firestore.Firestore,
   conversation: any,
-  branch: ConversationBranch,
 ): Promise<any> => {
   if (!conversation?.id || !Array.isArray(conversation.turns)) return conversation;
-  const alreadyHasProbe = conversation.turns.some((turn: any) => turn?.role === 'nora-probe');
-  if (alreadyHasProbe) return conversation;
+  if (conversation.state !== 'opened') return conversation;
 
   const now = Date.now();
-  const probeTurn = {
-    turnId: `${conversation.id}_t${conversation.turns.length}`,
-    index: conversation.turns.length,
-    role: 'nora-probe',
-    text: branch.probe.text,
-    voiceReviewStatus: branch.probe.voiceReviewStatus,
-    createdAt: now + 1,
-  };
   const updatedConversation = {
     ...conversation,
     state: 'awaiting-reply',
-    turns: [...conversation.turns, probeTurn],
-    updatedAt: now + 1,
+    updatedAt: now,
   };
 
   await db
@@ -144,14 +133,6 @@ const buildRevisedMorningConversation = (
         role: 'nora-opener',
         text: branch.opener.text,
         voiceReviewStatus: branch.opener.voiceReviewStatus,
-        createdAt: now,
-      },
-      {
-        turnId: `${conversation.id}_t1`,
-        index: 1,
-        role: 'nora-probe',
-        text: branch.probe.text,
-        voiceReviewStatus: branch.probe.voiceReviewStatus,
         createdAt: now + 1,
       },
     ],
@@ -181,16 +162,14 @@ const reviseMorningConversation = async (
   return revised;
 };
 
-// Mirrors NoraDailyView.ReadinessLevel.noraResponse on iOS. Keep these
-// byte-identical with PulseCheck/Views/Chat/NoraDailyView.swift's
-// `noraResponse` cases — both must pass the Nora voice rubric (10
-// questions) documented at the top of that file.
+// Used only after the athlete chooses to talk with Nora. Completing the
+// check-in itself returns CHECKIN_ACKNOWLEDGEMENT and does not open a thread.
 const OPENER_TEXT: Record<CheckinLevel, string> = {
-  drained: "You said you feel drained today. Your skill training is unlocked below whenever you're ready.",
-  low:     "You said you feel low today. Your skill training is unlocked below whenever you're ready.",
-  okay:    "You said you feel okay today. Your skill training is unlocked below whenever you're ready.",
-  solid:   "You said you feel good today. Your skill training is unlocked below whenever you're ready.",
-  locked:  "You said you feel locked in today. Your skill training is unlocked below whenever you're ready.",
+  drained: 'What feels most important to talk through about feeling drained today?',
+  low:     'What feels most important to talk through about feeling low today?',
+  okay:    'What would be useful to talk through about how you feel today?',
+  solid:   'What feels most worth talking through about feeling good today?',
+  locked:  'What feels most worth talking through about feeling locked in today?',
 };
 
 const PROBE_TEXT: Record<CheckinLevel, string> = {
@@ -251,13 +230,6 @@ const sanitizeProbeText = (value: unknown): string | undefined => {
   return trimmed;
 };
 
-const sanitizeOpenerText = (value: unknown): string | undefined => {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim().replace(/\s+/g, ' ');
-  if (trimmed.length < 12 || trimmed.length > 420) return undefined;
-  return trimmed;
-};
-
 const sanitizeProbeVariant = (value: unknown): string | undefined => {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim().toLowerCase();
@@ -288,6 +260,9 @@ export const handler: Handler = async (event) => {
     openerText?: unknown;
     probeText?: unknown;
     probeVariant?: unknown;
+    subjectiveRecoveryLevel?: unknown;
+    subjectiveRecoveryLabel?: unknown;
+    startConversation?: boolean;
     replaceExisting?: boolean;
   };
   try {
@@ -302,6 +277,20 @@ export const handler: Handler = async (event) => {
       statusCode: 400,
       headers: RESPONSE_HEADERS,
       body: JSON.stringify({ error: 'invalid_level', valid: VALID_LEVELS }),
+    };
+  }
+
+  const subjectiveRecoveryLevel = body.subjectiveRecoveryLevel === undefined
+    ? null
+    : Number(body.subjectiveRecoveryLevel);
+  if (
+    subjectiveRecoveryLevel !== null
+    && (!Number.isInteger(subjectiveRecoveryLevel) || subjectiveRecoveryLevel < 1 || subjectiveRecoveryLevel > 5)
+  ) {
+    return {
+      statusCode: 400,
+      headers: RESPONSE_HEADERS,
+      body: JSON.stringify({ error: 'invalid_subjective_recovery_level', valid: [1, 2, 3, 4, 5] }),
     };
   }
 
@@ -339,9 +328,10 @@ export const handler: Handler = async (event) => {
   const dayKey = formatYmdInTz(new Date(), timezone);
   const checkinDocId = `${auth.uid}_${dayKey}`;
   const now = Date.now();
-  const openerText = sanitizeOpenerText(body.openerText) || OPENER_TEXT[level];
+  const openerText = OPENER_TEXT[level];
   const probeText = sanitizeProbeText(body.probeText) || PROBE_TEXT[level];
   const probeVariant = sanitizeProbeVariant(body.probeVariant) || 'baseline';
+  const startConversation = body.startConversation === true;
   const replaceExisting = body.replaceExisting === true;
 
   // Persist check-in.  This is the first source of truth for "athlete
@@ -349,20 +339,28 @@ export const handler: Handler = async (event) => {
   // and the framing layer.
   try {
     const checkInRef = db.collection('pulsecheck-morning-checkins').doc(checkinDocId);
-    const previous = replaceExisting ? (await checkInRef.get()).data() : undefined;
+    const previous = (await checkInRef.get()).data();
     const checkInWrite: Record<string, unknown> = {
       id: checkinDocId,
       athleteUserId: auth.uid,
       dayKey,
       level,
       levelLabel: body.levelLabel || level,
-      openerText,
+      acknowledgementText: CHECKIN_ACKNOWLEDGEMENT,
+      conversationOpenerText: openerText,
       probeText,
       probeVariant,
       timezone,
       createdAt: previous?.createdAt || now,
       updatedAt: now,
     };
+    if (subjectiveRecoveryLevel !== null) {
+      checkInWrite.subjectiveRecoveryLevel = subjectiveRecoveryLevel;
+      const recoveryLabel = typeof body.subjectiveRecoveryLabel === 'string'
+        ? body.subjectiveRecoveryLabel.trim().slice(0, 80)
+        : '';
+      if (recoveryLabel) checkInWrite.subjectiveRecoveryLabel = recoveryLabel;
+    }
     if (teamId && organizationId) {
       checkInWrite.teamId = teamId;
       checkInWrite.organizationId = organizationId;
@@ -383,10 +381,25 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // Open the Nora conversation.  Synthesized branch contains the iOS
-  // noraResponse text as the opener so the athlete experiences a
-  // continuous narrative whether they stay on the home screen or
-  // navigate into the chat thread.
+  if (!startConversation) {
+    return {
+      statusCode: 200,
+      headers: RESPONSE_HEADERS,
+      body: JSON.stringify({
+        ok: true,
+        conversationId: null,
+        checkinDocId,
+        noraResponse: CHECKIN_ACKNOWLEDGEMENT,
+        noraProbe: null,
+        probeVariant,
+        scopeWarning,
+      }),
+    };
+  }
+
+  // The athlete explicitly chose to talk with Nora. The first visible
+  // message is the contextual question, and the thread is ready for one
+  // natural reply rather than presenting a stacked scripted exchange.
   const branch = synthesizeBranch(level, openerText, probeText);
   const evidenceSummary = `Morning check-in tone: ${level}. Probe variant: ${probeVariant}.`;
   let conversation;
@@ -413,7 +426,7 @@ export const handler: Handler = async (event) => {
           ACTION_DOMAIN[level],
           evidenceSummary,
         )
-      : await primeMorningCheckinProbe(db, conversation, branch);
+      : await markMorningConversationAwaitingReply(db, conversation);
   } catch (err: any) {
     return {
       statusCode: 500,
@@ -433,7 +446,8 @@ export const handler: Handler = async (event) => {
       ok: true,
       conversationId: conversation.state === 'closed-revoked' ? null : conversation.id,
       checkinDocId,
-      noraResponse: openerText,
+      noraResponse: CHECKIN_ACKNOWLEDGEMENT,
+      conversationOpener: openerText,
       noraProbe: probeText,
       probeVariant,
       scopeWarning,
@@ -443,5 +457,7 @@ export const handler: Handler = async (event) => {
 
 export const __internal = {
   buildRevisedMorningConversation,
+  CHECKIN_ACKNOWLEDGEMENT,
+  markMorningConversationAwaitingReply,
   synthesizeBranch,
 };

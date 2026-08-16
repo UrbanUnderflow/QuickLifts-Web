@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __internal } from '../../netlify/functions/record-morning-checkin';
 
-test('same-day morning revision replaces the old reply path', () => {
+test('same-day morning revision replaces the old reply path with one athlete-requested question', () => {
   const branch = __internal.synthesizeBranch(
     'locked',
     'You said you feel locked in today.',
@@ -34,8 +34,15 @@ test('same-day morning revision replaces the old reply path', () => {
   assert.equal(revised.state, 'awaiting-reply');
   assert.equal(revised.branchId, 'morning-checkin-tone-locked');
   assert.equal(revised.actionDomain, 'load');
-  assert.equal(revised.turns.length, 2);
-  assert.deepEqual(revised.turns.map((turn: any) => turn.role), ['nora-opener', 'nora-probe']);
+  assert.equal(revised.turns.length, 1);
+  assert.deepEqual(revised.turns.map((turn: any) => turn.role), ['nora-opener']);
   assert.equal(revised.actionState, undefined);
   assert.equal(revised.closedAt, undefined);
+});
+
+test('completed check-in acknowledgement invites rather than automatically probes', () => {
+  assert.equal(
+    __internal.CHECKIN_ACKNOWLEDGEMENT,
+    'Thanks for checking in. If you have a little time, we can talk more about what is behind it.',
+  );
 });

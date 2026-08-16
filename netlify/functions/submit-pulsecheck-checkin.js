@@ -2881,6 +2881,7 @@ async function orchestratePostCheckIn({
   liveProtocolRegistry,
   liveSimRegistry,
   primaryPlan,
+  forceMutableReplacement = false,
 }) {
   const snapshot =
     (sourceStateSnapshotId ? await getSnapshotById(db, sourceStateSnapshotId) : null) ||
@@ -2920,7 +2921,9 @@ async function orchestratePostCheckIn({
   const existingSnap = await assignmentRef.get();
   const existing = existingSnap.exists ? { id: existingSnap.id, ...existingSnap.data() } : null;
 
-  if (existing && !isAssignmentMutableForAutomaticRematerialization(existing)) {
+  const canApplyExplicitReplacement = forceMutableReplacement
+    && ['assigned', 'viewed', 'deferred'].includes(String(existing?.status || ''));
+  if (existing && !isAssignmentMutableForAutomaticRematerialization(existing) && !canApplyExplicitReplacement) {
     await attachExecutionLink(db, sourceStateSnapshotId, assignmentId);
     return existing;
   }
@@ -3030,6 +3033,10 @@ async function orchestratePostCheckIn({
     readinessBand: toReadinessBand(readinessScore),
     escalationTier: existing?.escalationTier ?? 0,
     supportFlag: plannerOutput.supportFlag ?? existing?.supportFlag ?? snapshot?.supportFlag ?? false,
+    commitmentOutcomeState: forceMutableReplacement ? 'replacement_accepted' : existing?.commitmentOutcomeState,
+    replacementForCommitmentId: forceMutableReplacement ? (existing?.id || assignmentId) : existing?.replacementForCommitmentId,
+    replacementRequestedAt: forceMutableReplacement ? now : existing?.replacementRequestedAt,
+    replacementRequestedBy: forceMutableReplacement ? athleteId : existing?.replacementRequestedBy,
     programSnapshot: activeProgram || undefined,
     phaseProgress:
       executionPattern === 'single'

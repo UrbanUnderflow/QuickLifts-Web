@@ -21,7 +21,15 @@ const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const STAFF_ROLES = new Set(['team-admin', 'coach', 'performance-staff', 'support-staff', 'clinician']);
-const TERMINAL_STATUSES = new Set(['completed', 'overridden', 'deferred', 'superseded', 'expired']);
+const TERMINAL_STATUSES = new Set([
+  'completed',
+  'overridden',
+  'deferred',
+  'planned_rest',
+  'rest_over_plan',
+  'superseded',
+  'expired',
+]);
 
 async function verifyAuth(event, adminApp) {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
@@ -41,6 +49,56 @@ function createError(statusCode, message) {
 
 function normalizeReason(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function shiftSourceDate(sourceDate, days) {
+  const parsed = new Date(`${sourceDate}T12:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return sourceDate;
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function evaluatePlannedRestPolicy(assignment, recentAssignments = []) {
+  const configuredAllowance = Number(
+    assignment?.plannedRestDaysPerSeven
+    ?? assignment?.programSnapshot?.plannedRestDaysPerWeek
+    ?? assignment?.curriculumIntent?.plannedRestDaysPerWeek
+    ?? 1
+  );
+  const allowance = Math.max(0, Math.min(7, Number.isFinite(configuredAllowance) ? Math.round(configuredAllowance) : 1));
+  const sourceDate = String(assignment?.sourceDate || '');
+  const windowStart = shiftSourceDate(sourceDate, -6);
+  const previousDate = shiftSourceDate(sourceDate, -1);
+  const priorRests = recentAssignments.filter((candidate) => {
+    const candidateDate = String(candidate?.sourceDate || '');
+    const outcome = String(candidate?.commitmentOutcomeState || candidate?.status || '');
+    return candidateDate >= windowStart
+      && candidateDate < sourceDate
+      && ['planned_rest', 'rest_over_plan'].includes(outcome);
+  });
+  const consecutiveRest = priorRests.some((candidate) => candidate.sourceDate === previousDate);
+  const plannedRestWithinPlan = priorRests.length < allowance;
+  const weeklyFollowThroughMet = plannedRestWithinPlan && !consecutiveRest;
+
+  return {
+    allowance,
+    priorRestCount: priorRests.length,
+    consecutiveRest,
+    plannedRestWithinPlan,
+    weeklyFollowThroughMet,
+    commitmentOutcomeState: weeklyFollowThroughMet ? 'planned_rest' : 'rest_over_plan',
+  };
+}
+
+async function resolvePlannedRestPolicy(db, assignment) {
+  const snapshot = await db.collection(DAILY_ASSIGNMENTS_COLLECTION)
+    .where('athleteId', '==', assignment.athleteId)
+    .get();
+  const recentAssignments = snapshot.docs.map((docSnap) => ({
+    id: docSnap.id,
+    ...(docSnap.data() || {}),
+  }));
+  return evaluatePlannedRestPolicy(assignment, recentAssignments);
 }
 
 function clamp(value, min = 0, max = 100) {
@@ -118,6 +176,8 @@ function buildRefreshNote({ assignment, eventType, reason }) {
       return `Execution refresh: the athlete completed ${actionText}.${reasonText}`;
     case 'deferred':
       return `Execution refresh: the assignment was deferred.${reasonText}`;
+    case 'planned_rest':
+      return `Execution refresh: the athlete logged planned rest.${reasonText}`;
     case 'overridden':
       return `Execution refresh: the assignment was coach-adjusted.${reasonText}`;
     case 'expired':
@@ -193,6 +253,7 @@ function resolvePlanStepEventType(eventType) {
       return 'plan_step_completed';
     case 'overridden':
     case 'deferred':
+    case 'planned_rest':
     case 'expired':
       return 'plan_step_overridden';
     default:
@@ -201,6 +262,9 @@ function resolvePlanStepEventType(eventType) {
 }
 
 function resolveExecutionTruthOwner({ assignment, eventType, actorType }) {
+  if (eventType === 'planned_rest') {
+    return 'athlete';
+  }
   if (eventType === 'overridden' || eventType === 'deferred') {
     return actorType === 'coach' ? 'coach' : 'staff';
   }
@@ -475,9 +539,14 @@ async function maybeApplyPlanStepSideEffects({
       break;
     case 'overridden':
     case 'deferred':
+    case 'planned_rest':
     case 'expired':
       if (currentStep.stepStatus !== 'overridden') {
-        nextStep.stepStatus = eventType === 'deferred' ? 'deferred' : 'overridden';
+        nextStep.stepStatus = eventType === 'planned_rest'
+          ? 'planned_rest'
+          : eventType === 'deferred'
+            ? 'deferred'
+            : 'overridden';
         nextStep.linkedDailyTaskId = assignment.id;
         nextStep.linkedDailyTaskSourceDate = assignment.sourceDate || undefined;
         nextStep.overrideReason = reason || assignment.overrideReason || currentStep.overrideReason || 'Assignment adjusted.';
@@ -609,7 +678,7 @@ async function maybeApplyPlanStepSideEffects({
   };
 }
 
-function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventAt) {
+function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventAt, commitmentPolicy = null) {
   switch (eventType) {
     case 'viewed':
       if (existing.status !== 'assigned') return null;
@@ -662,6 +731,19 @@ function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventA
         overrideReason: reason || existing.overrideReason || 'Assignment deferred.',
         updatedAt: eventAt,
       };
+    case 'planned_rest': {
+      if (TERMINAL_STATUSES.has(existing.status)) return null;
+      const outcomeState = commitmentPolicy?.commitmentOutcomeState || 'rest_over_plan';
+      return {
+        status: outcomeState,
+        commitmentOutcomeState: outcomeState,
+        plannedRestAt: eventAt,
+        plannedRestWithinPlan: Boolean(commitmentPolicy?.plannedRestWithinPlan),
+        weeklyFollowThroughMet: Boolean(commitmentPolicy?.weeklyFollowThroughMet),
+        plannedRestPolicy: commitmentPolicy || undefined,
+        updatedAt: eventAt,
+      };
+    }
     case 'expired':
       if (TERMINAL_STATUSES.has(existing.status)) return null;
       return {
@@ -699,7 +781,8 @@ async function assertAuthorized(db, assignment, eventType, requesterId) {
     || eventType === 'started'
     || eventType === 'paused'
     || eventType === 'resumed'
-    || eventType === 'completed';
+    || eventType === 'completed'
+    || eventType === 'planned_rest';
 
   if (athleteEvent) {
     if (requesterId !== assignment.athleteId) {
@@ -716,7 +799,7 @@ async function assertAuthorized(db, assignment, eventType, requesterId) {
 }
 
 function resolveActorType({ eventType, requesterRole, assignment, requesterId }) {
-  if (eventType === 'viewed' || eventType === 'started' || eventType === 'paused' || eventType === 'resumed' || eventType === 'completed') {
+  if (eventType === 'viewed' || eventType === 'started' || eventType === 'paused' || eventType === 'resumed' || eventType === 'completed' || eventType === 'planned_rest') {
     return requesterId === assignment.athleteId ? 'athlete' : 'system';
   }
   if (requesterRole === 'coach') return 'coach';
@@ -759,8 +842,8 @@ exports.handler = async (event) => {
       throw createError(400, 'assignmentId is required.');
     }
 
-    if (!['viewed', 'started', 'paused', 'resumed', 'completed', 'deferred', 'overridden', 'expired'].includes(eventType)) {
-      throw createError(400, 'eventType must be one of viewed, started, paused, resumed, completed, deferred, overridden, or expired.');
+    if (!['viewed', 'started', 'paused', 'resumed', 'completed', 'planned_rest', 'deferred', 'overridden', 'expired'].includes(eventType)) {
+      throw createError(400, 'eventType must be one of viewed, started, paused, resumed, completed, planned_rest, deferred, overridden, or expired.');
     }
 
     if (actorUserId !== decodedToken.uid) {
@@ -776,7 +859,10 @@ exports.handler = async (event) => {
     const assignment = { id: assignmentSnap.id, ...(assignmentSnap.data() || {}) };
     const requesterRole = await assertAuthorized(db, assignment, eventType, decodedToken.uid);
     const eventAt = Date.now();
-    const updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt);
+    const commitmentPolicy = eventType === 'planned_rest'
+      ? await resolvePlannedRestPolicy(db, assignment)
+      : null;
+    const updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt, commitmentPolicy);
     if (updates && eventType === 'completed' && metadata?.completionSummary) {
       updates.completionSummary = metadata.completionSummary;
     }
@@ -820,6 +906,7 @@ exports.handler = async (event) => {
       metadata: {
         ...(metadata || {}),
         ...(reason ? { reason } : {}),
+        ...(commitmentPolicy ? { commitmentPolicy } : {}),
         previousStatus: assignment.status || null,
         nextStatus: nextAssignment.status || assignment.status || null,
         previousAssignmentSummary: summarizeAssignmentForEvent(assignment, previousExecutionTruthOwner),
@@ -948,4 +1035,8 @@ exports.handler = async (event) => {
       }),
     };
   }
+};
+
+exports.testHelpers = {
+  evaluatePlannedRestPolicy,
 };

@@ -857,9 +857,14 @@ const NoraLanding: React.FC = () => {
               <span className="nr-methods-score">10/10</span>
               <p>required across the runtime response rubric before Nora's answer can be delivered.</p>
             </div>
-            <a href="/nora-engagement-model" className="nr-product-cta">
-              Read the full engagement model →
-            </a>
+            <div className="nr-methods-links">
+              <a href="/nora-engagement-model" className="nr-product-cta">
+                Read the engagement model →
+              </a>
+              <a href="/research/coherence-score-methodology-evidence-and-validation" className="nr-product-cta">
+                Review the score whitepaper →
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -1943,6 +1948,12 @@ const NoraLanding: React.FC = () => {
           display: flex;
           align-items: center;
           gap: 18px;
+        }
+        .nr-methods-foot .nr-methods-links {
+          flex: 0 0 auto;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          gap: 10px;
         }
         .nr-methods-score {
           flex: 0 0 auto;

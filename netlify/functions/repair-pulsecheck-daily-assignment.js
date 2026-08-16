@@ -319,7 +319,7 @@ exports.handler = async (event) => {
     initializeFirebaseAdmin(event);
     const decoded = await verifyAuth(event);
     const body = event.body ? JSON.parse(event.body) : {};
-    const userId = body.userId || decoded.uid;
+    const userId = decoded.uid;
     const sourceDate = isValidSourceDate(body.sourceDate) ? body.sourceDate : todayDateString();
     const preferLaunchableAlternative = parseBoolean(body.preferLaunchableAlternative);
     const recoverFromConversation = parseBoolean(body.recoverFromConversation);
@@ -498,6 +498,7 @@ exports.handler = async (event) => {
         plannerDecision,
         liveProtocolRegistry,
         liveSimRegistry,
+        forceMutableReplacement: true,
       });
 
       rematerialized = {

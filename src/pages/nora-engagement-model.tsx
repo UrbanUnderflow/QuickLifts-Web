@@ -186,6 +186,7 @@ const NoraEngagementModelPage: NextPage = () => (
           <a href="#loop">Engagement loop</a>
           <a href="#rubric">Rubric</a>
           <a href="#evidence">Evidence</a>
+          <a href="/research/coherence-score-methodology-evidence-and-validation">Score method</a>
         </nav>
         <a className="header-link" href="mailto:tre@pulseintelligencelabs.com?subject=Nora%20Methods%20Review">
           Discuss with our team <ArrowRight size={16} />
@@ -457,7 +458,7 @@ const NoraEngagementModelPage: NextPage = () => (
 
       <footer className="page-footer">
         <a href="/PIL" className="brand" aria-label="Pulse Intelligence Labs home"><img src="/pulse-logo-green.svg" alt="" /><span>Pulse Intelligence Labs</span></a>
-        <a href="/NCAA-Compliance">University mental-health operations</a>
+        <div className="footer-links"><a href="/research/coherence-score-methodology-evidence-and-validation">Coherence Score whitepaper</a><a href="/NCAA-Compliance">University mental-health operations</a></div>
         <span>© 2026 Pulse Intelligence Labs, Inc.</span>
       </footer>
 
@@ -695,6 +696,8 @@ const NoraEngagementModelPage: NextPage = () => (
         .closing-section .button { margin-top: 26px; }
         .page-footer { min-height: 84px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; padding: 0 48px; color: rgba(255,255,255,.42); background: rgba(0,0,0,.3); border-top: 1px solid rgba(255,255,255,.08); font-size: 12px; }
         .page-footer > a:not(.brand) { color: rgba(255,255,255,.62); text-decoration: none; }
+        .footer-links { display: flex; align-items: center; gap: 18px; }
+        .footer-links a { color: rgba(255,255,255,.62); text-decoration: none; }
         .page-footer > span { justify-self: end; }
         @media (max-width: 980px) {
           .site-header { grid-template-columns: 1fr auto; padding: 0 28px; }
@@ -753,6 +756,7 @@ const NoraEngagementModelPage: NextPage = () => (
           .sources-section { gap: 35px; }
           .page-footer { min-height: 116px; grid-template-columns: 1fr; gap: 10px; padding: 24px 20px; text-align: center; }
           .page-footer .brand, .page-footer > span { justify-self: center; }
+          .footer-links { justify-content: center; flex-wrap: wrap; }
           .page-footer .brand span { display: inline; }
         }
       `}</style>

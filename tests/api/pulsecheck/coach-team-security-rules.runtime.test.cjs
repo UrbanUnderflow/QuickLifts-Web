@@ -25,6 +25,9 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
     'escalation-records',
     'health-context-source-records',
     'health-context-source-status',
+    'health-context-snapshots',
+    'health-context-snapshot-revisions',
+    'health-context-assembly-traces',
     'mental-curriculum-assignments',
     'mental-exercises',
     'mental-recommendations',
@@ -37,6 +40,7 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
     'pulsecheck-coach-services',
     'pulsecheck-daily-assignments',
     'pulsecheck-morning-checkins',
+    'pulsecheck-scorecards',
     'pulsecheck-referral-attributions',
     'pulsecheck-team-memberships',
     'sim-modules',
@@ -90,6 +94,14 @@ test('readiness, device, sentiment, escalation, and user policies are explicit a
   assert.match(
     rules,
     /match \/health-context-source-status\/\{statusId\}[\s\S]*statusId == request\.auth\.uid \+ '_'[\s\S]*allow delete: if isAdminUser\(\)/
+  );
+  assert.match(
+    rules,
+    /match \/health-context-snapshots\/\{snapshotId\}[\s\S]*pcCanAccessCareTeamAthlete[\s\S]*snapshotId\.matches\('\^' \+ request\.auth\.uid \+ '_\.\*\$'\)/
+  );
+  assert.match(
+    rules,
+    /match \/pulsecheck-scorecards\/\{scorecardId\}[\s\S]*allow read: if isAdminUser\(\)[\s\S]*allow create, update, delete: if false/
   );
   assert.match(
     rules,
@@ -148,11 +160,11 @@ test('native readiness loaders require exact modern team and organization scope'
   );
   assert.match(
     repository,
-    /collection\("pulsecheck-morning-checkins"\)[\s\S]*whereField\("teamId", isEqualTo: teamAccess\.teamID\)[\s\S]*"organizationId",[\s\S]*isEqualTo: teamAccess\.organizationID/
+    /func loadReadinessCollectionRows[\s\S]*whereField\("teamId", isEqualTo: teamAccess\.teamID\)[\s\S]*"organizationId",[\s\S]*isEqualTo: teamAccess\.organizationID[\s\S]*readinessRecordBelongsToSelectedWorkspace/
   );
   assert.match(
     repository,
-    /collection\("dailySentimentAnalysis"\)[\s\S]*whereField\("teamId", isEqualTo: teamAccess\.teamID\)[\s\S]*"organizationId",[\s\S]*isEqualTo: teamAccess\.organizationID/
+    /collection: "pulsecheck-morning-checkins"[\s\S]*teamAccess: teamAccess[\s\S]*collection: "dailySentimentAnalysis"[\s\S]*teamAccess: teamAccess/
   );
   assert.match(
     repository,
@@ -198,10 +210,10 @@ test('native scoped dashboard queries have committed composite indexes', () => {
   );
 
   assert.equal(
-    hasIndex('pulsecheck-morning-checkins', [
-      'teamId',
-      'organizationId',
-      '__name__',
+    hasExactIndex('pulsecheck-morning-checkins', [
+      {fieldPath: 'athleteUserId', order: 'ASCENDING'},
+      {fieldPath: 'teamId', order: 'ASCENDING'},
+      {fieldPath: 'organizationId', order: 'ASCENDING'},
     ]),
     true
   );
@@ -226,10 +238,10 @@ test('native scoped dashboard queries have committed composite indexes', () => {
   assert.equal(
     hasExactIndex('health-context-source-records', [
       {fieldPath: 'athleteUserId', order: 'ASCENDING'},
+      {fieldPath: 'teamId', order: 'ASCENDING'},
       {fieldPath: 'organizationId', order: 'ASCENDING'},
       {fieldPath: 'status', order: 'ASCENDING'},
-      {fieldPath: 'teamId', order: 'ASCENDING'},
-      {fieldPath: 'observedAt', order: 'ASCENDING'},
+      {fieldPath: 'observedAt', order: 'DESCENDING'},
     ]),
     true
   );
@@ -238,6 +250,30 @@ test('native scoped dashboard queries have committed composite indexes', () => {
       'athleteUserId',
       'teamId',
       'organizationId',
+    ]),
+    true
+  );
+  assert.equal(
+    hasExactIndex('pulsecheck-daily-assignments', [
+      {fieldPath: 'athleteId', order: 'ASCENDING'},
+      {fieldPath: 'teamId', order: 'ASCENDING'},
+      {fieldPath: 'organizationId', order: 'ASCENDING'},
+    ]),
+    true
+  );
+  assert.equal(
+    hasExactIndex('conversations', [
+      {fieldPath: 'userId', order: 'ASCENDING'},
+      {fieldPath: 'teamId', order: 'ASCENDING'},
+      {fieldPath: 'organizationId', order: 'ASCENDING'},
+    ]),
+    true
+  );
+  assert.equal(
+    hasExactIndex('pulsecheck-nora-conversations', [
+      {fieldPath: 'athleteUserId', order: 'ASCENDING'},
+      {fieldPath: 'teamId', order: 'ASCENDING'},
+      {fieldPath: 'organizationId', order: 'ASCENDING'},
     ]),
     true
   );

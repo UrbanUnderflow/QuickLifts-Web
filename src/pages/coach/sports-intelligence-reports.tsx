@@ -26,7 +26,7 @@ const formatAdherenceChip = (report: CoachReportListItem) => {
     return `Adherence: ${Math.round(report.adherence.overallAdherencePct)}%`;
   }
   if (!report.adherence.categoriesTotal) return report.adherence.label || 'Coverage pending';
-  return `Adherence: ${report.adherence.categoriesReady ?? 0} / ${report.adherence.categoriesTotal} categories`;
+  return `Data coverage: ${report.adherence.categoriesReady ?? 0} / ${report.adherence.categoriesTotal} categories`;
 };
 
 const CoachSportsIntelligenceReports: React.FC = () => {

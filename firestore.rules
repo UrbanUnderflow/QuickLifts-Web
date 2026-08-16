@@ -190,6 +190,9 @@ service cloud.firestore {
         'escalation-records',
         'health-context-source-records',
         'health-context-source-status',
+        'health-context-snapshots',
+        'health-context-snapshot-revisions',
+        'health-context-assembly-traces',
         'junior-curriculum',
         'junior-progress',
         'mental-training-education-progress',
@@ -203,6 +206,7 @@ service cloud.firestore {
         'pulsecheck-organization-memberships',
         'pulsecheck-push-installations',
         'pulsecheck-morning-checkins',
+        'pulsecheck-scorecards',
         'pulsecheck-teams',
         'pulsecheck-team-memberships',
         'pulsecheck-daily-assignments',
@@ -1882,6 +1886,95 @@ service cloud.firestore {
           && statusId == request.auth.uid + '_'
             + resource.data.sourceFamily
         );
+    }
+
+    // Canonical daily snapshots may be assembled by the signed-in native
+    // HealthKit bridge or trusted backend adapters. Athletes can only write
+    // their own deterministic rows; staff access requires server-attached
+    // team and organization scope.
+    match /health-context-snapshots/{snapshotId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.athleteUserId == request.auth.uid
+            || (
+              resource.data.athleteUserId is string
+              && resource.data.teamId is string
+              && resource.data.organizationId is string
+              && pcDataMatchesTeamOrganization(resource.data, resource.data.teamId)
+              && pcCanAccessCareTeamAthlete(resource.data.teamId, resource.data.athleteUserId)
+            )
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          isSignedIn()
+          && snapshotId.matches('^' + request.auth.uid + '_.*$')
+          && request.resource.data.athleteUserId == request.auth.uid
+          && !('teamId' in request.resource.data)
+          && !('organizationId' in request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.athleteUserId == resource.data.athleteUserId
+          && (
+            (
+              !('teamId' in resource.data)
+              && !('teamId' in request.resource.data)
+            )
+            || (
+              'teamId' in resource.data
+              && 'teamId' in request.resource.data
+              && request.resource.data.teamId == resource.data.teamId
+            )
+          )
+          && (
+            (
+              !('organizationId' in resource.data)
+              && !('organizationId' in request.resource.data)
+            )
+            || (
+              'organizationId' in resource.data
+              && 'organizationId' in request.resource.data
+              && request.resource.data.organizationId == resource.data.organizationId
+            )
+          )
+        );
+      allow delete: if isAdminUser();
+    }
+
+    match /health-context-snapshot-revisions/{revisionId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && resource.data.athleteUserId == request.auth.uid);
+      allow create, update: if isAdminUser()
+        || (
+          isSignedIn()
+          && revisionId.matches('^' + request.auth.uid + '_.*$')
+          && request.resource.data.athleteUserId == request.auth.uid
+        );
+      allow delete: if isAdminUser();
+    }
+
+    match /health-context-assembly-traces/{traceId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && resource.data.athleteUserId == request.auth.uid);
+      allow create, update: if isAdminUser()
+        || (
+          isSignedIn()
+          && traceId.matches('^' + request.auth.uid + '_.*$')
+          && request.resource.data.athleteUserId == request.auth.uid
+        );
+      allow delete: if isAdminUser();
+    }
+
+    // Versioned scorecards are backend-derived. Athletes read their own
+    // scorecard through the authenticated endpoint; clients never author it.
+    match /pulsecheck-scorecards/{scorecardId} {
+      allow read: if isAdminUser();
+      allow create, update, delete: if false;
     }
 
     // Classification conditions are administered through the protected admin

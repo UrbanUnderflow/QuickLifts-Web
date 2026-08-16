@@ -15,6 +15,7 @@ import type { AthleteReadinessDailyDetail, DailySentimentRecord } from '../api/f
 import type { AthleteDeviceDayDetail, AthleteDeviceStatus } from '../api/firebase/pulsecheckDeviceMonitor';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
 import { useUser } from '../hooks/useUser';
+import { auth } from '../api/firebase/config';
 
 // Lean "triage" readiness card: status-led, one-glance trend + why + daily
 // check-ins + a clear action. Depth (28-day calendar, raw scores, tooltips)
@@ -41,6 +42,31 @@ interface AthleteData {
   deviceStatus?: AthleteDeviceStatus;
   youthTrack?: string;
 }
+
+type CoachScoreResult = {
+  score: number | null;
+  status: string;
+  confidence: string;
+  evidenceCoveragePercent: number;
+  trendDelta: number | null;
+};
+
+type CoachScorecardRead = {
+  methodologyVersion: string;
+  wellbeing: CoachScoreResult;
+  recovery: CoachScoreResult;
+  adherence: CoachScoreResult;
+  coherence: CoachScoreResult;
+};
+
+type CoachScorecardResponse = {
+  scorecard: CoachScorecardRead;
+  coachContext?: {
+    mixedRecoverySignals: boolean;
+    mixedSignalSummary: string | null;
+    physicalTrainingBoundary: string;
+  };
+};
 
 // Trend-level theme extraction from a day's check-in messages (no transcripts).
 const TOPIC_RULES: { label: string; rx: RegExp }[] = [
@@ -278,8 +304,54 @@ const AthleteReadinessCard: React.FC<{
   const [history, setHistory] = useState<DailySentimentRecord[] | null>(null);
   const [readinessDetails, setReadinessDetails] = useState<AthleteReadinessDailyDetail[] | null>(demo ? [] : null);
   const [messagingOpen, setMessagingOpen] = useState(false);
+  const [scorecardRead, setScorecardRead] = useState<CoachScorecardResponse | null>(
+    demo
+      ? {
+          scorecard: {
+            methodologyVersion: '2.0.0',
+            coherence: { score: 80, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 3 },
+            wellbeing: { score: 78, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 4 },
+            recovery: { score: 72, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 64, trendDelta: -2 },
+            adherence: { score: 84, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 79, trendDelta: 6 },
+          },
+          coachContext: {
+            mixedRecoverySignals: false,
+            mixedSignalSummary: null,
+            physicalTrainingBoundary: 'PulseCheck reports evidence and uncertainty. Coaches and sports medicine staff make physical training decisions.',
+          },
+        }
+      : null
+  );
   const [profileHover, setProfileHover] = useState<{ x: number; y: number; placement: 'above' | 'below' } | null>(null);
   const currentUser = useUser();
+
+  useEffect(() => {
+    let cancelled = false;
+    if (demo) return () => { cancelled = true; };
+    const normalizedTeamId = String(teamId || '').trim();
+    if (!normalizedTeamId) {
+      setScorecardRead(null);
+      return () => { cancelled = true; };
+    }
+    const load = async () => {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Authentication required');
+      const response = await fetch('/.netlify/functions/get-pulsecheck-scorecard', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ athleteUserId: athlete.id, teamId: normalizedTeamId }),
+      });
+      if (!response.ok) throw new Error(`Scorecard request failed with ${response.status}`);
+      return response.json() as Promise<CoachScorecardResponse>;
+    };
+    load()
+      .then((read) => { if (!cancelled) setScorecardRead(read); })
+      .catch(() => { if (!cancelled) setScorecardRead(null); });
+    return () => { cancelled = true; };
+  }, [athlete.id, demo, teamId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -601,33 +673,17 @@ const AthleteReadinessCard: React.FC<{
   );
 
   const adherenceStats = useMemo(() => {
-    const days = Math.max(1, last14.length);
-    const checkInPct = pct((last14.filter((d) => d.checkInCompleted).length / days) * 100);
-    const deviceDayCount = last14.filter((_, dayIndex) => deviceSummaryForDay(dayIndex).worn).length;
-    const devicePct = pct((deviceDayCount / days) * 100);
     const moduleAssignedCount = last14.reduce((sum, day) => sum + day.moduleAssignedCount, 0);
     const moduleCompletedCount = last14.reduce((sum, day) => sum + day.moduleCompletedCount, 0);
-    const modulePct = moduleAssignedCount > 0
-      ? pct((Math.min(moduleCompletedCount, moduleAssignedCount) / moduleAssignedCount) * 100)
-      : pct((last14.filter((day) => day.moduleCompletedCount > 0).length / days) * 100);
 
     return {
-      overallPct: pct(avg([checkInPct, devicePct, modulePct])),
-      checkInPct,
-      devicePct,
-      modulePct,
       moduleAssignedCount,
       moduleCompletedCount,
     };
-  }, [deviceSummaryForDay, last14]);
+  }, [last14]);
 
   const TrendIcon = trend === 'improving' ? ArrowUpRight : trend === 'declining' ? ArrowDownRight : Minus;
   const trendColor = trend === 'improving' ? '#4ade80' : trend === 'declining' ? '#f87171' : '#a1a1aa';
-  const adherenceBadgeClass = adherenceStats.overallPct >= 70
-    ? 'border-emerald-300/25 bg-emerald-300/[0.1] text-emerald-200'
-    : adherenceStats.overallPct >= 40
-      ? 'border-amber-300/25 bg-amber-300/[0.1] text-amber-200'
-      : 'border-red-300/25 bg-red-300/[0.1] text-red-200';
   const profileRows = useMemo(
     () =>
       [
@@ -758,17 +814,39 @@ const AthleteReadinessCard: React.FC<{
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-zinc-500">
-          <span className="font-medium uppercase tracking-wide">Adherence · 14 days</span>
-          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${adherenceBadgeClass}`}>
-            {adherenceStats.overallPct}%
-          </span>
-          <span>Check-ins <span className="text-zinc-300">{adherenceStats.checkInPct}%</span></span>
-          <span>Devices <span className="text-zinc-300">{adherenceStats.devicePct}%</span></span>
-          <span>Mental modules <span className="text-zinc-300">{adherenceStats.modulePct}%</span></span>
+        <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.025] p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Four-score read · 14 days</span>
+            <span className="text-[9px] font-semibold text-zinc-600">v{scorecardRead?.scorecard.methodologyVersion || '2.0'}</span>
+          </div>
+          {scorecardRead ? (
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {([
+                ['Coherence', scorecardRead.scorecard.coherence],
+                ['Wellbeing', scorecardRead.scorecard.wellbeing],
+                ['Recovery', scorecardRead.scorecard.recovery],
+                ['Adherence', scorecardRead.scorecard.adherence],
+              ] as const).map(([label, score]) => (
+                <div key={label} className="rounded-md border border-white/[0.07] bg-black/15 px-2 py-1.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-zinc-300">{label}</span>
+                    <span className="text-sm font-bold text-white">{score.score ?? 'Building'}</span>
+                  </div>
+                  <p className="mt-0.5 text-[9px] text-zinc-600">{score.evidenceCoveragePercent}% evidence · {score.confidence}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[10px] leading-4 text-zinc-600">Scorecard evidence is not available yet.</p>
+          )}
+          {scorecardRead?.coachContext?.mixedSignalSummary && (
+            <p className="mt-2 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-2 py-1.5 text-[10px] leading-4 text-amber-100">
+              {scorecardRead.coachContext.mixedSignalSummary}
+            </p>
+          )}
         </div>
 
-        {/* Adherence */}
+        {/* Data context. Device wear is evidence coverage, never Adherence. */}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-zinc-500">
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <span className="inline-flex flex-none items-center gap-1">

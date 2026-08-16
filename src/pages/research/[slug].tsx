@@ -535,7 +535,9 @@ const extractWhitePaperReferences = (content: string): WhitePaperReferenceMap =>
       const match = line.match(/^\[(\d+)\]\s*(.+)$/);
       if (!match) return references;
 
-      references[Number(match[1])] = match[2].trim();
+      references[Number(match[1])] = match[2]
+        .trim()
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
       return references;
     }, {});
 };

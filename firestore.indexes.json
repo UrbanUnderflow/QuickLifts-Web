@@ -23,6 +23,32 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "observedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "health-context-source-records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "athleteUserId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "status",
           "order": "ASCENDING"
         },
@@ -60,6 +86,24 @@
     },
     {
       "collectionGroup": "health-context-source-status",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "athleteUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pulsecheck-morning-checkins",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -393,6 +437,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "athleteId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pulsecheck-daily-assignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "coachId",
           "order": "ASCENDING"
         },
@@ -406,6 +468,42 @@
         },
         {
           "fieldPath": "athleteId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "pulsecheck-nora-conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "athleteUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "teamId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "organizationId",
           "order": "ASCENDING"
         }
       ]

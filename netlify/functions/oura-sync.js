@@ -401,6 +401,11 @@ function mapSleepPayload(record) {
     timeInBedHours: secondsToHours(firstNumber(record, ['time_in_bed'])),
     heartRateResting: firstNumber(record, ['lowest_heart_rate', 'resting_heart_rate', 'average_heart_rate']),
     heartRateVariability: firstNumber(record, ['average_hrv', 'hrv']),
+    heartRateVariabilityMethod: 'rmssd',
+    heartRateVariabilityMeasurementWindow: 'sleep',
+    heartRateVariabilityAlgorithmVersion: 'oura_average_hrv_rmssd_v1',
+    restingHeartRateMeasurementWindow: 'sleep',
+    restingHeartRateAlgorithmVersion: 'oura_sleep_resting_heart_rate_v1',
     respiratoryRate: firstNumber(record, ['average_breath', 'respiratory_rate']),
     // --- universal cross-device fields (added Phase A) ---
     bedtimeStart,

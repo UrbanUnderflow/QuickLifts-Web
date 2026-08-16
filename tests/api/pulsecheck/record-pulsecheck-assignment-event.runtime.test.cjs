@@ -7,7 +7,7 @@ const recordPath = path.join(repoRoot, 'netlify/functions/record-pulsecheck-assi
 const configPath = path.join(repoRoot, 'netlify/functions/config/firebase.js');
 const submitPath = path.join(repoRoot, 'netlify/functions/submit-pulsecheck-checkin.js');
 
-function loadHandler({ db, decodedUid = 'athlete-1', runtimeHelpersMock = {} }) {
+function loadRecordModule({ db, decodedUid = 'athlete-1', runtimeHelpersMock = {} }) {
   delete require.cache[recordPath];
   delete require.cache[configPath];
   delete require.cache[submitPath];
@@ -51,11 +51,16 @@ function loadHandler({ db, decodedUid = 'athlete-1', runtimeHelpersMock = {} }) 
     },
   };
 
-  return require(recordPath).handler;
+  return require(recordPath);
+}
+
+function loadHandler(options) {
+  return loadRecordModule(options).handler;
 }
 
 function createDb({
   assignment,
+  assignments = [],
   trainingPlan,
   snapshot,
   memberships = [],
@@ -68,7 +73,10 @@ function createDb({
     profiles: [],
   };
 
-  const assignmentStore = new Map([[assignment.id, assignment]]);
+  const assignmentStore = new Map([
+    ...assignments.map((entry) => [entry.id, entry]),
+    [assignment.id, assignment],
+  ]);
   const trainingPlanStore = new Map([[trainingPlan.id, trainingPlan]]);
   const snapshotStore = new Map([[snapshot.id, snapshot]]);
   const membershipStore = new Map(memberships.map((entry) => [entry.id, entry]));
@@ -88,6 +96,18 @@ function createDb({
     collection(name) {
       if (name === 'pulsecheck-daily-assignments') {
         return {
+          where(fieldPath, operator, value) {
+            assert.equal(operator, '==');
+            return {
+              async get() {
+                return {
+                  docs: Array.from(assignmentStore.entries())
+                    .filter(([, data]) => data[fieldPath] === value)
+                    .map(([id, data]) => ({ id, data: () => data })),
+                };
+              },
+            };
+          },
           doc(id) {
             return {
               async get() {
@@ -188,6 +208,70 @@ function parseBody(response) {
   assert.equal(response.statusCode, 200);
   return JSON.parse(response.body);
 }
+
+test('planned rest is verified against the rolling plan allowance and consecutive rests', async () => {
+  const currentAssignment = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    status: 'assigned',
+    actionType: 'sim',
+    trainingPlanId: 'training-plan-1',
+    trainingPlanStepId: 'training-plan-1_step_0',
+    trainingPlanStepIndex: 0,
+    trainingPlanStepLabel: 'Focus reset',
+    plannedRestDaysPerSeven: 2,
+    createdAt: 1742420000000,
+    updatedAt: 1742420000000,
+  };
+  const priorAssignment = {
+    id: 'athlete-1_2026-03-19',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-19',
+    status: 'planned_rest',
+    commitmentOutcomeState: 'planned_rest',
+  };
+  const db = createDb({
+    assignment: currentAssignment,
+    assignments: [priorAssignment],
+    trainingPlan: {
+      id: 'training-plan-1',
+      athleteId: 'athlete-1',
+      status: 'active',
+      steps: [{
+        id: 'training-plan-1_step_0',
+        stepIndex: 0,
+        stepLabel: 'Focus reset',
+        stepStatus: 'planned',
+      }],
+    },
+    snapshot: { id: 'unused-snapshot' },
+  });
+  const recordModule = loadRecordModule({ db });
+  const policy = recordModule.testHelpers.evaluatePlannedRestPolicy(currentAssignment, [priorAssignment]);
+
+  assert.equal(policy.plannedRestWithinPlan, true);
+  assert.equal(policy.consecutiveRest, true);
+  assert.equal(policy.weeklyFollowThroughMet, false);
+  assert.equal(policy.commitmentOutcomeState, 'rest_over_plan');
+
+  const response = parseBody(await recordModule.handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer token' },
+    body: JSON.stringify({
+      assignmentId: currentAssignment.id,
+      eventType: 'planned_rest',
+      actorUserId: 'athlete-1',
+    }),
+  }));
+
+  assert.equal(response.assignment.status, 'rest_over_plan');
+  assert.equal(response.assignment.commitmentOutcomeState, 'rest_over_plan');
+  assert.equal(response.assignment.plannedRestWithinPlan, true);
+  assert.equal(response.assignment.weeklyFollowThroughMet, false);
+  assert.equal(response.event.actorType, 'athlete');
+  assert.equal(response.planSideEffect.step.stepStatus, 'planned_rest');
+});
 
 test('started, paused, resumed, and completed events keep plan and assignment status in sync', async () => {
   const db = createDb({

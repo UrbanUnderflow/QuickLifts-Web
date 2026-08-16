@@ -513,6 +513,11 @@ function mapRecoveryPayload(data) {
       'milliseconds',
       'value',
     ]),
+    heartRateVariabilityMethod: 'rmssd',
+    heartRateVariabilityMeasurementWindow: 'spot',
+    heartRateVariabilityAlgorithmVersion: 'health_connect_rmssd_v1',
+    restingHeartRateMeasurementWindow: 'full_day',
+    restingHeartRateAlgorithmVersion: 'health_connect_daily_resting_heart_rate_v1',
     oxygenSaturation: metricValue(data.dailyOxygenSaturation, 'daily-oxygen-saturation', [
       'averagePercentage',
       'percentage',
@@ -665,6 +670,11 @@ function mapBiometricsPayload(data) {
       'milliseconds',
       'value',
     ]),
+    heartRateVariabilityMethod: 'rmssd',
+    heartRateVariabilityMeasurementWindow: 'spot',
+    heartRateVariabilityAlgorithmVersion: 'health_connect_rmssd_v1',
+    restingHeartRateMeasurementWindow: 'full_day',
+    restingHeartRateAlgorithmVersion: 'health_connect_daily_resting_heart_rate_v1',
     oxygenSaturation: metricValue(data.dailyOxygenSaturation, 'daily-oxygen-saturation', [
       'averagePercentage',
       'percentage',

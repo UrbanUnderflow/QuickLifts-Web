@@ -134,9 +134,16 @@ export interface RecoveryContext {
   sleepConsistencyScore?: number;
   sleepLatencyMin?: number;
   rmssdMs?: number;
+  heartRateVariability?: number;
+  heartRateVariabilityMethod?: 'sdnn' | 'rmssd';
+  heartRateVariabilityMeasurementWindow?: 'sleep' | 'overnight' | 'full_day' | 'spot' | 'unknown';
+  heartRateVariabilityAlgorithmVersion?: string;
   hrvBaselineDeltaPct?: number;
   hrvTrend7d?: number;
   restingHr?: number;
+  heartRateResting?: number;
+  restingHeartRateMeasurementWindow?: 'sleep' | 'overnight' | 'full_day' | 'spot' | 'unknown';
+  restingHeartRateAlgorithmVersion?: string;
   restingHrTrend7d?: number;
   recoveryScore?: number;
   readinessScore?: number;
