@@ -129,6 +129,14 @@ test('Nora voice rubric rejects polished but vague sports-intel reads', () => {
   assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.concreteAction'));
 });
 
+test('Nora voice rubric rejects not-maxed-out athlete framing', () => {
+  const issues = validateNoraVoiceRubric(
+    'Today is steady, not maxed out.',
+  );
+
+  assert.ok(issues.some((issue) => issue.field === 'noraVoiceRubric.plainAthleteLanguage'));
+});
+
 test('Nora voice rubric rewrites generic feeling questions without forcing a session pivot', () => {
   const repaired = enforceNoraVoiceRubric('How you feeling?', {
     fallback: defaultNoraVoiceRubricFallback('How you feeling?'),

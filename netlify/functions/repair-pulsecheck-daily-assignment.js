@@ -144,6 +144,25 @@ function assignmentIsDeferred(assignment) {
     || String(assignment.actionType || '') === 'defer';
 }
 
+function normalizedAssignmentKind(assignment) {
+  const rawKind = asNonEmptyString(assignment?.curriculumSlotKind)?.toLowerCase()
+    || asNonEmptyString(assignment?.actionType)?.toLowerCase()
+    || asNonEmptyString(assignment?.chosenCandidateType)?.toLowerCase();
+  if (!rawKind) return null;
+  if (rawKind === 'protocol') return 'protocol';
+  if (['sim', 'simulation', 'lighter_sim', 'trial'].includes(rawKind)) return 'sim';
+  return null;
+}
+
+function normalizedCandidateKind(candidate) {
+  const rawKind = asNonEmptyString(candidate?.type)?.toLowerCase()
+    || asNonEmptyString(candidate?.actionType)?.toLowerCase();
+  if (!rawKind) return null;
+  if (rawKind === 'protocol') return 'protocol';
+  if (['sim', 'simulation', 'lighter_sim', 'trial'].includes(rawKind)) return 'sim';
+  return null;
+}
+
 async function hasLaunchableExerciseForCandidate(db, candidate) {
   const legacyExerciseId = asNonEmptyString(candidate?.legacyExerciseId);
   if (legacyExerciseId) {
@@ -323,13 +342,16 @@ exports.handler = async (event) => {
     const sourceDate = isValidSourceDate(body.sourceDate) ? body.sourceDate : todayDateString();
     const preferLaunchableAlternative = parseBoolean(body.preferLaunchableAlternative);
     const recoverFromConversation = parseBoolean(body.recoverFromConversation);
-    const assignmentId = `${userId}_${sourceDate}`;
+    const defaultAssignmentId = `${userId}_${sourceDate}`;
+    const requestedAssignmentId = asNonEmptyString(body.assignmentId);
+    const assignmentId = requestedAssignmentId || defaultAssignmentId;
     const db = admin.firestore();
 
     console.info('[repair-pulsecheck-daily-assignment] Repair requested', {
       userId,
       sourceDate,
       assignmentId,
+      requestedAssignmentId,
       preferLaunchableAlternative,
       recoverFromConversation,
     });
@@ -338,7 +360,31 @@ exports.handler = async (event) => {
     const existingAssignment = existingAssignmentSnap.exists
       ? { id: existingAssignmentSnap.id, ...existingAssignmentSnap.data() }
       : null;
-    const existingSnapshot = await pulseCheckSubmissionRuntime.getSnapshotById(db, assignmentId);
+    if (requestedAssignmentId && !existingAssignment) {
+      return {
+        statusCode: 404,
+        headers: RESPONSE_HEADERS,
+        body: JSON.stringify({ error: 'That PulseCheck assignment could not be found.' }),
+      };
+    }
+    if (
+      requestedAssignmentId
+      && (
+        asNonEmptyString(existingAssignment?.athleteId) !== userId
+        || asNonEmptyString(existingAssignment?.sourceDate) !== sourceDate
+      )
+    ) {
+      return {
+        statusCode: 403,
+        headers: RESPONSE_HEADERS,
+        body: JSON.stringify({ error: 'That PulseCheck assignment does not belong to this athlete and date.' }),
+      };
+    }
+    const existingSnapshot = (
+      existingAssignment?.sourceStateSnapshotId
+        ? await pulseCheckSubmissionRuntime.getSnapshotById(db, existingAssignment.sourceStateSnapshotId)
+        : null
+    ) || await pulseCheckSubmissionRuntime.getSnapshotById(db, defaultAssignmentId);
 
     console.info('[repair-pulsecheck-daily-assignment] Existing runtime state', {
       userId,
@@ -426,10 +472,15 @@ exports.handler = async (event) => {
         liveSimRegistry,
         responsivenessProfile,
       });
+      const requestedAssignmentKind = requestedAssignmentId ? normalizedAssignmentKind(existingAssignment) : null;
+      const sameKindCandidates = requestedAssignmentKind
+        ? baseCandidateSet.candidates.filter((candidate) => normalizedCandidateKind(candidate) === requestedAssignmentKind)
+        : [];
+      const candidatePool = sameKindCandidates.length ? sameKindCandidates : baseCandidateSet.candidates;
 
       const launchableCandidates = await filterLaunchableCandidates(
         db,
-        baseCandidateSet.candidates,
+        candidatePool,
         existingAssignment,
         liveSimRegistry
       );
@@ -499,6 +550,7 @@ exports.handler = async (event) => {
         liveProtocolRegistry,
         liveSimRegistry,
         forceMutableReplacement: true,
+        assignmentIdOverride: assignmentId,
       });
 
       rematerialized = {

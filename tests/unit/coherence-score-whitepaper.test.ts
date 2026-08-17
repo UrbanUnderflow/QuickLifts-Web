@@ -61,6 +61,14 @@ test('claim limits remain explicit in public evidence copy', () => {
   assert.match(publicMethod, /training decisions/);
 });
 
+test('public method explains Coherence continuity and the three-day onboarding boundary', () => {
+  const publicMethod = COHERENCE_SCORE_WHITE_PAPER_CONTENT.toLowerCase();
+  assert.match(publicMethod, /first 3 account days/);
+  assert.match(publicMethod, /refreshes an established read rather than resetting/);
+  assert.match(publicMethod, /carries the last established read/);
+  assert.match(publicMethod, /scale is 1 to 100/);
+});
+
 test('source record and verification matrix cover the critical method risks', () => {
   const referenceUrls = references.map(([, url]) => url).join('\n');
   assert.match(referenceUrls, /who\.int/);

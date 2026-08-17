@@ -84,17 +84,34 @@ async function athleteHasConnectedWearable(db, userId) {
  * Returns an object keyed by HCSR domain id whose values are payloads
  * suitable for the source-record writer.
  */
-function buildSelfReportPayloads({ readinessScore, energyLevel, stressLevel, sleepQuality, perceivedRpe }) {
+function buildSelfReportPayloads({
+  readinessScore,
+  moodWord,
+  subjectiveRecoveryScore,
+  subjectiveRecoveryLabel,
+  energyLevel,
+  stressLevel,
+  sleepQuality,
+  perceivedRpe,
+}) {
   // sleepQuality 1–5 → sleepEfficiencyProxy 0–1
   const sleepEfficiencyProxy =
     sleepQuality !== undefined && Number.isFinite(Number(sleepQuality))
       ? clampNumber((Number(sleepQuality) - 1) / 4, 0, 1)
       : undefined;
 
-  // readinessScore 0–100 OR energyLevel 1–5 → readinessScoreProxy 0–100
+  // PulseCheck check-ins submit readiness on a 1–5 scale. Import paths may
+  // already provide 0–100, so preserve values above 5 and normalize 1–5.
   let readinessScoreProxy;
+  let subjectiveReadiness;
   if (readinessScore !== undefined && Number.isFinite(Number(readinessScore))) {
-    readinessScoreProxy = clampNumber(Number(readinessScore), 0, 100);
+    const numericReadiness = Number(readinessScore);
+    subjectiveReadiness = numericReadiness <= 5
+      ? clampNumber(numericReadiness, 1, 5)
+      : undefined;
+    readinessScoreProxy = numericReadiness <= 5
+      ? clampNumber(((numericReadiness - 1) / 4) * 100, 0, 100)
+      : clampNumber(numericReadiness, 0, 100);
   } else if (energyLevel !== undefined && Number.isFinite(Number(energyLevel))) {
     readinessScoreProxy = clampNumber(((Number(energyLevel) - 1) / 4) * 100, 0, 100);
   }
@@ -102,10 +119,20 @@ function buildSelfReportPayloads({ readinessScore, energyLevel, stressLevel, sle
   const recoveryPayload = compactPayload({
     sleepEfficiencyProxy,
     sleepQualityScore: clampNumber(sleepQuality, 1, 5),
+    subjectiveRecovery: clampNumber(subjectiveRecoveryScore, 1, 5),
+    subjectiveRecoveryLabel: typeof subjectiveRecoveryLabel === 'string'
+      ? subjectiveRecoveryLabel.trim().slice(0, 80)
+      : undefined,
   });
 
   const behavioralPayload = compactPayload({
     readinessScoreProxy,
+    subjectiveReadiness,
+    moodLabel: typeof moodWord === 'string' ? moodWord.trim().slice(0, 80) : undefined,
+    subjectiveRecovery: clampNumber(subjectiveRecoveryScore, 1, 5),
+    subjectiveRecoveryLabel: typeof subjectiveRecoveryLabel === 'string'
+      ? subjectiveRecoveryLabel.trim().slice(0, 80)
+      : undefined,
     energyScore: clampNumber(energyLevel, 1, 5),
     stressScore: clampNumber(stressLevel, 1, 5),
     perceivedRpeYesterday: clampNumber(perceivedRpe, 1, 10),
@@ -136,6 +163,11 @@ async function writeSelfReportSourceRecords(db, params) {
   const { recoveryPayload, behavioralPayload } = buildSelfReportPayloads(answers || {});
   const window = dayWindowSeconds(sourceDate);
   const observedAt = nowSeconds();
+  const recentCheckinAt = new Date(observedAt * 1000).toISOString();
+
+  if (Object.keys(behavioralPayload).length > 0) {
+    behavioralPayload.recentCheckinAt = recentCheckinAt;
+  }
 
   const baseMetadata = {
     syncOrigin: 'pulsecheck_self_report',
@@ -232,6 +264,9 @@ async function syncSelfReportFromCheckin(db, params) {
       confidenceLabel,
       answers: {
         readinessScore: params.readinessScore,
+        moodWord: params.moodWord,
+        subjectiveRecoveryScore: params.subjectiveRecoveryScore,
+        subjectiveRecoveryLabel: params.subjectiveRecoveryLabel,
         energyLevel: params.energyLevel,
         stressLevel: params.stressLevel,
         sleepQuality: params.sleepQuality,

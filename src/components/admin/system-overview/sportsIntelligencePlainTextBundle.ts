@@ -29,9 +29,9 @@ const HEADER = `# Pulse Sports Intelligence — Full Spec Bundle
 
 > **v0.3 reasoning-layer rule:** Sports Intelligence follows the Nutrition Layer pattern: code builds the fact ledger, candidate reads, scoring, guardrails, executable Nora rubric results, and validated payload trace before Nora or coach-report copy is allowed to phrase anything.
 
-> **Plain-language report rule:** Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Do not add vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff unless a real named role and decision are present in the source data. Example: "When the game gets late in the shot clock and the guards are tired or mentally cluttered, don't give them a bunch of coaching points. Give them one simple mental reset phrase they can use in that moment."
+> **Plain-language report rule:** Coach-facing copy must not speak in code or predict how an athlete feels from physiology. Separate what was measured, what the athlete reported, and what remains unknown. Give the coach assumption-free language for checking in; do not assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff.
 
-> **Operating thesis:** "What is the athlete's physical state teaching us about their mental performance environment?" Athlete reads create mindset change. Coach reads distinguish individual, unit, and team-wide patterns while preserving the coach's authority over physical programming.
+> **Operating thesis:** "What do the athlete's own report, measured cognitive performance, physical data, and sport context each tell us, and how do those patterns relate over time?" Athlete reads lead with self-report. Coach reads distinguish individual, unit, and team-wide patterns while preserving the coach's authority over physical programming.
 
 ---
 `;
@@ -39,17 +39,17 @@ const HEADER = `# Pulse Sports Intelligence — Full Spec Bundle
 const SPEC_1_LAYER = `
 ## 1. Sports Intelligence Layer — Architecture & Product Boundaries
 
-The device-agnostic, sport-aware interpretation system that translates raw biometrics, simulation evidence, daily check-ins, training, nutrition, and schedule context into mental-performance intelligence. Sits above the normalized health-context surface and below every consumer surface (coach reports, Macra, Nora, AuntEDNA escalation).
+The device-agnostic, sport-aware interpretation system that keeps biometrics, simulation evidence, daily check-ins, training, nutrition, and schedule context distinct while comparing their patterns for authorized athlete and coach surfaces. It sits above the normalized health-context surface and below every consumer surface (coach reports, Macra, Nora, AuntEDNA escalation).
 
-**Operating thesis:** What is the athlete's physical state teaching us about their mental performance environment?
+**Operating thesis:** What do the athlete's own report, measured cognitive performance, physical data, and sport context each tell us, and how do those patterns relate over time?
 
-Version 0.3 adds the reasoning-layer middle: \`Sports Fact Ledger -> Candidate Read Engine -> Scoring + Guardrails -> Nora/Coach Copy Layer -> Validated Intelligence Payload\`. The product failure this prevents is data-flavored confidence: unsupported physiology, invented session context, stale-data overconfidence, and vague actions. The product boundary it enforces: Nora uses physical signals to coach the mental layer, not to prescribe the physical workout.
+Version 0.4 adds the athlete Day Read contract to the reasoning-layer middle: \`Sports Fact Ledger -> Candidate Read Engine -> Scoring + Guardrails -> Nora/Coach Copy Layer -> Validated Intelligence Payload\`. The product failure this prevents is data-flavored confidence: unsupported physiology, invented session context, stale-data overconfidence, and vague actions. A fresh same-day self-report leads; only current recovery evidence may add athlete-facing context; coaches retain authority over physical programming decisions.
 
 **Slice 1 operating posture:** Pulse team manually curates inference + adherence; reports flow through reviewer screen; no auto-delivery during pilot. Reviewer screen: \`/admin/sportsIntelligenceReports\`. Code-owned reportPolicy/loadModel changes are backfilled with \`npx tsx scripts/seed-pulsecheck-sports.ts\` in diff mode first, then \`--apply\` after review.
 
 ### Highlights
 - **Device-Agnostic Surface** — No single device is the contract. Apple Watch / HealthKit and Oura are the active sources today; Polar, Whoop, and Garmin are planned future devices. Sports Intelligence reads from the normalized health-context surface; every adapter, plus self-report, flows through the same record shape.
-- **Mind-Body Performance Environment** — Same biometric reading can mean compounding momentum, a focus-support day, a composure opportunity, or recovery debt. The read connects physical state to focus, composure, decisioning, confidence, and habits.
+- **Mind-Body Performance Environment** — Biometrics describe a measured physical period. Athlete self-report and cognitive-task evidence separately describe focus, composure, decisioning, and confidence; the system may compare patterns without making one signal a verdict about another.
 - **Coach Context Without Overreach** — Coach reports distinguish individual, unit, and team-wide patterns, show supporting data, and spell out the exact coaching moment in plain English. They do not prescribe reps, sets, minutes, contact dose, throwing volume, jump volume, or workout changes.
 
 ### System Architecture (4 Layers)
@@ -57,36 +57,36 @@ Version 0.3 adds the reasoning-layer middle: \`Sports Fact Ledger -> Candidate R
 |---|---|---|
 | Inputs | Device-agnostic biometric surface, PulseCheck sims, daily Nora check-ins, FWP workouts, Macra nutrition, sport-config policy. | Sources are heterogeneous. The layer treats them as inputs to a single interpretation pipeline; no consumer reads any source directly. |
 | Normalization | Adapters convert each source into the canonical record shape (Athlete Context Snapshot, Correlation Evidence Record, sport-config attribute values). | Renaming or fork-defining record types is forbidden. |
-| Reasoning layer | Sports Fact Ledger → Candidate Read Engine → Scoring + Guardrails → Nora/Coach Copy Layer → Validated Intelligence Payload. | AI may phrase the read; code decides eligibility, support, usefulness, and rubric safety. The core question is how physical state shapes focus, composure, decisioning, confidence, and habit formation. |
+| Reasoning layer | Sports Fact Ledger → Candidate Read Engine → Scoring + Guardrails → Nora/Coach Copy Layer → Validated Intelligence Payload. | AI may phrase the read; code decides eligibility, support, usefulness, and rubric safety. Physical measurements, self-report, cognitive evidence, and sport context remain distinct; relationships are compared over time without assuming causation. |
 | Output surfaces | Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context. | Each surface has its own audience, latency, and copy posture. Coaches get pattern intelligence and supporting data; coaches keep authority over physical programming decisions. |
 
 ### Mind-Body Performance Framework
-**Athlete job:** teach the athlete how physical state, sleep, nutrition timing, recovery habits, self-talk, and mental reps compound into focus, composure, confidence, decision-making, and long-game maturity. Lower-readiness days become training opportunities, not deficit labels.
+**Athlete job:** help the athlete notice physical state, sleep, recovery habits, self-talk, and mental reps as separate signals over time. Athlete self-report and measured cognitive tasks anchor focus, composure, confidence, and decision-making; wearable data never declares those states.
 
 **Coach job:** show coaches which patterns are individual, unit-level, or team-wide, with enough supporting data to inform their own judgment. Sports Intelligence offers plain-language coach messages and pattern context; it does not prescribe the physical program.
 
 | Athlete Insight Type | When It Fires | What It Should Teach |
 |---|---|---|
-| Compounding Momentum | Sleep, recovery, routine, nutrition, and mental training are lining up | Praise the pattern and teach that the small things are becoming the big edge |
-| Composure Opportunity | Recovery is lower, but not a clinical or safety state | Frame the day as a useful chance to practice staying steady when conditions are not perfect |
-| Focus Support Day | Sleep timing, recovery, or load suggests attention may take more effort | Say when focus may get harder, what the athlete may feel, and the one simple phrase or routine to use before the first demanding task |
-| Recovery Debt Pattern | Under-recovery repeats across several days | Teach that the system needs support; protect bedtime, fueling rhythm, or recovery routine without shame language |
-| Mismatch Insight | Mental training is improving while physical habits are not supporting it, or vice versa | Show the athlete how body-state habits make mental reps stick deeper |
-| Steady Builder Day | No dramatic signal | Use average days to build identity: complete the mental rep and keep the routine clean |
+| Compounding Momentum | Several reported and measured signals are moving in the same direction | Name each signal separately and reinforce the athlete-reported habits that are helping without claiming that a wearable measurement caused a mental state |
+| Athlete-Led Recovery Context | A fresh self-report exists and eligible wearable recovery context may support or differ from it | Lead with how the athlete says they feel. If useful, add the wearable snapshot as a second, bounded signal that cannot reverse the athlete report |
+| Focus Support Context | Athlete reports focus strain or a verified cognitive-task trend changes | Anchor the read to self-report or cognitive-task evidence. Wearables may add physiological context but cannot predict attention |
+| Recovery Trend For Staff | Eligible recovery measurements differ from the athlete personal baseline across several days | Keep the trend in authorized staff context. Do not turn it into an athlete verdict or a physical training recommendation |
+| Cross-Signal Pattern | Self-report, cognitive-task evidence, and wearable context do not all move together | Present the signals as separate observations. Do not declare causation or imply that one source invalidates another |
+| No Intervention | The athlete reports no concern and no safety workflow is active | Affirm the check-in and offer optional conversation without assigning an exercise or manufacturing a problem |
 
 | Coach Pattern | What It Means | How The Report Should Help |
 |---|---|---|
-| Individual pattern | One athlete is under-recovered or carrying higher load while the team is steady | Name the athlete, show supporting evidence, and spell out the coaching moment in full sentences: when it may happen, what the athlete may feel or do, and what simple language the coach should use |
+| Individual pattern | One athlete has a different recovery or load pattern while the team is steady | Name the athlete, show the measured pattern, place the athlete report beside it as a separate signal, and give the coach assumption-free language for checking in |
 | Team-wide pattern | A meaningful share of the roster shows lower recovery, sleep disruption, sentiment drop, or cognitive drift | Surface it as a possible environment or schedule pattern for coach review, not as an automatic training correction |
 | Unit / role pattern | A position group, event group, lineup role, or travel group shows a shared state pattern | Help the coach see whether the issue clusters by role, minutes, travel, class schedule, or competition density |
 | Compounding strength | The team or athlete is stacking sleep, mental reps, check-ins, and stable physiology | Make the good pattern visible so coaches can reinforce the identity and habits that are working |
 | Data coverage pattern | Wear rate, Nora completion, or training/nutrition context is thin | Explain what is missing before interpretation so coaches know whether the signal is trustworthy |
 
-### Sports Intelligence Reasoning Layer v0.3
+### Sports Intelligence Reasoning Layer v0.4
 | Step | Layer | Responsibility |
 |---|---|---|
 | 1 | Sports Fact Ledger | Source of truth for athlete context, time context, source freshness, recovery/load/session/cognitive/check-in/nutrition facts, missing inputs, allowed claims, blocked claims, and evidence refs. |
-| 2 | Candidate Read Engine | Deterministic code generates eligible reads: readiness_status, recovery_limiter, load_spike, intent_mismatch, game_day_prep, fueling_context, session_confirmation_needed, data_quality, no_intervention. |
+| 2 | Candidate Read Engine | Deterministic code generates an athlete-only self_report_lead Day Read plus reviewer/coach reads: readiness_status, recovery_limiter, load_spike, intent_mismatch, game_day_prep, fueling_context, session_confirmation_needed, data_quality, no_intervention. |
 | 3 | Scoring + Guardrails | Rank by confidence, sport relevance, timing, actionability, materiality, novelty, freshness, and rubric readiness. Block unsupported sessions, unsupported physiology, stale-data overconfidence, and clinical boundary violations. |
 | 4 | Nora / Coach Copy Layer | Receives approved facts + selected candidate only. May translate tone, never invent facts, causes, sessions, or actions. |
 | 5 | Validated Intelligence Payload | Persists ledger, candidates, selected read, rejected reads, rubric results, guardrail trace, evidence refs, final copy, and review status. |
@@ -166,7 +166,7 @@ The dashboard is the access surface for reports, not a replacement for them. Coa
 - **Device-Agnostic By Contract** — Sports Intelligence reads from the normalized health-context surface, never directly from Polar / Whoop / Oura / Apple Health APIs. New device support is an adapter, not a Sports Intelligence change.
 - **Sport-Specific, Athlete-Specific** — Every recommendation is interpreted through the athlete's sport, position, season phase, and individual baseline.
 - **Reports Carry The Interpretation, Dashboard Stays Thin** — Coaches do receive a dashboard, but the dashboard is intentionally thin. Interpretation lives in the report; the dashboard makes those reports easy to find, scan, and act on without forcing the coach to dig through raw scores.
-- **Spell Out The Coaching Moment** — Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like mental install, body-state read, decision support, and vague readiness labels fail unless immediately rewritten into plain English.
+- **Spell Out The Coaching Moment** — Coach-facing copy must not speak in code or predict how an athlete feels from physiology. Separate what was measured, what the athlete reported, and what remains unknown, then give the coach assumption-free language for checking in. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data.
 - **Coach Owns Physical Programming** — Sports Intelligence may show recovery, load, trend, individual, and team-wide patterns so coaches can make better decisions. It must not tell the coach to change reps, sets, minutes, contact dose, throwing volume, or any other physical programming variable.
 - **Clinical Boundary Is Architectural** — Performance signals stay in the Sports Intelligence Layer. Clinical-threshold signals route through the escalation pipeline to AuntEDNA.
 - **AI Writes, Code Reasons** — Sports Intelligence never asks AI to notice, diagnose, or infer from scratch. Code builds the ledger, selects the candidate read, blocks unsupported claims, and runs the executable Nora rubric.
@@ -212,9 +212,9 @@ Version 0.3 makes decisioning candidate-based and audit-first. The contract now 
 ### Fact Ledger + Candidate Reads
 **SportsFactLedger fields:** athleteContext, timeContext, sourceFreshness, recoveryFacts, loadFacts, sessionFacts, cognitiveFacts, checkInFacts, nutritionFacts, allowedClaims, blockedClaims, missingInputs, evidenceRefs.
 
-**Candidate types:** readiness_status, recovery_limiter, load_spike, load_recovery_match, intent_mismatch, game_day_prep, cognitive_movement, fueling_context, session_confirmation_needed, data_quality, no_intervention.
+**Candidate types:** self_report_lead (athlete Day Read), readiness_status, recovery_limiter, load_spike, load_recovery_match, intent_mismatch, game_day_prep, cognitive_movement, fueling_context, session_confirmation_needed, data_quality, no_intervention.
 
-**Hard guardrails:** unsupported session claim → block; unsupported physiology claim → block; stale-data overconfidence → repair or block; clinical boundary → route; executable Nora rubric failure → repair, fallback, or hold for review.
+**Hard guardrails:** unsupported session claim → block; unsupported physiology claim → block; stale-data overconfidence → repair or block; clinical boundary → route; executable Nora rubric failure → repair, fallback, or hold for review. Athlete Day Reads additionally block biometric-to-psychological inference, contradiction of a positive self-report, repeated check-in prompts, raw default-view biometrics, automatic exercises, and recovery classification without a personal baseline.
 
 ### Missing Data + Source Conflict Rules
 **Minimum data behavior:** No biometric baseline → use training, check-in, cognitive only; no recovery/readiness claim. One stale source → exclude if older than freshness SLA. Mixed wearable sources → prefer strongest provenance and continuity, never average vendor readiness scores. Self-reported only → allowed for context, cannot drive high-trust coach recommendation. Clinical-threshold signal → stop Sports Intelligence delivery, route through AuntEDNA.
@@ -231,19 +231,18 @@ Version 0.3 makes decisioning candidate-based and audit-first. The contract now 
 | degraded | Conflict, stale source, missing baseline, or source transition | No automated coach recommendation |
 
 ### Interpretation Rules
-- **Readiness** — Blend biometric recovery, sleep, HRV/RHR trend, cognitive movement, sentiment 48h, training load, optional travel. Output is a band + explanation, not a universal wellness score.
-- **Training load** — Compute ACWR, microcycle delta, session RPE trend, sport-native metrics. Recommendations change by sport, position, season phase, competition density.
+- **Readiness** — Summarize eligible physiological recovery evidence with source, freshness, and personal-baseline limits. It remains separate from self-report, cognitive performance, and sentiment and is never a universal wellness or mental-state score.
+- **Training load** — Compute ACWR, microcycle delta, session RPE trend, and sport-native metrics for authorized staff context. Sport, position, season phase, and competition density change relevance; the coach owns any physical-program decision.
 - **Cognitive movement** — Compare Focus / Composure / Decisioning to athlete baseline + sim family evidence. Use confidence tier from Correlation Engine; avoid population-average claims.
 - **Sentiment trend** — Aggregate check-in posture into trend + abrupt-shift signal. No individual disclosure leaves clinician-gated or athlete-private contexts.
 - **Recommendation selection** — Generate candidate reads, score them, block unsupported claims, then select the lowest-risk useful action that matches evidence confidence and sport policy.
-- **Recommendation selection** — Choose the lowest-risk action that matches evidence confidence and sport policy.
 
 ### Sport / Position / Season Modifiers
-- **Basketball point guard, congested schedule** — Low HRV + high ACWR triggers minutes-management review and shorter high-cognitive-load practice blocks.
-- **Basketball frontcourt, strength block** — Same low HRV may produce recovery emphasis rather than minutes warning if sentiment + cognition are stable.
-- **Golf tournament week** — Precision, sleep consistency, composure trend carry more weight. Poor sleep with stable composure may recommend warm-up/routine reinforcement, not load reduction.
-- **Bowling multi-day tournament** — Day-three fatigue trend can trigger recovery protocol + reduced extra reps.
-- **Off-season development** — Moderate load increase framed as adaptation if sleep, sentiment, cognition stay stable.
+- **Basketball point guard, congested schedule** — Recovery and load evidence are shown to authorized staff with provenance. Athlete self-report and cognitive-task evidence supply separate mental-performance context; the coach owns minutes and practice design.
+- **Basketball frontcourt, strength block** — Contact and load exposure remain physical-context signals. HRV and load stay in staff context; athlete report and cognitive evidence remain separate.
+- **Golf tournament week** — Sleep consistency and measured composure are separate evidence families. Report each pattern separately; an established pre-shot routine is reinforced only when the athlete or coach identifies that need.
+- **Bowling multi-day tournament** — Repetition exposure and measured day-over-day composure are separate patterns. Show both without claiming one caused the other; the coach decides recovery and extra-rep changes.
+- **Off-season development** — Training exposure may change while self-report and cognitive evidence move independently. Stable sleep or sentiment is not automatic clearance for load progression.
 
 ### Alert Thresholds + Automation Gates (Pilot Default)
 Early-warning alerts and high-trust coach recommendations are generated as review candidates only during early pilots. Automated coach delivery requires pilot evidence, threshold evaluation, and explicit release approval.
@@ -777,7 +776,7 @@ The coach NEVER sees "acute:chronic ratio" or "load_au" or "score: 0.78". The sy
 | Low | Comfortably under sport-tolerable load | "Plenty of room", "fresh" |
 | Moderate | Within typical training week, no flags | "On track", "solid week of work" |
 | High | Approaching sport-tolerable ceiling | "Heavy week", "recent work is starting to show in the body-state data" |
-| Concerning | Past ceiling OR sustained high without recovery | "Recovery is not keeping up with the week", "when fatigue shows up, ask one short question about focus and give the athlete one simple phrase to use before the next rep" |
+| Concerning | Past ceiling OR sustained high alongside eligible recovery evidence | "Recent work and recovery measurements are moving in different directions", "check in about how the athlete feels; offer a mental-performance phrase only when the athlete reports that need" |
 
 ### Schema (\`PulseCheckSportReportPolicy.loadModel\`)
 | Field | Purpose |

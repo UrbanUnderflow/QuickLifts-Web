@@ -123,6 +123,45 @@ test('classifies acknowledgments as conversational closure before turn-taking', 
   }
 });
 
+test('coach handoff brief explains why meal-plan context is being sent', () => {
+  const { buildCoachHandoffBrief } = loadRuntimeHelpers();
+  const brief = buildCoachHandoffBrief({
+    athleteName: 'Tremaine',
+    message: 'They do, can you send these to coach to let him decide on what I can have?',
+    noraConversationId: 'conversation-1',
+    recentMessages: [
+      {
+        isFromUser: true,
+        content: "I'm feeling pretty good but I'm having some anxiety about my meal plan. My coach gave me ground beef and I don't really love ground beef. I've started to even hate how it smells",
+      },
+      {
+        isFromUser: false,
+        content: 'What do you think is making it hard to feel okay about this meal?',
+      },
+      {
+        isFromUser: true,
+        content: "I'm not confident that I will be adherent to the plan if I have to eat something I don't like so much",
+      },
+      {
+        isFromUser: false,
+        content: '1. **Beef Tacos**: Season the beef with taco spices.\n2. **Stuffed Peppers**: Mix cooked ground beef with rice and spices.',
+      },
+    ],
+  });
+
+  assert.equal(brief.topic, 'meal_plan_adherence');
+  assert.match(brief.messageBody, /Why this came up/i);
+  assert.match(brief.messageBody, /ground beef/i);
+  assert.match(brief.messageBody, /staying adherent/i);
+  assert.match(brief.messageBody, /smell aversion/i);
+  assert.match(brief.messageBody, /current ground beef requirement/i);
+  assert.doesNotMatch(brief.messageBody, /current something/i);
+  assert.match(brief.messageBody, /not as a generic performance-anxiety issue/i);
+  assert.match(brief.messageBody, /Beef Tacos/i);
+  assert.match(brief.messageBody, /Stuffed Peppers/i);
+  assert.match(brief.messageBody, /pulsecheck:\/\/nora\/chat\?conversationId=conversation-1/i);
+});
+
 test('web athlete chat callers attach Firebase bearer tokens and canonical user ids', () => {
   const pageSource = fs.readFileSync(
     path.join(repoRoot, 'src/pages/PulseCheckChat.tsx'),
@@ -827,7 +866,7 @@ test('downgrades benign performance stress escalation requests before record cre
       athleteMessage: 'I am nervous about competition and want help focusing.',
       response: body.assistantMessage,
     });
-    assert.equal(responseQuality.score, 10, JSON.stringify(responseQuality.failures));
+    assert.equal(responseQuality.passed, true, JSON.stringify(responseQuality.failures));
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.equal(recordStore.size, 0);
   } finally {

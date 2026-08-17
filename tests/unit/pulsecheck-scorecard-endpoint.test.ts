@@ -160,3 +160,9 @@ test('staff capability fallback mirrors team role policy', () => {
     staffCapabilities: ['administrative'],
   }, 'coaching'), false);
 });
+
+test('account age is measured in calendar days for the Coherence onboarding state', () => {
+  assert.equal(__internal.dayDifferenceFromKeys('2026-08-17', '2026-08-17'), 0);
+  assert.equal(__internal.dayDifferenceFromKeys('2026-08-19', '2026-08-17'), 2);
+  assert.equal(__internal.dayDifferenceFromKeys('2026-08-20', '2026-08-17'), 3);
+});

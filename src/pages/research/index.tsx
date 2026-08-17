@@ -190,6 +190,11 @@ const readActionLabel = (article: Article) => (isWhitePaper(article) ? 'Read whi
 const isListedArticle = (article: Article) =>
   article.visibility !== 'unlisted' && article.listed !== false && article.passwordProtected !== true;
 
+const filterByActiveCategory = (articles: Article[], activeCategory: string) =>
+  activeCategory === 'All'
+    ? articles
+    : articles.filter((article) => article.category === activeCategory);
+
 // ─── Article card component ────────────────────────────────────────
 const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, index }) => {
   const featuredImage = articleFeaturedImage(article);
@@ -319,6 +324,92 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
   );
 };
 
+const WhitePaperCard: React.FC<{ article: Article; index: number }> = ({ article, index }) => {
+  const featuredImage = articleFeaturedImage(article);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <Link href={`/research/${article.slug}`} className="block group h-full">
+        <article className="h-full rounded-lg border border-stone-200 bg-white/55 overflow-hidden transition-all duration-300 group-hover:border-stone-400 group-hover:bg-white">
+          {featuredImage && (
+            <div className="aspect-[16/9] bg-stone-100 overflow-hidden">
+              <img
+                src={featuredImage}
+                alt={article.title}
+                className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+              />
+            </div>
+          )}
+          <div className="p-5 md:p-6">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <span className="text-xs font-semibold uppercase text-stone-500">
+                White Paper
+              </span>
+              <span className="text-stone-300">·</span>
+              <span className="text-xs text-stone-400">{article.category}</span>
+              <span className="text-stone-300">·</span>
+              <span className="text-xs text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
+            </div>
+            <h3 className="text-lg md:text-xl font-semibold text-stone-900 leading-tight group-hover:text-stone-700 transition-colors">
+              {article.title}
+            </h3>
+            <p className="mt-3 text-sm text-stone-500 leading-relaxed line-clamp-3">
+              {article.excerpt}
+            </p>
+            <div className="mt-5 flex items-center justify-between gap-4">
+              <span className="text-xs text-stone-400">{article.readTime}</span>
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-stone-900 group-hover:text-stone-600 transition-colors">
+                Read white paper
+                <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </span>
+            </div>
+          </div>
+        </article>
+      </Link>
+    </motion.div>
+  );
+};
+
+const WhitePapersSection: React.FC<{ whitePapers: Article[] }> = ({ whitePapers }) => {
+  if (whitePapers.length === 0) return null;
+
+  return (
+    <section className="max-w-6xl mx-auto px-6 md:px-8 pb-14">
+      <motion.div
+        initial={{ opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        className="border-t-2 border-stone-900 pt-8"
+      >
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-6">
+          <div>
+            <p className="text-xs font-semibold uppercase text-stone-400 mb-2">
+              White papers
+            </p>
+            <h2 className="text-2xl md:text-3xl font-bold text-stone-900">
+              Methods, safety, and validation
+            </h2>
+          </div>
+          <p className="text-sm md:text-base text-stone-500 leading-relaxed max-w-xl">
+            Longer-form documents for the research, governance, and product architecture behind PulseCheck.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {whitePapers.map((article, index) => (
+            <WhitePaperCard key={article.slug} article={article} index={index} />
+          ))}
+        </div>
+      </motion.div>
+    </section>
+  );
+};
+
 // ─── Main Research Page ────────────────────────────────────────────
 const ResearchPage: NextPage = () => {
   const [activeCategory, setActiveCategory] = React.useState('All');
@@ -359,12 +450,12 @@ const ResearchPage: NextPage = () => {
 
   const listedArticles = articles.filter(isListedArticle);
 
-  const filteredArticles = activeCategory === 'All'
-    ? listedArticles
-    : listedArticles.filter((a) => a.category === activeCategory);
+  const filteredArticles = filterByActiveCategory(listedArticles, activeCategory);
+  const whitePapers = filteredArticles.filter(isWhitePaper);
+  const standardArticles = filteredArticles.filter((article) => !isWhitePaper(article));
 
-  const featuredArticle = filteredArticles.find((a) => a.featured);
-  const remainingArticles = filteredArticles.filter((a) => a.slug !== featuredArticle?.slug);
+  const featuredArticle = standardArticles.find((a) => a.featured);
+  const remainingArticles = standardArticles.filter((a) => a.slug !== featuredArticle?.slug);
 
   return (
     <>
@@ -500,6 +591,8 @@ const ResearchPage: NextPage = () => {
           </div>
         ) : (
           <>
+            <WhitePapersSection whitePapers={whitePapers} />
+
             {/* ─── Featured article ───────────────────────────── */}
             {featuredArticle && (
               <div className="max-w-6xl mx-auto px-6 md:px-8 pb-12">
@@ -515,7 +608,7 @@ const ResearchPage: NextPage = () => {
                     <ArticleCard key={article.slug} article={article} index={index} />
                   ))}
                 </div>
-              ) : !featuredArticle ? (
+              ) : !featuredArticle && whitePapers.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}

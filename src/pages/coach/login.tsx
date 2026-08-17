@@ -24,6 +24,7 @@ const PC_PURPLE_SOFT = '#A78BFA';
 const PC_PURPLE_DEEP = '#7C3AED';
 const DEFAULT_DEST = '/coach/dashboard';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'coach_magic_link_email';
+const GOOGLE_AUTH_TIMEOUT_MS = 45000;
 
 type Provider = 'email' | 'google' | 'apple' | null;
 
@@ -33,6 +34,27 @@ const safeRedirect = (value: unknown): string => {
   if (typeof value !== 'string') return DEFAULT_DEST;
   if (!value.startsWith('/') || value.startsWith('//')) return DEFAULT_DEST;
   return value;
+};
+
+const withTimeout = async <T,>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(message) as Error & { code?: string };
+      error.code = 'pulse/auth-timeout';
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 };
 
 const CoachLogin: NextPage = () => {
@@ -187,23 +209,37 @@ const CoachLogin: NextPage = () => {
     try {
       setPending('google');
       setError(null);
-      const result = await authService.signInWithGoogle();
-      if (await rejectAccidentalNewSocialLogin(result)) {
+      const result = await withTimeout(
+        authService.signInWithGoogle(),
+        GOOGLE_AUTH_TIMEOUT_MS,
+        'Google sign-in is taking too long. Close any Google pop-up and try again, or use a magic link.',
+      );
+      if (await withTimeout(
+        rejectAccidentalNewSocialLogin(result),
+        GOOGLE_AUTH_TIMEOUT_MS,
+        'Google sign-in is taking too long. Close any Google pop-up and try again, or use a magic link.',
+      )) {
         setError('We could not find an existing Pulse account for that Google sign-in. Create a new account, or sign in with your existing method and connect Google in Settings.');
         return;
       }
       const user = result.user;
       if (!user || !user.email) {
         setError('Sign-in failed: an email address is required.');
-        setPending(null);
         return;
       }
       await linkRememberedProviderCredential(user);
-      await ensureFirestoreUser(user);
+      await withTimeout(
+        ensureFirestoreUser(user),
+        GOOGLE_AUTH_TIMEOUT_MS,
+        'Your Google account was accepted, but the coach workspace check is taking too long. Refresh and try again, or use a magic link.',
+      );
       goToApp();
     } catch (err: any) {
       console.error('[Coach Login] Google auth error:', err);
       switch (err?.code) {
+        case 'pulse/auth-timeout':
+          setError(err?.message || 'Google sign-in is taking too long. Please try again.');
+          break;
         case 'auth/popup-blocked':
           setError('Please enable popups for this site and try again.');
           break;
@@ -224,6 +260,7 @@ const CoachLogin: NextPage = () => {
         default:
           setError(err?.message || 'Sign in failed. Please try again.');
       }
+    } finally {
       setPending(null);
     }
   };
@@ -243,7 +280,6 @@ const CoachLogin: NextPage = () => {
       const user = result.user;
       if (!user || !user.email) {
         setError('Apple sign-in did not return an email address.');
-        setPending(null);
         return;
       }
       await linkRememberedProviderCredential(user);
@@ -275,6 +311,7 @@ const CoachLogin: NextPage = () => {
         default:
           setError(err?.message || 'Sign in failed. Please try again.');
       }
+    } finally {
       setPending(null);
     }
   };

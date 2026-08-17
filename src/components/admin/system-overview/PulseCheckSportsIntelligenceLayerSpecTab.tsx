@@ -81,18 +81,18 @@ const CopyAllSportsIntelligenceDocsButton: React.FC = () => {
 };
 
 const SPORTS_INTELLIGENCE_THESIS =
-  'What is the athlete’s physical state teaching us about their mental performance environment?';
+  'What do the athlete’s own report, measured cognitive performance, physical data, and sport context each tell us, and how do those patterns relate over time?';
 
 const ARCHITECTURE_LAYERS = [
   ['Inputs', 'Device-agnostic biometric surface, PulseCheck sims, daily Nora check-ins, FWP workouts, Macra nutrition, sport-config policy.', 'Sources are heterogeneous. The layer treats them as inputs to a single interpretation pipeline; no consumer reads any source directly.'],
   ['Normalization', 'Adapters convert each source into the canonical record shape (Athlete Context Snapshot, Correlation Evidence Record, sport-config attribute values).', 'Renaming or fork-defining record types is forbidden — see Health Context Source Record Spec.'],
-  ['Reasoning layer', 'Sports Fact Ledger → Candidate Read Engine → Scoring + Guardrails → Nora/Coach Copy Layer → Validated Intelligence Payload.', 'AI may phrase the read; code decides eligibility, support, usefulness, and rubric safety. The core question is how physical state shapes focus, composure, decisioning, confidence, and habit formation — not whether Nora should change the physical workout.'],
+  ['Reasoning layer', 'Sports Fact Ledger → Candidate Read Engine → Scoring + Guardrails → Nora/Coach Copy Layer → Validated Intelligence Payload.', 'AI may phrase the read; code decides eligibility, support, usefulness, and rubric safety. A fresh same-day self-report leads the athlete Day Read. Physiological evidence may inform coach/reviewer context, but it cannot infer the athlete’s focus, confidence, motivation, or decision quality.'],
   ['Output surfaces', 'Weekly Sports Intelligence Report, Game-Day Readiness Report, Early-Warning Alerts, Macra nutrition context, Nora coaching context, AuntEDNA escalation context.', 'Each surface has its own audience, latency, and copy posture. Coaches get plain-language pattern intelligence and supporting data; coaches keep authority over physical programming decisions.'],
 ];
 
 const REASONING_LAYER_ROWS = [
   ['1', 'Sports Fact Ledger', 'Server- or runtime-owned source of truth for sport profile, time context, source freshness, recovery facts, load facts, session facts, cognitive evidence, check-ins, nutrition context, allowed claims, blocked claims, and missing inputs.'],
-  ['2', 'Candidate Read Engine', 'Deterministic code generates eligible reads such as readiness_status, recovery_limiter, load_spike, intent_mismatch, game_day_prep, fueling_context, session_confirmation_needed, data_quality, and no_intervention.'],
+  ['2', 'Candidate Read Engine', 'Deterministic code generates an athlete-only self_report_lead Day Read plus reviewer/coach reads such as readiness_status, recovery_limiter, load_spike, intent_mismatch, game_day_prep, fueling_context, session_confirmation_needed, data_quality, and no_intervention.'],
   ['3', 'Scoring + Guardrails', 'Candidates are ranked by data confidence, sport relevance, timing relevance, actionability, materiality, novelty, source freshness, and executable Nora rubric readiness. Unsupported claims are blocked before copy.'],
   ['4', 'Nora / Coach Copy Layer', 'Nora and coach-report generators receive approved facts and selected candidates only. They may translate tone and wording, but may not invent facts, causes, physiology, sessions, or actions.'],
   ['5', 'Validated Intelligence Payload', 'Final output persists the ledger, candidates, selected read, rejected reads, rubric results, guardrail trace, evidence refs, final copy, and review status so operators can answer “why did Nora say this?” in under 30 seconds.'],
@@ -101,7 +101,7 @@ const REASONING_LAYER_ROWS = [
 const REASONING_PAYLOAD_ROWS = [
   ['SportsFactLedger', 'athleteContext, timeContext, sourceFreshness, recoveryFacts, loadFacts, sessionFacts, cognitiveFacts, checkInFacts, nutritionFacts, missingInputs, allowedClaims, blockedClaims, evidenceRefs.'],
   ['SportsCandidateRead', 'id, type, claim, fact, interpretation, recommendedAction, confidence, score, scoreBreakdown, guardrails, audiencePolicy.'],
-  ['ValidatedSportsIntelligencePayload', 'ledger, candidates, selectedCandidate, rejectedCandidateIds, copy, rubricResults, guardrailResults, unsupportedClaims, finalStatus, provenance.'],
+  ['ValidatedSportsIntelligencePayload', 'ledger, candidates, selectedCandidate, dayRead (alignment, athlete read, optional wearable context/invitation, hidden coach context, evidence used/omitted), rejectedCandidateIds, rubricResults, guardrailResults, unsupportedClaims, finalStatus, provenance.'],
   ['Admin QA Trace', 'final read preview, ledger explorer, candidate rankings, source freshness table, unsupported-claim scanner, Nora rubric results, reviewer actions.'],
 ];
 
@@ -110,7 +110,7 @@ const DEVICE_LAYER_ROWS = [
   ['Oura', 'Oura OAuth/API direct lane (preferred) or HealthKit-derived fallback → Oura adapter → Health Context Source Record.', 'Active source today. Direct OAuth preferred; HealthKit fallback documented in the Oura Integration Strategy spec.'],
   ['Polar', 'Polar OAuth + Accesslink → Polar adapter → Health Context Source Record.', 'Planned future device. Adapter not yet implemented; on the HCSR build queue.'],
   ['Whoop / Garmin / future', 'Per-vendor OAuth → vendor adapter → Health Context Source Record.', 'Planned future devices; implementation-only addition once HCSR adapter scaffolding lands.'],
-  ['PulseCheck self-report', 'Nora check-in → self-report intake → Health Context Source Record with `source: pulsecheck_self_report`.', 'Active when an athlete has no connected wearable. Confidence capped at `emerging` per spec — never drives high-trust coach claims.'],
+  ['PulseCheck self-report', 'Nora check-in → self-report intake → Health Context Source Record with `source: pulsecheck_self_report`.', 'Active with or without a wearable. A fresh same-day report leads the athlete’s account of how they feel; it remains separately qualified for coach analytics.'],
   ['Coach-entered', 'Manual entry → manual adapter → Health Context Source Record with provenance flag.', 'Lowest-confidence lane; explicit provenance carries through to coach-facing copy.'],
 ];
 
@@ -145,16 +145,16 @@ const OUTPUT_SURFACES = [
 ];
 
 const ATHLETE_INSIGHT_TYPES = [
-  ['Compounding Momentum', 'Sleep, recovery, routine, nutrition, and mental training are lining up.', 'Praise the pattern and teach that the small things are becoming the big edge.'],
-  ['Composure Opportunity', 'Recovery is lower, but not a clinical or safety state.', 'Frame the day as a useful chance to practice staying steady when conditions are not perfect.'],
-  ['Focus Support Day', 'Sleep timing, recovery, or load suggests attention may take more effort.', 'Say when focus may get harder, what the athlete may feel, and the one simple phrase or routine to use before the first demanding task.'],
-  ['Recovery Debt Pattern', 'Under-recovery repeats across several days.', 'Teach that the system needs support; protect bedtime, fueling rhythm, or recovery routine without shame language.'],
-  ['Mismatch Insight', 'Mental training is improving while physical habits are not supporting it, or vice versa.', 'Show the athlete how body-state habits make mental reps stick deeper.'],
-  ['Steady Builder Day', 'No dramatic signal.', 'Use average days to build identity: complete the mental rep and keep the routine clean.'],
+  ['Compounding Momentum', 'Several reported and measured signals are moving in the same direction.', 'Name each signal separately and reinforce the athlete-reported habits that are helping without claiming that a wearable measurement caused a mental state.'],
+  ['Athlete-Led Recovery Context', 'A fresh self-report exists and eligible wearable recovery context may support or differ from it.', 'Lead with how the athlete says they feel. If useful, add the wearable snapshot as a second, bounded signal that cannot reverse the athlete report.'],
+  ['Focus Support Context', 'The athlete reports focus strain or a verified cognitive-task trend changes.', 'Anchor the read to self-report or cognitive-task evidence. Wearables may add physiological context but cannot predict attention.'],
+  ['Recovery Trend For Staff', 'Eligible recovery measurements differ from the athlete personal baseline across several days.', 'Keep the trend in authorized staff context. Do not turn it into an athlete verdict or a physical training recommendation.'],
+  ['Cross-Signal Pattern', 'Self-report, cognitive-task evidence, and wearable context do not all move together.', 'Present the signals as separate observations. Do not declare causation or imply that one source invalidates another.'],
+  ['No Intervention', 'The athlete reports no concern and no safety workflow is active.', 'Affirm the check-in and offer optional conversation without assigning an exercise or manufacturing a problem.'],
 ];
 
 const COACH_PATTERN_ROWS = [
-  ['Individual pattern', 'One athlete is under-recovered or carrying higher load while the team is steady.', 'Name the athlete, show the supporting evidence, and spell out the coaching moment in full sentences: when it may happen, what the athlete may feel or do, and what simple language the coach should use.'],
+  ['Individual pattern', 'One athlete has a different recovery or load pattern while the team is steady.', 'Name the athlete, show the measured pattern, place the athlete report beside it as a separate signal, and give the coach assumption-free language for checking in.'],
   ['Team-wide pattern', 'A meaningful share of the roster shows lower recovery, sleep disruption, sentiment drop, or cognitive drift.', 'Surface it as a possible environment or schedule pattern for coach review, not as an automatic training correction.'],
   ['Unit / role pattern', 'A position group, event group, lineup role, or travel group shows a shared state pattern.', 'Help the coach see whether the issue clusters by role, minutes, travel, class schedule, or competition density.'],
   ['Compounding strength', 'The team or athlete is stacking sleep, mental reps, check-ins, and stable physiology.', 'Make the good pattern visible so coaches can reinforce the identity and habits that are working.'],
@@ -203,7 +203,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Sport-Specific, Athlete-Specific',
     accent: 'blue' as const,
-    body: 'Every recommendation is interpreted through the athlete\'s sport, position, season phase, and individual baseline — not a population average. Same readiness reading produces different guidance for a starting point guard mid-back-to-back vs. a freshman bowler day three of a tournament.',
+    body: 'Every interpretation labels the athlete\'s sport, position, season phase, source freshness, and eligible personal baseline. Sport context changes which patterns are relevant; it never expands what a biometric measurement is allowed to claim about the athlete\'s mind.',
   },
   {
     title: 'Reports Carry The Interpretation, Dashboard Stays Thin',
@@ -213,7 +213,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Spell Out The Coaching Moment',
     accent: 'green' as const,
-    body: 'Coach-facing copy must not speak in code. Every point must say when the moment shows up, what the athlete may feel or do, and the one simple mental-performance phrase or routine the coach should give. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data. Terms like mental install, body-state read, decision support, and vague readiness labels fail unless immediately rewritten into plain English.',
+    body: 'Coach-facing copy must not speak in code or predict how an athlete feels from physiology. Every point must separate what was measured, what the athlete reported, and what remains unknown, then give the coach assumption-free language for checking in. Vague handoff lines that assign warm-up, lineup, tactical, training, or recovery decisions to unnamed staff fail unless a real named role and decision are present in the source data.',
   },
   {
     title: 'Clinical Boundary Is Architectural',
@@ -228,7 +228,7 @@ const NON_NEGOTIABLES = [
   {
     title: 'Plain Athlete Language',
     accent: 'green' as const,
-    body: 'Athlete-facing copy must sound like a coach talking to a smart middle schooler: clear, direct, and specific. Words like baseline, block, push signal, pullback signal, accessories, finishers, and normal-start read fail unless rewritten into an everyday mental action such as complete the Nora session, use one simple phrase when frustration shows up, protect bedtime, or notice focus during the first demanding task.',
+    body: 'Athlete-facing copy must sound like a coach talking to a smart middle schooler: clear, direct, and specific. Internal terms such as baseline, block, push signal, pullback signal, and readiness band do not belong in the default Day Read. Nora reflects what the athlete said, adds one bounded observation when useful, and offers an optional conversation without assigning an exercise.',
   },
   {
     title: 'Coach Owns Physical Programming',
@@ -252,11 +252,11 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           },
           {
             title: 'Mind-Body Performance Environment',
-            body: 'The layer connects physical state to focus, composure, decisioning, confidence, and habit formation. It does not prescribe sets, reps, minutes, contact, throws, jumps, intervals, or workout changes.',
+            body: 'The layer keeps physical measurements, athlete self-report, cognitive-task evidence, and sport context distinct, then compares their patterns over time without assuming causation. It does not prescribe sets, reps, minutes, contact, throws, jumps, intervals, or workout changes.',
           },
           {
             title: 'Coach Context Without Overreach',
-            body: 'Coach reports distinguish individual under-recovery from team-wide under-recovery, show supporting data and trends, and spell out the exact coaching moment in plain English so coaches can make their own physical training decisions.',
+            body: 'Coach reports distinguish individual from team-wide measurement patterns, show athlete reports separately, and explain what remains unknown so coaches can make their own physical training decisions.',
           },
           {
             title: 'Scenarios Speak The Athlete’s Sport',
@@ -274,9 +274,9 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
               “{SPORTS_INTELLIGENCE_THESIS}”
             </p>
             <p>
-              Athlete-facing reads should create a mindset shift: small physical habits, mental reps, nutrition timing,
-              sleep, recovery, self-talk, and composure practice compound into the long-game edge. Coach-facing reads
-              should make individual vs team patterns legible without telling the coach how to run the physical program.
+              Athlete-facing reads begin with the athlete&apos;s current account, then add measured context only when it is
+              fresh, useful, and bounded. Coach-facing reads keep physical measurements, self-report, cognitive evidence,
+              and sport context legible without claiming one caused another or telling the coach how to run the physical program.
             </p>
           </div>
         }
@@ -343,7 +343,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
           <InfoCard
             title="Athlete Job"
             accent="purple"
-            body="Teach the athlete how physical state, sleep, nutrition timing, recovery habits, self-talk, and mental reps compound into focus, composure, confidence, decision-making, and long-game maturity. Lower-readiness days become training opportunities, not deficit labels."
+            body="Teach the athlete how to notice physical state, sleep, recovery habits, self-talk, and mental reps as separate signals over time. Athlete self-report and measured cognitive tasks anchor focus, composure, confidence, and decision-making; wearable data never declares those states."
           />
           <InfoCard
             title="Coach Job"

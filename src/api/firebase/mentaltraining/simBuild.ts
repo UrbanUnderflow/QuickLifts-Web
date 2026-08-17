@@ -183,8 +183,11 @@ function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
     signal_window: {
       primaryTask: 'nine_arrow_majority_discrimination',
       evidenceCounts: [5, 6, 7],
-      stimulusExposureMs: 650,
-      responseWindowMs: 1600,
+      protocolVersion: '3.1',
+      practiceStimulusExposureMs: 2000,
+      practiceResponseWindowMs: 4000,
+      stimulusExposureMs: 1400,
+      responseWindowMs: 3000,
       latencyOrigin: 'stimulus_onset',
     },
     sequence_shift: {

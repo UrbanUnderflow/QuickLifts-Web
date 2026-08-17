@@ -79,6 +79,7 @@ const SPORTS_FACT_LEDGER_ROWS = [
 ];
 
 const CANDIDATE_READ_ROWS = [
+  ['self_report_lead', 'Athlete’s same-day report leads the Day Read.', 'Fresh wellbeing or subjective-recovery input exists. Wearable context may support or remain incomplete; it cannot reverse the report.'],
   ['readiness_status', 'Current readiness posture.', 'Fresh/recent recovery facts support a useful status read.'],
   ['recovery_limiter', 'Recovery is the limiting factor.', 'Readiness/recovery is materially below baseline or score band.'],
   ['load_spike', 'Load is unusually high.', 'ACWR/microcycle/session RPE crosses configured sport threshold.'],
@@ -103,15 +104,16 @@ const SCORING_GUARDRAIL_ROWS = [
   ['Unsupported physiology claim', 'Block.', 'No CNS, autonomic, respiratory-rate causal, or parasympathetic claims without approved rule and baseline.'],
   ['Stale-data overconfidence', 'Block or repair.', 'Freshness stale/missing/inferred requires hedging or data_quality.'],
   ['Clinical boundary', 'Block and route.', 'Clinical-threshold signals leave Sports Intelligence.'],
+  ['Athlete Day Read contradiction', 'Block.', 'Positive self-report cannot ship with wearable-derived warnings, psychological inference, repeat check-in prompts, raw default-view metrics, or an automatic exercise.'],
   ['Executable Nora rubric failure', 'Repair, fallback, or hold for review.', 'Athlete-facing copy must pass runtime checks, not just prompt instructions.'],
 ];
 
 const SPORT_MODIFIERS = [
-  ['Basketball point guard, congested schedule', 'High decisioning load + repeat high-intensity bouts.', 'Low HRV plus high ACWR triggers minutes-management review and shorter high-cognitive-load practice blocks.'],
-  ['Basketball frontcourt, strength block', 'Higher contact/load tolerance but recovery debt matters.', 'Same low HRV may produce recovery emphasis rather than immediate role/minutes warning if sentiment and cognition are stable.'],
-  ['Golf tournament week', 'Precision, sleep consistency, and composure trend carry more weight.', 'Poor sleep with stable composure may recommend warm-up/routine reinforcement, not load reduction.'],
-  ['Bowling multi-day tournament', 'Repetition fatigue and day-over-day composure drift matter.', 'Tournament day-three fatigue trend can trigger recovery protocol and reduced extra reps.'],
-  ['Off-season development', 'Training adaptation is acceptable when confidence is high and risk is low.', 'Moderate load increase can be framed as adaptation if sleep, sentiment, and cognition stay stable.'],
+  ['Basketball point guard, congested schedule', 'High decisioning load + repeat high-intensity bouts.', 'Recovery and load evidence are shown to authorized staff with provenance. Athlete self-report and cognitive-task evidence supply the mental-performance context; the coach owns minutes and practice design.'],
+  ['Basketball frontcourt, strength block', 'Contact and load exposure remain physical-context signals.', 'HRV and load stay in staff context with provenance. Athlete report and cognitive evidence remain separate; role and minutes stay with the coach.'],
+  ['Golf tournament week', 'Sleep consistency and measured composure are separate evidence families.', 'Report each pattern separately. An established pre-shot routine may be reinforced only when the athlete or coach identifies that need; no automatic load recommendation follows from sleep.'],
+  ['Bowling multi-day tournament', 'Repetition exposure and measured day-over-day composure are separate patterns.', 'Show both to authorized staff without claiming one caused the other. The coach decides recovery and extra-rep changes.'],
+  ['Off-season development', 'Training exposure may change while self-report and cognitive evidence move independently.', 'Describe each pattern with its source and confidence. Do not use stable sleep or sentiment as automatic clearance for load progression.'],
 ];
 
 const ALERT_THRESHOLDS = [

@@ -308,7 +308,7 @@ const AthleteReadinessCard: React.FC<{
     demo
       ? {
           scorecard: {
-            methodologyVersion: '2.0.0',
+            methodologyVersion: '2.1.0',
             coherence: { score: 80, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 3 },
             wellbeing: { score: 78, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 4 },
             recovery: { score: 72, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 64, trendDelta: -2 },

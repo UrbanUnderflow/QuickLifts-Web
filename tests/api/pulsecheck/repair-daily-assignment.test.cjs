@@ -853,3 +853,114 @@ test('emits a full repair trace when conversation recovery drives a rematerializ
   assert.match(body.debugTrace.summary, /finalAction=protocol/);
   assert.match(body.debugTrace.summary, /overrideApplied=false/);
 });
+
+test('targets the selected curriculum assignment when an athlete switches a visible skill', async () => {
+  const targetAssignmentId = 'athlete-1_2026-03-22_sim_1700000000000';
+  const snapshot = {
+    id: 'athlete-1_2026-03-22',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-22',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+  };
+  const candidateSet = {
+    id: 'candidate-set-visible-switch',
+    candidates: [
+      {
+        id: 'protocol-primer',
+        type: 'protocol',
+        label: 'Primer',
+        actionType: 'protocol',
+        protocolId: 'primer',
+        protocolLabel: 'Primer',
+      },
+      {
+        id: 'old-noise-gate',
+        type: 'sim',
+        label: 'Noise Gate',
+        actionType: 'sim',
+        simSpecId: 'noise_gate',
+      },
+      {
+        id: 'new-signal-window',
+        type: 'sim',
+        label: 'Signal Window',
+        actionType: 'sim',
+        simSpecId: 'signal_window',
+      },
+    ],
+    candidateIds: ['protocol-primer', 'old-noise-gate', 'new-signal-window'],
+    candidateClassHints: ['protocol', 'sim'],
+    plannerEligible: true,
+  };
+
+  let orchestrateArgs = null;
+  const handler = loadHandler({
+    db: createDb({
+      existingAssignment: {
+        id: targetAssignmentId,
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-22',
+        sourceStateSnapshotId: snapshot.id,
+        status: 'assigned',
+        assignedBy: 'curriculum-engine',
+        actionType: 'simulation',
+        chosenCandidateId: 'old-noise-gate',
+        simSpecId: 'noise_gate',
+        curriculumSlotKind: 'sim',
+        curriculumSlotIndex: 1,
+      },
+      launchableSimSpecIds: ['signal_window'],
+    }),
+    runtimeHelpers: {
+      stripUndefinedDeep: (value) => value,
+      getSnapshotById: async (dbArg, snapshotId) => {
+        assert.equal(snapshotId, snapshot.id);
+        return snapshot;
+      },
+      loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
+      syncTaxonomyProfile: async (_db, athleteId, progress) => ({ ...progress, athleteId }),
+      listLiveProtocolRegistry: async () => [],
+      listLivePublishedSimModules: async () => [],
+      getOrRefreshProtocolResponsivenessProfile: async () => null,
+      buildAssignmentCandidateSet: () => candidateSet,
+      orchestratePostCheckIn: async (args) => {
+        orchestrateArgs = args;
+        assert.equal(args.assignmentIdOverride, targetAssignmentId);
+        assert.deepEqual(args.candidateSet.candidateIds, ['new-signal-window']);
+        assert.equal(args.plannerDecision.selectedCandidateId, 'new-signal-window');
+        return {
+          id: targetAssignmentId,
+          athleteId: 'athlete-1',
+          sourceDate: '2026-03-22',
+          status: 'assigned',
+          assignedBy: 'curriculum-engine',
+          actionType: 'sim',
+          chosenCandidateId: 'new-signal-window',
+          simSpecId: 'signal_window',
+          curriculumSlotKind: 'sim',
+          curriculumSlotIndex: 1,
+          revision: 2,
+        };
+      },
+    },
+  });
+
+  const body = parseBody(await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer fake-token' },
+    body: JSON.stringify({
+      sourceDate: '2026-03-22',
+      assignmentId: targetAssignmentId,
+      preferLaunchableAlternative: true,
+    }),
+  }));
+
+  assert.ok(orchestrateArgs);
+  assert.equal(body.repairApplied, true);
+  assert.equal(body.dailyAssignment.id, targetAssignmentId);
+  assert.equal(body.dailyAssignment.chosenCandidateId, 'new-signal-window');
+  assert.equal(body.dailyAssignment.curriculumSlotKind, 'sim');
+});

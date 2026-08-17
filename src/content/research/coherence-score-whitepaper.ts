@@ -1,4 +1,4 @@
-export const COHERENCE_SCORE_METHOD_VERSION = '2.0.0';
+export const COHERENCE_SCORE_METHOD_VERSION = '2.1.0';
 export const COHERENCE_SCORE_PUBLICATION_DATE = 'August 16, 2026';
 
 export const COHERENCE_SCORE_WHITE_PAPER_SLUG =
@@ -18,7 +18,7 @@ export const COHERENCE_SCORE_WHITE_PAPER_METADATA = {
   featured: false,
   status: 'published' as const,
   createdAt: '2026-08-16T12:00:00.000Z',
-  updatedAt: '2026-08-16T12:00:00.000Z',
+  updatedAt: '2026-08-17T12:00:00.000Z',
   publishedAt: '2026-08-16T12:00:00.000Z',
   featuredImage: '/pulsecheck-pro/hero-athletes.webp',
 };
@@ -44,19 +44,22 @@ export const scoreDefinitions: ScoreDefinition[] = [
     accent: 'lime',
     question: 'Do stated commitments and verified follow-through line up over time?',
     summary:
-      'Coherence is a behavioral alignment index. It joins showing up with commitment congruence and is deliberately capped by Adherence, so a small set of successful days cannot hide low overall follow-through.',
-    equation: 'Coherence = min(A, sqrt(A x C))',
+      'Coherence is a continuous behavioral alignment index. The latest 14 days update the athlete\'s established read rather than restarting it. The index joins showing up with commitment congruence and is deliberately capped by Adherence, so a small set of successful days cannot hide low overall follow-through.',
+    equation: 'Established Coherence = max(1, min(A, sqrt(A x C)))',
     inputs: [
       'A = the Adherence score for the same 14-day window',
       'C = the percent of scorable days with both a check-in and a followed-through commitment',
       'Only final, verifiable commitment outcomes enter C',
+      'The established display scale is 1 to 100; missingness is represented by status and confidence, never by zero',
+      'When a mature account has too little current evidence, the last established positive read remains visible with reduced current-window confidence',
     ],
     excludes: [
       'Mood or wellbeing level',
       'Sleep, HRV, resting heart rate, or device wear',
       'Unverified claims that a task was completed elsewhere',
     ],
-    minimumEvidence: 'At least 3 days containing both a check-in and a final commitment outcome.',
+    minimumEvidence:
+      'Building is limited to the first 3 account days. A new calculation requires at least 3 days containing both a check-in and a final commitment outcome; after onboarding, insufficient current evidence does not reset an established read.',
   },
   {
     key: 'wellbeing',
@@ -205,7 +208,7 @@ export const evidenceMap = [
 export const implementationControls = [
   {
     title: 'Versioned calculation',
-    body: 'Every scorecard records methodologyVersion 2.0.0, a generated timestamp, the active window, evidence coverage, confidence, status, components, trend, notes, and limitations.',
+    body: 'Every scorecard records methodologyVersion 2.1.0, a generated timestamp, the active window, evidence coverage, confidence, status, components, trend, notes, and limitations.',
   },
   {
     title: 'Server-owned score',
@@ -220,6 +223,10 @@ export const implementationControls = [
     body: 'Missing inputs never become zero. Available inputs can be reweighted to produce a descriptive score, while evidence coverage, observed days, confidence, and Building or Recalibrating states preserve uncertainty.',
   },
   {
+    title: 'Coherence continuity',
+    body: 'Coherence uses Building only during the first 3 account days. After a positive read is established, each valid rolling 14-day window updates it. A thin current window can reduce confidence and carry the last established read, but it cannot reset the athlete to zero or restart onboarding.',
+  },
+  {
     title: 'No autonomous training decision',
     body: 'A physiological discrepancy can generate coach-facing informational context. It never tells the athlete to alter training and never replaces coach, athletic trainer, sports medicine, or clinical judgment.',
   },
@@ -231,7 +238,7 @@ export const implementationControls = [
 
 export const evidenceStates = [
   ['Available', 'Enough current evidence exists to calculate the score under the active method.'],
-  ['Building', 'Some valid evidence exists, but the minimum observation rule is not yet met.'],
+  ['Building', 'For Coherence, the athlete is within the first 3 account days. Other scores use their own published minimum-observation rules.'],
   ['Recalibrating', 'A physiological source lane is new, stale, or lacks 14 same-lane baseline nights.'],
   ['Insufficient evidence', 'No valid score can be supported from the available record.'],
 ] as const;
@@ -247,7 +254,7 @@ export const validationPlan = [
     phase: '01',
     title: 'Technical verification',
     body: 'Deterministic fixtures, property tests, missingness tests, source-switch tests, permission tests, and cross-platform contract tests verify that implementation matches the published method.',
-    status: 'Implemented in the 2.0.0 release',
+    status: 'Implemented in the 2.1.0 release',
   },
   {
     phase: '02',
@@ -355,7 +362,7 @@ const referenceBlock = references
 
 export const COHERENCE_SCORE_WHITE_PAPER_CONTENT = `
 :::abstract
-PulseCheck originally used the word coherence as if athlete wellbeing, recovery, and follow-through could be summarized responsibly in one number. That approach obscured distinct questions and made a high score too easy to overinterpret. The revised system separates four constructs: Coherence, Wellbeing, Recovery, and Adherence. Each score uses a rolling 14-day window, carries its own evidence coverage and confidence state, and can remain unavailable when the record is too limited.
+PulseCheck originally used the word coherence as if athlete wellbeing, recovery, and follow-through could be summarized responsibly in one number. That approach obscured distinct questions and made a high score too easy to overinterpret. The revised system separates four constructs: Coherence, Wellbeing, Recovery, and Adherence. Each score uses a rolling 14-day window, carries its own evidence coverage and confidence state, and can remain unavailable when the record is too limited. Coherence is continuous after onboarding: the rolling window refreshes an established read rather than resetting the athlete every 14 days.
 
 This paper defines the exact production method for version ${COHERENCE_SCORE_METHOD_VERSION}. Coherence asks whether stated commitments and verified follow-through align. Wellbeing summarizes athlete-reported experience. Recovery presents athlete report alongside recent sleep and source-normalized autonomic context. Adherence asks whether the athlete is showing up for scheduled check-ins and recorded mental-performance commitments. The system does not collapse those constructs into one overall grade.
 
@@ -380,11 +387,14 @@ ${scoreDefinitions.map(renderScoreSection).join('\n')}
 
 # 3. Windows, Missingness, and Trend
 
-The current result uses a rolling 14-day window. Trend compares that current window with the immediately preceding 14-day window. The scoring service can read a longer source-record horizon so it can establish physiological baselines and identify source transitions without blending incompatible measurements.
+The current result uses a rolling 14-day window. Trend compares that current window with the immediately preceding 14-day window. The scoring service can read a longer source-record horizon so it can establish physiological baselines, preserve Coherence continuity, and identify source transitions without blending incompatible measurements.
+
+For Coherence, **Building** is an onboarding state limited to the athlete's first 3 account days. Once a positive Coherence read has been established, every sufficiently evidenced 14-day window can replace it with a newer read. If the current window is too thin to support a new calculation, PulseCheck carries the last established read and lowers the current evidence coverage and confidence instead of displaying zero or restarting onboarding. The displayed established Coherence scale is 1 to 100; zero is not used as a missing-data state.
 
 When a configured component is unavailable, the score may reweight the valid components that remain. Reweighting does not erase the missing evidence. Evidence coverage, observed days, confidence, and status remain visible beside the number. If no defensible result can be produced, the score remains unavailable.
 
 - A recorded zero is data. A missing value is not converted to zero.
+- Established Coherence is never displayed as zero; the lowest fully evidenced displayed value is 1.
 - Current and previous windows are calculated under the same method version.
 - A trend is not shown as meaningful when either comparison window lacks enough evidence.
 - A score describes the evidence available to PulseCheck, not the athlete as a person.

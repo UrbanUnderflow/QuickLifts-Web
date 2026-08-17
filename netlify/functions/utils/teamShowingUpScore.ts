@@ -3,7 +3,9 @@ export type ShowingUpDailyEvidence = {
   skillTraining: boolean;
   morningCheckIn: boolean;
   eveningCheckIn: boolean;
-  wearable: boolean;
+  wearable?: boolean;
+  daytimeWearable?: boolean;
+  overnightWearable?: boolean;
 };
 
 export type ShowingUpDailyScore = ShowingUpDailyEvidence & {
@@ -25,6 +27,11 @@ export type CompletedShowingUpWindow = {
   winnerAthleteIds?: unknown;
 };
 
+export type WearableCoverageEvidence = {
+  hasDaytime: boolean;
+  hasOvernight: boolean;
+};
+
 const NON_SCORING_ASSIGNMENT_STATUSES = new Set([
   'overridden',
   'deferred',
@@ -43,6 +50,12 @@ const numberValue = (value: unknown): number | undefined => {
   }
   return undefined;
 };
+
+const dictionaryValue = (value: unknown): Record<string, any> => (
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {}
+);
 
 const normalizedString = (value: unknown): string => (
   typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -153,10 +166,17 @@ export const current14DaySprint = (
 
 export const scoreShowingUpDay = (evidence: ShowingUpDailyEvidence): ShowingUpDailyScore => ({
   ...evidence,
+  wearable: evidence.wearable === true
+    || evidence.daytimeWearable === true
+    || evidence.overnightWearable === true,
   points: Number(evidence.skillTraining)
     + Number(evidence.morningCheckIn)
     + Number(evidence.eveningCheckIn)
-    + Number(evidence.wearable),
+    + Number(
+      evidence.wearable === true
+        || evidence.daytimeWearable === true
+        || evidence.overnightWearable === true,
+    ),
 });
 
 export const assignSharedRanks = <T extends RankableShowingUpMember>(
@@ -272,4 +292,161 @@ export const hasVerifiedOvernightData = (snapshot: Record<string, any> | undefin
   const hasRecoverySignal = recoverySignals.some((value) => numberValue(value) !== undefined);
 
   return hasSleep && hasRecoverySignal;
+};
+
+const wearableSourceFamilies = new Set([
+  'oura',
+  'apple_health',
+  'healthkit',
+  'health_kit',
+  'apple_watch',
+  'healthconnect',
+  'health_connect',
+  'google_wearables',
+  'google-wearables',
+  'polar',
+  'fitbit',
+  'whoop',
+  'garmin',
+]);
+
+const nonWearableSourceFamilies = new Set([
+  'quicklifts',
+  'fit_with_pulse',
+  'pulsecheck_self_report',
+  'coach_entered',
+  'manual',
+]);
+
+const mergeBlockData = (block: unknown): Record<string, any> => {
+  const source = dictionaryValue(block);
+  const nestedData = dictionaryValue(source.data);
+  const nestedPayload = dictionaryValue(source.payload);
+  const nestedRollup = dictionaryValue(source.rollup);
+  const direct = Object.fromEntries(
+    Object.entries(source).filter(([key]) => ![
+      'data',
+      'payload',
+      'rollup',
+      'freshness',
+      'provenance',
+      'sourceStatus',
+      'generatedAt',
+      'updatedAt',
+    ].includes(key)),
+  );
+  return { ...direct, ...nestedData, ...nestedPayload, ...nestedRollup };
+};
+
+const normalizedSourceFamily = (value: unknown): string => normalizedString(value).replace(/-/g, '_');
+
+const sourceFamilyForDomain = (
+  snapshot: Record<string, any>,
+  domain: string,
+  block: Record<string, any>,
+): string => normalizedSourceFamily(
+  block.provenance?.primarySource
+  || snapshot.provenance?.domainWinners?.[domain]
+  || block.sourceFamily
+  || snapshot.provenance?.sourcesUsed?.[0]
+  || snapshot.sourceFamily,
+);
+
+const sourceCanRepresentWearable = (sourceFamily: string): boolean => {
+  if (!sourceFamily) return true;
+  if (nonWearableSourceFamilies.has(sourceFamily)) return false;
+  return wearableSourceFamilies.has(sourceFamily) || sourceFamily.includes('wearable');
+};
+
+const freshnessIsUsable = (value: unknown): boolean => {
+  const freshness = normalizedString(value);
+  return !freshness || !['missing', 'stale', 'error', 'permission_denied', 'not_connected'].includes(freshness);
+};
+
+const hasUsableMetric = (data: Record<string, any>, keys: string[]): boolean => {
+  const normalizedData = Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key.toLowerCase(), value]),
+  );
+  for (const key of keys) {
+    const value = normalizedData[key.toLowerCase()];
+    const numeric = numberValue(value);
+    if (numeric !== undefined && numeric > 0) return true;
+    if (typeof value === 'string' && value.trim()) return true;
+    if (Array.isArray(value) && value.length > 0) return true;
+  }
+  return false;
+};
+
+export const resolveWearableCoverageFromSnapshot = (
+  snapshot: Record<string, any> | undefined,
+): WearableCoverageEvidence => {
+  if (!snapshot) return { hasDaytime: false, hasOvernight: false };
+  const domains = dictionaryValue(snapshot.domains);
+  const freshness = dictionaryValue(snapshot.freshness);
+  const perDomainFreshness = dictionaryValue(freshness.perDomain);
+  const result: WearableCoverageEvidence = { hasDaytime: false, hasOvernight: false };
+  const daytimeMetricKeys = [
+    'steps',
+    'activeCalories',
+    'activecalories',
+    'totalCalories',
+    'totalcalories',
+    'distance',
+    'distanceMeters',
+    'exerciseMinutes',
+    'activeMinutes',
+    'standHours',
+    'workoutCount',
+    'heartRateAvg',
+    'avgHeartRate',
+    'averageHeartRate',
+    'heartRateAverage',
+    'heartRateBpm',
+    'liveHeartRateBpm',
+    'sampleCount',
+    'heartRateSamples',
+  ];
+  const overnightMetricKeys = [
+    'sleepDuration',
+    'sleepDurationHours',
+    'totalSleepHours',
+    'totalSleepMin',
+    'totalSleepMinutes',
+    'sleepEfficiency',
+    'sleepScore',
+    'timeInBedHours',
+    'bedtimeStart',
+    'bedtimeEnd',
+    'sleepMidpoint',
+    'recoveryScore',
+    'readinessScore',
+    'heartRateVariability',
+    'hrv',
+    'hrvMs',
+    'hrvRmssd',
+    'rmssdMs',
+    'restingHeartRate',
+    'heartRateResting',
+    'restingHeartRateBpm',
+  ];
+
+  for (const domain of ['activity', 'training', 'workout', 'biometrics', 'cardio', 'heart']) {
+    const block = dictionaryValue(domains[domain] || snapshot[domain]);
+    if (!Object.keys(block).length) continue;
+    const sourceFamily = sourceFamilyForDomain(snapshot, domain, block);
+    if (!sourceCanRepresentWearable(sourceFamily)) continue;
+    if (!freshnessIsUsable(block.freshness || perDomainFreshness[domain] || freshness[domain])) continue;
+    if (hasUsableMetric(mergeBlockData(block), daytimeMetricKeys)) result.hasDaytime = true;
+  }
+
+  for (const domain of ['recovery', 'sleep']) {
+    const block = dictionaryValue(domains[domain] || snapshot[domain]);
+    if (!Object.keys(block).length) continue;
+    const sourceFamily = sourceFamilyForDomain(snapshot, domain, block);
+    if (!sourceCanRepresentWearable(sourceFamily)) continue;
+    if (!freshnessIsUsable(block.freshness || perDomainFreshness[domain] || freshness[domain])) continue;
+    if (hasUsableMetric(mergeBlockData(block), overnightMetricKeys)) result.hasOvernight = true;
+  }
+
+  return result;
 };

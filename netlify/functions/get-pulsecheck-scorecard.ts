@@ -127,6 +127,13 @@ const shiftDateKey = (dateKey: string, offset: number): string => {
   return date.toISOString().slice(0, 10);
 };
 
+const dayDifferenceFromKeys = (laterDateKey: string, earlierDateKey: string): number | null => {
+  const later = Date.parse(`${laterDateKey}T12:00:00.000Z`);
+  const earlier = Date.parse(`${earlierDateKey}T12:00:00.000Z`);
+  if (!Number.isFinite(later) || !Number.isFinite(earlier)) return null;
+  return Math.max(0, Math.floor((later - earlier) / 86_400_000));
+};
+
 const dateKeyInTimeZone = (date: Date, timeZone: string): string => {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -493,13 +500,23 @@ export const handler: Handler = async (event) => {
     shiftDateKey(throughDateKey, -(SCORE_INPUT_DAYS - 1 - index)));
   const checkInIds = dateKeys.map((dateKey) => `${requestedAthleteId}_${dateKey}`);
   const healthIds = dateKeys.map((dateKey) => `${requestedAthleteId}_daily_${dateKey}`);
+  const documentId = `${requestedAthleteId}_v${PULSECHECK_SCORING_VERSION.split('.')[0]}`;
 
   try {
-    const [checkIns, healthSnapshots, assignmentSnapshot, wellbeingRecords] = await Promise.all([
+    const [
+      checkIns,
+      healthSnapshots,
+      assignmentSnapshot,
+      wellbeingRecords,
+      userDocument,
+      existingScorecardDocument,
+    ] = await Promise.all([
       getDocumentsById(db, CHECKIN_COLLECTION, checkInIds),
       getDocumentsById(db, HEALTH_COLLECTION, healthIds),
       db.collection(ASSIGNMENT_COLLECTION).where('athleteId', '==', requestedAthleteId).get(),
       loadOptionalWellbeingRecords(db, requestedAthleteId),
+      db.collection('users').doc(requestedAthleteId).get(),
+      db.collection(SCORECARD_COLLECTION).doc(documentId).get(),
     ]);
     const assignments = assignmentSnapshot.docs.map((document) => ({
       id: document.id,
@@ -508,12 +525,35 @@ export const handler: Handler = async (event) => {
     const days = buildScoringDays({ dateKeys, checkIns, assignments, healthSnapshots });
     const whoFive = whoFiveFromRecords(wellbeingRecords, throughDateKey);
     const generatedAt = new Date().toISOString();
+    const userData = userDocument.data() || {};
+    let accountCreatedAtMillis = timestampMillis(
+      userData.createdAt
+      ?? userData.joinedAt
+      ?? userData.activatedAt,
+    );
+    if (accountCreatedAtMillis === null) {
+      try {
+        const authUser = await admin.auth().getUser(requestedAthleteId);
+        accountCreatedAtMillis = Date.parse(authUser.metadata.creationTime);
+      } catch {
+        accountCreatedAtMillis = null;
+      }
+    }
+    const accountCreatedDateKey = accountCreatedAtMillis !== null && Number.isFinite(accountCreatedAtMillis)
+      ? dateKeyInTimeZone(new Date(accountCreatedAtMillis), timezone)
+      : null;
+    const accountAgeDays = accountCreatedDateKey
+      ? dayDifferenceFromKeys(throughDateKey, accountCreatedDateKey)
+      : null;
+    const existingScorecard = existingScorecardDocument.data() || {};
+    const establishedCoherenceScore = finiteNumber(existingScorecard.coherence?.score);
     const scorecard = calculatePulseCheckScorecardV2({
       days,
       whoFive,
       generatedAt,
+      accountAgeDays,
+      establishedCoherenceScore,
     });
-    const documentId = `${requestedAthleteId}_v${PULSECHECK_SCORING_VERSION.split('.')[0]}`;
     await db.collection(SCORECARD_COLLECTION).doc(documentId).set({
       ...scorecard,
       athleteUserId: requestedAthleteId,
@@ -524,6 +564,10 @@ export const handler: Handler = async (event) => {
         assignmentDocuments: assignments.length,
         healthSnapshotDocuments: healthSnapshots.length,
         periodicWellbeingDocuments: wellbeingRecords.length,
+        accountAgeDays,
+        establishedCoherenceScore: establishedCoherenceScore && establishedCoherenceScore > 0
+          ? establishedCoherenceScore
+          : null,
       },
       computedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -564,6 +608,7 @@ export const __internal = {
   commitmentFromAssignment,
   commitmentStateFrom,
   dateKeyInTimeZone,
+  dayDifferenceFromKeys,
   defaultHrvMethod,
   defaultMeasurementWindow,
   healthDayFromSnapshot,

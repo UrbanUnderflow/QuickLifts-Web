@@ -1,5 +1,6 @@
-export const PULSECHECK_SCORING_VERSION = '2.0.0';
+export const PULSECHECK_SCORING_VERSION = '2.1.0';
 export const PULSECHECK_SCORE_WINDOW_DAYS = 14;
+export const PULSECHECK_COHERENCE_BUILDING_DAYS = 3;
 export const PULSECHECK_AUTONOMIC_BASELINE_MINIMUM = 14;
 export const PULSECHECK_AUTONOMIC_BASELINE_WINDOW_DAYS = 28;
 
@@ -77,6 +78,8 @@ export interface PulseCheckScoringInput {
   whoFive?: PulseCheckWhoFiveObservation | null;
   windowDays?: number;
   generatedAt?: string;
+  accountAgeDays?: number | null;
+  establishedCoherenceScore?: number | null;
 }
 
 export interface PulseCheckScoreComponent {
@@ -612,23 +615,41 @@ const calculateAdherenceWindow = (
 const calculateCoherenceWindow = (
   adherence: WindowCalculation & { congruencePercent: number | null; congruenceObservedDays: number },
   windowDays: number,
+  options: {
+    isInitialBuildingPeriod?: boolean;
+    establishedScore?: number | null;
+  } = {},
 ): WindowCalculation => {
   const hasEnoughEvidence = adherence.score !== null &&
     adherence.congruencePercent !== null &&
     adherence.congruenceObservedDays >= 3;
-  const coherenceScore = hasEnoughEvidence
+  const rawCoherenceScore = hasEnoughEvidence
     ? rounded(Math.min(
       adherence.score!,
       Math.sqrt(adherence.score! * adherence.congruencePercent!),
     ))
     : null;
-  const status: PulseCheckScoreStatus = coherenceScore !== null
-    ? 'available'
-    : adherence.congruenceObservedDays > 0
-      ? 'building'
-      : 'insufficient_evidence';
   const congruenceCoverage = rounded((adherence.congruenceObservedDays / windowDays) * 100);
   const evidenceCoveragePercent = rounded((adherence.evidenceCoveragePercent + congruenceCoverage) / 2);
+  const currentWindowScore = rawCoherenceScore === 0 && evidenceCoveragePercent < 80
+    ? null
+    : rawCoherenceScore === 0
+      ? 1
+      : rawCoherenceScore;
+  const establishedScore = options.establishedScore !== null && options.establishedScore !== undefined
+    && Number.isFinite(options.establishedScore)
+    && options.establishedScore > 0
+    ? rounded(options.establishedScore)
+    : null;
+  const coherenceScore = options.isInitialBuildingPeriod
+    ? null
+    : currentWindowScore ?? establishedScore;
+  const carriedEstablishedScore = coherenceScore !== null && currentWindowScore === null && establishedScore !== null;
+  const status: PulseCheckScoreStatus = options.isInitialBuildingPeriod
+    ? 'building'
+    : coherenceScore !== null
+    ? 'available'
+    : 'insufficient_evidence';
 
   return {
     score: coherenceScore,
@@ -658,6 +679,10 @@ const calculateCoherenceWindow = (
     notes: [
       'Coherence is capped by Adherence, so a high alignment rate cannot hide low follow-through.',
       'Wellbeing and Recovery do not raise or lower Coherence.',
+      'The latest 14 days update an established Coherence read; they do not restart it.',
+      ...(carriedEstablishedScore
+        ? ['Recent evidence is thin, so the last established Coherence read is carried forward.']
+        : []),
     ],
   };
 };
@@ -682,7 +707,29 @@ export const calculatePulseCheckScorecardV2 = (input: PulseCheckScoringInput): P
   const previousRecovery = calculateRecoveryWindow(previousDays, previousMeasurements, windowDays);
   const currentAdherence = calculateAdherenceWindow(currentDays, windowDays);
   const previousAdherence = calculateAdherenceWindow(previousDays, windowDays);
-  const currentCoherence = calculateCoherenceWindow(currentAdherence, windowDays);
+  const historyDays = sorted.slice(0, Math.max(0, sorted.length - windowDays));
+  const historicalAdherence = historyDays.length > 0
+    ? calculateAdherenceWindow(historyDays, Math.max(windowDays, historyDays.length))
+    : null;
+  const historicalCoherence = historicalAdherence
+    ? calculateCoherenceWindow(historicalAdherence, Math.max(windowDays, historyDays.length))
+    : null;
+  const persistedEstablishedCoherenceScore = input.establishedCoherenceScore !== null
+    && input.establishedCoherenceScore !== undefined
+    && Number.isFinite(input.establishedCoherenceScore)
+    && input.establishedCoherenceScore > 0
+    ? rounded(input.establishedCoherenceScore)
+    : null;
+  const establishedCoherenceScore = persistedEstablishedCoherenceScore
+    ?? historicalCoherence?.score
+    ?? null;
+  const isInitialBuildingPeriod = input.accountAgeDays !== null
+    && input.accountAgeDays !== undefined
+    && input.accountAgeDays < PULSECHECK_COHERENCE_BUILDING_DAYS;
+  const currentCoherence = calculateCoherenceWindow(currentAdherence, windowDays, {
+    isInitialBuildingPeriod,
+    establishedScore: establishedCoherenceScore,
+  });
   const previousCoherence = calculateCoherenceWindow(previousAdherence, windowDays);
 
   const sourceTransitions = [currentRecovery.autonomic.hrv, currentRecovery.autonomic.restingHeartRate]

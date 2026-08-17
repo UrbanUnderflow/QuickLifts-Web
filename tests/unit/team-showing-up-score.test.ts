@@ -11,6 +11,7 @@ import {
   hasVerifiedOvernightData,
   isSkillAssignmentDueToday,
   isShowingUpLeaderboardEnabled,
+  resolveWearableCoverageFromSnapshot,
   scoreShowingUpDay,
 } from '../../netlify/functions/utils/teamShowingUpScore';
 
@@ -30,6 +31,29 @@ test('daily score awards one point for each completed showing-up action', () => 
       eveningCheckIn: true,
       wearable: true,
       points: 4,
+    },
+  );
+});
+
+test('daily score awards the wearable point from daytime or overnight coverage', () => {
+  assert.deepEqual(
+    scoreShowingUpDay({
+      dateKey: '2026-08-03',
+      skillTraining: true,
+      morningCheckIn: true,
+      eveningCheckIn: false,
+      daytimeWearable: true,
+      overnightWearable: false,
+    }),
+    {
+      dateKey: '2026-08-03',
+      skillTraining: true,
+      morningCheckIn: true,
+      eveningCheckIn: false,
+      daytimeWearable: true,
+      overnightWearable: false,
+      wearable: true,
+      points: 3,
     },
   );
 });
@@ -126,6 +150,41 @@ test('wearable point requires both sleep and recovery evidence', () => {
       },
     },
   }), true);
+});
+
+test('wearable coverage recognizes daytime evidence separately from overnight recovery', () => {
+  assert.deepEqual(resolveWearableCoverageFromSnapshot({
+    provenance: { domainWinners: { activity: 'polar', biometrics: 'whoop' } },
+    freshness: { perDomain: { activity: 'fresh', biometrics: 'fresh' } },
+    domains: {
+      activity: { data: { activeCalories: 564 } },
+      biometrics: { data: { heartRateAvg: 107 } },
+    },
+  }), {
+    hasDaytime: true,
+    hasOvernight: false,
+  });
+
+  assert.deepEqual(resolveWearableCoverageFromSnapshot({
+    provenance: { domainWinners: { recovery: 'whoop' } },
+    freshness: { perDomain: { recovery: 'fresh' } },
+    domains: {
+      recovery: { data: { sleepDuration: 7.2 } },
+    },
+  }), {
+    hasDaytime: false,
+    hasOvernight: true,
+  });
+
+  assert.deepEqual(resolveWearableCoverageFromSnapshot({
+    provenance: { domainWinners: { training: 'quicklifts' } },
+    domains: {
+      training: { data: { workoutCount: 1 } },
+    },
+  }), {
+    hasDaytime: false,
+    hasOvernight: false,
+  });
 });
 
 test('leaderboard uses consecutive 14-day sprints anchored to the pilot start', () => {

@@ -8,9 +8,9 @@ import {
   dateKeyInTimeZone,
   hasEveningCheckIn,
   hasMorningCheckIn,
-  hasVerifiedOvernightData,
   isSkillAssignmentDueToday,
   isShowingUpLeaderboardEnabled,
+  resolveWearableCoverageFromSnapshot,
   resolveTimeZone,
   scoreShowingUpDay,
 } from './utils/teamShowingUpScore';
@@ -193,6 +193,8 @@ const persistShowingUpRecords = async (
           eveningCheckIn: day.eveningCheckIn === true,
           checkIn: admin.firestore.FieldValue.delete(),
           wearable: day.wearable === true,
+          daytimeWearable: day.daytimeWearable === true,
+          overnightWearable: day.overnightWearable === true,
           points: Number(day.points) || 0,
           maxPoints: 4,
           finalized: day.dateKey < input.throughDate,
@@ -428,13 +430,17 @@ export const calculateAndPersistTeamStandings = async (input: {
         ? checkInDocument.data() as Record<string, any>
         : undefined;
       const healthDocument = healthById.get(`${membership.userId}_daily_${dateKey}`);
+      const wearableCoverage = healthDocument?.exists === true
+        ? resolveWearableCoverageFromSnapshot(healthDocument.data() as Record<string, any>)
+        : { hasDaytime: false, hasOvernight: false };
       return scoreShowingUpDay({
         dateKey,
         skillTraining: skillDays.get(membership.userId)?.has(dateKey) === true,
         morningCheckIn: hasMorningCheckIn(checkInData),
         eveningCheckIn: hasEveningCheckIn(checkInData),
-        wearable: healthDocument?.exists === true
-          && hasVerifiedOvernightData(healthDocument.data() as Record<string, any>),
+        wearable: wearableCoverage.hasDaytime || wearableCoverage.hasOvernight,
+        daytimeWearable: wearableCoverage.hasDaytime,
+        overnightWearable: wearableCoverage.hasOvernight,
       });
     });
     return {
@@ -492,6 +498,7 @@ export const calculateAndPersistTeamStandings = async (input: {
       morningCheckInPoints: 1,
       eveningCheckInPoints: 1,
       wearablePoints: 1,
+      wearablePointRule: 'Any verified daytime or overnight wearable coverage earns the wearable showing-up point; missing overnight recovery still stays missing in Recovery.',
     },
     members,
     currentUser,

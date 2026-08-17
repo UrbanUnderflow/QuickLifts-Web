@@ -152,6 +152,7 @@ export interface InferenceResult {
 }
 
 export type SportsCandidateReadType =
+  | 'self_report_lead'
   | 'readiness_status'
   | 'recovery_limiter'
   | 'load_spike'
@@ -164,8 +165,31 @@ export type SportsCandidateReadType =
   | 'data_quality'
   | 'no_intervention';
 
+export type AthleteDayReadAlignment = 'supportive' | 'different' | 'incomplete' | 'no_self_report';
+
+export interface AthleteDayReadSelfReport {
+  wellbeingScore: number;
+  wellbeingLabel?: string;
+  subjectiveRecoveryScore?: number;
+  subjectiveRecoveryLabel?: string;
+  observedAt?: string;
+  isSameDay: boolean;
+}
+
+export interface AthleteDayReadOutput {
+  alignment: AthleteDayReadAlignment;
+  headline: string;
+  athleteRead: string;
+  wearableContext?: string;
+  invitation?: string;
+  coachContext?: string;
+  evidenceUsed: string[];
+  evidenceOmitted: string[];
+}
+
 export interface SportsFactLedger {
-  version: 'sports-intelligence-reasoning-v0.3';
+  version: 'sports-intelligence-reasoning-v0.4';
+  audience: 'athlete' | 'coach' | 'reviewer';
   athleteContext: {
     athleteUserId: string;
     sportId: string;
@@ -178,6 +202,7 @@ export interface SportsFactLedger {
   cognitiveFacts: CognitiveMovementInterpretation;
   circadianFacts: CircadianDisruptionInterpretation;
   recommendations: SportsRecommendation[];
+  selfReport?: AthleteDayReadSelfReport;
   allowedClaims: string[];
   blockedClaims: string[];
   missingInputs: string[];
@@ -223,6 +248,7 @@ export interface ValidatedSportsIntelligencePayload {
     action: string;
     confidenceNote?: string;
   };
+  dayRead: AthleteDayReadOutput;
   validation: SportsReasoningTrace;
   provenance: {
     evidenceRefs: string[];
@@ -233,6 +259,7 @@ export interface ValidatedSportsIntelligencePayload {
 
 export interface SportsReasoningLayerInput extends InferenceEngineInput {
   audience?: ValidatedSportsIntelligencePayload['audience'];
+  selfReport?: AthleteDayReadSelfReport | null;
   inference?: InferenceResult;
   generatedAt?: number;
   sourceSnapshotIds?: string[];
@@ -803,10 +830,10 @@ const buildCircadianDisruptionInterpretation = (
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Sports Intelligence Reasoning Layer v0.3
+// Sports Intelligence Reasoning Layer v0.4
 // ──────────────────────────────────────────────────────────────────────────────
 
-const SPORTS_REASONING_VERSION: SportsFactLedger['version'] = 'sports-intelligence-reasoning-v0.3';
+const SPORTS_REASONING_VERSION: SportsFactLedger['version'] = 'sports-intelligence-reasoning-v0.4';
 
 const SPORTS_REASONING_DOMAIN_KEYS: DomainKey[] = [
   'identity',
@@ -851,6 +878,81 @@ const uniqueStrings = (items: Array<string | undefined | null>): string[] =>
 
 const formatBand = (value: string): string => value.replace(/_/g, ' ');
 
+const clampDayReadScore = (value: unknown): number | undefined => {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  const oneToFive = numeric > 5 ? 1 + (Math.max(0, Math.min(100, numeric)) / 25) : numeric;
+  return Math.max(1, Math.min(5, Math.round(oneToFive)));
+};
+
+const sameOperationalDay = (value: string | undefined, dayKey: string): boolean => {
+  if (!value) return false;
+  return value.slice(0, 10) === dayKey;
+};
+
+const extractAthleteDayReadSelfReport = (
+  input: SportsReasoningLayerInput,
+): AthleteDayReadSelfReport | undefined => {
+  if (input.selfReport === null) return undefined;
+  if (input.selfReport !== undefined) return input.selfReport;
+
+  const block = input.snapshot.domains.behavioral;
+  const behavioral = block?.data as BehavioralContext | undefined;
+  const wellbeingScore = clampDayReadScore(
+    behavioral?.subjectiveReadiness ?? behavioral?.readinessScoreProxy,
+  );
+  if (wellbeingScore === undefined) return undefined;
+
+  const observedAt = behavioral?.recentCheckinAt;
+  const isSameDay = sameOperationalDay(observedAt, input.snapshot.snapshotDate)
+    || (!observedAt && block?.freshness === 'fresh');
+
+  return {
+    wellbeingScore,
+    wellbeingLabel: behavioral?.moodLabel,
+    subjectiveRecoveryScore: clampDayReadScore(behavioral?.subjectiveRecovery),
+    subjectiveRecoveryLabel: behavioral?.subjectiveRecoveryLabel,
+    observedAt,
+    isSameDay,
+  };
+};
+
+const wellbeingPhrase = (score: number, fallback?: string): string => {
+  if (score <= 1) return 'drained';
+  if (score === 2) return 'off';
+  if (score === 3) return 'okay';
+  if (score === 4) return 'good';
+  if (score >= 5) return 'locked in';
+  return String(fallback || 'okay').trim().toLowerCase();
+};
+
+const recoveryPhrase = (score: number, fallback?: string): string => {
+  if (score <= 1) return 'very tired';
+  if (score === 2) return 'tired';
+  if (score === 3) return 'mixed on recovery';
+  if (score === 4) return 'recovered';
+  if (score >= 5) return 'fully recovered';
+  return String(fallback || 'unsure about recovery').trim().toLowerCase();
+};
+
+const athleteFeelingPhrase = (selfReport: AthleteDayReadSelfReport): string => {
+  const wellbeing = wellbeingPhrase(selfReport.wellbeingScore, selfReport.wellbeingLabel);
+  if (selfReport.subjectiveRecoveryScore === undefined) return wellbeing;
+  return `${wellbeing} and ${recoveryPhrase(
+    selfReport.subjectiveRecoveryScore,
+    selfReport.subjectiveRecoveryLabel,
+  )}`;
+};
+
+const capitalizeFirst = (value: string): string =>
+  value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
+
+const athleteDayReadHeadline = (selfReport: AthleteDayReadSelfReport): string => {
+  const fullHeadline = capitalizeFirst(`Feeling ${athleteFeelingPhrase(selfReport)}`);
+  if (fullHeadline.trim().split(/\s+/).length <= 6) return fullHeadline;
+  return capitalizeFirst(`Feeling ${wellbeingPhrase(selfReport.wellbeingScore, selfReport.wellbeingLabel)}`);
+};
+
 const confidenceWeight = (tier: DataConfidence): number => CONFIDENCE_RANK[tier] ?? 0;
 
 const evidenceLabel = (ref: InterpretationEvidenceRef): string => {
@@ -869,7 +971,7 @@ const evidenceShortValue = (
 };
 
 const buildSportsFactLedger = (
-  input: InferenceEngineInput,
+  input: SportsReasoningLayerInput,
   inference: InferenceResult,
 ): SportsFactLedger => {
   const domainBlocks = input.snapshot.domains as Partial<Record<DomainKey, { freshness?: FreshnessTier }>>;
@@ -900,9 +1002,21 @@ const buildSportsFactLedger = (
     ...(inference.circadianDisruption.evidence.length > 0 ? [inference.circadianDisruption.confidenceTier] : []),
   ];
   const confidenceTier = confidenceInputs.reduce((acc, next) => minConfidence(acc, next), 'high_confidence' as DataConfidence);
+  const selfReport = extractAthleteDayReadSelfReport(input);
+  if (selfReport?.isSameDay) {
+    evidenceRefs.unshift({
+      domain: 'behavioral',
+      label: 'fresh same-day athlete self-report',
+      value: athleteFeelingPhrase(selfReport),
+      sourceFamily: 'pulsecheck_self_report',
+    });
+  } else {
+    missingInputs.push('behavioral: Fresh same-day self-report is unavailable.');
+  }
 
   return {
     version: SPORTS_REASONING_VERSION,
+    audience: input.audience || 'reviewer',
     athleteContext: {
       athleteUserId: input.snapshot.athleteUserId,
       sportId: input.sport.id,
@@ -915,6 +1029,7 @@ const buildSportsFactLedger = (
     cognitiveFacts: inference.cognitiveMovement,
     circadianFacts: inference.circadianDisruption,
     recommendations: inference.recommendations,
+    selfReport: selfReport?.isSameDay ? selfReport : undefined,
     allowedClaims: uniqueStrings([
       `Readiness band is ${formatBand(inference.readiness.readinessBand)}.`,
       `Training load band is ${formatBand(inference.trainingLoad.loadBand)}.`,
@@ -971,7 +1086,80 @@ const makeCandidate = (
   };
 };
 
+const hasAnyWearableRecoveryEvidence = (ledger: SportsFactLedger): boolean =>
+  ledger.recoveryFacts.evidence.some((ref) => ref.domain === 'recovery');
+
+const hasWearableRecoveryEvidence = (ledger: SportsFactLedger): boolean =>
+  hasAnyWearableRecoveryEvidence(ledger)
+  && ['fresh', 'recent'].includes(ledger.sourceFreshness.recovery || 'missing');
+
+const athleteDayReadAlignment = (ledger: SportsFactLedger): AthleteDayReadAlignment => {
+  if (!ledger.selfReport?.isSameDay) return 'no_self_report';
+  // Alignment can only be classified against an eligible personal trend.
+  // The current inference payload does not yet expose that trend, so a
+  // one-day wearable snapshot remains incomplete rather than high/low.
+  return 'incomplete';
+};
+
+const buildAthleteSelfReportCandidate = (ledger: SportsFactLedger): SportsCandidateRead => {
+  const selfReport = ledger.selfReport!;
+  const phrase = athleteFeelingPhrase(selfReport);
+  const positive = selfReport.wellbeingScore >= 4
+    && (selfReport.subjectiveRecoveryScore ?? 4) >= 3;
+  const concern = selfReport.wellbeingScore <= 2
+    || (selfReport.subjectiveRecoveryScore ?? 3) <= 2;
+  const wearableContext = hasWearableRecoveryEvidence(ledger)
+    ? 'Your wearable captured an overnight snapshot. That snapshot gives context about your night, while your check-in tells us how you feel now.'
+    : "Your check-in is enough for today's read.";
+  const invitation = positive
+    ? 'If you have time, we can talk more about what is helping you feel good.'
+    : concern
+      ? 'If you have time, we can talk more about what feels most important today.'
+      : 'If you have time, we can talk more about how today feels.';
+
+  return makeCandidate(
+    ledger,
+    'self_report_lead',
+    `You said you feel ${phrase} today, so that is the lead.`,
+    wearableContext,
+    invitation,
+    'high_confidence',
+    100,
+    ['fresh same-day self-report leads athlete Day Read'],
+  );
+};
+
+const buildAthleteWearableSnapshotCandidate = (ledger: SportsFactLedger): SportsCandidateRead =>
+  makeCandidate(
+    ledger,
+    'data_quality',
+    `Your wearable captured recovery data for ${ledger.athleteContext.dayKey}.`,
+    'These measurements describe a limited period. Open the data view to see what your device recorded.',
+    'Review the individual measurements whenever you deliberately open the data view.',
+    ledger.confidenceTier,
+    90,
+    ['device-only athlete read stays descriptive'],
+  );
+
+const buildAthleteMissingDataCandidate = (ledger: SportsFactLedger): SportsCandidateRead =>
+  makeCandidate(
+    ledger,
+    'data_quality',
+    'Your wearable data is still arriving for today.',
+    'The available measurements cover part of the overnight picture.',
+    'You can review the individual measurements after more data arrives.',
+    'degraded',
+    90,
+    ['missing wearable data stays descriptive'],
+  );
+
 const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidateRead[] => {
+  if (ledger.audience === 'athlete') {
+    if (ledger.selfReport?.isSameDay) return [buildAthleteSelfReportCandidate(ledger)];
+    if (hasWearableRecoveryEvidence(ledger)) return [buildAthleteWearableSnapshotCandidate(ledger)];
+    return [buildAthleteMissingDataCandidate(ledger)];
+  }
+
   const readiness = ledger.recoveryFacts;
   const load = ledger.loadFacts;
   const circadian = ledger.circadianFacts;
@@ -1006,7 +1194,7 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       'session_confirmation_needed',
       `Recent activity context is incomplete for ${ledger.athleteContext.sportName}.${metricText}`,
       'I should not judge workload from an incomplete activity picture.',
-      'Treat this as a mindset check: complete the Nora session and notice where focus feels easy or harder today.',
+      'Keep the read incomplete. If a conversation is useful, begin with the athlete\'s own account before offering mental-performance support.',
       load.confidenceTier,
       readiness.readinessBand === 'on_plan' ? 88 : 72,
       ['training freshness/session-context gate activated'],
@@ -1020,8 +1208,8 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       ledger,
       'recovery_limiter',
       `Readiness is ${formatBand(readiness.readinessBand)}${metricText}.`,
-      'That does not make today a bad day; it makes today a composure opportunity.',
-      'Before pressure shows up, pick one simple phrase such as calm, patient, or next play. Use it when the body feels flat.',
+      'This is recovery context. The athlete\'s own report supplies mood, confidence, focus, and capability.',
+      'Keep the measurements in authorized staff context and let the athlete\'s report lead any mental-performance conversation.',
       readiness.confidenceTier,
       readiness.readinessBand === 'concerning' ? 88 : 78,
       [`readiness band: ${readiness.readinessBand}`],
@@ -1034,8 +1222,8 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       ledger,
       'load_spike',
       `Training load is ${formatBand(load.loadBand)}${acwr !== undefined ? ` with ACWR ${acwr}` : ''}.`,
-      'Heavy weeks can make focus, patience, and emotional control harder.',
-      'Use this as a mental rep: before the day starts, choose one simple phrase you can say to yourself the first time frustration shows up.',
+      'Load describes recent work exposure. The athlete\'s report supplies focus, patience, and emotional-control context.',
+      'Keep the pattern available to authorized staff and begin with the athlete\'s own account before offering support.',
       load.confidenceTier,
       load.loadBand === 'concerning' ? 86 : 74,
       [`load band: ${load.loadBand}`],
@@ -1053,8 +1241,8 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       ledger,
       'readiness_status',
       `Readiness is ${formatBand(readiness.readinessBand)} and load is ${formatBand(load.loadBand)}.${sleepText}`,
-      'The athlete is creating a cleaner environment for focus, learning, and composure.',
-      'Reward the pattern: complete the Nora session, protect the same routine tonight, and rate your focus after the first five minutes of work.',
+      'This combination describes recovery and load. Athlete self-report and measured cognitive tasks supply the mental-performance picture.',
+      'Keep the pattern descriptive and use the athlete\'s own account before offering mental-performance support.',
       minConfidence(readiness.confidenceTier, load.confidenceTier),
       trainingContextMissing ? 54 : 76,
       ['readiness/load match gate activated'],
@@ -1070,8 +1258,8 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       ledger,
       'recovery_limiter',
       `Circadian disruption is ${formatBand(circadian.disruptionBand)}.`,
-      'Sleep timing can make attention and patience feel more expensive.',
-      'Make the mental setup simple: get light early, hydrate, and use one 6-second exhale before your first class, lift, or practice task.',
+      'Sleep timing differs from the recent pattern. Athlete self-report supplies attention and patience context.',
+      'Keep the timing pattern in authorized staff context and let the athlete\'s report lead any mental-performance conversation.',
       circadian.confidenceTier,
       circadian.disruptionBand === 'jetlag_significant' ? 82 : 70,
       [`circadian band: ${circadian.disruptionBand}`],
@@ -1088,8 +1276,8 @@ const generateSportsCandidateReads = (ledger: SportsFactLedger): SportsCandidate
       ledger,
       'no_intervention',
       `Readiness is ${formatBand(readiness.readinessBand)} and load is ${formatBand(load.loadBand)}.`,
-      'Nothing extreme is showing up, and average days still build identity.',
-      'Complete the mental rep, keep the routine clean, and let consistency do its quiet work.',
+      'The available recovery and load evidence supports a descriptive update.',
+      'No mental assignment is implied. Athlete self-report leads any mental-performance conversation.',
       ledger.confidenceTier,
       62,
       ['no threshold crossed'],
@@ -1109,6 +1297,62 @@ const scanUnsupportedSportsClaims = (text: string): string[] =>
       .map((entry) => entry.message),
   );
 
+const scanAthleteDayReadClaims = (text: string, ledger: SportsFactLedger): string[] => {
+  if (ledger.audience !== 'athlete') return [];
+  const issues: string[] = [];
+  const lowered = text.toLowerCase();
+  const selfReport = ledger.selfReport;
+  const reportedConcern = selfReport?.isSameDay === true
+    && (selfReport.wellbeingScore <= 2 || (selfReport.subjectiveRecoveryScore ?? 3) <= 2);
+
+  if (
+    /\b(confidence|focus|motivation|decision|decisions|decision-making)\b[^.!?]{0,80}\b(harder|more effort|limited|lower|worse)\b/i.test(text)
+    || /\b(sleep|hrv|resting heart rate|readiness|recovery)\b[^.!?]{0,100}\b(confidence|focus|motivation|decision|decisions|decision-making)\b/i.test(text)
+  ) {
+    issues.push('wearable data cannot infer psychological state, confidence, focus, motivation, or decision quality');
+  }
+
+  if (/\bhrv\b|\bresting (?:heart rate|hr)\b|\breadiness(?:\s+is)?\s+\d|\bsleep\s+\d+(?:\.\d+)?\s*(?:h|hr|hours|m|min|minutes)\b/i.test(text)) {
+    issues.push('raw biometrics belong behind the deliberate data view');
+  }
+  if (!reportedConcern && /6-second exhale|breathing exercise|visualization|choose one word|pick one simple phrase|mental assignment/i.test(text)) {
+    issues.push('a Day Read cannot manufacture an exercise from wearable data');
+  }
+  if (/poor day|bad day|limited day|compromised day|broken day|day is broken|not maxed out/i.test(text)) {
+    issues.push('a Day Read cannot turn measurements into a verdict about the athlete day');
+  }
+  if (/change today'?s workout|change your workout|reduce training|increase training|cut reps|add sets|lower the weight|skip practice|train harder|take a rest day/i.test(text)) {
+    issues.push('physical training decisions belong with the athlete coach');
+  }
+
+  if (selfReport?.isSameDay) {
+    if (/\b(?:open|complete|use)\s+(?:the\s+)?(?:today'?s\s+)?nora check-in\b/i.test(text)) {
+      issues.push('the athlete already completed today\'s check-in');
+    }
+    if (/\bbut\b/i.test(text)) {
+      issues.push('Day Read context must add to the athlete report instead of negating it with but');
+    }
+
+    const positive = selfReport.wellbeingScore >= 4
+      && (selfReport.subjectiveRecoveryScore ?? 4) >= 3;
+    if (
+      positive
+      && /may take more effort|not fully recovered|not at peak|body feels flat|limited activity/i.test(text)
+    ) {
+      issues.push('positive same-day self-report cannot be reversed by a wearable-derived warning');
+    }
+  }
+
+  if (
+    hasAnyWearableRecoveryEvidence(ledger)
+    && /\b(?:high|low|good|poor|mixed) recovery\b/i.test(lowered)
+  ) {
+    issues.push('wearable data cannot be classified without an eligible personal baseline');
+  }
+
+  return uniqueStrings(issues);
+};
+
 const evaluateSportsGuardrails = (
   candidate: SportsCandidateRead,
   ledger: SportsFactLedger,
@@ -1123,7 +1367,8 @@ const evaluateSportsGuardrails = (
   }
 
   if (
-    ledger.missingInputs.length >= 3
+    ledger.audience !== 'athlete'
+    && ledger.missingInputs.length >= 3
     && !['data_quality', 'session_confirmation_needed'].includes(candidate.type)
   ) {
     issues.push('missing-input gate requires a data-quality or session-confirmation read first');
@@ -1147,7 +1392,10 @@ const validateSportsCandidate = (
 ): Pick<SportsReasoningTrace, 'rubricResults' | 'guardrailResults' | 'unsupportedClaims'> => {
   const text = candidateText(candidate);
   const rubricResults = validateNoraVoiceRubric(text).map((result) => result.message);
-  const unsupportedClaims = scanUnsupportedSportsClaims(text);
+  const unsupportedClaims = uniqueStrings([
+    ...scanUnsupportedSportsClaims(text),
+    ...scanAthleteDayReadClaims(text, ledger),
+  ]);
   const guardrailResults = evaluateSportsGuardrails(candidate, ledger);
 
   return {
@@ -1157,8 +1405,18 @@ const validateSportsCandidate = (
   };
 };
 
-const buildFallbackCandidate = (ledger: SportsFactLedger): SportsCandidateRead =>
-  makeCandidate(
+export const validateAthleteDayReadCopy = (
+  text: string,
+  ledger: SportsFactLedger,
+): string[] => scanAthleteDayReadClaims(text, ledger);
+
+const buildFallbackCandidate = (ledger: SportsFactLedger): SportsCandidateRead => {
+  if (ledger.audience === 'athlete') {
+    if (ledger.selfReport?.isSameDay) return buildAthleteSelfReportCandidate(ledger);
+    if (hasWearableRecoveryEvidence(ledger)) return buildAthleteWearableSnapshotCandidate(ledger);
+    return buildAthleteMissingDataCandidate(ledger);
+  }
+  return makeCandidate(
     ledger,
     'data_quality',
     `The ${ledger.athleteContext.sportName} read needs more evidence before a strong recommendation.`,
@@ -1169,6 +1427,7 @@ const buildFallbackCandidate = (ledger: SportsFactLedger): SportsCandidateRead =
     ['fallback candidate used after validation blocked stronger reads'],
     ['hold for reviewer if data remains missing'],
   );
+};
 
 const selectValidatedCandidate = (
   ledger: SportsFactLedger,
@@ -1213,6 +1472,76 @@ const selectValidatedCandidate = (
   };
 };
 
+const buildDayReadOutput = (
+  ledger: SportsFactLedger,
+  candidate: SportsCandidateRead,
+): AthleteDayReadOutput => {
+  const alignment = athleteDayReadAlignment(ledger);
+  const selfReport = ledger.selfReport;
+  const hasAnyWearable = hasAnyWearableRecoveryEvidence(ledger);
+  const hasEligibleWearable = hasWearableRecoveryEvidence(ledger);
+  const headline = selfReport?.isSameDay
+    ? athleteDayReadHeadline(selfReport)
+    : candidate.type === 'data_quality' && hasWearableRecoveryEvidence(ledger)
+      ? 'Wearable snapshot available'
+      : candidate.type === 'data_quality'
+        ? 'Wearable data still arriving'
+        : capitalizeFirst(formatBand(candidate.type));
+
+  const evidenceUsed = uniqueStrings([
+    ...(selfReport?.isSameDay ? ['selfReport.wellbeingScore'] : []),
+    ...(selfReport?.isSameDay && selfReport.subjectiveRecoveryScore !== undefined
+      ? ['selfReport.subjectiveRecoveryScore']
+      : []),
+    ...(hasEligibleWearable
+      ? ledger.recoveryFacts.evidence
+        .filter((ref) => ref.domain === 'recovery')
+        .map((ref) => `${ref.domain}.${ref.label} (context only)`)
+      : []),
+  ]);
+  const evidenceOmitted = uniqueStrings([
+    ...(!selfReport?.isSameDay ? ['selfReport: no fresh same-day report'] : []),
+    ...(hasEligibleWearable
+      ? ['wearable classification: no eligible personal baseline']
+      : []),
+    ...(hasAnyWearable && !hasEligibleWearable
+      ? [`wearable context: omitted because the recovery source is ${ledger.sourceFreshness.recovery || 'missing'}`]
+      : []),
+    ...(selfReport?.isSameDay && hasEligibleWearable
+      ? ['raw biometrics: available only in the deliberate data view']
+      : []),
+    ...(ledger.recoveryFacts.evidence.some((ref) => /readinessScore|recoveryScore/i.test(ref.label))
+      ? ['composite readiness: hidden from the default athlete read']
+      : []),
+  ]);
+
+  const coachContextParts = [
+    selfReport?.isSameDay
+      ? `Athlete reported feeling ${athleteFeelingPhrase(selfReport)} today.`
+      : undefined,
+    hasAnyWearable
+      ? `Wearable evidence (${ledger.sourceFreshness.recovery || 'missing'}): ${ledger.recoveryFacts.evidence
+        .filter((ref) => ref.domain === 'recovery')
+        .map(evidenceLabel)
+        .join(', ')}.`
+      : undefined,
+    hasAnyWearable
+      ? 'No eligible personal baseline was available for athlete-facing classification.'
+      : undefined,
+  ].filter((part): part is string => Boolean(part));
+
+  return {
+    alignment,
+    headline,
+    athleteRead: candidate.fact,
+    wearableContext: candidate.interpretation || undefined,
+    invitation: candidate.recommendedAction || undefined,
+    coachContext: coachContextParts.join(' ') || undefined,
+    evidenceUsed,
+    evidenceOmitted,
+  };
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Public entry
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1239,6 +1568,7 @@ export const runSportsIntelligenceReasoningLayer = (
   const candidates = generateSportsCandidateReads(ledger);
   const selection = selectValidatedCandidate(ledger, candidates);
   const selectedCandidate = selection.selectedCandidate;
+  const dayRead = buildDayReadOutput(ledger, selectedCandidate);
   const generatedAt = input.generatedAt || Date.now();
 
   return {
@@ -1251,7 +1581,7 @@ export const runSportsIntelligenceReasoningLayer = (
     candidates,
     selectedCandidate,
     copy: {
-      headline: formatBand(selectedCandidate.type),
+      headline: ledger.audience === 'athlete' ? dayRead.headline : formatBand(selectedCandidate.type),
       fact: selectedCandidate.fact,
       interpretation: selectedCandidate.interpretation,
       action: selectedCandidate.recommendedAction,
@@ -1260,6 +1590,7 @@ export const runSportsIntelligenceReasoningLayer = (
           ? undefined
           : `Confidence: ${selectedCandidate.confidence}.`,
     },
+    dayRead,
     validation: {
       ledgerVersion: ledger.version,
       selectedCandidateId: selectedCandidate.id,
@@ -1280,6 +1611,7 @@ export const runSportsIntelligenceReasoningLayer = (
 export const sportsIntelligenceInferenceEngine = {
   run: runSportsIntelligenceInference,
   reason: runSportsIntelligenceReasoningLayer,
+  validateAthleteDayReadCopy,
 };
 
 // Re-export the load model type so callers don't need a second import.

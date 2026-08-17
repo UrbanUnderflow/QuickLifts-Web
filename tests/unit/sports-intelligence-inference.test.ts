@@ -192,8 +192,10 @@ test('reasoning layer — selects a supported readiness read without screenshot-
   });
   const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
   const copyText = JSON.stringify(payload.copy).toLowerCase();
-  assert.equal(payload.layerVersion, 'sports-intelligence-reasoning-v0.3');
-  assert.equal(payload.selectedCandidate.type, 'readiness_status');
+  assert.equal(payload.layerVersion, 'sports-intelligence-reasoning-v0.4');
+  assert.equal(payload.selectedCandidate.type, 'self_report_lead');
+  assert.equal(payload.dayRead.alignment, 'incomplete');
+  assert.equal(payload.dayRead.headline, 'Feeling good');
   assert.equal(payload.validation.finalStatus, 'approved');
   assert.equal(payload.validation.rubricResults.length, 0);
   assert.equal(payload.validation.unsupportedClaims.length, 0);
@@ -219,7 +221,7 @@ test('reasoning layer — routes missing recovery through data quality instead o
   assert.ok(payload.ledger.missingInputs.some((item: string) => item.includes('recovery')));
 });
 
-test('reasoning layer — steady readiness with missing session context avoids filler copy', async () => {
+test('reasoning layer — device-only recovery stays descriptive and avoids mental advice', async () => {
   const { inference } = await loadModules();
   const sport = await fetchSport('basketball');
   const snapshot = buildSnapshot({
@@ -232,7 +234,7 @@ test('reasoning layer — steady readiness with missing session context avoids f
   });
   const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
   const copyText = JSON.stringify(payload.copy).toLowerCase();
-  assert.equal(payload.selectedCandidate.type, 'session_confirmation_needed');
+  assert.equal(payload.selectedCandidate.type, 'data_quality');
   assert.equal(payload.validation.unsupportedClaims.length, 0);
   assert.equal(copyText.includes('dramatic change'), false);
   assert.equal(copyText.includes('choose the day'), false);
@@ -243,8 +245,219 @@ test('reasoning layer — steady readiness with missing session context avoids f
   assert.equal(copyText.includes('accessories'), false);
   assert.equal(copyText.includes('workout or rest day'), false);
   assert.equal(copyText.includes('do not add more sets, reps, cardio, or exercises'), false);
-  assert.ok(copyText.includes('mindset check'));
-  assert.ok(copyText.includes('complete the nora session'));
+  assert.ok(copyText.includes('wearable snapshot available'));
+  assert.ok(copyText.includes('open the data view'));
+  assert.equal(copyText.includes('mindset check'), false);
+  assert.equal(copyText.includes('complete the nora session'), false);
+});
+
+test('reasoning layer — positive self-report leads when a wearable snapshot looks unfavorable', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('track-field');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { recoveryScore: 35, sleepEfficiency: 0.7, totalSleepMin: 344 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+    behavioral: {
+      freshness: 'fresh',
+      data: {
+        subjectiveReadiness: 4,
+        moodLabel: 'Solid',
+        subjectiveRecovery: 4,
+        subjectiveRecoveryLabel: 'Recovered',
+        recentCheckinAt: '2026-04-25T12:00:00Z',
+      },
+      provenance: { contributingSources: ['pulsecheck_self_report'], primarySource: 'pulsecheck_self_report', dataConfidence: 'emerging' },
+      sourceStatus: { pulsecheck_self_report: 'connected_synced' },
+    },
+  });
+
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+  const copyText = JSON.stringify(payload.copy).toLowerCase();
+
+  assert.equal(payload.selectedCandidate.type, 'self_report_lead');
+  assert.equal(payload.dayRead.headline, 'Feeling good and recovered');
+  assert.match(payload.dayRead.athleteRead, /you said you feel good and recovered/i);
+  assert.doesNotMatch(copyText, /may take more effort|not fully recovered|not maxed out|not at peak/);
+  assert.doesNotMatch(copyText, /hrv|resting heart rate|readiness\s+\d|sleep\s+\d/);
+  assert.doesNotMatch(copyText, /6-second exhale|breathing exercise|visualization/);
+  assert.equal(payload.validation.finalStatus, 'approved');
+});
+
+test('reasoning layer — fresh self-report produces a Day Read without wearable recovery', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    behavioral: {
+      freshness: 'fresh',
+      data: {
+        subjectiveReadiness: 4,
+        moodLabel: 'Solid',
+        subjectiveRecovery: 4,
+        subjectiveRecoveryLabel: 'Recovered',
+        recentCheckinAt: '2026-04-25T12:00:00Z',
+      },
+      provenance: { contributingSources: ['pulsecheck_self_report'], primarySource: 'pulsecheck_self_report', dataConfidence: 'emerging' },
+      sourceStatus: { pulsecheck_self_report: 'connected_synced' },
+    },
+  });
+
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+  const copyText = JSON.stringify(payload.copy).toLowerCase();
+
+  assert.equal(payload.selectedCandidate.type, 'self_report_lead');
+  assert.equal(payload.dayRead.headline, 'Feeling good and recovered');
+  assert.match(payload.dayRead.wearableContext || '', /check-in is enough for today's read/i);
+  assert.doesNotMatch(copyText, /wearable data still arriving|may take more effort|not fully recovered/);
+  assert.equal(payload.validation.finalStatus, 'approved');
+});
+
+test('reasoning layer — stale wearable evidence stays out of the athlete Day Read', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'stale',
+      data: { recoveryScore: 76, sleepEfficiency: 0.88, totalSleepMin: 430 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'directional' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+    behavioral: {
+      freshness: 'fresh',
+      data: {
+        subjectiveReadiness: 4,
+        moodLabel: 'Solid',
+        subjectiveRecovery: 4,
+        subjectiveRecoveryLabel: 'Recovered',
+        recentCheckinAt: '2026-04-25T12:00:00Z',
+      },
+      provenance: { contributingSources: ['pulsecheck_self_report'], primarySource: 'pulsecheck_self_report', dataConfidence: 'emerging' },
+      sourceStatus: { pulsecheck_self_report: 'connected_synced' },
+    },
+  });
+
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+
+  assert.match(payload.dayRead.wearableContext || '', /check-in is enough for today's read/i);
+  assert.doesNotMatch(payload.dayRead.wearableContext || '', /overnight snapshot/i);
+  assert.equal(payload.dayRead.evidenceUsed.some((entry: string) => entry.startsWith('recovery.')), false);
+  assert.ok(payload.dayRead.evidenceOmitted.some((entry: string) => /source is stale/i.test(entry)));
+  assert.match(payload.dayRead.coachContext || '', /wearable evidence \(stale\)/i);
+  assert.equal(payload.validation.finalStatus, 'approved');
+});
+
+test('reasoning layer — favorable wearable data does not erase a reported concern', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { recoveryScore: 92, sleepEfficiency: 0.96, totalSleepMin: 510 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+    behavioral: {
+      freshness: 'fresh',
+      data: {
+        subjectiveReadiness: 2,
+        moodLabel: 'Off',
+        subjectiveRecovery: 2,
+        subjectiveRecoveryLabel: 'Tired',
+        recentCheckinAt: '2026-04-25T12:00:00Z',
+      },
+      provenance: { contributingSources: ['pulsecheck_self_report'], primarySource: 'pulsecheck_self_report', dataConfidence: 'emerging' },
+      sourceStatus: { pulsecheck_self_report: 'connected_synced' },
+    },
+  });
+
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+
+  assert.equal(payload.dayRead.headline, 'Feeling off and tired');
+  assert.match(payload.dayRead.athleteRead, /you said you feel off and tired/i);
+  assert.match(payload.dayRead.invitation || '', /what feels most important today/i);
+  assert.doesNotMatch(JSON.stringify(payload.copy), /high recovery|good recovery|all systems green/i);
+  assert.equal(payload.validation.finalStatus, 'approved');
+});
+
+test('reasoning layer — every self-report combination produces a validated compact Day Read', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('basketball');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { recoveryScore: 65, sleepEfficiency: 0.78, totalSleepMin: 344 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+  });
+
+  for (let wellbeingScore = 1; wellbeingScore <= 5; wellbeingScore += 1) {
+    for (let subjectiveRecoveryScore = 1; subjectiveRecoveryScore <= 5; subjectiveRecoveryScore += 1) {
+      const payload = inference.runSportsIntelligenceReasoningLayer({
+        snapshot: snapshot as any,
+        sport,
+        audience: 'athlete',
+        selfReport: {
+          wellbeingScore,
+          subjectiveRecoveryScore,
+          observedAt: '2026-04-25T12:00:00Z',
+          isSameDay: true,
+        },
+      });
+
+      assert.ok(payload.dayRead.headline.trim().split(/\s+/).length <= 6);
+      assert.equal(payload.validation.finalStatus, 'approved');
+      assert.equal(payload.validation.guardrailResults.length, 0);
+      assert.equal(payload.validation.unsupportedClaims.length, 0);
+    }
+  }
+});
+
+test('reasoning layer — deterministic Day Read validation rejects screenshot-style contradiction', async () => {
+  const { inference } = await loadModules();
+  const sport = await fetchSport('track-field');
+  const snapshot = buildSnapshot({
+    recovery: {
+      freshness: 'fresh',
+      data: { recoveryScore: 65, sleepEfficiency: 0.78, totalSleepMin: 344 },
+      provenance: { contributingSources: ['oura'], primarySource: 'oura', dataConfidence: 'stable' },
+      sourceStatus: { oura: 'connected_synced' },
+    },
+    behavioral: {
+      freshness: 'fresh',
+      data: {
+        subjectiveReadiness: 4,
+        subjectiveRecovery: 4,
+        recentCheckinAt: '2026-04-25T12:00:00Z',
+      },
+      provenance: { contributingSources: ['pulsecheck_self_report'], primarySource: 'pulsecheck_self_report', dataConfidence: 'emerging' },
+      sourceStatus: { pulsecheck_self_report: 'connected_synced' },
+    },
+  });
+  const payload = inference.runSportsIntelligenceReasoningLayer({ snapshot: snapshot as any, sport, audience: 'athlete' });
+
+  const failures = inference.validateAthleteDayReadCopy(
+    'You feel good, but readiness 65 means confidence and decisions may take more effort. Use one 6-second exhale, then open the Nora check-in.',
+    payload.ledger,
+  );
+
+  assert.ok(failures.some((failure: string) => /psychological state/i.test(failure)));
+  assert.ok(failures.some((failure: string) => /already completed/i.test(failure)));
+  assert.ok(failures.some((failure: string) => /raw biometrics/i.test(failure)));
+  assert.ok(failures.some((failure: string) => /manufacture an exercise/i.test(failure)));
+  assert.ok(failures.some((failure: string) => /cannot be reversed/i.test(failure)));
+  assert.ok(failures.some((failure: string) => /add to the athlete report|negating/i.test(failure)));
+
+  const boundaryFailures = inference.validateAthleteDayReadCopy(
+    "This is a poor day with low recovery. Cut reps and change today's workout.",
+    payload.ledger,
+  );
+  assert.ok(boundaryFailures.some((failure: string) => /verdict about the athlete day/i.test(failure)));
+  assert.ok(boundaryFailures.some((failure: string) => /physical training decisions/i.test(failure)));
+  assert.ok(boundaryFailures.some((failure: string) => /personal baseline/i.test(failure)));
 });
 
 test('generator — empty athleteResults produces team-on-plan top line', async () => {
@@ -376,7 +589,7 @@ test('orchestrator — preview mode skips Firestore writes and surfaces athlete 
   assert.equal(result.athleteTrace[0].snapshotLoaded, true);
   assert.equal(result.athleteTrace[1].snapshotLoaded, false);
   assert.ok(result.generatedDraft.coachSurface.meta.source === 'generated');
-  assert.equal(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.layerVersion, 'sports-intelligence-reasoning-v0.3');
+  assert.equal(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.layerVersion, 'sports-intelligence-reasoning-v0.4');
   assert.equal(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.payloads.length, 1);
   assert.ok(result.generatedDraft.reviewerOnly.sportsIntelligenceLayer?.payloads[0].selectedCandidateType);
 });

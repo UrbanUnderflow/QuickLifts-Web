@@ -71,6 +71,21 @@ test('buildSelfReportPayloads — readinessScore (0-100) wins over energyLevel f
   assert.equal(behavioralPayload.readinessScoreProxy, 75);
 });
 
+test('buildSelfReportPayloads — PulseCheck 1–5 readiness remains the athlete self-report and maps to a 0–100 proxy', () => {
+  const { behavioralPayload } = helper.buildSelfReportPayloads({
+    readinessScore: 4,
+    moodWord: 'Solid',
+    subjectiveRecoveryScore: 4,
+    subjectiveRecoveryLabel: 'Recovered',
+  });
+
+  assert.equal(behavioralPayload.subjectiveReadiness, 4);
+  assert.equal(behavioralPayload.readinessScoreProxy, 75);
+  assert.equal(behavioralPayload.moodLabel, 'Solid');
+  assert.equal(behavioralPayload.subjectiveRecovery, 4);
+  assert.equal(behavioralPayload.subjectiveRecoveryLabel, 'Recovered');
+});
+
 test('buildSelfReportPayloads — clamps out-of-range numeric inputs', () => {
   const { recoveryPayload, behavioralPayload } = helper.buildSelfReportPayloads({
     sleepQuality: 99,
@@ -131,7 +146,10 @@ test('writeSelfReportSourceRecords — writes recovery + behavioral docs with de
     timezone: 'America/New_York',
     confidenceLabel: 'emerging',
     answers: {
-      readinessScore: 80,
+      readinessScore: 4,
+      moodWord: 'Solid',
+      subjectiveRecoveryScore: 4,
+      subjectiveRecoveryLabel: 'Recovered',
       energyLevel: 4,
       stressLevel: 2,
       sleepQuality: 5,
@@ -152,6 +170,12 @@ test('writeSelfReportSourceRecords — writes recovery + behavioral docs with de
     assert.equal(record.provenance.mode, 'self_reported');
     assert.equal(record.provenance.confidenceLabel, 'emerging');
   }
+  const behavioralRecord = records.find((record) => record.domain === 'behavioral');
+  assert.equal(behavioralRecord.payload.subjectiveReadiness, 4);
+  assert.equal(behavioralRecord.payload.moodLabel, 'Solid');
+  assert.equal(behavioralRecord.payload.subjectiveRecovery, 4);
+  assert.equal(behavioralRecord.payload.subjectiveRecoveryLabel, 'Recovered');
+  assert.match(behavioralRecord.payload.recentCheckinAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test('writeSelfReportSourceRecords — skips empty-payload domains', async () => {

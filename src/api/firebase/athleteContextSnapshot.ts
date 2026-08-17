@@ -184,6 +184,10 @@ export interface BehavioralContext {
   recentCheckinAt?: string;
   sentimentRollingAvg?: number;
   subjectiveReadiness?: number;
+  readinessScoreProxy?: number;
+  moodLabel?: string;
+  subjectiveRecovery?: number;
+  subjectiveRecoveryLabel?: string;
   moodTone?: 'positive' | 'neutral' | 'concerned' | 'distressed' | 'unknown';
   sorenessReports?: Record<string, number>;
   riskFlags?: string[];

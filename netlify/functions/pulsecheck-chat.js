@@ -30,6 +30,8 @@ const {
   buildNoraLaneInstructions,
   classifyNoraConversationLane,
   evaluateNoraEngagementResponse,
+  isCoachHandoffRequest,
+  isCoachIdentityQuestion,
 } = require('./utils/noraEngagementPolicy');
 const {
   runtimeHelpers: escalationRuntime,
@@ -1129,6 +1131,498 @@ const canStaffUseNora = (data) => {
   return role === 'coach' || role === 'support-staff';
 };
 
+const canBePrimaryCoach = (data) => {
+  const role = normalizeScopeString(data?.role).toLowerCase();
+  const title = normalizeScopeString(data?.title).toLowerCase();
+  return role === 'coach' || title.includes('coach');
+};
+
+const scopedCoachAthleteConversationId = ({
+  organizationId,
+  teamId,
+  coachId,
+  athleteId,
+}) => {
+  const scope = [organizationId, teamId, coachId, athleteId].map(normalizeScopeString);
+  if (scope.some((value) => !/^[A-Za-z0-9_-]{1,256}$/.test(value))) {
+    return '';
+  }
+  return `pcv2_${scope.join('~')}`;
+};
+
+function displayNameFromData(data, fallback = 'Coach') {
+  const candidates = [
+    data?.displayName,
+    data?.preferredName,
+    data?.fullName,
+    data?.name,
+    data?.username,
+    data?.referralCode,
+  ];
+  const value = candidates
+    .map((entry) => normalizeScopeString(entry))
+    .find(Boolean);
+  return value || fallback;
+}
+
+async function getUserIdentity(db, userId, fallback = 'Coach') {
+  const cleanId = normalizeScopeString(userId);
+  if (!cleanId) return { displayName: fallback, profileImageURL: '' };
+  const [userSnap, coachSnap] = await Promise.all([
+    db.collection('users').doc(cleanId).get().catch(() => null),
+    db.collection('coaches').doc(cleanId).get().catch(() => null),
+  ]);
+  const userData = userSnap && scopeSnapshotExists(userSnap) ? (userSnap.data() || {}) : {};
+  const coachData = coachSnap && scopeSnapshotExists(coachSnap) ? (coachSnap.data() || {}) : {};
+  return {
+    displayName: displayNameFromData({ ...coachData, ...userData }, fallback),
+    profileImageURL: normalizeScopeString(userData.profileImageURL || userData.photoURL || coachData.profileImageURL),
+  };
+}
+
+async function loadAthleteCoachContacts(db, userId, userData = {}) {
+  const contactsByUserId = new Map();
+  const primaryCandidates = [];
+  const storedPrimaryCoachId = normalizeScopeString(userData?.primaryCoachUserId);
+
+  const putContact = (contact) => {
+    const coachId = normalizeScopeString(contact?.coachId);
+    if (!coachId) return;
+    const existing = contactsByUserId.get(coachId) || {};
+    const merged = {
+      ...existing,
+      ...contact,
+      coachId,
+      canBePrimary: Boolean(existing.canBePrimary || contact.canBePrimary),
+      teamNames: [...new Set([...(existing.teamNames || []), ...(contact.teamNames || [])].filter(Boolean))],
+    };
+    contactsByUserId.set(coachId, merged);
+    if (merged.canBePrimary && !primaryCandidates.includes(coachId)) {
+      primaryCandidates.push(coachId);
+    }
+  };
+
+  const connectedCoaches = Array.isArray(userData?.connectedCoaches)
+    ? userData.connectedCoaches
+    : [];
+  for (const link of connectedCoaches) {
+    const coachId = normalizeScopeString(
+      link && typeof link === 'object' ? link.coachId : link
+    );
+    if (!coachId) continue;
+    const identity = await getUserIdentity(db, coachId, 'Coach');
+    putContact({
+      coachId,
+      displayName: normalizeScopeString(link?.coachName) || identity.displayName,
+      roleLabel: 'Coach',
+      organizationId: '',
+      teamId: '',
+      teamNames: [],
+      canBePrimary: true,
+    });
+  }
+
+  const membershipSnapshot = await db
+    .collection('pulsecheck-team-memberships')
+    .where('userId', '==', userId)
+    .get();
+  const athleteMemberships = (membershipSnapshot.docs || [])
+    .map((doc) => doc.data() || {})
+    .filter((membership) => (
+      normalizeScopeString(membership.userId) === userId
+      && normalizeScopeString(membership.role).toLowerCase() === 'athlete'
+      && normalizeScopeString(membership.teamId)
+      && normalizeScopeString(membership.organizationId)
+      && isActiveScopeRecord(membership)
+    ));
+
+  for (const athleteMembership of athleteMemberships) {
+    const teamId = normalizeScopeString(athleteMembership.teamId);
+    const organizationId = normalizeScopeString(athleteMembership.organizationId);
+    const [teamSnap, staffSnap] = await Promise.all([
+      db.collection('pulsecheck-teams').doc(teamId).get().catch(() => null),
+      db.collection('pulsecheck-team-memberships').where('teamId', '==', teamId).get(),
+    ]);
+    const teamData = teamSnap && scopeSnapshotExists(teamSnap) ? (teamSnap.data() || {}) : {};
+    if (
+      normalizeScopeString(teamData.organizationId) !== organizationId
+      || normalizeScopeString(teamData.status).toLowerCase() !== 'active'
+      || !isActiveScopeRecord(teamData)
+    ) {
+      continue;
+    }
+    const teamName = normalizeScopeString(teamData.displayName) || 'Team';
+    for (const doc of staffSnap.docs || []) {
+      const staff = doc.data() || {};
+      const coachId = normalizeScopeString(staff.userId);
+      if (
+        !coachId
+        || coachId === userId
+        || normalizeScopeString(staff.teamId) !== teamId
+        || normalizeScopeString(staff.organizationId) !== organizationId
+        || !isActiveScopeRecord(staff)
+        || !canStaffUseNora(staff)
+      ) {
+        continue;
+      }
+      const primaryEligible = canBePrimaryCoach(staff);
+      const identity = await getUserIdentity(db, coachId, normalizeScopeString(staff.title) || 'Coach');
+      putContact({
+        coachId,
+        displayName: identity.displayName || normalizeScopeString(staff.title) || 'Coach',
+        roleLabel: normalizeScopeString(staff.title) || normalizeScopeString(staff.role) || 'Staff',
+        organizationId,
+        teamId,
+        teamNames: [teamName],
+        canBePrimary: primaryEligible,
+      });
+    }
+  }
+
+  const contacts = [...contactsByUserId.values()];
+  const primaryCoachId = storedPrimaryCoachId && contacts.some((contact) => contact.coachId === storedPrimaryCoachId && contact.canBePrimary)
+    ? storedPrimaryCoachId
+    : primaryCandidates.find((coachId) => contactsByUserId.get(coachId)?.canBePrimary) || '';
+
+  return contacts
+    .map((contact) => ({ ...contact, isPrimary: contact.coachId === primaryCoachId }))
+    .sort((left, right) => {
+      if (left.isPrimary !== right.isPrimary) return left.isPrimary ? -1 : 1;
+      if (left.canBePrimary !== right.canBePrimary) return left.canBePrimary ? -1 : 1;
+      return String(left.displayName || '').localeCompare(String(right.displayName || ''));
+    });
+}
+
+function resolveTargetCoachFromMessage(message, contacts) {
+  const normalized = normalizeScopeString(message).toLowerCase();
+  if (!Array.isArray(contacts) || contacts.length === 0) return null;
+  const named = contacts.find((contact) => {
+    const name = normalizeScopeString(contact.displayName).toLowerCase();
+    return name && normalized.includes(name);
+  });
+  if (named) return named;
+  return contacts.find((contact) => contact.isPrimary && contact.canBePrimary)
+    || contacts.find((contact) => contact.canBePrimary)
+    || null;
+}
+
+function buildCoachOptionsText(contacts) {
+  const options = contacts
+    .filter((contact) => contact.canBePrimary)
+    .slice(0, 4)
+    .map((contact) => contact.displayName || 'Coach');
+  if (options.length === 0) return '';
+  if (options.length === 1) return options[0];
+  return options.slice(0, -1).join(', ') + `, or ${options[options.length - 1]}`;
+}
+
+function cleanCoachHandoffText(value) {
+  return normalizeScopeString(value)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function containsAnyText(value, terms) {
+  const lower = cleanCoachHandoffText(value).toLowerCase();
+  return terms.some((term) => lower.includes(String(term).toLowerCase()));
+}
+
+function trimCoachHandoffText(value, limit = 3900) {
+  const cleaned = normalizeScopeString(value)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (cleaned.length <= limit) return cleaned;
+  return `${cleaned.slice(0, Math.max(0, limit - 1)).trim()}...`;
+}
+
+function isCoachHandoffSystemText(value) {
+  return containsAnyText(value, [
+    'which coach would you like me to send',
+    'which coach should i send',
+    'send it to',
+    'sending it now',
+    'i just sent this message',
+    'sent to coach',
+    'nora handoff from',
+  ]);
+}
+
+function firstCoachHandoffCapture(text, pattern) {
+  const match = normalizeScopeString(text).match(pattern);
+  return cleanCoachHandoffText(match?.[1] || '');
+}
+
+function detectedCoachHandoffMealPlanItem(text) {
+  const patterns = [
+    /(?:coach (?:gave|assigned|put|wants|said it has to be)\s+(?:me\s+)?)([^.,!?\n]+)/i,
+    /(?:includes|include|including|there(?:'s| is))\s+([^.,!?\n]+)/i,
+    /(?:having to eat|have to eat|has to be|had to be|needs to be|must be)\s+([^.,!?\n]+)/i,
+    /(?:don't|don’t)\s+(?:really\s+)?(?:love|like)\s+([^.,!?\n]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const captured = firstCoachHandoffCapture(text, pattern)
+      .replace(/\b(the thought of|something|a lot of|for me specifically|because.*)$/i, '')
+      .replace(/\s+(and|but)\s+i\b.*$/i, '')
+      .replace(/^(the|a|an)\s+/i, '')
+      .trim()
+      .replace(/[.,!?]+$/g, '')
+      .trim();
+    const lower = captured.toLowerCase();
+    if (lower.includes("something i don't") || ['something', 'this meal', 'this food'].includes(lower)) continue;
+    if (captured && captured.length <= 80) return captured;
+  }
+  return '';
+}
+
+function detectedCoachHandoffConcernReasons(text) {
+  const lower = cleanCoachHandoffText(text).toLowerCase();
+  const reasons = [];
+  if (/(anxious|anxiety|worried)/i.test(lower)) reasons.push('anxiety around the food requirement');
+  if (/(not confident|adher|stick to)/i.test(lower)) reasons.push('concern about staying adherent');
+  if (/smell/i.test(lower)) reasons.push('smell aversion');
+  if (/(taste|palate|don’t like|don't like|hate)/i.test(lower)) reasons.push('strong dislike of the food');
+  if (/texture/i.test(lower)) reasons.push('texture concern');
+  if (/(gain weight|lean down|goal)/i.test(lower)) reasons.push('wanting the nutrition goal to stay intact');
+  return [...new Set(reasons)];
+}
+
+function numberedCoachHandoffOptionSummaries(text) {
+  const source = normalizeScopeString(text).replace(/\s+/g, ' ');
+  return [...source.matchAll(/(?:^|\s)(\d+)\.\s+(.+?)(?=\s+\d+\.\s+|$)/g)]
+    .map((match) => {
+      const cleaned = String(match[2] || '').replace(/\*\*/g, '').trim();
+      if (!cleaned) return '';
+      const [title, ...detailParts] = cleaned.split(':');
+      const detail = detailParts.join(':').trim();
+      return detail ? `${title.trim()}: ${detail}` : title.trim();
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConversationId }) {
+  const request = cleanCoachHandoffText(message);
+  const displayName = cleanCoachHandoffText(athleteName) || 'the athlete';
+  const turns = (recentMessages || [])
+    .map((entry) => ({
+      isFromUser: entry?.isFromUser === true,
+      content: cleanCoachHandoffText(entry?.content),
+    }))
+    .filter((entry) => entry.content && !isCoachHandoffSystemText(entry.content))
+    .slice(-14);
+  const combined = [request, ...turns.map((entry) => entry.content)].filter(Boolean).join(' ');
+  const isMealPlanRequest = containsAnyText(combined, [
+    'meal plan',
+    'food plan',
+    'nutrition plan',
+    'diet plan',
+    'recipe',
+    'recipes',
+    'food',
+    'eat',
+    'taste',
+    'smell',
+    'texture',
+    'adher',
+  ]);
+  const item = isMealPlanRequest ? detectedCoachHandoffMealPlanItem(combined) : '';
+  const reasons = isMealPlanRequest ? detectedCoachHandoffConcernReasons(combined) : [];
+  const why = isMealPlanRequest
+    ? `${displayName} asked Nora to involve the coach because the current meal plan may be hard to follow.${item ? ` It includes ${item}.` : ''} The context includes ${reasons.length ? reasons.join(', ') : 'coach review before deciding what fits the plan'}, so this should be reviewed as plan fit and adherence context, not as a generic performance-anxiety issue.`
+    : `${displayName} asked Nora to share the recent conversation context so the coach can review it with the athlete directly.`;
+
+  const requestKey = request.toLowerCase();
+  const userTurns = turns
+    .filter((entry) => entry.isFromUser)
+    .map((entry) => entry.content)
+    .filter((content) => content.toLowerCase() !== requestKey);
+  const relevantUserTurns = userTurns.filter((content) => containsAnyText(content, [
+    'anxious',
+    'anxiety',
+    'worried',
+    'not confident',
+    'adher',
+    'meal plan',
+    'food plan',
+    'nutrition',
+    'recipe',
+    'coach',
+    'has to',
+    'have to',
+    "don't like",
+    'don’t like',
+    'dislike',
+    'hate',
+    'smell',
+    'taste',
+    'texture',
+    'goal',
+    'gain weight',
+    'lean down',
+  ]));
+  const athleteExcerpts = (relevantUserTurns.length ? relevantUserTurns : userTurns).slice(-4);
+
+  const assistantTurns = turns
+    .filter((entry) => !entry.isFromUser)
+    .map((entry) => entry.content)
+    .filter((content) => !isCoachHandoffSystemText(content));
+  const optionSource = [...assistantTurns].reverse().find((content) => containsAnyText(content, [
+    'recipe',
+    'option',
+    'alternative',
+    'consider',
+    'try',
+  ])) || assistantTurns[assistantTurns.length - 1] || '';
+  const optionSummaries = numberedCoachHandoffOptionSummaries(optionSource);
+  const noraOptions = optionSummaries.length ? optionSummaries : (optionSource ? [trimCoachHandoffText(optionSource, 700)] : []);
+
+  const reviewAsk = isMealPlanRequest
+    ? item
+      ? `Please review whether any of these preparation ideas fit the current ${item} requirement, or what coach-approved adjustment would protect adherence while keeping the nutrition goal intact.`
+      : 'Please review whether the shared preparation ideas fit the current meal plan, or what coach-approved adjustment would protect adherence while keeping the nutrition goal intact.'
+    : `Please review this context with ${displayName} when you have a chance. The athlete explicitly asked Nora to share it with you.`;
+
+  const noraLink = `pulsecheck://nora/chat?conversationId=${encodeURIComponent(noraConversationId || '')}`;
+  const sections = [
+    `Nora handoff from ${displayName}`,
+    '',
+    'Athlete asked:',
+    `"${request}"`,
+    '',
+    'Why this came up:',
+    why,
+  ];
+  if (athleteExcerpts.length) {
+    sections.push('', 'What the athlete said:');
+    athleteExcerpts.forEach((excerpt) => sections.push(`- "${trimCoachHandoffText(excerpt, 240)}"`));
+  }
+  if (noraOptions.length) {
+    sections.push('', 'What Nora shared:');
+    noraOptions.forEach((option) => sections.push(`- ${trimCoachHandoffText(option, 180)}`));
+  }
+  sections.push('', 'Coach review needed:', reviewAsk, '', `Nora thread: ${noraLink}`);
+
+  return {
+    title: isMealPlanRequest ? 'Meal-plan context for coach review' : 'Nora context for coach review',
+    summary: isMealPlanRequest
+      ? 'Includes why the athlete asked, the adherence concern, and the options Nora shared for coach review.'
+      : 'Includes why the athlete asked and the recent Nora context for coach review.',
+    why,
+    athleteExcerpts,
+    noraOptions,
+    reviewAsk,
+    topic: isMealPlanRequest ? 'meal_plan_adherence' : 'nora_context',
+    messageBody: trimCoachHandoffText(sections.join('\n'), 3900),
+  };
+}
+
+function sanitizeAthleteFacingNoraText(value) {
+  return String(value || '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\bPrimary training plan step\b/gi, 'Today\'s saved plan')
+    .replace(/\bstate-based override\b/gi, 'a later coach or athlete update')
+    .replace(/\bdecision trace\b/gi, 'saved context')
+    .replace(/\bExecution Truth\b/g, 'Saved context')
+    .trim();
+}
+
+async function sendNoraCoachHandoff({
+  db,
+  athleteId,
+  athleteName,
+  coach,
+  noraConversationId,
+  message,
+  recentMessages,
+}) {
+  const conversationId = scopedCoachAthleteConversationId({
+    organizationId: coach.organizationId,
+    teamId: coach.teamId,
+    coachId: coach.coachId,
+    athleteId,
+  });
+  if (!conversationId) {
+    return {
+      sent: false,
+      reason: 'missing_team_scope',
+      assistantMessage: `I can see ${coach.displayName || 'your coach'}, but I need a team-scoped PulseCheck message thread before I can send this. Open Conversations with that coach and I can keep the handoff there.`,
+    };
+  }
+
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const conversationRef = db.collection('coach-athlete-conversations').doc(conversationId);
+  const conversationSnap = await conversationRef.get();
+  if (!scopeSnapshotExists(conversationSnap)) {
+    await conversationRef.set({
+      coachId: coach.coachId,
+      athleteId,
+      organizationId: coach.organizationId,
+      teamId: coach.teamId,
+      participantIds: [coach.coachId, athleteId],
+      coachName: coach.displayName || 'Coach',
+      athleteName: athleteName || 'Athlete',
+      lastMessage: '',
+      lastMessageId: '',
+      lastMessageTimestamp: now,
+      lastMessageSenderId: '',
+      unreadCount: { [coach.coachId]: 0, [athleteId]: 0 },
+      createdAt: now,
+      updatedAt: now,
+    }, { merge: true });
+  }
+
+  const coachBrief = buildCoachHandoffBrief({
+    athleteName,
+    message,
+    recentMessages,
+    noraConversationId,
+  });
+  const handoffText = coachBrief.messageBody;
+
+  const messageRef = db.collection('coach-athlete-messages').doc();
+  const batch = db.batch();
+  batch.set(messageRef, {
+    conversationId,
+    senderId: athleteId,
+    senderType: 'athlete',
+    content: handoffText,
+    timestamp: now,
+    readBy: { [athleteId]: now },
+    messageType: 'text',
+    source: 'nora_handoff',
+      noraHandoff: {
+        sourceConversationId: noraConversationId || '',
+        requestedByAthleteId: athleteId,
+        targetCoachId: coach.coachId,
+        topic: coachBrief.topic,
+        title: coachBrief.title,
+        summary: coachBrief.summary,
+        why: coachBrief.why,
+        athleteExcerpts: coachBrief.athleteExcerpts,
+        noraOptions: coachBrief.noraOptions,
+        reviewAsk: coachBrief.reviewAsk,
+        createdAt: now,
+      },
+    });
+  batch.set(conversationRef, {
+    lastMessage: handoffText,
+    lastMessageId: messageRef.id,
+    lastMessageTimestamp: now,
+    lastMessageSenderId: athleteId,
+    updatedAt: now,
+    [`unreadCount.${coach.coachId}`]: admin.firestore.FieldValue.increment(1),
+  }, { merge: true });
+  await batch.commit();
+
+  return {
+    sent: true,
+    conversationId,
+    messageId: messageRef.id,
+    assistantMessage: `Done. I sent ${coach.displayName || 'your coach'} the context and a link back to this Nora thread.`,
+  };
+}
+
 async function resolveAthleteVaultScopes(db, userId, userData) {
   const membershipSnapshot = await db
     .collection('pulsecheck-team-memberships')
@@ -1899,7 +2393,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     let assignmentContextSection = '';
     if (todaysNoraAssignment) {
       const assignmentAction = getDailyAssignmentActionLabel(todaysNoraAssignment) || 'nora task';
-      assignmentContextSection = `\n\n## Today's Nora Assignment (Execution Truth):\n- Status: ${todaysNoraAssignment.status || 'assigned'}\n- Action: ${assignmentAction}\n- Rationale: ${todaysNoraAssignment.rationale || 'No rationale saved.'}`;
+      assignmentContextSection = `\n\n## Today's Nora Assignment (Internal Context Only):\n- Status: ${todaysNoraAssignment.status || 'assigned'}\n- Action: ${assignmentAction}`;
 
       if (todaysNoraAssignment.readinessBand) {
         assignmentContextSection += `\n- Readiness Band: ${todaysNoraAssignment.readinessBand}`;
@@ -1908,7 +2402,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         assignmentContextSection += `\n- Source Date: ${todaysNoraAssignment.sourceDate}`;
       }
 
-      assignmentContextSection += `\nRules:\n- Keep this assignment in the background until the athlete asks about training, practice, today's task, their assignment, curriculum, a session, a sim, a protocol, or an exercise.\n- Treat this assignment as the source of truth when the athlete asks about today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- When naming today's active task, use this saved task or a plain-language paraphrase of the same saved task.\n- Before recommending or surfacing this task, explain why the athlete's message, assignment rationale, and available context markers make this the right next step.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
+      assignmentContextSection += `\nRules:\n- Keep this assignment in the background until the athlete asks about training, practice, today's task, their assignment, curriculum, a session, a sim, a protocol, or an exercise.\n- Treat this assignment as the source of truth when the athlete asks about today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, answer in plain athlete language using the saved task name.\n- Never expose assignment rationale, state snapshots, decision traces, override logic, or internal routing.`;
       if (conversationSignalEvent && !['started', 'completed', 'deferred', 'overridden', 'superseded'].includes(todaysNoraAssignment.status || '')) {
         assignmentContextSection += assignmentRefreshApplied
           ? `\n- A newer chat-derived signal refreshed both the state snapshot and the current mutable assignment. Speak to the updated task, not the stale one.`
@@ -1922,7 +2416,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         humanizeAssignmentField(activeProgram.sessionType) ||
         'next best rep';
 
-      assignmentContextSection = `\n\n## Current Program Recommendation (No Daily Task Materialized Yet):\n- Recommended Focus: ${recommendedAction}\n- Rationale: ${activeProgram.rationale || 'No rationale saved.'}\nRules:\n- This is recommendation context, not a confirmed assigned task.\n- If the athlete asks what is assigned today, be honest that no daily Nora task is materialized yet.\n- Do not invent a branded drill, sim, or protocol name that is not present in the runtime recommendation context.`;
+      assignmentContextSection = `\n\n## Current Program Recommendation (Internal Context Only):\n- Recommended Focus: ${recommendedAction}\nRules:\n- This is recommendation context, not a confirmed assigned task.\n- If the athlete asks what is assigned today, be honest that no daily Nora task is materialized yet.\n- Do not invent a branded drill, sim, or protocol name that is not present in the runtime recommendation context.\n- Never expose saved rationale, decision traces, state snapshots, or internal routing.`;
     }
     const snapshotContextSection = buildSnapshotContextSection(currentStateSnapshot, conversationSignalEvent);
     
@@ -1980,6 +2474,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     const boundaryResponse = buildNoraBoundaryResponse(conversationLane, { athleteMessage: message });
     const handledBoundary = Boolean(boundaryResponse);
     let assistantMessage = handledAcknowledgment ? "You're welcome." : boundaryResponse;
+    let coachHandoffOutcome = null;
     let handledOnboarding = handledAcknowledgment || handledBoundary;
 
     if (!handledOnboarding && onboardingState === 'asked') {
@@ -2065,6 +2560,74 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           const minuteStr = String(parsed.minute).padStart(2, '0');
           assistantMessage = `Done. I’ll remind you at ${parsed.hour}:${minuteStr} (your local time) if you haven’t completed your assignment.`;
           handledOnboarding = true;
+        }
+      }
+    }
+
+    const awaitingCoachHandoffSelection = (recentMessages || [])
+      .slice()
+      .reverse()
+      .find((entry) => entry && !entry.isFromUser && normalizeScopeString(entry.content))
+      ?.content
+      ?.toLowerCase()
+      ?.includes('which coach should i send this to') === true;
+
+    if (!handledOnboarding && (isCoachIdentityQuestion(message) || isCoachHandoffRequest(message) || awaitingCoachHandoffSelection)) {
+      const coachContacts = await loadAthleteCoachContacts(db, userId, userDataForPrefs);
+      const primaryCoach = coachContacts.find((contact) => contact.isPrimary && contact.canBePrimary);
+
+      if (isCoachIdentityQuestion(message) && !isCoachHandoffRequest(message) && !awaitingCoachHandoffSelection) {
+        if (primaryCoach) {
+          assistantMessage = `Your primary PulseCheck coach is ${primaryCoach.displayName || 'Coach'}.`;
+        } else if (coachContacts.length > 0) {
+          const optionsText = buildCoachOptionsText(coachContacts);
+          assistantMessage = optionsText
+            ? `I see these coach options: ${optionsText}. I do not see one marked as primary yet.`
+            : 'I see staff connected to your account, but I do not see a primary coach marked yet.';
+        } else {
+          assistantMessage = 'I do not see a PulseCheck coach connected to your account yet.';
+        }
+        handledOnboarding = true;
+      } else if (isCoachHandoffRequest(message) || awaitingCoachHandoffSelection) {
+        const coachEligibleContacts = coachContacts.filter((contact) => contact.canBePrimary);
+        if (coachEligibleContacts.length === 0) {
+          assistantMessage = 'I do not see a PulseCheck coach connected for messaging yet, so I cannot send this from Nora.';
+          handledOnboarding = true;
+        } else {
+          const namedCoach = coachEligibleContacts.find((contact) => {
+            const name = normalizeScopeString(contact.displayName).toLowerCase();
+            return name && normalizeScopeString(message).toLowerCase().includes(name);
+          });
+          const targetCoach = namedCoach || primaryCoach || (coachEligibleContacts.length === 1 ? coachEligibleContacts[0] : null);
+
+          if (!targetCoach) {
+            const optionsText = buildCoachOptionsText(coachEligibleContacts);
+            assistantMessage = optionsText
+              ? `Which coach should I send this to: ${optionsText}?`
+              : 'Which coach should I send this to?';
+            coachHandoffOutcome = {
+              status: 'needs_coach_selection',
+              coachOptions: coachEligibleContacts.map((contact) => ({
+                coachId: contact.coachId,
+                displayName: contact.displayName,
+                teamId: contact.teamId || '',
+                organizationId: contact.organizationId || '',
+              })),
+            };
+            handledOnboarding = true;
+          } else {
+            coachHandoffOutcome = await sendNoraCoachHandoff({
+              db,
+              athleteId: userId,
+              athleteName: displayName,
+              coach: targetCoach,
+              noraConversationId: newConvoId,
+              message,
+              recentMessages,
+            });
+            assistantMessage = coachHandoffOutcome.assistantMessage;
+            handledOnboarding = true;
+          }
         }
       }
     }
@@ -2201,6 +2764,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
     }
 
+    assistantMessage = sanitizeAthleteFacingNoraText(assistantMessage);
     assistantMessage = enforceNoraVoiceRubric(assistantMessage, {
       source: handledAcknowledgment
         ? 'pulsecheck-chat-acknowledgment'
@@ -2288,7 +2852,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           const candidate = revision.choices?.[0]?.message?.content?.trim();
           if (!candidate) break;
 
-          assistantMessage = enforceNoraVoiceRubric(candidate, {
+          assistantMessage = enforceNoraVoiceRubric(sanitizeAthleteFacingNoraText(candidate), {
             source: `pulsecheck-chat-engagement-revision-${attempt}`,
             fallback: defaultNoraVoiceRubricFallback(candidate),
             previousAssistantMessages,
@@ -2324,7 +2888,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         previousAssistantMessages,
         groundingMessages,
       });
-      console.warn('[pulsecheck-chat] Used deterministic Nora engagement fallback', {
+      console.warn('[pulsecheck-chat] Used grounded Nora engagement fallback', {
         lane: conversationLane,
         score: `${engagementEvaluation.score}/${engagementEvaluation.maxScore}`,
         failures: engagementEvaluation.failures.map((failure) => failure.id),
@@ -2332,7 +2896,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     }
 
     if (!engagementEvaluation.passed) {
-      console.error('[pulsecheck-chat] Deterministic Nora fallback failed the engagement rubric', {
+      console.error('[pulsecheck-chat] Grounded Nora fallback failed the engagement rubric', {
         lane: conversationLane,
         failures: engagementEvaluation.failures.map((failure) => failure.id),
       });
@@ -2575,6 +3139,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         conversationSignalEvent: conversationSignalEvent || null,
         dailyAssignment: todaysNoraAssignment || null,
         assignmentRefreshApplied,
+        coachHandoff: coachHandoffOutcome,
       })
     };
   } catch (error) {
@@ -3483,4 +4048,5 @@ exports.runtimeHelpers = {
   recoverSnapshotFromSavedConversation,
   resolveAthleteVaultScopes,
   getCoachVaultContext,
+  buildCoachHandoffBrief,
 };

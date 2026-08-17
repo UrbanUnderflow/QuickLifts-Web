@@ -1551,7 +1551,7 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
             lowerRaw,
             'signal_window_missing_timing_contract',
             'Signal Window response timing must begin at arrow-field onset, with the same response keys available while the field is visible.',
-            ['arrow-field onset', 'response keys remain available', '650 ms']
+            ['arrow-field onset', 'response keys remain available', '1,400 ms']
         );
         pushArchetypeRequirementFinding(
             findings,
@@ -3445,7 +3445,7 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
         case 'Signal Window':
             return [
                 '`direction`: `left` or `right`; `evidence_count`: `5`, `6`, or `7` agreeing arrows in a nine-arrow field.',
-                'Direction and evidence count are balanced while the 650 ms exposure, 1600 ms response window, and response mapping remain fixed.',
+                'Direction and evidence count are balanced while the protocol v3.1 1400 ms exposure, 3000 ms response window, and response mapping remain fixed.',
                 'Sport, shot-clock, ambiguity, or decoy names may supply context only; they may not reveal the answer or alter the canonical evidence manipulation.',
             ];
         case 'Sequence Shift':

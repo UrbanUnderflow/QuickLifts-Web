@@ -30,7 +30,7 @@ test('scorecard returns four separate scores and keeps a hard wellbeing day out 
   const days = dateKeys(14).map((dateKey, index) => showingUpDay(dateKey, index === 13 ? 1 : 4));
   const result = calculatePulseCheckScorecardV2({ days, generatedAt: '2026-08-16T12:00:00.000Z' });
 
-  assert.equal(result.methodologyVersion, '2.0.0');
+  assert.equal(result.methodologyVersion, '2.1.0');
   assert.equal(result.wellbeing.score, 70);
   assert.equal(result.adherence.score, 100);
   assert.equal(result.coherence.score, 100);
@@ -68,6 +68,121 @@ test('coherence is capped by adherence even when completed commitments are highl
   assert.equal(result.adherence.score, 21);
   assert.equal(result.coherence.components[1].score, 100);
   assert.equal(result.coherence.score, 21);
+});
+
+test('coherence does not present a hard zero while coverage is still thin', () => {
+  const days = dateKeys(14).map((dateKey, index): PulseCheckScoringDay => ({
+    dateKey,
+    scheduledCheckIn: true,
+    wellbeingLevel: index < 3 ? 2 : null,
+    commitment: index < 3
+      ? { state: 'missed', commitmentId: `missed-${index}` }
+      : null,
+  }));
+  const result = calculatePulseCheckScorecardV2({ days, accountAgeDays: 1 });
+
+  assert.equal(result.coherence.score, null);
+  assert.equal(result.coherence.status, 'building');
+  assert.ok(result.coherence.evidenceCoveragePercent < 80);
+});
+
+test('an established coherence read carries forward when the latest window is too thin', () => {
+  const days = dateKeys(14).map((dateKey): PulseCheckScoringDay => ({
+    dateKey,
+    scheduledCheckIn: true,
+  }));
+  const result = calculatePulseCheckScorecardV2({
+    days,
+    accountAgeDays: 420,
+    establishedCoherenceScore: 76,
+  });
+
+  assert.equal(result.coherence.score, 76);
+  assert.equal(result.coherence.status, 'available');
+  assert.equal(result.coherence.windowDays, 14);
+  assert.ok(result.coherence.notes.some((note) => note.includes('carried forward')));
+});
+
+test('compatible historical evidence seeds a mature account before a canonical scorecard exists', () => {
+  const keys = dateKeys(28);
+  const days = keys.map((dateKey, index): PulseCheckScoringDay => index < 14
+    ? showingUpDay(dateKey, 4)
+    : { dateKey, scheduledCheckIn: true });
+  const result = calculatePulseCheckScorecardV2({ days, accountAgeDays: 365 });
+
+  assert.equal(result.coherence.score, 100);
+  assert.equal(result.coherence.status, 'available');
+  assert.ok(result.coherence.notes.some((note) => note.includes('carried forward')));
+});
+
+test('a legacy zero scorecard cannot block compatible historical evidence from seeding Coherence', () => {
+  const keys = dateKeys(28);
+  const days = keys.map((dateKey, index): PulseCheckScoringDay => index < 14
+    ? showingUpDay(dateKey, 4)
+    : { dateKey, scheduledCheckIn: true });
+  const result = calculatePulseCheckScorecardV2({
+    days,
+    accountAgeDays: 365,
+    establishedCoherenceScore: 0,
+  });
+
+  assert.equal(result.coherence.score, 100);
+  assert.equal(result.coherence.status, 'available');
+});
+
+test('a sufficiently evidenced latest window replaces the established coherence read', () => {
+  const days = dateKeys(14).map((dateKey, index): PulseCheckScoringDay => ({
+    dateKey,
+    scheduledCheckIn: true,
+    wellbeingLevel: 4,
+    commitment: {
+      state: index < 7 ? 'completed' : 'missed',
+      commitmentId: `commitment-${dateKey}`,
+    },
+  }));
+  const result = calculatePulseCheckScorecardV2({
+    days,
+    accountAgeDays: 365,
+    establishedCoherenceScore: 76,
+  });
+
+  assert.equal(result.coherence.score, 59);
+  assert.notEqual(result.coherence.score, 76);
+});
+
+test('a mature account without defensible coherence evidence is unavailable, not building or zero', () => {
+  const days = dateKeys(14).map((dateKey): PulseCheckScoringDay => ({
+    dateKey,
+    scheduledCheckIn: true,
+  }));
+  const result = calculatePulseCheckScorecardV2({ days, accountAgeDays: 365 });
+
+  assert.equal(result.coherence.score, null);
+  assert.equal(result.coherence.status, 'insufficient_evidence');
+});
+
+test('a fully evidenced lowest coherence result uses the established one-to-one-hundred scale', () => {
+  const days = dateKeys(14).map((dateKey): PulseCheckScoringDay => ({
+    dateKey,
+    scheduledCheckIn: true,
+    wellbeingLevel: 3,
+    commitment: { state: 'missed', commitmentId: `missed-${dateKey}` },
+  }));
+  const result = calculatePulseCheckScorecardV2({ days, accountAgeDays: 365 });
+
+  assert.equal(result.coherence.score, 1);
+  assert.equal(result.coherence.status, 'available');
+});
+
+test('coherence uses Building only during the first three account days', () => {
+  const days = dateKeys(14).map((dateKey): PulseCheckScoringDay => showingUpDay(dateKey, 4));
+  const onboarding = calculatePulseCheckScorecardV2({ days, accountAgeDays: 2 });
+  const established = calculatePulseCheckScorecardV2({ days, accountAgeDays: 3 });
+
+  assert.equal(onboarding.coherence.score, null);
+  assert.equal(onboarding.coherence.status, 'building');
+  assert.equal(established.coherence.score, 100);
+  assert.equal(established.coherence.status, 'available');
 });
 
 test('planned rest counts only when it fits the plan and weekly follow-through remains intact', () => {

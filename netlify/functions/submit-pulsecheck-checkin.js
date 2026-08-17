@@ -601,7 +601,7 @@ function buildPlanDrivenCandidate({
     type: resolvePlanDrivenCandidateType(primaryPlan, step),
     label: step.stepLabel || liveProtocol?.label || liveSim?.name || humanizeRuntimeLabel(step.exerciseId),
     actionType: step.actionType || 'sim',
-    rationale: `Primary training plan step ${step.stepIndex} directs today's work before any state-based override is considered.`,
+    rationale: `${step.stepLabel || liveProtocol?.label || liveSim?.name || "Today's saved plan"} is the next saved step in the athlete's current plan.`,
     legacyExerciseId: liveProtocol?.legacyExerciseId || liveSim?.id || undefined,
     protocolId: step.protocolId || undefined,
     protocolFamilyId: liveProtocol?.familyId,
@@ -2882,6 +2882,7 @@ async function orchestratePostCheckIn({
   liveSimRegistry,
   primaryPlan,
   forceMutableReplacement = false,
+  assignmentIdOverride,
 }) {
   const snapshot =
     (sourceStateSnapshotId ? await getSnapshotById(db, sourceStateSnapshotId) : null) ||
@@ -2916,7 +2917,9 @@ async function orchestratePostCheckIn({
   }
 
   const readinessScore = snapshot?.readinessScore ?? progress?.taxonomyProfile?.modifierScores?.readiness;
-  const assignmentId = `${athleteId}_${sourceDate}`;
+  const assignmentId = hasNonEmptyString(assignmentIdOverride)
+    ? assignmentIdOverride.trim()
+    : `${athleteId}_${sourceDate}`;
   const assignmentRef = db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(assignmentId);
   const existingSnap = await assignmentRef.get();
   const existing = existingSnap.exists ? { id: existingSnap.id, ...existingSnap.data() } : null;
@@ -2987,10 +2990,10 @@ async function orchestratePostCheckIn({
     sourceDate,
     timezone: materializationTimezone,
     sourceDateMode: 'athlete_local_day',
-    assignedBy: 'nora',
+    assignedBy: existing?.assignedBy || 'nora',
     materializedAt: existing?.materializedAt || now,
     materializedBy: existing?.materializedBy || 'nora_runtime',
-    isPrimaryForDate: true,
+    isPrimaryForDate: existing?.isPrimaryForDate ?? true,
     status: actionType === 'defer' ? 'deferred' : (existing?.status || 'assigned'),
     actionType,
     executionPattern,
@@ -3033,6 +3036,16 @@ async function orchestratePostCheckIn({
     readinessBand: toReadinessBand(readinessScore),
     escalationTier: existing?.escalationTier ?? 0,
     supportFlag: plannerOutput.supportFlag ?? existing?.supportFlag ?? snapshot?.supportFlag ?? false,
+    curriculumSlateId: existing?.curriculumSlateId,
+    curriculumSlotId: existing?.curriculumSlotId,
+    curriculumSlotIndex: existing?.curriculumSlotIndex,
+    curriculumSlotKind: existing?.curriculumSlotKind,
+    curriculumSlotState: existing?.curriculumSlotState,
+    curriculumLane: existing?.curriculumLane,
+    curriculumIsDueToday: existing?.curriculumIsDueToday,
+    curriculumDueRank: existing?.curriculumDueRank,
+    curriculumGeneratorVersion: existing?.curriculumGeneratorVersion,
+    curriculumIntent: existing?.curriculumIntent,
     commitmentOutcomeState: forceMutableReplacement ? 'replacement_accepted' : existing?.commitmentOutcomeState,
     replacementForCommitmentId: forceMutableReplacement ? (existing?.id || assignmentId) : existing?.replacementForCommitmentId,
     replacementRequestedAt: forceMutableReplacement ? now : existing?.replacementRequestedAt,
@@ -3247,6 +3260,25 @@ exports.handler = async (event) => {
       };
     }
 
+    const subjectiveRecoveryScore = body.subjectiveRecoveryScore === undefined
+      ? undefined
+      : Number(body.subjectiveRecoveryScore);
+    if (
+      subjectiveRecoveryScore !== undefined
+      && (!Number.isInteger(subjectiveRecoveryScore)
+        || subjectiveRecoveryScore < 1
+        || subjectiveRecoveryScore > 5)
+    ) {
+      return {
+        statusCode: 400,
+        headers: RESPONSE_HEADERS,
+        body: JSON.stringify({ error: 'subjectiveRecoveryScore must be a number from 1 to 5.' }),
+      };
+    }
+    const subjectiveRecoveryLabel = typeof body.subjectiveRecoveryLabel === 'string'
+      ? body.subjectiveRecoveryLabel.trim().slice(0, 80)
+      : undefined;
+
     const { sourceDate, timezone } = resolveOperationalDay({
       explicitSourceDate: body.sourceDate,
       timezone: body.timezone,
@@ -3277,6 +3309,8 @@ exports.handler = async (event) => {
       type: typeof body.type === 'string' && body.type.trim() ? body.type.trim() : 'morning',
       readinessScore,
       moodWord: typeof body.moodWord === 'string' ? body.moodWord : undefined,
+      subjectiveRecoveryScore,
+      subjectiveRecoveryLabel,
       energyLevel: typeof body.energyLevel === 'number' ? body.energyLevel : undefined,
       stressLevel: typeof body.stressLevel === 'number' ? body.stressLevel : undefined,
       sleepQuality: typeof body.sleepQuality === 'number' ? body.sleepQuality : undefined,
@@ -3415,6 +3449,9 @@ exports.handler = async (event) => {
         sourceDate,
         timezone: body.timezone,
         readinessScore,
+        moodWord: typeof body.moodWord === 'string' ? body.moodWord : undefined,
+        subjectiveRecoveryScore,
+        subjectiveRecoveryLabel,
         energyLevel: typeof body.energyLevel === 'number' ? body.energyLevel : undefined,
         stressLevel: typeof body.stressLevel === 'number' ? body.stressLevel : undefined,
         sleepQuality: typeof body.sleepQuality === 'number' ? body.sleepQuality : undefined,
