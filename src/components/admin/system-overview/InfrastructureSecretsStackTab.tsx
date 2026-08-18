@@ -16,8 +16,44 @@ const INFRA_ROWS = [
 const SECRET_ROWS = [
   ['Netlify environment variables', 'Operational app config, API keys, low-to-medium sensitivity values, small runtime toggles', 'Front-end build env, small server-side API credentials, routing flags, cron secrets'],
   ['Google Cloud Secret Manager', 'Large or high-sensitivity server secrets that should not live in repo or Firestore', 'Google service-account JSON blob, future private keys, machine credentials that exceed Netlify env comfort'],
+  ['macOS Keychain + off-repo files', 'Local signing keys and passwords that must never be committed', 'PulseCheck Android Play upload keystore and password entries used only for release bundle creation'],
   ['Firestore / Firebase', 'Never use as a secret vault', 'Application data may reference secret ids or secret-backed configuration state, but not the secret material itself'],
   ['Local developer machine', 'Temporary bootstrap only', 'One-off downloaded key files before upload into Secret Manager and safe deletion'],
+];
+
+const PULSECHECK_ANDROID_SIGNING_ROWS = [
+  ['Play app', 'PulseCheck: Mindset Coaching', 'Google Play package `com.fitwithpulse.pulsecheck`.'],
+  ['Upload keystore', <code className="text-xs">~/.pulsecheck/android-release/pulsecheck-upload-2026.jks</code>, 'Private signing material. Keep off Git, off chat, and off Firestore.'],
+  ['Upload certificate PEM', <code className="text-xs">~/.pulsecheck/android-release/pulsecheck-upload-2026-cert.pem</code>, 'Public certificate used for Play upload-key reset or registration. Safe to upload to Play Console, but still keep out of repo unless intentionally archived.'],
+  ['Key alias', <code className="text-xs">pulsecheck_upload</code>, 'Non-secret alias consumed by Gradle through `PULSE_KEY_ALIAS`.'],
+  ['Store password', 'macOS Keychain service `pulsecheck-android-upload-store-password`', 'Read at build time only. Do not copy into Gradle files, System Overview, terminal screenshots, or docs.'],
+  ['Key password', 'macOS Keychain service `pulsecheck-android-upload-key-password`', 'PKCS12 uses the store password; this entry is kept aligned so the Gradle contract always has all four expected values.'],
+  ['Release script', <code className="text-xs">PulseCheck/scripts/build_android_play_release.sh</code>, 'Builds the signed AAB from Keychain-backed env vars and verifies the signature.'],
+  ['Current upload certificate SHA-1', <code className="text-xs">EE:97:4C:26:62:21:6D:BB:5F:46:63:F4:E7:8E:88:4B:D3:19:1C:E3</code>, 'Use this to compare against Play Console after the upload certificate is registered.'],
+  ['Current upload certificate SHA-256', <code className="text-xs">EB:DD:53:07:75:BE:C5:5E:26:80:E4:E9:D9:3D:2B:23:53:45:76:0E:FC:F8:AC:D6:02:FA:66:28:C5:2F:87:03</code>, 'Use this for Play Console/API-provider fingerprint checks.'],
+];
+
+const PULSECHECK_ANDROID_SIGNING_STEPS = [
+  {
+    title: 'Build from the Keychain-backed script',
+    body: 'Run `PulseCheck/scripts/build_android_play_release.sh`. The script exports the four Gradle signing values from macOS Keychain and creates `PulseCheck/android/app/build/outputs/bundle/release/app-release.aab`.',
+    owner: 'Release operator',
+  },
+  {
+    title: 'Verify the output before opening Play Console',
+    body: 'Confirm the Gradle output includes `:app:signReleaseBundle` and that jarsigner exits successfully. The verifier may warn about a self-signed certificate chain; that is normal for an upload key, but an unsigned bundle is not acceptable.',
+    owner: 'Release operator',
+  },
+  {
+    title: 'Register or reset the upload certificate if Play rejects the bundle',
+    body: 'If Google Play expects a previous upload key, use the PEM at `~/.pulsecheck/android-release/pulsecheck-upload-2026-cert.pem` in Protected with Play > Play Store protection > Manage Play app signing > Upload key certificate > Request upload key reset.',
+    owner: 'Play Console admin',
+  },
+  {
+    title: 'Never store the private key in System Overview',
+    body: 'This page records the keystore location, Keychain service names, fingerprints, and operating path only. Raw passwords and private key bytes stay outside the repo and outside Firestore.',
+    owner: 'Engineering',
+  },
 ];
 
 const GROUP_MEET_ROWS = [
@@ -163,6 +199,10 @@ export default function InfrastructureSecretsStackTab() {
             body: 'Brevo email sends currently depend on `BREVO_MARKETING_KEY` or `BREVO_API_KEY` from runtime env, and that source must be documented and carried forward explicitly.',
           },
           {
+            title: 'Android Upload Key Is Tracked Here',
+            body: 'PulseCheck Android Play signing now has a documented off-repo keystore, Keychain-backed passwords, certificate fingerprints, and a repeatable signed-bundle build script.',
+          },
+          {
             title: 'Guest Google Import Is Separate',
             body: 'Group Meet now has a second Google contract for guest-side calendar import. It uses dedicated guest OAuth envs and invite-scoped token storage, not the admin final-event scheduler setup.',
           },
@@ -178,6 +218,7 @@ export default function InfrastructureSecretsStackTab() {
           'Agent Infrastructure Handbook',
           'AuntEdna Integration Strategy',
           'Firestore Index Registry',
+          'PulseCheck Android Release Signing',
         ]}
       />
 
@@ -199,6 +240,23 @@ export default function InfrastructureSecretsStackTab() {
             body="Do not store private keys, service-account JSON, refresh tokens, or raw API secrets inside Firestore, Realtime Database, Storage objects, or handbook content."
           />
         </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={KeyRound} title="PulseCheck Android Play Release Signing">
+        <DataTable columns={['Concern', 'Current Home', 'Notes']} rows={PULSECHECK_ANDROID_SIGNING_ROWS} />
+        <CardGrid columns="xl:grid-cols-2">
+          <InfoCard
+            title="Why The Previous Build Was Unsigned"
+            accent="amber"
+            body="The Android Gradle release config already expected signing env vars, but this machine did not have the keystore path, alias, or passwords configured. Gradle could build a release bundle, but not a Play-ready signed upload bundle."
+          />
+          <InfoCard
+            title="Play Console Caveat"
+            accent="blue"
+            body="A new upload key is valid only after Play Console accepts or registers its public certificate. If this package already has a different upload certificate on file, request an upload-key reset before uploading the new AAB."
+          />
+        </CardGrid>
+        <StepRail steps={PULSECHECK_ANDROID_SIGNING_STEPS} />
       </SectionBlock>
 
       <SectionBlock icon={Cloud} title="Group Meet Scheduling Setup">

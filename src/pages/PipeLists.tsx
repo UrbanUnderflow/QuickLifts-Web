@@ -54,6 +54,8 @@ import {
   Mail,
   MessageCircle,
   Paperclip,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   ShieldCheck,
@@ -2735,6 +2737,7 @@ const PipelinePage: NextPage = () => {
   const [lists, setLists] = useState<PipeList[]>(initialLists);
   const personalListsRef = useRef<PipeList[]>(initialLists);
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -8712,93 +8715,113 @@ Rules:
           </div>
         </nav>
 
-        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:px-8">
+        <div
+          className={`mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8 ${
+            isSidebarCollapsed ? 'lg:grid-cols-[64px_minmax(0,1fr)]' : 'lg:grid-cols-[300px_minmax(0,1fr)]'
+          }`}
+        >
           <aside className="lg:sticky lg:top-24 lg:self-start">
             <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
-              <div className="mb-3 flex items-center justify-between px-1">
-                <h1 className="text-base font-semibold text-stone-900">PipeLists</h1>
-                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
-                  {formatCount(lists.length, 'list')}
-                </span>
+              <div className={`flex items-center px-1 ${isSidebarCollapsed ? 'justify-center' : 'mb-3 justify-between'}`}>
+                {!isSidebarCollapsed && (
+                  <>
+                    <h1 className="text-base font-semibold text-stone-900">PipeLists</h1>
+                    <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
+                      {formatCount(lists.length, 'list')}
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-900"
+                  title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                  {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </button>
               </div>
 
-              <div className="space-y-1.5">
-                {lists.map((list) => (
-                  <button
-                    key={list.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveListId(list.id);
-                      setViewMode('pipeline');
-                      setStageFilter('all');
-                      setSelectedLogItemId('');
-                      setLogDraft(defaultLogDraft(list.templateKey));
-                      setSelectedDetailItemId('');
-                      setDraft(defaultDraft(list.stages[0]?.id));
-                      resetEditor();
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition ${
-                      activeListId === list.id ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
-                    }`}
-                  >
-                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${list.accent}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">{list.name}</span>
-                      <span
-                        className={`block truncate text-xs ${
-                          activeListId === list.id ? 'text-stone-300' : 'text-stone-400'
+              {!isSidebarCollapsed && (
+                <>
+                  <div className="space-y-1.5">
+                    {lists.map((list) => (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveListId(list.id);
+                          setViewMode('pipeline');
+                          setStageFilter('all');
+                          setSelectedLogItemId('');
+                          setLogDraft(defaultLogDraft(list.templateKey));
+                          setSelectedDetailItemId('');
+                          setDraft(defaultDraft(list.stages[0]?.id));
+                          resetEditor();
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition ${
+                          activeListId === list.id ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
                         }`}
                       >
-                        {formatCount(list.items.filter((item) => !isItemDeleted(item)).length, listItemNoun(list))} · {templateCatalog[list.templateKey].label}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {isSharedView && (
-                <div className="mt-4 border-t border-stone-100 pt-4">
-                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
-                    <p className="text-sm font-semibold text-stone-950">
-                      {canEditShared ? 'Editor access' : isLeadSharedView ? 'Read-only lead' : 'Read-only share'}
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-stone-500">
-                      {canEditShared
-                        ? 'Your changes save back to this shared list.'
-                        : isLeadSharedView
-                          ? 'Anyone with this link can read this lead and open its attachments.'
-                          : 'Anyone with this link can read this list. Sign in only if you were granted edit access.'}
-                    </p>
-
-                    {shareDoc?.access === 'edit' && !canEditShared && (
-                      <div className="mt-3 space-y-2">
-                        <button
-                          type="button"
-                          onClick={handleGoogleSignIn}
-                          disabled={isGoogleSignInStarting}
-                          className="inline-flex h-9 w-full items-center justify-center rounded-full bg-stone-900 px-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Sign in with Google
-                        </button>
-                        <input
-                          value={magicEmail}
-                          onChange={(event) => setMagicEmail(event.target.value)}
-                          className="h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none"
-                          placeholder="email@example.com"
-                        />
-                        <button
-                          type="button"
-                          onClick={sendMagicLink}
-                          disabled={sendingMagicLink}
-                          className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:opacity-50"
-                        >
-                          {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
-                        </button>
-                        <MessageBanner message={authMessage} />
-                      </div>
-                    )}
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${list.accent}`} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{list.name}</span>
+                          <span
+                            className={`block truncate text-xs ${
+                              activeListId === list.id ? 'text-stone-300' : 'text-stone-400'
+                            }`}
+                          >
+                            {formatCount(list.items.filter((item) => !isItemDeleted(item)).length, listItemNoun(list))} · {templateCatalog[list.templateKey].label}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                </div>
+
+                  {isSharedView && (
+                    <div className="mt-4 border-t border-stone-100 pt-4">
+                      <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                        <p className="text-sm font-semibold text-stone-950">
+                          {canEditShared ? 'Editor access' : isLeadSharedView ? 'Read-only lead' : 'Read-only share'}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-stone-500">
+                          {canEditShared
+                            ? 'Your changes save back to this shared list.'
+                            : isLeadSharedView
+                              ? 'Anyone with this link can read this lead and open its attachments.'
+                              : 'Anyone with this link can read this list. Sign in only if you were granted edit access.'}
+                        </p>
+
+                        {shareDoc?.access === 'edit' && !canEditShared && (
+                          <div className="mt-3 space-y-2">
+                            <button
+                              type="button"
+                              onClick={handleGoogleSignIn}
+                              disabled={isGoogleSignInStarting}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full bg-stone-900 px-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Sign in with Google
+                            </button>
+                            <input
+                              value={magicEmail}
+                              onChange={(event) => setMagicEmail(event.target.value)}
+                              className="h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none"
+                              placeholder="email@example.com"
+                            />
+                            <button
+                              type="button"
+                              onClick={sendMagicLink}
+                              disabled={sendingMagicLink}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:opacity-50"
+                            >
+                              {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
+                            </button>
+                            <MessageBanner message={authMessage} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </aside>
