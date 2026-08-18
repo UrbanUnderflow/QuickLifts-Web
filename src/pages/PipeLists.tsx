@@ -31,11 +31,14 @@ import {
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   Activity,
+  ArrowDown,
+  ArrowUp,
   BarChart3,
   Building2,
   Calendar,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   CheckCircle2,
   CheckSquare,
   ClipboardList,
@@ -79,6 +82,8 @@ import {
 } from '../utils/pipelistsEmailEventSync';
 
 type PipelinePriority = 'high' | 'medium' | 'low';
+
+type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'nextStep';
 type ViewMode = 'pipeline' | 'metrics' | 'logs';
 type DetailModalMode = 'details' | 'logs' | 'email' | 'research' | 'ask';
 type MessageTone = 'success' | 'error' | 'info';
@@ -2741,6 +2746,9 @@ const PipelinePage: NextPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | PipelinePriority>('all');
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [newListName, setNewListName] = useState('');
   const [newListTemplateKey, setNewListTemplateKey] = useState<TemplateKey>('university-pilot');
   const [isDeleteListModalOpen, setIsDeleteListModalOpen] = useState(false);
@@ -3855,6 +3863,7 @@ const PipelinePage: NextPage = () => {
     return activeListItems
       .filter((item) => {
         const matchesStage = isInvestorUpdateContactsList || stageFilter === 'all' || item.stage === stageFilter;
+        const matchesPriority = priorityFilter === 'all' || item.priority === priorityFilter;
         const matchesQuery =
           search.length === 0 ||
           [
@@ -3874,9 +3883,36 @@ const PipelinePage: NextPage = () => {
             .toLowerCase()
             .includes(search);
 
-        return matchesStage && matchesQuery;
+        return matchesStage && matchesPriority && matchesQuery;
       })
       .sort((left, right) => {
+        if (sortColumn) {
+          const direction = sortDirection === 'asc' ? 1 : -1;
+          switch (sortColumn) {
+            case 'item':
+              return left.title.localeCompare(right.title) * direction;
+            case 'organization':
+              return (left.organization || '').localeCompare(right.organization || '') * direction;
+            case 'stage': {
+              const stageIndex = (item: PipelineItem) =>
+                activeList.stages.findIndex((stage) => stage.id === item.stage);
+              return (stageIndex(left) - stageIndex(right)) * direction;
+            }
+            case 'value': {
+              const valueFor = (item: PipelineItem) => (isContactListActive ? 0 : itemValue(item));
+              return (valueFor(left) - valueFor(right)) * direction;
+            }
+            case 'dueDate':
+              return (dueTime(left) - dueTime(right)) * direction;
+            case 'nextStep': {
+              const nextStepFor = (item: PipelineItem) => item.nextStep || item.notes || item.expansionPath || '';
+              return nextStepFor(left).localeCompare(nextStepFor(right)) * direction;
+            }
+            default:
+              return 0;
+          }
+        }
+
         const stageRank = (item: PipelineItem) => {
           if (isLostStage(activeList, item.stage)) return 2;
           return isIdentifiedStage(getStage(activeList, item.stage)) ? 1 : 0;
@@ -3889,7 +3925,17 @@ const PipelinePage: NextPage = () => {
 
         return left.title.localeCompare(right.title);
       });
-  }, [activeList, activeListItems, isInvestorUpdateContactsList, query, stageFilter]);
+  }, [
+    activeList,
+    activeListItems,
+    isContactListActive,
+    isInvestorUpdateContactsList,
+    priorityFilter,
+    query,
+    sortColumn,
+    sortDirection,
+    stageFilter,
+  ]);
 
   const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
   const filteredItemIdSet = useMemo(() => new Set(filteredItemIds), [filteredItemIds]);
@@ -3919,6 +3965,18 @@ const PipelinePage: NextPage = () => {
         return accumulator;
       }, {}),
     [activeListItems, activeList.stages],
+  );
+
+  const countsByPriority = useMemo(
+    () =>
+      activeListItems.reduce<Record<PipelinePriority, number>>(
+        (accumulator, item) => {
+          accumulator[item.priority] = (accumulator[item.priority] || 0) + 1;
+          return accumulator;
+        },
+        { high: 0, medium: 0, low: 0 },
+      ),
+    [activeListItems],
   );
 
   const activeItems = activeListItems.filter((item) => !isClosedStage(activeList, item.stage)).length;
@@ -5694,6 +5752,7 @@ Rules:
     setAddedGeneratedLeadKeys((currentKeys) => [...currentKeys, key]);
     setSelectedLogItemId(nextItem.id);
     setStageFilter('all');
+    setPriorityFilter('all');
     setViewMode('pipeline');
     setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -5756,6 +5815,7 @@ Rules:
     setAddedPastedLeadKeys((currentKeys) => [...currentKeys, key]);
     setSelectedLogItemId(nextItem.id);
     setStageFilter('all');
+    setPriorityFilter('all');
     setViewMode('pipeline');
     setPastedLeadListMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -6255,6 +6315,7 @@ Rules:
       ),
     );
     setStageFilter('all');
+    setPriorityFilter('all');
     setSelectedLogItemId(nextItem.id);
     setViewMode('pipeline');
     setToastMessage({
@@ -6310,6 +6371,7 @@ Rules:
         ),
       );
       setStageFilter('all');
+      setPriorityFilter('all');
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -6447,6 +6509,7 @@ Rules:
         ),
       );
       setStageFilter('all');
+      setPriorityFilter('all');
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -6664,6 +6727,7 @@ Rules:
     setLists((currentLists) => [...currentLists, nextList]);
     setActiveListId(nextList.id);
     setStageFilter('all');
+    setPriorityFilter('all');
     setNewListName('');
     setDraft(defaultDraft(nextList.stages[0]?.id));
     setSelectedLogItemId('');
@@ -6984,6 +7048,7 @@ Rules:
     if (editingItemId === itemId) resetEditor();
     setActiveListId(targetListId);
     setStageFilter('all');
+    setPriorityFilter('all');
     setQuery('');
     setSelectedDetailItemId(itemId);
     setSelectedLogItemId(itemId);
@@ -7116,6 +7181,7 @@ Rules:
     setLists(nextLists);
     setActiveListId(nextLists[0].id);
     setStageFilter('all');
+    setPriorityFilter('all');
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextLists[0].templateKey));
     setSelectedDetailItemId('');
@@ -7975,6 +8041,34 @@ Rules:
     </div>
   );
 
+  const handleSortColumnClick = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortableHeader = (label: string, column: SortColumn) => (
+    <button
+      type="button"
+      onClick={() => handleSortColumnClick(column)}
+      className="inline-flex items-center gap-1 uppercase tracking-wide text-stone-400 transition hover:text-stone-700"
+    >
+      <span>{label}</span>
+      {sortColumn === column ? (
+        sortDirection === 'asc' ? (
+          <ArrowUp className="h-3 w-3" />
+        ) : (
+          <ArrowDown className="h-3 w-3" />
+        )
+      ) : (
+        <ChevronsUpDown className="h-3 w-3 text-stone-300" />
+      )}
+    </button>
+  );
+
   const selectedDetailStage = selectedDetailItem ? getStage(activeList, selectedDetailItem.stage) : null;
   const selectedDetailIsEditing = Boolean(selectedDetailItem && isEditorOpen && editingItemId === selectedDetailItem.id);
   const shouldBlockEditShare = isSharedView && shareDoc?.access === 'edit' && !canEditShared;
@@ -8752,6 +8846,7 @@ Rules:
                           setActiveListId(list.id);
                           setViewMode('pipeline');
                           setStageFilter('all');
+                          setPriorityFilter('all');
                           setSelectedLogItemId('');
                           setLogDraft(defaultLogDraft(list.templateKey));
                           setSelectedDetailItemId('');
@@ -9208,6 +9303,9 @@ Rules:
                       onClick={() => {
                         setQuery('');
                         setStageFilter('all');
+                        setPriorityFilter('all');
+                        setSortColumn(null);
+                        setSortDirection('asc');
                       }}
                       className="inline-flex h-11 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-500 transition hover:text-stone-900"
                     >
@@ -9374,6 +9472,35 @@ Rules:
                   </div>
                 )}
 
+                {!isInvestorUpdateContactsList && (
+                  <div className="mb-4 grid grid-cols-3 gap-2">
+                    {(['high', 'medium', 'low'] as PipelinePriority[]).map((priorityKey) => (
+                      <button
+                        key={priorityKey}
+                        type="button"
+                        onClick={() => setPriorityFilter(priorityFilter === priorityKey ? 'all' : priorityKey)}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-left transition ${
+                          priorityFilter === priorityKey
+                            ? 'border-stone-900 bg-stone-900 text-white'
+                            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                        }`}
+                      >
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                            priorityKey === 'high' ? 'bg-rose-500' : priorityKey === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                          }`}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-semibold capitalize">{priorityKey} priority</span>
+                          <span className={priorityFilter === priorityKey ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
+                            {formatCount(countsByPriority[priorityKey] || 0, 'item')}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
                   <div
                     className={`hidden gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid ${
@@ -9384,23 +9511,23 @@ Rules:
                           : 'min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
                     }`}
                   >
-                    <span>{isContactListActive ? 'Contact' : 'Item'}</span>
-                    <span>Organization</span>
+                    {renderSortableHeader(isContactListActive ? 'Contact' : 'Item', 'item')}
+                    {renderSortableHeader('Organization', 'organization')}
                     {isInvestorUpdateContactsList ? (
                       <span>Email Status</span>
                     ) : isContactListActive ? (
                       <>
-                        <span>Stage</span>
+                        {renderSortableHeader('Stage', 'stage')}
                         <span>Log Status</span>
                       </>
                     ) : (
                       <>
-                        <span>Stage</span>
-                        <span>{isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value'}</span>
+                        {renderSortableHeader('Stage', 'stage')}
+                        {renderSortableHeader(isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', 'value')}
                       </>
                     )}
-                    <span>{isContactListActive ? 'Follow-Up' : 'Due Date'}</span>
-                    <span>Next Step</span>
+                    {renderSortableHeader(isContactListActive ? 'Follow-Up' : 'Due Date', 'dueDate')}
+                    {renderSortableHeader('Next Step', 'nextStep')}
                     <span className="text-right">Actions</span>
                   </div>
 
@@ -9481,7 +9608,19 @@ Rules:
                                 />
                               )}
                               <div className="min-w-0">
-                                <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                      item.priority === 'high'
+                                        ? 'bg-rose-500'
+                                        : item.priority === 'medium'
+                                          ? 'bg-amber-500'
+                                          : 'bg-emerald-500'
+                                    }`}
+                                    title={importanceLabel(item.priority)}
+                                  />
+                                  <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
                                   {item.owner && <span>{item.owner}</span>}
                                   {item.segment && <span>{item.segment}</span>}
