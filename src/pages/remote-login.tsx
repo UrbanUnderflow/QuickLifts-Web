@@ -3,9 +3,9 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import { browserSessionPersistence, setPersistence, signInWithCustomToken } from 'firebase/auth';
+import { browserSessionPersistence, setPersistence, signInWithCustomToken, signOut } from 'firebase/auth';
 import { auth } from '../api/firebase/config';
-import { signOutAndClearPulseAuthState } from '../utils/authSessionCleanup';
+import { clearStalePulseAuthKeys } from '../utils/authSessionCleanup';
 import Head from 'next/head';
 
 const RemoteLogin: React.FC = () => {
@@ -77,7 +77,13 @@ const RemoteLogin: React.FC = () => {
           });
         }
 
-        await signOutAndClearPulseAuthState(auth);
+        // Plain sign-out only: signOutAndClearPulseAuthState also deletes the
+        // shared firebaseLocalStorageDb IndexedDB database, which corrupts the
+        // Auth SDK's persistence layer if a new sign-in follows immediately
+        // (see authSessionCleanup.ts). We're about to sign in again right below,
+        // so just clear the small leftover keys and sign out normally.
+        clearStalePulseAuthKeys();
+        await signOut(auth);
 
         await setPersistence(auth, browserSessionPersistence);
         window.sessionStorage.setItem('pulse_remote_login_active', 'true');
