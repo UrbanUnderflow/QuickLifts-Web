@@ -17,6 +17,7 @@ import {
   MailPlus,
   MoreHorizontal,
   Plus,
+  RefreshCw,
   Search,
   Share2,
   ShieldPlus,
@@ -712,6 +713,33 @@ const CollapsibleCard: React.FC<{
   </div>
 );
 
+// The short manual-entry join code athletes can type by hand to join a team
+// when a link doesn't resolve. Lazily generated server-side on first `get`.
+const fetchTeamCode = async (
+  teamId: string,
+  action: 'get' | 'regenerate' = 'get'
+): Promise<string> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('Sign in again to load the team code.');
+  }
+
+  const response = await fetch('/.netlify/functions/manage-pulsecheck-team-code', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      ...getFirebaseModeRequestHeaders(),
+    },
+    body: JSON.stringify({ action, teamId }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.teamCode) {
+    throw new Error(String(payload?.error || 'The team code could not be loaded.'));
+  }
+  return payload.teamCode as string;
+};
+
 const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
   const dispatch = useDispatch();
@@ -781,6 +809,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [coachPhotoUploadingToken, setCoachPhotoUploadingToken] = useState<string | null>(null);
   const [sportOptions, setSportOptions] = useState<PulseCheckSportConfigurationEntry[]>(() => getDefaultPulseCheckSports());
   const [teamCommercialDrafts, setTeamCommercialDrafts] = useState<Record<string, PulseCheckTeamCommercialConfig>>({});
+  const [teamCodeOverrides, setTeamCodeOverrides] = useState<Record<string, string>>({});
+  const [teamCodeBusyId, setTeamCodeBusyId] = useState<string | null>(null);
+  const [teamCodeCopiedId, setTeamCodeCopiedId] = useState<string | null>(null);
   const [teamAthleteSubscriptionPriceDrafts, setTeamAthleteSubscriptionPriceDrafts] = useState<Record<string, string>>({});
   type OrgStaffOption = { userId: string; name: string; email?: string; role: PulseCheckTeamMembershipRole; title?: string };
   const [orgStaffById, setOrgStaffById] = useState<Record<string, OrgStaffOption[]>>({});
@@ -4154,6 +4185,92 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </button>
                                             ) : null}
                                           </div>
+                                        </CollapsibleCard>
+
+                                        <CollapsibleCard
+                                          title="Team Code"
+                                          open={expandedOrgCardKeys.has(`${team.id}:teamcode`)}
+                                          onToggle={() => toggleOrgCard(`${team.id}:teamcode`)}
+                                          preview={
+                                            teamCodeOverrides[team.id] || team.teamCode
+                                              ? `Code: ${teamCodeOverrides[team.id] || team.teamCode}`
+                                              : 'Not generated yet. Open to generate one.'
+                                          }
+                                        >
+                                          {(() => {
+                                            const displayedCode = teamCodeOverrides[team.id] || team.teamCode || '';
+                                            const isBusy = teamCodeBusyId === team.id;
+                                            const runTeamCodeAction = async (action: 'get' | 'regenerate') => {
+                                              if (action === 'regenerate' && !window.confirm(
+                                                'Generate a new team code? Athletes with the old code will no longer be able to use it to join.'
+                                              )) {
+                                                return;
+                                              }
+                                              setTeamCodeBusyId(team.id);
+                                              try {
+                                                const code = await fetchTeamCode(team.id, action);
+                                                setTeamCodeOverrides((current) => ({ ...current, [team.id]: code }));
+                                                setTeamCodeCopiedId(null);
+                                              } catch (error) {
+                                                console.error('[PulseCheckProvisioning] failed to load team code', error);
+                                                window.alert(error instanceof Error ? error.message : 'The team code could not be loaded.');
+                                              } finally {
+                                                setTeamCodeBusyId(null);
+                                              }
+                                            };
+
+                                            return (
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                                                {displayedCode ? (
+                                                  <span style={{ fontFamily: 'monospace', fontSize: 18, letterSpacing: '0.2em', color: '#fff' }}>
+                                                    {displayedCode}
+                                                  </span>
+                                                ) : (
+                                                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>No code generated yet.</span>
+                                                )}
+                                                <div style={{ display: 'flex', gap: 8 }}>
+                                                  {displayedCode ? (
+                                                    <button
+                                                      type="button"
+                                                      className="pcp-ab pcp-ab-t"
+                                                      onClick={async () => {
+                                                        try {
+                                                          await navigator.clipboard.writeText(displayedCode);
+                                                          setTeamCodeCopiedId(team.id);
+                                                        } catch (error) {
+                                                          console.error('[PulseCheckProvisioning] failed to copy team code', error);
+                                                        }
+                                                      }}
+                                                    >
+                                                      <Clipboard />
+                                                      {teamCodeCopiedId === team.id ? 'Copied' : 'Copy'}
+                                                    </button>
+                                                  ) : (
+                                                    <button
+                                                      type="button"
+                                                      className="pcp-ab pcp-ab-g"
+                                                      disabled={isBusy}
+                                                      onClick={() => void runTeamCodeAction('get')}
+                                                    >
+                                                      <Plus />
+                                                      {isBusy ? 'Generating…' : 'Generate code'}
+                                                    </button>
+                                                  )}
+                                                  {displayedCode ? (
+                                                    <button
+                                                      type="button"
+                                                      className="pcp-ab pcp-ab-t"
+                                                      disabled={isBusy}
+                                                      onClick={() => void runTeamCodeAction('regenerate')}
+                                                    >
+                                                      <RefreshCw className={isBusy ? 'animate-spin' : ''} />
+                                                      {isBusy ? 'Regenerating…' : 'Regenerate'}
+                                                    </button>
+                                                  ) : null}
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
                                         </CollapsibleCard>
 
                                         <CollapsibleCard

@@ -928,6 +928,8 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   requiredConsents: normalizeConsentDocList(data.requiredConsents || []),
   intake: normalizeIntakeConfig(data.intake),
   notes: data.notes || '',
+  teamCode: data.teamCode || undefined,
+  teamCodeGeneratedAt: data.teamCodeGeneratedAt || null,
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });

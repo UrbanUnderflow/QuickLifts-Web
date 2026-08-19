@@ -1,4 +1,4 @@
-export const PULSECHECK_SCORING_VERSION = '2.1.0';
+export const PULSECHECK_SCORING_VERSION = '2.2.0';
 export const PULSECHECK_SCORE_WINDOW_DAYS = 14;
 export const PULSECHECK_COHERENCE_BUILDING_DAYS = 3;
 export const PULSECHECK_AUTONOMIC_BASELINE_MINIMUM = 14;
@@ -544,7 +544,7 @@ const commitmentOutcome = (
 const calculateAdherenceWindow = (
   days: PulseCheckScoringDay[],
   windowDays: number,
-): WindowCalculation & { congruencePercent: number | null; congruenceObservedDays: number } => {
+): WindowCalculation => {
   const latestDateKey = days[days.length - 1]?.dateKey || '';
   const scheduledDays = days.filter((day) => day.scheduledCheckIn !== false);
   const checkedInDays = scheduledDays.filter((day) => normalizeLevel(day.wellbeingLevel) !== null);
@@ -561,14 +561,6 @@ const calculateAdherenceWindow = (
     { score: checkInPercent, weight: 40 },
     { score: commitmentPercent, weight: 60 },
   ]);
-  const congruenceOutcomes = days.flatMap((day) => {
-    if (normalizeLevel(day.wellbeingLevel) === null || !day.commitment) return [];
-    const outcome = commitmentOutcome(day.commitment, day.dateKey, latestDateKey);
-    return outcome === null ? [] : [outcome];
-  });
-  const congruencePercent = congruenceOutcomes.length > 0
-    ? rounded((congruenceOutcomes.reduce((sum, value) => sum + value, 0) / congruenceOutcomes.length) * 100)
-    : null;
   const evidenceCoveragePercent = rounded(
     (checkInPercent === null ? 0 : 40) + (commitmentPercent === null ? 0 : 60),
   );
@@ -607,35 +599,45 @@ const calculateAdherenceWindow = (
       },
     ],
     notes,
-    congruencePercent,
-    congruenceObservedDays: congruenceOutcomes.length,
   };
 };
 
 const calculateCoherenceWindow = (
-  adherence: WindowCalculation & { congruencePercent: number | null; congruenceObservedDays: number },
+  adherence: WindowCalculation,
+  wellbeing: WindowCalculation,
+  recovery: WindowCalculation,
   windowDays: number,
   options: {
     isInitialBuildingPeriod?: boolean;
     establishedScore?: number | null;
   } = {},
 ): WindowCalculation => {
-  const hasEnoughEvidence = adherence.score !== null &&
-    adherence.congruencePercent !== null &&
-    adherence.congruenceObservedDays >= 3;
-  const rawCoherenceScore = hasEnoughEvidence
-    ? rounded(Math.min(
-      adherence.score!,
-      Math.sqrt(adherence.score! * adherence.congruencePercent!),
-    ))
+  const domainSignals = [
+    { key: 'adherence', label: 'Showing up', weight: 33, result: adherence, detail: 'Adherence score for the same 14-day window.' },
+    { key: 'wellbeing', label: 'Feeling good', weight: 33, result: wellbeing, detail: 'Wellbeing score for the same 14-day window.' },
+    { key: 'recovery', label: 'Body agreement', weight: 34, result: recovery, detail: 'Recovery score for the same 14-day window.' },
+  ];
+  const availableSignals = domainSignals.filter((signal) => signal.result.score !== null);
+  const availableScores = availableSignals.map((signal) => signal.result.score as number);
+  const hasEnoughEvidence = availableScores.length >= 2;
+  const meanScore = hasEnoughEvidence ? mean(availableScores) : null;
+  const spread = hasEnoughEvidence ? Math.max(...availableScores) - Math.min(...availableScores) : null;
+  const rawCoherenceScore = meanScore !== null && spread !== null
+    ? rounded(meanScore * (1 - spread / 100))
     : null;
-  const congruenceCoverage = rounded((adherence.congruenceObservedDays / windowDays) * 100);
-  const evidenceCoveragePercent = rounded((adherence.evidenceCoveragePercent + congruenceCoverage) / 2);
-  const currentWindowScore = rawCoherenceScore === 0 && evidenceCoveragePercent < 80
+  const evidenceCoveragePercent = rounded(
+    domainSignals.reduce(
+      (sum, signal) => sum + (signal.result.score !== null ? signal.result.evidenceCoveragePercent : 0),
+      0,
+    ) / domainSignals.length,
+  );
+  const currentWindowScore = rawCoherenceScore === null
     ? null
-    : rawCoherenceScore === 0
-      ? 1
-      : rawCoherenceScore;
+    : rawCoherenceScore === 0 && evidenceCoveragePercent < 80
+      ? null
+      : rawCoherenceScore === 0
+        ? 1
+        : rawCoherenceScore;
   const establishedScore = options.establishedScore !== null && options.establishedScore !== undefined
     && Number.isFinite(options.establishedScore)
     && options.establishedScore > 0
@@ -650,35 +652,28 @@ const calculateCoherenceWindow = (
     : coherenceScore !== null
     ? 'available'
     : 'insufficient_evidence';
+  const observedDays = availableSignals.length > 0
+    ? Math.min(...availableSignals.map((signal) => signal.result.observedDays))
+    : 0;
 
   return {
     score: coherenceScore,
     status,
-    confidence: confidenceFor(evidenceCoveragePercent, adherence.congruenceObservedDays, status),
+    confidence: confidenceFor(evidenceCoveragePercent, observedDays, status),
     evidenceCoveragePercent,
-    observedDays: adherence.congruenceObservedDays,
+    observedDays,
     windowDays,
-    components: [
-      {
-        key: 'adherence',
-        label: 'Showing up',
-        score: adherence.score,
-        configuredWeightPercent: 50,
-        evidenceAvailable: adherence.score !== null,
-        detail: 'Verified check-in and commitment follow-through.',
-      },
-      {
-        key: 'commitment_congruence',
-        label: 'Commitment congruence',
-        score: adherence.congruencePercent,
-        configuredWeightPercent: 50,
-        evidenceAvailable: adherence.congruencePercent !== null,
-        detail: `${adherence.congruenceObservedDays} days include both a check-in and a final commitment outcome.`,
-      },
-    ],
+    components: domainSignals.map((signal) => ({
+      key: signal.key,
+      label: signal.label,
+      score: signal.result.score,
+      configuredWeightPercent: signal.weight,
+      evidenceAvailable: signal.result.score !== null,
+      detail: signal.detail,
+    })),
     notes: [
-      'Coherence is capped by Adherence, so a high alignment rate cannot hide low follow-through.',
-      'Wellbeing and Recovery do not raise or lower Coherence.',
+      'Coherence combines the average of Adherence, Wellbeing, and Recovery with how closely those scores agree with each other; wide disagreement lowers Coherence even when the average is high.',
+      'At least 2 of the 3 domain scores must be independently available to compute a current-window value.',
       'The latest 14 days update an established Coherence read; they do not restart it.',
       ...(carriedEstablishedScore
         ? ['Recent evidence is thin, so the last established Coherence read is carried forward.']
@@ -708,11 +703,19 @@ export const calculatePulseCheckScorecardV2 = (input: PulseCheckScoringInput): P
   const currentAdherence = calculateAdherenceWindow(currentDays, windowDays);
   const previousAdherence = calculateAdherenceWindow(previousDays, windowDays);
   const historyDays = sorted.slice(0, Math.max(0, sorted.length - windowDays));
+  const historicalWindowDays = Math.max(windowDays, historyDays.length);
+  const historicalMeasurements = measurementsFromDays(historyDays);
   const historicalAdherence = historyDays.length > 0
-    ? calculateAdherenceWindow(historyDays, Math.max(windowDays, historyDays.length))
+    ? calculateAdherenceWindow(historyDays, historicalWindowDays)
     : null;
-  const historicalCoherence = historicalAdherence
-    ? calculateCoherenceWindow(historicalAdherence, Math.max(windowDays, historyDays.length))
+  const historicalWellbeing = historyDays.length > 0
+    ? calculateWellbeingWindow(historyDays, null, historicalWindowDays)
+    : null;
+  const historicalRecovery = historyDays.length > 0
+    ? calculateRecoveryWindow(historyDays, historicalMeasurements, historicalWindowDays)
+    : null;
+  const historicalCoherence = historicalAdherence && historicalWellbeing && historicalRecovery
+    ? calculateCoherenceWindow(historicalAdherence, historicalWellbeing, historicalRecovery, historicalWindowDays)
     : null;
   const persistedEstablishedCoherenceScore = input.establishedCoherenceScore !== null
     && input.establishedCoherenceScore !== undefined
@@ -726,11 +729,11 @@ export const calculatePulseCheckScorecardV2 = (input: PulseCheckScoringInput): P
   const isInitialBuildingPeriod = input.accountAgeDays !== null
     && input.accountAgeDays !== undefined
     && input.accountAgeDays < PULSECHECK_COHERENCE_BUILDING_DAYS;
-  const currentCoherence = calculateCoherenceWindow(currentAdherence, windowDays, {
+  const currentCoherence = calculateCoherenceWindow(currentAdherence, currentWellbeing, currentRecovery, windowDays, {
     isInitialBuildingPeriod,
     establishedScore: establishedCoherenceScore,
   });
-  const previousCoherence = calculateCoherenceWindow(previousAdherence, windowDays);
+  const previousCoherence = calculateCoherenceWindow(previousAdherence, previousWellbeing, previousRecovery, windowDays);
 
   const sourceTransitions = [currentRecovery.autonomic.hrv, currentRecovery.autonomic.restingHeartRate]
     .filter((lane): lane is PulseCheckAutonomicLaneResult & { laneId: string; sourceFamily: string } =>

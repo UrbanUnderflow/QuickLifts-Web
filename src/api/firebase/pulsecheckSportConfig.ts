@@ -1743,10 +1743,6 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       attribute('football', 'performanceFocus', 'Performance Focus', 'multiSelect', 'athlete', 4, {
         options: options(['Assignment Discipline', 'Explosive First Step', 'Route / Coverage Timing', 'Pocket Poise', 'Tackling Confidence', 'Communication']),
       }),
-      attribute('football', 'bodyCompositionGoal', 'Body Composition Goal', 'singleSelect', 'nutrition', 5, {
-        options: options(['Maintain', 'Lean Mass Gain', 'Reduce Fat Mass', 'Position-Specific Weight Target', 'No Active Change']),
-        includeInMacraContext: true,
-      }),
     ],
     metrics: [
       metric('football', 'snapCount', 'Snap Count', 'snaps', 'competition', 0),
@@ -2002,10 +1998,6 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       attribute('wrestling', 'competitiveLevel', 'Competitive Level', 'singleSelect', 'athlete', 0, { options: COMPETITIVE_LEVEL_OPTIONS, includeInMacraContext: true }),
       attribute('wrestling', 'style', 'Style', 'singleSelect', 'competition', 1, { options: options(['Folkstyle', 'Freestyle', 'Greco-Roman', 'No-Gi / Hybrid']) }),
       attribute('wrestling', 'weightClass', 'Weight Class', 'text', 'competition', 2, { placeholder: 'e.g. 165 lb', includeInMacraContext: true }),
-      attribute('wrestling', 'weightCutStatus', 'Weight Cut Status', 'singleSelect', 'nutrition', 3, {
-        options: options(['Not Cutting', 'Small Cut', 'Moderate Cut', 'Aggressive Cut', 'Recovery From Weigh-In']),
-        includeInMacraContext: true,
-      }),
       attribute('wrestling', 'performanceFocus', 'Performance Focus', 'multiSelect', 'athlete', 4, {
         options: options(['Hand Fight Pressure', 'Shot Confidence', 'Bottom Escape', 'Top Control', 'Gas Tank', 'Match Composure']),
       }),
@@ -2043,10 +2035,6 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
         options: options(['Heavy Barbell', 'Gymnastics Skill', 'Monostructural Engine', 'Mixed Modal Pacing', 'Grip', 'Mobility']),
       }),
       attribute('crossfit', 'trainingLoadPattern', 'Training Load Pattern', 'singleSelect', 'recovery', 4, { options: TRAINING_LOAD_OPTIONS, includeInMacraContext: true }),
-      attribute('crossfit', 'nutritionPriority', 'Nutrition Priority', 'singleSelect', 'nutrition', 5, {
-        options: options(['Performance Fueling', 'Body Composition', 'Competition Day Strategy', 'Recovery', 'Gut Comfort']),
-        includeInMacraContext: true,
-      }),
     ],
     metrics: [
       metric('crossfit', 'benchmarkScore', 'Benchmark Score', 'score', 'competition', 0),
@@ -2274,10 +2262,10 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
       {
         id: 'physique-competition-date',
         key: 'competitionDate',
-        label: 'Competition Date',
+        label: 'Do you know your next competition date?',
         type: 'date',
         scope: 'competition',
-        required: true,
+        required: false,
         includeInNoraContext: true,
         includeInMacraContext: true,
         sortOrder: 1,
@@ -2300,55 +2288,10 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
         ],
         sortOrder: 2,
       },
-      {
-        id: 'physique-food-variance',
-        key: 'foodVarianceTolerance',
-        label: 'Food Variance Tolerance',
-        type: 'singleSelect',
-        scope: 'nutrition',
-        required: false,
-        includeInNoraContext: true,
-        includeInMacraContext: true,
-        options: [
-          { label: 'Low', value: 'low' },
-          { label: 'Medium', value: 'medium' },
-          { label: 'High', value: 'high' },
-        ],
-        sortOrder: 3,
-      },
-      {
-        id: 'physique-approved-carb-sources',
-        key: 'approvedCarbSources',
-        label: 'Approved Carb Sources',
-        type: 'multiSelect',
-        scope: 'nutrition',
-        required: false,
-        includeInNoraContext: true,
-        includeInMacraContext: true,
-        options: [
-          { label: 'Rice', value: 'rice' },
-          { label: 'Cream of Rice', value: 'cream_of_rice' },
-          { label: 'Potatoes', value: 'potatoes' },
-          { label: 'Oats', value: 'oats' },
-          { label: 'Rice Cakes', value: 'rice_cakes' },
-        ],
-        sortOrder: 4,
-      },
-      {
-        id: 'physique-coach-macros-locked',
-        key: 'coachMacrosLocked',
-        label: 'Coach Macros Locked',
-        type: 'boolean',
-        scope: 'nutrition',
-        required: false,
-        includeInNoraContext: true,
-        includeInMacraContext: true,
-        sortOrder: 5,
-      },
       attribute('bodybuilding-physique', 'posingPriority', 'Posing Priority', 'multiSelect', 'competition', 6, {
         options: options(['Front Pose', 'Back Pose', 'Transitions', 'Stage Presence', 'Mandatories', 'Routine Flow']),
       }),
-      attribute('bodybuilding-physique', 'cardioLoad', 'Cardio Load', 'singleSelect', 'nutrition', 7, {
+      attribute('bodybuilding-physique', 'cardioLoad', 'Cardio Load', 'singleSelect', 'recovery', 7, {
         options: options(['None', 'Low', 'Moderate', 'High', 'Peak Week Taper']),
         includeInMacraContext: true,
       }),

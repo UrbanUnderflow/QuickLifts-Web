@@ -39,11 +39,26 @@ const deleteIndexedDbDatabase = (databaseName: string) =>
     request.onblocked = () => resolve();
   });
 
-export const clearPulseAuthStorage = async () => {
+// Clears leftover auth-related keys from localStorage/sessionStorage only.
+// Safe to call immediately before starting a new sign-in (popup/redirect):
+// it does NOT touch the `firebaseLocalStorageDb` IndexedDB database that the
+// Firebase Auth SDK itself relies on to track in-flight popup/redirect events.
+// Deleting that database while the SDK has a live persistence connection open
+// (i.e. right before signInWithPopup/signInWithRedirect) corrupts the SDK's
+// internal pending-event bookkeeping and causes every subsequent popup sign-in
+// on the page (any provider) to fail with "INTERNAL ASSERTION FAILED: Pending
+// promise was never set" / "auth/popup-closed-by-user".
+export const clearStalePulseAuthKeys = () => {
   if (typeof window === 'undefined') return;
 
   removeMatchingStorageKeys(window.localStorage);
   removeMatchingStorageKeys(window.sessionStorage);
+};
+
+export const clearPulseAuthStorage = async () => {
+  if (typeof window === 'undefined') return;
+
+  clearStalePulseAuthKeys();
 
   await Promise.all([
     deleteIndexedDbDatabase('firebaseLocalStorageDb'),

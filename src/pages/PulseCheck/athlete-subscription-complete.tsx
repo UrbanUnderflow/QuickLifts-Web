@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { onAuthStateChanged, type User as FirebaseAuthUser } from 'firebase/auth';
 import {
   ArrowRight,
@@ -12,8 +13,16 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { auth, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
-import { buildPulseCheckAthleteOfferWebUrl } from '../../utils/pulsecheckInviteLinks';
+import {
+  buildPulseCheckAthleteOfferWebUrl,
+  buildPulseCheckTeamInviteOneLink,
+  resolvePulseCheckInvitePreviewImage,
+} from '../../utils/pulsecheckInviteLinks';
 
+// Bare store links. Used only when there's no invite context to build an
+// attributed OneLink from (e.g. malformed return URL) — a fresh install via
+// these loses all AppsFlyer attribution, which is the exact bug this page
+// otherwise avoids. See downloadUrls below.
 const PULSECHECK_IOS_APP_STORE_URL =
   'https://apps.apple.com/app/pulsecheck-mindset-coaching/id6747253393';
 const PULSECHECK_ANDROID_PLAY_STORE_URL =
@@ -27,7 +36,9 @@ const singleQueryValue = (value: string | string[] | undefined) =>
 const wait = (durationMs: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, durationMs));
 
-const AthleteSubscriptionCompletePage: React.FC = () => {
+const AthleteSubscriptionCompletePage = ({
+  inviteContext,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const router = useRouter();
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
@@ -59,6 +70,37 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
       ),
     [forceDevFirebase, inviteToken]
   );
+
+  // A fresh (not-yet-installed) athlete has no app instance to catch the
+  // pulsecheck:// deep link above, so "Download PulseCheck" has to carry the
+  // invite token through the App/Play Store install itself. A bare store link
+  // strips all of that — AppsFlyer's deferred deep link is what survives an
+  // install, so the button must route through the OneLink, not the store
+  // directly. The af_r fallback also carries checkoutComplete=1 so the app
+  // knows this athlete already paid and should go straight to Join Team
+  // instead of the paywall.
+  const downloadUrls = useMemo(() => {
+    if (!inviteToken || !inviteContext) {
+      return { ios: PULSECHECK_IOS_APP_STORE_URL, android: PULSECHECK_ANDROID_PLAY_STORE_URL };
+    }
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+    const resumeOfferUrl = buildPulseCheckAthleteOfferWebUrl(inviteToken, origin, forceDevFirebase);
+    const resumeFallbackPath = `${resumeOfferUrl}${resumeOfferUrl.includes('?') ? '&' : '?'}checkoutComplete=1`;
+    const oneLink = buildPulseCheckTeamInviteOneLink({
+      token: inviteToken,
+      fallbackPath: resumeFallbackPath,
+      role: 'Athlete',
+      teamName: inviteContext.teamName,
+      organizationName: inviteContext.organizationName,
+      pilotName: inviteContext.pilotName,
+      cohortName: inviteContext.cohortName,
+      imageUrl: inviteContext.previewImageUrl,
+    });
+    // AppsFlyer OneLink detects the visiting device and routes to the correct
+    // store on its own — the same link works for both buttons.
+    return { ios: oneLink, android: oneLink };
+  }, [forceDevFirebase, inviteContext, inviteToken]);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
@@ -276,7 +318,7 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
                     </p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <a
-                        href={PULSECHECK_IOS_APP_STORE_URL}
+                        href={downloadUrls.ios}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black"
@@ -285,7 +327,7 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
                         Download for iPhone
                       </a>
                       <a
-                        href={PULSECHECK_ANDROID_PLAY_STORE_URL}
+                        href={downloadUrls.android}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white"
@@ -330,6 +372,63 @@ const AthleteSubscriptionCompletePage: React.FC = () => {
       </main>
     </>
   );
+};
+
+type AthleteSubscriptionCompleteInviteContext = {
+  teamName: string;
+  organizationName: string;
+  pilotName: string;
+  cohortName: string;
+  previewImageUrl: string;
+};
+
+export const getServerSideProps: GetServerSideProps<{
+  inviteContext: AthleteSubscriptionCompleteInviteContext | null;
+}> = async ({ query }) => {
+  const token = typeof query.invite === 'string' ? query.invite.trim() : '';
+  if (!token) {
+    return { props: { inviteContext: null } };
+  }
+
+  const forceDevFirebase = query.devFirebase === '1';
+
+  try {
+    const firebaseAdmin = await import('../../lib/firebase-admin');
+    const admin = firebaseAdmin.default;
+    const adminApp = firebaseAdmin.getFirebaseAdminApp(forceDevFirebase);
+    const firestore = admin.firestore(adminApp);
+
+    const inviteSnap = await firestore.collection('pulsecheck-invite-links').doc(token).get();
+    const invite = inviteSnap.exists ? inviteSnap.data() || {} : null;
+    if (!invite) {
+      return { props: { inviteContext: null } };
+    }
+
+    const [organizationSnap, teamSnap] = await Promise.all([
+      firestore.collection('pulsecheck-organizations').doc(String(invite.organizationId || '')).get(),
+      firestore.collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
+    ]);
+
+    const organizationName = String(organizationSnap.data()?.displayName || 'PulseCheck Organization');
+    const teamName = String(teamSnap.data()?.displayName || 'Team');
+    const organizationImageUrl = String(organizationSnap.data()?.invitePreviewImageUrl || '');
+    const teamImageUrl = String(teamSnap.data()?.invitePreviewImageUrl || '');
+
+    return {
+      props: {
+        inviteContext: {
+          teamName,
+          organizationName,
+          pilotName: String(invite.pilotName || ''),
+          cohortName: String(invite.cohortName || ''),
+          previewImageUrl: resolvePulseCheckInvitePreviewImage(teamImageUrl, organizationImageUrl),
+        },
+      },
+    };
+  } catch (error) {
+    console.error('[pulsecheck-athlete-subscription-complete] Failed to load invite context:', error);
+    return { props: { inviteContext: null } };
+  }
 };
 
 export default AthleteSubscriptionCompletePage;

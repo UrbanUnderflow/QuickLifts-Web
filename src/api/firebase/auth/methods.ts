@@ -24,10 +24,10 @@ import {
   buildAppVersionWritePayload,
 } from '../../../utils/appVersioning';
 import { resolveGoogleProviderConflict } from './accountLinking';
-import { clearPulseAuthStorage, signOutAndClearPulseAuthState } from '../../../utils/authSessionCleanup';
+import { clearStalePulseAuthKeys, signOutAndClearPulseAuthState } from '../../../utils/authSessionCleanup';
 
 const preparePrimaryAuthSignIn = async () => {
-  await clearPulseAuthStorage();
+  clearStalePulseAuthKeys();
   await setPersistence(auth, browserLocalPersistence);
 };
 

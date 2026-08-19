@@ -89,6 +89,7 @@ import PulseCheckNoraConversationOrchestratorSpecTab from "../../components/admi
 import PulseCheckNoraGuardSpecTab from "../../components/admin/system-overview/PulseCheckNoraGuardSpecTab";
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
 import PulseCheckSportsIntelligenceMockReportBaselinesTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceMockReportBaselinesTab";
+import PulseCheckSportsIntelligenceOnboardingQuestionMatrixTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceOnboardingQuestionMatrixTab";
 import PulseCheckNoraContextCaptureSpecTab from "../../components/admin/system-overview/PulseCheckNoraContextCaptureSpecTab";
 import PulseCheckContextualSportsDetectionEngineSpecTab from "../../components/admin/system-overview/PulseCheckContextualSportsDetectionEngineSpecTab";
 import PulseCheckPhaseJSessionSchemaContractTab from "../../components/admin/system-overview/PulseCheckPhaseJSessionSchemaContractTab";
@@ -316,6 +317,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-sports-intelligence-layer-spec",
       "pulsecheck-sports-intelligence-aggregation-inference-contract",
       "pulsecheck-sports-intelligence-mock-report-baselines",
+      "pulsecheck-sports-intelligence-onboarding-question-matrix",
       "pulsecheck-adaptive-framing-layer-spec",
       "pulsecheck-athlete-data-framing-doctrine",
       "pulsecheck-curriculum-layer-spec",
@@ -2519,6 +2521,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-sports-intelligence-mock-report-baselines":
         return <PulseCheckSportsIntelligenceMockReportBaselinesTab />;
+
+      case "pulsecheck-sports-intelligence-onboarding-question-matrix":
+        return <PulseCheckSportsIntelligenceOnboardingQuestionMatrixTab />;
 
       case "pulsecheck-nora-context-capture":
         return <PulseCheckNoraContextCaptureSpecTab />;

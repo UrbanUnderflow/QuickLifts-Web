@@ -4863,6 +4863,34 @@ const createManagedAthleteInvite = async (input: {
   return payload.invite as ManagedAthleteInvite;
 };
 
+// A team's manual-entry join code — the fallback for athletes when a
+// deep link doesn't resolve (or for coaches who'd rather just say the code
+// out loud). Lazily generated server-side on first `get`.
+const fetchTeamCode = async (
+  teamId: string,
+  action: 'get' | 'regenerate' = 'get'
+): Promise<string> => {
+  const idToken = await auth.currentUser?.getIdToken();
+  if (!idToken) {
+    throw new Error('Sign in again to load your team code.');
+  }
+
+  const response = await fetch('/.netlify/functions/manage-pulsecheck-team-code', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+      ...getFirebaseModeRequestHeaders(),
+    },
+    body: JSON.stringify({ action, teamId }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.success !== true || !payload?.teamCode) {
+    throw new Error(String(payload?.error || 'The team code could not be loaded.'));
+  }
+  return payload.teamCode as string;
+};
+
 const ReferralLinksSection: React.FC<{
   isDemo?: boolean;
   coachId?: string;
@@ -5170,6 +5198,60 @@ const AthleteInviteSection: React.FC<{
     isDemo ? 'https://fitwithpulse.ai/PulseCheck/team-invite/demo-athlete' : ''
   );
   const [busy, setBusy] = useState(false);
+  const [teamCode, setTeamCode] = useState(isDemo ? 'DEMO42' : '');
+  const [teamCodeLoading, setTeamCodeLoading] = useState(false);
+  const [teamCodeCopied, setTeamCodeCopied] = useState(false);
+  const [regeneratingCode, setRegeneratingCode] = useState(false);
+
+  useEffect(() => {
+    if (isDemo || !team?.teamId || teamCode) return;
+    let cancelled = false;
+    setTeamCodeLoading(true);
+    fetchTeamCode(team.teamId, 'get')
+      .then((code) => {
+        if (!cancelled) setTeamCode(code);
+      })
+      .catch((err) => {
+        console.error('[CoachDashboard] failed to load team code', err);
+      })
+      .finally(() => {
+        if (!cancelled) setTeamCodeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo, team?.teamId, teamCode]);
+
+  const copyTeamCode = async () => {
+    if (!teamCode) return;
+    try {
+      await copyShareUrl(teamCode);
+      setTeamCodeCopied(true);
+      setToast('Team code copied.');
+    } catch (err) {
+      console.error('[CoachDashboard] failed to copy team code', err);
+      setToast('Could not copy the team code. Try again.');
+    }
+  };
+
+  const regenerateCode = async () => {
+    if (!team?.teamId || regeneratingCode) return;
+    if (!window.confirm('Generate a new team code? Athletes with the old code will no longer be able to use it to join.')) {
+      return;
+    }
+    setRegeneratingCode(true);
+    try {
+      const code = await fetchTeamCode(team.teamId, 'regenerate');
+      setTeamCode(code);
+      setTeamCodeCopied(false);
+      setToast('New team code generated.');
+    } catch (err) {
+      console.error('[CoachDashboard] failed to regenerate team code', err);
+      setToast('Could not regenerate the team code. Try again.');
+    } finally {
+      setRegeneratingCode(false);
+    }
+  };
 
   // Both coach actions resolve the same reusable token. Calling the server each
   // time is intentional: it refreshes the destination from the live commercial
@@ -5288,6 +5370,43 @@ const AthleteInviteSection: React.FC<{
           {inviteLink}
         </div>
       )}
+
+      <div className="flex items-center justify-between flex-wrap gap-2 rounded-lg border border-zinc-700/30 bg-zinc-950/30 px-3 py-2.5">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Team code</div>
+          <div className="mt-0.5 text-sm leading-5 text-zinc-500">
+            {teamCode ? (
+              <span className="font-mono text-base tracking-[0.2em] text-white">{teamCode}</span>
+            ) : teamCodeLoading ? (
+              'Loading…'
+            ) : (
+              'Could not load — try refreshing.'
+            )}
+          </div>
+          <div className="mt-1 text-[11px] leading-4 text-zinc-600">
+            Athletes can type this in by hand to join if a link doesn&apos;t work.
+          </div>
+        </div>
+        {canInvite && teamCode && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyTeamCode}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40"
+            >
+              {teamCodeCopied ? <Check className="h-4 w-4 text-[#E0FE10]" /> : <Copy className="h-4 w-4" />}
+              {teamCodeCopied ? 'Copied' : 'Copy code'}
+            </button>
+            <button
+              onClick={regenerateCode}
+              disabled={regeneratingCode}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800/40 disabled:opacity-40"
+            >
+              <RefreshCw className={`h-4 w-4 ${regeneratingCode ? 'animate-spin' : ''}`} />
+              {regeneratingCode ? 'Regenerating…' : 'Regenerate'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {toast && (
         <div className="text-xs text-[#E0FE10] bg-[#E0FE10]/10 border border-[#E0FE10]/25 rounded-lg px-3 py-2">

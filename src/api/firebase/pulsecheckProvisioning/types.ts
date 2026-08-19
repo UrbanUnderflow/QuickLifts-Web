@@ -611,6 +611,10 @@ export interface PulseCheckTeam {
   // the athlete-onboarding and coach post-activation flows.
   intake?: PulseCheckTeamIntakeConfig;
   notes?: string;
+  // Short manual-entry join code (5-8 uppercase letters/digits), generated
+  // lazily on first request rather than at creation — see teamCode.ts.
+  teamCode?: string;
+  teamCodeGeneratedAt?: Timestamp | null;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
