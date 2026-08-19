@@ -6997,6 +6997,11 @@ type MemberSubscriptionEarning = {
   initials: string;
   plan: string;
   isActive: boolean;
+  // Coach-priced-app-offer subscribers earn no referral cut (that's tracked
+  // separately, as coach-net income, not a referral commission) — used to
+  // route them into the "Coach-priced app subscriptions" section instead of
+  // the referral list.
+  isCoachPricedAthleteAppPlan: boolean;
   subscriptionCost: number;
   monthlyShareAmount: number;
   billingPeriod: 'month' | 'year' | null;
@@ -7050,10 +7055,16 @@ type AthleteAppSubscriptionTransaction = {
   coachNet: number;
   refunded: number;
   currency: string;
+  // True until the Stripe webhook confirms this invoice into the revenue
+  // ledger — computed live from the subscription/invoice instead.
+  estimated: boolean;
 };
 
 type AthleteAppSubscriptionEarnings = {
   subscriberCount: number;
+  confirmedSubscriberCount: number;
+  estimatedSubscriberCount: number;
+  hasUnconfirmedEstimates: boolean;
   transactionCount: number;
   currentMonthGross: number;
   currentMonthNet: number;
@@ -7061,12 +7072,20 @@ type AthleteAppSubscriptionEarnings = {
   lifetimePlatformShare: number;
   lifetimeStripeProcessingFee: number;
   lifetimeNet: number;
+  // Confirmed + estimated combined — what the section's stat tiles should
+  // display. lifetimeNet/currentMonthNet above stay confirmed-only (payout
+  // math depends on them staying that way).
+  displayLifetimeNet: number;
+  displayCurrentMonthNet: number;
   estimatedMonthlyNet: number;
   transactions: AthleteAppSubscriptionTransaction[];
 };
 
 const emptyAthleteAppSubscriptionEarnings = (): AthleteAppSubscriptionEarnings => ({
   subscriberCount: 0,
+  confirmedSubscriberCount: 0,
+  estimatedSubscriberCount: 0,
+  hasUnconfirmedEstimates: false,
   transactionCount: 0,
   currentMonthGross: 0,
   currentMonthNet: 0,
@@ -7074,6 +7093,8 @@ const emptyAthleteAppSubscriptionEarnings = (): AthleteAppSubscriptionEarnings =
   lifetimePlatformShare: 0,
   lifetimeStripeProcessingFee: 0,
   lifetimeNet: 0,
+  displayLifetimeNet: 0,
+  displayCurrentMonthNet: 0,
   estimatedMonthlyNet: 0,
   transactions: [],
 });
@@ -7221,6 +7242,7 @@ const EarningsSection: React.FC<{
             initials: initialsOf(member.name || member.email || 'Team member'),
             plan: String(member.plan || 'Paid plan unavailable'),
             isActive: Boolean(member.isActive),
+            isCoachPricedAthleteAppPlan: Boolean(member.isCoachPricedAthleteAppPlan),
             subscriptionCost: (Number(member.subscriptionAmountCents) || 0) / 100,
             monthlyShareAmount: (Number(member.estimatedMonthlyShareCents) || 0) / 100,
             billingPeriod:
@@ -7292,6 +7314,7 @@ const EarningsSection: React.FC<{
           coachNet: (Number(transaction.coachNetCents) || 0) / 100,
           refunded: (Number(transaction.refundedCents) || 0) / 100,
           currency: String(transaction.currency || 'usd').toUpperCase(),
+          estimated: Boolean(transaction.estimated),
         }));
 
         rows.sort((left, right) =>
@@ -7306,6 +7329,9 @@ const EarningsSection: React.FC<{
           setServiceLifetimeNet((Number(serviceSummary.lifetimeNetCents) || 0) / 100);
           setAthleteAppEarnings({
             subscriberCount: Math.max(0, Number(athleteAppSummary.subscriberCount) || 0),
+            confirmedSubscriberCount: Math.max(0, Number(athleteAppSummary.confirmedSubscriberCount) || 0),
+            estimatedSubscriberCount: Math.max(0, Number(athleteAppSummary.estimatedSubscriberCount) || 0),
+            hasUnconfirmedEstimates: Boolean(athleteAppSummary.hasUnconfirmedEstimates),
             transactionCount: Math.max(0, Number(athleteAppSummary.transactionCount) || 0),
             currentMonthGross:
               (Number(athleteAppSummary.currentMonthGrossCents) || 0) / 100,
@@ -7317,6 +7343,8 @@ const EarningsSection: React.FC<{
             lifetimeStripeProcessingFee:
               (Number(athleteAppSummary.lifetimeStripeProcessingFeeCents) || 0) / 100,
             lifetimeNet: (Number(athleteAppSummary.lifetimeNetCents) || 0) / 100,
+            displayLifetimeNet: (Number(athleteAppSummary.displayLifetimeNetCents) || 0) / 100,
+            displayCurrentMonthNet: (Number(athleteAppSummary.displayCurrentMonthNetCents) || 0) / 100,
             estimatedMonthlyNet:
               (Number(athleteAppSummary.estimatedMonthlyNetCents) || 0) / 100,
             transactions: athleteAppRows,
@@ -7451,6 +7479,16 @@ const EarningsSection: React.FC<{
       setPayoutSubmitting(false);
     }
   };
+
+  // Coach-priced-app-offer subscribers are shown in "Coach-priced app
+  // subscriptions" above (their earnings are computed there, not as a
+  // referral share) — excluding them here is what keeps this list from
+  // showing the same athlete a second time with a confusing "share
+  // unavailable" label.
+  const referralMemberSubscriptions = useMemo(
+    () => memberSubscriptions.filter((member) => !member.isCoachPricedAthleteAppPlan),
+    [memberSubscriptions]
+  );
 
   return (
     <div className="space-y-5">
@@ -7620,6 +7658,9 @@ const EarningsSection: React.FC<{
                 </div>
                 <div className="mt-1 text-xs text-zinc-500">
                   Stripe subscription earnings from your athlete invite offer
+                  {athleteAppEarnings.hasUnconfirmedEstimates
+                    ? ' — figures marked "estimated" will finalize once Stripe confirms the payment'
+                    : ''}
                 </div>
               </div>
               <div className="rounded-lg border border-[#E0FE10]/15 bg-[#E0FE10]/5 px-3 py-2 text-xs text-zinc-400">
@@ -7648,12 +7689,12 @@ const EarningsSection: React.FC<{
                   />
                   <StatTile
                     label="This month coach net"
-                    value={fmt(athleteAppEarnings.currentMonthNet)}
+                    value={fmt(athleteAppEarnings.displayCurrentMonthNet)}
                     accent
                   />
                   <StatTile
                     label="Lifetime coach net"
-                    value={fmt(athleteAppEarnings.lifetimeNet)}
+                    value={fmt(athleteAppEarnings.displayLifetimeNet)}
                   />
                   <StatTile
                     label="Lifetime gross"
@@ -7717,9 +7758,16 @@ const EarningsSection: React.FC<{
                                     : 'Stripe payment'}
                                 </div>
                               </div>
-                              <span className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-green-300">
-                                {transaction.status.replace(/_/g, ' ')}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {transaction.estimated ? (
+                                  <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                    Estimated
+                                  </span>
+                                ) : null}
+                                <span className="rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-green-300">
+                                  {transaction.status.replace(/_/g, ' ')}
+                                </span>
+                              </div>
                             </div>
                             <div className="mt-3 grid grid-cols-2 gap-2 text-xs lg:grid-cols-4">
                               <div className="rounded-lg bg-zinc-950/45 p-2">
@@ -7847,10 +7895,10 @@ const EarningsSection: React.FC<{
 
       <div>
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
-          {isDemo ? 'Recent conversions' : 'Member subscriptions'}
+          {isDemo ? 'Recent conversions' : 'Referral subscribers'}
         </div>
         {!isDemo && subscriptionsLoading ? (
-          <LoadingBlock label="Loading member subscriptions..." />
+          <LoadingBlock label="Loading referral subscribers..." />
         ) : !isDemo && subscriptionsError ? (
           <EmptyBlock
             icon={AlertTriangle}
@@ -7863,11 +7911,11 @@ const EarningsSection: React.FC<{
             title="No conversions yet"
             body="When athletes you invited subscribe to a paid plan, their conversions and your kickback show up here."
           />
-        ) : !isDemo && memberSubscriptions.length === 0 ? (
+        ) : !isDemo && referralMemberSubscriptions.length === 0 ? (
           <EmptyBlock
             icon={Users}
-            title="Team roster is empty"
-            body="Member subscription status and your estimated share will appear here as athletes join this team."
+            title="No referral subscribers yet"
+            body="Athletes who subscribe through your referral link — not your coach-priced app offer, tracked above — show up here with your share."
           />
         ) : isDemo ? (
           <div className="space-y-2">
@@ -7897,7 +7945,7 @@ const EarningsSection: React.FC<{
           </div>
         ) : (
           <div className="space-y-2">
-            {memberSubscriptions.map((member) => (
+            {referralMemberSubscriptions.map((member) => (
               <div
                 key={member.id}
                 className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 overflow-hidden"

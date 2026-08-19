@@ -13,6 +13,9 @@ const {
   calculateRevenueBreakdown,
   payoutStateId,
 } = require('./utils/pulsecheck-coach-payouts');
+const {
+  revenueBreakdown: athleteAppRevenueBreakdown,
+} = require('./lib/pulsecheck-athlete-app-offers');
 
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
@@ -23,6 +26,13 @@ const COACH_SERVICE_ORDERS_COLLECTION = 'pulsecheck-coach-service-orders';
 const ASSESSMENT_PURCHASES_COLLECTION = 'pulsecheck-assessment-purchases';
 const ATHLETE_APP_OFFERS_COLLECTION = 'pulsecheck-athlete-app-offers';
 const ATHLETE_APP_REVENUE_EVENTS_COLLECTION = 'pulsecheck-athlete-app-revenue-events';
+// Flat approximation of Stripe's US card rate (2.9% + 30c), used only for the
+// "estimated" fallback shown before a webhook-confirmed ledger entry exists —
+// the confirmed path (recordPaidAthleteAppInvoice) still looks up the real fee
+// via a balance-transaction call; doing that here would mean a live Stripe API
+// round trip per invoice on every dashboard load.
+const estimatedStripeFeeCents = (amountCents) =>
+  Math.max(0, Math.round((Number(amountCents) || 0) * 0.029) + 30);
 const configuredAppleCommissionPct = Number(process.env.PULSECHECK_APPLE_COMMISSION_PCT);
 const APPLE_COMMISSION_PCT = Number.isFinite(configuredAppleCommissionPct)
   ? Math.min(100, Math.max(0, configuredAppleCommissionPct))
@@ -576,6 +586,60 @@ const invoiceRows = ({
     })
     .sort((left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || '')));
 
+// Coach-priced-app-offer invoices don't earn the coach a referral cut (that's
+// what invoiceRows computes) — they earn the coach's 50/50 split of the
+// subscription itself, the same split recordPaidAthleteAppInvoice uses to
+// write the confirmed pulsecheck-athlete-app-revenue-events ledger. This
+// builds an "estimated" version of that same row shape from data already
+// fetched for the member (live Stripe subscription + paid invoices), for
+// display before the webhook-confirmed ledger entry exists.
+const estimatedAppSubscriptionInvoiceRows = ({
+  invoices,
+  stripeSubscriptionId = '',
+  expectedStripeMode = resolveServerStripeMode(),
+}) =>
+  invoices
+    .filter((invoice) => {
+      const invoiceSubscriptionId = normalizeString(
+        typeof invoice.subscription === 'string'
+          ? invoice.subscription
+          : invoice.subscription?.id
+      );
+      return normalizeStatus(invoice.status) === 'paid'
+        && Number(invoice.amount_paid) > 0
+        && typeof invoice.livemode === 'boolean'
+        && invoice.livemode === (expectedStripeMode === 'live')
+        && (
+          !stripeSubscriptionId
+          || invoiceSubscriptionId === stripeSubscriptionId
+        );
+    })
+    .map((invoice) => {
+      const amountPaidCents = Number(invoice.amount_paid) || 0;
+      const paidAtSeconds = Number(invoice.status_transitions?.paid_at || invoice.created || 0);
+      const revenue = athleteAppRevenueBreakdown({
+        grossCents: amountPaidCents,
+        actualStripeFeeCents: estimatedStripeFeeCents(amountPaidCents),
+      });
+
+      return {
+        id: normalizeString(invoice.id),
+        stripeInvoiceId: normalizeString(invoice.id),
+        paidAt: paidAtSeconds ? new Date(paidAtSeconds * 1000).toISOString() : null,
+        amountPaidCents,
+        grossRevenueCents: revenue.grossRevenueCents,
+        platformShareCents: revenue.platformShareCents,
+        stripeProcessingFeeCents: revenue.stripeProcessingFeeCents,
+        coachNetCents: revenue.coachNetCents,
+        currency: normalizeStatus(invoice.currency) || 'usd',
+        billingReason: normalizeString(invoice.billing_reason) || null,
+        source: 'pulsecheck-coach-athlete-offer',
+        sourceLabel: 'Coach-priced PulseCheck subscription',
+        estimated: true,
+      };
+    })
+    .sort((left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || '')));
+
 const loadMemberEarnings = async ({
   athleteMembership,
   sharePct,
@@ -704,6 +768,18 @@ const loadMemberEarnings = async ({
         stripeSubscriptionId,
         expectedStripeMode: stripeMode,
       });
+  // Coach-priced-app-offer subscribers earn no referral cut (payments stays
+  // empty above, correctly) — but the live Stripe data already fetched for
+  // them is real money the coach IS owed under the app-subscription split.
+  // Surface it as an estimate rather than discarding it.
+  const estimatedAppSubscriptionPayments =
+    isCoachPricedAthleteAppPlan && !isAppleSubscription && stripeSubscriptionId
+      ? estimatedAppSubscriptionInvoiceRows({
+          invoices: paidInvoices,
+          stripeSubscriptionId,
+          expectedStripeMode: stripeMode,
+        })
+      : [];
   const subscriptionSource = isAppleSubscription
     ? 'apple_app_store'
     : stripeSubscriptionId
@@ -750,6 +826,12 @@ const loadMemberEarnings = async ({
     paidInvoiceCount: payments.length,
     lifetimePaidCents: payments.reduce((sum, payment) => sum + payment.amountPaidCents, 0),
     lifetimeShareCents: payments.reduce((sum, payment) => sum + payment.coachShareCents, 0),
+    isCoachPricedAthleteAppPlan,
+    estimatedAppSubscriptionPayments,
+    estimatedAppSubscriptionLifetimeNetCents: estimatedAppSubscriptionPayments.reduce(
+      (sum, payment) => sum + payment.coachNetCents,
+      0
+    ),
   };
 };
 
@@ -1020,6 +1102,91 @@ const loadAthleteAppSubscriptionEarnings = async ({
   };
 };
 
+// Folds each coach-priced-app member's live-Stripe-derived estimate into the
+// confirmed ledger response, so the "Coach-priced app subscriptions" section
+// and the member list it's built next to never disagree. `lifetimeNetCents`/
+// `currentMonthNetCents` are left untouched (confirmed-ledger-only) — that's
+// what payoutEligibleCents is computed from, and a coach should never be able
+// to request a payout against money Stripe hasn't confirmed settled yet. The
+// new `display*` fields are what the section's stat tiles should render.
+const mergeEstimatedAppSubscriptionEarnings = ({ athleteAppSubscriptionEarnings, members }) => {
+  const confirmedInvoiceIds = new Set(
+    athleteAppSubscriptionEarnings.transactions.map((transaction) => transaction.invoiceId).filter(Boolean)
+  );
+  const confirmedSubscriberIds = new Set(
+    athleteAppSubscriptionEarnings.transactions.map((transaction) => transaction.athleteUserId).filter(Boolean)
+  );
+
+  const estimatedTransactions = [];
+  for (const member of members) {
+    if (!member.isCoachPricedAthleteAppPlan) continue;
+    for (const payment of member.estimatedAppSubscriptionPayments) {
+      if (confirmedInvoiceIds.has(payment.stripeInvoiceId)) continue;
+      estimatedTransactions.push({
+        id: payment.id,
+        invoiceId: payment.stripeInvoiceId,
+        subscriptionId: null,
+        athleteUserId: member.userId,
+        teamId: member.teamId,
+        offerId: member.teamId,
+        status: 'paid',
+        paidAt: payment.paidAt,
+        amountPaidCents: payment.amountPaidCents,
+        grossRevenueCents: payment.grossRevenueCents,
+        refundedCents: 0,
+        platformShareCents: payment.platformShareCents,
+        stripeProcessingFeeCents: payment.stripeProcessingFeeCents,
+        coachNetCents: payment.coachNetCents,
+        platformNetCents: 0,
+        currency: payment.currency,
+        billingReason: payment.billingReason,
+        source: 'pulsecheck-coach-athlete-offer',
+        sourceLabel: payment.sourceLabel,
+        estimated: true,
+      });
+    }
+  }
+
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const currentMonthEstimated = estimatedTransactions.filter((transaction) =>
+    String(transaction.paidAt || '').startsWith(currentMonthKey)
+  );
+  const estimatedSubscriberIds = new Set(
+    estimatedTransactions.map((transaction) => transaction.athleteUserId).filter(Boolean)
+  );
+  // Any active coach-priced member counts as a subscriber even if this month
+  // happened not to produce an invoice we could estimate from (e.g. mid-cycle).
+  members.forEach((member) => {
+    if (member.isCoachPricedAthleteAppPlan && member.isActive) {
+      estimatedSubscriberIds.add(member.userId);
+    }
+  });
+  const estimatedLifetimeNetCents = estimatedTransactions.reduce(
+    (sum, transaction) => sum + transaction.coachNetCents,
+    0
+  );
+  const estimatedCurrentMonthNetCents = currentMonthEstimated.reduce(
+    (sum, transaction) => sum + transaction.coachNetCents,
+    0
+  );
+
+  return {
+    ...athleteAppSubscriptionEarnings,
+    confirmedSubscriberCount: confirmedSubscriberIds.size,
+    estimatedSubscriberCount: estimatedSubscriberIds.size,
+    subscriberCount: new Set([...confirmedSubscriberIds, ...estimatedSubscriberIds]).size,
+    hasUnconfirmedEstimates: estimatedTransactions.length > 0,
+    estimatedLifetimeNetCents,
+    estimatedCurrentMonthNetCents,
+    displayLifetimeNetCents: athleteAppSubscriptionEarnings.lifetimeNetCents + estimatedLifetimeNetCents,
+    displayCurrentMonthNetCents: athleteAppSubscriptionEarnings.currentMonthNetCents + estimatedCurrentMonthNetCents,
+    transactionCount: athleteAppSubscriptionEarnings.transactionCount + estimatedTransactions.length,
+    transactions: [...athleteAppSubscriptionEarnings.transactions, ...estimatedTransactions].sort(
+      (left, right) => String(right.paidAt || '').localeCompare(String(left.paidAt || ''))
+    ),
+  };
+};
+
 const loadCoachPayoutSummary = async ({
   coachUserId,
   teamId,
@@ -1127,7 +1294,16 @@ const loadCoachEarnings = async (coachUserId, teamId, database = db) => {
 
   const athleteScopes = new Map();
   for (const { team, commercialConfig } of eligibleTeams) {
-    if (!commercialConfig.referralKickbackEnabled || commercialConfig.referralRevenueSharePct <= 0) {
+    const hasReferralProgram =
+      commercialConfig.referralKickbackEnabled && commercialConfig.referralRevenueSharePct > 0;
+    // Even without a referral program, a team can still have coach-priced app
+    // subscribers whose earnings loadMemberEarnings needs to compute — skip
+    // this loop only when NEITHER program is active for the team. sharePct
+    // stays whatever the referral config says (0 when referral is off); that's
+    // correct either way since isCoachPricedAthleteAppPlan forces it to 0 per
+    // member regardless, and a team without a referral program shouldn't pay
+    // referral shares to anyone.
+    if (!hasReferralProgram && !commercialConfig.athleteAppSubscriptionEnabled) {
       continue;
     }
     const membersSnapshot = await database
@@ -1156,7 +1332,7 @@ const loadCoachEarnings = async (coachUserId, teamId, database = db) => {
     });
   }
 
-  const [members, serviceEarnings, athleteAppSubscriptionEarnings] = await Promise.all([
+  const [members, serviceEarnings, confirmedAthleteAppSubscriptionEarnings] = await Promise.all([
     Promise.all(
       [...athleteScopes.values()].map((scope) =>
         loadMemberEarnings({ ...scope, database })
@@ -1177,6 +1353,10 @@ const loadCoachEarnings = async (coachUserId, teamId, database = db) => {
       database,
     }),
   ]);
+  const athleteAppSubscriptionEarnings = mergeEstimatedAppSubscriptionEarnings({
+    athleteAppSubscriptionEarnings: confirmedAthleteAppSubscriptionEarnings,
+    members,
+  });
   members.sort(
     (left, right) =>
       Number(right.isActive) - Number(left.isActive)

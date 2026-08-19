@@ -2234,7 +2234,7 @@ const DEFAULT_PULSECHECK_SPORTS: PulseCheckSportConfigurationEntry[] = [
   }),
   sportDefaults({
     id: 'bodybuilding-physique',
-    name: 'Bodybuilding / Physique',
+    name: 'Competitive Bodybuilding',
     emoji: '🏆',
     positions: ['Men’s Physique', 'Classic Physique', 'Bodybuilding', 'Bikini', 'Figure', 'Wellness', 'Fitness'],
     sortOrder: 16,
