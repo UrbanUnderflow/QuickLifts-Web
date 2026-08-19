@@ -194,6 +194,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if ((invite.status || '') !== 'active') {
         throw new Error('Invite is no longer active.');
       }
+      // Older links created before expiresAt existed have no expiration —
+      // only enforce it when the field is actually present.
+      const expiresAtMillis = invite.expiresAt?.toMillis?.();
+      if (typeof expiresAtMillis === 'number' && expiresAtMillis < Date.now()) {
+        throw new Error('Invite has expired.');
+      }
 
       // Authorization here is bearer (possession of the unguessable, single-use
       // invite token) plus an authenticated session — so a coach can activate via
@@ -403,7 +409,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const statusCode =
       message === 'Invite not found.'
         ? 404
-        : message === 'Invite is no longer active.' || message === 'Invite type is invalid for this route.'
+        : message === 'Invite is no longer active.' ||
+            message === 'Invite type is invalid for this route.' ||
+            message === 'Invite has expired.'
           ? 409
           : message.startsWith('This invite is restricted to')
             ? 403

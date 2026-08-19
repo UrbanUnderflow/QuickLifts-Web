@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Bell, Check, CheckCircle2, ChevronRight, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waypoints } from 'lucide-react';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
-import { PULSECHECK_INTAKE_FORM_VERSION } from '../../api/firebase/pulsecheckProvisioning/types';
 import type {
   PulseCheckInviteLink,
   PulseCheckNotificationPreferences,
@@ -191,7 +190,6 @@ export default function PulseCheckPostActivationPage() {
   });
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState('');
-  const [coachIntakeAnswers, setCoachIntakeAnswers] = useState<Record<string, string | number | string[]>>({});
 
   const [adultInviteForm, setAdultInviteForm] = useState({
     recipientName: '',
@@ -277,19 +275,7 @@ export default function PulseCheckPostActivationPage() {
       phone: membership.phone || current.phone,
       notificationPreferences: membership.notificationPreferences || current.notificationPreferences,
     }));
-    setCoachIntakeAnswers(membership.coachIntakeResponses || {});
   }, [membership]);
-
-  const coachIntakeQuestions = team?.intake?.coach?.questions || [];
-  const coachIntakeFormVersion = team?.intake?.coach?.version || PULSECHECK_INTAKE_FORM_VERSION;
-  const isCoachIntakeAnswerEmpty = (value: string | number | string[] | undefined) =>
-    value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
-  const coachIntakeComplete = coachIntakeQuestions
-    .filter((question) => question.required)
-    .every((question) => !isCoachIntakeAnswerEmpty(coachIntakeAnswers[question.id]));
-  const setCoachIntakeAnswer = (questionId: string, value: string | number | string[]) => {
-    setCoachIntakeAnswers((current) => ({ ...current, [questionId]: value }));
-  };
 
   const activeInviteLinks = useMemo(
     () => inviteLinks.filter((invite) => invite.status === 'active'),
@@ -350,11 +336,6 @@ export default function PulseCheckPostActivationPage() {
       }
     }
 
-    if (!coachIntakeComplete) {
-      setMessage({ type: 'error', text: 'Please answer the required intake questions before continuing.' });
-      return;
-    }
-
     setSavingProfile(true);
     setMessage(null);
 
@@ -386,9 +367,6 @@ export default function PulseCheckPostActivationPage() {
         notificationPreferences: profileForm.notificationPreferences,
         phone: smsEnabled ? normalizedPhone : '',
         profileImageUrl,
-        ...(coachIntakeQuestions.length > 0
-          ? { intakeResponses: coachIntakeAnswers, intakeFormVersion: coachIntakeFormVersion }
-          : {}),
       });
 
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
@@ -818,84 +796,6 @@ export default function PulseCheckPostActivationPage() {
                     </div>
                   ) : null}
                 </div>
-
-                {coachIntakeQuestions.length > 0 ? (
-                  <div className="mt-6 rounded-2xl border border-zinc-800 bg-[#0b1730] p-5">
-                    <div className="text-base font-semibold text-white">A Few Questions</div>
-                    <p className="mt-1 text-sm leading-6 text-zinc-400">
-                      A quick read so we can tailor PulseCheck to your team. Takes a minute.
-                    </p>
-                    <div className="mt-4 space-y-5">
-                      {coachIntakeQuestions.map((question) => {
-                        const answer = coachIntakeAnswers[question.id];
-                        return (
-                          <div key={question.id} className="space-y-2">
-                            <span className="block text-sm text-zinc-300">
-                              {question.question}
-                              {question.required ? <span className="text-cyan-300"> *</span> : null}
-                            </span>
-                            {question.type === 'text' ? (
-                              <textarea
-                                value={typeof answer === 'string' ? answer : ''}
-                                onChange={(e) => setCoachIntakeAnswer(question.id, e.target.value)}
-                                rows={2}
-                                className="w-full rounded-xl border border-zinc-700 bg-[#06101f] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/50 placeholder:text-zinc-600"
-                                placeholder="Your answer"
-                              />
-                            ) : null}
-                            {question.type === 'number' ? (
-                              <input
-                                type="number"
-                                value={typeof answer === 'number' ? answer : typeof answer === 'string' ? answer : ''}
-                                min={question.minValue}
-                                max={question.maxValue}
-                                onChange={(e) => setCoachIntakeAnswer(question.id, e.target.value === '' ? '' : Number(e.target.value))}
-                                className="w-40 rounded-xl border border-zinc-700 bg-[#06101f] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/50"
-                                placeholder={question.minValue !== undefined && question.maxValue !== undefined ? `${question.minValue}–${question.maxValue}` : 'Number'}
-                              />
-                            ) : null}
-                            {question.type === 'yes_no' ? (
-                              <div className="flex gap-3">
-                                {['Yes', 'No'].map((opt) => (
-                                  <button
-                                    key={opt}
-                                    type="button"
-                                    onClick={() => setCoachIntakeAnswer(question.id, opt)}
-                                    className={`rounded-xl border px-5 py-2 text-sm transition ${
-                                      answer === opt
-                                        ? 'border-cyan-400/50 bg-cyan-400/10 text-white'
-                                        : 'border-zinc-700 bg-[#06101f] text-zinc-300 hover:border-zinc-500'
-                                    }`}
-                                  >
-                                    {opt}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-                            {question.type === 'multiple_choice' ? (
-                              <div className="grid gap-2">
-                                {(question.options || []).map((opt) => (
-                                  <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => setCoachIntakeAnswer(question.id, opt.text)}
-                                    className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                                      answer === opt.text
-                                        ? 'border-cyan-400/50 bg-cyan-400/10 text-white'
-                                        : 'border-zinc-700 bg-[#06101f] text-zinc-300 hover:border-zinc-500'
-                                    }`}
-                                  >
-                                    {opt.text}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
 
                 <div className="mt-6">
                   <button

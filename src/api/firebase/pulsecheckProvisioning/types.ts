@@ -807,6 +807,9 @@ export interface PulseCheckInviteLink {
   notifyCoachOnAccept?: boolean;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
+  // Admin-activation links only. Unset on older links created before this
+  // field existed — treat missing as "does not expire" rather than expired.
+  expiresAt?: Timestamp | null;
   redeemedByUserId?: string;
   redeemedByEmail?: string;
   redeemedAt?: Timestamp | null;

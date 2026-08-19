@@ -1,4 +1,4 @@
-import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../config';
 import {
   buildPulseCheckAthleteOfferWebUrl,
@@ -102,6 +102,10 @@ const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const CLINICIAN_PROFILES_COLLECTION = 'pulsecheck-auntedna-clinician-profiles';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const INVITE_ACTIVITY_COLLECTION = 'pulsecheck-invite-activities';
+// A leaked/forwarded admin-activation link stays a valid bearer credential
+// until it expires or is manually revoked — 30 days bounds that exposure
+// without being so short it lapses before a slow-to-respond coach opens it.
+const ADMIN_ACTIVATION_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const COACH_INTAKE_DRAFTS_COLLECTION = 'pulsecheck-coach-intake-drafts';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
@@ -3085,6 +3089,7 @@ export const pulseCheckProvisioningService = {
       createdByEmail: normalizeString(input.createdByEmail),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      expiresAt: Timestamp.fromMillis(Date.now() + ADMIN_ACTIVATION_LINK_TTL_MS),
     };
 
     const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));

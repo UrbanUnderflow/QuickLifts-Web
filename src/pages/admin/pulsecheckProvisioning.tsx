@@ -5049,9 +5049,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       })()}
 
                                       {(() => {
+                                        // Coach intake is retired from onboarding — coaches are already
+                                        // interviewed before they're invited, so we don't ask again in the
+                                        // app. Athlete intake is unaffected.
                                         const intakeKinds: Array<{ kind: PulseCheckIntakeKind; label: string }> = [
                                           { kind: 'athlete', label: 'Athlete intake' },
-                                          { kind: 'coach', label: 'Coach intake' },
                                         ];
                                         const fieldStyle: React.CSSProperties = {
                                           background: 'rgba(0,0,0,0.35)',
@@ -5069,11 +5071,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             title="Intake Surveys"
                                             open={teamIntakeCardOpen}
                                             onToggle={() => toggleOrgCard(`${team.id}:intakecard`)}
-                                            preview="Athlete & coach intake questions. Open to manage."
+                                            preview="Athlete intake questions. Open to manage."
                                             className="pcp-card pcp-tracker-card"
                                           >
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
-                                              Questions each athlete and coach answers during onboarding. Athletes answer theirs alongside the consent block, so they sign once and the app will not ask again.
+                                              Questions each athlete answers during onboarding, alongside the consent block, so they sign once and the app will not ask again.
                                             </div>
                                             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                                               {intakeKinds.map(({ kind, label }) => {

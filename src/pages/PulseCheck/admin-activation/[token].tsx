@@ -298,9 +298,11 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     }
   };
 
-  // Google / Apple sign-in. Same invite gate as email: the social account's email
-  // must match the invited email, otherwise we sign them back out. Phone is not
-  // offered here because the invite is keyed on email.
+  // Google / Apple sign-in. Unlike the email/password form (whose email field is
+  // locked to the invite's target email), an OAuth identity's email can't be
+  // constrained up front — a mismatch instead prompts the coach to choose where
+  // updates should go (see emailChoice below) rather than blocking them. Phone is
+  // not offered here because the invite is keyed on email.
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
     if (submitting) return;
     if (isDemo) {
@@ -988,6 +990,8 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
     if (!invite) return { notFound: true };
     if (invite.status && invite.status !== 'active') return { notFound: true };
     if (invite.inviteType !== 'admin-activation') return { notFound: true };
+    const ssrExpiresAtMillis = invite.expiresAt?.toMillis?.();
+    if (typeof ssrExpiresAtMillis === 'number' && ssrExpiresAtMillis < Date.now()) return { notFound: true };
 
     // Record the first time this activation link is opened so the provisioning
     // console can show whether the invited admin has actually viewed it. Recorded
