@@ -6,7 +6,7 @@ import { ArrowUpRight, Download, ChevronRight, TrendingUp, Lock, Loader2, Mail, 
 
 import PageHead from '../../components/PageHead';
 import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
-import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, orderBy, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { UserChallenge } from '../../api/firebase/workout/types';
 import { workoutService } from '../../api/firebase/workout';
@@ -1897,55 +1897,24 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     setAccessError(null);
 
     try {
-      const accessRef = collection(db, 'investorAccess');
-      // Normalize code: remove dashes and convert to uppercase
-      const normalizedCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+      const response = await fetch('/api/investor/verify-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, isAutoLogin: isAutoCheck }),
+      });
+      const result = await response.json();
 
-      // Try normalized code (no dashes)
-      let q = query(accessRef, where('accessCode', '==', normalizedCode));
-      let snapshot = await getDocs(q);
-
-      // Fallback: try email for backward compatibility
-      if (snapshot.empty) {
-        q = query(accessRef, where('email', '==', code.toLowerCase().trim()));
-        snapshot = await getDocs(q);
-      }
-
-      if (!snapshot.empty) {
-        const accessDoc = snapshot.docs[0];
-        const accessData = accessDoc.data();
-        if (accessData.isApproved) {
-          setHasAccess(true);
-          // Store section access from Firestore, falling back to defaults
-          const storedSectionAccess = accessData.sectionAccess || DEFAULT_SECTION_ACCESS;
-          setSectionAccess(storedSectionAccess);
-          const accessCodeToStore = accessData.accessCode || accessData.email || code.toUpperCase().trim();
-          localStorage.setItem('investorAccessCode', accessCodeToStore);
-          localStorage.setItem('investorSectionAccess', JSON.stringify(storedSectionAccess));
-
-          // Log this access event for analytics
-          try {
-            const logsRef = collection(db, 'investorAccessLogs');
-            await addDoc(logsRef, {
-              accessCode: accessCodeToStore,
-              email: accessData.email || null, // Keep for backward compatibility
-              investorAccessId: accessDoc.id,
-              name: accessData.name || null,
-              company: accessData.company || null,
-              accessedAt: serverTimestamp(),
-              userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : null,
-              isAutoLogin: isAutoCheck,
-            });
-          } catch (logError) {
-            console.error('Error logging access:', logError);
-            // Don't block access if logging fails
-          }
-        } else {
-          setHasAccess(false);
-          setAccessError('Your access has been revoked. Please contact invest@fitwithpulse.ai');
-          localStorage.removeItem('investorAccessCode');
-          localStorage.removeItem('investorSectionAccess');
-        }
+      if (response.ok && result.success) {
+        setHasAccess(true);
+        const storedSectionAccess = result.sectionAccess || DEFAULT_SECTION_ACCESS;
+        setSectionAccess(storedSectionAccess);
+        localStorage.setItem('investorAccessCode', result.accessCode);
+        localStorage.setItem('investorSectionAccess', JSON.stringify(storedSectionAccess));
+      } else if (response.status === 403) {
+        setHasAccess(false);
+        setAccessError('Your access has been revoked. Please contact invest@fitwithpulse.ai');
+        localStorage.removeItem('investorAccessCode');
+        localStorage.removeItem('investorSectionAccess');
       } else {
         setHasAccess(false);
         if (!isAutoCheck) {
