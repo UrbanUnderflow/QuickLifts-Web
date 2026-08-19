@@ -2686,6 +2686,46 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
+  // One-click path for the team-card "Copy Link" button: reuse an existing
+  // active link for the team's default admin if there is one, otherwise
+  // create one silently (no email send) and copy it straight away.
+  const handleCopyOrCreateAdminActivationLink = async (
+    team: PulseCheckTeam,
+    existingLink: PulseCheckInviteLink | null
+  ) => {
+    const targetEmail = team.defaultAdminEmail?.trim();
+    if (!targetEmail) {
+      setMessage({
+        type: 'error',
+        text: 'Set a default admin email for this team before copying a link — open Manage Activations to add one.',
+      });
+      return;
+    }
+
+    if (existingLink && existingLink.status === 'active') {
+      await handleCopyActivationLink(existingLink.activationUrl);
+      return;
+    }
+
+    const created = await handleCreateAdminActivationLink(team, targetEmail);
+    if (!created) return;
+
+    const refreshedLinks = await pulseCheckProvisioningService.listTeamInviteLinks(team.id);
+    const link = refreshedLinks.find(
+      (candidate) =>
+        candidate.inviteType === 'admin-activation' &&
+        candidate.status === 'active' &&
+        (candidate.targetEmail || '').toLowerCase() === targetEmail.toLowerCase()
+    );
+
+    if (!link) {
+      setMessage({ type: 'error', text: 'Link created, but could not resolve it to copy — open Manage Activations to grab it.' });
+      return;
+    }
+
+    await handleCopyActivationLink(link.activationUrl);
+  };
+
   const handleCopyActivationLink = async (activationUrl: string) => {
     try {
       await navigator.clipboard.writeText(activationUrl);
@@ -3055,6 +3095,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
       if (options?.teamId) {
         const nextTeam = teams.find((team) => team.id === options.teamId) || null;
         if (nextTeam) {
+          setTeamForm((current) => ({
+            ...current,
+            organizationId: nextTeam.organizationId,
+          }));
           setPilotForm((current) => ({
             ...current,
             organizationId: nextTeam.organizationId,
@@ -3079,6 +3123,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
       if (options?.pilotId) {
         const nextPilot = pilots.find((pilot) => pilot.id === options.pilotId) || null;
         if (nextPilot) {
+          setTeamForm((current) => ({
+            ...current,
+            organizationId: nextPilot.organizationId,
+          }));
           setCohortForm((current) => ({
             ...current,
             organizationId: nextPilot.organizationId,
@@ -4743,6 +4791,22 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                     : 'No activation email sent yet. You choose when the admin is invited in.'}
                                                 </div>
                                               </div>
+                                              <button
+                                                type="button"
+                                                className="pcp-ab pcp-ab-g"
+                                                disabled={activationCreatingTeamId === team.id}
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  void handleCopyOrCreateAdminActivationLink(team, activeAdminLink);
+                                                }}
+                                              >
+                                                {activationCreatingTeamId === team.id ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                  <Clipboard />
+                                                )}
+                                                Copy Link
+                                              </button>
                                               <button
                                                 type="button"
                                                 className="pcp-ab pcp-ab-t"

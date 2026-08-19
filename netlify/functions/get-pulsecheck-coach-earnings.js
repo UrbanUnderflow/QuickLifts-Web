@@ -693,6 +693,14 @@ const loadMemberEarnings = async ({
         sharePct,
       });
     } catch (error) {
+      // The client-facing message stays generic (no RevenueCat API/auth detail
+      // leaks to the coach dashboard) — but this used to be the only place
+      // this failure was ever recorded, and it discarded the real reason
+      // entirely. Without this, "temporarily unavailable" is undiagnosable.
+      console.error(
+        `[PulseCheckCoachEarnings] RevenueCat lookup failed for athlete ${athleteUserId}:`,
+        error?.message || error
+      );
       invoiceHistoryAvailable = false;
       invoiceHistoryMessage = 'Apple transaction history is temporarily unavailable.';
     }
