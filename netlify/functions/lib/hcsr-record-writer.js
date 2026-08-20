@@ -122,6 +122,9 @@ function normalize(input) {
     ...(sample.provenance || {}),
   };
 
+  const teamId = sample.teamId || input?.teamId;
+  const organizationId = sample.organizationId || input?.organizationId;
+
   return stripUndefinedDeep({
     athleteUserId,
     sourceFamily,
@@ -136,6 +139,9 @@ function normalize(input) {
     payload: sample.payload || {},
     sourceMetadata,
     provenance,
+    // Only set when both are present — a partial scope would falsely match
+    // (or never match) the coach dashboard's team-scoped queries.
+    ...(teamId && organizationId ? { teamId, organizationId } : {}),
     recordIdOverride: sample.recordIdOverride || input?.recordIdOverride || buildRecordId({
       athleteUserId,
       sourceFamily,
@@ -167,6 +173,9 @@ function buildSourceRecord(input) {
     payload: normalized.payload,
     sourceMetadata: normalized.sourceMetadata,
     provenance: normalized.provenance,
+    ...(normalized.teamId && normalized.organizationId
+      ? { teamId: normalized.teamId, organizationId: normalized.organizationId }
+      : {}),
   };
 }
 

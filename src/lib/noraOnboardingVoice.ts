@@ -7,7 +7,7 @@ export type NoraDynamicLine = {
   id: string;
   label: string;
   description: string;
-  /** Build the spoken text. `name` is the coach's first name (may be empty). */
+  /** Build the spoken text. `name` is the coach's full name — the last word is spoken (may be empty). */
   build: (name: string) => string;
   /** Example name used for library preview defaults. */
   sampleName: string;
@@ -15,11 +15,12 @@ export type NoraDynamicLine = {
 
 /**
  * The line Nora speaks the moment a coach opens their activation link.
- * e.g. "Welcome, Coach Tre! Nora here. Let's get you signed up, and I'll walk
+ * e.g. "Welcome, Coach Grant! Nora here. Let's get you signed up, and I'll walk
  * you through your setup."
  */
 export function buildNoraOnboardingWelcome(coachName?: string): string {
-  const name = (coachName || '').trim().split(/\s+/)[0] || '';
+  const parts = (coachName || '').trim().split(/\s+/).filter(Boolean);
+  const name = parts[parts.length - 1] || '';
   return name
     ? `Welcome, Coach ${name}! Nora here. Let's get you signed up, and I'll walk you through your setup.`
     : `Welcome, Coach! Nora here. Let's get you signed up, and I'll walk you through your setup.`;
@@ -30,8 +31,8 @@ export const NORA_DYNAMIC_LINES: NoraDynamicLine[] = [
   {
     id: 'coach-onboarding-welcome',
     label: 'Coach onboarding welcome',
-    description: 'Plays when a coach first opens their activation link. Inserts the coach’s first name.',
+    description: 'Plays when a coach first opens their activation link. Inserts the coach’s last name.',
     build: buildNoraOnboardingWelcome,
-    sampleName: 'Tre',
+    sampleName: 'Tre Grant',
   },
 ];

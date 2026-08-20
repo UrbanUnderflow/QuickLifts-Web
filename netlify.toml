@@ -577,6 +577,11 @@
   # has an open curriculum assignment.
   schedule = "*/30 * * * *"
 
+[functions.scheduled-coach-reminders]
+  # Runs every 15 minutes; sends server-driven check-in-time pushes and
+  # coach-authored custom reminders for teams or individual athletes.
+  schedule = "*/15 * * * *"
+
 [functions.scheduled-curriculum-assessment]
   # Runs daily at 03:00 UTC; on the 1st of each month it computes the
   # 30-day rollup per athlete and writes pulsecheck-curriculum-assessments.

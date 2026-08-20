@@ -922,6 +922,10 @@ export interface PulseCheckTeamMembership {
   status?: PulseCheckTeamMembershipStatus;
   revokedAt?: Timestamp | null;
   title?: string;
+  // Name the admin entered when generating the activation link (invite.recipientName),
+  // carried over at redeem so post-activation can prefill the profile name field
+  // instead of the auto-generated username. Still freely editable there.
+  invitedDisplayName?: string;
   permissionSetId?: string;
   // Authoritative coach-granted capabilities for staff members. role /
   // operatingRole / rosterVisibilityScope below are derived from these.

@@ -8,6 +8,7 @@ const {
   getOauthCredentials,
   verifyAuth,
 } = require('./oura-utils');
+const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-team-scope');
 const {
   buildNoraBiometricBriefNotification,
   resolveAthleteFirstName,
@@ -622,7 +623,11 @@ function buildSourceStatusDocument({ userId, observedAt, syncAt, lifecycleState,
   };
 }
 
-function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPayload, readinessPayload, stressPayload, rawSleep, rawReadiness, rawStress }) {
+function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPayload, readinessPayload, stressPayload, rawSleep, rawReadiness, rawStress, teamId, organizationId }) {
+  // Omitted entirely (not set to null/undefined) when the athlete has no
+  // unambiguous active team — the coach dashboard's team-scoped query
+  // requires these to match, so a wrong guess would be worse than absent.
+  const teamScopeFields = teamId && organizationId ? { teamId, organizationId } : {};
   const sourceWindow = buildDayWindow(dateKey, timezone);
   const records = [];
 
@@ -631,6 +636,7 @@ function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPa
     records.push({
       id,
       athleteUserId: userId,
+      ...teamScopeFields,
       sourceFamily: 'oura',
       sourceType: 'pulsecheck_oura_recovery',
       recordType: 'summary_input',
@@ -661,6 +667,7 @@ function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPa
     records.push({
       id,
       athleteUserId: userId,
+      ...teamScopeFields,
       sourceFamily: 'oura',
       sourceType: 'pulsecheck_oura_readiness',
       recordType: 'summary_input',
@@ -691,6 +698,7 @@ function buildSourceRecordDocuments({ userId, dateKey, timezone, syncAt, sleepPa
     records.push({
       id,
       athleteUserId: userId,
+      ...teamScopeFields,
       sourceFamily: 'oura',
       sourceType: 'pulsecheck_oura_autonomic_load',
       recordType: 'summary_input',
@@ -995,6 +1003,13 @@ exports.handler = async (event) => {
       ? body.snapshotDateKey.trim()
       : dateKeyInTimeZone(new Date(), timezone);
     const syncAt = Date.now() / 1000;
+    // Resolved once per sync — not fatal if it fails or is ambiguous
+    // (multi-team athlete, or no active team): records still get written,
+    // just without the team-scoped fields, matching prior behavior.
+    const { scope: teamScope } = await resolveUnambiguousAthleteScope(admin.firestore(), userId).catch((error) => {
+      console.warn(`[oura-sync] team-scope lookup failed for ${userId}:`, error?.message || error);
+      return { scope: null };
+    });
 
     const connectionRef = admin.firestore().collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(userId));
     const connectionSnap = await connectionRef.get();
@@ -1068,6 +1083,8 @@ exports.handler = async (event) => {
       rawSleep: latestSleep,
       rawReadiness: latestReadiness,
       rawStress: latestStress,
+      teamId: teamScope?.teamId,
+      organizationId: teamScope?.organizationId,
     });
 
     for (const record of sourceRecordDocs) {

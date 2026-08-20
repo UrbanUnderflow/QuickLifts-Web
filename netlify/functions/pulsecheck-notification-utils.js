@@ -225,6 +225,32 @@ function buildNoraDailyReflectionNotification({
   };
 }
 
+function buildCoachCheckInReminderMessage({
+  athleteName = '',
+  localDate = '',
+} = {}) {
+  const prompt = "Hey Nora, I'm ready to check in.";
+  const assistantOpeningMessage = "Hey, how are you feeling right now? Give me the real version and I'll help you sort through it.";
+  const launchSubtitle = "Opening Nora for your check-in.";
+
+  return {
+    title: 'Nora',
+    body: `${buildGreeting(athleteName)} your coach set this time for your check-in. I'm ready when you are.`,
+    subtitle: 'Check-in time',
+    notificationType: 'COACH_CHECK_IN_REMINDER',
+    data: normalizeStringMap({
+      type: 'COACH_CHECK_IN_REMINDER',
+      dmKind: 'end_of_day_reflection',
+      route: 'nora_chat',
+      prompt,
+      assistantOpeningMessage,
+      launchSubtitle,
+      localDate,
+      timestamp: Date.now(),
+    }),
+  };
+}
+
 function buildNoraPushMessage({
   fcmToken,
   title,
@@ -458,6 +484,7 @@ async function sendLoggedNoraPush({
 }
 
 module.exports = {
+  buildCoachCheckInReminderMessage,
   buildNoraBiometricBriefNotification,
   buildNoraDailyReflectionNotification,
   buildNoraPushMessage,

@@ -2161,6 +2161,83 @@ service cloud.firestore {
         ]);
     }
 
+    function pcCoachReminderDataIsCoachOwned(data) {
+      return data.coachId == request.auth.uid
+        && data.teamId is string
+        && data.organizationId is string
+        && pcDataMatchesTeamOrganization(data, data.teamId)
+        && (
+          (
+            data.scope == 'team'
+            && pcCanCoachTeam(data.teamId)
+          )
+          || (
+            data.scope == 'athlete'
+            && data.athleteId is string
+            && pcCanAccessTeamAthlete(data.teamId, data.athleteId)
+          )
+        );
+    }
+
+    function pcCoachReminderCreateIsValid(reminderId, data) {
+      return data.kind in ['checkIn', 'custom']
+        && data.scope in ['team', 'athlete']
+        && pcCoachReminderDataIsCoachOwned(data)
+        && (
+          data.kind != 'checkIn'
+          || (
+            data.scope == 'athlete'
+            && reminderId == 'checkin_' + data.athleteId
+          )
+        );
+    }
+
+    function pcCoachReminderUpdateIsValid(data) {
+      return data.kind in ['checkIn', 'custom']
+        && data.scope in ['team', 'athlete']
+        && pcCoachReminderDataIsCoachOwned(data)
+        && request.resource.data.coachId == data.coachId
+        && request.resource.data.teamId == data.teamId
+        && request.resource.data.organizationId == data.organizationId
+        && request.resource.data.kind == data.kind
+        && request.resource.data.scope == data.scope
+        && (
+          !('athleteId' in data)
+          || request.resource.data.athleteId == data.athleteId
+        )
+        && pcCoachReminderDataIsCoachOwned(request.resource.data);
+    }
+
+    match /pulsecheck-coach-reminders/{reminderId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && pcCoachReminderDataIsCoachOwned(resource.data)
+        )
+        || (
+          isSignedIn()
+          && reminderId == 'checkin_' + request.auth.uid
+          && resource.data.kind == 'checkIn'
+          && resource.data.scope == 'athlete'
+          && resource.data.athleteId == request.auth.uid
+        )
+        || (
+          isSignedIn()
+          && resource.data.kind == 'custom'
+          && resource.data.scope == 'athlete'
+          && resource.data.athleteId == request.auth.uid
+        );
+      allow create: if isSignedIn()
+        && pcCoachReminderCreateIsValid(
+          reminderId,
+          request.resource.data
+        );
+      allow update: if isSignedIn()
+        && pcCoachReminderUpdateIsValid(resource.data);
+      allow delete: if isSignedIn()
+        && pcCoachReminderDataIsCoachOwned(resource.data);
+    }
+
     // Coach-created recommendations are bound to the selected team and athlete.
     // Athletes retain their existing own-record accept/dismiss flow.
     match /mental-recommendations/{recommendationId} {

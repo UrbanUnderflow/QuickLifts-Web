@@ -195,10 +195,6 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       setMessage({ type: 'error', text: 'Email, password, and username are required.' });
       return;
     }
-    if (normalizedTargetEmail && email !== normalizedTargetEmail) {
-      setMessage({ type: 'error', text: `This invite is restricted to ${invite.targetEmail}.` });
-      return;
-    }
     if (createForm.password !== createForm.confirmPassword) {
       setMessage({ type: 'error', text: 'Passwords do not match.' });
       return;
@@ -236,7 +232,9 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
 
       await claimUsername(credential.user.uid, finalUsername);
       await createPulseCheckAdminUser(credential.user, finalUsername);
-      await completeRedeem();
+      // Pass the email they actually signed up with — they may have edited it
+      // away from the invite's pre-filled address — so notifications route there.
+      await completeRedeem(email);
     } catch (error) {
       console.error('[pulsecheck-admin-activation] Failed to create account:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -269,17 +267,15 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       setMessage({ type: 'error', text: 'Email and password are required.' });
       return;
     }
-    if (normalizedTargetEmail && email !== normalizedTargetEmail) {
-      setMessage({ type: 'error', text: `This invite is restricted to ${invite.targetEmail}.` });
-      return;
-    }
 
     setSubmitting(true);
     setMessage(null);
 
     try {
       await signInWithEmailAndPassword(auth, email, signInForm.password);
-      await completeRedeem();
+      // Pass the email they actually signed in with — they may have edited it
+      // away from the invite's pre-filled address — so notifications route there.
+      await completeRedeem(email);
     } catch (error) {
       console.error('[pulsecheck-admin-activation] Failed to sign in:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -434,7 +430,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     'w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-70';
   const primaryBtnStyle: React.CSSProperties = { background: PC.purple };
   const displayFont: React.CSSProperties = { fontFamily: 'Switzer, sans-serif' };
-  const coachFirstName = (invite.targetName || '').trim().split(/\s+/)[0] || '';
+  // Greet by last name ("Coach Grant"), not first — matches how coaches are
+  // addressed elsewhere in the app.
+  const targetNameParts = (invite.targetName || '').trim().split(/\s+/).filter(Boolean);
+  const coachLastName = targetNameParts[targetNameParts.length - 1] || '';
 
   // Nora greets the coach by name when they open the link. Browsers block audio
   // autoplay without a gesture, so we fire on the first interaction with the page
@@ -448,7 +447,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       if (noraGreetedRef.current) return;
       noraGreetedRef.current = true;
       events.forEach((event) => window.removeEventListener(event, greet));
-      void speakStep(buildNoraOnboardingWelcome(coachFirstName), { fallbackToBrowser: false }).catch(() => {});
+      void speakStep(buildNoraOnboardingWelcome(coachLastName), { fallbackToBrowser: false }).catch(() => {});
     };
     const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart'];
     events.forEach((event) => window.addEventListener(event, greet, { passive: true }));
@@ -457,7 +456,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       events.forEach((event) => window.removeEventListener(event, greet));
       stopNarration();
     };
-  }, [coachFirstName, invite.status]);
+  }, [coachLastName, invite.status]);
 
   // Wizard step is derived purely from auth/redeem state.
   // 1 = account (signed out), 2 = review & activate (signed in, not redeemed), 3 = done.
@@ -671,13 +670,13 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     <Sparkles className="h-3.5 w-3.5" /> You&apos;re invited
                   </span>
                   <h2 className="mt-3 text-3xl font-bold leading-tight text-white" style={displayFont}>
-                    {coachFirstName ? (
+                    {coachLastName ? (
                       <>
                         Welcome{' '}
                         <span style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.purpleSoft }}>
                           Coach
                         </span>{' '}
-                        {coachFirstName}
+                        {coachLastName}
                       </>
                     ) : (
                       <>Set up {invite.organizationName}</>
@@ -736,7 +735,6 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         type="email"
                         value={createForm.email}
                         onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
-                        disabled={!!invite.targetEmail}
                         className={textInputClass}
                       />
                     </label>
@@ -801,7 +799,6 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         type="email"
                         value={signInForm.email}
                         onChange={(event) => setSignInForm((current) => ({ ...current, email: event.target.value }))}
-                        disabled={!!invite.targetEmail}
                         className={textInputClass}
                       />
                     </label>
@@ -1062,7 +1059,10 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
       const teamData = teamSnap.data();
       organizationName = organizationData?.displayName || organizationName;
       teamName = teamData?.displayName || teamName;
-      targetName = resolveTargetName(organizationData, teamData);
+      // The invite's own recipientName (set when the admin generated this specific
+      // link) is authoritative — only fall back to guessing from org/team contacts
+      // for older links created before that field existed.
+      targetName = String(invite.recipientName || '').trim() || resolveTargetName(organizationData, teamData);
     } catch {
       const [organizationDoc, teamDoc] = await Promise.all([
         getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || ''), forceDevFirebase),
@@ -1071,7 +1071,7 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
 
       organizationName = String(organizationDoc?.displayName || organizationName);
       teamName = String(teamDoc?.displayName || teamName);
-      targetName = resolveTargetName(organizationDoc, teamDoc);
+      targetName = String(invite.recipientName || '').trim() || resolveTargetName(organizationDoc, teamDoc);
     }
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');

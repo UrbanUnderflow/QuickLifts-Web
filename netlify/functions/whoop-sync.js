@@ -10,6 +10,7 @@ const {
   verifyAuth,
   whoopApiRequest,
 } = require('./whoop-utils');
+const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-team-scope');
 
 const HEALTH_CONTEXT_COLLECTIONS = {
   sourceStatus: 'health-context-source-status',
@@ -215,13 +216,17 @@ function buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, las
   });
 }
 
-function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, sourceType, payload, rawRevision }) {
+function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, sourceType, payload, rawRevision, teamId, organizationId }) {
   const sourceWindow = buildDayWindow(dateKey, timezone);
   const segment = sourceType.replace(/^pulsecheck_whoop_/, '');
   const id = `${userId}_whoop_${segment}_${dateKey}`;
   return {
     id,
     athleteUserId: userId,
+    // Omitted entirely (not set to null/undefined) when the athlete has no
+    // unambiguous active team — the coach dashboard's team-scoped query
+    // requires these to match, so a wrong guess would be worse than absent.
+    ...(teamId && organizationId ? { teamId, organizationId } : {}),
     sourceFamily: 'whoop',
     sourceType,
     recordType: domain === 'training' ? 'session_input' : 'summary_input',
@@ -369,7 +374,7 @@ function mapBodyMeasurementPayload(body) {
   });
 }
 
-function buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData }) {
+function buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData, teamId, organizationId }) {
   const window = buildDayWindow(dateKey, timezone);
   const recoveries = recordsForWindow(whoopData.recoveries?.records || [], window);
   const sleeps = recordsForWindow(whoopData.sleeps?.records || [], window).filter((sleep) => !sleep.nap);
@@ -396,6 +401,8 @@ function buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData 
       sourceType: 'pulsecheck_whoop_recovery',
       payload: recoveryPayload,
       rawRevision: selectedRecovery?.updated_at || selectedSleep?.updated_at,
+      teamId,
+      organizationId,
     }));
   }
 
@@ -412,6 +419,8 @@ function buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData 
       sourceType: 'pulsecheck_whoop_activity',
       payload: activityPayload,
       rawRevision: selectedCycle?.updated_at,
+      teamId,
+      organizationId,
     }));
   }
 
@@ -426,6 +435,8 @@ function buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData 
       sourceType: 'pulsecheck_whoop_training',
       payload: trainingPayload,
       rawRevision: chooseLatest(workouts, ['updated_at'])?.updated_at,
+      teamId,
+      organizationId,
     }));
   }
 
@@ -440,6 +451,8 @@ function buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData 
       sourceType: 'pulsecheck_whoop_biometrics',
       payload: biometricsPayload,
       rawRevision: String(whoopData.profile?.user_id || whoopData.bodyMeasurement?.max_heart_rate || ''),
+      teamId,
+      organizationId,
     }));
   }
 
@@ -684,7 +697,22 @@ async function syncWhoopForConnection({ firestore, connectionRef, connection, da
   const freshConnection = await ensureFreshAccessToken({ firestore, connectionRef, connection });
   const syncAt = Math.round(Date.now() / 1000);
   const whoopData = await fetchWhoopData(freshConnection.accessToken, { dateKey, timezone });
-  const sourceRecordDocs = buildWhoopSourceRecords({ userId, dateKey, timezone, syncAt, whoopData });
+  // Resolved once per sync — not fatal if it fails or is ambiguous (multi-team
+  // athlete, or no active team): records still get written, just without the
+  // team-scoped fields, matching prior behavior for those athletes.
+  const { scope } = await resolveUnambiguousAthleteScope(firestore, userId).catch((error) => {
+    console.warn(`[whoop-sync] team-scope lookup failed for ${userId}:`, error?.message || error);
+    return { scope: null };
+  });
+  const sourceRecordDocs = buildWhoopSourceRecords({
+    userId,
+    dateKey,
+    timezone,
+    syncAt,
+    whoopData,
+    teamId: scope?.teamId,
+    organizationId: scope?.organizationId,
+  });
   // Cap at syncAt: record observedAt carries the day-window endAt, which
   // can sit up to 24h in the future and would inflate device "reporting"
   // freshness on mobile by a full day.

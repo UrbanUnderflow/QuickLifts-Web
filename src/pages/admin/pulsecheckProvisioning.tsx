@@ -781,6 +781,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [activationCreatingTeamId, setActivationCreatingTeamId] = useState<string | null>(null);
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
+  const [copyLinkModalTeamId, setCopyLinkModalTeamId] = useState<string | null>(null);
+  const [copyLinkForm, setCopyLinkForm] = useState({ name: '', email: '' });
+  const [copyLinkSubmitting, setCopyLinkSubmitting] = useState(false);
   const [teamCommercialSavingId, setTeamCommercialSavingId] = useState<string | null>(null);
   const [teamConsentDrafts, setTeamConsentDrafts] = useState<Record<string, PulseCheckRequiredConsentDocument[]>>({});
   const [teamConsentSavingId, setTeamConsentSavingId] = useState<string | null>(null);
@@ -2650,6 +2653,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     team: PulseCheckTeam,
     targetEmail?: string,
     staffCapabilities?: StaffPermission[],
+    recipientName?: string,
   ) => {
     if (!targetEmail?.trim()) {
       setMessage({ type: 'error', text: 'An admin email is required before generating an onboarding link.' });
@@ -2665,6 +2669,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         organizationId: team.organizationId,
         teamId: team.id,
         targetEmail,
+        recipientName,
         staffCapabilities,
         createdByUserId: currentUser?.id || '',
         createdByEmail: currentUser?.email || '',
@@ -2686,44 +2691,65 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
-  // One-click path for the team-card "Copy Link" button: reuse an existing
-  // active link for the team's default admin if there is one, otherwise
-  // create one silently (no email send) and copy it straight away.
-  const handleCopyOrCreateAdminActivationLink = async (
-    team: PulseCheckTeam,
-    existingLink: PulseCheckInviteLink | null
-  ) => {
-    const targetEmail = team.defaultAdminEmail?.trim();
+  // Team-card "Copy Link" button: collect the specific coach's name/email
+  // first (see handleSubmitCopyLinkForm below), rather than guessing.
+  const handleOpenCopyLinkModal = (team: PulseCheckTeam) => {
+    setCopyLinkModalTeamId(team.id);
+    setCopyLinkForm({ name: '', email: '' });
+    setMessage(null);
+  };
+
+  const handleCloseCopyLinkModal = () => {
+    setCopyLinkModalTeamId(null);
+  };
+
+  // Generates (or reuses) an admin-activation link scoped to the exact coach
+  // name/email entered in the Copy Link modal, then copies it. Deliberately
+  // does NOT fall back to team.defaultAdminEmail — that field is often the
+  // org's internal setup contact, not the coach being invited, and silently
+  // reusing it sent a link greeting the wrong person by name.
+  const handleSubmitCopyLinkForm = async (team: PulseCheckTeam) => {
+    const targetEmail = copyLinkForm.email.trim();
+    const recipientName = copyLinkForm.name.trim();
     if (!targetEmail) {
-      setMessage({
-        type: 'error',
-        text: 'Set a default admin email for this team before copying a link — open Manage Activations to add one.',
-      });
+      setMessage({ type: 'error', text: "The coach's email is required to generate a link." });
       return;
     }
 
-    if (existingLink && existingLink.status === 'active') {
-      await handleCopyActivationLink(existingLink.activationUrl);
-      return;
+    setCopyLinkSubmitting(true);
+    try {
+      const existingLinks = await pulseCheckProvisioningService.listTeamInviteLinks(team.id);
+      let link = existingLinks.find(
+        (candidate) =>
+          candidate.inviteType === 'admin-activation' &&
+          candidate.status === 'active' &&
+          (candidate.targetEmail || '').toLowerCase() === targetEmail.toLowerCase()
+      ) || null;
+
+      if (!link) {
+        const created = await handleCreateAdminActivationLink(team, targetEmail, undefined, recipientName);
+        if (!created) return;
+
+        const refreshedLinks = await pulseCheckProvisioningService.listTeamInviteLinks(team.id);
+        link =
+          refreshedLinks.find(
+            (candidate) =>
+              candidate.inviteType === 'admin-activation' &&
+              candidate.status === 'active' &&
+              (candidate.targetEmail || '').toLowerCase() === targetEmail.toLowerCase()
+          ) || null;
+      }
+
+      if (!link) {
+        setMessage({ type: 'error', text: 'Link created, but could not resolve it to copy — open Manage Activations to grab it.' });
+        return;
+      }
+
+      await handleCopyActivationLink(link.activationUrl);
+      setCopyLinkModalTeamId(null);
+    } finally {
+      setCopyLinkSubmitting(false);
     }
-
-    const created = await handleCreateAdminActivationLink(team, targetEmail);
-    if (!created) return;
-
-    const refreshedLinks = await pulseCheckProvisioningService.listTeamInviteLinks(team.id);
-    const link = refreshedLinks.find(
-      (candidate) =>
-        candidate.inviteType === 'admin-activation' &&
-        candidate.status === 'active' &&
-        (candidate.targetEmail || '').toLowerCase() === targetEmail.toLowerCase()
-    );
-
-    if (!link) {
-      setMessage({ type: 'error', text: 'Link created, but could not resolve it to copy — open Manage Activations to grab it.' });
-      return;
-    }
-
-    await handleCopyActivationLink(link.activationUrl);
   };
 
   const handleCopyActivationLink = async (activationUrl: string) => {
@@ -2936,7 +2962,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       let link =
         input.existingLink && input.existingLink.status === 'active' ? input.existingLink : null;
       if (!link) {
-        const created = await handleCreateAdminActivationLink(team, normalizedEmail, input.staffCapabilities);
+        const created = await handleCreateAdminActivationLink(team, normalizedEmail, input.staffCapabilities, recipientName);
         if (!created) {
           return;
         }
@@ -4794,17 +4820,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               <button
                                                 type="button"
                                                 className="pcp-ab pcp-ab-g"
-                                                disabled={activationCreatingTeamId === team.id}
                                                 onClick={(event) => {
                                                   event.stopPropagation();
-                                                  void handleCopyOrCreateAdminActivationLink(team, activeAdminLink);
+                                                  handleOpenCopyLinkModal(team);
                                                 }}
                                               >
-                                                {activationCreatingTeamId === team.id ? (
-                                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                ) : (
-                                                  <Clipboard />
-                                                )}
+                                                <Clipboard />
                                                 Copy Link
                                               </button>
                                               <button
@@ -4826,6 +4847,60 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             </div>
                                           </div>
                                         </CollapsibleCard>
+
+                                        {copyLinkModalTeamId === team.id && typeof document !== 'undefined' ? createPortal(
+                                          <div
+                                            style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+                                            onClick={handleCloseCopyLinkModal}
+                                          >
+                                            <div
+                                              onClick={(event) => event.stopPropagation()}
+                                              style={{ maxWidth: 420, width: '100%', background: '#0d0d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 20 }}
+                                            >
+                                              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Copy activation link</div>
+                                                <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={handleCloseCopyLinkModal}><X /></button>
+                                              </div>
+                                              <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                                                Who is this link for? The page greets them by this name, and the email field is locked to what you enter here — it can only be redeemed as that person.
+                                              </div>
+                                              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                  <span>Coach name</span>
+                                                  <input
+                                                    value={copyLinkForm.name}
+                                                    onChange={(event) => setCopyLinkForm((current) => ({ ...current, name: event.target.value }))}
+                                                    placeholder="Jordan Lee"
+                                                    style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '8px 10px', fontSize: 13 }}
+                                                  />
+                                                </label>
+                                                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                  <span>Coach email</span>
+                                                  <input
+                                                    type="email"
+                                                    value={copyLinkForm.email}
+                                                    onChange={(event) => setCopyLinkForm((current) => ({ ...current, email: event.target.value }))}
+                                                    placeholder="coach@school.edu"
+                                                    style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '8px 10px', fontSize: 13 }}
+                                                  />
+                                                </label>
+                                              </div>
+                                              <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                                <button type="button" className="pcp-ab pcp-ab-t" onClick={handleCloseCopyLinkModal}>Cancel</button>
+                                                <button
+                                                  type="button"
+                                                  className="pcp-ab pcp-ab-g"
+                                                  disabled={copyLinkSubmitting || !copyLinkForm.email.trim()}
+                                                  onClick={() => void handleSubmitCopyLinkForm(team)}
+                                                >
+                                                  {copyLinkSubmitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clipboard className="h-3.5 w-3.5" />}
+                                                  {copyLinkSubmitting ? 'Generating…' : 'Generate & Copy'}
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>,
+                                          document.body
+                                        ) : null}
                                       </div>
                                       {(() => {
                                         const consentDraft = getTeamConsentDraft(team);
@@ -6772,7 +6847,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       </a>
                                       <button
                                         type="button"
-                                        onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email, recipientCaps)}
+                                        onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email, recipientCaps, recipient.name)}
                                         disabled={isGenerating}
                                         className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                                       >

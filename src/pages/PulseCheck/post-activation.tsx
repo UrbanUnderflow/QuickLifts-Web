@@ -253,10 +253,12 @@ export default function PulseCheckPostActivationPage() {
     if (!currentUser) return;
     setProfileForm((current) => ({
       ...current,
-      displayName: currentUser.displayName || current.displayName,
+      // Prefer the name the admin entered when generating the activation link
+      // over the auto-generated username — still just a starting point, editable below.
+      displayName: membership?.invitedDisplayName || currentUser.displayName || current.displayName,
     }));
     setProfileImagePreview(currentUser.profileImage?.profileImageURL || '');
-  }, [currentUser]);
+  }, [currentUser, membership?.invitedDisplayName]);
 
   useEffect(() => {
     if (!isDemo) return;

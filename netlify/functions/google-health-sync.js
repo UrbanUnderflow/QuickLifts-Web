@@ -10,6 +10,7 @@ const {
   parseJsonBody,
   verifyAuth,
 } = require('./google-health-utils');
+const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-team-scope');
 
 const HEALTH_CONTEXT_COLLECTIONS = {
   sourceStatus: 'health-context-source-status',
@@ -854,7 +855,7 @@ function buildSourceStatusDocument({
   };
 }
 
-function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, payload }) {
+function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, payload, teamId, organizationId }) {
   const sourceWindow = buildDayWindow(dateKey, timezone);
   const id = `${userId}_fitbit_${domain}_${dateKey}`;
   return {
@@ -873,6 +874,10 @@ function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, payload 
     dedupeKey: `${userId}|fitbit|${domain}|${dateKey}`,
     payloadVersion: CONTRACT_VERSIONS.sourceRecord,
     payload,
+    // Only set when the athlete has exactly one active team — lets the coach
+    // dashboard's team-scoped queries find this record; omitted (not null)
+    // for unaffiliated/multi-team athletes so it never falsely matches a scope.
+    ...(teamId && organizationId ? { teamId, organizationId } : {}),
     sourceMetadata: {
       syncOrigin: 'pulsecheck_google_health_refresh',
       writer: 'google-health-sync.js',
@@ -1077,6 +1082,10 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
 }
 
 async function syncGoogleHealthSnapshotForConnection({ userId, timezone, requestedDateKey, connectionRef, connection }) {
+  const { scope: teamScope } = await resolveUnambiguousAthleteScope(admin.firestore(), userId).catch((error) => {
+    console.warn(`[google-health-sync] team-scope lookup failed for ${userId}:`, error?.message || error);
+    return { scope: null };
+  });
   let freshConnection = await ensureFreshGoogleHealthConnection(connectionRef, connection);
   if (!freshConnection.healthUserId && freshConnection.accessToken) {
     const identity = await getGoogleHealthIdentity(freshConnection.accessToken).catch(() => null);
@@ -1163,6 +1172,8 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
       syncAt,
       domain,
       payload,
+      teamId: teamScope?.teamId,
+      organizationId: teamScope?.organizationId,
     }));
 
   for (const record of sourceRecordDocs) {

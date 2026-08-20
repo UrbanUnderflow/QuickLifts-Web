@@ -3061,6 +3061,7 @@ export const pulseCheckProvisioningService = {
     organizationId: string;
     teamId: string;
     targetEmail?: string;
+    recipientName?: string;
     staffCapabilities?: StaffPermission[];
     createdByUserId?: string;
     createdByEmail?: string;
@@ -3082,6 +3083,7 @@ export const pulseCheckProvisioningService = {
       organizationId: normalizeString(input.organizationId),
       teamId: normalizeString(input.teamId),
       targetEmail: normalizeString(input.targetEmail),
+      recipientName: normalizeString(input.recipientName),
       staffCapabilities,
       token,
       activationUrl,

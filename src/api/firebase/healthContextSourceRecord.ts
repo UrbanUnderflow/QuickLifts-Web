@@ -213,6 +213,9 @@ export interface UpsertSourceRecordInput<TPayload = Record<string, unknown>> {
   provenance: HealthContextSourceProvenance;
   /** Override the auto-generated id when the adapter needs custom segmentation. */
   recordIdOverride?: string;
+  /** Athlete's current active team scope, when known — enables team-scoped reads. */
+  teamId?: string;
+  organizationId?: string;
 }
 
 /**
@@ -250,6 +253,9 @@ export const upsertHealthContextSourceRecord = async <TPayload>(
     payload: input.payload,
     sourceMetadata: input.sourceMetadata,
     provenance: input.provenance,
+    ...(input.teamId && input.organizationId
+      ? { teamId: input.teamId, organizationId: input.organizationId }
+      : {}),
   };
 
   await setDoc(

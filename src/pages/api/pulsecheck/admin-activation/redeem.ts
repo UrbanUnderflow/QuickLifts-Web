@@ -325,6 +325,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           rosterVisibilityScope: adminDerivedAccess.rosterVisibilityScope,
           allowedAthleteIds: Array.isArray(reservedTeamMembership.allowedAthleteIds) ? reservedTeamMembership.allowedAthleteIds : [],
           onboardingStatus: reservedTeamMembership.onboardingStatus || 'pending-profile',
+          ...(normalizeString(invite.recipientName)
+            ? { invitedDisplayName: normalizeString(invite.recipientName) }
+            : {}),
           ...(hasCoachIntakeResponses
             ? {
                 coachIntakeResponses,

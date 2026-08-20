@@ -10,6 +10,7 @@ const {
   polarApiRequest,
   verifyAuth,
 } = require('./polar-utils');
+const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-team-scope');
 
 const HEALTH_CONTEXT_COLLECTIONS = {
   sourceStatus: 'health-context-source-status',
@@ -654,12 +655,16 @@ function buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, las
   };
 }
 
-function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, sourceType, payload, raw }) {
+function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, sourceType, payload, raw, teamId, organizationId }) {
   const sourceWindow = buildDayWindow(dateKey, timezone);
   const id = `${userId}_${sourceType}_${dateKey}`;
   return {
     id,
     athleteUserId: userId,
+    // Omitted entirely (not set to null/undefined) when the athlete has no
+    // unambiguous active team — the coach dashboard's team-scoped query
+    // requires these to match, so a wrong guess would be worse than absent.
+    ...(teamId && organizationId ? { teamId, organizationId } : {}),
     sourceFamily: 'polar',
     sourceType,
     recordType: 'summary_input',
@@ -798,6 +803,13 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
 }
 
 async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateKey, connectionRef, connection }) {
+  // Resolved once per sync — not fatal if it fails or is ambiguous
+  // (multi-team athlete, or no active team): records still get written,
+  // just without the team-scoped fields, matching prior behavior.
+  const { scope: teamScope } = await resolveUnambiguousAthleteScope(admin.firestore(), userId).catch((error) => {
+    console.warn(`[polar-sync] team-scope lookup failed for ${userId}:`, error?.message || error);
+    return { scope: null };
+  });
   const freshConnection = await ensureFreshPolarConnection(connectionRef, connection);
   const polarData = await fetchPolarData(freshConnection, requestedDateKey);
   const payloads = {
@@ -860,6 +872,8 @@ async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateK
           activityDays: polarData.activityDays,
         }
         : polarData[domain],
+      teamId: teamScope?.teamId,
+      organizationId: teamScope?.organizationId,
     }));
 
   for (const record of sourceRecordDocs) {
