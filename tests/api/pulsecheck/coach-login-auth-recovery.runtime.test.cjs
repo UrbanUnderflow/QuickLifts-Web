@@ -8,6 +8,10 @@ const coachLoginSource = fs.readFileSync(
   path.join(repoRoot, 'src/pages/coach/login.tsx'),
   'utf8',
 );
+const signInModalSource = fs.readFileSync(
+  path.join(repoRoot, 'src/components/SignInModal.tsx'),
+  'utf8',
+);
 
 test('coach Google sign-in recovers from hung auth and account checks', () => {
   assert.match(
@@ -39,5 +43,33 @@ test('coach Google sign-in recovers from hung auth and account checks', () => {
     coachLoginSource,
     /const handleGoogleSignIn = async \(\) => \{[\s\S]*\} finally \{[\s\S]*setPending\(null\);[\s\S]*\};/,
     'coach Google sign-in should always clear its loading state',
+  );
+});
+
+test('shared sign-in modal recovers from hung social auth', () => {
+  assert.match(
+    signInModalSource,
+    /SOCIAL_AUTH_TIMEOUT_MS\s*=\s*45000/,
+    'shared sign-in modal should have a finite timeout for social auth',
+  );
+  assert.match(
+    signInModalSource,
+    /withAuthTimeout\(\s*authService\.signInWithGoogle\(\)/,
+    'shared sign-in modal should bound the Firebase Google popup promise',
+  );
+  assert.match(
+    signInModalSource,
+    /withAuthTimeout\(\s*signInWithPopup\(auth, appleProvider\)/,
+    'shared sign-in modal should bound the Firebase Apple popup promise',
+  );
+  assert.match(
+    signInModalSource,
+    /case 'pulse\/auth-timeout':[\s\S]*errorMessage = error\.message;/,
+    'shared sign-in modal should show the timeout message instead of spinning forever',
+  );
+  assert.match(
+    signInModalSource,
+    /disabled=\{isLoading\}[\s\S]*activeProvider[\s\S]*"Send magic link"/,
+    'shared sign-in modal should not label the email submit button as sending during social auth',
   );
 });

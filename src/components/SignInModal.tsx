@@ -139,6 +139,28 @@ const SignedInBadge: React.FC<{ user: { username?: string; profileImage?: { prof
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pulse_magic_link_email';
 const MAGIC_LINK_INVITE_CODE_STORAGE_KEY = 'pulse_magic_link_invite_code';
 const MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY = 'pulse_magic_link_legal_accepted';
+const SOCIAL_AUTH_TIMEOUT_MS = 45000;
+
+const withAuthTimeout = async <T,>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const error = new Error(message) as Error & { code?: string };
+      error.code = 'pulse/auth-timeout';
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
 
 const SignInModal: React.FC<SignInModalProps> = ({
   isVisible,
@@ -591,8 +613,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
    
         try {
           // Sign in with popup
-          const result: UserCredential = await signInWithPopup(auth, appleProvider);
-          if (!isSignUp && await rejectAccidentalNewSocialLogin(result)) {
+          const result: UserCredential = await withAuthTimeout(
+            signInWithPopup(auth, appleProvider),
+            SOCIAL_AUTH_TIMEOUT_MS,
+            'Apple sign-in is taking too long. Close any Apple pop-up and try again, or use a magic link.',
+          );
+          if (!isSignUp && await withAuthTimeout(
+            rejectAccidentalNewSocialLogin(result),
+            SOCIAL_AUTH_TIMEOUT_MS,
+            'Apple sign-in is taking too long. Close any Apple pop-up and try again, or use a magic link.',
+          )) {
             setError('We could not find an existing Pulse account for that Apple sign-in. Sign in with your existing email first, then connect Apple in Settings.');
             setShowError(true);
             return;
@@ -676,8 +706,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
           }
         }
       } else if (provider === 'google') {
-        const result = await authService.signInWithGoogle();
-        if (!isSignUp && await rejectAccidentalNewSocialLogin(result)) {
+        const result = await withAuthTimeout(
+          authService.signInWithGoogle(),
+          SOCIAL_AUTH_TIMEOUT_MS,
+          'Google sign-in is taking too long. Close any Google pop-up and try again, or use a magic link.',
+        );
+        if (!isSignUp && await withAuthTimeout(
+          rejectAccidentalNewSocialLogin(result),
+          SOCIAL_AUTH_TIMEOUT_MS,
+          'Google sign-in is taking too long. Close any Google pop-up and try again, or use a magic link.',
+        )) {
           setError('We could not find an existing Pulse account for that Google sign-in. Create a new account, or sign in with your existing method and connect Google in Settings.');
           setShowError(true);
           return;
@@ -789,6 +827,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
       if (error instanceof Error) {
         // Handle specific Firebase Auth error codes
         switch ((error as any).code) {
+          case 'pulse/auth-timeout':
+            errorMessage = error.message;
+            break;
           case 'auth/popup-blocked':
             errorMessage = "Please enable popups for this site and try again";
             break;
@@ -4227,6 +4268,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             <div className="flex flex-col gap-4 mt-8">
               <button
                 type="submit"
+                disabled={isLoading}
                 onClick={() => {
                   console.log('[SignInModal] Submit button clicked:', {
                     isSignUp,
@@ -4251,11 +4293,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
                     ? "Create Account"
                     : signUpStep === "legal"
                     ? legalTheme.primaryLabel
-                    : isLoading
+                    : isLoading && !activeProvider
                     ? "Sending..."
                     : "Send magic link"
                   : isLoading
-                  ? "Sending..."
+                  ? activeProvider
+                    ? emailAuthMode === 'password'
+                      ? "Sign in with password"
+                      : "Send magic link"
+                    : "Sending..."
                   : emailAuthMode === 'password'
                   ? "Sign in with password"
                   : "Send magic link"}
