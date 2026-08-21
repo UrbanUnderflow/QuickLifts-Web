@@ -228,20 +228,23 @@ function buildNoraDailyReflectionNotification({
 function buildCoachCheckInReminderMessage({
   athleteName = '',
   localDate = '',
+  slot = '',
 } = {}) {
   const prompt = "Hey Nora, I'm ready to check in.";
   const assistantOpeningMessage = "Hey, how are you feeling right now? Give me the real version and I'll help you sort through it.";
   const launchSubtitle = "Opening Nora for your check-in.";
+  const slotLabel = slot === 'morning' ? 'morning ' : slot === 'evening' ? 'evening ' : '';
 
   return {
     title: 'Nora',
-    body: `${buildGreeting(athleteName)} your coach set this time for your check-in. I'm ready when you are.`,
-    subtitle: 'Check-in time',
+    body: `${buildGreeting(athleteName)} your coach set this time for your ${slotLabel}mood check-in. I'm ready when you are.`,
+    subtitle: `${slotLabel ? slotLabel[0].toUpperCase() + slotLabel.slice(1) : ''}Mood check-in`.trim(),
     notificationType: 'COACH_CHECK_IN_REMINDER',
     data: normalizeStringMap({
       type: 'COACH_CHECK_IN_REMINDER',
       dmKind: 'end_of_day_reflection',
       route: 'nora_chat',
+      slot,
       prompt,
       assistantOpeningMessage,
       launchSubtitle,

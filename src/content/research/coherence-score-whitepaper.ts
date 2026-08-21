@@ -1,5 +1,5 @@
-export const COHERENCE_SCORE_METHOD_VERSION = '2.2.0';
-export const COHERENCE_SCORE_PUBLICATION_DATE = 'August 16, 2026';
+export const COHERENCE_SCORE_METHOD_VERSION = '2.2.2';
+export const COHERENCE_SCORE_PUBLICATION_DATE = 'August 21, 2026';
 
 export const COHERENCE_SCORE_WHITE_PAPER_SLUG =
   'coherence-score-methodology-evidence-and-validation';
@@ -42,24 +42,29 @@ export const scoreDefinitions: ScoreDefinition[] = [
     key: 'coherence',
     label: 'Coherence',
     accent: 'lime',
-    question: 'Do the athlete\'s Adherence, Wellbeing, and Recovery scores agree with each other over the same window?',
+    question: 'How strong is the athlete\'s recent pattern across Wellbeing, Recovery, and follow-through?',
     summary:
-      'Coherence is a continuous cross-domain alignment index. It combines the average of the athlete\'s current Adherence, Wellbeing, and Recovery scores with how closely those scores agree with one another, so a strong result in one domain cannot offset weakness or disagreement in the others. The latest 14 days update the athlete\'s established read rather than restarting it.',
-    equation: 'Established Coherence = max(1, round(M x (1 - D / 100)))',
+      'Coherence is a continuous formative index with a 90-percent state core and a bounded 10-percent behavioral contribution. Wellbeing and Recovery remain the dominant read, while Adherence allows verified follow-through to matter without turning Coherence into a compliance grade. It is not a statistical correlation or a measure of obedience. The latest 14 days update the athlete\'s established read rather than restarting it.',
+    equation: 'Current Coherence = round(0.45(Wellbeing) + 0.45(Recovery) + 0.10(Adherence))',
     inputs: [
-      'M = the mean of the current Adherence, Wellbeing, and Recovery scores for the same 14-day window',
-      'D = the spread between the highest and lowest of those available domain scores; (1 - D/100) is an alignment factor of 1.0 when all available domains agree exactly and approaches 0 as they diverge',
-      'At least 2 of the 3 domain scores must be independently available to compute a current-window value',
+      'Wellbeing = the current Wellbeing score for the same 14-day window',
+      'Recovery = the current Recovery score for the same 14-day window',
+      'Adherence = scheduled check-in completion and verified commitment follow-through for the same 14-day window',
+      'Both Wellbeing and Recovery must be independently available to compute a current-window value',
+      'When Adherence is unavailable, the valid Wellbeing and Recovery inputs are reweighted equally and evidence coverage reflects the missing 10-percent component',
+      'The 10-percent Adherence weight bounds its maximum influence to 10 points on the 0-to-100 scale',
       'The established display scale is 1 to 100; missingness is represented by status and confidence, never by zero',
       'When a mature account has too little current evidence, the last established positive read remains visible with reduced current-window confidence',
     ],
     excludes: [
-      'Any signal not already scored within Adherence, Wellbeing, or Recovery',
+      'A nonlinear disagreement or spread multiplier',
+      'App usage, screen time, or connected-device wear',
+      'Any signal not already scored within Wellbeing, Recovery, or Adherence',
       'Comparison between athletes; Coherence is a within-person read',
       'Training load, performance outcomes, or competition results',
     ],
     minimumEvidence:
-      'Building is limited to the first 3 account days. A current-window calculation requires at least 2 of the 3 domain scores (Adherence, Wellbeing, Recovery) to be independently available; after onboarding, insufficient current evidence does not reset an established read.',
+      'Building is limited to the first 3 account days. A current-window calculation requires both Wellbeing and Recovery to be independently available. Adherence contributes when available and is never imputed as zero; after onboarding, insufficient current evidence does not reset an established read.',
   },
   {
     key: 'wellbeing',
@@ -109,19 +114,19 @@ export const scoreDefinitions: ScoreDefinition[] = [
     accent: 'amber',
     question: 'Is the athlete showing up for the commitments recorded in PulseCheck?',
     summary:
-      'Adherence represents showing up, not app activity. It measures scheduled check-in completion and final, verifiable outcomes for assigned mental-performance commitments.',
+      'Adherence represents follow-through on valid opportunities, not app activity or obedience. It measures scorable scheduled check-in completion and final, verifiable outcomes for assigned or athlete-accepted mental-performance commitments.',
     equation: 'Adherence = 0.40(K) + 0.60(F)',
     inputs: [
-      'K = completed scheduled check-ins divided by scheduled check-ins',
+      'K = completed scheduled check-ins divided by scorable scheduled check-ins; the open current day remains pending until completed or closed',
       'F = followed-through commitments divided by scorable commitments',
       'Planned rest counts only when it remains within the current plan and weekly follow-through policy',
     ],
     excludes: [
       'Screen time, taps, sessions opened, or connected-device wear',
-      'Coach-excused days, technical failures, and days with no assignment',
+      'Pre-activation check-in days and coach-excused, technical-failure, or no-assignment commitment outcomes',
       'Unverifiable self-reported claims that a task was completed elsewhere',
     ],
-    minimumEvidence: 'The score remains in Building until at least 3 days are present in the window.',
+    minimumEvidence: 'The score remains in Building until at least 3 scheduled opportunity days are present in the window.',
   },
 ];
 
@@ -206,29 +211,29 @@ export const evidenceMap = [
   {
     construct: 'Behavioral goal alignment',
     productUse:
-      'Coherence treats agreement between committed behavior and an athlete\'s other reported and measured domains as informative.',
+      'Adherence contributes 10 percent of Coherence so verified follow-through matters while the Wellbeing and Recovery state core remains dominant.',
     evidenceStatement:
-      'Alignment between a person\'s stated goals or commitments and their actual behavior is associated with sustained effort and durable well-being gains in longitudinal goal-pursuit research.',
+      'Alignment between a person\'s self-concordant goals or commitments and their actual behavior is associated with sustained effort and durable well-being gains in longitudinal goal-pursuit research.',
     claimLimit:
-      'This literature supports behavioral alignment as a meaningful construct in general. It does not validate the specific PulseCheck Coherence equation or weights.',
+      'This literature supports self-endorsed behavioral follow-through as a meaningful construct in general. It does not validate the PulseCheck Adherence measure, the 10-percent bound, or the complete Coherence equation.',
     sourceLabel: 'Sheldon & Elliot, 1999, Journal of Personality and Social Psychology',
     sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/10101878/',
   },
   {
-    construct: 'Cross-domain signal agreement',
+    construct: 'State-signal agreement',
     productUse:
-      'Coherence combines a central-tendency read across Adherence, Wellbeing, and Recovery with a measure of how closely those scores agree, rather than only averaging them.',
+      'Coherence keeps Wellbeing, Recovery, and Adherence visible as separate components. Cross-domain differences remain auditable instead of being converted into a nonlinear penalty.',
     evidenceStatement:
       'Measuring the degree to which independently collected physiological and behavioral signal streams move together is an established methodological approach for characterizing coordinated versus divergent states.',
     claimLimit:
-      'This literature establishes signal agreement as a measurable property between physiological and behavioral channels. It does not validate that PulseCheck\'s product-level spread calculation captures a clinically meaningful state.',
+      'This literature establishes signal agreement as a measurable property between independent channels. PulseCheck Coherence is a weighted formative index, not a validated synchrony statistic or clinical state measure.',
     sourceLabel: 'Palumbo et al., 2017, Personality and Social Psychology Review',
     sourceUrl: 'https://journals.sagepub.com/doi/abs/10.1177/1088868316628405',
   },
   {
     construct: 'Self-report and objective divergence',
     productUse:
-      'Coherence lowers when an athlete\'s self-reported Wellbeing diverges from their Adherence or Recovery, rather than assuming either signal is simply wrong.',
+      'Coherence gives athlete-reported Wellbeing and available Recovery equal weight in its state core without treating either signal as automatically correct.',
     evidenceStatement:
       'Self-reported and objectively measured signals do not always agree, and studying that disagreement directly is an established approach distinct from treating either measure as uniquely correct.',
     claimLimit:
@@ -239,7 +244,7 @@ export const evidenceMap = [
   {
     construct: 'Multi-system divergence under stress',
     productUse:
-      'The rationale for treating cross-domain disagreement as informative draws on broader stress-physiology literature about coordinated versus divergent system function.',
+      'The rationale for treating state-signal disagreement as informative draws on broader stress-physiology literature about coordinated versus divergent system function.',
     evidenceStatement:
       'Chronic stress is associated with dysregulation across multiple interdependent physiological systems rather than a single isolated marker.',
     claimLimit:
@@ -298,7 +303,7 @@ export const validationPlan = [
     phase: '01',
     title: 'Technical verification',
     body: 'Deterministic fixtures, property tests, missingness tests, source-switch tests, permission tests, and cross-platform contract tests verify that implementation matches the published method.',
-    status: 'Implemented in the 2.1.0 release',
+    status: 'Server fixtures implemented for method 2.2.2; native release verification remains required',
   },
   {
     phase: '02',
@@ -309,7 +314,7 @@ export const validationPlan = [
   {
     phase: '03',
     title: 'Reliability and construct study',
-    body: 'Pre-registered prospective work should evaluate stability, sensitivity to change, convergent and discriminant relationships, subgroup performance, missingness, and source effects.',
+    body: 'Pre-registered prospective work should evaluate stability, sensitivity to change, convergent and discriminant relationships, subgroup performance, missingness, source effects, and sensitivity of conclusions to alternative Adherence weights such as 0, 5, and 15 percent. The 10-percent production weight must not be tuned and validated on the same sample.',
     status: 'Not yet completed',
   },
   {
@@ -332,6 +337,7 @@ export const verificationMatrix = [
 export const limitations = [
   'The four scores are evidence-informed proprietary indices. They are not diagnoses, medical clearance, treatment recommendations, or clinically validated outcomes.',
   'Evidence supporting an input does not validate the selected product weights or the complete composite score.',
+  'The 10-percent Adherence weight is an a priori governance bound selected to limit influence. It is not an empirically estimated or clinically validated coefficient.',
   'A score describes the evidence available to PulseCheck, not the athlete as a person and not every behavior that occurred outside the product.',
   'Adherence can be underestimated when legitimate activity occurs outside the verifiable workflow. The product intentionally does not accept an unverifiable completed-elsewhere claim.',
   'Consumer wearable accuracy, algorithms, missingness, source access, device fit, and measurement windows can differ across athletes and over time.',
@@ -356,6 +362,7 @@ export const references = [
   ['Palumbo RV, Marraccini ME, Weyandt LL, Wilder-Smith O, McGee HA, Liu S, Goodwin MS. Interpersonal autonomic physiology: a systematic review of the literature. Personality and Social Psychology Review. 2017;21(2):99-141.', 'https://journals.sagepub.com/doi/abs/10.1177/1088868316628405'],
   ['Murphy J, Brewer R, Plans D, Khalsa SS, Catmur C, Bird G. Testing the independence of self-reported interoceptive accuracy and attention. Quarterly Journal of Experimental Psychology. 2020;73(1):115-133.', 'https://pubmed.ncbi.nlm.nih.gov/31519137/'],
   ['Juster RP, McEwen BS, Lupien SJ. Allostatic load biomarkers of chronic stress and impact on health and cognition. Neuroscience & Biobehavioral Reviews. 2010;35(1):2-16.', 'https://pubmed.ncbi.nlm.nih.gov/19822172/'],
+  ['Jeffries AC, Wallace L, Coutts AJ, McLaren SJ, McCall A, Impellizzeri FM. Athlete-reported outcome measures for monitoring training responses: a systematic review of risk of bias and measurement property quality according to the COSMIN guidelines. International Journal of Sports Physiology and Performance. 2020;15(9):1203-1215.', 'https://pubmed.ncbi.nlm.nih.gov/32957081/'],
 ] as const;
 
 const renderList = (items: readonly string[]) => items.map((item) => `- ${item}`).join('\n');
@@ -410,9 +417,9 @@ const referenceBlock = references
 
 export const COHERENCE_SCORE_WHITE_PAPER_CONTENT = `
 :::abstract
-PulseCheck reports four evidence-informed constructs. Wellbeing, Recovery, and Adherence are independent domain scores, each answering one question about the athlete's recent record. Coherence is a fourth, integrative measure of how closely those three domains agree with one another over the same window. Separating the domain scores from the integrative measure keeps each question distinct and auditable while still answering the practical question of whether an athlete's behavior, self-reported experience, and physiological signals are moving together or pulling apart. Each score uses a rolling 14-day window, carries its own evidence coverage and confidence state, and can remain unavailable when the record is too limited. Coherence is continuous after onboarding: the rolling window refreshes an established read rather than resetting the athlete every 14 days.
+PulseCheck reports four evidence-informed constructs. Wellbeing, Recovery, and Adherence are independent domain scores, each answering one question about the athlete's recent record. Coherence is a fourth, transparent formative index: Wellbeing and Recovery form a 90-percent state core, and Adherence provides a bounded 10-percent behavioral contribution. Separating the domain scores from the composite keeps each question distinct and auditable while still providing one recent-pattern read across self-report, recovery evidence, and verified follow-through. Each score uses a rolling 14-day window, carries its own evidence coverage and confidence state, and can remain unavailable when the record is too limited. Coherence is continuous after onboarding: the rolling window refreshes an established read rather than resetting the athlete every 14 days.
 
-This paper defines the exact production method for version ${COHERENCE_SCORE_METHOD_VERSION}. Wellbeing summarizes athlete-reported experience. Recovery presents athlete report alongside recent sleep and source-normalized autonomic context. Adherence asks whether the athlete is showing up for scheduled check-ins and recorded mental-performance commitments. Coherence asks whether those three domains agree with each other over the same window. The three domain scores remain independently visible; Coherence never replaces them or stands in as a single overall grade.
+This paper defines the exact production method for version ${COHERENCE_SCORE_METHOD_VERSION}. Wellbeing summarizes athlete-reported experience. Recovery presents athlete report alongside recent sleep and source-normalized autonomic context. Adherence asks whether the athlete is showing up for scheduled check-ins and recorded mental-performance commitments. Coherence combines those three domain scores with a deliberately bounded behavioral weight. It never replaces the supporting scores or stands in as a single overall grade.
 
 The four scores are evidence-informed proprietary descriptive indices. Research supports the relevance and careful use of several inputs, but it does not validate PulseCheck's selected weights, equations, or complete scorecard as a clinical outcome. The scores do not diagnose, prescribe physical training, determine medical clearance, or replace athlete, coach, athletic trainer, sports medicine, or licensed clinical judgment.
 :::
@@ -421,7 +428,7 @@ The four scores are evidence-informed proprietary descriptive indices. Research 
 
 An athlete can feel well while recovering poorly from a demanding schedule. Another athlete can show strong physiological recovery while not following through on commitments. A third can complete every assigned task while reporting a sustained decline in wellbeing. Treating those patterns as one construct makes the output difficult to explain and easier to misuse.
 
-PulseCheck therefore keeps Wellbeing, Recovery, and Adherence as independent domain scores, and adds Coherence as an explicit measure of agreement between them rather than folding them into a single hidden average. This keeps the underlying questions separate so staff can see what changed, what evidence is present, and what remains unknown, while still surfacing whether the domains are telling a consistent story.
+PulseCheck therefore keeps Wellbeing, Recovery, and Adherence as independent domain scores, and adds Coherence as a published weighted composite rather than a hidden or punitive calculation. The component cards show what changed, what evidence is present, and what remains unknown. The 45/45/10 weighting makes the athlete's state dominant while allowing verified follow-through to influence the headline within a fixed 10-point maximum.
 
 :::callout
 Evidence-informed does not mean clinically validated. Technical verification can establish that software follows the published method. Reliability, construct validity, fairness, decision impact, and improved athlete outcomes require separate prospective study.
@@ -449,9 +456,11 @@ When a configured component is unavailable, the score may reweight the valid com
 
 # 4. Adherence as Showing Up
 
-Adherence is not screen time, app opens, device wear, or a reward for using more product features. It represents showing up for scheduled check-ins and final, verifiable outcomes for assigned mental-performance commitments. An unverifiable self-reported claim that a task was completed elsewhere does not enter the calculation, because the product cannot confirm that claim consistently.
+Adherence is not screen time, app opens, device wear, obedience, or a reward for using more product features. It represents follow-through on valid opportunities: scheduled check-ins and final, verifiable outcomes for assigned or athlete-accepted mental-performance commitments. Pre-activation days are excluded from the check-in denominator. Coach-excused, technical-failure, and no-assignment outcomes are excluded from the commitment denominator rather than treated as failures. An unverifiable self-reported claim that a task was completed elsewhere does not enter the calculation, because the product cannot confirm that claim consistently.
 
 A replacement skill keeps the original commitment lineage. Planned rest can count as follow-through only when it remains inside the current plan and weekly policy. Repeated rest outside the plan remains visible as a follow-through issue rather than being silently rewarded.
+
+The open current day remains pending until the athlete completes the check-in or the day closes. It is visible in the 14-day grid but does not lower Adherence early merely because the athlete has not checked in yet.
 
 | Recorded outcome | Interpretation | Adherence treatment |
 | --- | --- | --- |
@@ -464,6 +473,8 @@ The evidence model separates support for an input from validation of the full pr
 ## 5.1 Daily Subjective Wellbeing
 
 Repeated subjective self-report can be sensitive to changes in athlete wellbeing and training response, particularly when interpreted alongside context. [cite:2] PulseCheck summarizes an athlete-selected daily wellbeing level across the recent window. The daily check-in is not a diagnostic screen and is not presented as a validated clinical outcome measure.
+
+Reviews of athlete-reported monitoring measures have also identified important gaps in content validity, measurement error, and validation of commonly used single-item measures. [cite:16] PulseCheck therefore treats technical consistency with the published calculation as distinct from scientific validation of the underlying measures or composite.
 
 ## 5.2 Periodic Wellbeing Instrument
 
@@ -483,15 +494,15 @@ Wearable device, algorithm, recording window, method, and artifact handling can 
 
 Adherence is an operational product construct defined by scheduled opportunities and final product-recorded outcomes. Its usefulness depends on whether the behavior, opportunity, exclusions, and follow-through rules remain stable. The selected weights are product-designed. They have not yet been established as validated psychometric constructs.
 
-## 5.6 Coherence as Cross-Domain Alignment
+## 5.6 Coherence as a Bounded Formative Index
 
-Alignment between a person's committed behavior and their actual follow-through is associated with sustained effort and durable well-being gains in longitudinal goal-pursuit research. [cite:12] Coherence extends this idea across three independently collected domains rather than one.
+Alignment between a person's self-concordant commitments and their follow-through is associated with sustained effort and durable well-being gains in longitudinal goal-pursuit research. [cite:12] PulseCheck therefore includes Adherence as a bounded 10-percent contribution. This is a product-design rationale, not evidence that 10 percent is a biologically or psychometrically optimal weight.
 
-Measuring the degree to which independently collected physiological and behavioral signal streams move together, rather than only their individual levels, is an established methodological approach in psychophysiology research. [cite:13] Coherence applies the same logic to three product-level domain scores instead of two raw physiological channels.
+Measuring the degree to which independently collected signal streams move together, rather than only their individual levels, is an established methodological approach in psychophysiology research. [cite:13] PulseCheck preserves that information by showing all three component scores and their evidence. The headline Coherence number itself is a weighted formative index, not a correlation, synchrony coefficient, or nonlinear disagreement score.
 
-Self-reported and objectively measured signals do not always agree, and studying that disagreement directly is an established approach distinct from treating either measure as uniquely correct. [cite:14] When an athlete's self-reported Wellbeing diverges from their Adherence or Recovery, Coherence treats that divergence as a lower-agreement state rather than resolving it in either direction. Divergence across behavioral, subjective, and physiological systems is also consistent with broader stress-physiology literature on multi-system dysregulation. [cite:15]
+Self-reported and objectively measured signals do not always agree, and studying that disagreement directly is an established approach distinct from treating either measure as uniquely correct. [cite:14] Wellbeing and Recovery therefore receive equal weight inside the 90-percent state core. Their component cards keep a mixed state visible without applying the former spread multiplier. Divergence across behavioral, subjective, and physiological systems is also consistent with broader stress-physiology literature on multi-system dysregulation. [cite:15]
 
-The selected Coherence equation, including its mean and spread calculation, is a product-designed index. This literature supports cross-domain alignment as a meaningful construct in general; it does not validate that PulseCheck's specific formula captures a clinically meaningful state.
+The selected Coherence equation is product-designed and prespecified for auditability. Its nonnegative weights sum to 100, so the result remains inside the range of its available component scores. Adherence can change the headline by no more than 10 points, and no multiplicative spread penalty can collapse the result. These mathematical properties make the behavior bounded and testable; they do not establish reliability, validity, fairness, or clinical meaning.
 
 # 6. Wearable Source Normalization
 

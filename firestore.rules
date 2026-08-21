@@ -2187,7 +2187,14 @@ service cloud.firestore {
           data.kind != 'checkIn'
           || (
             data.scope == 'athlete'
-            && reminderId == 'checkin_' + data.athleteId
+            && (
+              reminderId == 'checkin_' + data.athleteId
+              || (
+                'slot' in data
+                && data.slot in ['morning', 'evening']
+                && reminderId == 'checkin_' + data.athleteId + '_' + data.slot
+              )
+            )
           )
         );
     }
@@ -2201,6 +2208,10 @@ service cloud.firestore {
         && request.resource.data.organizationId == data.organizationId
         && request.resource.data.kind == data.kind
         && request.resource.data.scope == data.scope
+        && (
+          !('slot' in data)
+          || request.resource.data.slot == data.slot
+        )
         && (
           !('athleteId' in data)
           || request.resource.data.athleteId == data.athleteId
@@ -2216,7 +2227,11 @@ service cloud.firestore {
         )
         || (
           isSignedIn()
-          && reminderId == 'checkin_' + request.auth.uid
+          && (
+            reminderId == 'checkin_' + request.auth.uid
+            || reminderId == 'checkin_' + request.auth.uid + '_morning'
+            || reminderId == 'checkin_' + request.auth.uid + '_evening'
+          )
           && resource.data.kind == 'checkIn'
           && resource.data.scope == 'athlete'
           && resource.data.athleteId == request.auth.uid

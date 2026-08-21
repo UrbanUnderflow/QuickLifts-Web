@@ -16,6 +16,7 @@ const WINDOW_MINUTES = 10;
 type ReminderKind = 'checkIn' | 'custom';
 type ReminderScope = 'athlete' | 'team';
 type ReminderRecurrence = 'once' | 'daily';
+type ReminderSlot = 'morning' | 'evening';
 
 interface CoachReminderDoc {
   id: string;
@@ -29,6 +30,7 @@ interface CoachReminderDoc {
   title?: string;
   message?: string;
   recurrence?: ReminderRecurrence;
+  slot?: ReminderSlot;
   hour: number;
   minute: number;
   startDateKey?: string;
@@ -122,6 +124,9 @@ function mapReminder(
     title: stringValue(data.title) || undefined,
     message: stringValue(data.message) || undefined,
     recurrence: stringValue(data.recurrence) as ReminderRecurrence || undefined,
+    slot: ['morning', 'evening'].includes(stringValue(data.slot))
+      ? stringValue(data.slot) as ReminderSlot
+      : undefined,
     hour,
     minute,
     startDateKey: stringValue(data.startDateKey) || undefined,
@@ -364,7 +369,7 @@ export const handler: Handler = async () => {
 
       const athleteName = resolveAthleteFirstName(userData);
       const message = reminder.kind === 'checkIn'
-        ? buildCoachCheckInReminderMessage({ athleteName, localDate: localDateStr })
+        ? buildCoachCheckInReminderMessage({ athleteName, localDate: localDateStr, slot: reminder.slot })
         : customReminderMessage(reminder, localDateStr);
 
       const result = await sendLoggedNoraPush({

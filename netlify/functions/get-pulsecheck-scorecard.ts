@@ -51,6 +51,13 @@ const finiteNumber = (value: unknown): number | null => {
   return null;
 };
 
+const establishedCoherenceScoreFromDocument = (document: Record<string, any>): number | null => {
+  const methodologyVersion = cleanString(document.methodologyVersion);
+  return methodologyVersion === PULSECHECK_SCORING_VERSION
+    ? finiteNumber(document.coherence?.score)
+    : null;
+};
+
 const booleanValue = (value: unknown): boolean | null =>
   typeof value === 'boolean' ? value : null;
 
@@ -367,6 +374,7 @@ const buildScoringDays = (input: {
   checkIns: FirestoreRecord[];
   assignments: FirestoreRecord[];
   healthSnapshots: FirestoreRecord[];
+  eligibleFromDateKey?: string | null;
 }): PulseCheckScoringDay[] => {
   const checkInsByDate = new Map<string, Record<string, any>>();
   for (const record of input.checkIns) {
@@ -387,7 +395,7 @@ const buildScoringDays = (input: {
     const health = healthByDate.get(dateKey);
     return {
       dateKey,
-      scheduledCheckIn: true,
+      scheduledCheckIn: !input.eligibleFromDateKey || dateKey >= input.eligibleFromDateKey,
       wellbeingLevel: checkIn.level ?? checkIn.readinessLevel ?? null,
       subjectiveRecoveryLevel:
         checkIn.subjectiveRecoveryLevel
@@ -522,7 +530,6 @@ export const handler: Handler = async (event) => {
       id: document.id,
       data: document.data() || {},
     }));
-    const days = buildScoringDays({ dateKeys, checkIns, assignments, healthSnapshots });
     const whoFive = whoFiveFromRecords(wellbeingRecords, throughDateKey);
     const generatedAt = new Date().toISOString();
     const userData = userDocument.data() || {};
@@ -542,11 +549,23 @@ export const handler: Handler = async (event) => {
     const accountCreatedDateKey = accountCreatedAtMillis !== null && Number.isFinite(accountCreatedAtMillis)
       ? dateKeyInTimeZone(new Date(accountCreatedAtMillis), timezone)
       : null;
+    const adherenceEligibleAtMillis = timestampMillis(userData.activatedAt ?? userData.joinedAt)
+      ?? accountCreatedAtMillis;
+    const adherenceEligibleDateKey = adherenceEligibleAtMillis !== null && Number.isFinite(adherenceEligibleAtMillis)
+      ? dateKeyInTimeZone(new Date(adherenceEligibleAtMillis), timezone)
+      : null;
     const accountAgeDays = accountCreatedDateKey
       ? dayDifferenceFromKeys(throughDateKey, accountCreatedDateKey)
       : null;
+    const days = buildScoringDays({
+      dateKeys,
+      checkIns,
+      assignments,
+      healthSnapshots,
+      eligibleFromDateKey: adherenceEligibleDateKey,
+    });
     const existingScorecard = existingScorecardDocument.data() || {};
-    const establishedCoherenceScore = finiteNumber(existingScorecard.coherence?.score);
+    const establishedCoherenceScore = establishedCoherenceScoreFromDocument(existingScorecard);
     const scorecard = calculatePulseCheckScorecardV2({
       days,
       whoFive,
@@ -565,6 +584,7 @@ export const handler: Handler = async (event) => {
         healthSnapshotDocuments: healthSnapshots.length,
         periodicWellbeingDocuments: wellbeingRecords.length,
         accountAgeDays,
+        adherenceEligibleFromDateKey: adherenceEligibleDateKey,
         establishedCoherenceScore: establishedCoherenceScore && establishedCoherenceScore > 0
           ? establishedCoherenceScore
           : null,
@@ -611,6 +631,7 @@ export const __internal = {
   dayDifferenceFromKeys,
   defaultHrvMethod,
   defaultMeasurementWindow,
+  establishedCoherenceScoreFromDocument,
   healthDayFromSnapshot,
   latestAssignmentsByDay,
   mergeDomainData,

@@ -1,8 +1,13 @@
-export const PULSECHECK_SCORING_VERSION = '2.2.0';
+export const PULSECHECK_SCORING_VERSION = '2.2.2';
 export const PULSECHECK_SCORE_WINDOW_DAYS = 14;
 export const PULSECHECK_COHERENCE_BUILDING_DAYS = 3;
 export const PULSECHECK_AUTONOMIC_BASELINE_MINIMUM = 14;
 export const PULSECHECK_AUTONOMIC_BASELINE_WINDOW_DAYS = 28;
+export const PULSECHECK_COHERENCE_WEIGHTS = {
+  wellbeing: 45,
+  recovery: 45,
+  adherence: 10,
+} as const;
 
 export type PulseCheckScoreStatus =
   | 'building'
@@ -89,6 +94,13 @@ export interface PulseCheckScoreComponent {
   configuredWeightPercent: number;
   evidenceAvailable: boolean;
   detail: string;
+  dayStates?: PulseCheckScoreComponentDayState[];
+}
+
+export interface PulseCheckScoreComponentDayState {
+  dateKey: string;
+  state: 'complete' | 'partial' | 'missed' | 'pending' | 'excused';
+  label: string;
 }
 
 export interface PulseCheckScoreResult {
@@ -213,6 +225,19 @@ const weightedScore = (
   const availableWeight = available.reduce((sum, entry) => sum + entry.weight, 0);
   if (availableWeight <= 0) return null;
   return rounded(available.reduce((sum, entry) => sum + entry.score * entry.weight, 0) / availableWeight);
+};
+
+export const calculatePulseCheckCoherenceScore = (
+  wellbeingScore: number | null,
+  recoveryScore: number | null,
+  adherenceScore: number | null,
+): number | null => {
+  if (wellbeingScore === null || recoveryScore === null) return null;
+  return weightedScore([
+    { score: wellbeingScore, weight: PULSECHECK_COHERENCE_WEIGHTS.wellbeing },
+    { score: recoveryScore, weight: PULSECHECK_COHERENCE_WEIGHTS.recovery },
+    { score: adherenceScore, weight: PULSECHECK_COHERENCE_WEIGHTS.adherence },
+  ]);
 };
 
 const scoreResult = (
@@ -541,15 +566,92 @@ const commitmentOutcome = (
   }
 };
 
+const commitmentStateLabel = (state: PulseCheckCommitmentState): string => {
+  switch (state) {
+    case 'completed':
+      return 'Commitment completed';
+    case 'planned_rest':
+      return 'Planned rest within plan';
+    case 'rest_over_plan':
+      return 'Planned rest over plan';
+    case 'missed':
+      return 'Commitment missed';
+    case 'accepted':
+    case 'replacement_accepted':
+      return 'Commitment pending';
+    case 'coach_excused':
+      return 'Coach excused';
+    case 'technical_failure':
+      return 'Technical failure';
+    case 'no_assignment':
+      return 'No assignment';
+  }
+};
+
+const adherenceDayStates = (days: PulseCheckScoringDay[]): PulseCheckScoreComponentDayState[] => {
+  const latestDateKey = days[days.length - 1]?.dateKey || '';
+  return days.map((day) => {
+    if (day.scheduledCheckIn === false) {
+      return {
+        dateKey: day.dateKey,
+        state: 'excused',
+        label: `${day.dateKey}: no scheduled check-in.`,
+      };
+    }
+
+    const checkedIn = normalizeLevel(day.wellbeingLevel) !== null;
+    const outcome = day.commitment ? commitmentOutcome(day.commitment, day.dateKey, latestDateKey) : null;
+    const commitmentLabel = day.commitment ? commitmentStateLabel(day.commitment.state) : 'No commitment assigned';
+    const commitmentPending = day.commitment?.state === 'accepted'
+      || day.commitment?.state === 'replacement_accepted';
+
+    if (checkedIn && !commitmentPending && (outcome === 1 || outcome === null)) {
+      return {
+        dateKey: day.dateKey,
+        state: 'complete',
+        label: `${day.dateKey}: check-in completed. ${commitmentLabel}.`,
+      };
+    }
+    if (commitmentPending && outcome === null) {
+      return {
+        dateKey: day.dateKey,
+        state: 'pending',
+        label: `${day.dateKey}: ${checkedIn ? 'check-in completed' : 'check-in pending'}. ${commitmentLabel}.`,
+      };
+    }
+    if (checkedIn || outcome === 1) {
+      return {
+        dateKey: day.dateKey,
+        state: 'partial',
+        label: `${day.dateKey}: partial follow-through. ${checkedIn ? 'Check-in completed' : 'Check-in missing'}. ${commitmentLabel}.`,
+      };
+    }
+    if (outcome === null && day.dateKey >= latestDateKey) {
+      return {
+        dateKey: day.dateKey,
+        state: 'pending',
+        label: `${day.dateKey}: still pending. ${commitmentLabel}.`,
+      };
+    }
+    return {
+      dateKey: day.dateKey,
+      state: 'missed',
+      label: `${day.dateKey}: check-in missing. ${commitmentLabel}.`,
+    };
+  });
+};
+
 const calculateAdherenceWindow = (
   days: PulseCheckScoringDay[],
   windowDays: number,
 ): WindowCalculation => {
   const latestDateKey = days[days.length - 1]?.dateKey || '';
   const scheduledDays = days.filter((day) => day.scheduledCheckIn !== false);
-  const checkedInDays = scheduledDays.filter((day) => normalizeLevel(day.wellbeingLevel) !== null);
-  const checkInPercent = scheduledDays.length > 0
-    ? rounded((checkedInDays.length / scheduledDays.length) * 100)
+  const scorableScheduledDays = scheduledDays.filter((day) =>
+    normalizeLevel(day.wellbeingLevel) !== null || day.dateKey < latestDateKey);
+  const checkedInDays = scorableScheduledDays.filter((day) => normalizeLevel(day.wellbeingLevel) !== null);
+  const checkInPercent = scorableScheduledDays.length > 0
+    ? rounded((checkedInDays.length / scorableScheduledDays.length) * 100)
     : null;
   const commitmentOutcomes = days
     .map((day) => day.commitment ? commitmentOutcome(day.commitment, day.dateKey, latestDateKey) : null)
@@ -564,11 +666,12 @@ const calculateAdherenceWindow = (
   const evidenceCoveragePercent = rounded(
     (checkInPercent === null ? 0 : 40) + (commitmentPercent === null ? 0 : 60),
   );
-  const status: PulseCheckScoreStatus = score === null
-    ? 'insufficient_evidence'
-    : days.length < 3
-      ? 'building'
+  const status: PulseCheckScoreStatus = scheduledDays.length > 0 && scheduledDays.length < 3
+    ? 'building'
+    : score === null
+      ? 'insufficient_evidence'
       : 'available';
+  const dayStates = adherenceDayStates(days);
   const notes: string[] = [];
   if (commitmentPercent === null) notes.push('No verified commitment outcomes are available in this window.');
   notes.push('Connected-device wear does not contribute to Adherence.');
@@ -587,7 +690,8 @@ const calculateAdherenceWindow = (
         score: checkInPercent,
         configuredWeightPercent: 40,
         evidenceAvailable: checkInPercent !== null,
-        detail: `${checkedInDays.length} of ${scheduledDays.length} scheduled check-ins completed.`,
+        detail: `${checkedInDays.length} of ${scorableScheduledDays.length} scorable scheduled check-ins completed.`,
+        dayStates,
       },
       {
         key: 'commitment_follow_through',
@@ -596,6 +700,7 @@ const calculateAdherenceWindow = (
         configuredWeightPercent: 60,
         evidenceAvailable: commitmentPercent !== null,
         detail: `${commitmentOutcomes.filter((value) => value === 1).length} of ${commitmentOutcomes.length} scorable commitments followed through.`,
+        dayStates,
       },
     ],
     notes,
@@ -612,24 +717,45 @@ const calculateCoherenceWindow = (
     establishedScore?: number | null;
   } = {},
 ): WindowCalculation => {
-  const domainSignals = [
-    { key: 'adherence', label: 'Showing up', weight: 33, result: adherence, detail: 'Adherence score for the same 14-day window.' },
-    { key: 'wellbeing', label: 'Feeling good', weight: 33, result: wellbeing, detail: 'Wellbeing score for the same 14-day window.' },
-    { key: 'recovery', label: 'Body agreement', weight: 34, result: recovery, detail: 'Recovery score for the same 14-day window.' },
+  const stateSignals = [
+    {
+      key: 'wellbeing',
+      label: 'Feeling good',
+      weight: PULSECHECK_COHERENCE_WEIGHTS.wellbeing,
+      result: wellbeing,
+      detail: 'Wellbeing contributes to the 90% state core for the same 14-day window.',
+    },
+    {
+      key: 'recovery',
+      label: 'Body agreement',
+      weight: PULSECHECK_COHERENCE_WEIGHTS.recovery,
+      result: recovery,
+      detail: 'Recovery contributes to the 90% state core for the same 14-day window.',
+    },
   ];
-  const availableSignals = domainSignals.filter((signal) => signal.result.score !== null);
-  const availableScores = availableSignals.map((signal) => signal.result.score as number);
-  const hasEnoughEvidence = availableScores.length >= 2;
-  const meanScore = hasEnoughEvidence ? mean(availableScores) : null;
-  const spread = hasEnoughEvidence ? Math.max(...availableScores) - Math.min(...availableScores) : null;
-  const rawCoherenceScore = meanScore !== null && spread !== null
-    ? rounded(meanScore * (1 - spread / 100))
+  const adherenceSignal = {
+    key: 'adherence',
+    label: 'Showing up',
+    weight: PULSECHECK_COHERENCE_WEIGHTS.adherence,
+    result: adherence,
+    detail: 'A bounded contribution from scheduled check-ins and verified commitment follow-through.',
+  };
+  const scoringSignals = [...stateSignals, adherenceSignal];
+  const availableSignals = scoringSignals.filter((signal) => signal.result.score !== null);
+  const availableStateSignals = stateSignals.filter((signal) => signal.result.score !== null);
+  const hasEnoughEvidence = availableStateSignals.length === stateSignals.length;
+  const rawCoherenceScore = hasEnoughEvidence
+    ? calculatePulseCheckCoherenceScore(wellbeing.score, recovery.score, adherence.score)
     : null;
   const evidenceCoveragePercent = rounded(
-    domainSignals.reduce(
-      (sum, signal) => sum + (signal.result.score !== null ? signal.result.evidenceCoveragePercent : 0),
+    scoringSignals.reduce(
+      (sum, signal) => sum + (
+        signal.result.score !== null
+          ? signal.result.evidenceCoveragePercent * (signal.weight / 100)
+          : 0
+      ),
       0,
-    ) / domainSignals.length,
+    ),
   );
   const currentWindowScore = rawCoherenceScore === null
     ? null
@@ -655,6 +781,7 @@ const calculateCoherenceWindow = (
   const observedDays = availableSignals.length > 0
     ? Math.min(...availableSignals.map((signal) => signal.result.observedDays))
     : 0;
+  const components = [adherenceSignal, ...stateSignals];
 
   return {
     score: coherenceScore,
@@ -663,17 +790,21 @@ const calculateCoherenceWindow = (
     evidenceCoveragePercent,
     observedDays,
     windowDays,
-    components: domainSignals.map((signal) => ({
+    components: components.map((signal) => ({
       key: signal.key,
       label: signal.label,
       score: signal.result.score,
       configuredWeightPercent: signal.weight,
       evidenceAvailable: signal.result.score !== null,
       detail: signal.detail,
+      dayStates: signal.key === 'adherence'
+        ? signal.result.components.find((component) => component.dayStates?.length)?.dayStates
+        : undefined,
     })),
     notes: [
-      'Coherence combines the average of Adherence, Wellbeing, and Recovery with how closely those scores agree with each other; wide disagreement lowers Coherence even when the average is high.',
-      'At least 2 of the 3 domain scores must be independently available to compute a current-window value.',
+      'Coherence uses a 90% state core from Wellbeing and Recovery plus a bounded 10% contribution from Adherence.',
+      'Adherence can move the headline score by no more than 10 points; no disagreement multiplier is applied.',
+      'Wellbeing and Recovery must both be independently available. Missing Adherence is reweighted and lowers evidence coverage; it never becomes zero.',
       'The latest 14 days update an established Coherence read; they do not restart it.',
       ...(carriedEstablishedScore
         ? ['Recent evidence is thin, so the last established Coherence read is carried forward.']

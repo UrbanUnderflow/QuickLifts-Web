@@ -52,6 +52,19 @@ test('public method documents each canonical score once', () => {
   });
 });
 
+test('public Coherence method gives Adherence a bounded 10-percent contribution', () => {
+  const coherence = scoreDefinitions.find((score) => score.key === 'coherence');
+  assert.ok(coherence);
+  assert.equal(
+    coherence.equation,
+    'Current Coherence = round(0.45(Wellbeing) + 0.45(Recovery) + 0.10(Adherence))',
+  );
+  assert.match(coherence.summary, /bounded 10-percent behavioral contribution/i);
+  assert.match(coherence.inputs.join(' '), /maximum influence to 10 points/i);
+  assert.match(coherence.excludes.join(' '), /nonlinear disagreement or spread multiplier/i);
+  assert.match(COHERENCE_SCORE_WHITE_PAPER_CONTENT, /not a correlation, synchrony coefficient, or nonlinear disagreement score/i);
+});
+
 test('claim limits remain explicit in public evidence copy', () => {
   const publicMethod = JSON.stringify({ evidenceMap, limitations }).toLowerCase();
   assert.match(publicMethod, /not diagnoses/);

@@ -2,7 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc as firestoreDoc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 import {
   Home,
   Flame,
@@ -631,6 +644,7 @@ type ViewKey =
   | 'alerts'
   | 'inbox'
   | 'roster'
+  | 'reminders'
   | 'referrals'
   | 'staff'
   | 'nora'
@@ -644,6 +658,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'alerts', label: 'Athlete Alerts', icon: Flame },
   { key: 'inbox', label: 'Inbox', icon: Inbox },
   { key: 'roster', label: 'Team Roster', icon: Users },
+  { key: 'reminders', label: 'Reminders', icon: BellRing },
   { key: 'referrals', label: 'Referral Links', icon: Link2 },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'nora', label: 'Train Nora', icon: Brain },
@@ -680,10 +695,9 @@ const mergeLatestCoachDashboardQuery = (
   return nextQuery;
 };
 
-const replaceCoachDashboardUrlQuery = (
+const coachDashboardUrlForQuery = (
   updates: Record<string, string | string[] | undefined>
-) => {
-  if (typeof window === 'undefined') return;
+): string => {
   const nextQuery = mergeLatestCoachDashboardQuery({}, updates);
   const params = new URLSearchParams();
   Object.entries(nextQuery).forEach(([key, value]) => {
@@ -695,7 +709,16 @@ const replaceCoachDashboardUrlQuery = (
       params.set(key, value);
     }
   });
-  const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  if (typeof window === 'undefined') return suffix;
+  return `${window.location.pathname}${suffix}${window.location.hash}`;
+};
+
+const replaceCoachDashboardUrlQuery = (
+  updates: Record<string, string | string[] | undefined>
+) => {
+  if (typeof window === 'undefined') return;
+  const nextUrl = coachDashboardUrlForQuery(updates);
   window.history.replaceState(window.history.state, '', nextUrl);
 };
 
@@ -888,6 +911,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       switch (key) {
         case 'home':
         case 'roster':
+        case 'reminders':
         case 'inbox':
         case 'reports':
           return can('coaching');
@@ -922,14 +946,26 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const navItems = permissionsReady ? allowedNavItems : pendingNavItems;
   const canManageAthleteInvites = can('admin') || can('coaching') || can('administrative');
 
+  const replaceDashboardQuery = useCallback(
+    (updates: Record<string, string | string[] | undefined>) => {
+      const nextUrl = coachDashboardUrlForQuery(updates);
+      if (!router.isReady) {
+        replaceCoachDashboardUrlQuery(updates);
+        return;
+      }
+      void router.replace(nextUrl, undefined, { shallow: true, scroll: false });
+    },
+    [router]
+  );
+
   const selectView = useCallback(
     (nextView: ViewKey) => {
       if (!navAllowed(nextView)) return;
       setView(nextView);
       if (!router.isReady || routeView === nextView) return;
-      replaceCoachDashboardUrlQuery({ view: nextView });
+      replaceDashboardQuery({ view: nextView });
     },
-    [navAllowed, routeView, router.isReady]
+    [navAllowed, replaceDashboardQuery, routeView, router.isReady]
   );
 
   // Keep dashboard tabs deep-linkable while refusing unknown or unauthorized
@@ -948,9 +984,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         : navItems[0].key;
     setView((current) => (current === nextView ? current : nextView));
     if (routeView !== nextView) {
-      replaceCoachDashboardUrlQuery({ view: nextView });
+      replaceDashboardQuery({ view: nextView });
     }
-  }, [navItems, permissionsReady, routeView, router.isReady]);
+  }, [navItems, permissionsReady, replaceDashboardQuery, routeView, router.isReady]);
 
   const NavList = ({ onPick }: { onPick?: () => void }) => (
     <nav className="flex-1 space-y-0.5">
@@ -964,11 +1000,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             ? 'bg-[#E0FE10]/15 text-[#E0FE10] border-[#E0FE10]/25'
             : 'bg-red-500/20 text-red-400 border-red-500/25';
         return (
-          <button
-            type="button"
+          <a
+            href={coachDashboardUrlForQuery({ view: item.key })}
             key={item.key}
             data-nav={item.key}
-            onClick={() => {
+            onClick={(event) => {
+              event.preventDefault();
               selectView(item.key);
               onPick?.();
             }}
@@ -985,7 +1022,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                 {badgeCount}
               </span>
             )}
-          </button>
+          </a>
         );
       })}
     </nav>
@@ -1191,6 +1228,15 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         onSelectAthlete={setSelectedAthleteId}
                       />
                     </div>
+                  )}
+                  {view === 'reminders' && (
+                    <RemindersSection
+                      coachId={coachId}
+                      teamContext={teamContext}
+                      athletes={athletes}
+                      isDemo={isDemo}
+                      onOpenRoster={() => selectView('roster')}
+                    />
                   )}
                   {view === 'referrals' && (
                     <ReferralLinksSection
@@ -6313,6 +6359,889 @@ const DemoReportsArchive: React.FC = () => {
           />
         ))}
       </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Coach Reminders
+// ---------------------------------------------------------------------------
+
+type CoachReminderKind = 'checkIn' | 'custom';
+type CoachReminderScope = 'athlete' | 'team';
+type CoachReminderRecurrence = 'once' | 'daily';
+type MoodCheckInSlot = 'morning' | 'evening';
+
+type CoachReminder = {
+  id: string;
+  kind: CoachReminderKind;
+  scope: CoachReminderScope;
+  coachId: string;
+  teamId: string;
+  organizationId: string;
+  athleteId?: string;
+  title?: string;
+  message?: string;
+  recurrence?: CoachReminderRecurrence;
+  slot?: MoodCheckInSlot;
+  hour: number;
+  minute: number;
+  startDateKey?: string;
+  active?: boolean;
+  overrideAcknowledged?: boolean;
+  lastSentLocalDate?: string;
+  lastSentLocalDateByAthlete?: Record<string, string>;
+};
+
+type CoachReminderDraft = {
+  scope: CoachReminderScope;
+  athleteId: string;
+  title: string;
+  message: string;
+  recurrence: CoachReminderRecurrence;
+  date: string;
+  time: string;
+  active: boolean;
+};
+
+type MoodCheckInDraft = {
+  athleteId: string;
+  slots: Record<MoodCheckInSlot, { enabled: boolean; time: string }>;
+};
+
+const COACH_REMINDERS_COLLECTION = 'pulsecheck-coach-reminders';
+
+const defaultReminderDraft = (): CoachReminderDraft => ({
+  scope: 'team',
+  athleteId: '',
+  title: '',
+  message: '',
+  recurrence: 'once',
+  date: localDayKey(new Date()),
+  time: '08:00',
+  active: true,
+});
+
+const defaultMoodCheckInDraft = (): MoodCheckInDraft => ({
+  athleteId: '',
+  slots: {
+    morning: { enabled: true, time: '08:00' },
+    evening: { enabled: true, time: '20:00' },
+  },
+});
+
+const parseReminderTime = (time: string): { hour: number; minute: number } | null => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  return { hour, minute };
+};
+
+const reminderTimeLabel = (hour: number, minute: number): string => {
+  const date = new Date();
+  date.setHours(hour, minute, 0, 0);
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+};
+
+const reminderInputTime = (hour: number, minute: number): string =>
+  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+const sanitizeCoachReminder = (id: string, raw: Record<string, any>): CoachReminder | null => {
+  const kind = raw.kind === 'checkIn' || raw.kind === 'custom' ? raw.kind : null;
+  const scope = raw.scope === 'athlete' || raw.scope === 'team' ? raw.scope : null;
+  const hour = typeof raw.hour === 'number' ? raw.hour : null;
+  const minute = typeof raw.minute === 'number' ? raw.minute : null;
+  if (!kind || !scope || hour == null || minute == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  return {
+    id,
+    kind,
+    scope,
+    coachId: typeof raw.coachId === 'string' ? raw.coachId : '',
+    teamId: typeof raw.teamId === 'string' ? raw.teamId : '',
+    organizationId: typeof raw.organizationId === 'string' ? raw.organizationId : '',
+    athleteId: typeof raw.athleteId === 'string' ? raw.athleteId : undefined,
+    title: typeof raw.title === 'string' ? raw.title : undefined,
+    message: typeof raw.message === 'string' ? raw.message : undefined,
+    recurrence: raw.recurrence === 'daily' || raw.recurrence === 'once' ? raw.recurrence : undefined,
+    slot: raw.slot === 'morning' || raw.slot === 'evening' ? raw.slot : undefined,
+    hour,
+    minute,
+    startDateKey: typeof raw.startDateKey === 'string' ? raw.startDateKey : undefined,
+    active: raw.active !== false,
+    overrideAcknowledged: raw.overrideAcknowledged === true,
+    lastSentLocalDate: typeof raw.lastSentLocalDate === 'string' ? raw.lastSentLocalDate : undefined,
+    lastSentLocalDateByAthlete:
+      raw.lastSentLocalDateByAthlete && typeof raw.lastSentLocalDateByAthlete === 'object'
+        ? raw.lastSentLocalDateByAthlete
+        : undefined,
+  };
+};
+
+const dailyPreferenceEnabled = (raw: any): boolean => {
+  if (!raw || typeof raw !== 'object') return false;
+  const prefs = raw.dailyReflectionPreferences;
+  return Boolean(prefs && typeof prefs === 'object' && prefs.enabled === true);
+};
+
+const dailyPreferenceLabel = (raw: any): string => {
+  const prefs = raw?.dailyReflectionPreferences;
+  if (!prefs || typeof prefs !== 'object') return 'their own daily check-in reminder';
+  const time = typeof prefs.time === 'string'
+    ? prefs.time
+    : typeof prefs.hour === 'number' && typeof prefs.minute === 'number'
+      ? reminderInputTime(prefs.hour, prefs.minute)
+      : '';
+  const parsed = time ? parseReminderTime(time) : null;
+  return parsed ? `their own ${reminderTimeLabel(parsed.hour, parsed.minute)} reminder` : 'their own daily check-in reminder';
+};
+
+const moodCheckInSlotLabel = (slot?: MoodCheckInSlot): string => {
+  if (slot === 'morning') return 'Morning';
+  if (slot === 'evening') return 'Evening';
+  return 'Daily';
+};
+
+const moodCheckInScheduleLabel = (draft: MoodCheckInDraft): string =>
+  (Object.entries(draft.slots) as Array<[MoodCheckInSlot, { enabled: boolean; time: string }]>)
+    .filter(([, config]) => config.enabled)
+    .map(([slot, config]) => {
+      const parsed = parseReminderTime(config.time);
+      return `${moodCheckInSlotLabel(slot)} ${parsed ? reminderTimeLabel(parsed.hour, parsed.minute) : config.time}`;
+    })
+    .join(' + ');
+
+const RemindersSection: React.FC<{
+  coachId?: string;
+  teamContext: CoachDashboardTeamContext | null;
+  athletes: CoachAthlete[];
+  isDemo?: boolean;
+  onOpenRoster: () => void;
+}> = ({ coachId, teamContext, athletes, isDemo = false, onOpenRoster }) => {
+  const dispatch = useDispatch();
+  const [reminders, setReminders] = useState<CoachReminder[]>([]);
+  const [loading, setLoading] = useState(!isDemo);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [draft, setDraft] = useState<CoachReminderDraft>(() => defaultReminderDraft());
+  const [moodDraft, setMoodDraft] = useState<MoodCheckInDraft>(() => defaultMoodCheckInDraft());
+  const [conflict, setConflict] = useState<{
+    athlete: CoachAthlete;
+    schedule: string;
+    existingLabel: string;
+  } | null>(null);
+
+  const activeAthletes = useMemo(
+    () => [...athletes].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [athletes]
+  );
+  const athleteById = useMemo(
+    () => new Map(activeAthletes.map((athlete) => [athlete.id, athlete])),
+    [activeAthletes]
+  );
+  const checkInReminders = useMemo(
+    () => reminders.filter((reminder) => reminder.kind === 'checkIn'),
+    [reminders]
+  );
+  const customReminders = useMemo(
+    () => reminders.filter((reminder) => reminder.kind === 'custom'),
+    [reminders]
+  );
+
+  useEffect(() => {
+    setDraft(defaultReminderDraft());
+    setMoodDraft(defaultMoodCheckInDraft());
+    setConflict(null);
+  }, [teamContext?.teamId]);
+
+  useEffect(() => {
+    if (activeAthletes.length === 0 && draft.scope === 'athlete') {
+      setDraft((current) => ({ ...current, scope: 'team', athleteId: '' }));
+    }
+  }, [activeAthletes.length, draft.scope]);
+
+  useEffect(() => {
+    if (isDemo) {
+      setReminders([
+        {
+          id: 'demo-checkin-1',
+          kind: 'checkIn',
+          scope: 'athlete',
+          coachId: DEMO_COACH_ID,
+          teamId: DEMO_COACH_TEAM_CONTEXT.teamId,
+          organizationId: DEMO_COACH_TEAM_CONTEXT.organizationId,
+          athleteId: DEMO_ATHLETES[0]?.id,
+          hour: 8,
+          minute: 0,
+          active: true,
+          overrideAcknowledged: true,
+          slot: 'morning',
+        },
+        {
+          id: 'demo-checkin-2',
+          kind: 'checkIn',
+          scope: 'athlete',
+          coachId: DEMO_COACH_ID,
+          teamId: DEMO_COACH_TEAM_CONTEXT.teamId,
+          organizationId: DEMO_COACH_TEAM_CONTEXT.organizationId,
+          athleteId: DEMO_ATHLETES[0]?.id,
+          hour: 20,
+          minute: 0,
+          active: true,
+          overrideAcknowledged: true,
+          slot: 'evening',
+        },
+      ]);
+      setLoading(false);
+      return;
+    }
+
+    if (!coachId || !teamContext?.teamId || !teamContext.organizationId) {
+      setReminders([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    const q = query(
+      collection(db, COACH_REMINDERS_COLLECTION),
+      where('coachId', '==', coachId),
+      where('teamId', '==', teamContext.teamId),
+      where('organizationId', '==', teamContext.organizationId)
+    );
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const next = snapshot.docs
+          .map((entry) => sanitizeCoachReminder(entry.id, entry.data()))
+          .filter((reminder): reminder is CoachReminder => Boolean(reminder))
+          .sort((a, b) => {
+            const aTime = a.hour * 60 + a.minute;
+            const bTime = b.hour * 60 + b.minute;
+            if (a.kind !== b.kind) return a.kind === 'checkIn' ? -1 : 1;
+            return aTime - bTime;
+          });
+        setReminders(next);
+        setLoading(false);
+      },
+      (snapshotError) => {
+        console.error('[CoachDashboard] failed to load reminders', snapshotError);
+        setError('Could not load reminders. Refresh and try again.');
+        setLoading(false);
+      }
+    );
+  }, [coachId, isDemo, teamContext?.organizationId, teamContext?.teamId]);
+
+  const saveCheckInReminder = async (forceOverride = false) => {
+    if (saving) return;
+    const athlete = athleteById.get(moodDraft.athleteId);
+    const enabledSlots = (Object.entries(moodDraft.slots) as Array<[MoodCheckInSlot, { enabled: boolean; time: string }]>)
+      .filter(([, config]) => config.enabled);
+    const parsedSlots = enabledSlots.map(([slot, config]) => ({ slot, parsed: parseReminderTime(config.time) }));
+    if (!athlete || enabledSlots.length === 0 || parsedSlots.some((entry) => !entry.parsed)) {
+      dispatch(showToast({ message: 'Choose an athlete and at least one valid mood check-in time.', type: 'error' }));
+      return;
+    }
+    if (!teamContext) {
+      dispatch(showToast({ message: 'Choose an active team first.', type: 'error' }));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (isDemo) {
+        const nextReminders = parsedSlots.map(({ slot, parsed }) => ({
+          id: `checkin_${athlete.id}_${slot}`,
+          kind: 'checkIn' as const,
+          scope: 'athlete' as const,
+          coachId: coachId || DEMO_COACH_ID,
+          teamId: teamContext.teamId,
+          organizationId: teamContext.organizationId,
+          athleteId: athlete.id,
+          hour: parsed?.hour || 0,
+          minute: parsed?.minute || 0,
+          active: true,
+          overrideAcknowledged: true,
+          slot,
+        }));
+        setReminders((current) => [
+          ...nextReminders,
+          ...current.filter((item) => !nextReminders.some((next) => next.id === item.id)),
+        ]);
+        dispatch(showToast({ message: 'Daily mood check-ins saved.', type: 'success' }));
+        return;
+      }
+
+      if (!coachId) {
+        dispatch(showToast({ message: 'Coach account is still loading.', type: 'error' }));
+        return;
+      }
+
+      if (!forceOverride) {
+        const userSnapshot = await getDoc(firestoreDoc(db, 'users', athlete.id));
+        const userData = userSnapshot.data();
+        if (dailyPreferenceEnabled(userData)) {
+          setConflict({
+            athlete,
+            schedule: moodCheckInScheduleLabel(moodDraft),
+            existingLabel: dailyPreferenceLabel(userData),
+          });
+          return;
+        }
+      }
+
+      const legacyRef = firestoreDoc(db, COACH_REMINDERS_COLLECTION, `checkin_${athlete.id}`);
+      const legacySnapshot = await getDoc(legacyRef);
+      if (legacySnapshot.exists()) {
+        await updateDoc(legacyRef, { active: false, updatedAt: serverTimestamp() });
+      }
+
+      await Promise.all(
+        (Object.entries(moodDraft.slots) as Array<[MoodCheckInSlot, { enabled: boolean; time: string }]>).map(
+          async ([slot, config]) => {
+            const reminderRef = firestoreDoc(db, COACH_REMINDERS_COLLECTION, `checkin_${athlete.id}_${slot}`);
+            const existing = await getDoc(reminderRef);
+            const parsed = parseReminderTime(config.time);
+            if (!config.enabled) {
+              if (existing.exists()) {
+                await updateDoc(reminderRef, { active: false, updatedAt: serverTimestamp() });
+              }
+              return;
+            }
+            if (!parsed) return;
+            const payload: Record<string, any> = {
+              kind: 'checkIn',
+              scope: 'athlete',
+              coachId,
+              teamId: teamContext.teamId,
+              organizationId: teamContext.organizationId,
+              athleteId: athlete.id,
+              slot,
+              title: `${moodCheckInSlotLabel(slot)} daily mood check-in`,
+              hour: parsed.hour,
+              minute: parsed.minute,
+              active: true,
+              overrideAcknowledged: forceOverride,
+              updatedAt: serverTimestamp(),
+            };
+            if (!existing.exists()) payload.createdAt = serverTimestamp();
+            await setDoc(reminderRef, payload, { merge: true });
+          }
+        )
+      );
+      setConflict(null);
+      dispatch(showToast({ message: 'Daily mood check-ins saved.', type: 'success' }));
+    } catch (saveError) {
+      console.error('[CoachDashboard] failed to save check-in reminder', saveError);
+      dispatch(showToast({ message: 'Could not save this reminder.', type: 'error' }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveCustomReminder = async () => {
+    if (saving) return;
+    const title = draft.title.trim();
+    const message = draft.message.trim();
+    const parsed = parseReminderTime(draft.time);
+    if (!title || !message || !parsed) {
+      dispatch(showToast({ message: 'Add a title, message, and reminder time.', type: 'error' }));
+      return;
+    }
+    if (draft.scope === 'athlete' && !draft.athleteId) {
+      dispatch(showToast({ message: 'Choose the athlete for this reminder.', type: 'error' }));
+      return;
+    }
+    if (!teamContext) {
+      dispatch(showToast({ message: 'Choose an active team first.', type: 'error' }));
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        kind: 'custom',
+        scope: draft.scope,
+        coachId: coachId || DEMO_COACH_ID,
+        teamId: teamContext.teamId,
+        organizationId: teamContext.organizationId,
+        title,
+        message,
+        recurrence: draft.recurrence,
+        startDateKey: draft.date || localDayKey(new Date()),
+        hour: parsed.hour,
+        minute: parsed.minute,
+        active: draft.active,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      if (draft.scope === 'athlete') payload.athleteId = draft.athleteId;
+
+      if (isDemo) {
+        setReminders((current) => [{ ...payload, id: `demo-${Date.now()}` } as CoachReminder, ...current]);
+      } else {
+        if (!coachId) {
+          dispatch(showToast({ message: 'Coach account is still loading.', type: 'error' }));
+          return;
+        }
+        await addDoc(collection(db, COACH_REMINDERS_COLLECTION), payload);
+      }
+      setDraft(defaultReminderDraft());
+      dispatch(showToast({ message: 'Reminder added.', type: 'success' }));
+    } catch (saveError) {
+      console.error('[CoachDashboard] failed to save custom reminder', saveError);
+      dispatch(showToast({ message: 'Could not add this reminder.', type: 'error' }));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleReminder = async (reminder: CoachReminder) => {
+    const nextActive = reminder.active === false;
+    if (isDemo) {
+      setReminders((current) =>
+        current.map((item) => (item.id === reminder.id ? { ...item, active: nextActive } : item))
+      );
+      return;
+    }
+    try {
+      await updateDoc(firestoreDoc(db, COACH_REMINDERS_COLLECTION, reminder.id), {
+        active: nextActive,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (toggleError) {
+      console.error('[CoachDashboard] failed to update reminder', toggleError);
+      dispatch(showToast({ message: 'Could not update this reminder.', type: 'error' }));
+    }
+  };
+
+  const deleteCustomReminder = async (reminder: CoachReminder) => {
+    if (isDemo) {
+      setReminders((current) => current.filter((item) => item.id !== reminder.id));
+      return;
+    }
+    try {
+      await deleteDoc(firestoreDoc(db, COACH_REMINDERS_COLLECTION, reminder.id));
+      dispatch(showToast({ message: 'Reminder deleted.', type: 'success' }));
+    } catch (deleteError) {
+      console.error('[CoachDashboard] failed to delete reminder', deleteError);
+      dispatch(showToast({ message: 'Could not delete this reminder.', type: 'error' }));
+    }
+  };
+
+  if (loading) return <LoadingBlock label="Loading reminders..." />;
+
+  if (!teamContext) {
+    return (
+      <EmptyBlock
+        icon={BellRing}
+        title="Choose a team"
+        body="Reminders are attached to one active team at a time."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {error && (
+        <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      {activeAthletes.length === 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-[#E0FE10]/20 bg-[#E0FE10]/[0.06] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-white">No athletes on this team yet</div>
+            <div className="mt-1 text-sm text-zinc-400">
+              Team reminders can be created now. Add athletes when you want athlete-specific daily mood check-ins.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenRoster}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black hover:brightness-95"
+          >
+            <Plus className="h-4 w-4" />
+            Add athlete
+          </button>
+        </div>
+      )}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-2xl border border-[#E0FE10]/20 bg-zinc-900/55 p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E0FE10]/12">
+              <BellRing className="h-5 w-5 text-[#E0FE10]" />
+            </div>
+            <div>
+              <div className="text-base font-semibold text-white">Daily mood check-in</div>
+              <div className="text-xs text-zinc-500">Set morning and evening mood check-in times for one athlete.</div>
+            </div>
+          </div>
+          {activeAthletes.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-700/50 p-5">
+              <div className="text-sm font-semibold text-white">Add an athlete first</div>
+              <div className="mt-1 text-sm text-zinc-500">
+                Athlete notifications need a roster member so PulseCheck knows who should receive the prompt.
+              </div>
+              <button
+                type="button"
+                onClick={onOpenRoster}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg border border-[#E0FE10]/35 bg-[#E0FE10]/10 px-3 py-2 text-sm font-semibold text-[#E0FE10] hover:bg-[#E0FE10]/15"
+              >
+                <Plus className="h-4 w-4" />
+                Add athlete
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-zinc-400">
+                Athlete
+                <select
+                  value={moodDraft.athleteId}
+                  onChange={(event) => setMoodDraft((current) => ({ ...current, athleteId: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-[#E0FE10]/40 focus:outline-none"
+                >
+                  <option value="">Choose athlete</option>
+                  {activeAthletes.map((athlete) => (
+                    <option key={athlete.id} value={athlete.id}>
+                      {athlete.displayName || athlete.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(Object.entries(moodDraft.slots) as Array<[MoodCheckInSlot, { enabled: boolean; time: string }]>).map(
+                ([slot, config]) => (
+                  <div key={slot} className="rounded-xl border border-zinc-700/40 bg-black/20 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">{moodCheckInSlotLabel(slot)}</div>
+                        <div className="text-xs text-zinc-500">Daily mood check-in</div>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs font-medium text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={config.enabled}
+                          onChange={(event) =>
+                            setMoodDraft((current) => ({
+                              ...current,
+                              slots: {
+                                ...current.slots,
+                                [slot]: { ...current.slots[slot], enabled: event.target.checked },
+                              },
+                            }))
+                          }
+                          className="h-4 w-4 accent-[#E0FE10]"
+                        />
+                        On
+                      </label>
+                    </div>
+                    <input
+                      type="time"
+                      value={config.time}
+                      disabled={!config.enabled}
+                      onChange={(event) =>
+                        setMoodDraft((current) => ({
+                          ...current,
+                          slots: {
+                            ...current.slots,
+                            [slot]: { ...current.slots[slot], time: event.target.value },
+                          },
+                        }))
+                      }
+                      className="w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-[#E0FE10]/40 focus:outline-none disabled:opacity-45"
+                    />
+                  </div>
+                )
+              )}
+              <button
+                onClick={() => void saveCheckInReminder(false)}
+                disabled={saving}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Check className="h-4 w-4" />
+                {saving ? 'Saving...' : 'Save mood check-ins'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-cyan-400/20 bg-zinc-900/55 p-5">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/12">
+              <MessageSquare className="h-5 w-5 text-cyan-200" />
+            </div>
+            <div>
+              <div className="text-base font-semibold text-white">Team reminder</div>
+              <div className="text-xs text-zinc-500">Send a one-time or daily nudge to the whole team or one athlete.</div>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-xs font-medium text-zinc-400">
+              Audience
+              <select
+                value={draft.scope}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    scope: event.target.value as CoachReminderScope,
+                    athleteId: event.target.value === 'team' ? '' : current.athleteId,
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-cyan-300/40 focus:outline-none"
+              >
+                <option value="team">Whole team</option>
+                <option value="athlete" disabled={activeAthletes.length === 0}>One athlete</option>
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-zinc-400">
+              Athlete
+              <select
+                value={draft.athleteId}
+                onChange={(event) => setDraft((current) => ({ ...current, athleteId: event.target.value }))}
+                disabled={draft.scope === 'team'}
+                className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-cyan-300/40 focus:outline-none disabled:opacity-45"
+              >
+                <option value="">Choose athlete</option>
+                {activeAthletes.map((athlete) => (
+                  <option key={athlete.id} value={athlete.id}>
+                    {athlete.displayName || athlete.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs font-medium text-zinc-400 sm:col-span-2">
+              Title
+              <input
+                value={draft.title}
+                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                placeholder="Hydration check"
+                className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-cyan-300/40 focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-medium text-zinc-400 sm:col-span-2">
+              Message
+              <textarea
+                value={draft.message}
+                onChange={(event) => setDraft((current) => ({ ...current, message: event.target.value }))}
+                placeholder="Quick check: water, food, and recovery are all part of today's work."
+                rows={3}
+                className="mt-1 w-full resize-none rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-cyan-300/40 focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-medium text-zinc-400">
+              Date
+              <input
+                type="date"
+                value={draft.date}
+                onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-cyan-300/40 focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-medium text-zinc-400">
+              Time
+              <input
+                type="time"
+                value={draft.time}
+                onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-cyan-300/40 focus:outline-none"
+              />
+            </label>
+            <label className="block text-xs font-medium text-zinc-400">
+              Repeat
+              <select
+                value={draft.recurrence}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, recurrence: event.target.value as CoachReminderRecurrence }))
+                }
+                className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-cyan-300/40 focus:outline-none"
+              >
+                <option value="once">Once</option>
+                <option value="daily">Daily</option>
+              </select>
+            </label>
+            <label className="mt-6 flex items-center gap-2 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                checked={draft.active}
+                onChange={(event) => setDraft((current) => ({ ...current, active: event.target.checked }))}
+                className="h-4 w-4 accent-[#E0FE10]"
+              />
+              Active
+            </label>
+          </div>
+          <button
+            onClick={() => void saveCustomReminder()}
+            disabled={saving}
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" />
+            {saving ? 'Saving...' : draft.scope === 'team' ? 'Add team reminder' : 'Add athlete reminder'}
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/45 p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white">Daily mood check-ins</div>
+              <div className="text-xs text-zinc-500">Coach-controlled daily mood prompts for specific athletes.</div>
+            </div>
+            <span className="rounded-full border border-zinc-700/50 px-2.5 py-1 text-xs text-zinc-400">
+              {checkInReminders.length}
+            </span>
+          </div>
+          {checkInReminders.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-700/50 p-5 text-sm text-zinc-500">
+              No daily mood check-ins yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {checkInReminders.map((reminder) => {
+                const athlete = reminder.athleteId ? athleteById.get(reminder.athleteId) : null;
+                return (
+                  <div key={reminder.id} className="rounded-xl border border-zinc-700/40 bg-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-white">
+                          {athlete?.displayName || reminder.athleteId || 'Athlete'}
+                        </div>
+                        <div className="mt-1 text-xs text-zinc-500">
+                          Daily at {reminderTimeLabel(reminder.hour, reminder.minute)}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => void toggleReminder(reminder)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          reminder.active === false
+                            ? 'border-zinc-700 bg-zinc-800/60 text-zinc-400'
+                            : 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#E0FE10]'
+                        }`}
+                      >
+                        {reminder.active === false ? 'Off' : 'Active'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/45 p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-white">Custom reminders</div>
+              <div className="text-xs text-zinc-500">Team or athlete nudges scheduled by the coach.</div>
+            </div>
+            <span className="rounded-full border border-zinc-700/50 px-2.5 py-1 text-xs text-zinc-400">
+              {customReminders.length}
+            </span>
+          </div>
+          {customReminders.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-700/50 p-5 text-sm text-zinc-500">
+              No custom reminders yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {customReminders.map((reminder) => {
+                const athlete = reminder.athleteId ? athleteById.get(reminder.athleteId) : null;
+                return (
+                  <div key={reminder.id} className="rounded-xl border border-zinc-700/40 bg-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-white">{reminder.title || 'Reminder'}</div>
+                        <div className="mt-1 text-xs text-zinc-500">
+                          {reminder.scope === 'team' ? 'Whole team' : athlete?.displayName || 'One athlete'} · {reminder.recurrence === 'daily' ? 'Daily' : 'Once'} at {reminderTimeLabel(reminder.hour, reminder.minute)}
+                        </div>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <button
+                          onClick={() => void toggleReminder(reminder)}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                            reminder.active === false
+                              ? 'border-zinc-700 bg-zinc-800/60 text-zinc-400'
+                              : 'border-cyan-300/30 bg-cyan-300/10 text-cyan-100'
+                          }`}
+                        >
+                          {reminder.active === false ? 'Off' : 'Active'}
+                        </button>
+                        <button
+                          onClick={() => void deleteCustomReminder(reminder)}
+                          className="rounded-lg border border-zinc-700/50 p-1.5 text-zinc-500 hover:border-red-500/40 hover:text-red-300"
+                          aria-label="Delete reminder"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    {reminder.message && (
+                      <div className="mt-3 rounded-lg bg-zinc-950/45 px-3 py-2 text-sm text-zinc-300">
+                        {reminder.message}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {conflict && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setConflict(null)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              className="relative z-10 w-full max-w-md rounded-2xl border border-amber-400/25 bg-[#0d0d12] shadow-2xl"
+            >
+              <div className="border-b border-zinc-800 px-5 py-4">
+                <div className="text-base font-semibold text-white">Replace athlete reminder?</div>
+                <div className="mt-1 text-xs text-zinc-500">{conflict.athlete.displayName}</div>
+              </div>
+              <div className="space-y-4 px-5 py-4">
+                <p className="text-sm leading-relaxed text-zinc-300">
+                  This athlete already has {conflict.existingLabel}. Saving this coach reminder will make the coach time the active check-in prompt.
+                </p>
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+                  New coach schedule: {conflict.schedule}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setConflict(null)}
+                    className="rounded-lg border border-zinc-700/50 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveCheckInReminder(true)}
+                    disabled={saving}
+                    className="rounded-lg bg-[#E0FE10] px-4 py-2 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {saving ? 'Saving...' : 'Replace reminder'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

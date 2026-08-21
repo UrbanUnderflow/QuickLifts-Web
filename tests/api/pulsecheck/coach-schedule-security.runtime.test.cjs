@@ -83,20 +83,27 @@ const activeRecords = ({
   ],
 });
 
-const makeHttpClient = (respond, observed) => ({
+const makeHttpClient = (respond, observed, lookupOptions = {}) => ({
   request(url, options, callback) {
     const request = new EventEmitter();
     request.destroy = () => {};
     request.end = () => {
       options.lookup(
         url.hostname,
-        {},
-        (error, address, family) => {
+        lookupOptions,
+        (error, lookupResult, family) => {
           if (error) {
             request.emit('error', error);
             return;
           }
-          observed.lookups.push({ hostname: url.hostname, address, family });
+          const selectedAddress = Array.isArray(lookupResult)
+            ? lookupResult[0]
+            : { address: lookupResult, family };
+          observed.lookups.push({
+            hostname: url.hostname,
+            address: selectedAddress.address,
+            family: selectedAddress.family,
+          });
           const responseDefinition = respond(url);
           const response = new PassThrough();
           response.statusCode = responseDefinition.statusCode || 200;
@@ -120,6 +127,7 @@ const makeHttpClient = (respond, observed) => ({
 const loadScrape = ({
   collections = activeRecords(),
   dnsLookup,
+  lookupOptions,
   respond = () => ({
     statusCode: 200,
     body: '<html><title>Track 2026</title><body>January 2, 2026 Riverside Invitational at Central Stadium with the full team.</body></html>',
@@ -128,7 +136,7 @@ const loadScrape = ({
 } = {}) => {
   const firebaseMock = createFirestoreAdminMock({ collections });
   const observed = { requests: [], lookups: [] };
-  const client = makeHttpClient(respond, observed);
+  const client = makeHttpClient(respond, observed, lookupOptions);
   const firebaseApp = {
     auth: () => ({ verifyIdToken: verifyToken }),
     firestore: () => firebaseMock.db,
@@ -274,6 +282,23 @@ test('schedule scrape pins a validated DNS answer to the socket lookup', async (
   ]);
 });
 
+test('schedule scrape supports Node lookup calls that request all addresses', async () => {
+  const { module, observed } = loadScrape({
+    lookupOptions: { all: true },
+  });
+  const response = createNextApiResponseRecorder();
+  await module.default(scrapeRequest(), response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(observed.lookups, [
+    {
+      hostname: 'schedule.example',
+      address: '93.184.216.34',
+      family: 4,
+    },
+  ]);
+});
+
 test('schedule scrape revalidates every redirect and blocks a private redirect target', async () => {
   const dnsHosts = [];
   const { module, observed } = loadScrape({
@@ -312,6 +337,38 @@ test('schedule scrape rejects mixed public and private DNS answers', async () =>
   await module.default(scrapeRequest(), response);
   assert.equal(response.statusCode, 400);
   assert.equal(observed.requests.length, 0);
+});
+
+test('schedule text keeps structured SportsEvent data from Sidearm pages', () => {
+  const { module } = loadScrape();
+  const { text } = module.scheduleHtmlToText(`
+    <html>
+      <head>
+        <title>2026 Women&#39;s Volleyball Schedule</title>
+        <script type="application/ld+json">
+          [{
+            "@context": "https://schema.org/",
+            "@type": "SportsEvent",
+            "name": "Clark Atlanta University Vs Tuskegee University",
+            "startDate": "2026-09-04T12:30:00",
+            "homeTeam": { "name": "Clark Atlanta University" },
+            "awayTeam": { "name": "Tuskegee University" },
+            "location": {
+              "name": "L.S. Epps Gymnasium",
+              "address": { "streetAddress": "Atlanta, Ga." }
+            },
+            "description": "Clark Atlanta University Vs Tuskegee University on 9/4/2026 12:30:00 PM"
+          }]
+        </script>
+      </head>
+      <body>Visible page copy without enough row structure.</body>
+    </html>
+  `);
+
+  assert.match(text, /Structured schedule events:/);
+  assert.match(text, /Starts: 2026-09-04T12:30:00/);
+  assert.match(text, /Away: Tuskegee University/);
+  assert.match(text, /Location: L\.S\. Epps Gymnasium - Atlanta, Ga\./);
 });
 
 const importRequest = (body, authorization = 'Bearer firebase-token') => ({

@@ -12,7 +12,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Fit With Pulse consumer fitness, PulseCheck elite athlete service technology, Macra nutrition, shared data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-07-25',
+  lastUpdated: '2026-08-20',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -63,6 +63,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-junior-track-curriculum-spec', label: 'Junior Track Guided Curriculum', description: 'Implemented guided junior curriculum with three daily lessons, morning and evening check-ins, same-day revision, Energy Recalibration, checkpoints, completion ceremony, and junior-safe language and biometric framing.', parentSectionId: 'pulsecheck-youth-pathways' },
     { id: 'pulsecheck-exercise-teaching-moments', label: 'Exercise Teaching Moments', description: 'First-encounter narrated learning journeys for breathing, visualization, attention, body awareness, resets, decisions, reframing, reflection, affirmations, process focus, and posture.', parentSectionId: 'pulsecheck-youth-pathways' },
     { id: 'pulsecheck-runtime-architecture', label: 'Runtime Stack', description: 'Parent artifact for the PulseCheck runtime operating model, state logic, assignment rules, escalation bridges, and QA posture.' },
+    { id: 'pulsecheck-nora-chat-contract', label: 'Nora Chat Contract', description: 'Canonical product and safety contract for Nora role, conversation lanes, refusals, privacy, health data, coach handoffs, agent tools, red-team evaluation, and release gates.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-athlete-daily-state-loop', label: 'Athlete Daily State Loop', description: 'Morning and evening self-report, same-day revisions, assigned training, Energy Recalibration, silent biometric alignment, coherence metrics, and safety-aware follow-up.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-state-signal-layer', label: 'State Signal Layer', description: 'Operational state inference, confidence bands, freshness rules, and routing outputs for Nora.', parentSectionId: 'pulsecheck-runtime-architecture' },
     { id: 'pulsecheck-checkin-signal-layer-integration-spec', label: 'Check-In Integration Spec', description: 'AI-native contract between readiness check-in, enriched state snapshots, bounded assignment candidate sets, Nora chat context, and daily task materialization.', parentSectionId: 'pulsecheck-runtime-architecture' },
@@ -149,6 +150,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the canonical Nora Chat Contract as a complete visual System Overview artifact, including the seven prioritized conversation lanes, always-on safety overlay, clinical and privacy boundaries, agent-tool rules, red-team severity model, release gates, platform alignment, and unresolved governance decisions.',
       'Added the PulseCheck Coach Service Payments artifact under Coach Dashboard IA. It documents Stripe PaymentSheet, Apple Pay release requirements, fixed-price server catalog, Connect destination charges, payment verification, paid-only scheduling, shared booking cards, service earnings, webhook recovery, refunds, environment keys, tests, and code ownership.',
       'Expanded the PulseCheck Sports Intelligence source of truth with separate scenario and biometric-insight archetype axes, catalog-first sport/position/event/division resolution, reviewed TypeScript-to-Swift mappings, CI coverage gates, sport-native event vocabulary, visible personalization badges, scenario-pack telemetry, and general fallback rules.',
       'Added the Athlete Daily State Loop: morning and evening check-ins share one athlete-local daily record, both answers can be revised before the day resets, drained athletes can enter Energy Recalibration, and silent device alignment builds pattern memory without overruling self-report.',

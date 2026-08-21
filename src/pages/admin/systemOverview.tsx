@@ -85,6 +85,7 @@ import PulseCheckJuniorTrackCurriculumSpecTab from "../../components/admin/syste
 import PulseCheckAthleteDailyStateLoopTab from "../../components/admin/system-overview/PulseCheckAthleteDailyStateLoopTab";
 import PulseCheckExerciseTeachingMomentsTab from "../../components/admin/system-overview/PulseCheckExerciseTeachingMomentsTab";
 import PulseCheckAthleteDataFramingDoctrineTab from "../../components/admin/system-overview/PulseCheckAthleteDataFramingDoctrineTab";
+import PulseCheckNoraChatContractTab from "../../components/admin/system-overview/PulseCheckNoraChatContractTab";
 import PulseCheckNoraConversationOrchestratorSpecTab from "../../components/admin/system-overview/PulseCheckNoraConversationOrchestratorSpecTab";
 import PulseCheckNoraGuardSpecTab from "../../components/admin/system-overview/PulseCheckNoraGuardSpecTab";
 import PulseCheckSportsIntelligenceAggregationInferenceContractTab from "../../components/admin/system-overview/PulseCheckSportsIntelligenceAggregationInferenceContractTab";
@@ -2510,6 +2511,9 @@ const SystemOverviewPage: React.FC = () => {
       case "pulsecheck-curriculum-layer-spec":
         return <PulseCheckCurriculumLayerSpecTab />;
 
+      case "pulsecheck-nora-chat-contract":
+        return <PulseCheckNoraChatContractTab />;
+
       case "pulsecheck-nora-conversation-orchestrator-spec":
         return <PulseCheckNoraConversationOrchestratorSpecTab />;
 
@@ -2931,7 +2935,7 @@ const SystemOverviewPage: React.FC = () => {
 
   return (
     <AdminRouteGuard>
-      <div className="min-h-screen bg-[#05070c] text-white overflow-x-hidden">
+      <div className="min-h-screen bg-[#05070c] text-white overflow-x-clip">
         <Head>
           <title>{systemOverviewManifest.title} | Pulse Admin</title>
         </Head>

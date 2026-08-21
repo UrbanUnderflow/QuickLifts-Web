@@ -92,6 +92,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/PipeLists',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/coach/login', '/build-your-round', '/creator-onboarding',
+    // Public coach dashboard walkthrough
+    '/coach/dashboard/demo',
     // Design language showcase
     '/chromatic-glass',
     // Business overview

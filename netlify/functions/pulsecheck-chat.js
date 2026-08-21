@@ -23,6 +23,7 @@ const {
   enforceNoraVoiceRubric,
 } = require('./utils/noraVoiceRubric');
 const {
+  NORA_CONTRACT_VERSION,
   NORA_ENGAGEMENT_MODEL_PROMPT,
   NoraConversationLane,
   buildNoraBoundaryResponse,
@@ -2101,7 +2102,8 @@ exports.handler = async (event, context) => {
       healthContext,       // Optional: iOS sends health data from HealthKit
       lastNoraResponseLength, // Optional: For turn-taking detection
       recentMessages: clientRecentMessages, // Optional: iOS may send its own recent messages
-      coachDirective // Optional: iOS can send a bounded coaching directive for this turn
+      coachDirective, // Optional: iOS can send a bounded coaching directive for this turn
+      clientCapabilities
     } = body;
 
     let verifiedCaller;
@@ -2126,6 +2128,15 @@ exports.handler = async (event, context) => {
 
     if (!message) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing message' }) };
+    }
+
+    const clientContractVersion = String(clientCapabilities?.noraContractVersion || '').trim();
+    if (clientContractVersion && clientContractVersion !== NORA_CONTRACT_VERSION) {
+      console.warn('[pulsecheck-chat] Nora contract version mismatch', {
+        platform: String(clientCapabilities?.platform || 'unknown'),
+        clientContractVersion,
+        serverContractVersion: NORA_CONTRACT_VERSION,
+      });
     }
 
     // Always load user doc for preferences (even if iOS provides userContext)
@@ -2802,6 +2813,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       lane: conversationLane,
       previousAssistantMessages,
       groundingMessages,
+      confirmedExternalAction: coachHandoffOutcome?.sent === true,
     });
     console.log('[pulsecheck-chat] Nora engagement evaluation', {
       lane: engagementEvaluation.lane,
@@ -2863,6 +2875,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
             lane: conversationLane,
             previousAssistantMessages,
             groundingMessages,
+            confirmedExternalAction: coachHandoffOutcome?.sent === true,
           });
           console.log('[pulsecheck-chat] Nora engagement revision evaluation', {
             attempt,
@@ -2887,6 +2900,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         lane: conversationLane,
         previousAssistantMessages,
         groundingMessages,
+        confirmedExternalAction: coachHandoffOutcome?.sent === true,
       });
       console.warn('[pulsecheck-chat] Used grounded Nora engagement fallback', {
         lane: conversationLane,
@@ -3132,6 +3146,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       headers,
       body: JSON.stringify({
         conversationId: newConvoId,
+        noraContractVersion: NORA_CONTRACT_VERSION,
         assistantMessage,
         escalation: escalationResponse,
         escalationOutcome,

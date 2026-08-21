@@ -330,13 +330,19 @@ const fetchHtmlOnce = async (
         },
         lookup: (
           _hostname: string,
-          _options: any,
+          options: any,
           callback: (
             error: NodeJS.ErrnoException | null,
-            address: string,
-            family: number
+            address: string | ResolvedPublicAddress[],
+            family?: number
           ) => void
-        ) => callback(null, resolved.address, resolved.family),
+        ) => {
+          if (options?.all) {
+            callback(null, [resolved]);
+            return;
+          }
+          callback(null, resolved.address, resolved.family);
+        },
         servername: normalizeHostname(parsed.hostname),
         timeout: requestTimeout,
       },
@@ -446,6 +452,96 @@ export const fetchPublicScheduleHtml = async (targetUrl: URL): Promise<string> =
   throw new ScheduleScrapeError('That link redirected too many times.', 422);
 };
 
+const decodeHtmlEntities = (value: string): string =>
+  value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_match, code) => {
+      const parsed = Number(code);
+      return Number.isFinite(parsed) ? String.fromCharCode(parsed) : ' ';
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) => {
+      const parsed = Number.parseInt(code, 16);
+      return Number.isFinite(parsed) ? String.fromCharCode(parsed) : ' ';
+    })
+    .replace(/&[a-z]+;/gi, ' ');
+
+const coerceJsonArray = (value: unknown): any[] => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return [value];
+  return [];
+};
+
+const compactText = (value: unknown, limit = 160): string => (
+  typeof value === 'string' ? value : ''
+).replace(/\s+/g, ' ').trim().slice(0, limit);
+
+const extractPlaceText = (location: any): string => {
+  if (!location || typeof location !== 'object') return '';
+  const name = compactText(location.name, 120);
+  const address = location.address && typeof location.address === 'object'
+    ? [
+        compactText(location.address.streetAddress, 120),
+        compactText(location.address.addressLocality, 80),
+        compactText(location.address.addressRegion, 40),
+      ].filter(Boolean).join(', ')
+    : '';
+  return [name, address].filter(Boolean).join(' - ');
+};
+
+const sportsEventToLine = (event: any): string | null => {
+  if (!event || typeof event !== 'object') return null;
+  const type = compactText(event['@type'], 60);
+  if (type && type !== 'SportsEvent' && !type.split(/\s*,\s*/).includes('SportsEvent')) {
+    return null;
+  }
+
+  const title = compactText(event.name, 180);
+  const startsAt = compactText(event.startDate, 60);
+  if (!title || !startsAt) return null;
+
+  const home = compactText(event.homeTeam?.name, 120);
+  const away = compactText(event.awayTeam?.name, 120);
+  const location = extractPlaceText(event.location);
+  const description = compactText(event.description, 220);
+  return [
+    `Event: ${title}`,
+    `Starts: ${startsAt}`,
+    home ? `Home: ${home}` : '',
+    away ? `Away: ${away}` : '',
+    location ? `Location: ${location}` : '',
+    description ? `Details: ${description}` : '',
+  ].filter(Boolean).join(' | ');
+};
+
+const extractSportsEventJsonLd = (html: string): string => {
+  const lines: string[] = [];
+  const scriptPattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = scriptPattern.exec(html)) !== null) {
+    const rawJson = decodeHtmlEntities(match[1]).trim();
+    if (!rawJson) continue;
+    try {
+      const parsed = JSON.parse(rawJson);
+      for (const item of coerceJsonArray(parsed)) {
+        const eventLines = sportsEventToLine(item);
+        if (eventLines) lines.push(eventLines);
+      }
+    } catch {
+      // Some athletics vendors emit relaxed JSON in unrelated ld+json blocks.
+      // The visible-page fallback still gives Nora useful text.
+    }
+  }
+
+  return lines.length
+    ? `Structured schedule events:\n${lines.join('\n')}`
+    : '';
+};
+
 /** Reduce raw HTML to readable text, preserving rows and table structure. */
 export function scheduleHtmlToText(html: string): {
   title: string;
@@ -456,7 +552,7 @@ export function scheduleHtmlToText(html: string): {
     ? titleMatch[1].replace(/\s+/g, ' ').trim().slice(0, 200)
     : '';
 
-  const text = html
+  const visibleText = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
@@ -474,6 +570,9 @@ export function scheduleHtmlToText(html: string): {
     .replace(/[ \t]+/g, ' ')
     .replace(/\n\s*\n\s*\n+/g, '\n\n')
     .trim();
+
+  const structuredEvents = extractSportsEventJsonLd(html);
+  const text = [structuredEvents, visibleText].filter(Boolean).join('\n\n');
 
   return { title, text: text.slice(0, MAX_TEXT_CHARS) };
 }

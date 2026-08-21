@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __internal } from '../../netlify/functions/get-pulsecheck-scorecard';
+import { calculatePulseCheckScorecardV2 } from '../../src/utils/pulsecheckScoringV2';
 
 test('health snapshot parser identifies Apple HRV as SDNN and keeps the full-day lane', () => {
   const parsed = __internal.healthDayFromSnapshot({
@@ -117,6 +118,35 @@ test('daily input joins wellbeing, recovery, commitment, sleep, and autonomic ev
   assert.equal(days[1].autonomicMeasurements?.[0].method, 'rmssd');
 });
 
+test('pre-activation days stay visible in the 14-day grid without counting as missed adherence', () => {
+  const dateKeys = Array.from({ length: 14 }, (_, index) => `2026-08-${String(index + 1).padStart(2, '0')}`);
+  const builtDays = __internal.buildScoringDays({
+    dateKeys,
+    checkIns: [],
+    assignments: [],
+    healthSnapshots: [],
+    eligibleFromDateKey: '2026-08-13',
+  });
+  const days = builtDays.map((day) => day.scheduledCheckIn
+    ? {
+      ...day,
+      wellbeingLevel: 4,
+      subjectiveRecoveryLevel: 4,
+      commitment: { state: 'completed' as const, commitmentId: `commitment-${day.dateKey}` },
+    }
+    : day);
+  const scorecard = calculatePulseCheckScorecardV2({ days, accountAgeDays: 1 });
+  const dayStates = scorecard.adherence.components[0].dayStates || [];
+
+  assert.equal(builtDays.filter((day) => day.scheduledCheckIn === false).length, 12);
+  assert.equal(builtDays.filter((day) => day.scheduledCheckIn).length, 2);
+  assert.equal(scorecard.adherence.status, 'building');
+  assert.equal(scorecard.adherence.score, null);
+  assert.equal(dayStates.length, 14);
+  assert.equal(dayStates.filter((day) => day.state === 'excused').length, 12);
+  assert.equal(dayStates.filter((day) => day.state === 'complete').length, 2);
+});
+
 test('athlete response removes source-lane identifiers and raw physiological values', () => {
   const scorecard = {
     autonomic: {
@@ -130,6 +160,21 @@ test('athlete response removes source-lane identifiers and raw physiological val
   assert.equal(safe.autonomic.hrv.currentValue, null);
   assert.equal(safe.autonomic.hrv.score, 55);
   assert.equal(scorecard.autonomic.hrv.currentValue, 62);
+});
+
+test('legacy scorecards are not reused as established Coherence under the current method', () => {
+  assert.equal(__internal.establishedCoherenceScoreFromDocument({
+    methodologyVersion: '2.2.0',
+    coherence: { score: 9 },
+  }), null);
+  assert.equal(__internal.establishedCoherenceScoreFromDocument({
+    methodologyVersion: '2.2.1',
+    coherence: { score: 73 },
+  }), null);
+  assert.equal(__internal.establishedCoherenceScoreFromDocument({
+    methodologyVersion: '2.2.2',
+    coherence: { score: 80 },
+  }), 80);
 });
 
 test('coach context reports a mixed signal without prescribing physical training', () => {

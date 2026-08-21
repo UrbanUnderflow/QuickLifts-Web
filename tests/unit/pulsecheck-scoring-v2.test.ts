@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   calculateAutonomicLane,
+  calculatePulseCheckCoherenceScore,
   calculatePulseCheckScorecardV2,
+  PULSECHECK_COHERENCE_WEIGHTS,
   pulseCheckMeasurementLaneId,
   type PulseCheckAutonomicMeasurement,
   type PulseCheckScoringDay,
@@ -30,12 +32,12 @@ test('scorecard returns four separate scores and keeps a hard wellbeing day out 
   const days = dateKeys(14).map((dateKey, index) => showingUpDay(dateKey, index === 13 ? 1 : 4));
   const result = calculatePulseCheckScorecardV2({ days, generatedAt: '2026-08-16T12:00:00.000Z' });
 
-  assert.equal(result.methodologyVersion, '2.2.0');
+  assert.equal(result.methodologyVersion, '2.2.2');
   assert.equal(result.wellbeing.score, 70);
   assert.equal(result.adherence.score, 100);
   assert.equal(result.recovery.score, 0);
-  assert.equal(result.coherence.score, null);
-  assert.equal(result.coherence.status, 'insufficient_evidence');
+  assert.equal(result.coherence.score, 42);
+  assert.equal(result.coherence.status, 'available');
   assert.equal(result.generatedAt, '2026-08-16T12:00:00.000Z');
 });
 
@@ -55,7 +57,7 @@ test('missing data lowers evidence coverage and is never converted to zero', () 
   assert.ok(result.wellbeing.notes.some((note) => note.includes('not scored as zero')));
 });
 
-test('coherence is fully suppressed when domains disagree completely, even when one domain is perfect', () => {
+test('coherence gives adherence a bounded contribution without a disagreement multiplier', () => {
   const days = dateKeys(14).map((dateKey, index): PulseCheckScoringDay => ({
     dateKey,
     wellbeingLevel: 4,
@@ -68,29 +70,61 @@ test('coherence is fully suppressed when domains disagree completely, even when 
   assert.equal(result.adherence.score, 100);
   assert.equal(result.wellbeing.score, 75);
   assert.equal(result.recovery.score, 0);
-  assert.equal(result.coherence.score, null);
-  assert.equal(result.coherence.status, 'insufficient_evidence');
+  assert.equal(result.coherence.score, 44);
+  assert.equal(result.coherence.status, 'available');
+  assert.ok(result.coherence.notes.some((note) => note.includes('bounded 10% contribution')));
 });
 
-test('coherence reflects a spread penalty and never displays a hard zero when domains partially disagree', () => {
+test('low adherence influences but cannot collapse an otherwise steady coherence read', () => {
   const days = dateKeys(14).map((dateKey, index): PulseCheckScoringDay => ({
     dateKey,
     wellbeingLevel: 4,
-    subjectiveRecoveryLevel: index === 13 ? 2 : 4,
+    subjectiveRecoveryLevel: 4,
     scheduledCheckIn: true,
-    commitment: { state: 'completed', commitmentId: `c-${dateKey}` },
+    commitment: { state: index < 2 ? 'completed' : 'missed', commitmentId: `c-${dateKey}` },
   }));
   const result = calculatePulseCheckScorecardV2({ days });
 
-  assert.equal(result.adherence.score, 100);
+  assert.equal(result.adherence.score, 48);
   assert.equal(result.wellbeing.score, 75);
-  assert.equal(result.recovery.score, 25);
-  assert.equal(result.coherence.score, 17);
-  assert.ok(result.coherence.score === null || result.coherence.score >= 1);
+  assert.equal(result.recovery.score, 75);
+  const coherenceScore = result.coherence.score;
+  assert.equal(coherenceScore, 72);
+  assert.equal(result.coherence.components.find((component) => component.key === 'adherence')?.configuredWeightPercent, 10);
+  assert.ok(coherenceScore !== null && 75 - coherenceScore <= 10);
+  assert.ok(coherenceScore !== null && coherenceScore >= 1);
   assert.equal(result.coherence.status, 'available');
 });
 
-test('coherence requires at least 2 of 3 domain scores to compute a current-window value', () => {
+test('coherence exposes the same 14-day evidence behind its Showing up contribution', () => {
+  const days = dateKeys(14).map((dateKey, index): PulseCheckScoringDay => ({
+    dateKey,
+    wellbeingLevel: 4,
+    subjectiveRecoveryLevel: 4,
+    scheduledCheckIn: true,
+    commitment: { state: index < 10 ? 'completed' : 'missed', commitmentId: `c-${dateKey}` },
+  }));
+  const result = calculatePulseCheckScorecardV2({ days });
+  const showingUp = result.coherence.components.find((component) => component.key === 'adherence');
+
+  assert.equal(result.coherence.score, 76);
+  assert.equal(showingUp?.score, result.adherence.score);
+  assert.equal(showingUp?.configuredWeightPercent, 10);
+  assert.equal(showingUp?.dayStates?.length, 14);
+  assert.equal(showingUp?.dayStates?.filter((day) => day.state === 'complete').length, 10);
+  assert.equal(showingUp?.dayStates?.filter((day) => day.state === 'partial').length, 4);
+});
+
+test('published coherence weights reproduce the screenshot case and cap adherence influence at 10 points', () => {
+  assert.equal(Object.values(PULSECHECK_COHERENCE_WEIGHTS).reduce((sum, weight) => sum + weight, 0), 100);
+  assert.equal(calculatePulseCheckCoherenceScore(75, 99, 14), 80);
+  assert.equal(calculatePulseCheckCoherenceScore(75, 99, null), 87);
+  assert.equal(calculatePulseCheckCoherenceScore(100, 100, 0), 90);
+  assert.equal(calculatePulseCheckCoherenceScore(100, 100, 100), 100);
+  assert.equal(calculatePulseCheckCoherenceScore(null, 99, 14), null);
+});
+
+test('coherence requires both wellbeing and recovery to compute a current-window value', () => {
   const days = dateKeys(14).map((dateKey): PulseCheckScoringDay => ({
     dateKey,
     scheduledCheckIn: true,
@@ -128,7 +162,7 @@ test('compatible historical evidence seeds a mature account before a canonical s
     : { dateKey, scheduledCheckIn: true });
   const result = calculatePulseCheckScorecardV2({ days, accountAgeDays: 365 });
 
-  assert.equal(result.coherence.score, 63);
+  assert.equal(result.coherence.score, 78);
   assert.equal(result.coherence.status, 'available');
   assert.ok(result.coherence.notes.some((note) => note.includes('carried forward')));
 });
@@ -144,7 +178,7 @@ test('a legacy zero scorecard cannot block compatible historical evidence from s
     establishedCoherenceScore: 0,
   });
 
-  assert.equal(result.coherence.score, 63);
+  assert.equal(result.coherence.score, 78);
   assert.equal(result.coherence.status, 'available');
 });
 
@@ -153,6 +187,7 @@ test('a sufficiently evidenced latest window replaces the established coherence 
     dateKey,
     scheduledCheckIn: true,
     wellbeingLevel: 4,
+    subjectiveRecoveryLevel: 4,
     commitment: {
       state: index < 7 ? 'completed' : 'missed',
       commitmentId: `commitment-${dateKey}`,
@@ -164,7 +199,7 @@ test('a sufficiently evidenced latest window replaces the established coherence 
     establishedCoherenceScore: 76,
   });
 
-  assert.equal(result.coherence.score, 69);
+  assert.equal(result.coherence.score, 75);
   assert.notEqual(result.coherence.score, 76);
 });
 
@@ -186,7 +221,7 @@ test('coherence uses Building only during the first three account days', () => {
 
   assert.equal(onboarding.coherence.score, null);
   assert.equal(onboarding.coherence.status, 'building');
-  assert.equal(established.coherence.score, 63);
+  assert.equal(established.coherence.score, 78);
   assert.equal(established.coherence.status, 'available');
 });
 
@@ -316,4 +351,20 @@ test('replacement acceptance is pending today and becomes missed only after the 
 
   assert.equal(result.adherence.components[1].detail, '13 of 13 scorable commitments followed through.');
   assert.equal(result.adherence.score, 100);
+  assert.equal(result.adherence.components[0].dayStates?.at(-1)?.state, 'pending');
+});
+
+test('an open current day is pending in the 14-day grid instead of being marked missed early', () => {
+  const days = dateKeys(14).map((dateKey, index): PulseCheckScoringDay => ({
+    dateKey,
+    wellbeingLevel: index === 13 ? null : 4,
+    subjectiveRecoveryLevel: 4,
+    scheduledCheckIn: true,
+  }));
+  const result = calculatePulseCheckScorecardV2({ days });
+
+  assert.equal(result.adherence.score, 100);
+  assert.equal(result.adherence.components[0].detail, '13 of 13 scorable scheduled check-ins completed.');
+  assert.equal(result.adherence.components[0].dayStates?.at(-1)?.state, 'pending');
+  assert.equal(result.adherence.components[0].dayStates?.filter((day) => day.state === 'missed').length, 0);
 });

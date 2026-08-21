@@ -4,7 +4,6 @@ import { useRouter } from 'next/router';
 import {
   ChevronDown,
   Database,
-  Home,
   LogIn,
   LogOut,
   Server,
@@ -101,23 +100,16 @@ const AdminNavBanner: React.FC = () => {
     <>
       <header className="sticky top-0 z-50 border-b border-zinc-800 bg-[#0f1216]/95 text-white shadow-[0_10px_35px_rgba(0,0,0,0.22)] backdrop-blur">
         <div className="mx-auto flex max-w-[1800px] flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             <Link
               href="/admin"
-              className="inline-flex items-center gap-2 rounded-lg border border-[#d7ff00]/25 bg-[#d7ff00]/10 px-3 py-2 text-sm font-semibold text-[#d7ff00] transition hover:bg-[#d7ff00]/15"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d7ff00]/25 bg-[#d7ff00]/10 px-3 text-sm font-semibold text-[#d7ff00] transition hover:bg-[#d7ff00]/15"
               title="Open admin dashboard"
             >
               <ShieldCheck className="h-4 w-4" />
               Admin
             </Link>
-            <Link
-              href="/admin"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
-              title="Admin dashboard"
-              aria-label="Admin dashboard"
-            >
-              <Home className="h-4 w-4" />
-            </Link>
+            <span className="text-zinc-700" aria-hidden="true">/</span>
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-zinc-100">{pageTitle}</div>
               <div className="truncate text-xs text-zinc-500">{router.asPath}</div>
@@ -129,7 +121,7 @@ const AdminNavBanner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsEnvironmentOpen((open) => !open)}
-                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                className={`inline-flex h-10 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition ${
                   isDevelopment
                     ? 'border-amber-400/30 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15'
                     : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
@@ -193,7 +185,7 @@ const AdminNavBanner: React.FC = () => {
 
             {user ? (
               <div className="inline-flex items-center overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
-                <div className="inline-flex min-w-0 items-center gap-2 px-3 py-2 text-sm text-zinc-200">
+                <div className="inline-flex h-10 min-w-0 items-center gap-2 px-3 text-sm text-zinc-200">
                   {profileImageUrl ? (
                     <img src={profileImageUrl} alt={accountLabel} className="h-5 w-5 rounded-full object-cover" />
                   ) : (
@@ -216,7 +208,7 @@ const AdminNavBanner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsSignInOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#d7ff00]/35 bg-[#d7ff00] px-3 py-2 text-sm font-semibold text-black transition hover:bg-[#c8eb00]"
+                className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d7ff00]/35 bg-[#d7ff00] px-3 text-sm font-semibold text-black transition hover:bg-[#c8eb00]"
               >
                 <LogIn className="h-4 w-4" />
                 Sign in
