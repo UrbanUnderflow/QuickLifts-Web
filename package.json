@@ -121,6 +121,7 @@
     "test:pulsecheck:sport-content-packs": "node --import tsx --test tests/unit/sport-scenario-packs.test.ts",
     "test:pulsecheck:mental-skills-baseline": "node --import tsx --test tests/unit/mental-skills-baseline.test.ts",
     "test:nora:engagement": "node --test tests/api/pulsecheck/nora-engagement-policy.test.cjs tests/api/pulsecheck/pulsecheck-chat.runtime.test.cjs && node --import tsx --test tests/unit/nora-voice-rubric.test.ts",
+    "test:nora:red-team": "node --import tsx --test tests/unit/nora-red-team-v0.test.ts",
     "test:nora:live": "node scripts/evaluate-nora-engagement.cjs",
     "test:pulsecheck:gate": "node --test tests/api/pulsecheck/repair-daily-assignment.test.cjs tests/api/pulsecheck/submit-pulsecheck-checkin.runtime.test.cjs tests/api/pulsecheck/pulsecheck-functions-proxy.runtime.test.cjs",
     "smoke:pulsecheck:repair": "node scripts/pulsecheck-repair-smoke.cjs",

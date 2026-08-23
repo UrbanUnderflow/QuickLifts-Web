@@ -10,6 +10,8 @@ const RESPONSE_HEADERS = {
 };
 
 const HEALTH_COLLECTION = 'health-context-snapshots';
+const HEALTH_SOURCE_RECORD_COLLECTION = 'health-context-source-records';
+const HEALTH_SOURCE_STATUS_COLLECTION = 'health-context-source-status';
 const MAX_OBSERVATIONS = 60;
 
 interface HealthConnectObservation {
@@ -109,7 +111,17 @@ const isDirectWearableSource = (source: string): boolean => {
   return ['whoop', 'oura', 'polar', 'fitbit', 'garmin'].some((name) => normalized.includes(name));
 };
 
+const ingestionPlanFor = (previousSource: string) => {
+  const preserveExistingSnapshot = isDirectWearableSource(previousSource);
+  return {
+    writeSourceRecord: true,
+    writeSnapshot: !preserveExistingSnapshot,
+    linkSourceRecordToExistingSnapshot: preserveExistingSnapshot,
+  };
+};
+
 const recoveryDataFor = (observation: HealthConnectObservation): Record<string, unknown> => {
+  const sourceFamily = 'healthconnect';
   const data: Record<string, unknown> = {
     rawDeviceId: observation.sourcePackage,
     deviceId: observation.sourcePackage,
@@ -146,6 +158,14 @@ const recoveryDataFor = (observation: HealthConnectObservation): Record<string, 
       sleepMidpointShiftMinutes: observation.sleepTimingDeviationMinutes,
     });
   }
+  const measuredFields = Object.keys(data).filter((key) => ![
+    'rawDeviceId',
+    'deviceId',
+    'sourcePackage',
+    'observedAt',
+  ].includes(key));
+  data.fieldSources = Object.fromEntries(measuredFields.map((key) => [key, sourceFamily]));
+  data.fieldSourceLabels = Object.fromEntries(measuredFields.map((key) => [key, 'Health Connect']));
   return data;
 };
 
@@ -176,30 +196,80 @@ export const handler: Handler = async (event) => {
   const db = await getFirestore();
   let written = 0;
   let preservedDirectSource = 0;
+  const acknowledgedDateKeys: string[] = [];
+  const writtenSnapshotDateKeys: string[] = [];
+  const preservedDirectSourceDateKeys: string[] = [];
   const batch = db.batch();
   for (const observation of observations) {
     const reference = db.collection(HEALTH_COLLECTION).doc(`${auth.uid}_daily_${observation.dateKey}`);
     const existing = await reference.get();
     const existingData = existing.data() || {};
     const previousSource = sourceFromSnapshot(existingData);
-    if (isDirectWearableSource(previousSource)) {
-      preservedDirectSource += 1;
-      continue;
-    }
+    const ingestionPlan = ingestionPlanFor(previousSource);
     const sourceFamily = `health_connect:${observation.sourcePackage}`;
+    const sourceRecordId = `${auth.uid}_healthconnect_recovery_${observation.dateKey}`;
+    const recoveryData = recoveryDataFor(observation);
     const transition = previousSource && previousSource !== sourceFamily
       ? { from: previousSource, to: sourceFamily, observedAt: observation.observedAt }
       : null;
+    if (ingestionPlan.writeSourceRecord) batch.set(db.collection(HEALTH_SOURCE_RECORD_COLLECTION).doc(sourceRecordId), {
+      id: sourceRecordId,
+      athleteUserId: auth.uid,
+      sourceFamily: 'healthconnect',
+      sourceType: 'healthconnect_recovery',
+      recordType: 'summary_input',
+      domain: 'recovery',
+      observedAt: new Date(observation.observedAt),
+      ingestedAt: admin.firestore.FieldValue.serverTimestamp(),
+      timezone: cleanString(body.timezone, 80) || 'UTC',
+      status: 'active',
+      dedupeKey: `${auth.uid}|health_connect|recovery|${observation.dateKey}`,
+      payloadVersion: 'health-connect-recovery-v1',
+      payload: recoveryData,
+      sourceMetadata: {
+        sourcePackage: observation.sourcePackage,
+        transport: 'health_connect',
+        writer: 'ingest-health-connect-recovery',
+      },
+      provenance: {
+        mode: 'direct',
+        sourceSystem: sourceFamily,
+        writer: 'PulseCheck Android',
+      },
+    }, { merge: true });
+    if (!ingestionPlan.writeSnapshot) {
+      if (ingestionPlan.linkSourceRecordToExistingSnapshot) {
+        batch.set(reference, {
+          provenance: {
+            sourceRecordIds: admin.firestore.FieldValue.arrayUnion(sourceRecordId),
+            sourcesUsed: admin.firestore.FieldValue.arrayUnion(sourceFamily),
+          },
+          sourceStatus: {
+            healthconnect: {
+              sourceFamily: 'healthconnect',
+              lifecycleState: 'connected_synced',
+              lastObservedRecordAt: observation.observedAt,
+            },
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+      preservedDirectSource += 1;
+      acknowledgedDateKeys.push(observation.dateKey);
+      preservedDirectSourceDateKeys.push(observation.dateKey);
+      continue;
+    }
     batch.set(reference, {
       id: `${auth.uid}_daily_${observation.dateKey}`,
       userId: auth.uid,
       athleteUserId: auth.uid,
+      snapshotType: 'daily',
       snapshotDateKey: observation.dateKey,
       snapshotDate: observation.dateKey,
       payloadVersion: 'health-connect-recovery-v1',
       domains: {
         recovery: {
-          data: recoveryDataFor(observation),
+          data: recoveryData,
           freshness: observation.freshness,
           provenance: {
             primarySource: sourceFamily,
@@ -210,6 +280,25 @@ export const handler: Handler = async (event) => {
       },
       provenance: {
         domainWinners: { recovery: sourceFamily },
+        sourcesUsed: [sourceFamily],
+        sourceRecordIds: [sourceRecordId],
+      },
+      freshness: {
+        overall: observation.freshness,
+        recovery: observation.freshness,
+        perDomain: { recovery: observation.freshness },
+        evaluatedAt: observation.observedAt,
+      },
+      sourceWindow: {
+        timezone: cleanString(body.timezone, 80) || 'UTC',
+        windowType: 'daily',
+      },
+      sourceStatus: {
+        healthconnect: {
+          sourceFamily: 'healthconnect',
+          lifecycleState: 'connected_synced',
+          lastObservedRecordAt: observation.observedAt,
+        },
       },
       recoveryWinner: sourceFamily,
       lastObservedRecordAt: observation.observedAt,
@@ -217,16 +306,44 @@ export const handler: Handler = async (event) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     written += 1;
+    acknowledgedDateKeys.push(observation.dateKey);
+    writtenSnapshotDateKeys.push(observation.dateKey);
   }
-  if (written > 0) await batch.commit();
+  const newestObservation = observations.reduce((latest, observation) =>
+    Date.parse(observation.observedAt) > Date.parse(latest.observedAt) ? observation : latest);
+  const statusId = `${auth.uid}_healthconnect`;
+  batch.set(db.collection(HEALTH_SOURCE_STATUS_COLLECTION).doc(statusId), {
+    id: statusId,
+    userId: auth.uid,
+    athleteUserId: auth.uid,
+    sourceFamily: 'healthconnect',
+    family: 'healthconnect',
+    transport: 'health_connect',
+    platform: 'android',
+    lifecycleState: 'connected_synced',
+    status: 'connected_synced',
+    lastObservedRecordAt: new Date(newestObservation.observedAt),
+    lastSuccessfulSyncAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  await batch.commit();
   return {
     statusCode: 200,
     headers: RESPONSE_HEADERS,
-    body: JSON.stringify({ ok: true, received: observations.length, written, preservedDirectSource }),
+    body: JSON.stringify({
+      ok: true,
+      received: observations.length,
+      written,
+      preservedDirectSource,
+      acknowledgedDateKeys: Array.from(new Set(acknowledgedDateKeys)).sort(),
+      writtenSnapshotDateKeys: Array.from(new Set(writtenSnapshotDateKeys)).sort(),
+      preservedDirectSourceDateKeys: Array.from(new Set(preservedDirectSourceDateKeys)).sort(),
+    }),
   };
 };
 
 export const __internal = {
+  ingestionPlanFor,
   isDirectWearableSource,
   normalizeObservation,
   recoveryDataFor,

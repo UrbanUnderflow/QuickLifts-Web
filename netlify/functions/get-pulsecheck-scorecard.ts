@@ -5,8 +5,6 @@ import {
   calculatePulseCheckScorecardV2,
   PULSECHECK_SCORING_VERSION,
   type PulseCheckAutonomicMeasurement,
-  type PulseCheckCommitmentSignal,
-  type PulseCheckCommitmentState,
   type PulseCheckScoringDay,
   type PulseCheckSleepSignal,
   type PulseCheckWhoFiveObservation,
@@ -21,10 +19,16 @@ const RESPONSE_HEADERS = {
 
 const SCORECARD_COLLECTION = 'pulsecheck-scorecards';
 const CHECKIN_COLLECTION = 'pulsecheck-morning-checkins';
-const ASSIGNMENT_COLLECTION = 'pulsecheck-daily-assignments';
 const HEALTH_COLLECTION = 'health-context-snapshots';
+const HEALTH_SOURCE_RECORD_COLLECTION = 'health-context-source-records';
 const WELLBEING_COLLECTION = 'pulsecheck-wellbeing-assessments';
 const SCORE_INPUT_DAYS = 60;
+const DEVICE_EVIDENCE_DAYS = 14;
+const SCORECARD_CACHE_TTL_MS = 15 * 60 * 1000;
+
+const { measuredFieldNames } = require('./lib/health-context-measurements') as {
+  measuredFieldNames: (domain: string, payload: Record<string, unknown>) => string[];
+};
 
 type FirestoreRecord = { id: string; data: Record<string, any> };
 
@@ -51,15 +55,33 @@ const finiteNumber = (value: unknown): number | null => {
   return null;
 };
 
+const asRecord = (value: unknown): Record<string, any> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+
+const withoutUndefined = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => withoutUndefined(item))
+      .filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== 'object' || value instanceof Date || value instanceof admin.firestore.Timestamp) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .map(([key, item]) => [key, withoutUndefined(item)]),
+  );
+};
+
 const establishedCoherenceScoreFromDocument = (document: Record<string, any>): number | null => {
   const methodologyVersion = cleanString(document.methodologyVersion);
   return methodologyVersion === PULSECHECK_SCORING_VERSION
     ? finiteNumber(document.coherence?.score)
     : null;
 };
-
-const booleanValue = (value: unknown): boolean | null =>
-  typeof value === 'boolean' ? value : null;
 
 const membershipIsActive = (data: Record<string, any>): boolean => {
   const status = cleanString(data.status).toLowerCase();
@@ -283,69 +305,6 @@ const healthDayFromSnapshot = (record: FirestoreRecord): {
   return { dateKey, sleep, autonomicMeasurements };
 };
 
-const commitmentStateFrom = (data: Record<string, any>): PulseCheckCommitmentState => {
-  const explicit = cleanString(data.commitmentOutcomeState || data.adherenceState).toLowerCase();
-  const valid: PulseCheckCommitmentState[] = [
-    'accepted',
-    'replacement_accepted',
-    'completed',
-    'planned_rest',
-    'rest_over_plan',
-    'missed',
-    'coach_excused',
-    'technical_failure',
-    'no_assignment',
-  ];
-  if (valid.includes(explicit as PulseCheckCommitmentState)) return explicit as PulseCheckCommitmentState;
-  const status = cleanString(data.status).toLowerCase();
-  if (status === 'completed' || data.completedAt != null) return 'completed';
-  if (['expired', 'missed', 'skipped'].includes(status)) return 'missed';
-  if (['superseded', 'overridden'].includes(status) && Number(data.revision || 1) > 1) return 'replacement_accepted';
-  if (['assigned', 'viewed', 'started', 'paused'].includes(status)) {
-    return Number(data.revision || 1) > 1 ? 'replacement_accepted' : 'accepted';
-  }
-  return 'no_assignment';
-};
-
-const commitmentFromAssignment = (data: Record<string, any>): PulseCheckCommitmentSignal | null => {
-  const actionType = cleanString(data.actionType).toLowerCase().replace(/-/g, '_');
-  if (actionType === 'check_in' || actionType === 'checkin') return null;
-  const state = commitmentStateFrom(data);
-  if (state === 'no_assignment' && !cleanString(data.id)) return null;
-  return {
-    state,
-    commitmentId: cleanString(data.id || data.assignmentId) || null,
-    replacementForCommitmentId: cleanString(
-      data.replacementForCommitmentId || data.supersedesDailyTaskId || data.lineageId,
-    ) || null,
-    plannedRestWithinPlan: booleanValue(data.plannedRestWithinPlan),
-    weeklyFollowThroughMet: booleanValue(data.weeklyFollowThroughMet),
-  };
-};
-
-const latestAssignmentsByDay = (records: FirestoreRecord[]): Map<string, PulseCheckCommitmentSignal> => {
-  const byLineage = new Map<string, FirestoreRecord>();
-  for (const record of records) {
-    const dateKey = cleanString(record.data.sourceDate || record.data.dateKey);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
-    const lineage = cleanString(record.data.lineageId) || record.id;
-    const key = `${dateKey}|${lineage}`;
-    const current = byLineage.get(key);
-    if (!current || Number(record.data.revision || 1) >= Number(current.data.revision || 1)) {
-      byLineage.set(key, { id: record.id, data: { ...record.data, id: record.id } });
-    }
-  }
-  const byDay = new Map<string, PulseCheckCommitmentSignal>();
-  for (const record of byLineage.values()) {
-    const dateKey = cleanString(record.data.sourceDate || record.data.dateKey);
-    const commitment = commitmentFromAssignment(record.data);
-    if (!commitment) continue;
-    const current = byDay.get(dateKey);
-    if (!current || current.state === 'no_assignment') byDay.set(dateKey, commitment);
-  }
-  return byDay;
-};
-
 const whoFiveFromRecords = (records: FirestoreRecord[], throughDateKey: string): PulseCheckWhoFiveObservation | null => {
   const current = records
     .map((record) => {
@@ -372,7 +331,6 @@ const whoFiveFromRecords = (records: FirestoreRecord[], throughDateKey: string):
 const buildScoringDays = (input: {
   dateKeys: string[];
   checkIns: FirestoreRecord[];
-  assignments: FirestoreRecord[];
   healthSnapshots: FirestoreRecord[];
   eligibleFromDateKey?: string | null;
 }): PulseCheckScoringDay[] => {
@@ -383,7 +341,6 @@ const buildScoringDays = (input: {
       || '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) checkInsByDate.set(dateKey, record.data);
   }
-  const assignmentsByDate = latestAssignmentsByDay(input.assignments);
   const healthByDate = new Map(
     input.healthSnapshots
       .map(healthDayFromSnapshot)
@@ -402,7 +359,6 @@ const buildScoringDays = (input: {
         ?? checkIn.recoveryLevel
         ?? checkIn.recovery?.level
         ?? null,
-      commitment: assignmentsByDate.get(dateKey) || null,
       sleep: health?.sleep || null,
       autonomicMeasurements: health?.autonomicMeasurements || [],
     };
@@ -441,6 +397,46 @@ const buildCoachContext = (
   };
 };
 
+const reusableCachedScorecard = (
+  document: Record<string, any>,
+  throughDateKey: string,
+  nowMillis: number,
+  requireCoachContext: boolean,
+): ReturnType<typeof calculatePulseCheckScorecardV2> | null => {
+  const computedAtMillis = timestampMillis(document.computedAt);
+  const adherenceComponents = Array.isArray(document.adherence?.components)
+    ? document.adherence.components
+    : [];
+  const showingUpDays = adherenceComponents.find((component: Record<string, unknown>) =>
+    Array.isArray(component.dayStates) && component.dayStates.length > 0)?.dayStates || [];
+  const hasDetailedShowingUpDays = showingUpDays.length > 0
+    && showingUpDays.every((day: unknown) => {
+      const record = asRecord(day);
+      return cleanString(record.checkInLabel).length > 0
+        && cleanString(record.reason).length > 0;
+    });
+  if (
+    cleanString(document.methodologyVersion) !== PULSECHECK_SCORING_VERSION
+    || cleanString(document.throughDateKey) !== throughDateKey
+    || computedAtMillis === null
+    || computedAtMillis > nowMillis
+    || nowMillis - computedAtMillis > SCORECARD_CACHE_TTL_MS
+    || !document.wellbeing
+    || !document.recovery
+    || !document.adherence
+    || !document.coherence
+    || !document.autonomic
+    || !Array.isArray(document.sourceTransitions)
+    || !Array.isArray(document.limitations)
+    || !hasDetailedShowingUpDays
+    || (requireCoachContext && !document.coachContext)
+  ) {
+    return null;
+  }
+
+  return document as ReturnType<typeof calculatePulseCheckScorecardV2>;
+};
+
 const getDocumentsById = async (
   db: admin.firestore.Firestore,
   collectionName: string,
@@ -455,6 +451,160 @@ const getDocumentsById = async (
     });
   }
   return records;
+};
+
+const WEARABLE_SOURCE_FAMILIES = new Set([
+  'oura',
+  'apple_health',
+  'healthkit',
+  'health_kit',
+  'apple_watch',
+  'healthconnect',
+  'google_health',
+  'polar',
+  'fitbit',
+  'whoop',
+  'garmin',
+]);
+
+const timestampSeconds = (value: unknown): number | null => {
+  const millis = timestampMillis(value);
+  return millis === null ? null : millis / 1000;
+};
+
+const sourceRecordDateKey = (record: FirestoreRecord): string => {
+  const provenance = asRecord(record.data.provenance);
+  const candidates = [
+    cleanString(provenance.rawDay),
+    cleanString(provenance.rawDate),
+    cleanString(record.data.dedupeKey).split('|').at(-1) || '',
+    record.id.match(/(\d{4}-\d{2}-\d{2})(?:$|_)/)?.[1] || '',
+  ];
+  return candidates.find((value) => /^\d{4}-\d{2}-\d{2}$/.test(value)) || '';
+};
+
+const verifiedFitbitMetadata = (record: FirestoreRecord): boolean => {
+  const payload = asRecord(record.data.payload);
+  const provenance = asRecord(record.data.provenance);
+  const deviceMetadata = {
+    ...asRecord(provenance.deviceMetadata),
+    ...asRecord(payload.deviceMetadata),
+    ...asRecord(record.data.deviceMetadata),
+  };
+  return [
+    deviceMetadata.manufacturer,
+    deviceMetadata.brand,
+    deviceMetadata.model,
+    deviceMetadata.displayName,
+  ].some((value) => typeof value === 'string' && value.toLowerCase().includes('fitbit'));
+};
+
+const qualifiedSourceFamily = (record: FirestoreRecord): string => {
+  const sourceFamily = cleanString(record.data.sourceFamily).toLowerCase();
+  if (sourceFamily !== 'fitbit') return sourceFamily;
+  const payload = asRecord(record.data.payload);
+  const provenance = asRecord(record.data.provenance);
+  const providerTokens = [
+    record.data.provider,
+    provenance.provider,
+    provenance.sourceProvider,
+    payload.provider,
+    payload.dataSourceFamily,
+  ].map((value) => cleanString(value).toLowerCase());
+  const genericGoogleHealth = providerTokens.some((value) =>
+    value.includes('google_health')
+    || value.includes('google-health')
+    || value.includes('google-wearable')
+    || value.includes('health_connect')
+  );
+  return genericGoogleHealth && !verifiedFitbitMetadata(record) ? 'google_health' : sourceFamily;
+};
+
+const projectMeasuredSourceRecord = (
+  record: FirestoreRecord,
+  dateKeys: Set<string>,
+): Record<string, unknown> | null => {
+  const status = cleanString(record.data.status).toLowerCase();
+  if (status && status !== 'active') return null;
+  const dateKey = sourceRecordDateKey(record);
+  if (!dateKeys.has(dateKey)) return null;
+  const sourceFamily = qualifiedSourceFamily(record);
+  if (!WEARABLE_SOURCE_FAMILIES.has(sourceFamily)) return null;
+  const domain = cleanString(record.data.domain).toLowerCase();
+  const payload = asRecord(record.data.payload);
+  const measuredFields = measuredFieldNames(domain, payload);
+  if (measuredFields.length === 0) return null;
+
+  const explicitFieldSources = asRecord(payload.fieldSources);
+  const explicitFieldSourceLabels = asRecord(payload.fieldSourceLabels);
+  const measuredPayload = Object.fromEntries(
+    measuredFields.map((field) => [field, payload[field]]),
+  );
+  const fieldSources = Object.fromEntries(
+    measuredFields.map((field) => {
+      const explicit = cleanString(explicitFieldSources[field]).toLowerCase();
+      return [field, WEARABLE_SOURCE_FAMILIES.has(explicit) ? explicit : sourceFamily];
+    }),
+  );
+  const fieldSourceLabels = Object.fromEntries(
+    measuredFields.flatMap((field) => {
+      const label = cleanString(explicitFieldSourceLabels[field]);
+      return label ? [[field, label]] : [];
+    }),
+  );
+
+  return {
+    id: record.id,
+    athleteUserId: cleanString(record.data.athleteUserId),
+    sourceFamily,
+    domain,
+    status: 'active',
+    observedAt: timestampSeconds(record.data.observedAt),
+    observedWindowStart: timestampSeconds(record.data.observedWindowStart),
+    observedWindowEnd: timestampSeconds(record.data.observedWindowEnd),
+    ingestedAt: timestampSeconds(record.data.ingestedAt),
+    timezone: cleanString(record.data.timezone) || undefined,
+    dedupeKey: cleanString(record.data.dedupeKey) || undefined,
+    provenance: { rawDay: dateKey },
+    payload: {
+      ...measuredPayload,
+      fieldSources,
+      ...(Object.keys(fieldSourceLabels).length > 0 ? { fieldSourceLabels } : {}),
+    },
+  };
+};
+
+const loadCoachDeviceEvidence = async (
+  db: admin.firestore.Firestore,
+  athleteUserId: string,
+  dateKeys: string[],
+) => {
+  const snapshotIds = dateKeys.map((dateKey) => `${athleteUserId}_daily_${dateKey}`);
+  const snapshots = await getDocumentsById(db, HEALTH_COLLECTION, snapshotIds);
+  const sourceRecordIds = Array.from(new Set(snapshots.flatMap((snapshot) => {
+    const provenance = asRecord(snapshot.data.provenance);
+    return Array.isArray(provenance.sourceRecordIds)
+      ? provenance.sourceRecordIds.map((value: unknown) => cleanString(value)).filter(Boolean)
+      : [];
+  })));
+  const sourceRecords = sourceRecordIds.length > 0
+    ? await getDocumentsById(db, HEALTH_SOURCE_RECORD_COLLECTION, sourceRecordIds)
+    : [];
+  const dateKeySet = new Set(dateKeys);
+  const records = sourceRecords
+    .map((record) => projectMeasuredSourceRecord(record, dateKeySet))
+    .filter((record): record is Record<string, unknown> => record !== null)
+    .sort((left, right) => Number(right.observedAt || 0) - Number(left.observedAt || 0));
+  const computedAt = Date.now() / 1000;
+  const windowStart = Date.parse(`${dateKeys[0]}T00:00:00.000Z`) / 1000;
+  return {
+    records,
+    windowDays: dateKeys.length,
+    windowDateKeys: dateKeys,
+    windowStart,
+    computedAt,
+    evidenceState: 'available' as const,
+  };
 };
 
 const loadOptionalWellbeingRecords = async (
@@ -511,25 +661,68 @@ export const handler: Handler = async (event) => {
   const documentId = `${requestedAthleteId}_v${PULSECHECK_SCORING_VERSION.split('.')[0]}`;
 
   try {
+    const scorecardReference = db.collection(SCORECARD_COLLECTION).doc(documentId);
+    const [existingScorecardDocument, deviceEvidence] = await Promise.all([
+      scorecardReference.get(),
+      loadCoachDeviceEvidence(
+        db,
+        requestedAthleteId,
+        dateKeys.slice(-DEVICE_EVIDENCE_DAYS),
+      ).catch((error) => {
+        console.warn('[get-pulsecheck-scorecard] Device evidence unavailable.', {
+          athleteUserId: requestedAthleteId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        const deviceDateKeys = dateKeys.slice(-DEVICE_EVIDENCE_DAYS);
+        return {
+          records: [],
+          windowDays: deviceDateKeys.length,
+          windowDateKeys: deviceDateKeys,
+          windowStart: Date.parse(`${deviceDateKeys[0]}T00:00:00.000Z`) / 1000,
+          computedAt: Date.now() / 1000,
+          evidenceState: 'unavailable' as const,
+        };
+      }),
+    ]);
+    const existingScorecard = existingScorecardDocument.data() || {};
+    const cachedScorecard = reusableCachedScorecard(
+      existingScorecard,
+      throughDateKey,
+      Date.now(),
+      Boolean(staffAccess),
+    );
+    if (cachedScorecard) {
+      return {
+        statusCode: 200,
+        headers: RESPONSE_HEADERS,
+        body: JSON.stringify({
+          ok: true,
+          scorecard: staffAccess ? cachedScorecard : athleteSafeScorecard(cachedScorecard),
+          deviceEvidence,
+          cached: true,
+          ...(staffAccess ? {
+            coachContext: existingScorecard.coachContext,
+            accessScope: {
+              teamId: requestedTeamId,
+              organizationId: staffAccess.organizationId,
+              athleteUserId: requestedAthleteId,
+            },
+          } : {}),
+        }),
+      };
+    }
+
     const [
       checkIns,
       healthSnapshots,
-      assignmentSnapshot,
       wellbeingRecords,
       userDocument,
-      existingScorecardDocument,
     ] = await Promise.all([
       getDocumentsById(db, CHECKIN_COLLECTION, checkInIds),
       getDocumentsById(db, HEALTH_COLLECTION, healthIds),
-      db.collection(ASSIGNMENT_COLLECTION).where('athleteId', '==', requestedAthleteId).get(),
       loadOptionalWellbeingRecords(db, requestedAthleteId),
       db.collection('users').doc(requestedAthleteId).get(),
-      db.collection(SCORECARD_COLLECTION).doc(documentId).get(),
     ]);
-    const assignments = assignmentSnapshot.docs.map((document) => ({
-      id: document.id,
-      data: document.data() || {},
-    }));
     const whoFive = whoFiveFromRecords(wellbeingRecords, throughDateKey);
     const generatedAt = new Date().toISOString();
     const userData = userDocument.data() || {};
@@ -560,11 +753,9 @@ export const handler: Handler = async (event) => {
     const days = buildScoringDays({
       dateKeys,
       checkIns,
-      assignments,
       healthSnapshots,
       eligibleFromDateKey: adherenceEligibleDateKey,
     });
-    const existingScorecard = existingScorecardDocument.data() || {};
     const establishedCoherenceScore = establishedCoherenceScoreFromDocument(existingScorecard);
     const scorecard = calculatePulseCheckScorecardV2({
       days,
@@ -573,24 +764,32 @@ export const handler: Handler = async (event) => {
       accountAgeDays,
       establishedCoherenceScore,
     });
-    await db.collection(SCORECARD_COLLECTION).doc(documentId).set({
-      ...scorecard,
-      athleteUserId: requestedAthleteId,
-      throughDateKey,
-      timezone,
-      inputEvidence: {
-        checkInDocuments: checkIns.length,
-        assignmentDocuments: assignments.length,
-        healthSnapshotDocuments: healthSnapshots.length,
-        periodicWellbeingDocuments: wellbeingRecords.length,
-        accountAgeDays,
-        adherenceEligibleFromDateKey: adherenceEligibleDateKey,
-        establishedCoherenceScore: establishedCoherenceScore && establishedCoherenceScore > 0
-          ? establishedCoherenceScore
-          : null,
-      },
-      computedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    const coachContext = buildCoachContext(scorecard, days);
+    try {
+      await scorecardReference.set(withoutUndefined({
+        ...scorecard,
+        athleteUserId: requestedAthleteId,
+        throughDateKey,
+        timezone,
+        coachContext,
+        inputEvidence: {
+          checkInDocuments: checkIns.length,
+          healthSnapshotDocuments: healthSnapshots.length,
+          periodicWellbeingDocuments: wellbeingRecords.length,
+          accountAgeDays,
+          adherenceEligibleFromDateKey: adherenceEligibleDateKey,
+          establishedCoherenceScore: establishedCoherenceScore && establishedCoherenceScore > 0
+            ? establishedCoherenceScore
+            : null,
+        },
+        computedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }) as admin.firestore.DocumentData, { merge: true });
+    } catch (error) {
+      console.warn('[get-pulsecheck-scorecard] Cache write failed; returning the calculated scorecard.', {
+        athleteUserId: requestedAthleteId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return {
       statusCode: 200,
@@ -598,8 +797,9 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify({
         ok: true,
         scorecard: staffAccess ? scorecard : athleteSafeScorecard(scorecard),
+        deviceEvidence,
         ...(staffAccess ? {
-          coachContext: buildCoachContext(scorecard, days),
+          coachContext,
           accessScope: {
             teamId: requestedTeamId,
             organizationId: staffAccess.organizationId,
@@ -625,18 +825,19 @@ export const __internal = {
   buildScoringDays,
   athleteSafeScorecard,
   buildCoachContext,
-  commitmentFromAssignment,
-  commitmentStateFrom,
   dateKeyInTimeZone,
   dayDifferenceFromKeys,
   defaultHrvMethod,
   defaultMeasurementWindow,
   establishedCoherenceScoreFromDocument,
   healthDayFromSnapshot,
-  latestAssignmentsByDay,
   mergeDomainData,
   membershipHasCapability,
   membershipIsActive,
+  projectMeasuredSourceRecord,
+  qualifiedSourceFamily,
+  reusableCachedScorecard,
   shiftDateKey,
+  withoutUndefined,
   whoFiveFromRecords,
 };

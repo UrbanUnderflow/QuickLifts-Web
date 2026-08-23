@@ -145,6 +145,12 @@ const adminCardsData = [
     link: "/admin/noraGuard"
   },
   {
+    title: "Nora Red Team",
+    description: "Run synthetic contract scenarios through Nora, inspect agent judgments, flag release blockers, and export minimized evidence.",
+    icon: <FlaskConical className="w-5 h-5" />,
+    link: "/admin/noraRedTeam"
+  },
+  {
     title: "Clinical Escalations",
     description: "Tier 3 escalation queue. Clinicians acknowledge and resolve here; the athlete's app gates to a 988 / 911 / Crisis Text Line surface. Pulse never auto-dials emergency services.",
     icon: <ShieldAlert className="w-5 h-5" />,

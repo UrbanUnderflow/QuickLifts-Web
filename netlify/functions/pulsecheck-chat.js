@@ -1344,6 +1344,7 @@ function isCoachHandoffSystemText(value) {
     'send it to',
     'sending it now',
     'i just sent this message',
+    'only the selected context',
     'sent to coach',
     'nora handoff from',
   ]);
@@ -1399,11 +1400,12 @@ function numberedCoachHandoffOptionSummaries(text) {
       return detail ? `${title.trim()}: ${detail}` : title.trim();
     })
     .filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 4);
 }
 
-function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConversationId }) {
+function buildCoachHandoffBrief({ athleteName, message, recentMessages }) {
   const request = cleanCoachHandoffText(message);
+  const requestKey = request.toLowerCase();
   const displayName = cleanCoachHandoffText(athleteName) || 'the athlete';
   const turns = (recentMessages || [])
     .map((entry) => ({
@@ -1411,9 +1413,13 @@ function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConv
       content: cleanCoachHandoffText(entry?.content),
     }))
     .filter((entry) => entry.content && !isCoachHandoffSystemText(entry.content))
-    .slice(-14);
-  const combined = [request, ...turns.map((entry) => entry.content)].filter(Boolean).join(' ');
-  const isMealPlanRequest = containsAnyText(combined, [
+    .filter((entry) => !(entry.isFromUser && entry.content.toLowerCase() === requestKey))
+    .slice(-4);
+  const latestUserTurn = [...turns].reverse().find((entry) => entry.isFromUser);
+  const latestAssistantTurn = [...turns].reverse().find((entry) => !entry.isFromUser);
+  const topicText = [request, latestUserTurn?.content, latestAssistantTurn?.content].filter(Boolean).join(' ');
+  const contextText = [request, ...turns.map((entry) => entry.content)].filter(Boolean).join(' ');
+  const isMealPlanRequest = containsAnyText(topicText, [
     'meal plan',
     'food plan',
     'nutrition plan',
@@ -1427,13 +1433,12 @@ function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConv
     'texture',
     'adher',
   ]);
-  const item = isMealPlanRequest ? detectedCoachHandoffMealPlanItem(combined) : '';
-  const reasons = isMealPlanRequest ? detectedCoachHandoffConcernReasons(combined) : [];
+  const item = isMealPlanRequest ? detectedCoachHandoffMealPlanItem(contextText) : '';
+  const reasons = isMealPlanRequest ? detectedCoachHandoffConcernReasons(contextText) : [];
   const why = isMealPlanRequest
     ? `${displayName} asked Nora to involve the coach because the current meal plan may be hard to follow.${item ? ` It includes ${item}.` : ''} The context includes ${reasons.length ? reasons.join(', ') : 'coach review before deciding what fits the plan'}, so this should be reviewed as plan fit and adherence context, not as a generic performance-anxiety issue.`
-    : `${displayName} asked Nora to share the recent conversation context so the coach can review it with the athlete directly.`;
+    : `${displayName} asked Nora to share the current topic so the coach can review it with the athlete directly.`;
 
-  const requestKey = request.toLowerCase();
   const userTurns = turns
     .filter((entry) => entry.isFromUser)
     .map((entry) => entry.content)
@@ -1462,21 +1467,26 @@ function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConv
     'gain weight',
     'lean down',
   ]));
-  const athleteExcerpts = (relevantUserTurns.length ? relevantUserTurns : userTurns).slice(-4);
+  const athleteExcerptSource = isMealPlanRequest
+    ? (relevantUserTurns.length ? relevantUserTurns : userTurns)
+    : userTurns;
+  const athleteExcerpts = athleteExcerptSource.slice(isMealPlanRequest ? -2 : -1);
 
   const assistantTurns = turns
     .filter((entry) => !entry.isFromUser)
     .map((entry) => entry.content)
     .filter((content) => !isCoachHandoffSystemText(content));
-  const optionSource = [...assistantTurns].reverse().find((content) => containsAnyText(content, [
-    'recipe',
-    'option',
-    'alternative',
-    'consider',
-    'try',
-  ])) || assistantTurns[assistantTurns.length - 1] || '';
+  const optionSource = isMealPlanRequest
+    ? [...assistantTurns].reverse().find((content) => containsAnyText(content, [
+      'recipe',
+      'option',
+      'alternative',
+      'consider',
+      'try',
+    ])) || assistantTurns[assistantTurns.length - 1] || ''
+    : assistantTurns[assistantTurns.length - 1] || '';
   const optionSummaries = numberedCoachHandoffOptionSummaries(optionSource);
-  const noraOptions = optionSummaries.length ? optionSummaries : (optionSource ? [trimCoachHandoffText(optionSource, 700)] : []);
+  const noraOptions = optionSummaries.length ? optionSummaries : (optionSource ? [trimCoachHandoffText(optionSource, 360)] : []);
 
   const reviewAsk = isMealPlanRequest
     ? item
@@ -1484,7 +1494,6 @@ function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConv
       : 'Please review whether the shared preparation ideas fit the current meal plan, or what coach-approved adjustment would protect adherence while keeping the nutrition goal intact.'
     : `Please review this context with ${displayName} when you have a chance. The athlete explicitly asked Nora to share it with you.`;
 
-  const noraLink = `pulsecheck://nora/chat?conversationId=${encodeURIComponent(noraConversationId || '')}`;
   const sections = [
     `Nora handoff from ${displayName}`,
     '',
@@ -1502,18 +1511,20 @@ function buildCoachHandoffBrief({ athleteName, message, recentMessages, noraConv
     sections.push('', 'What Nora shared:');
     noraOptions.forEach((option) => sections.push(`- ${trimCoachHandoffText(option, 180)}`));
   }
-  sections.push('', 'Coach review needed:', reviewAsk, '', `Nora thread: ${noraLink}`);
+  sections.push('', 'Coach review needed:', reviewAsk);
 
   return {
     title: isMealPlanRequest ? 'Meal-plan context for coach review' : 'Nora context for coach review',
     summary: isMealPlanRequest
       ? 'Includes why the athlete asked, the adherence concern, and the options Nora shared for coach review.'
-      : 'Includes why the athlete asked and the recent Nora context for coach review.',
+      : 'Includes the athlete-selected topic and the minimum context needed for coach review.',
     why,
     athleteExcerpts,
     noraOptions,
     reviewAsk,
     topic: isMealPlanRequest ? 'meal_plan_adherence' : 'nora_context',
+    sharingScope: 'selected_context',
+    includesFullThread: false,
     messageBody: trimCoachHandoffText(sections.join('\n'), 3900),
   };
 }
@@ -1533,7 +1544,6 @@ async function sendNoraCoachHandoff({
   athleteId,
   athleteName,
   coach,
-  noraConversationId,
   message,
   recentMessages,
 }) {
@@ -1577,7 +1587,6 @@ async function sendNoraCoachHandoff({
     athleteName,
     message,
     recentMessages,
-    noraConversationId,
   });
   const handoffText = coachBrief.messageBody;
 
@@ -1593,7 +1602,6 @@ async function sendNoraCoachHandoff({
     messageType: 'text',
     source: 'nora_handoff',
       noraHandoff: {
-        sourceConversationId: noraConversationId || '',
         requestedByAthleteId: athleteId,
         targetCoachId: coach.coachId,
         topic: coachBrief.topic,
@@ -1603,6 +1611,8 @@ async function sendNoraCoachHandoff({
         athleteExcerpts: coachBrief.athleteExcerpts,
         noraOptions: coachBrief.noraOptions,
         reviewAsk: coachBrief.reviewAsk,
+        sharingScope: coachBrief.sharingScope,
+        includesFullThread: coachBrief.includesFullThread,
         createdAt: now,
       },
     });
@@ -1620,7 +1630,7 @@ async function sendNoraCoachHandoff({
     sent: true,
     conversationId,
     messageId: messageRef.id,
-    assistantMessage: `Done. I sent ${coach.displayName || 'your coach'} the context and a link back to this Nora thread.`,
+    assistantMessage: `Done. I sent ${coach.displayName || 'your coach'} only the selected context.`,
   };
 }
 
@@ -2614,8 +2624,8 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           if (!targetCoach) {
             const optionsText = buildCoachOptionsText(coachEligibleContacts);
             assistantMessage = optionsText
-              ? `Which coach should I send this to: ${optionsText}?`
-              : 'Which coach should I send this to?';
+              ? `Which coach should I send this summary to: ${optionsText}?`
+              : 'Which coach should I send this summary to?';
             coachHandoffOutcome = {
               status: 'needs_coach_selection',
               coachOptions: coachEligibleContacts.map((contact) => ({
@@ -2632,7 +2642,6 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
               athleteId: userId,
               athleteName: displayName,
               coach: targetCoach,
-              noraConversationId: newConvoId,
               message,
               recentMessages,
             });

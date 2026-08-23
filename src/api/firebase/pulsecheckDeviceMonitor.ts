@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from './config';
+import { auth, db } from './config';
 import {
   listHealthContextSourceRecordsForWindow,
   type HealthContextSourceFamily,
@@ -36,6 +36,7 @@ import {
 
 /** Coarse connection state an operator can act on at a glance. */
 export type AthleteDeviceConnectionStatus = 'synced' | 'stale' | 'not_connected';
+export type AthleteDeviceEvidenceState = 'available' | 'partial' | 'unavailable';
 
 /**
  * A single day's data snapshot for one wearable source, surfaced on hover over a
@@ -99,6 +100,8 @@ export interface AthleteDeviceStatus {
   /** Human label for the current device (e.g. "Polar", "Oura Ring"). */
   currentDeviceLabel: string;
   connectionStatus: AthleteDeviceConnectionStatus;
+  /** Whether the backing device evidence could actually be read. */
+  evidenceState: AthleteDeviceEvidenceState;
   /** Unix seconds of the most recent observed wearable data point, or null. */
   lastObservedAt: number | null;
   /** Unix seconds of the most recent ingestion (sync) of wearable data, or null. */
@@ -129,6 +132,15 @@ export interface TeamDeviceStatusResult {
   athleteCount: number;
 }
 
+export interface AthleteDeviceEvidencePayload {
+  records: HealthContextSourceRecord[];
+  windowDays: number;
+  windowDateKeys: string[];
+  windowStart: number;
+  computedAt: number;
+  evidenceState: AthleteDeviceEvidenceState;
+}
+
 export const DEVICE_MONITOR_DEFAULT_WINDOW_DAYS = 14;
 
 const SECONDS_PER_DAY = 24 * 60 * 60;
@@ -137,6 +149,7 @@ const SECONDS_PER_DAY = 24 * 60 * 60;
 const STALE_AFTER_SEC = 36 * 60 * 60;
 const MAX_RECORDS_PER_ATHLETE = 200;
 const QUERY_CONCURRENCY = 6;
+const HEALTH_CONTEXT_SNAPSHOTS_COLLECTION = 'health-context-snapshots';
 
 /**
  * Source families that represent a real worn/integrated device. Self-report and
@@ -150,6 +163,7 @@ const WEARABLE_FAMILY_LIST: HealthContextSourceFamily[] = [
   'health_kit',
   'apple_watch',
   'healthconnect',
+  'google_health',
   'polar',
   'fitbit',
   'whoop',
@@ -180,6 +194,7 @@ const DEVICE_FAMILY_LABELS: Record<HealthContextSourceFamily, string> = {
   health_kit: 'Apple Watch / HealthKit',
   apple_watch: 'Apple Watch',
   healthconnect: 'Health Connect',
+  google_health: 'Google Health',
   polar: 'Polar',
   fitbit: 'Fitbit',
   whoop: 'Whoop',
@@ -226,6 +241,61 @@ const humanizeDomain = (domain: string): string => {
  * emit the ordered metric label/value list. Only keys actually present are
  * emitted — no invented values.
  */
+const metricsFromPayload = (merged: Record<string, unknown>): Array<{ label: string; value: string }> => {
+  const metrics: Array<{ label: string; value: string }> = [];
+  const push = (label: string, value: string) => metrics.push({ label, value });
+
+  const sleepDuration = toFiniteNumber(merged.sleepDuration);
+  if (sleepDuration !== null && sleepDuration > 0) push('Sleep', formatHoursToHm(sleepDuration));
+
+  const sleepEfficiency = toFiniteNumber(merged.sleepEfficiency);
+  if (sleepEfficiency !== null && sleepEfficiency > 0) push('Sleep efficiency', `${Math.round(sleepEfficiency)}%`);
+
+  const heartRateResting = toFiniteNumber(merged.heartRateResting);
+  if (heartRateResting !== null && heartRateResting > 0) push('Resting HR', `${Math.round(heartRateResting)} bpm`);
+
+  const averageHeartRate = toFiniteNumber(
+    merged.averageHeartRate ?? merged.avgHeartRate ?? merged.heartRateAvg ?? merged.heartRateAverage ?? merged.averageHr,
+  );
+  if (averageHeartRate !== null && averageHeartRate > 0) push('Avg HR', `${Math.round(averageHeartRate)} bpm`);
+
+  const heartRateVariability = toFiniteNumber(merged.heartRateVariability);
+  if (heartRateVariability !== null && heartRateVariability > 0) push('HRV', `${Math.round(heartRateVariability)} ms`);
+
+  const respiratoryRate = toFiniteNumber(merged.respiratoryRate);
+  if (respiratoryRate !== null && respiratoryRate > 0) push('Respiratory', `${respiratoryRate.toFixed(1)} /min`);
+
+  const readinessScore = toFiniteNumber(merged.readinessScore);
+  if (readinessScore !== null && readinessScore > 0) push('Readiness', `${Math.round(readinessScore)}`);
+
+  const deepSleepDuration = toFiniteNumber(merged.deepSleepDuration);
+  if (deepSleepDuration !== null && deepSleepDuration > 0) push('Deep sleep', formatHoursToHm(deepSleepDuration));
+
+  const remSleepDuration = toFiniteNumber(merged.remSleepDuration);
+  if (remSleepDuration !== null && remSleepDuration > 0) push('REM', formatHoursToHm(remSleepDuration));
+
+  const steps = toFiniteNumber(merged.steps);
+  if (steps !== null && steps > 0) push('Steps', Math.round(steps).toLocaleString());
+
+  const activeCalories = toFiniteNumber(merged.activeCalories);
+  if (activeCalories !== null && activeCalories > 0) push('Active cal', `${Math.round(activeCalories)}`);
+
+  const activeMinutes = toFiniteNumber(
+    merged.activeMinutes
+      ?? merged.exerciseMinutes
+      ?? merged.totalDurationMinutes
+      ?? merged.totalWorkoutDurationMinutes,
+  );
+  if (activeMinutes !== null && activeMinutes > 0) push('Active min', `${Math.round(activeMinutes)} min`);
+
+  const distanceKm = toFiniteNumber(merged.distance ?? merged.distanceKm);
+  const distanceMeters = toFiniteNumber(merged.distanceMeters);
+  const resolvedDistanceKm = distanceKm ?? (distanceMeters !== null ? distanceMeters / 1000 : null);
+  if (resolvedDistanceKm !== null && resolvedDistanceKm > 0) push('Distance', `${resolvedDistanceKm.toFixed(1)} km`);
+
+  return metrics;
+};
+
 const extractDayMetrics = (
   records: HealthContextSourceRecord[],
 ): Array<{ label: string; value: string }> => {
@@ -241,46 +311,7 @@ const extractDayMetrics = (
       if (value !== undefined && value !== null) merged[key] = value;
     }
   }
-
-  const metrics: Array<{ label: string; value: string }> = [];
-  const push = (label: string, value: string) => metrics.push({ label, value });
-
-  const sleepDuration = toFiniteNumber(merged.sleepDuration);
-  if (sleepDuration !== null) push('Sleep', formatHoursToHm(sleepDuration));
-
-  const sleepEfficiency = toFiniteNumber(merged.sleepEfficiency);
-  if (sleepEfficiency !== null) push('Sleep efficiency', `${Math.round(sleepEfficiency)}%`);
-
-  const heartRateResting = toFiniteNumber(merged.heartRateResting);
-  if (heartRateResting !== null) push('Resting HR', `${Math.round(heartRateResting)} bpm`);
-
-  const averageHeartRate = toFiniteNumber(
-    merged.averageHeartRate ?? merged.avgHeartRate ?? merged.heartRateAverage ?? merged.averageHr,
-  );
-  if (averageHeartRate !== null) push('Avg HR', `${Math.round(averageHeartRate)} bpm`);
-
-  const heartRateVariability = toFiniteNumber(merged.heartRateVariability);
-  if (heartRateVariability !== null) push('HRV', `${Math.round(heartRateVariability)} ms`);
-
-  const respiratoryRate = toFiniteNumber(merged.respiratoryRate);
-  if (respiratoryRate !== null) push('Respiratory', `${respiratoryRate.toFixed(1)} /min`);
-
-  const readinessScore = toFiniteNumber(merged.readinessScore);
-  if (readinessScore !== null) push('Readiness', `${Math.round(readinessScore)}`);
-
-  const deepSleepDuration = toFiniteNumber(merged.deepSleepDuration);
-  if (deepSleepDuration !== null) push('Deep sleep', formatHoursToHm(deepSleepDuration));
-
-  const remSleepDuration = toFiniteNumber(merged.remSleepDuration);
-  if (remSleepDuration !== null) push('REM', formatHoursToHm(remSleepDuration));
-
-  const steps = toFiniteNumber(merged.steps);
-  if (steps !== null) push('Steps', Math.round(steps).toLocaleString());
-
-  const activeCalories = toFiniteNumber(merged.activeCalories);
-  if (activeCalories !== null) push('Active cal', `${Math.round(activeCalories)}`);
-
-  return metrics;
+  return metricsFromPayload(merged);
 };
 
 /**
@@ -291,6 +322,54 @@ const extractDayMetrics = (
  */
 const recordHasMeasuredData = (record: HealthContextSourceRecord): boolean =>
   extractDayMetrics([record]).length > 0;
+
+const normalizedWearableFamily = (value: unknown): HealthContextSourceFamily | null => {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase() as HealthContextSourceFamily;
+  return WEARABLE_FAMILIES.has(normalized) ? normalized : null;
+};
+
+const attributeRecordsByMeasuredSource = (
+  records: HealthContextSourceRecord[],
+): HealthContextSourceRecord[] => records.flatMap((record) => {
+  const payload = asRecord(record.payload) || {};
+  const fieldSources = asRecord(payload.fieldSources);
+  const fieldSourceLabels = asRecord(payload.fieldSourceLabels) || {};
+  if (!fieldSources || Object.keys(fieldSources).length === 0) {
+    return recordHasMeasuredData(record) ? [record] : [];
+  }
+
+  const payloadsBySource = new Map<HealthContextSourceFamily, Record<string, unknown>>();
+  const labelsBySource = new Map<HealthContextSourceFamily, Record<string, string>>();
+  for (const [field, value] of Object.entries(payload)) {
+    if (field === 'fieldSources' || field === 'fieldSourceLabels') continue;
+    const sourceFamily = normalizedWearableFamily(fieldSources[field]) || record.sourceFamily;
+    if (!WEARABLE_FAMILIES.has(sourceFamily)) continue;
+    const attributedPayload = payloadsBySource.get(sourceFamily) || {};
+    attributedPayload[field] = value;
+    payloadsBySource.set(sourceFamily, attributedPayload);
+    const explicitLabel = fieldSourceLabels[field];
+    if (typeof explicitLabel === 'string' && explicitLabel.trim()) {
+      const attributedLabels = labelsBySource.get(sourceFamily) || {};
+      attributedLabels[field] = explicitLabel.trim();
+      labelsBySource.set(sourceFamily, attributedLabels);
+    }
+  }
+
+  return Array.from(payloadsBySource.entries()).flatMap(([sourceFamily, attributedPayload]) => {
+    const attributedLabels = labelsBySource.get(sourceFamily);
+    if (attributedLabels && Object.keys(attributedLabels).length > 0) {
+      attributedPayload.fieldSourceLabels = attributedLabels;
+    }
+    const attributedRecord: HealthContextSourceRecord = {
+      ...record,
+      id: `${record.id}::${sourceFamily}`,
+      sourceFamily,
+      payload: attributedPayload,
+    };
+    return recordHasMeasuredData(attributedRecord) ? [attributedRecord] : [];
+  });
+});
 
 const observedSecondsForRecords = (records: HealthContextSourceRecord[]): number => {
   const intervals = records
@@ -348,7 +427,7 @@ const observedSecondsForRecords = (records: HealthContextSourceRecord[]): number
 const OVERNIGHT_METRIC_LABELS = new Set([
   'Sleep', 'Deep sleep', 'REM', 'Sleep efficiency',
 ]);
-const DAYTIME_METRIC_LABELS = new Set(['Steps', 'Active cal', 'Avg HR']);
+const DAYTIME_METRIC_LABELS = new Set(['Steps', 'Active cal', 'Avg HR', 'Active min', 'Distance']);
 
 const classifyDayWear = (
   metrics: Array<{ label: string; value: string }>,
@@ -385,6 +464,17 @@ const formatDayLabel = (unixSeconds: number, timezone?: string): string => {
   }
 };
 
+const sourceRecordDateKey = (record: HealthContextSourceRecord): string => {
+  const provenance = record.provenance as HealthContextSourceRecord['provenance'] & { rawDate?: string };
+  const candidates = [
+    provenance.rawDay,
+    provenance.rawDate,
+    record.dedupeKey?.split('|').at(-1),
+    record.id?.match(/(\d{4}-\d{2}-\d{2})(?:$|::)/)?.[1],
+  ];
+  return candidates.find((value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) || '';
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Derivation
 // ──────────────────────────────────────────────────────────────────────────────
@@ -405,11 +495,12 @@ interface DeriveInput {
   user: User | undefined;
   records: HealthContextSourceRecord[];
   sourceStatuses?: HealthContextSourceStatus[];
+  snapshotCoverageDays?: SnapshotWearableCoverageDay[];
   now: number;
   windowStart: number;
   windowDays: number;
   windowDateKeys?: string[];
-  activeRecordCountsAsPresence?: boolean;
+  evidenceState?: AthleteDeviceEvidenceState;
 }
 
 interface HealthContextSourceStatus {
@@ -424,6 +515,44 @@ interface HealthContextSourceStatus {
   lastSyncedAt?: number;
   lastAttemptedSyncAt?: number;
 }
+
+interface SnapshotWearableCoverageDay {
+  dayIndex: number;
+  dateKey: string;
+  observedAt: number | null;
+  sourceFamily: HealthContextSourceFamily;
+  sourceLabel: string;
+  domains: string[];
+  metrics: Array<{ label: string; value: string }>;
+}
+
+interface EvidenceLoadResult<T> {
+  value: T;
+  state: AthleteDeviceEvidenceState;
+}
+
+const evidenceStateFromSettled = (
+  results: PromiseSettledResult<unknown>[]
+): AthleteDeviceEvidenceState => {
+  const fulfilled = results.filter((result) => result.status === 'fulfilled').length;
+  if (fulfilled === results.length) return 'available';
+  return fulfilled > 0 ? 'partial' : 'unavailable';
+};
+
+const matchesWorkspaceOrUnscopedSelf = (
+  data: Record<string, unknown>,
+  workspace: PulseCheckWorkspaceScope | undefined,
+  allowUnscopedSelf: boolean
+): boolean => {
+  if (!workspace || pulseCheckRecordMatchesWorkspace(data, workspace)) return true;
+  if (!allowUnscopedSelf) return false;
+  const teamId = typeof data.teamId === 'string' ? data.teamId.trim() : '';
+  const organizationId = typeof data.organizationId === 'string'
+    ? data.organizationId.trim()
+    : '';
+  return (!teamId || teamId === workspace.teamId)
+    && (!organizationId || organizationId === workspace.organizationId);
+};
 
 const toUnixSeconds = (value: unknown): number | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -471,7 +600,7 @@ const buildSourceStatusFromEntry = (
   if (typeof entry !== 'object') return null;
   const data = entry as Record<string, unknown>;
   return {
-    sourceFamily: (data.sourceFamily || family) as HealthContextSourceFamily,
+    sourceFamily: sourceFamilyForStatus(data, family),
     teamId: typeof data.teamId === 'string' ? data.teamId : undefined,
     organizationId:
       typeof data.organizationId === 'string' ? data.organizationId : undefined,
@@ -485,86 +614,375 @@ const buildSourceStatusFromEntry = (
   };
 };
 
+const sourceFamilyForStatus = (
+  data: Record<string, unknown>,
+  fallback: HealthContextSourceFamily,
+): HealthContextSourceFamily => {
+  const rawFamily = normalizedWearableFamily(data.sourceFamily) || fallback;
+  if (rawFamily !== 'fitbit') return rawFamily;
+
+  const consentMetadata = asRecord(data.consentMetadata) || {};
+  const provider = String(consentMetadata.provider || data.provider || '').trim().toLowerCase();
+  if (provider !== 'google_health') return rawFamily;
+
+  const deviceMetadata = asRecord(data.deviceMetadata)
+    || asRecord(consentMetadata.deviceMetadata)
+    || {};
+  const verifiedFitbitIdentity = [
+    deviceMetadata.manufacturer,
+    deviceMetadata.brand,
+    deviceMetadata.model,
+    deviceMetadata.displayName,
+  ].some((value) => typeof value === 'string' && value.toLowerCase().includes('fitbit'));
+  return verifiedFitbitIdentity ? 'fitbit' : 'google_health';
+};
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+
+const normalizeSnapshotToken = (value: unknown): string =>
+  typeof value === 'string'
+    ? value.trim().replace(/[-_\s]/g, '').toLowerCase()
+    : '';
+
+const freshnessIsUsable = (value: unknown): boolean => {
+  const normalized = normalizeSnapshotToken(value);
+  return !normalized || ![
+    'missing',
+    'stale',
+    'error',
+    'permissiondenied',
+    'notconnected',
+  ].includes(normalized);
+};
+
+const DAYTIME_WEARABLE_METRIC_KEYS = new Set([
+  'steps',
+  'activecalories',
+  'totalcalories',
+  'distance',
+  'distancemeters',
+  'exerciseminutes',
+  'activeminutes',
+  'standhours',
+  'workoutcount',
+  'heartrateavg',
+  'avgheartrate',
+  'averageheartrate',
+  'heartrateaverage',
+  'heartratebpm',
+  'liveheartratebpm',
+  'samplecount',
+  'heartratesamples',
+]);
+
+const OVERNIGHT_WEARABLE_METRIC_KEYS = new Set([
+  'sleepduration',
+  'sleepdurationhours',
+  'totalsleephours',
+  'totalsleepmin',
+  'totalsleepminutes',
+  'sleepefficiency',
+  'sleepscore',
+  'timeinbedhours',
+  'bedtimestart',
+  'bedtimeend',
+  'sleepmidpoint',
+  'recoveryscore',
+  'readinessscore',
+  'heartratevariability',
+  'hrv',
+  'hrvms',
+  'hrvrmssd',
+  'rmssdms',
+  'restingheartrate',
+  'heartrateresting',
+  'restingheartratebpm',
+]);
+
+const sourceCanRepresentWearable = (sourceFamily: unknown): boolean => {
+  const normalized = normalizeSnapshotToken(sourceFamily);
+  if (!normalized) return true;
+  if ([
+    'quicklifts',
+    'fitwithpulse',
+    'pulsecheckselfreport',
+    'coachentered',
+    'manual',
+  ].includes(normalized)) {
+    return false;
+  }
+  return WEARABLE_FAMILY_LIST.some((family) => normalizeSnapshotToken(family) === normalized)
+    || normalized.includes('wearable');
+};
+
+const flattenedSnapshotMetricPayload = (block: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(block)) {
+    if (![
+      'data',
+      'payload',
+      'rollup',
+      'freshness',
+      'provenance',
+      'sourceStatus',
+      'generatedAt',
+      'updatedAt',
+    ].includes(key)) {
+      result[key.toLowerCase()] = value;
+    }
+  }
+  for (const nestedKey of ['data', 'payload', 'rollup']) {
+    const nested = asRecord(block[nestedKey]);
+    if (!nested) continue;
+    for (const [key, value] of Object.entries(nested)) {
+      result[key.toLowerCase()] = value;
+    }
+  }
+  return result;
+};
+
+const snapshotMetricPayload = (block: Record<string, unknown>): Record<string, unknown> => {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(block)) {
+    if (!['data', 'payload', 'rollup', 'freshness', 'provenance', 'sourceStatus'].includes(key)) {
+      result[key] = value;
+    }
+  }
+  for (const nestedKey of ['data', 'payload', 'rollup']) {
+    const nested = asRecord(block[nestedKey]);
+    if (nested) Object.assign(result, nested);
+  }
+  return result;
+};
+
+const snapshotBlockHasUsableMetric = (
+  block: Record<string, unknown>,
+  keys: Set<string>,
+): boolean => {
+  const flattened = flattenedSnapshotMetricPayload(block);
+  return Array.from(keys).some((key) => {
+    const value = flattened[key];
+    if (value === undefined || value === null) return false;
+    const numeric = toFiniteNumber(value);
+    if (numeric !== null) return numeric > 0;
+    if (typeof value === 'string') return value.trim().length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return false;
+  });
+};
+
+const snapshotHasWearableCoverage = (data: Record<string, unknown>): boolean => {
+  const domains = asRecord(data.domains) || {};
+  const provenance = asRecord(data.provenance) || {};
+  const domainWinners = asRecord(provenance.domainWinners) || {};
+  const freshness = asRecord(data.freshness) || {};
+  const perDomainFreshness = asRecord(freshness.perDomain) || {};
+
+  const blockFor = (domain: string): Record<string, unknown> => {
+    const domainBlock = asRecord(domains[domain]) || {};
+    return Object.keys(domainBlock).length > 0 ? domainBlock : asRecord(data[domain]) || {};
+  };
+
+  const sourceFamilyFor = (domain: string, block: Record<string, unknown>): unknown => {
+    const blockProvenance = asRecord(block.provenance) || {};
+    return blockProvenance.primarySource
+      ?? domainWinners[domain]
+      ?? block.sourceFamily
+      ?? data.sourceFamily;
+  };
+
+  for (const domain of ['activity', 'training', 'workout', 'biometrics', 'cardio', 'heart']) {
+    const block = blockFor(domain);
+    if (
+      Object.keys(block).length > 0
+      && sourceCanRepresentWearable(sourceFamilyFor(domain, block))
+      && freshnessIsUsable(block.freshness ?? perDomainFreshness[domain] ?? freshness[domain])
+      && snapshotBlockHasUsableMetric(block, DAYTIME_WEARABLE_METRIC_KEYS)
+    ) {
+      return true;
+    }
+  }
+
+  for (const domain of ['recovery', 'sleep']) {
+    const block = blockFor(domain);
+    if (
+      Object.keys(block).length > 0
+      && sourceCanRepresentWearable(sourceFamilyFor(domain, block))
+      && freshnessIsUsable(block.freshness ?? perDomainFreshness[domain] ?? freshness[domain])
+      && snapshotBlockHasUsableMetric(block, OVERNIGHT_WEARABLE_METRIC_KEYS)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const latestSnapshotObservationTime = (data: Record<string, unknown>): number | null => {
+  const provenance = asRecord(data.provenance) || {};
+  const observationTimes = asRecord(provenance.sourceObservationTimes) || {};
+  const domains = asRecord(data.domains) || {};
+  const candidates = [
+    ...Object.values(observationTimes),
+    ...Object.values(domains).flatMap((value) => {
+      const block = asRecord(value);
+      return block ? [block.observedAt, block.updatedAt, block.generatedAt] : [];
+    }),
+    data.latestObservedAt,
+    data.generatedAt,
+    data.updatedAt,
+  ].map(toUnixSeconds).filter((value): value is number => value !== null);
+  return candidates.length ? Math.max(...candidates) : null;
+};
+
+const attributedSnapshotCoverageDays = (
+  data: Record<string, unknown>,
+  dayIndex: number,
+  dateKey: string,
+): SnapshotWearableCoverageDay[] => {
+  const domains = asRecord(data.domains) || {};
+  const freshness = asRecord(data.freshness) || {};
+  const perDomainFreshness = asRecord(freshness.perDomain) || {};
+  const grouped = new Map<HealthContextSourceFamily, {
+    sourceLabel: string;
+    domains: Set<string>;
+    payload: Record<string, unknown>;
+  }>();
+
+  for (const domain of ['recovery', 'activity', 'training', 'biometrics']) {
+    const block = asRecord(domains[domain]) || asRecord(data[domain]) || {};
+    if (!freshnessIsUsable(block.freshness ?? perDomainFreshness[domain] ?? freshness[domain])) continue;
+    const payload = snapshotMetricPayload(block);
+    const fieldSources = asRecord(payload.fieldSources);
+    const fieldSourceLabels = asRecord(payload.fieldSourceLabels) || {};
+    if (!fieldSources) continue;
+
+    for (const [field, rawSource] of Object.entries(fieldSources)) {
+      const sourceFamily = normalizedWearableFamily(rawSource);
+      if (!sourceFamily || payload[field] === undefined || payload[field] === null) continue;
+      const entry = grouped.get(sourceFamily) || {
+        sourceLabel: getDeviceFamilyLabel(sourceFamily),
+        domains: new Set<string>(),
+        payload: {},
+      };
+      entry.payload[field] = payload[field];
+      entry.domains.add(humanizeDomain(domain));
+      const explicitLabel = fieldSourceLabels[field];
+      if (typeof explicitLabel === 'string' && explicitLabel.trim()) {
+        entry.sourceLabel = explicitLabel.trim();
+      }
+      grouped.set(sourceFamily, entry);
+    }
+  }
+
+  const observedAt = latestSnapshotObservationTime(data);
+  return Array.from(grouped.entries()).flatMap(([sourceFamily, entry]) => {
+    const metrics = metricsFromPayload(entry.payload);
+    if (metrics.length === 0) return [];
+    return [{
+      dayIndex,
+      dateKey,
+      observedAt,
+      sourceFamily,
+      sourceLabel: entry.sourceLabel,
+      domains: Array.from(entry.domains),
+      metrics,
+    }];
+  });
+};
+
+const loadSnapshotWearableCoverageDays = async (
+  athleteUserId: string,
+  windowDateKeys: string[],
+  workspace?: PulseCheckWorkspaceScope,
+  allowUnscopedSelf: boolean = false,
+): Promise<EvidenceLoadResult<SnapshotWearableCoverageDay[]>> => {
+  const entries = await Promise.allSettled(
+    windowDateKeys.map(async (dateKey, dayIndex): Promise<SnapshotWearableCoverageDay[]> => {
+      const snap = await getDoc(
+        doc(db, HEALTH_CONTEXT_SNAPSHOTS_COLLECTION, `${athleteUserId}_daily_${dateKey}`)
+      );
+      if (!snap.exists()) return [];
+      const data = snap.data() as Record<string, unknown>;
+      if (!matchesWorkspaceOrUnscopedSelf(data, workspace, allowUnscopedSelf)) return [];
+      if (!snapshotHasWearableCoverage(data)) return [];
+      return attributedSnapshotCoverageDays(data, dayIndex, dateKey);
+    })
+  );
+  return {
+    value: entries.flatMap((entry) =>
+      entry.status === 'fulfilled' ? entry.value : []
+    ),
+    state: evidenceStateFromSettled(entries),
+  };
+};
+
 const loadSharedSourceStatusMap = async (
   athleteUserId: string,
-  workspace?: PulseCheckWorkspaceScope
+  workspace?: PulseCheckWorkspaceScope,
+  allowUnscopedSelf: boolean = false,
 ): Promise<HealthContextSourceStatus[]> => {
-  try {
-    const snap = await getDoc(doc(db, 'health-context-source-status', athleteUserId));
-    if (!snap.exists()) return [];
-    const data = snap.data() as Record<string, unknown>;
-    if (workspace && !pulseCheckRecordMatchesWorkspace(data, workspace)) return [];
-    const sourceStatuses = (data.sourceStatuses && typeof data.sourceStatuses === 'object')
-      ? data.sourceStatuses as Record<string, unknown>
-      : data;
-    return WEARABLE_FAMILY_LIST
-      .map((family) => buildSourceStatusFromEntry(family, sourceStatuses[family]))
-      .filter((entry): entry is HealthContextSourceStatus => !!entry);
-  } catch {
-    return [];
-  }
+  const snap = await getDoc(doc(db, 'health-context-source-status', athleteUserId));
+  if (!snap.exists()) return [];
+  const data = snap.data() as Record<string, unknown>;
+  if (!matchesWorkspaceOrUnscopedSelf(data, workspace, allowUnscopedSelf)) return [];
+  const sourceStatuses = (data.sourceStatuses && typeof data.sourceStatuses === 'object')
+    ? data.sourceStatuses as Record<string, unknown>
+    : data;
+  return WEARABLE_FAMILY_LIST
+    .map((family) => buildSourceStatusFromEntry(family, sourceStatuses[family]))
+    .filter((entry): entry is HealthContextSourceStatus => !!entry);
 };
 
 const loadNestedAthleteSourceStatus = async (
   athleteUserId: string,
-  workspace?: PulseCheckWorkspaceScope
+  workspace?: PulseCheckWorkspaceScope,
+  allowUnscopedSelf: boolean = false,
 ): Promise<HealthContextSourceStatus[]> => {
-  try {
-    const snap = await getDoc(doc(db, 'athletes', athleteUserId, 'health-context-source-status', 'current'));
-    if (!snap.exists()) return [];
-    const data = snap.data() as Record<string, unknown>;
-    if (workspace && !pulseCheckRecordMatchesWorkspace(data, workspace)) return [];
-    return WEARABLE_FAMILY_LIST
-      .map((family) => buildSourceStatusFromEntry(family, data[family]))
-      .filter((entry): entry is HealthContextSourceStatus => !!entry);
-  } catch {
-    return [];
-  }
+  const snap = await getDoc(doc(db, 'athletes', athleteUserId, 'health-context-source-status', 'current'));
+  if (!snap.exists()) return [];
+  const data = snap.data() as Record<string, unknown>;
+  if (!matchesWorkspaceOrUnscopedSelf(data, workspace, allowUnscopedSelf)) return [];
+  return WEARABLE_FAMILY_LIST
+    .map((family) => buildSourceStatusFromEntry(family, data[family]))
+    .filter((entry): entry is HealthContextSourceStatus => !!entry);
 };
 
 const loadWearableSourceStatuses = async (
   athleteUserId: string,
-  workspace?: PulseCheckWorkspaceScope
-): Promise<HealthContextSourceStatus[]> => {
-  const [sharedEntries, nestedEntries, familyEntries] = await Promise.all([
-    loadSharedSourceStatusMap(athleteUserId, workspace),
-    loadNestedAthleteSourceStatus(athleteUserId, workspace),
-    Promise.all(
-      WEARABLE_FAMILY_LIST.map(async (family): Promise<HealthContextSourceStatus | null> => {
-        try {
-          const snap = await getDoc(doc(db, 'health-context-source-status', `${athleteUserId}_${family}`));
-          if (!snap.exists()) return null;
-          const data = snap.data() as Record<string, unknown>;
-          if (workspace && !pulseCheckRecordMatchesWorkspace(data, workspace)) {
-            return null;
-          }
-          const status: HealthContextSourceStatus = {
-            sourceFamily: (data.sourceFamily || family) as HealthContextSourceFamily,
-            teamId: typeof data.teamId === 'string' ? data.teamId : undefined,
-            organizationId:
-              typeof data.organizationId === 'string'
-                ? data.organizationId
-                : undefined,
-            lifecycleState: data.lifecycleState as string | undefined,
-            status: data.status as string | undefined,
-            connectionState: data.connectionState as string | undefined,
-            lastObservedRecordAt: toUnixSeconds(data.lastObservedRecordAt) || undefined,
-            lastSuccessfulSyncAt: toUnixSeconds(data.lastSuccessfulSyncAt) || undefined,
-            lastSyncedAt: toUnixSeconds(data.lastSyncedAt) || undefined,
-            lastAttemptedSyncAt: toUnixSeconds(data.lastAttemptedSyncAt) || undefined,
-          };
-          return status;
-        } catch {
-          return null;
-        }
-      })
-    ),
-  ]);
-  return [
-    ...sharedEntries,
-    ...nestedEntries,
-    ...familyEntries.filter((entry): entry is HealthContextSourceStatus => !!entry),
+  workspace?: PulseCheckWorkspaceScope,
+  allowUnscopedSelf: boolean = false,
+): Promise<EvidenceLoadResult<HealthContextSourceStatus[]>> => {
+  const operations: Array<Promise<HealthContextSourceStatus[]>> = [
+    loadSharedSourceStatusMap(athleteUserId, workspace, allowUnscopedSelf),
+    loadNestedAthleteSourceStatus(athleteUserId, workspace, allowUnscopedSelf),
+    ...WEARABLE_FAMILY_LIST.map(async (family): Promise<HealthContextSourceStatus[]> => {
+      const snap = await getDoc(doc(db, 'health-context-source-status', `${athleteUserId}_${family}`));
+      if (!snap.exists()) return [];
+      const data = snap.data() as Record<string, unknown>;
+      if (!matchesWorkspaceOrUnscopedSelf(data, workspace, allowUnscopedSelf)) return [];
+      return [{
+        sourceFamily: sourceFamilyForStatus(data, family),
+        teamId: typeof data.teamId === 'string' ? data.teamId : undefined,
+        organizationId: typeof data.organizationId === 'string' ? data.organizationId : undefined,
+        lifecycleState: data.lifecycleState as string | undefined,
+        status: data.status as string | undefined,
+        connectionState: data.connectionState as string | undefined,
+        lastObservedRecordAt: toUnixSeconds(data.lastObservedRecordAt) || undefined,
+        lastSuccessfulSyncAt: toUnixSeconds(data.lastSuccessfulSyncAt) || undefined,
+        lastSyncedAt: toUnixSeconds(data.lastSyncedAt) || undefined,
+        lastAttemptedSyncAt: toUnixSeconds(data.lastAttemptedSyncAt) || undefined,
+      }];
+    }),
   ];
+  const settled = await Promise.allSettled(operations);
+  return {
+    value: settled.flatMap((entry) => entry.status === 'fulfilled' ? entry.value : []),
+    state: evidenceStateFromSettled(settled),
+  };
 };
 
 export const deriveAthleteDeviceStatus = ({
@@ -572,13 +990,16 @@ export const deriveAthleteDeviceStatus = ({
   user,
   records,
   sourceStatuses = [],
+  snapshotCoverageDays = [],
   now,
   windowStart,
   windowDays,
   windowDateKeys,
-  activeRecordCountsAsPresence = false,
+  evidenceState = 'available',
 }: DeriveInput): AthleteDeviceStatus => {
-  const wearableRecords = records.filter((record) => WEARABLE_FAMILIES.has(record.sourceFamily));
+  const wearableRecords = attributeRecordsByMeasuredSource(
+    records.filter((record) => WEARABLE_FAMILIES.has(record.sourceFamily))
+  );
   const connectedStatuses = sourceStatuses.filter(isConnectedSourceStatus);
 
   // Pick the freshest connected source-status per family (an athlete can have
@@ -596,6 +1017,7 @@ export const deriveAthleteDeviceStatus = ({
   const families = new Set<HealthContextSourceFamily>();
   for (const record of wearableRecords) families.add(record.sourceFamily);
   for (const family of connectedStatusByFamily.keys()) families.add(family);
+  for (const day of snapshotCoverageDays) families.add(day.sourceFamily);
   const dateIndexByKey = windowDateKeys
     ? new Map(windowDateKeys.map((dateKey, index) => [dateKey, index]))
     : null;
@@ -603,6 +1025,20 @@ export const deriveAthleteDeviceStatus = ({
   const devices: AthleteDevicePerSourceStatus[] = Array.from(families).map((family) => {
     const familyRecords = wearableRecords.filter((record) => record.sourceFamily === family);
     const status = connectedStatusByFamily.get(family) || null;
+    const familySnapshotDays = snapshotCoverageDays.filter((day) => day.sourceFamily === family);
+    const snapshotDayByIndex = new Map(familySnapshotDays.map((day) => [day.dayIndex, day]));
+    const sourceRecordLabel = familyRecords.reduce<string | null>((label, record) => {
+      if (label) return label;
+      const labels = asRecord(asRecord(record.payload)?.fieldSourceLabels);
+      if (!labels) return null;
+      const explicitLabel = Object.values(labels).find(
+        (value) => typeof value === 'string' && value.trim()
+      );
+      return typeof explicitLabel === 'string' ? explicitLabel.trim() : null;
+    }, null);
+    const sourceLabel = familySnapshotDays.find((day) => day.sourceLabel)?.sourceLabel
+      || sourceRecordLabel
+      || getDeviceFamilyLabel(family);
 
     let lastObservedAt: number | null = null;
     let lastSyncedAt: number | null = null;
@@ -614,16 +1050,13 @@ export const deriveAthleteDeviceStatus = ({
       if (typeof record.observedAt === 'number') {
         // "Last data" must reflect the most recent record that actually carried
         // measured values — not an empty placeholder/sync record.
-        if (
-          (activeRecordCountsAsPresence || recordHasMeasuredData(record)) &&
-          (lastObservedAt === null || record.observedAt > lastObservedAt)
-        ) {
+        if (recordHasMeasuredData(record) && (lastObservedAt === null || record.observedAt > lastObservedAt)) {
           lastObservedAt = record.observedAt;
         }
         const observedDate = new Date(record.observedAt * 1000);
-        const observedDateKey = Number.isNaN(observedDate.getTime())
+        const observedDateKey = sourceRecordDateKey(record) || (Number.isNaN(observedDate.getTime())
           ? ''
-          : `${observedDate.getFullYear()}-${String(observedDate.getMonth() + 1).padStart(2, '0')}-${String(observedDate.getDate()).padStart(2, '0')}`;
+          : `${observedDate.getFullYear()}-${String(observedDate.getMonth() + 1).padStart(2, '0')}-${String(observedDate.getDate()).padStart(2, '0')}`);
         const dayIndex = dateIndexByKey
           ? dateIndexByKey.get(observedDateKey)
           : Math.floor((record.observedAt - windowStart) / SECONDS_PER_DAY);
@@ -638,8 +1071,13 @@ export const deriveAthleteDeviceStatus = ({
       }
     }
 
-    if (lastObservedAt === null && status) {
-      lastObservedAt = toUnixSeconds(status.lastObservedRecordAt);
+    for (const snapshotDay of familySnapshotDays) {
+      if (
+        snapshotDay.observedAt !== null
+        && (lastObservedAt === null || snapshotDay.observedAt > lastObservedAt)
+      ) {
+        lastObservedAt = snapshotDay.observedAt;
+      }
     }
     if (lastSyncedAt === null && status) {
       lastSyncedAt = toUnixSeconds(status.lastSuccessfulSyncAt)
@@ -657,16 +1095,26 @@ export const deriveAthleteDeviceStatus = ({
       connectionStatus = 'not_connected';
     }
 
-    // General device-monitor surfaces require a measured value before calling a
-    // day worn. The scoped coach-readiness contract mirrors the universal app:
-    // any active wearable source record in that local calendar day is evidence.
+    // A day counts as worn only when this source produced a measured value.
     const dailyDetails: (AthleteDeviceDayDetail | null)[] = Array.from(
       { length: windowDays },
       (_, day): AthleteDeviceDayDetail | null => {
         const dayRecords = recordsByDay.get(day);
-        if (!dayRecords || dayRecords.length === 0) return null;
+        if (!dayRecords || dayRecords.length === 0) {
+          const snapshotDay = snapshotDayByIndex.get(day);
+          if (!snapshotDay) return null;
+          return {
+            dayIndex: day,
+            dateLabel: formatDayLabel(snapshotDay.observedAt || windowStart + day * SECONDS_PER_DAY),
+            observedSeconds: 0,
+            recordCount: 0,
+            domains: snapshotDay.domains,
+            metrics: snapshotDay.metrics,
+            wearNote: deriveWearNote(snapshotDay.metrics),
+          };
+        }
         const metrics = extractDayMetrics(dayRecords);
-        if (metrics.length === 0 && !activeRecordCountsAsPresence) return null;
+        if (metrics.length === 0) return null;
         const maxObservedAt = dayRecords.reduce(
           (max, record) => (typeof record.observedAt === 'number' && record.observedAt > max ? record.observedAt : max),
           0,
@@ -702,7 +1150,7 @@ export const deriveAthleteDeviceStatus = ({
 
     return {
       sourceFamily: family,
-      label: getDeviceFamilyLabel(family),
+      label: sourceLabel,
       connectionStatus,
       lastObservedAt,
       lastSyncedAt,
@@ -734,6 +1182,24 @@ export const deriveAthleteDeviceStatus = ({
   });
 
   const best = devices[0] ?? null;
+  const dailyPresence = Array.from(
+    { length: windowDays },
+    (_, dayIndex) => devices.some((device) => device.dailyPresence[dayIndex])
+  );
+  const wearDaysCovered = dailyPresence.reduce((sum, present) => sum + (present ? 1 : 0), 0);
+  const lastObservedAt = devices.reduce<number | null>(
+    (latest, device) => device.lastObservedAt !== null && (latest === null || device.lastObservedAt > latest)
+      ? device.lastObservedAt
+      : latest,
+    null
+  );
+  const connectionStatus: AthleteDeviceConnectionStatus = best
+    ? best.connectionStatus
+    : lastObservedAt !== null && now - lastObservedAt <= STALE_AFTER_SEC
+      ? 'synced'
+      : wearDaysCovered > 0
+        ? 'stale'
+        : 'not_connected';
 
   return {
     athleteUserId: membership.userId,
@@ -741,14 +1207,130 @@ export const deriveAthleteDeviceStatus = ({
     email: user?.email || membership.email,
     currentDeviceFamily: best?.sourceFamily ?? null,
     currentDeviceLabel: best ? best.label : getDeviceFamilyLabel(null),
-    connectionStatus: best?.connectionStatus ?? 'not_connected',
-    lastObservedAt: best?.lastObservedAt ?? null,
+    connectionStatus,
+    evidenceState,
+    lastObservedAt,
     lastSyncedAt: best?.lastSyncedAt ?? null,
-    wearDaysCovered: best?.wearDaysCovered ?? 0,
+    wearDaysCovered,
     windowDays,
-    wearCoveragePct: best?.wearCoveragePct ?? 0,
-    dailyPresence: best?.dailyPresence ?? Array.from({ length: windowDays }, () => false),
+    wearCoveragePct: windowDays > 0 ? Math.round((wearDaysCovered / windowDays) * 100) : 0,
+    dailyPresence,
     totalRecords: wearableRecords.length,
+    devices,
+  };
+};
+
+export const deriveAthleteDeviceStatusFromEvidence = (
+  evidence: AthleteDeviceEvidencePayload,
+  athlete: {
+    id: string;
+    displayName?: string;
+    username?: string;
+    email?: string;
+  },
+): AthleteDeviceStatus => {
+  const windowDays = safeWindow(evidence.windowDays || evidence.windowDateKeys?.length || 14);
+  const computedAt = Number.isFinite(evidence.computedAt)
+    ? evidence.computedAt
+    : Math.round(Date.now() / 1000);
+  const windowDateKeys = Array.isArray(evidence.windowDateKeys)
+    ? evidence.windowDateKeys
+        .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+        .slice(-windowDays)
+    : [];
+  const windowStart = Number.isFinite(evidence.windowStart)
+    ? evidence.windowStart
+    : computedAt - windowDays * SECONDS_PER_DAY;
+  const evidenceState: AthleteDeviceEvidenceState = [
+    'available',
+    'partial',
+    'unavailable',
+  ].includes(evidence.evidenceState)
+    ? evidence.evidenceState
+    : 'unavailable';
+
+  return deriveAthleteDeviceStatus({
+    membership: {
+      userId: athlete.id,
+      role: 'athlete',
+      email: athlete.email,
+    } as PulseCheckTeamMembership,
+    user: {
+      id: athlete.id,
+      displayName: athlete.displayName,
+      username: athlete.username,
+      email: athlete.email,
+    } as User,
+    records: Array.isArray(evidence.records) ? evidence.records : [],
+    now: computedAt,
+    windowStart,
+    windowDays,
+    windowDateKeys: windowDateKeys.length === windowDays ? windowDateKeys : undefined,
+    evidenceState,
+  });
+};
+
+const latestUnixSeconds = (...values: Array<number | null>): number | null => {
+  const finiteValues = values.filter((value): value is number =>
+    typeof value === 'number' && Number.isFinite(value)
+  );
+  return finiteValues.length > 0 ? Math.max(...finiteValues) : null;
+};
+
+/**
+ * Coach device evidence is projected server-side so staff can read measured
+ * days without receiving an athlete's raw wearable records. Connection state
+ * remains a separate client-readable lane. Merge the lanes so the secure
+ * projection does not erase a connected device, or vice versa.
+ */
+export const mergeAthleteDeviceStatusEvidence = (
+  measured: AthleteDeviceStatus,
+  connectionContext?: AthleteDeviceStatus,
+): AthleteDeviceStatus => {
+  if (!connectionContext) return measured;
+  if (measured.evidenceState === 'unavailable') {
+    return { ...connectionContext, evidenceState: 'unavailable' };
+  }
+
+  const connectionByFamily = new Map(
+    connectionContext.devices.map((device) => [device.sourceFamily, device])
+  );
+  const measuredFamilies = new Set(measured.devices.map((device) => device.sourceFamily));
+  const devices = measured.devices.map((device) => {
+    const connection = connectionByFamily.get(device.sourceFamily);
+    if (!connection) return device;
+    return {
+      ...device,
+      label: device.label || connection.label,
+      connectionStatus: connection.connectionStatus !== 'not_connected'
+        ? connection.connectionStatus
+        : device.connectionStatus,
+      lastObservedAt: latestUnixSeconds(device.lastObservedAt, connection.lastObservedAt),
+      lastSyncedAt: latestUnixSeconds(device.lastSyncedAt, connection.lastSyncedAt),
+    };
+  });
+  devices.push(
+    ...connectionContext.devices.filter((device) => !measuredFamilies.has(device.sourceFamily))
+  );
+
+  const connectionStatus: AthleteDeviceConnectionStatus = devices.some(
+    (device) => device.connectionStatus === 'synced'
+  )
+    ? 'synced'
+    : devices.some((device) => device.connectionStatus === 'stale')
+      ? 'stale'
+      : 'not_connected';
+  const primaryDevice = devices.find(
+    (device) => device.sourceFamily === measured.currentDeviceFamily
+  ) || devices[0] || null;
+
+  return {
+    ...measured,
+    currentDeviceFamily: primaryDevice?.sourceFamily ?? null,
+    currentDeviceLabel: primaryDevice?.label ?? getDeviceFamilyLabel(null),
+    connectionStatus,
+    lastObservedAt: latestUnixSeconds(measured.lastObservedAt, connectionContext.lastObservedAt),
+    lastSyncedAt: latestUnixSeconds(measured.lastSyncedAt, connectionContext.lastSyncedAt),
     devices,
   };
 };
@@ -782,6 +1364,7 @@ const loadDeviceStatusesForMemberships = async (
   windowDays: number,
   preloadedUserById?: Map<string, User>,
   workspace?: PulseCheckWorkspaceScope,
+  allowUnscopedRosterEvidence: boolean = false,
 ): Promise<TeamDeviceStatusResult> => {
   const safeWindowDays = safeWindow(windowDays);
   const now = Math.round(Date.now() / 1000);
@@ -807,41 +1390,68 @@ const loadDeviceStatusesForMemberships = async (
   );
 
   const statuses = await mapWithConcurrency(athletes, QUERY_CONCURRENCY, async (membership) => {
-    // Each lane is independently non-fatal: a failing HCSR window query (e.g. a
-    // missing composite index) must NOT blank out device status for the athlete —
-    // the simple source-status point-reads still detect a connected/fresh device.
-    // Previously either throw rejected the whole load and the dashboard's
-    // catch(() => null) reported "No device" for EVERY athlete.
-    const [records, sourceStatuses] = await Promise.all([
+    const allowUnscopedSelf = auth.currentUser?.uid === membership.userId;
+    const allowUnscopedCompatibleEvidence = allowUnscopedSelf || allowUnscopedRosterEvidence;
+    const sourceRecordWorkspace = allowUnscopedSelf ? undefined : workspace;
+    const [recordsLoad, sourceStatusesLoad, snapshotCoverageLoad] = await Promise.all([
       listHealthContextSourceRecordsForWindow(membership.userId, windowStart, now, {
-        ...(workspace
-          ? { workspace }
-          : { max: MAX_RECORDS_PER_ATHLETE }),
-      }).catch((error) => {
+        max: MAX_RECORDS_PER_ATHLETE,
+        indexIndependent: allowUnscopedSelf,
+        ...(sourceRecordWorkspace ? { workspace: sourceRecordWorkspace } : {}),
+      }).then((records): EvidenceLoadResult<HealthContextSourceRecord[]> => ({
+        value: records.filter((record) => allowUnscopedSelf || matchesWorkspaceOrUnscopedSelf(
+            record as unknown as Record<string, unknown>,
+            workspace,
+            false
+          )
+        ),
+        state: 'available',
+      })).catch((error): EvidenceLoadResult<HealthContextSourceRecord[]> => {
         console.warn(
-          `[pulsecheckDeviceMonitor] health-context-source-records query failed for ${membership.userId}; falling back to source-status`,
+          `[pulsecheckDeviceMonitor] health-context-source-records unavailable for ${membership.userId}`,
           error,
         );
-        return [] as HealthContextSourceRecord[];
+        return { value: [], state: 'unavailable' };
       }),
-      loadWearableSourceStatuses(membership.userId, workspace).catch((error) => {
-        console.warn(
-          `[pulsecheckDeviceMonitor] source-status load failed for ${membership.userId}`,
-          error,
-        );
-        return [] as HealthContextSourceStatus[];
-      }),
+      loadWearableSourceStatuses(
+        membership.userId,
+        workspace,
+        allowUnscopedCompatibleEvidence
+      ),
+      workspace && windowDateKeys
+        ? loadSnapshotWearableCoverageDays(
+            membership.userId,
+            windowDateKeys,
+            workspace,
+            allowUnscopedCompatibleEvidence
+          )
+        : Promise.resolve({
+            value: [] as SnapshotWearableCoverageDay[],
+            state: 'available' as const,
+          }),
     ]);
+    const laneStates = [recordsLoad.state, sourceStatusesLoad.state, snapshotCoverageLoad.state];
+    const hasReadableDeviceEvidence = recordsLoad.value.length > 0
+      || sourceStatusesLoad.value.length > 0
+      || snapshotCoverageLoad.value.length > 0;
+    const evidenceState: AthleteDeviceEvidenceState = !hasReadableDeviceEvidence
+      ? 'unavailable'
+      : laneStates.every((state) => state === 'available')
+        ? 'available'
+        : laneStates.every((state) => state === 'unavailable')
+          ? 'unavailable'
+          : 'partial';
     return deriveAthleteDeviceStatus({
       membership,
       user: userById.get(membership.userId),
-      records,
-      sourceStatuses,
+      records: recordsLoad.value,
+      sourceStatuses: sourceStatusesLoad.value,
+      snapshotCoverageDays: snapshotCoverageLoad.value,
       now,
       windowStart,
       windowDays: safeWindowDays,
       windowDateKeys: windowDateKeys || undefined,
-      activeRecordCountsAsPresence: !!workspace,
+      evidenceState,
     });
   });
 
@@ -888,7 +1498,12 @@ export const loadAthleteDeviceStatuses = async (
     );
   }
   const athleteIds = Array.from(new Set(athleteUserIds.map((id) => id.trim()).filter(Boolean)));
-  const users = athleteIds.length ? await userService.getUsersByIds(athleteIds) : [];
+  const users = athleteIds.length
+    ? await userService.getUsersByIds(athleteIds).catch((error) => {
+        console.warn('[pulsecheckDeviceMonitor] athlete profiles unavailable; continuing with roster IDs', error);
+        return [];
+      })
+    : [];
   const userById = new Map(users.map((user) => [user.id, user]));
   const athletes = athleteIds.map((athleteUserId) => ({
     userId: athleteUserId,
@@ -899,7 +1514,8 @@ export const loadAthleteDeviceStatuses = async (
     athletes,
     windowDays,
     userById,
-    workspace || undefined
+    workspace || undefined,
+    true
   );
 };
 

@@ -34,12 +34,71 @@ require.cache[googleHealthUtilsPath] = {
 
 const {
   fetchPagedDataPoints,
+  buildGoogleFieldAttribution,
+  googleHealthPointSource,
+  googleHealthResponseSource,
+  hasMeasuredPayload,
   mapActivityPayload,
   mapBiometricsPayload,
   mapRecoveryPayload,
   mapTrainingPayload,
   shouldWriteDomain,
 } = require('../google-health-sync').__test;
+
+test('generic Google Health points stay generic without verified Fitbit metadata', () => {
+  const genericPoint = {
+    dataSource: {
+      platform: 'GOOGLE_HEALTH',
+      device: { displayName: 'Android phone' },
+    },
+  };
+
+  assert.deepEqual(googleHealthPointSource(genericPoint), {
+    sourceFamily: 'google_health',
+    label: 'Google Health',
+  });
+  assert.deepEqual(googleHealthResponseSource({ dataPoints: [genericPoint] }), {
+    sourceFamily: 'google_health',
+    label: 'Google Health',
+  });
+  assert.deepEqual(googleHealthPointSource({ dataSource: { platform: 'FITBIT' } }), {
+    sourceFamily: 'google_health',
+    label: 'Google Health',
+  });
+});
+
+test('verified Fitbit metadata supplies Fitbit metric attribution and its real device label', () => {
+  const fitbitResponse = {
+    dataPoints: [{
+      dataSource: {
+        platform: 'FITBIT',
+        device: { manufacturer: 'Fitbit', displayName: 'Charge 6' },
+      },
+    }],
+  };
+  const payloads = {
+    recovery: {},
+    activity: { steps: 5_115 },
+    training: {},
+    biometrics: {},
+  };
+  const attribution = buildGoogleFieldAttribution(
+    { steps: fitbitResponse },
+    payloads
+  );
+
+  assert.deepEqual(googleHealthResponseSource(fitbitResponse), {
+    sourceFamily: 'fitbit',
+    label: 'Fitbit Charge 6',
+  });
+  assert.equal(attribution.fieldSourcesByDomain.activity.steps, 'fitbit');
+  assert.equal(attribution.fieldSourceLabelsByDomain.activity.steps, 'Fitbit Charge 6');
+});
+
+test('Google Health metadata without a real metric cannot mark a domain observed', () => {
+  assert.equal(hasMeasuredPayload('activity', { steps: 0, lastSyncTimestamp: 1_787_400_000 }), false);
+  assert.equal(hasMeasuredPayload('recovery', { sourceFamily: 'fitbit' }), false);
+});
 
 test('mapActivityPayload imports Google Health daily rollups into activity context', () => {
   const payload = mapActivityPayload({

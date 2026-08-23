@@ -150,7 +150,69 @@ test('assembler — valid WHOOP sleep beats a short Oura fragment for sleep fiel
   assert.equal(recovery.respiratoryRate, 16);
   assert.equal(recovery.fieldSources.sleepDuration, 'whoop');
   assert.equal(recovery.fieldSources.sleepEfficiency, 'whoop');
+  assert.equal(recovery.fieldSources.respiratoryRate, 'oura');
   assert.equal(result.snapshot.provenance.domainWinners.recovery, 'whoop');
+});
+
+test('assembler ignores metadata-only providers when selecting winners and sources used', async () => {
+  const mod = await loadAssembler();
+  const fitbitMetadata = buildRecord({
+    id: 'rec-fitbit-empty',
+    sourceFamily: 'fitbit',
+    sourceType: 'fitbit_activity',
+    domain: 'activity',
+    payload: { steps: 0, lastSyncTimestamp: 1_777_000_000 },
+    dedupeKey: 'athlete-1|fitbit|activity|2026-04-25',
+  });
+  const polarMetadata = buildRecord({
+    id: 'rec-polar-empty',
+    sourceFamily: 'polar',
+    sourceType: 'polar_activity',
+    domain: 'activity',
+    payload: { cardioLoad: -1, cardioLoadStatus: 'not_available' },
+    dedupeKey: 'athlete-1|polar|activity|2026-04-25',
+  });
+  const whoopMeasured = buildRecord({
+    id: 'rec-whoop-activity',
+    sourceFamily: 'whoop',
+    sourceType: 'whoop_activity',
+    domain: 'activity',
+    payload: { activeMinutes: 41, activeCalories: 610 },
+    dedupeKey: 'athlete-1|whoop|activity|2026-04-25',
+  });
+
+  const result = await mod.assembleAthleteContextSnapshot({
+    ...baseInput,
+    records: [fitbitMetadata, polarMetadata, whoopMeasured],
+  });
+
+  const activity = result.snapshot.domains.activity!.data as Record<string, any>;
+  assert.equal(result.snapshot.provenance.domainWinners.activity, 'whoop');
+  assert.deepEqual(result.snapshot.provenance.sourcesUsed, ['whoop']);
+  assert.equal(activity.fieldSources.activeMinutes, 'whoop');
+  assert.equal(activity.fieldSources.activeCalories, 'whoop');
+});
+
+test('assembler preserves generic Google Health instead of translating it to Fitbit', async () => {
+  const mod = await loadAssembler();
+  const googleMeasured = buildRecord({
+    id: 'rec-google-health-activity',
+    sourceFamily: 'google_health',
+    sourceType: 'google_health_activity',
+    domain: 'activity',
+    payload: { steps: 3_822 },
+    dedupeKey: 'athlete-1|google_health|activity|2026-04-25',
+  });
+
+  const result = await mod.assembleAthleteContextSnapshot({
+    ...baseInput,
+    records: [googleMeasured],
+  });
+
+  const activity = result.snapshot.domains.activity!.data as Record<string, any>;
+  assert.equal(result.snapshot.provenance.domainWinners.activity, 'google_health');
+  assert.equal(activity.fieldSources.steps, 'google_health');
+  assert.deepEqual(result.snapshot.provenance.sourcesUsed, ['google_health']);
 });
 
 test('assembler — self-report-only on recovery domain caps confidence at emerging', async () => {

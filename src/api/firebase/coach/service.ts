@@ -24,13 +24,20 @@ import {
 import {
   buildWorkspaceReadinessDailyDetails,
   type AthleteReadinessDailyDetail,
+  type AthleteReadinessWorkspaceSnapshot,
+  type ReadinessEvidenceAvailability,
+  type ReadinessFirestoreRow,
 } from './readinessWorkspace';
 import {
   normalizePulseCheckWorkspaceScope,
   type PulseCheckWorkspaceScope,
 } from '../pulsecheckWorkspaceScope';
 
-export type { AthleteReadinessDailyDetail } from './readinessWorkspace';
+export type {
+  AthleteReadinessDailyDetail,
+  AthleteReadinessWorkspaceSnapshot,
+  ReadinessEvidenceAvailability,
+} from './readinessWorkspace';
 
 export interface DailySentimentRecord {
   id: string;
@@ -38,9 +45,24 @@ export interface DailySentimentRecord {
   date: string; // YYYY-MM-DD
   sentimentScore: number; // -1 to 1
   messageCount: number;
+  sources?: DailySentimentSourceSummary[];
   lastAnalyzedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export type DailySentimentSourceKey =
+  | 'stored-sentiment-analysis'
+  | 'mood-check-in'
+  | 'morning-check-in'
+  | 'pulsecheck-chat'
+  | 'nora-conversation';
+
+export interface DailySentimentSourceSummary {
+  key: DailySentimentSourceKey;
+  label: string;
+  sentimentScore: number;
+  messageCount: number;
 }
 
 export interface ConversationMessage {
@@ -121,6 +143,19 @@ type DailySignalAggregate = {
   scoreCount: number;
   messageCount: number;
   latestAt: Date;
+  sources: Map<DailySentimentSourceKey, {
+    scoreSum: number;
+    scoreCount: number;
+    messageCount: number;
+  }>;
+};
+
+const DAILY_SENTIMENT_SOURCE_LABELS: Record<DailySentimentSourceKey, string> = {
+  'stored-sentiment-analysis': 'Stored PulseCheck analysis',
+  'mood-check-in': 'Mood check-in',
+  'morning-check-in': 'Morning check-in',
+  'pulsecheck-chat': 'PulseCheck chat',
+  'nora-conversation': 'Nora conversation',
 };
 
 const toMillis = (value: any): number | null => {
@@ -1028,7 +1063,14 @@ class CoachService {
           // Get additional stats (conversations, sessions, etc.)
           // Defensive: ensure we have a valid instance context; fallback to singleton
           const self = (this as CoachService | undefined) || coachService;
-          const athleteStats = await self.getAthleteStats(athleteUserId);
+          const athleteStats = await self.getAthleteStats(
+            athleteUserId,
+            coachId,
+            {
+              teamId: connection.athleteMembership.teamId,
+              organizationId: connection.athleteMembership.organizationId,
+            }
+          );
 
           // Last active should reflect the athlete's own PulseCheck history,
           // not when this team membership was created.
@@ -1089,11 +1131,18 @@ class CoachService {
   /**
    * Get athlete statistics and sentiment analysis
    */
-  private async getAthleteStats(athleteUserId: string): Promise<{
+  private async getAthleteStats(
+    athleteUserId: string,
+    coachId: string,
+    scope: PulseCheckWorkspaceScope
+  ): Promise<{
     conversationCount: number;
     totalSessions: number;
     weeklyGoalProgress: number;
     sentimentScore: number;
+    sentimentHistory: DailySentimentRecord[];
+    readinessHistory: AthleteReadinessDailyDetail[];
+    readinessAvailability: AthleteReadinessWorkspaceSnapshot['availability'];
     lastConversationDate?: Date;
     lastCheckInDate?: Date;
     lastTrainingDate?: Date;
@@ -1179,11 +1228,86 @@ class CoachService {
       const latestHistoryRow = history.find((record) => record.messageCount > 0);
       const sentimentScore = latestHistoryRow?.sentimentScore ?? 0;
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const readinessDateKeys = Array.from({ length: 14 }, (_, index) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() - (13 - index));
+        return ymd(date);
+      });
+      const rowsFromSnapshot = (
+        snapshot: { docs: Array<{ id: string; data: () => Record<string, any> }> } | null,
+        source: string,
+        normalize: (data: Record<string, any>) => Record<string, unknown> = (data) => data
+      ): ReadinessFirestoreRow[] => (snapshot?.docs || []).map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        data: normalize(documentSnapshot.data()),
+        source,
+      }));
+      const snapshotAvailability = (
+        snapshots: Array<{ metadata?: { fromCache?: boolean } } | null>
+      ): ReadinessEvidenceAvailability => {
+        const readable = snapshots.filter(
+          (snapshot): snapshot is { metadata?: { fromCache?: boolean } } => snapshot !== null
+        );
+        if (readable.length === 0) return 'unavailable';
+        if (
+          readable.length === snapshots.length
+          && readable.every((snapshot) => snapshot.metadata?.fromCache !== true)
+        ) {
+          return 'available';
+        }
+        return 'partial';
+      };
+      const normalizeAthleteRow = (data: Record<string, any>): Record<string, unknown> => ({
+        ...data,
+        athleteUserId,
+        date: resolveDayKey(data) || data.date,
+      });
+      const normalizeConversationRow = (data: Record<string, any>): Record<string, unknown> => ({
+        ...data,
+        athleteUserId: data.athleteUserId || data.userId || athleteUserId,
+      });
+      const readinessHistory = buildWorkspaceReadinessDailyDetails({
+        athleteUserId,
+        coachId,
+        viewerUserId: coachId,
+        scope,
+        dateKeys: readinessDateKeys,
+        checkIns: [
+          ...rowsFromSnapshot(mentalCheckInSnapshot, 'mental-check-in', normalizeAthleteRow),
+          ...rowsFromSnapshot(morningCheckInSnapshot, 'morning-check-in', normalizeAthleteRow),
+        ],
+        assignments: [],
+        completions: [
+          ...rowsFromSnapshot(simCompletionSnapshot, 'sim-completion'),
+          ...rowsFromSnapshot(iosCompletionSnapshot, 'exercise-completion'),
+          ...rowsFromSnapshot(simSessionSnapshot, 'sim-session'),
+        ],
+        conversations: [
+          ...rowsFromSnapshot(conversationSnapshot, 'legacy-nora-conversation', normalizeConversationRow),
+          ...rowsFromSnapshot(noraConversationSnapshot, 'nora-conversation', normalizeConversationRow),
+        ],
+        allowUnscopedRosterEvidence: true,
+      });
+      const readinessAvailability: AthleteReadinessWorkspaceSnapshot['availability'] = {
+        checkIns: snapshotAvailability([mentalCheckInSnapshot, morningCheckInSnapshot]),
+        modules: snapshotAvailability([
+          simCompletionSnapshot,
+          iosCompletionSnapshot,
+          simSessionSnapshot,
+        ]),
+        nora: snapshotAvailability([conversationSnapshot, noraConversationSnapshot]),
+      };
+
       const stats = {
         conversationCount,
         totalSessions,
         weeklyGoalProgress,
         sentimentScore,
+        sentimentHistory: history,
+        readinessHistory,
+        readinessAvailability,
         lastConversationDate,
         lastCheckInDate,
         lastTrainingDate,
@@ -1198,7 +1322,14 @@ class CoachService {
         conversationCount: 0,
         totalSessions: 0,
         weeklyGoalProgress: 0,
-        sentimentScore: 0
+        sentimentScore: 0,
+        sentimentHistory: [],
+        readinessHistory: [],
+        readinessAvailability: {
+          checkIns: 'unavailable',
+          modules: 'unavailable',
+          nora: 'unavailable',
+        },
       };
     }
   }
@@ -1355,21 +1486,30 @@ class CoachService {
   }
 
   /**
-   * Canonical coach-dashboard readiness feed. Unlike the athlete detail fallback
-   * below, this path is fail-closed to one coach, team, and organization and only
-   * consumes the evidence families shared with the universal app.
+   * Selected-workspace coach-dashboard readiness feed. Evidence families settle
+   * independently so a failed Firestore lane remains unavailable instead of
+   * converting every signal into a believable zero.
    */
-  async getCoachReadinessDailyDetailsForWorkspace(
+  async getCoachReadinessSnapshotForWorkspace(
     athleteUserId: string,
     coachId: string,
     scope: PulseCheckWorkspaceScope,
     days: number = 14
-  ): Promise<AthleteReadinessDailyDetail[]> {
+  ): Promise<AthleteReadinessWorkspaceSnapshot> {
+    const unavailable: AthleteReadinessWorkspaceSnapshot['availability'] = {
+      checkIns: 'unavailable',
+      modules: 'unavailable',
+      nora: 'unavailable',
+    };
     try {
       const normalizedAthleteID = String(athleteUserId || '').trim();
       const normalizedCoachID = String(coachId || '').trim();
       const workspace = normalizePulseCheckWorkspaceScope(scope);
-      if (!normalizedAthleteID || !normalizedCoachID || !workspace) return [];
+      if (!normalizedAthleteID || !normalizedCoachID || !workspace) {
+        return { details: [], availability: unavailable };
+      }
+      const viewerUserID = String(auth.currentUser?.uid || '').trim();
+      const allowUnscopedSelfEvidence = viewerUserID === normalizedAthleteID;
 
       const windowDays = Math.max(1, Math.min(60, Math.round(days || 14)));
       const today = new Date();
@@ -1387,53 +1527,143 @@ class CoachService {
         (_, index) => checkInDocumentIDs.slice(index * 30, index * 30 + 30)
       );
 
-      const [checkInSnapshots, assignmentSnapshot] = await Promise.all([
-        Promise.all(
-          checkInDocumentIDChunks.map((documentIDs) =>
-            getDocs(
-              query(
+      const toRows = (
+        snapshots: Array<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }>,
+        source: string
+      ): ReadinessFirestoreRow[] => snapshots.flatMap((snapshot) =>
+        snapshot.docs.map((documentSnapshot) => ({
+          id: documentSnapshot.id,
+          data: documentSnapshot.data(),
+          source,
+        }))
+      );
+      const checkInsPromise = Promise.all(
+        checkInDocumentIDChunks.map((documentIDs) => getDocs(
+          allowUnscopedSelfEvidence
+            ? query(
+                collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION),
+                where(documentId(), 'in', documentIDs)
+              )
+            : query(
                 collection(db, PULSECHECK_MORNING_CHECKINS_COLLECTION),
                 where(documentId(), 'in', documentIDs),
                 where('teamId', '==', workspace.teamId),
                 where('organizationId', '==', workspace.organizationId)
               )
+        ))
+      ).then((snapshots) => toRows(snapshots, 'morning-check-in'));
+      const assignmentsPromise = getDocs(
+        query(
+          collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION),
+          where('coachId', '==', normalizedCoachID),
+          where('teamId', '==', workspace.teamId),
+          where('organizationId', '==', workspace.organizationId),
+          where('athleteId', '==', normalizedAthleteID)
+        )
+      ).then((snapshot) => toRows([snapshot], 'daily-assignment'));
+      const legacyConversationsPromise = allowUnscopedSelfEvidence
+        ? getDocs(
+            query(collection(db, 'conversations'), where('userId', '==', normalizedAthleteID))
+          ).then((snapshot) => toRows([snapshot], 'legacy-nora-conversation'))
+        : Promise.resolve([] as ReadinessFirestoreRow[]);
+      const noraConversationsPromise = getDocs(
+        allowUnscopedSelfEvidence
+          ? query(
+              collection(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION),
+              where('athleteUserId', '==', normalizedAthleteID)
             )
-          )
-        ),
-        getDocs(
-          query(
-            collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION),
-            where('coachId', '==', normalizedCoachID),
-            where('teamId', '==', workspace.teamId),
-            where('organizationId', '==', workspace.organizationId),
-            where('athleteId', '==', normalizedAthleteID)
-          )
-        ),
-      ]);
+          : query(
+              collection(db, PULSECHECK_NORA_CONVERSATIONS_COLLECTION),
+              where('athleteUserId', '==', normalizedAthleteID),
+              where('teamId', '==', workspace.teamId)
+            )
+      ).then((snapshot) => toRows([snapshot], 'nora-conversation'));
+      const simCompletionsPromise = getDocs(
+        collection(db, SIM_COMPLETIONS_ROOT, normalizedAthleteID, 'completions')
+      ).then((snapshot) => toRows([snapshot], 'sim-completion'));
+      const exerciseCompletionsPromise = getDocs(
+        collection(db, IOS_MENTAL_COMPLETIONS_ROOT, normalizedAthleteID, 'completions')
+      ).then((snapshot) => toRows([snapshot], 'exercise-completion'));
+      const simSessionsPromise = getDocs(
+        collection(db, SIM_SESSIONS_ROOT, normalizedAthleteID, 'sessions')
+      ).then((snapshot) => toRows([snapshot], 'sim-session'));
 
-      return buildWorkspaceReadinessDailyDetails({
-        athleteUserId: normalizedAthleteID,
-        coachId: normalizedCoachID,
-        scope: workspace,
-        dateKeys,
-        checkIns: checkInSnapshots.flatMap((querySnapshot) =>
-          querySnapshot.docs.map((snapshot) => ({
-            id: snapshot.id,
-            data: snapshot.data() as Record<string, unknown>,
-          }))
-        ),
-        assignments: assignmentSnapshot.docs.map((snapshot) => ({
-          id: snapshot.id,
-          data: snapshot.data() as Record<string, unknown>,
-        })),
+      const evidenceNames = [
+        'check-ins',
+        'daily assignments',
+        'legacy Nora conversations',
+        'Nora conversations',
+        'simulation completions',
+        'mental exercise completions',
+        'simulation sessions',
+      ];
+      const settled = await Promise.allSettled([
+        checkInsPromise,
+        assignmentsPromise,
+        legacyConversationsPromise,
+        noraConversationsPromise,
+        simCompletionsPromise,
+        exerciseCompletionsPromise,
+        simSessionsPromise,
+      ]);
+      settled.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.warn(
+            `[CoachService] ${evidenceNames[index]} unavailable for scoped readiness.`,
+            result.reason
+          );
+        }
       });
+      const rowsAt = (index: number): ReadinessFirestoreRow[] => {
+        const result = settled[index];
+        return result?.status === 'fulfilled' ? result.value : [];
+      };
+      const availabilityFor = (indexes: number[]): ReadinessEvidenceAvailability => {
+        const availableCount = indexes.filter((index) => settled[index]?.status === 'fulfilled').length;
+        if (availableCount === indexes.length) return 'available';
+        return availableCount > 0 ? 'partial' : 'unavailable';
+      };
+
+      return {
+        details: buildWorkspaceReadinessDailyDetails({
+          athleteUserId: normalizedAthleteID,
+          coachId: normalizedCoachID,
+          viewerUserId: viewerUserID,
+          scope: workspace,
+          dateKeys,
+          checkIns: rowsAt(0),
+          assignments: rowsAt(1),
+          conversations: [...rowsAt(2), ...rowsAt(3)],
+          completions: [...rowsAt(4), ...rowsAt(5), ...rowsAt(6)],
+        }),
+        availability: {
+          checkIns: availabilityFor([0]),
+          modules: availabilityFor([1, 4, 5, 6]),
+          nora: availabilityFor([2, 3]),
+        },
+      };
     } catch (error) {
       console.error(
-        '[CoachService] Error fetching scoped coach readiness details:',
+        '[CoachService] Error fetching scoped coach readiness snapshot:',
         error
       );
-      return [];
+      return { details: [], availability: unavailable };
     }
+  }
+
+  async getCoachReadinessDailyDetailsForWorkspace(
+    athleteUserId: string,
+    coachId: string,
+    scope: PulseCheckWorkspaceScope,
+    days: number = 14
+  ): Promise<AthleteReadinessDailyDetail[]> {
+    const snapshot = await this.getCoachReadinessSnapshotForWorkspace(
+      athleteUserId,
+      coachId,
+      scope,
+      days
+    );
+    return snapshot.details;
   }
 
   async getAthleteReadinessDailyDetails(
@@ -2267,7 +2497,13 @@ class CoachService {
       oldest.setDate(oldest.getDate() - Math.max(0, days - 1));
       const aggregates = new Map<string, DailySignalAggregate>();
 
-      const addAggregate = (dateKey: string | null, sentimentScore: number, messageCount = 1, at?: Date | null) => {
+      const addAggregate = (
+        dateKey: string | null,
+        sentimentScore: number,
+        messageCount: number,
+        source: DailySentimentSourceKey,
+        at?: Date | null
+      ) => {
         if (!dateKey || messageCount <= 0) return;
         const date = new Date(`${dateKey}T12:00:00`);
         if (!Number.isFinite(date.getTime()) || date < oldest) return;
@@ -2277,10 +2513,21 @@ class CoachService {
           scoreCount: 0,
           messageCount: 0,
           latestAt,
+          sources: new Map(),
         };
-        existing.scoreSum += clampSentiment(sentimentScore);
+        const clampedScore = clampSentiment(sentimentScore);
+        existing.scoreSum += clampedScore;
         existing.scoreCount += 1;
         existing.messageCount += messageCount;
+        const sourceAggregate = existing.sources.get(source) || {
+          scoreSum: 0,
+          scoreCount: 0,
+          messageCount: 0,
+        };
+        sourceAggregate.scoreSum += clampedScore;
+        sourceAggregate.scoreCount += 1;
+        sourceAggregate.messageCount += messageCount;
+        existing.sources.set(source, sourceAggregate);
         if (latestAt > existing.latestAt) existing.latestAt = latestAt;
         aggregates.set(dateKey, existing);
       };
@@ -2314,6 +2561,7 @@ class CoachService {
             String(data.date || '').trim(),
             Number(data.sentimentScore || 0),
             messageCount,
+            'stored-sentiment-analysis',
             toDateOrNull(data.updatedAt || data.lastAnalyzedAt || data.createdAt)
           );
         }
@@ -2325,6 +2573,7 @@ class CoachService {
           resolveDayKey(data),
           resolveCheckInSentiment(data),
           1,
+          'mood-check-in',
           toDateOrNull(data.createdAt || data.updatedAt)
         );
       });
@@ -2335,6 +2584,7 @@ class CoachService {
           resolveDayKey(data),
           resolveCheckInSentiment(data),
           1,
+          'morning-check-in',
           toDateOrNull(data.createdAt || data.updatedAt)
         );
       });
@@ -2355,6 +2605,7 @@ class CoachService {
           dateKey,
           messages.length ? this.calculateBasicSentiment(messages) : 0,
           messages.length,
+          'pulsecheck-chat',
           toDateOrNull(data.updatedAt || data.createdAt)
         );
       });
@@ -2368,6 +2619,7 @@ class CoachService {
           resolveDayKey({ ...data, createdAt: data.createdAt || data.updatedAt }),
           texts.length ? this.calculateBasicSentiment(texts) : 0,
           messageCount,
+          'nora-conversation',
           toDateOrNull(data.updatedAt || data.createdAt)
         );
       });
@@ -2381,6 +2633,14 @@ class CoachService {
             date,
             sentimentScore: clampSentiment(score),
             messageCount: aggregate.messageCount,
+            sources: Array.from(aggregate.sources.entries()).map(([key, source]) => ({
+              key,
+              label: DAILY_SENTIMENT_SOURCE_LABELS[key],
+              sentimentScore: clampSentiment(
+                source.scoreCount > 0 ? source.scoreSum / source.scoreCount : 0
+              ),
+              messageCount: source.messageCount,
+            })),
             lastAnalyzedAt: aggregate.latestAt,
             createdAt: aggregate.latestAt,
             updatedAt: aggregate.latestAt,

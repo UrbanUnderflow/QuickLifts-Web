@@ -128,7 +128,6 @@ test('coach handoff brief explains why meal-plan context is being sent', () => {
   const brief = buildCoachHandoffBrief({
     athleteName: 'Tremaine',
     message: 'They do, can you send these to coach to let him decide on what I can have?',
-    noraConversationId: 'conversation-1',
     recentMessages: [
       {
         isFromUser: true,
@@ -159,7 +158,46 @@ test('coach handoff brief explains why meal-plan context is being sent', () => {
   assert.match(brief.messageBody, /not as a generic performance-anxiety issue/i);
   assert.match(brief.messageBody, /Beef Tacos/i);
   assert.match(brief.messageBody, /Stuffed Peppers/i);
-  assert.match(brief.messageBody, /pulsecheck:\/\/nora\/chat\?conversationId=conversation-1/i);
+  assert.equal(brief.sharingScope, 'selected_context');
+  assert.equal(brief.includesFullThread, false);
+  assert.doesNotMatch(brief.messageBody, /Nora thread/i);
+  assert.doesNotMatch(brief.messageBody, /pulsecheck:\/\/nora\/chat/i);
+  assert.doesNotMatch(brief.messageBody, /full conversation/i);
+});
+
+test('generic coach handoff shares only the selected current context', () => {
+  const { buildCoachHandoffBrief } = loadRuntimeHelpers();
+  const brief = buildCoachHandoffBrief({
+    athleteName: 'Tremaine',
+    message: 'Send this to my coach.',
+    recentMessages: [
+      {
+        isFromUser: true,
+        content: 'Earlier I shared a private meal-plan concern about a teammate that is unrelated to this request.',
+      },
+      {
+        isFromUser: false,
+        content: 'One option is to keep that earlier concern between us unless you decide to share it.',
+      },
+      {
+        isFromUser: true,
+        content: 'My legs feel unusually heavy after today\'s workout.',
+      },
+      {
+        isFromUser: false,
+        content: 'It may help to ask your coach to review today\'s training load with you.',
+      },
+    ],
+  });
+
+  assert.match(brief.messageBody, /legs feel unusually heavy/i);
+  assert.match(brief.messageBody, /review today\'s training load/i);
+  assert.doesNotMatch(brief.messageBody, /private meal-plan concern about a teammate/i);
+  assert.doesNotMatch(brief.messageBody, /option is to keep that earlier concern between us/i);
+  assert.doesNotMatch(brief.messageBody, /Nora thread|pulsecheck:\/\/nora\/chat|full conversation/i);
+  assert.deepEqual(brief.athleteExcerpts, ["My legs feel unusually heavy after today's workout."]);
+  assert.equal(brief.sharingScope, 'selected_context');
+  assert.equal(brief.includesFullThread, false);
 });
 
 test('web athlete chat callers attach Firebase bearer tokens and canonical user ids', () => {

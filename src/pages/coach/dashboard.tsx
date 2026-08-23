@@ -68,11 +68,15 @@ import {
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
 import AccountSignInMethods from '../../components/auth/AccountSignInMethods';
-import AthleteReadinessCard from '../../components/AthleteReadinessCard';
+import AthleteReadinessCard, {
+  type CoachScorecardResponse,
+} from '../../components/AthleteReadinessCard';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { getCategoryLabel, EscalationCategory } from '../../api/firebase/escalation/types';
 import {
+  deriveAthleteDeviceStatusFromEvidence,
   loadAthleteDeviceStatuses,
+  mergeAthleteDeviceStatusEvidence,
   type AthleteDeviceStatus,
   type AthleteDevicePerSourceStatus,
   type AthleteDeviceDayDetail,
@@ -85,8 +89,11 @@ import { userService, User as UserModel } from '../../api/firebase/user';
 import {
   coachService,
   type AthleteReadinessDailyDetail,
+  type AthleteReadinessWorkspaceSnapshot,
   type CoachAthleteCurriculumItem,
   type CoachAthleteCurriculumSnapshot,
+  type DailySentimentRecord,
+  type ReadinessEvidenceAvailability,
 } from '../../api/firebase/coach';
 import { resolveCurriculumItemAccent } from '../../utils/pulseCheckModuleVisuals';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
@@ -126,11 +133,11 @@ import {
 } from '../../utils/pulsecheckCommercialization';
 import { buildPulseCheckAthleteOfferWebUrl } from '../../utils/pulsecheckInviteLinks';
 import {
-  calculatePulseCheckCoherence,
-  calculatePulseCheckTeamCoherence,
-  type PulseCheckCoherenceSnapshot,
-  type PulseCheckTeamCoherenceSnapshot,
-} from '../../utils/pulsecheckCoherence';
+  calculatePulseCheckTeamScorecardSnapshot,
+  type PulseCheckTeamScorecardSnapshot,
+} from '../../utils/pulsecheckTeamScorecard';
+import { pulseCheckTeamScoreDisplayLabel } from '../../utils/pulsecheckScorePresentation';
+import type { PulseCheckScoreComponentDayState } from '../../utils/pulsecheckScoringV2';
 import {
   listSentSportsIntelligenceReportsForTeam,
   type CoachReportListItem,
@@ -173,6 +180,7 @@ type CoachAthlete = {
   athleteAge?: number;
   accountCreatedAt?: Date | number | string | null;
   lastActiveDate?: Date;
+  lastCheckInDate?: Date;
   conversationCount: number;
   totalSessions: number;
   weeklyGoalProgress: number;
@@ -184,6 +192,9 @@ type CoachAthlete = {
   deviceDailyPresence?: boolean[];
   deviceStatus?: AthleteDeviceStatus;
   youthTrack?: PulseCheckYouthTrack;
+  sentimentHistory?: DailySentimentRecord[];
+  readinessHistory?: AthleteReadinessDailyDetail[];
+  readinessAvailability?: AthleteReadinessWorkspaceSnapshot['availability'];
 };
 
 type AthleteProfileHistoryRow = {
@@ -192,11 +203,18 @@ type AthleteProfileHistoryRow = {
   messages: number;
 };
 
-type DailyCheckInPoint = {
+type DailySentimentPoint = {
   date: Date;
   dateKey: string;
   score: number;
   messages: number;
+  hasSignal: boolean;
+};
+
+type DailyCheckInPoint = {
+  date: Date;
+  dateKey: string;
+  state: PulseCheckScoreComponentDayState['state'] | 'unavailable';
   hasCheckIn: boolean;
 };
 
@@ -204,11 +222,14 @@ type CheckInWindowSummary = {
   days: number;
   checked: number;
   missed: number;
-  rate: number;
+  scorable: number;
+  observedDays: number;
+  rate: number | null;
   state: string;
   toneClass: string;
   detail: string;
-  presence: boolean[];
+  presence: DailyCheckInPoint['state'][];
+  availability: ReadinessEvidenceAvailability;
 };
 
 type StatusKey = 'optimal' | 'flagged' | 'elevated' | 'escalated' | 'pending';
@@ -236,85 +257,185 @@ const clampPct = (value: number): number => Math.max(0, Math.min(100, Math.round
 const average = (values: number[]): number =>
   values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 
-type AthleteAdherenceBreakdown = {
-  checkIn: number;
-  device: number;
-  modules: number;
-  overall: number;
+const averageAvailable = (values: Array<number | null>): number | null => {
+  const available = values.filter((value): value is number => value !== null);
+  return available.length > 0 ? average(available) : null;
 };
 
-type TeamAdherenceBreakdown = AthleteAdherenceBreakdown & {
+const mergeReadinessAvailability = (
+  primary: ReadinessEvidenceAvailability,
+  fallback?: ReadinessEvidenceAvailability
+): ReadinessEvidenceAvailability => {
+  if (primary === 'available' || fallback === 'available') return 'available';
+  if (primary === 'partial' || fallback === 'partial') return 'partial';
+  return 'unavailable';
+};
+
+const mergeAthleteReadinessSnapshot = (
+  primary: AthleteReadinessWorkspaceSnapshot,
+  fallbackDetails: AthleteReadinessDailyDetail[] = [],
+  fallbackAvailability?: AthleteReadinessWorkspaceSnapshot['availability']
+): AthleteReadinessWorkspaceSnapshot => {
+  const primaryByDate = new Map(primary.details.map((detail) => [detail.date, detail]));
+  const fallbackByDate = new Map(fallbackDetails.map((detail) => [detail.date, detail]));
+  const dateKeys = Array.from(new Set([
+    ...primaryByDate.keys(),
+    ...fallbackByDate.keys(),
+  ])).sort();
+  const details = dateKeys.map((date) => {
+    const scoped = primaryByDate.get(date);
+    const roster = fallbackByDate.get(date);
+    if (!scoped) return roster as AthleteReadinessDailyDetail;
+    if (!roster) return scoped;
+    const preferRosterSentiment = roster.noraMessageCount > scoped.noraMessageCount;
+    return {
+      date,
+      checkInCompleted: scoped.checkInCompleted || roster.checkInCompleted,
+      checkInCount: Math.max(scoped.checkInCount, roster.checkInCount),
+      noraChatCount: Math.max(scoped.noraChatCount, roster.noraChatCount),
+      noraMessageCount: Math.max(scoped.noraMessageCount, roster.noraMessageCount),
+      noraSentimentScore: preferRosterSentiment
+        ? roster.noraSentimentScore ?? scoped.noraSentimentScore
+        : scoped.noraSentimentScore ?? roster.noraSentimentScore,
+      moduleAssignedCount: Math.max(scoped.moduleAssignedCount, roster.moduleAssignedCount),
+      moduleCompletedCount: Math.max(scoped.moduleCompletedCount, roster.moduleCompletedCount),
+      moduleDurationSeconds: Math.max(scoped.moduleDurationSeconds, roster.moduleDurationSeconds),
+      coherenceMorningLevel: scoped.coherenceMorningLevel || roster.coherenceMorningLevel,
+      coherenceEveningLevel: scoped.coherenceEveningLevel || roster.coherenceEveningLevel,
+      coherenceCompletedTraining:
+        scoped.coherenceCompletedTraining || roster.coherenceCompletedTraining,
+      coherenceEligibleTaskCount: Math.max(
+        scoped.coherenceEligibleTaskCount,
+        roster.coherenceEligibleTaskCount
+      ),
+      coherenceCompletedTaskCount: Math.max(
+        scoped.coherenceCompletedTaskCount,
+        roster.coherenceCompletedTaskCount
+      ),
+    };
+  });
+
+  return {
+    details,
+    availability: {
+      checkIns: mergeReadinessAvailability(
+        primary.availability.checkIns,
+        fallbackAvailability?.checkIns
+      ),
+      modules: mergeReadinessAvailability(
+        primary.availability.modules,
+        fallbackAvailability?.modules
+      ),
+      nora: mergeReadinessAvailability(
+        primary.availability.nora,
+        fallbackAvailability?.nora
+      ),
+    },
+  };
+};
+
+type AthleteEngagementCoverage = {
+  checkIn: number | null;
+  device: number | null;
+  modules: number | null;
+  overall: number | null;
+};
+
+type TeamEngagementCoverage = AthleteEngagementCoverage & {
   athleteCount: number;
 };
 
-const deviceWearPctForAthlete = (athlete: CoachAthlete, windowDays = 14): number => {
+const deviceWearPctForAthlete = (athlete: CoachAthlete, windowDays = 14): number | null => {
+  if (athlete.deviceStatus?.evidenceState === 'unavailable') return null;
   const sources = (athlete.deviceStatus?.devices || []).filter((device) => device.connectionStatus !== 'not_connected');
-  if (sources.length > 0) {
-    const wornDays = Array.from({ length: windowDays }, (_, dayIndex) =>
-      sources.some((source) => {
+  const fallbackPresence = athlete.deviceStatus?.dailyPresence || athlete.deviceDailyPresence || [];
+  const hasPresenceEvidence = sources.length > 0 || fallbackPresence.length > 0;
+  if (hasPresenceEvidence) {
+    const wornDays = Array.from({ length: windowDays }, (_, dayIndex) => {
+      const fallbackIndex = fallbackPresence.length - windowDays + dayIndex;
+      const hasFallbackPresence = fallbackIndex >= 0
+        && fallbackIndex < fallbackPresence.length
+        && fallbackPresence[fallbackIndex];
+      return hasFallbackPresence || sources.some((source) => {
         const sourceIndex = source.dailyPresence.length - windowDays + dayIndex;
         return sourceIndex >= 0 && sourceIndex < source.dailyPresence.length && source.dailyPresence[sourceIndex];
-      })
-    ).filter(Boolean).length;
+      });
+    }).filter(Boolean).length;
+    if (athlete.deviceStatus?.evidenceState === 'partial' && wornDays === 0) return null;
     return clampPct((wornDays / windowDays) * 100);
   }
 
-  const fallbackPresence = athlete.deviceStatus?.dailyPresence || athlete.deviceDailyPresence || [];
-  if (fallbackPresence.length > 0) {
-    const visibleWindow = fallbackPresence.slice(-windowDays);
-    return clampPct((visibleWindow.filter(Boolean).length / windowDays) * 100);
-  }
-
-  return 0;
+  return athlete.deviceStatus?.evidenceState === 'available' ? 0 : null;
 };
 
-const deriveAthleteAdherenceBreakdown = (
+const deriveAthleteEngagementCoverage = (
   athlete: CoachAthlete,
-  details: AthleteReadinessDailyDetail[],
+  snapshot: AthleteReadinessWorkspaceSnapshot,
   windowDays = 14
-): AthleteAdherenceBreakdown => {
+): AthleteEngagementCoverage => {
   const days = Math.max(1, windowDays);
+  const details = snapshot.details;
   const windowDetails = details.slice(-days);
-  const checkIn = clampPct((windowDetails.filter((day) => day.checkInCompleted).length / days) * 100);
+  const checkIn = snapshot.availability.checkIns === 'available'
+    ? clampPct((windowDetails.filter((day) => day.checkInCompleted).length / days) * 100)
+    : null;
   const device = deviceWearPctForAthlete(athlete, days);
   const assignedModules = windowDetails.reduce((sum, day) => sum + day.moduleAssignedCount, 0);
   const completedModules = windowDetails.reduce((sum, day) => sum + day.moduleCompletedCount, 0);
-  const modules = assignedModules > 0
-    ? clampPct((Math.min(completedModules, assignedModules) / assignedModules) * 100)
-    : clampPct((windowDetails.filter((day) => day.moduleCompletedCount > 0).length / days) * 100);
+  const modules = snapshot.availability.modules === 'available'
+    ? assignedModules > 0
+      ? clampPct((Math.min(completedModules, assignedModules) / assignedModules) * 100)
+      : clampPct((windowDetails.filter((day) => day.moduleCompletedCount > 0).length / days) * 100)
+    : null;
   return {
     checkIn,
     device,
     modules,
-    overall: clampPct(average([checkIn, device, modules])),
+    overall: (() => {
+      const value = averageAvailable([checkIn, device, modules]);
+      return value === null ? null : clampPct(value);
+    })(),
   };
 };
 
-const averageTeamAdherence = (breakdowns: AthleteAdherenceBreakdown[]): TeamAdherenceBreakdown => ({
+const averageTeamEngagementCoverage = (breakdowns: AthleteEngagementCoverage[]): TeamEngagementCoverage => ({
   athleteCount: breakdowns.length,
-  checkIn: clampPct(average(breakdowns.map((item) => item.checkIn))),
-  device: clampPct(average(breakdowns.map((item) => item.device))),
-  modules: clampPct(average(breakdowns.map((item) => item.modules))),
-  overall: clampPct(average(breakdowns.map((item) => item.overall))),
+  checkIn: (() => {
+    const value = averageAvailable(breakdowns.map((item) => item.checkIn));
+    return value === null ? null : clampPct(value);
+  })(),
+  device: (() => {
+    const value = averageAvailable(breakdowns.map((item) => item.device));
+    return value === null ? null : clampPct(value);
+  })(),
+  modules: (() => {
+    const value = averageAvailable(breakdowns.map((item) => item.modules));
+    return value === null ? null : clampPct(value);
+  })(),
+  overall: (() => {
+    const value = averageAvailable(breakdowns.map((item) => item.overall));
+    return value === null ? null : clampPct(value);
+  })(),
 });
 
-const deriveAthleteCoherence = (
-  athlete: CoachAthlete,
-  details: AthleteReadinessDailyDetail[],
-  windowDays = 14
-): PulseCheckCoherenceSnapshot =>
-  calculatePulseCheckCoherence(
-    details.slice(-windowDays).map((detail) => ({
-      dateKey: detail.date,
-      morningLevel: detail.coherenceMorningLevel,
-      eveningLevel: detail.coherenceEveningLevel,
-      completedTraining: detail.coherenceCompletedTraining,
-      eligibleTaskCount: detail.coherenceEligibleTaskCount,
-      completedTaskCount: detail.coherenceCompletedTaskCount,
-    })),
-    windowDays,
-    { activatedAt: athlete.accountCreatedAt }
-  );
+const loadAthleteTeamScorecard = async (
+  athleteUserId: string,
+  teamId: string,
+  idToken: string,
+): Promise<CoachScorecardResponse> => {
+  const response = await fetch('/api/pulsecheck/functions/get-pulsecheck-scorecard', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ athleteUserId, teamId }),
+  });
+  if (!response.ok) throw new Error(`Scorecard request failed with ${response.status}`);
+  const payload = await response.json() as Partial<CoachScorecardResponse>;
+  if (!payload.scorecard) throw new Error('Scorecard response was missing the scorecard.');
+  return payload as CoachScorecardResponse;
+};
 
 const relativeWhen = (d?: Date): string => {
   const days = daysSince(d);
@@ -544,6 +665,42 @@ const initialsOf = (name?: string): string => {
   if (!name) return 'C';
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || 'C';
+};
+
+const dashboardImageSrc = (src?: string | null): string => {
+  const trimmed = typeof src === 'string' ? src.trim() : '';
+  if (!trimmed || ['null', 'undefined', 'none'].includes(trimmed.toLowerCase())) return '';
+  if (/^gs:\/\//i.test(trimmed)) return '';
+  if (/^(https?:\/\/|data:image\/|blob:|\/)/i.test(trimmed)) return trimmed;
+  return '';
+};
+
+const DashboardAvatar: React.FC<{
+  src?: string | null;
+  name?: string;
+  alt?: string;
+  imageClassName: string;
+  fallbackClassName: string;
+}> = ({ src, name, alt, imageClassName, fallbackClassName }) => {
+  const imageSrc = useMemo(() => dashboardImageSrc(src), [src]);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFailedSrc(null);
+  }, [imageSrc]);
+
+  if (imageSrc && failedSrc !== imageSrc) {
+    return (
+      <img
+        src={imageSrc}
+        alt={alt || name || ''}
+        className={imageClassName}
+        onError={() => setFailedSrc(imageSrc)}
+      />
+    );
+  }
+
+  return <span className={fallbackClassName}>{initialsOf(name)}</span>;
 };
 
 type InboxThread = {
@@ -1054,12 +1211,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         aria-label="Edit your profile"
       >
         <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-[#E0FE10]/30 to-green-500/20 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-          {profile.avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-xs font-bold text-[#E0FE10]">{initialsOf(profile.name)}</span>
-          )}
+          <DashboardAvatar
+            src={profile.avatarUrl}
+            name={profile.name}
+            imageClassName="w-full h-full object-cover"
+            fallbackClassName="text-xs font-bold text-[#E0FE10]"
+          />
         </div>
         <div className="leading-tight min-w-0 flex-1">
           <div className="text-xs font-semibold text-white truncate">{profile.name}</div>
@@ -1317,6 +1474,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           athlete={selectedAthlete}
           alerts={alerts}
           canSeeTier3={canSeeTier3}
+          coachId={coachId || ''}
+          teamId={teamContext?.teamId || ''}
+          organizationId={teamContext?.organizationId || ''}
           onClose={() => setSelectedAthleteId(null)}
         />
 
@@ -1584,7 +1744,8 @@ const CoachDashboard: React.FC = () => {
         // single batch queries; best-effort so a failure never blocks the board.
         let enriched = list;
         try {
-          const [coachEscalations, deviceResult] = await Promise.all([
+          const idToken = await auth.currentUser?.getIdToken();
+          const [coachEscalations, deviceResult, coachEvidenceResponses] = await Promise.all([
             escalationRecordsService.getActiveForCoach(currentUser.id).catch(() => []),
             loadAthleteDeviceStatuses(
               list.map((athlete) => athlete.id),
@@ -1594,6 +1755,16 @@ const CoachDashboard: React.FC = () => {
                 organizationId: selectedTeamAccess.context.organizationId,
               }
             ).catch(() => null),
+            idToken
+              ? Promise.all(list.map(async (athlete) => ({
+                  athlete,
+                  response: await loadAthleteTeamScorecard(
+                    athlete.id,
+                    selectedTeamAccess.context.teamId,
+                    idToken,
+                  ).catch(() => null),
+                })))
+              : Promise.resolve([]),
           ]);
           const selectedAthleteIds = new Set(list.map((athlete) => athlete.id));
           const escalations = coachEscalations.filter((record) => selectedAthleteIds.has(record.userId));
@@ -1605,6 +1776,20 @@ const CoachDashboard: React.FC = () => {
           const deviceByAthlete = new Map<string, AthleteDeviceStatus>();
           for (const s of deviceResult?.statuses || []) {
             deviceByAthlete.set(s.athleteUserId, s);
+          }
+          for (const { athlete, response } of coachEvidenceResponses) {
+            if (!response?.deviceEvidence) continue;
+            const projectedStatus = deriveAthleteDeviceStatusFromEvidence(
+              response.deviceEvidence,
+              athlete,
+            );
+            deviceByAthlete.set(
+              athlete.id,
+              mergeAthleteDeviceStatusEvidence(
+                projectedStatus,
+                deviceByAthlete.get(athlete.id),
+              ),
+            );
           }
           enriched = list.map((a) => ({
             ...a,
@@ -1879,8 +2064,10 @@ const HomeSection: React.FC<{
   organizationId,
   onSelectAthlete,
 }) => {
-  const [liveAdherence, setLiveAdherence] = useState<TeamAdherenceBreakdown | null>(null);
-  const [liveCoherence, setLiveCoherence] = useState<PulseCheckTeamCoherenceSnapshot | null>(null);
+  const [liveEngagementCoverage, setLiveEngagementCoverage] = useState<TeamEngagementCoverage | null>(null);
+  const [liveCoherence, setLiveCoherence] = useState<PulseCheckTeamScorecardSnapshot | null>(null);
+  const [liveReadinessByAthlete, setLiveReadinessByAthlete] = useState<Record<string, AthleteReadinessWorkspaceSnapshot> | null>(null);
+  const [liveScorecardByAthlete, setLiveScorecardByAthlete] = useState<Record<string, CoachScorecardResponse | null> | null>(null);
 
   const counts = useMemo(() => {
     const c: Record<StatusKey, number> = {
@@ -1899,15 +2086,19 @@ const HomeSection: React.FC<{
   useEffect(() => {
     let cancelled = false;
     if (isDemo) {
-      setLiveAdherence(null);
+      setLiveEngagementCoverage(null);
       setLiveCoherence(null);
+      setLiveReadinessByAthlete(null);
+      setLiveScorecardByAthlete(null);
       return () => {
         cancelled = true;
       };
     }
     if (athletes.length === 0) {
-      setLiveAdherence(averageTeamAdherence([]));
-      setLiveCoherence(calculatePulseCheckTeamCoherence([]));
+      setLiveEngagementCoverage(averageTeamEngagementCoverage([]));
+      setLiveCoherence(calculatePulseCheckTeamScorecardSnapshot([], 0));
+      setLiveReadinessByAthlete({});
+      setLiveScorecardByAthlete({});
       return () => {
         cancelled = true;
       };
@@ -1916,44 +2107,96 @@ const HomeSection: React.FC<{
     const normalizedTeamID = String(teamId || '').trim();
     const normalizedOrganizationID = String(organizationId || '').trim();
     if (!normalizedCoachID || !normalizedTeamID || !normalizedOrganizationID) {
-      setLiveAdherence(averageTeamAdherence([]));
-      setLiveCoherence(calculatePulseCheckTeamCoherence([]));
+      setLiveEngagementCoverage(averageTeamEngagementCoverage([]));
+      setLiveCoherence(calculatePulseCheckTeamScorecardSnapshot([], athletes.length));
+      setLiveReadinessByAthlete(Object.fromEntries(athletes.map((athlete) => [
+        athlete.id,
+        {
+          details: [],
+          availability: {
+            checkIns: 'unavailable',
+            modules: 'unavailable',
+            nora: 'unavailable',
+          },
+        },
+      ])));
+      setLiveScorecardByAthlete(Object.fromEntries(
+        athletes.map((athlete) => [athlete.id, null])
+      ));
       return () => {
         cancelled = true;
       };
     }
 
-    setLiveAdherence(null);
+    setLiveEngagementCoverage(null);
     setLiveCoherence(null);
-    Promise.all(
-      athletes.map(async (athlete) => {
-        const details = await coachService
-          .getCoachReadinessDailyDetailsForWorkspace(
-            athlete.id,
-            normalizedCoachID,
-            {
-              teamId: normalizedTeamID,
-              organizationId: normalizedOrganizationID,
-            },
-            14
-          )
-          .catch((): AthleteReadinessDailyDetail[] => []);
-        return {
-          adherence: deriveAthleteAdherenceBreakdown(athlete, details, 14),
-          coherence: deriveAthleteCoherence(athlete, details, 14),
-        };
-      })
-    )
+    setLiveReadinessByAthlete(null);
+    setLiveScorecardByAthlete(null);
+    const loadMetrics = async () => {
+      const idToken = await auth.currentUser?.getIdToken();
+      return Promise.all(
+        athletes.map(async (athlete) => {
+          const [snapshot, scorecardResponse] = await Promise.all([
+            coachService
+              .getCoachReadinessSnapshotForWorkspace(
+                athlete.id,
+                normalizedCoachID,
+                {
+                  teamId: normalizedTeamID,
+                  organizationId: normalizedOrganizationID,
+                },
+                14
+              )
+              .catch((): AthleteReadinessWorkspaceSnapshot => ({
+                details: [],
+                availability: {
+                  checkIns: 'unavailable',
+                  modules: 'unavailable',
+                  nora: 'unavailable',
+                },
+              })),
+            idToken
+              ? loadAthleteTeamScorecard(athlete.id, normalizedTeamID, idToken).catch(() => null)
+              : Promise.resolve(null),
+          ]);
+          const mergedSnapshot = mergeAthleteReadinessSnapshot(
+            snapshot,
+            athlete.readinessHistory,
+            athlete.readinessAvailability
+          );
+          return {
+            athleteId: athlete.id,
+            snapshot: mergedSnapshot,
+            engagementCoverage: deriveAthleteEngagementCoverage(athlete, mergedSnapshot, 14),
+            scorecardResponse,
+          };
+        })
+      );
+    };
+    loadMetrics()
       .then((metrics) => {
         if (!cancelled) {
-          setLiveAdherence(averageTeamAdherence(metrics.map((item) => item.adherence)));
-          setLiveCoherence(calculatePulseCheckTeamCoherence(metrics.map((item) => item.coherence)));
+          setLiveReadinessByAthlete(Object.fromEntries(
+            metrics.map((item) => [item.athleteId, item.snapshot])
+          ));
+          setLiveScorecardByAthlete(Object.fromEntries(
+            metrics.map((item) => [item.athleteId, item.scorecardResponse])
+          ));
+          setLiveEngagementCoverage(averageTeamEngagementCoverage(metrics.map((item) => item.engagementCoverage)));
+          setLiveCoherence(calculatePulseCheckTeamScorecardSnapshot(
+            metrics
+              .map((item) => item.scorecardResponse?.scorecard ?? null)
+              .filter((scorecard): scorecard is NonNullable<typeof scorecard> => scorecard !== null),
+            athletes.length,
+          ));
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setLiveAdherence(averageTeamAdherence([]));
-          setLiveCoherence(calculatePulseCheckTeamCoherence([]));
+          setLiveEngagementCoverage(averageTeamEngagementCoverage([]));
+          setLiveCoherence(calculatePulseCheckTeamScorecardSnapshot([], athletes.length));
+          setLiveReadinessByAthlete({});
+          setLiveScorecardByAthlete({});
         }
       });
 
@@ -1962,7 +2205,7 @@ const HomeSection: React.FC<{
     };
   }, [athletes, coachId, isDemo, organizationId, teamId]);
 
-  const adherence = useMemo(() => {
+  const engagementCoverage = useMemo(() => {
     const total = athletes.length || 1;
     const pct = (n: number) => Math.round((n / total) * 100);
     if (isDemo) {
@@ -1975,22 +2218,23 @@ const HomeSection: React.FC<{
       const modules = pct(modulesDone);
       return { checkIn, device, modules, overall: clampPct(average([checkIn, device, modules])) };
     }
-    return liveAdherence || averageTeamAdherence([]);
-  }, [athletes, isDemo, liveAdherence]);
+    return liveEngagementCoverage || averageTeamEngagementCoverage([]);
+  }, [athletes, isDemo, liveEngagementCoverage]);
 
-  const coherence = useMemo<PulseCheckTeamCoherenceSnapshot>(() => {
+  const coherence = useMemo<PulseCheckTeamScorecardSnapshot>(() => {
     if (isDemo) {
-      return {
-        athleteCount: athletes.length,
-        scoredAthleteCount: athletes.length,
-        buildingAthleteCount: 0,
-        consistencyPercent: 71,
-        followThroughPercent: 67,
-        feelingGoodPercent: 75,
-        coherencePercent: 71,
-      };
+      return calculatePulseCheckTeamScorecardSnapshot(
+        Array.from({ length: athletes.length }, () => ({
+          methodologyVersion: '2.2.3',
+          coherence: { score: 76, status: 'available' },
+          wellbeing: { score: 78, status: 'available' },
+          recovery: { score: 72, status: 'available' },
+          adherence: { score: 84, status: 'available' },
+        })),
+        athletes.length,
+      );
     }
-    return liveCoherence || calculatePulseCheckTeamCoherence([]);
+    return liveCoherence || calculatePulseCheckTeamScorecardSnapshot([], athletes.length);
   }, [athletes.length, isDemo, liveCoherence]);
 
   return (
@@ -2009,13 +2253,13 @@ const HomeSection: React.FC<{
           snapshot={coherence}
           loading={!isDemo && athletes.length > 0 && liveCoherence === null}
         />
-        <AdherenceTile
-          id="tile-adherence"
-          checkIn={adherence.checkIn}
-          device={adherence.device}
-          modules={adherence.modules}
-          overall={adherence.overall}
-          loading={!isDemo && athletes.length > 0 && liveAdherence === null}
+        <EngagementCoverageTile
+          id="tile-engagement-coverage"
+          checkIn={engagementCoverage.checkIn}
+          device={engagementCoverage.device}
+          modules={engagementCoverage.modules}
+          overall={engagementCoverage.overall}
+          loading={!isDemo && athletes.length > 0 && liveEngagementCoverage === null}
           athletes={athletes}
         />
       </div>
@@ -2051,6 +2295,8 @@ const HomeSection: React.FC<{
                 demo={isDemo}
                 teamId={teamId}
                 organizationId={organizationId}
+                readinessSnapshot={liveReadinessByAthlete?.[a.id]}
+                scorecardResponse={liveScorecardByAthlete?.[a.id]}
                 athlete={{
                   id: a.id,
                   displayName: a.displayName,
@@ -2066,11 +2312,13 @@ const HomeSection: React.FC<{
                   weeklyGoalProgress: a.weeklyGoalProgress,
                   sentimentScore: a.sentimentScore,
                   lastActiveDate: a.lastActiveDate,
+                  lastCheckInDate: a.lastCheckInDate,
                   activeEscalationTier: a.activeEscalationTier,
                   deviceCoveragePct: a.deviceCoveragePct,
                   deviceConnected: a.deviceConnected,
                   deviceDailyPresence: a.deviceDailyPresence,
                   deviceStatus: a.deviceStatus,
+                  sentimentHistory: a.sentimentHistory,
                 }}
               />
             </div>
@@ -3763,18 +4011,12 @@ const StaffSection: React.FC<{
 
                 {/* Header: avatar + name + role */}
                 <div className="flex items-center gap-3">
-                  {s.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={s.avatarUrl}
-                      alt={s.name}
-                      className="w-14 h-14 rounded-full object-cover border border-[#E0FE10]/20 flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-base font-bold text-[#E0FE10]">{initialsOf(s.name)}</span>
-                    </div>
-                  )}
+                  <DashboardAvatar
+                    src={s.avatarUrl}
+                    name={s.name}
+                    imageClassName="w-14 h-14 rounded-full object-cover border border-[#E0FE10]/20 flex-shrink-0"
+                    fallbackClassName="w-14 h-14 rounded-full bg-gradient-to-br from-[#E0FE10]/25 to-green-500/15 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 text-base font-bold text-[#E0FE10]"
+                  />
                   <div className="min-w-0 pr-14">
                     <div className="text-base font-semibold text-white truncate">{s.name}</div>
                     <div className="text-xs font-medium text-[#E0FE10]/80 truncate">{s.role}</div>
@@ -3888,6 +4130,8 @@ const formatDeviceTime = (seconds?: number | null): string => {
 };
 
 const deviceConnectionLabel = (status?: AthleteDeviceStatus): string => {
+  if (status?.evidenceState === 'unavailable') return 'Data unavailable';
+  if (status?.evidenceState === 'partial' && status.connectionStatus === 'not_connected') return 'Partial data';
   if (!status || status.connectionStatus === 'not_connected') return 'Not connected';
   if (status.wearDaysCovered === 0) return 'Connected, waiting for data';
   if (status.connectionStatus === 'stale') return 'Connected, stale';
@@ -3895,6 +4139,7 @@ const deviceConnectionLabel = (status?: AthleteDeviceStatus): string => {
 };
 
 const deviceToneClass = (status?: AthleteDeviceStatus): string => {
+  if (status?.evidenceState === 'unavailable') return 'text-zinc-500';
   if (!status || status.connectionStatus === 'not_connected') return 'text-zinc-500';
   if (status.wearCoveragePct >= 70) return 'text-emerald-300';
   if (status.wearCoveragePct > 0) return 'text-amber-300';
@@ -4001,9 +4246,12 @@ const DevicePresenceStrip: React.FC<{
 // wearable on an athlete renders its own coverage + freshness + status chip.
 
 const deviceSourceChipLabel = (device: AthleteDevicePerSourceStatus): string => {
-  if (device.connectionStatus === 'synced') return 'Synced';
+  if (device.wearDaysCovered > 0 && device.connectionStatus === 'synced') return 'Reporting measured data';
+  if (device.wearDaysCovered === 0 && device.connectionStatus !== 'not_connected') {
+    return 'Connected · no measured data';
+  }
   if (device.connectionStatus === 'stale') {
-    return device.wearCoveragePct === 0 ? 'Connected · waiting for data' : 'Stale · no recent data';
+    return 'Stale · no recent data';
   }
   return 'Not connected';
 };
@@ -4016,7 +4264,28 @@ const deviceSourceChipTone = (device: AthleteDevicePerSourceStatus): string => {
   return 'text-zinc-500';
 };
 
-const DeviceSourceCard: React.FC<{ device: AthleteDevicePerSourceStatus }> = ({ device }) => (
+const DeviceSourceCard: React.FC<{ device: AthleteDevicePerSourceStatus }> = ({ device }) => {
+  const hasMeasuredData = device.wearDaysCovered > 0;
+  if (!hasMeasuredData) {
+    return (
+      <div className="rounded-xl bg-zinc-800/30 border border-zinc-700/30 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-white truncate">{device.label}</div>
+            <div className={`mt-0.5 text-[10px] font-semibold ${deviceSourceChipTone(device)}`}>
+              {deviceSourceChipLabel(device)}
+            </div>
+          </div>
+          <div className="flex-none text-right">
+            <div className="text-[9px] uppercase tracking-wide text-zinc-600">Last sync</div>
+            <div className="mt-0.5 text-xs font-semibold text-zinc-400">{formatDeviceTime(device.lastSyncedAt)}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
   <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -4072,7 +4341,8 @@ const DeviceSourceCard: React.FC<{ device: AthleteDevicePerSourceStatus }> = ({ 
       <ProfileStat label="Last sync" value={formatDeviceTime(device.lastSyncedAt)} />
     </div>
   </div>
-);
+  );
+};
 
 const ProfileStat: React.FC<{ label: string; value: React.ReactNode; sub?: string; color?: string }> = ({
   label,
@@ -4156,7 +4426,7 @@ const shortDate = (date?: Date): string =>
 
 const isToday = (date?: Date): boolean => !!date && daysSince(date) === 0;
 
-const buildDailyCheckInPoints = (rows: AthleteProfileHistoryRow[], days = 30): DailyCheckInPoint[] => {
+const buildDailySentimentPoints = (rows: AthleteProfileHistoryRow[], days = 30): DailySentimentPoint[] => {
   const byDate = new Map(rows.filter((row) => row.date).map((row) => [row.date, row]));
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -4172,29 +4442,92 @@ const buildDailyCheckInPoints = (rows: AthleteProfileHistoryRow[], days = 30): D
       dateKey,
       score: row?.score ?? 0,
       messages,
-      hasCheckIn: messages > 0,
+      hasSignal: messages > 0,
     };
   });
 };
 
-const summarizeCheckInWindow = (daily: DailyCheckInPoint[], days: number): CheckInWindowSummary => {
+const buildDailyCheckInPointsFromReadiness = (
+  details: AthleteReadinessDailyDetail[],
+  days = 30,
+): DailyCheckInPoint[] => {
+  const byDate = new Map(details.filter((detail) => detail.date).map((detail) => [detail.date, detail]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - index);
+    const dateKey = localDayKey(date);
+    const detail = byDate.get(dateKey);
+    return {
+      date,
+      dateKey,
+      state: !detail ? 'unavailable' : detail.checkInCompleted === true ? 'complete' : 'missed',
+      hasCheckIn: detail?.checkInCompleted === true,
+    };
+  });
+};
+
+const buildDailyCheckInPointsFromScorecard = (
+  dayStates: PulseCheckScoreComponentDayState[],
+  days = 30,
+): DailyCheckInPoint[] => {
+  const byDate = new Map(dayStates.filter((day) => day.dateKey).map((day) => [day.dateKey, day]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - index);
+    const dateKey = localDayKey(date);
+    const state = byDate.get(dateKey)?.state ?? 'unavailable';
+    return {
+      date,
+      dateKey,
+      state,
+      hasCheckIn: state === 'complete',
+    };
+  });
+};
+
+const summarizeCheckInWindow = (
+  daily: DailyCheckInPoint[],
+  days: number,
+  availability: ReadinessEvidenceAvailability = 'available',
+): CheckInWindowSummary => {
   const window = daily.slice(0, days);
-  const checked = window.filter((day) => day.hasCheckIn).length;
-  const missed = Math.max(0, days - checked);
-  const rate = Math.round((checked / Math.max(1, days)) * 100);
-  const latestMiss = window.find((day) => !day.hasCheckIn);
-  const state =
-    checked >= days
+  const observed = window.filter((day) => day.state !== 'unavailable');
+  const scorableDays = observed.filter((day) => day.state === 'complete' || day.state === 'missed');
+  const checked = scorableDays.filter((day) => day.state === 'complete').length;
+  const missed = scorableDays.filter((day) => day.state === 'missed').length;
+  const scorable = scorableDays.length;
+  const observedDays = observed.length;
+  const resolvedAvailability: ReadinessEvidenceAvailability = availability === 'unavailable' || observedDays === 0
+    ? 'unavailable'
+    : availability === 'partial' || observedDays < days
+    ? 'partial'
+    : 'available';
+  const rate = scorable > 0 ? Math.round((checked / scorable) * 100) : null;
+  const latestMiss = window.find((day) => day.state === 'missed');
+  const state = resolvedAvailability === 'unavailable'
+    ? 'Unavailable'
+    : resolvedAvailability === 'partial'
+    ? 'Partial data'
+    : scorable === 0
+      ? 'No closed days'
+    : checked >= scorable
       ? 'On track'
-      : checked >= Math.ceil(days * 0.75)
+      : checked >= Math.ceil(scorable * 0.75)
       ? 'Mostly steady'
       : checked > 0
       ? 'Needs nudge'
       : 'No check-ins';
-  const toneClass =
-    checked >= days
+  const toneClass = resolvedAvailability !== 'available'
+    ? 'text-zinc-500'
+    : scorable > 0 && checked >= scorable
       ? 'text-emerald-300'
-      : checked >= Math.ceil(days * 0.75)
+      : scorable > 0 && checked >= Math.ceil(scorable * 0.75)
       ? 'text-[#E0FE10]'
       : checked > 0
       ? 'text-orange-300'
@@ -4204,8 +4537,13 @@ const summarizeCheckInWindow = (daily: DailyCheckInPoint[], days: number): Check
       ? 'today'
       : shortDate(latestMiss.date)
     : '';
-  const detail =
-    missed === 0
+  const detail = resolvedAvailability === 'unavailable'
+    ? 'Selected-team Showing Up data is unavailable.'
+    : resolvedAvailability === 'partial'
+    ? `${checked} of ${scorable} scorable check-ins completed across ${observedDays} observed days; the rest of this window is unavailable.`
+    : scorable === 0
+      ? `No scheduled check-in has closed in the last ${days} days.`
+    : missed === 0
       ? `No missed days in last ${days}`
       : `${plural(missed, 'missed day')} in last ${days}${latestMissLabel ? `; latest ${latestMissLabel}` : ''}`;
 
@@ -4213,11 +4551,14 @@ const summarizeCheckInWindow = (daily: DailyCheckInPoint[], days: number): Check
     days,
     checked,
     missed,
+    scorable,
+    observedDays,
     rate,
     state,
     toneClass,
     detail,
-    presence: window.map((day) => day.hasCheckIn),
+    presence: window.map((day) => day.state),
+    availability: resolvedAvailability,
   };
 };
 
@@ -4271,7 +4612,7 @@ const deriveCurriculumAdherence = (item: CoachAthleteCurriculumItem) => {
   return { state, meta, progressPct, completedCount, targetCount, expectedCount, missedCount, evidence, explanation };
 };
 
-const AdherencePill: React.FC<{ label: string; color: string; bg: string; border: string }> = ({ label, color, bg, border }) => (
+const CurriculumStatusPill: React.FC<{ label: string; color: string; bg: string; border: string }> = ({ label, color, bg, border }) => (
   <span
     className="flex-shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold"
     style={{ color, background: bg, border: `1px solid ${border}` }}
@@ -4285,21 +4626,41 @@ const CheckInWindowRow: React.FC<{ summary: CheckInWindowSummary }> = ({ summary
     <div className="flex items-center justify-between gap-2 text-[10px]">
       <span className="font-medium text-zinc-400">Last {summary.days} days</span>
       <span className="font-semibold text-white">
-        {summary.checked}/{summary.days} <span className="text-zinc-600">·</span>{' '}
-        <span className={summary.missed > 0 ? 'text-orange-300' : 'text-emerald-300'}>
-          {summary.missed === 0 ? 'no missed days' : `${summary.missed} missed`}
-        </span>
+        {summary.availability === 'unavailable' ? (
+          <span className="text-zinc-500">Unavailable</span>
+        ) : (
+          <>
+            {summary.checked}/{summary.scorable} <span className="text-zinc-600">·</span>{' '}
+            <span className={summary.availability === 'partial' ? 'text-zinc-500' : summary.missed > 0 ? 'text-orange-300' : 'text-emerald-300'}>
+              {summary.availability === 'partial'
+                ? 'partial data'
+                : summary.missed === 0 ? 'no missed days' : `${summary.missed} missed`}
+            </span>
+          </>
+        )}
       </span>
     </div>
     <div
       className="mt-1.5 flex gap-0.5"
-      aria-label={`${summary.checked} check-ins in the last ${summary.days} days`}
+      aria-label={summary.availability === 'unavailable'
+        ? `Check-in data unavailable for the last ${summary.days} days`
+        : `${summary.checked} of ${summary.scorable} scorable check-ins completed in the last ${summary.days} days${summary.availability === 'partial' ? `; ${summary.observedDays} days observed` : ''}`}
       title={summary.detail}
     >
-      {[...summary.presence].reverse().map((hasCheckIn, index) => (
+      {[...summary.presence].reverse().map((state, index) => (
         <span
           key={`${summary.days}-${index}`}
-          className={`h-1.5 min-w-0 flex-1 rounded-full ${hasCheckIn ? 'bg-emerald-400/80' : 'bg-zinc-700/70'}`}
+          className={`h-1.5 min-w-0 flex-1 rounded-full ${
+            state === 'complete'
+              ? 'bg-emerald-400/80'
+              : state === 'missed'
+                ? 'bg-zinc-700/70'
+                : state === 'pending'
+                  ? 'bg-zinc-500/70'
+                  : state === 'excused'
+                    ? 'bg-sky-500/50'
+                    : 'bg-zinc-800/70'
+          }`}
         />
       ))}
     </div>
@@ -4310,10 +4671,17 @@ const AthleteProfileDrawer: React.FC<{
   athlete: CoachAthlete | null;
   alerts: AthleteAlert[];
   canSeeTier3?: boolean;
+  coachId: string;
+  teamId: string;
+  organizationId: string;
   onClose: () => void;
-}> = ({ athlete, alerts, canSeeTier3 = true, onClose }) => {
+}> = ({ athlete, alerts, canSeeTier3 = true, coachId, teamId, organizationId, onClose }) => {
   const [history, setHistory] = useState<AthleteProfileHistoryRow[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [profileReadiness, setProfileReadiness] = useState<AthleteReadinessWorkspaceSnapshot | null>(null);
+  const [loadingProfileReadiness, setLoadingProfileReadiness] = useState(false);
+  const [profileScorecard, setProfileScorecard] = useState<CoachScorecardResponse | null>(null);
+  const [loadingProfileScorecard, setLoadingProfileScorecard] = useState(false);
   const [curriculumSnapshot, setCurriculumSnapshot] = useState<CoachAthleteCurriculumSnapshot | null>(null);
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
 
@@ -4347,6 +4715,84 @@ const AthleteProfileDrawer: React.FC<{
       cancelled = true;
     };
   }, [athlete?.id]);
+
+  useEffect(() => {
+    if (!athlete) {
+      setProfileReadiness(null);
+      setLoadingProfileReadiness(false);
+      return;
+    }
+    const normalizedCoachId = coachId.trim();
+    const normalizedTeamId = teamId.trim();
+    const normalizedOrganizationId = organizationId.trim();
+    if (!normalizedCoachId || !normalizedTeamId || !normalizedOrganizationId) {
+      setProfileReadiness({
+        details: [],
+        availability: { checkIns: 'unavailable', modules: 'unavailable', nora: 'unavailable' },
+      });
+      setLoadingProfileReadiness(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingProfileReadiness(true);
+    setProfileReadiness(null);
+    coachService
+      .getCoachReadinessSnapshotForWorkspace(
+        athlete.id,
+        normalizedCoachId,
+        { teamId: normalizedTeamId, organizationId: normalizedOrganizationId },
+        30,
+      )
+      .then((snapshot) => {
+        if (!cancelled) setProfileReadiness(snapshot);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProfileReadiness({
+            details: [],
+            availability: { checkIns: 'unavailable', modules: 'unavailable', nora: 'unavailable' },
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProfileReadiness(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [athlete?.id, coachId, organizationId, teamId]);
+
+  useEffect(() => {
+    if (!athlete) {
+      setProfileScorecard(null);
+      setLoadingProfileScorecard(false);
+      return;
+    }
+    const normalizedTeamId = teamId.trim();
+    if (!normalizedTeamId) {
+      setProfileScorecard(null);
+      setLoadingProfileScorecard(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingProfileScorecard(true);
+    setProfileScorecard(null);
+    auth.currentUser
+      ?.getIdToken()
+      .then((idToken) => loadAthleteTeamScorecard(athlete.id, normalizedTeamId, idToken))
+      .then((response) => {
+        if (!cancelled && response) setProfileScorecard(response);
+      })
+      .catch(() => {
+        if (!cancelled) setProfileScorecard(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingProfileScorecard(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [athlete?.id, teamId]);
 
   useEffect(() => {
     if (!athlete) {
@@ -4391,29 +4837,56 @@ const AthleteProfileDrawer: React.FC<{
 
   const status = athlete ? deriveStatus(athlete) : 'pending';
   const mood = moodMeta(athlete?.sentimentScore ?? 0);
-  const dailyCheckInHistory = useMemo(() => buildDailyCheckInPoints(history, 30), [history]);
-  const checkInWindows = useMemo(
-    () => [7, 14, 30].map((days) => summarizeCheckInWindow(dailyCheckInHistory, days)),
-    [dailyCheckInHistory]
+  const dailySentimentHistory = useMemo(() => buildDailySentimentPoints(history, 30), [history]);
+  const showingUpDayStates = useMemo(() => {
+    if (!profileScorecard) return [];
+    const scorecardComponents = [
+      ...(profileScorecard.scorecard.adherence.components || []),
+      ...(profileScorecard.scorecard.coherence.components || []),
+    ];
+    return scorecardComponents.find((component) =>
+      component.key === 'scheduled_check_ins' || component.key === 'showing_up'
+    )?.dayStates ?? [];
+  }, [profileScorecard]);
+  const usesScorecardCheckIns = showingUpDayStates.length > 0;
+  const checkInAvailability: ReadinessEvidenceAvailability = loadingProfileScorecard || (!usesScorecardCheckIns && loadingProfileReadiness)
+    ? 'unavailable'
+    : usesScorecardCheckIns
+      ? 'available'
+      : profileReadiness?.availability.checkIns ?? 'unavailable';
+  const dailyCheckInHistory = useMemo(
+    () => usesScorecardCheckIns
+      ? buildDailyCheckInPointsFromScorecard(showingUpDayStates, 30)
+      : buildDailyCheckInPointsFromReadiness(profileReadiness?.details ?? [], 30),
+    [profileReadiness?.details, showingUpDayStates, usesScorecardCheckIns],
   );
-  const checkInLast7 = checkInWindows[0] ?? summarizeCheckInWindow(dailyCheckInHistory, 7);
-  const checkInLast14 = checkInWindows[1] ?? summarizeCheckInWindow(dailyCheckInHistory, 14);
-  const checkInLast30 = checkInWindows[2] ?? summarizeCheckInWindow(dailyCheckInHistory, 30);
-  const latestCheckInDay = dailyCheckInHistory.find((day) => day.hasCheckIn);
+  const checkInWindows = useMemo(
+    () => [7, 14, 30].map((days) => summarizeCheckInWindow(dailyCheckInHistory, days, checkInAvailability)),
+    [checkInAvailability, dailyCheckInHistory]
+  );
+  const checkInLast7 = checkInWindows[0] ?? summarizeCheckInWindow(dailyCheckInHistory, 7, checkInAvailability);
+  const checkInLast14 = checkInWindows[1] ?? summarizeCheckInWindow(dailyCheckInHistory, 14, checkInAvailability);
+  const checkInLast30 = checkInWindows[2] ?? summarizeCheckInWindow(dailyCheckInHistory, 30, checkInAvailability);
+  const latestCheckInDay = dailyCheckInHistory.find((day) => day.state === 'complete');
   const latestCheckInRelative = latestCheckInDay ? relativeWhen(latestCheckInDay.date) : '';
-  const latestCheckInStat = latestCheckInDay
+  const latestCheckInStat = checkInAvailability === 'unavailable'
+    ? 'Unavailable'
+    : latestCheckInDay
     ? isToday(latestCheckInDay.date)
       ? 'Today'
       : latestCheckInRelative
     : 'No data';
-  const latestCheckInAction = latestCheckInDay
+  const latestCheckInAction = checkInAvailability === 'unavailable'
+    ? 'Check-in data unavailable'
+    : latestCheckInDay
     ? isToday(latestCheckInDay.date)
       ? 'Checked in today'
       : `Checked in ${latestCheckInRelative}`
     : 'No check-ins in last 30 days';
-  const recentScores = dailyCheckInHistory.slice(0, 28).map((h) => (h.hasCheckIn ? h.score : 0));
+  const recentScores = dailySentimentHistory.slice(0, 28).map((point) => (point.hasSignal ? point.score : 0));
   const trend = trendOf(recentScores);
-  const checkinsLast7 = checkInLast7.checked;
+  const checkinsLast7 = checkInLast7.availability === 'unavailable' ? null : checkInLast7.checked;
+  const checkinsLast7Label = checkinsLast7 === null ? '—' : `${checkinsLast7}/${checkInLast7.scorable}`;
   const curriculum = curriculumSnapshot?.items || [];
   const completedModules = curriculumSnapshot?.completedCount ?? curriculum.filter((c) => c.status === 'completed').length;
   const totalModules = curriculumSnapshot?.totalCount ?? curriculum.length;
@@ -4423,6 +4896,10 @@ const AthleteProfileDrawer: React.FC<{
   const deviceDaysCovered = deviceStatus?.wearDaysCovered ?? athlete?.deviceDailyPresence?.filter(Boolean).length ?? 0;
   const deviceWindowDays = deviceStatus?.windowDays ?? athlete?.deviceDailyPresence?.length ?? 14;
   const deviceList = deviceStatus?.devices ?? [];
+  const reportingDevices = deviceList.filter((device) => device.wearDaysCovered > 0);
+  const connectedOnlyDevices = deviceList.filter(
+    (device) => device.wearDaysCovered === 0 && device.connectionStatus !== 'not_connected'
+  );
 
   const trendMeta: Record<SentimentTrend, { label: string; color: string; icon: React.ElementType }> = {
     improving: { label: 'Improving', color: '#22C55E', icon: TrendingUp },
@@ -4464,7 +4941,9 @@ const AthleteProfileDrawer: React.FC<{
       : 'Connected, no data'
     : 'Not connected';
   const deviceSnapshotSub = deviceConnected
-    ? `${deviceDaysCovered}/${deviceWindowDays} days with data`
+    ? reportingDevices.length > 0
+      ? `${deviceDaysCovered}/${deviceWindowDays} days · ${reportingDevices.map((device) => device.label).join(' + ')}`
+      : 'Connected integrations have no measured data'
     : 'Ask about setup';
 
   return (
@@ -4490,17 +4969,12 @@ const AthleteProfileDrawer: React.FC<{
           >
             {/* Header */}
             <div className="sticky top-0 z-10 px-6 py-4 border-b border-zinc-800/60 bg-[#111113]/90 backdrop-blur flex items-start gap-3">
-              {athlete.profileImageUrl ? (
-                <img
-                  src={athlete.profileImageUrl}
-                  alt={athlete.displayName}
-                  className="h-12 w-12 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0"
-                />
-              ) : (
-                <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-bold text-zinc-200 ring-1 ring-white/10">
-                  {initialsOf(athlete.displayName)}
-                </span>
-              )}
+              <DashboardAvatar
+                src={athlete.profileImageUrl}
+                name={athlete.displayName}
+                imageClassName="h-12 w-12 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0"
+                fallbackClassName="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-zinc-800 text-sm font-bold text-zinc-200 ring-1 ring-white/10"
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-lg font-bold text-white truncate">{athlete.displayName}</div>
                 <div className="flex items-center gap-1.5 text-xs text-zinc-500 truncate">
@@ -4591,7 +5065,7 @@ const AthleteProfileDrawer: React.FC<{
                 </div>
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   <ProfileStat label="Current mood" value={mood.label} color={mood.color} />
-                  <ProfileStat label="Check-ins" value={`${checkinsLast7}/7`} sub="last 7 days" />
+                  <ProfileStat label="Check-ins" value={checkinsLast7Label} sub="last 7 days" />
                   <ProfileStat label="Conversations" value={athlete.conversationCount} />
                 </div>
               </div>
@@ -4601,7 +5075,7 @@ const AthleteProfileDrawer: React.FC<{
                 <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Engagement</h3>
                 <div className="grid grid-cols-3 gap-3">
                   <ProfileStat label="Sessions" value={athlete.totalSessions} />
-                  <ProfileStat label="7-day rate" value={`${checkInLast7.rate}%`} />
+                  <ProfileStat label="7-day rate" value={checkInLast7.rate === null ? '—' : `${checkInLast7.rate}%`} />
                   <ProfileStat
                     label="Last check-in"
                     value={latestCheckInStat}
@@ -4609,9 +5083,9 @@ const AthleteProfileDrawer: React.FC<{
                 </div>
               </div>
 
-              {/* Adherence snapshot */}
+              {/* Separate engagement context; no blended individual adherence score. */}
               <div>
-                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Adherence snapshot</h3>
+                <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Engagement snapshot</h3>
                 <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 space-y-2">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="rounded-lg bg-black/20 border border-white/5 p-2.5">
@@ -4621,7 +5095,7 @@ const AthleteProfileDrawer: React.FC<{
                           {checkinState}
                         </span>
                       </div>
-                      <div className="mt-1 text-sm font-bold text-white">{checkinsLast7}/7</div>
+                      <div className="mt-1 text-sm font-bold text-white">{checkinsLast7Label}</div>
                       <div className="mt-0.5 text-[10px] text-zinc-500">
                         {checkInLast7.detail}
                       </div>
@@ -4633,13 +5107,13 @@ const AthleteProfileDrawer: React.FC<{
                     </div>
                     <div className="rounded-lg bg-black/20 border border-white/5 p-2.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] uppercase tracking-wide text-zinc-500">Mental modules</span>
+                        <span className="text-[10px] uppercase tracking-wide text-zinc-500">Current curriculum</span>
                         <span className={`text-[10px] font-semibold ${curriculumBehindCount > 0 ? 'text-orange-300' : curriculumDueTodayCount > 0 ? 'text-[#E0FE10]' : 'text-emerald-300'}`}>
                           {curriculumSnapshotLabel}
                         </span>
                       </div>
                       <div className="mt-1 text-sm font-bold text-white">
-                        {loadingCurriculum ? '—' : `${completedModules}/${totalModules || 0}`}
+                        {loadingCurriculum ? '—' : `${completedModules}/${totalModules || 0} skills mastered`}
                       </div>
                       <div className="mt-0.5 text-[10px] text-zinc-500">{curriculumSnapshotSub}</div>
                     </div>
@@ -4659,7 +5133,7 @@ const AthleteProfileDrawer: React.FC<{
                         {latestCheckInAction}
                       </div>
                       <div className="mt-0.5 text-[10px] text-zinc-500">
-                        {curriculumBehindCount > 0 ? 'Mental module nudge recommended' : 'No urgent adherence action'}
+                        {curriculumBehindCount > 0 ? 'Mental module nudge recommended' : 'No urgent engagement action'}
                       </div>
                     </div>
                   </div>
@@ -4675,23 +5149,41 @@ const AthleteProfileDrawer: React.FC<{
                 </div>
               </div>
 
-              {/* Device adherence — one card per connected source */}
+              {/* Device coverage — one card per measured source */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Device adherence</h3>
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Device coverage</h3>
                   <span className={`text-[10px] font-semibold ${deviceToneClass(deviceStatus)}`}>
-                    {deviceList.length > 0
-                      ? deviceList.length === 1
-                        ? deviceConnectionLabel(deviceStatus)
-                        : `${deviceList.length} sources`
-                      : 'Not connected'}
+                    {reportingDevices.length > 0
+                      ? `${reportingDevices.length} reporting ${reportingDevices.length === 1 ? 'device' : 'devices'}`
+                      : connectedOnlyDevices.length > 0
+                        ? 'Connected · no measured data'
+                        : 'Not connected'}
                   </span>
                 </div>
                 {deviceList.length > 0 ? (
-                  <div className="space-y-3">
-                    {deviceList.map((device) => (
-                      <DeviceSourceCard key={device.sourceFamily} device={device} />
-                    ))}
+                  <div className="space-y-4">
+                    {reportingDevices.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                          Tracked measurements
+                        </div>
+                        {reportingDevices.map((device) => (
+                          <DeviceSourceCard key={device.sourceFamily} device={device} />
+                        ))}
+                      </div>
+                    )}
+                    {connectedOnlyDevices.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-wide text-zinc-500">
+                          <span>Connected integrations</span>
+                          <span>{connectedOnlyDevices.length} with no measured data</span>
+                        </div>
+                        {connectedOnlyDevices.map((device) => (
+                          <DeviceSourceCard key={device.sourceFamily} device={device} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
@@ -4802,7 +5294,7 @@ const AthleteProfileDrawer: React.FC<{
                                     </span>
                                   </div>
                                 </div>
-                                <AdherencePill
+                                <CurriculumStatusPill
                                   label={walledOff ? 'Paused' : statusMeta.label}
                                   color={statusMeta.color}
                                   bg={statusMeta.bg}
@@ -5489,8 +5981,7 @@ const RosterSection: React.FC<{
     return c;
   }, [rows]);
 
-  // "Checked in today" = athletes whose last Nora check-in was today.
-  const checkedInToday = athletes.filter((a) => daysSince(a.lastActiveDate) === 0).length;
+  const checkedInToday = athletes.filter((a) => daysSince(a.lastCheckInDate) === 0).length;
   const pct = athletes.length ? Math.round((checkedInToday / athletes.length) * 100) : 0;
 
   if (loading) return <LoadingBlock label="Building team roster…" />;
@@ -5547,7 +6038,7 @@ const RosterSection: React.FC<{
         </div>
         <div className="max-h-[520px] overflow-y-auto">
           {rows.map(({ a, status }, i) => {
-            const stale = daysSince(a.lastActiveDate);
+            const lastCheckInDays = daysSince(a.lastCheckInDate);
             return (
               <motion.div
                 key={a.id}
@@ -5566,17 +6057,12 @@ const RosterSection: React.FC<{
                 className="grid grid-cols-[1fr_110px_90px] sm:grid-cols-[1fr_1fr_120px] gap-0 items-center px-3 py-2.5 border-b border-zinc-800/50 text-sm hover:bg-zinc-800/40 cursor-pointer focus:outline-none focus:bg-zinc-800/50"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  {a.profileImageUrl ? (
-                    <img
-                      src={a.profileImageUrl}
-                      alt={a.displayName}
-                      className="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-white/10"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10">
-                      {initialsOf(a.displayName)}
-                    </span>
-                  )}
+                  <DashboardAvatar
+                    src={a.profileImageUrl}
+                    name={a.displayName}
+                    imageClassName="h-8 w-8 flex-none rounded-full object-cover ring-1 ring-white/10"
+                    fallbackClassName="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-zinc-800 text-[11px] font-semibold text-zinc-300 ring-1 ring-white/10"
+                  />
                   <div className="min-w-0">
                     <div className="font-medium text-white truncate">{a.displayName}</div>
                     <div className="text-[11px] text-zinc-500 truncate">{a.email}</div>
@@ -5589,7 +6075,11 @@ const RosterSection: React.FC<{
                   </span>
                 </div>
                 <div className="text-right text-zinc-500 text-xs">
-                  {stale === null ? '—' : stale === 0 ? 'Today' : `${stale}d ago`}
+                  {lastCheckInDays === null
+                    ? 'None recorded'
+                    : lastCheckInDays === 0
+                      ? 'Today'
+                      : `${lastCheckInDays}d ago`}
                 </div>
               </motion.div>
             );
@@ -9586,30 +10076,37 @@ const StatTile: React.FC<{ label: string; value: number | string; accent?: boole
   </div>
 );
 
-// Adherence — are athletes actually doing what they're supposed to? Tracks
-// check-ins, device wear, and module completion over the last 14 days.
-const AdherenceTile: React.FC<{
+// Team context coverage across check-ins, wearable records, and module practice.
+const EngagementCoverageTile: React.FC<{
   id?: string;
-  checkIn: number;
-  device: number;
-  modules: number;
-  overall?: number;
+  checkIn: number | null;
+  device: number | null;
+  modules: number | null;
+  overall?: number | null;
   loading?: boolean;
   athletes?: CoachAthlete[];
 }> = ({ id, checkIn, device, modules, overall, loading, athletes = [] }) => {
-  const rows: { label: string; value: number }[] = [
+  const rows: { label: string; value: number | null }[] = [
     { label: 'Checked in', value: checkIn },
     { label: 'Device worn', value: device },
     { label: 'Mental modules', value: modules },
   ];
-  const displayOverall = overall ?? Math.round(rows.reduce((s, r) => s + r.value, 0) / rows.length);
+  const rowAverage = averageAvailable(rows.map((row) => row.value));
+  const displayOverall = overall !== undefined
+    ? overall
+    : rowAverage === null ? null : Math.round(rowAverage);
   const deviceStatuses = athletes.map((athlete) => ({
     athlete,
     status: athlete.deviceStatus,
   }));
-  const connectedCount = deviceStatuses.filter(({ status }) => status && status.connectionStatus !== 'not_connected').length;
+  const connectedCount = deviceStatuses.filter(({ status }) =>
+    Boolean(status)
+    && status?.evidenceState !== 'unavailable'
+    && status?.connectionStatus !== 'not_connected'
+  ).length;
   const withDataCount = deviceStatuses.filter(({ status }) => (status?.wearDaysCovered ?? 0) > 0).length;
   const staleCount = deviceStatuses.filter(({ status }) => status?.connectionStatus === 'stale').length;
+  const unavailableCount = deviceStatuses.filter(({ status }) => !status || status.evidenceState === 'unavailable').length;
   const sortedDeviceStatuses = [...deviceStatuses].sort((left, right) => {
     const leftPct = left.status?.wearCoveragePct ?? -1;
     const rightPct = right.status?.wearCoveragePct ?? -1;
@@ -9624,15 +10121,15 @@ const AdherenceTile: React.FC<{
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-[#E0FE10]">
             <ClipboardList className="h-4 w-4" />
-            Adherence
+            Engagement coverage
           </div>
           <div className="mt-3 flex items-baseline gap-1">
-            <span className="text-4xl font-bold text-white">{loading ? '—' : displayOverall}</span>
-            <span className="text-lg font-semibold text-zinc-500">%</span>
+            <span className="text-4xl font-bold text-white">{loading || displayOverall === null ? '—' : displayOverall}</span>
+            {!loading && displayOverall !== null && <span className="text-lg font-semibold text-zinc-500">%</span>}
           </div>
         </div>
         <span className="rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-3 py-1 text-xs font-semibold text-[#E0FE10]">
-          Daily habits
+          Context coverage
         </span>
       </div>
       <div className="mt-7 space-y-3">
@@ -9642,39 +10139,52 @@ const AdherenceTile: React.FC<{
               {r.label}
             </span>
             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-zinc-700/40">
-              <span className="block h-full rounded-full bg-[#E0FE10]" style={{ width: `${r.value}%` }} />
+              <span className="block h-full rounded-full bg-[#E0FE10]" style={{ width: `${r.value ?? 0}%` }} />
             </span>
-            <span className="w-9 flex-none text-right text-xs font-semibold text-zinc-400">{r.value}%</span>
+            <span className="w-9 flex-none text-right text-xs font-semibold text-zinc-400">
+              {r.value === null ? '—' : `${r.value}%`}
+            </span>
           </div>
         ))}
       </div>
       <p className="mt-6 text-sm leading-6 text-zinc-400">
-        Adherence averages check-ins, connected-device wear, and completed mental modules across
-        the last 14 days. A low smaller bar tells you the exact habit to support next.
+        Equal average of available check-in completion, wearable data coverage, and mental-module
+        practice coverage across the last 14 days. These context lanes are separate from Showing Up.
       </p>
       {athletes.length > 0 && (
         <div className="pointer-events-none absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-white/10 bg-zinc-950/95 p-3 opacity-0 shadow-2xl backdrop-blur transition group-hover:opacity-100">
           <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
             <div>
-              <div className="text-xs font-semibold text-white">Team adherence</div>
-              <div className="text-[10px] text-zinc-500">Average of visible athletes, last 14 days</div>
+              <div className="text-xs font-semibold text-white">Team engagement coverage</div>
+              <div className="text-[10px] text-zinc-500">Equal average of available lanes, last 14 days</div>
             </div>
             <div className="text-right">
-              <div className="text-sm font-bold text-white">{loading ? '—' : displayOverall}%</div>
+              <div className="text-sm font-bold text-white">
+                {loading || displayOverall === null ? '—' : `${displayOverall}%`}
+              </div>
               <div className="text-[10px] text-zinc-600">team avg</div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 py-2">
+          <div className="grid grid-cols-2 gap-2 py-2">
             <MetricTile label="Connected" value={`${connectedCount}/${athletes.length}`} />
             <MetricTile label="With data" value={`${withDataCount}/${athletes.length}`} />
             <MetricTile label="Stale" value={staleCount} />
+            <MetricTile label="Unavailable" value={unavailableCount} />
           </div>
 
           <div className="space-y-2">
             {sortedDeviceStatuses.slice(0, 6).map(({ athlete, status }) => {
-              const label = status?.currentDeviceLabel || 'No device';
-              const pct = status?.wearCoveragePct ?? athlete.deviceCoveragePct ?? 0;
+              const sourceCoverageDays = status?.devices.reduce(
+                (covered, source) => Math.max(covered, source.wearDaysCovered),
+                0
+              ) ?? 0;
+              const label = status && status.wearDaysCovered > sourceCoverageDays
+                ? 'Wearable data'
+                : status?.currentDeviceLabel || 'No device';
+              const pct = status?.evidenceState === 'unavailable'
+                ? null
+                : status?.wearCoveragePct ?? athlete.deviceCoveragePct ?? null;
               return (
                 <div key={athlete.id} className="rounded-lg border border-white/5 bg-white/[0.03] p-2">
                   <div className="flex items-center justify-between gap-2">
@@ -9684,7 +10194,9 @@ const AdherenceTile: React.FC<{
                         {label} · {deviceConnectionLabel(status)}
                       </div>
                     </div>
-                    <div className={`text-[11px] font-bold ${deviceToneClass(status)}`}>{pct}%</div>
+                    <div className={`text-[11px] font-bold ${deviceToneClass(status)}`}>
+                      {pct === null ? '—' : `${pct}%`}
+                    </div>
                   </div>
                   <div className="mt-1.5">
                     <DevicePresenceStrip presence={status?.dailyPresence || athlete.deviceDailyPresence} compact />
@@ -9706,15 +10218,20 @@ const AdherenceTile: React.FC<{
 
 const CoherenceTile: React.FC<{
   id?: string;
-  snapshot: PulseCheckTeamCoherenceSnapshot;
+  snapshot: PulseCheckTeamScorecardSnapshot;
   loading?: boolean;
 }> = ({ id, snapshot, loading }) => {
   const rows: Array<{ label: string; value: number | null }> = [
-    { label: 'Showing up', value: snapshot.consistencyPercent },
-    { label: 'Training', value: snapshot.followThroughPercent },
-    { label: 'Feeling good', value: snapshot.feelingGoodPercent },
+    { label: 'Wellbeing', value: snapshot.wellbeingPercent },
+    { label: 'Recovery', value: snapshot.recoveryPercent },
+    { label: 'Showing Up', value: snapshot.showingUpPercent },
   ];
   const displayScore = snapshot.coherencePercent;
+  const displayScoreLabel = pulseCheckTeamScoreDisplayLabel({
+    score: displayScore,
+    buildingAthleteCount: snapshot.buildingAthleteCount,
+    loading,
+  });
 
   return (
     <div
@@ -9725,11 +10242,11 @@ const CoherenceTile: React.FC<{
         <div>
           <div className="flex items-center gap-2 text-sm font-bold text-[#63f6e8]">
             <Heart className="h-4 w-4" />
-            Coherence
+            Team Coherence
           </div>
           <div className="mt-3 flex items-baseline gap-1">
-            <span className="text-4xl font-bold text-white">
-              {loading ? '...' : displayScore === null ? 'Building' : displayScore}
+            <span className={`${displayScore === null ? 'text-xl' : 'text-4xl'} font-bold text-white`}>
+              {displayScoreLabel}
             </span>
             {!loading && displayScore !== null && (
               <span className="text-lg font-semibold text-zinc-500">%</span>
@@ -9737,7 +10254,7 @@ const CoherenceTile: React.FC<{
           </div>
         </div>
         <span className="rounded-full border border-[#14E7D0]/20 bg-[#14E7D0]/10 px-3 py-1 text-xs font-semibold text-[#63f6e8]">
-          14-day pattern
+          V{snapshot.methodologyVersion}
         </span>
       </div>
       <div className="mt-7 space-y-3">
@@ -9755,17 +10272,16 @@ const CoherenceTile: React.FC<{
                 />
               </span>
               <span className="w-9 flex-none text-right text-xs font-semibold text-zinc-400">
-                {row.value === null ? '...' : `${row.value}%`}
+                {row.value === null ? 'N/A' : `${row.value}%`}
               </span>
             </div>
           );
         })}
       </div>
       <p className="mt-6 text-sm leading-6 text-zinc-400">
-        Coherence combines showing up, completing assigned training, and days the athlete reports
-        feeling Solid or Locked In. A rising score means those pieces are lining up more often.
-        “Building” is only the first 14-day grace window. After that, low activity counts as a
-        real pattern.
+        Team Coherence is the average of available athlete Coherence scores. Each athlete score uses
+        a 90% state core from Wellbeing and Recovery plus a bounded 10% Showing Up contribution.
+        Missing scorecards remain unavailable instead of becoming zero.
       </p>
 
       {snapshot.athleteCount > 0 && (
@@ -9774,27 +10290,28 @@ const CoherenceTile: React.FC<{
             <div>
               <div className="text-xs font-semibold text-white">Team coherence</div>
               <div className="text-[10px] text-zinc-500">
-                Average of current 14-day athlete patterns
+                Average of current versioned athlete scorecards
               </div>
             </div>
             <div className="text-right">
               <div className="text-sm font-bold text-white">
-                {loading ? '...' : displayScore === null ? 'Building' : `${displayScore}%`}
+                {displayScore === null ? displayScoreLabel : `${displayScoreLabel}%`}
               </div>
               <div className="text-[10px] text-zinc-600">team average</div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 py-2">
+          <div className="grid grid-cols-4 gap-2 py-2">
             <MetricTile label="Roster" value={snapshot.athleteCount} />
             <MetricTile label="Scored" value={snapshot.scoredAthleteCount} />
             <MetricTile label="Building" value={snapshot.buildingAthleteCount} />
+            <MetricTile label="Unavailable" value={snapshot.unavailableAthleteCount} />
           </div>
 
           <div className="rounded-lg border border-white/5 bg-white/[0.03] p-2 text-[10px] leading-4 text-zinc-400">
-            PulseCheck combines showing up, assigned training, and Solid or Locked In check-ins.
-            First-window athletes need three observed days and two available measures. After that,
-            missed days stay in the pattern instead of disappearing from the score.
+            Wellbeing and Recovery each contribute 45%. Showing Up contributes 10%. Building is limited
+            to the first 3 account days, and only method {snapshot.methodologyVersion} scorecards enter
+            this team average.
           </div>
         </div>
       )}

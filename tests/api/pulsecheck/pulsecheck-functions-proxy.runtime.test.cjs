@@ -88,6 +88,46 @@ test('PulseCheck function proxy forwards supported functions to direct Netlify e
   }
 });
 
+test('PulseCheck function proxy supports coach scorecard requests', async () => {
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  global.fetch = async (url, options = {}) => {
+    fetchCalls.push({ url: String(url), options });
+    return {
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      async arrayBuffer() {
+        return Buffer.from('{"scorecard":{"coherence":{"score":73}}}');
+      },
+    };
+  };
+
+  try {
+    const { default: handler } = loadProxyModule();
+    const response = createResponseRecorder();
+
+    await handler({
+      method: 'POST',
+      url: '/api/pulsecheck/functions/get-pulsecheck-scorecard',
+      query: { name: 'get-pulsecheck-scorecard' },
+      headers: {
+        host: 'localhost:3000',
+        'x-forwarded-host': 'localhost:3000',
+        authorization: 'Bearer token',
+      },
+      body: { athleteId: 'athlete-1', teamId: 'team-1' },
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+    assert.equal(fetchCalls[0].url, 'https://fitwithpulse.ai/.netlify/functions/get-pulsecheck-scorecard');
+    assert.equal(fetchCalls[0].options.headers.get('authorization'), 'Bearer token');
+    assert.equal(fetchCalls[0].options.body, JSON.stringify({ athleteId: 'athlete-1', teamId: 'team-1' }));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('PulseCheck function proxy forwards team standings requests', async () => {
   const originalFetch = global.fetch;
   const fetchCalls = [];

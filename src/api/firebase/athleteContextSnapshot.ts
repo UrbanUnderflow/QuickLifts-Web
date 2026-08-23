@@ -66,6 +66,7 @@ export type SnapshotSourceId =
   | 'apple_watch'
   | 'oura'
   | 'polar'
+  | 'google_health'
   | 'fitbit'
   | 'whoop'
   | 'garmin'

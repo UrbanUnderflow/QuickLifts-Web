@@ -11,6 +11,11 @@ const {
   verifyAuth,
 } = require('./google-health-utils');
 const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-team-scope');
+const {
+  hasMeasuredPayload,
+  measuredFieldNames,
+  mergePayloadWithAttribution,
+} = require('./lib/health-context-measurements');
 
 const HEALTH_CONTEXT_COLLECTIONS = {
   sourceStatus: 'health-context-source-status',
@@ -312,6 +317,54 @@ function dataPointsFromResponse(response) {
     ...(Array.isArray(response.dataPoints) ? response.dataPoints : []),
     ...(Array.isArray(response.rollupDataPoints) ? response.rollupDataPoints : []),
   ];
+}
+
+function googleHealthPointSource(point) {
+  const dataSource = point?.dataSource || {};
+  const device = dataSource?.device || {};
+  const platformIdentity = [
+    dataSource.platform,
+    dataSource.sourcePlatform,
+    dataSource.dataSourceFamily,
+  ]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim());
+  const deviceIdentity = [
+    device.manufacturer,
+    device.brand,
+    device.model,
+    device.displayName,
+  ]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim());
+  const platformClaimsFitbit = platformIdentity.some((value) => value.toLowerCase().includes('fitbit'));
+  const deviceClaimsFitbit = deviceIdentity.some((value) => value.toLowerCase().includes('fitbit'));
+  const verifiedFitbit = deviceClaimsFitbit || (platformClaimsFitbit && deviceIdentity.length > 0);
+  const displayName = typeof device.displayName === 'string' ? device.displayName.trim() : '';
+  const label = verifiedFitbit
+    ? displayName
+      ? displayName.toLowerCase().includes('fitbit') ? displayName : `Fitbit ${displayName}`
+      : 'Fitbit'
+    : 'Google Health';
+  return {
+    sourceFamily: verifiedFitbit ? 'fitbit' : 'google_health',
+    label,
+  };
+}
+
+function googleHealthResponseSource(response) {
+  const points = dataPointsFromResponse(response);
+  if (points.length === 0) return { sourceFamily: 'google_health', label: 'Google Health' };
+  const identities = points.map(googleHealthPointSource);
+  const families = new Set(identities.map((identity) => identity.sourceFamily));
+  if (families.size !== 1 || !families.has('fitbit')) {
+    return { sourceFamily: 'google_health', label: 'Google Health' };
+  }
+  const labels = Array.from(new Set(identities.map((identity) => identity.label)));
+  return {
+    sourceFamily: 'fitbit',
+    label: labels.length === 1 ? labels[0] : 'Fitbit',
+  };
 }
 
 async function fetchPagedDataPoints(accessToken, path, query, warnings, options = {}) {
@@ -700,6 +753,74 @@ function mapBiometricsPayload(data) {
   });
 }
 
+function buildGoogleFieldAttribution(data, payloads) {
+  const fieldSourcesByDomain = {};
+  const fieldSourceLabelsByDomain = {};
+
+  const assign = (domain, fields, response) => {
+    const measured = new Set(measuredFieldNames(domain, payloads[domain]));
+    const source = googleHealthResponseSource(response);
+    fieldSourcesByDomain[domain] = fieldSourcesByDomain[domain] || {};
+    fieldSourceLabelsByDomain[domain] = fieldSourceLabelsByDomain[domain] || {};
+    for (const field of fields) {
+      if (!measured.has(field)) continue;
+      fieldSourcesByDomain[domain][field] = source.sourceFamily;
+      fieldSourceLabelsByDomain[domain][field] = source.label;
+    }
+  };
+
+  const sleepFields = [
+    'sleepDuration', 'deepSleepDuration', 'remSleepDuration', 'lightSleepDuration',
+    'sleepEfficiency', 'sleepScore',
+  ];
+  assign('recovery', sleepFields, data.sleep);
+  assign('recovery', ['heartRateResting'], data.dailyRestingHeartRate);
+  assign('recovery', ['heartRateVariability'], data.dailyHeartRateVariability);
+  assign('recovery', ['oxygenSaturation'], data.dailyOxygenSaturation);
+  assign('recovery', ['respiratoryRate'], data.dailyRespiratoryRate);
+  assign('recovery', ['sleepTemperatureDeviationCelsius'], data.dailySleepTemperatureDerivations);
+
+  assign('activity', ['steps', 'totalSteps'], data.steps);
+  assign('activity', ['activeCalories'], data.activeEnergyBurned);
+  assign('activity', ['totalCalories'], data.totalCalories);
+  assign('activity', ['activeMinutes'], data.activeMinutes);
+  assign('activity', ['activeZoneMinutes'], data.activeZoneMinutes);
+  assign('activity', ['distanceMeters'], data.distance);
+
+  assign('training', ['workoutCount', 'totalWorkoutDurationMinutes', 'workouts'], data.exercise);
+
+  assign(
+    'biometrics',
+    ['heartRateAvg', 'heartRateMin', 'heartRateMax', 'continuousHeartRateSampleCount'],
+    data.heartRate
+  );
+  assign('biometrics', ['heartRateResting'], data.dailyRestingHeartRate);
+  assign('biometrics', ['heartRateVariability'], data.dailyHeartRateVariability);
+  assign('biometrics', ['oxygenSaturation'], data.dailyOxygenSaturation);
+  assign('biometrics', ['respiratoryRate'], data.dailyRespiratoryRate);
+  assign('biometrics', ['vo2Max'], data.dailyVo2Max);
+  assign('biometrics', ['bodyWeight'], data.weight);
+  assign('biometrics', ['bodyFatPercentage'], data.bodyFat);
+
+  for (const [domain, payload] of Object.entries(payloads)) {
+    fieldSourcesByDomain[domain] = fieldSourcesByDomain[domain] || {};
+    fieldSourceLabelsByDomain[domain] = fieldSourceLabelsByDomain[domain] || {};
+    for (const field of measuredFieldNames(domain, payload)) {
+      if (!fieldSourcesByDomain[domain][field]) {
+        fieldSourcesByDomain[domain][field] = 'google_health';
+        fieldSourceLabelsByDomain[domain][field] = 'Google Health';
+      }
+    }
+  }
+
+  return { fieldSourcesByDomain, fieldSourceLabelsByDomain };
+}
+
+function domainSourceFamily(fieldSources) {
+  const sources = Array.from(new Set(Object.values(fieldSources || {})));
+  return sources.length === 1 ? sources[0] : 'google_health';
+}
+
 function filterForInterval(dataType, dateKey, dateField = 'civil_start_time') {
   const filterKey = DATA_TYPE_FILTER_KEYS[dataType] || dataType;
   return `${filterKey}.interval.${dateField} >= "${dateKey}T00:00:00"`;
@@ -833,11 +954,11 @@ function buildSourceStatusDocument({
   return {
     id: `${userId}_fitbit`,
     athleteUserId: userId,
-    sourceFamily: 'fitbit',
+    sourceFamily: 'google_health',
     lifecycleState,
     lastAttemptedSyncAt: syncAt,
-    ...(effectiveSuccessfulSyncAt ? { lastSuccessfulSyncAt: effectiveSuccessfulSyncAt } : {}),
-    ...(effectiveObservedAt ? { lastObservedRecordAt: effectiveObservedAt } : {}),
+    lastSuccessfulSyncAt: effectiveSuccessfulSyncAt,
+    lastObservedRecordAt: effectiveObservedAt,
     lastErrorCode: lastError ? 'google_health_sync_failed' : null,
     lastErrorCategory: lastError ? 'google_health_sync' : null,
     // Optional-lane fetch failures from the most recent sync. Empty on a
@@ -855,14 +976,26 @@ function buildSourceStatusDocument({
   };
 }
 
-function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, payload, teamId, organizationId }) {
+function buildSourceRecord({
+  userId,
+  dateKey,
+  timezone,
+  syncAt,
+  domain,
+  payload,
+  sourceFamily,
+  fieldSources,
+  fieldSourceLabels,
+  teamId,
+  organizationId,
+}) {
   const sourceWindow = buildDayWindow(dateKey, timezone);
-  const id = `${userId}_fitbit_${domain}_${dateKey}`;
+  const id = `${userId}_${sourceFamily}_${domain}_${dateKey}`;
   return {
     id,
     athleteUserId: userId,
-    sourceFamily: 'fitbit',
-    sourceType: `pulsecheck_fitbit_${domain}`,
+    sourceFamily,
+    sourceType: `pulsecheck_${sourceFamily}_${domain}`,
     recordType: 'summary_input',
     domain,
     observedAt: sourceWindow.endAt,
@@ -871,9 +1004,9 @@ function buildSourceRecord({ userId, dateKey, timezone, syncAt, domain, payload,
     ingestedAt: syncAt,
     timezone: sourceWindow.timezone,
     status: 'active',
-    dedupeKey: `${userId}|fitbit|${domain}|${dateKey}`,
+    dedupeKey: `${userId}|${sourceFamily}|${domain}|${dateKey}`,
     payloadVersion: CONTRACT_VERSIONS.sourceRecord,
-    payload,
+    payload: mergePayloadWithAttribution({}, payload, fieldSources, fieldSourceLabels),
     // Only set when the athlete has exactly one active team — lets the coach
     // dashboard's team-scoped queries find this record; omitted (not null)
     // for unaffiliated/multi-team athletes so it never falsely matches a scope.
@@ -899,11 +1032,13 @@ async function findLatestFitbitObservedAt({ firestore, userId, dateKey, timezone
   for (let offset = 0; offset <= lookbackDays; offset += 1) {
     const candidateDateKey = shiftDateKey(dateKey, -offset);
     for (const domain of domains) {
-      refs.push(
-        firestore
-          .collection(HEALTH_CONTEXT_COLLECTIONS.sourceRecords)
-          .doc(`${userId}_fitbit_${domain}_${candidateDateKey}`)
-      );
+      for (const sourceFamily of ['google_health', 'fitbit']) {
+        refs.push(
+          firestore
+            .collection(HEALTH_CONTEXT_COLLECTIONS.sourceRecords)
+            .doc(`${userId}_${sourceFamily}_${domain}_${candidateDateKey}`)
+        );
+      }
     }
   }
 
@@ -912,6 +1047,7 @@ async function findLatestFitbitObservedAt({ firestore, userId, dateKey, timezone
     .filter((snapshot) => snapshot.exists)
     .map((snapshot) => {
       const data = snapshot.data() || {};
+      if (!hasMeasuredPayload(data.domain, data.payload)) return null;
       return unixSecondsValue(data.observedAt)
         || unixSecondsValue(data.observedWindowEnd)
         || unixSecondsValue(buildDayWindow(data.provenance?.rawDate || data.dateKey || dateKey, timezone).endAt);
@@ -955,7 +1091,18 @@ function shouldWriteDomain(existingSnapshot, domain, hasPayload, syncAt = null) 
   return syncAt - observedAt > takeoverSeconds;
 }
 
-function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatusDoc, sourceRecordDocs, payloads, existingSnapshot }) {
+function buildSnapshotArtifacts({
+  userId,
+  dateKey,
+  timezone,
+  syncAt,
+  sourceStatusDoc,
+  sourceRecordDocs,
+  payloads,
+  fieldSourcesByDomain,
+  fieldSourceLabelsByDomain,
+  existingSnapshot,
+}) {
   const snapshotId = `${userId}_daily_${dateKey}`;
   const revisionId = `${snapshotId}_${Math.trunc(syncAt * 1000)}`;
   const sourceWindow = buildDayWindow(dateKey, timezone);
@@ -965,19 +1112,20 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
   const existingSourceRecordIds = Array.isArray(existingProvenance.sourceRecordIds) ? existingProvenance.sourceRecordIds : [];
   const nextSourceRecordIds = Array.from(new Set([...existingSourceRecordIds, ...sourceRecordDocs.map((record) => record.id)]));
   const existingSourcesUsed = Array.isArray(existingProvenance.sourcesUsed) ? existingProvenance.sourcesUsed : [];
-  const nextSourcesUsed = Array.from(new Set([...existingSourcesUsed, 'fitbit']));
+  const measuredSources = Object.values(fieldSourcesByDomain || {}).flatMap((sources) => Object.values(sources));
+  const nextSourcesUsed = Array.from(new Set([...existingSourcesUsed, ...measuredSources]));
   const domainWrite = {
-    recovery: shouldWriteDomain(existingSnapshot, 'recovery', Object.keys(payloads.recovery).length > 0, syncAt),
-    biometrics: shouldWriteDomain(existingSnapshot, 'biometrics', Object.keys(payloads.biometrics).length > 0, syncAt),
-    activity: shouldWriteDomain(existingSnapshot, 'activity', Object.keys(payloads.activity).length > 0, syncAt),
-    training: shouldWriteDomain(existingSnapshot, 'training', Object.keys(payloads.training).length > 0, syncAt),
+    recovery: shouldWriteDomain(existingSnapshot, 'recovery', hasMeasuredPayload('recovery', payloads.recovery), syncAt),
+    biometrics: shouldWriteDomain(existingSnapshot, 'biometrics', hasMeasuredPayload('biometrics', payloads.biometrics), syncAt),
+    activity: shouldWriteDomain(existingSnapshot, 'activity', hasMeasuredPayload('activity', payloads.activity), syncAt),
+    training: shouldWriteDomain(existingSnapshot, 'training', hasMeasuredPayload('training', payloads.training), syncAt),
   };
   const nextDomainWinners = {
     ...(existingProvenance.domainWinners || {}),
-    ...(domainWrite.recovery ? { recovery: 'fitbit' } : {}),
-    ...(domainWrite.biometrics ? { biometrics: 'fitbit' } : {}),
-    ...(domainWrite.activity ? { activity: 'fitbit' } : {}),
-    ...(domainWrite.training ? { training: 'fitbit' } : {}),
+    ...(domainWrite.recovery ? { recovery: domainSourceFamily(fieldSourcesByDomain.recovery) } : {}),
+    ...(domainWrite.biometrics ? { biometrics: domainSourceFamily(fieldSourcesByDomain.biometrics) } : {}),
+    ...(domainWrite.activity ? { activity: domainSourceFamily(fieldSourcesByDomain.activity) } : {}),
+    ...(domainWrite.training ? { training: domainSourceFamily(fieldSourcesByDomain.training) } : {}),
   };
   // When the winning lane last actually had data per domain — read by
   // shouldWriteDomain's staleness takeover (here and in the other lanes).
@@ -1002,12 +1150,12 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
     permissions: {
       ...(existingSnapshot?.permissions || {}),
       googleHealthAuthorized: true,
-      fitbitAuthorized: true,
+      ...(measuredSources.includes('fitbit') ? { fitbitAuthorized: true } : {}),
       syncOrigin: 'pulsecheck_google_health_refresh',
     },
     sourceStatus: {
       ...existingSourceStatus,
-      fitbit: sourceStatusDoc,
+      google_health: sourceStatusDoc,
     },
     freshness: {
       ...(existingSnapshot?.freshness || {}),
@@ -1015,7 +1163,9 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
       biometrics: domainWrite.biometrics ? 'fresh' : existingSnapshot?.freshness?.biometrics || 'missing',
       activity: domainWrite.activity ? 'fresh' : existingSnapshot?.freshness?.activity || 'missing',
       training: domainWrite.training ? 'fresh' : existingSnapshot?.freshness?.training || 'missing',
-      overall: 'fresh',
+      overall: Object.values(domainWrite).some(Boolean)
+        ? 'fresh'
+        : existingSnapshot?.freshness?.overall || 'missing',
       evaluatedAt: syncAt,
     },
     provenance: {
@@ -1025,30 +1175,54 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
       sourceRecordIds: nextSourceRecordIds,
       domainWinners: nextDomainWinners,
       domainObservedAt: nextDomainObservedAt,
-      latestObservedFitbitDateKey: dateKey,
+      ...(measuredSources.includes('fitbit') ? { latestObservedFitbitDateKey: dateKey } : {}),
+      ...(measuredSources.length > 0 ? { latestObservedGoogleHealthDateKey: dateKey } : {}),
     },
     domains: {
       ...existingDomains,
       identity: existingDomains.identity || { athleteUserId: userId, timezone, snapshotDate: dateKey },
       recovery: domainWrite.recovery
-        ? compactObject({ ...(existingDomains.recovery || {}), ...payloads.recovery })
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.recovery,
+          payloads.recovery,
+          fieldSourcesByDomain.recovery,
+          fieldSourceLabelsByDomain.recovery
+        ))
         : existingDomains.recovery || {},
       biometrics: domainWrite.biometrics
-        ? compactObject({ ...(existingDomains.biometrics || {}), ...payloads.biometrics })
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.biometrics,
+          payloads.biometrics,
+          fieldSourcesByDomain.biometrics,
+          fieldSourceLabelsByDomain.biometrics
+        ))
         : existingDomains.biometrics || {},
       activity: domainWrite.activity
-        ? compactObject({ ...(existingDomains.activity || {}), ...payloads.activity })
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.activity,
+          payloads.activity,
+          fieldSourcesByDomain.activity,
+          fieldSourceLabelsByDomain.activity
+        ))
         : existingDomains.activity || {},
       training: domainWrite.training
-        ? compactObject({ ...(existingDomains.training || {}), ...payloads.training })
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.training,
+          payloads.training,
+          fieldSourcesByDomain.training,
+          fieldSourceLabelsByDomain.training
+        ))
         : existingDomains.training || {},
       summary: compactObject({
         ...(existingDomains.summary || {}),
         dataSourcesUsed: nextSourcesUsed,
         lastSyncTimestamp: syncAt,
         syncOrigin: 'pulsecheck_google_health_refresh',
-        fitbitLastSyncTimestamp: syncAt,
-        fitbitObservedDateKey: dateKey,
+        googleHealthLastSyncTimestamp: syncAt,
+        googleHealthObservedDateKey: dateKey,
+        ...(measuredSources.includes('fitbit')
+          ? { fitbitLastSyncTimestamp: syncAt, fitbitObservedDateKey: dateKey }
+          : {}),
       }),
     },
     lastTriggerReason: 'pulsecheck_google_health_refresh',
@@ -1063,7 +1237,7 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
       generatedAt: syncAt,
       triggerReason: 'pulsecheck_google_health_refresh',
       payload: snapshot,
-      diffSummary: { sourceFamily: 'fitbit', provider: 'google_health', snapshotDateKey: dateKey },
+      diffSummary: { sourceFamily: 'google_health', provider: 'google_health', snapshotDateKey: dateKey },
     },
     assemblyTrace: {
       id: `${revisionId}_1`,
@@ -1108,8 +1282,12 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
     activity: mapActivityPayload(googleHealthData),
     training: mapTrainingPayload(googleHealthData),
   };
+  const { fieldSourcesByDomain, fieldSourceLabelsByDomain } = buildGoogleFieldAttribution(
+    googleHealthData,
+    payloads
+  );
   const syncAt = Date.now() / 1000;
-  const hasPayload = Object.values(payloads).some((payload) => Object.keys(payload).length > 0);
+  const hasPayload = Object.entries(payloads).some(([domain, payload]) => hasMeasuredPayload(domain, payload));
   const observedAt = hasPayload ? buildDayWindow(requestedDateKey, timezone).endAt : null;
   const fetchWarnings = Array.isArray(googleHealthData.fetchWarnings) ? googleHealthData.fetchWarnings : [];
   const firestore = admin.firestore();
@@ -1133,11 +1311,11 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
     fetchWarnings,
     previousSourceStatus: {
       ...existingSourceStatus,
-      lastObservedRecordAt: existingSourceStatus.lastObservedRecordAt || repairedObservedAt,
+      lastObservedRecordAt: repairedObservedAt,
     },
   });
   const importedDomains = Object.entries(payloads)
-    .filter(([, payload]) => Object.keys(payload).length > 0)
+    .filter(([domain, payload]) => hasMeasuredPayload(domain, payload))
     .map(([domain]) => domain);
 
   const batch = firestore.batch();
@@ -1159,12 +1337,12 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
       status: 'waiting_for_data',
       snapshotDateKey: requestedDateKey,
       fetchWarnings,
-      detail: 'Fitbit is connected, but no synced Google Health data was available for this date yet.',
+      detail: 'Google Health is connected, but no measured wearable data was available for this date yet.',
     };
   }
 
   const sourceRecordDocs = Object.entries(payloads)
-    .filter(([, payload]) => Object.keys(payload).length > 0)
+    .filter(([domain, payload]) => hasMeasuredPayload(domain, payload))
     .map(([domain, payload]) => buildSourceRecord({
       userId,
       dateKey: requestedDateKey,
@@ -1172,6 +1350,9 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
       syncAt,
       domain,
       payload,
+      sourceFamily: domainSourceFamily(fieldSourcesByDomain[domain]),
+      fieldSources: fieldSourcesByDomain[domain],
+      fieldSourceLabels: fieldSourceLabelsByDomain[domain],
       teamId: teamScope?.teamId,
       organizationId: teamScope?.organizationId,
     }));
@@ -1190,6 +1371,8 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
     sourceStatusDoc,
     sourceRecordDocs,
     payloads,
+    fieldSourcesByDomain,
+    fieldSourceLabelsByDomain,
     existingSnapshot: existingSnapshotSnap.data() || null,
   });
 
@@ -1213,7 +1396,7 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
     sourcesUsed: artifacts.snapshot.provenance.sourcesUsed,
     importedDomains,
     fetchWarnings,
-    detail: 'PulseCheck imported the latest Fitbit health context.',
+    detail: 'PulseCheck imported the latest measured Google Health context.',
   };
 }
 
@@ -1253,7 +1436,7 @@ exports.handler = async (event) => {
     console.error('[google-health-sync] Failed:', error);
     return buildGoogleHealthErrorResponse(error, {
       errorCode: 'GOOGLE_HEALTH_SYNC_FAILED',
-      message: 'We could not refresh your Fitbit health data right now.',
+      message: 'We could not refresh your Google Health data right now.',
     });
   }
 };
@@ -1269,6 +1452,11 @@ exports.__test = {
   mapRecoveryPayload,
   mapSleepPayload,
   mapTrainingPayload,
+  buildGoogleFieldAttribution,
+  buildSnapshotArtifacts,
+  googleHealthPointSource,
+  googleHealthResponseSource,
+  hasMeasuredPayload,
   optionalGoogleHealthRequest,
   selectSleepRecord,
   shouldWriteDomain,

@@ -51,7 +51,7 @@ test('coach identity and handoff responses stay direct and product-grounded', ()
   });
   const handoff = evaluateNoraEngagementResponse({
     athleteMessage: 'Can you send these recipe options to my coach?',
-    response: 'Done. I sent Coach Carter the context and a link back to this Nora thread.',
+    response: 'Done. I sent Coach Carter only the selected context.',
     lane: NoraConversationLane.CoachHandoff,
     confirmedExternalAction: true,
   });

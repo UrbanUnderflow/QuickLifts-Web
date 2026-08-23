@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  User,
   MessageCircle,
   ArrowUpRight,
   ArrowDownRight,
@@ -11,11 +10,23 @@ import {
   Check,
 } from 'lucide-react';
 import { coachService } from '../api/firebase/coach/service';
-import type { AthleteReadinessDailyDetail, DailySentimentRecord } from '../api/firebase/coach/service';
-import type { AthleteDeviceDayDetail, AthleteDeviceStatus } from '../api/firebase/pulsecheckDeviceMonitor';
+import type {
+  AthleteReadinessWorkspaceSnapshot,
+  DailySentimentRecord,
+} from '../api/firebase/coach/service';
+import type {
+  AthleteDeviceDayDetail,
+  AthleteDeviceEvidencePayload,
+  AthleteDeviceStatus,
+} from '../api/firebase/pulsecheckDeviceMonitor';
+import type { PulseCheckScoreComponentDayState } from '../utils/pulsecheckScoringV2';
+import { pulseCheckScoreDisplayLabel } from '../utils/pulsecheckScorePresentation';
+import {
+  derivePulseCheckMoodEvidence,
+  type PulseCheckMoodEvidence,
+} from '../utils/pulsecheckMoodEvidence';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
 import { useUser } from '../hooks/useUser';
-import { auth } from '../api/firebase/config';
 
 // Lean "triage" readiness card: status-led, one-glance trend + why + daily
 // check-ins + a clear action. Depth (28-day calendar, raw scores, tooltips)
@@ -31,6 +42,7 @@ interface AthleteData {
   sportOrProgram?: string;
   athleteAge?: number;
   lastActiveDate?: Date;
+  lastCheckInDate?: Date;
   totalSessions?: number;
   weeklyGoalProgress?: number;
   sentimentScore?: number;
@@ -41,6 +53,7 @@ interface AthleteData {
   deviceDailyPresence?: boolean[];
   deviceStatus?: AthleteDeviceStatus;
   youthTrack?: string;
+  sentimentHistory?: DailySentimentRecord[];
 }
 
 type CoachScoreResult = {
@@ -49,9 +62,16 @@ type CoachScoreResult = {
   confidence: string;
   evidenceCoveragePercent: number;
   trendDelta: number | null;
+  components?: Array<{
+    key: string;
+    score?: number | null;
+    configuredWeightPercent?: number;
+    detail?: string;
+    dayStates?: PulseCheckScoreComponentDayState[];
+  }>;
 };
 
-type CoachScorecardRead = {
+export type CoachScorecardRead = {
   methodologyVersion: string;
   wellbeing: CoachScoreResult;
   recovery: CoachScoreResult;
@@ -59,14 +79,129 @@ type CoachScorecardRead = {
   coherence: CoachScoreResult;
 };
 
-type CoachScorecardResponse = {
+export type CoachScorecardResponse = {
   scorecard: CoachScorecardRead;
+  deviceEvidence?: AthleteDeviceEvidencePayload;
   coachContext?: {
     mixedRecoverySignals: boolean;
     mixedSignalSummary: string | null;
     physicalTrainingBoundary: string;
   };
 };
+
+const DEMO_SHOWING_UP_DAYS = Array.from({ length: 14 }, (_, index) => {
+  const day = index + 8;
+  const state: PulseCheckScoreComponentDayState['state'] = index < 10
+    ? 'complete'
+    : index < 13 ? 'missed' : 'pending';
+  const dateKey = `2026-08-${String(day).padStart(2, '0')}`;
+  return {
+    dateKey,
+    state,
+    label: `${dateKey}: Demo scheduled check-in ${state}.`,
+    checkInState: state === 'complete'
+      ? 'completed' as const
+      : state === 'pending' ? 'pending' as const : 'missed' as const,
+    checkInLabel: state === 'complete'
+      ? 'Completed'
+      : state === 'pending' ? 'Pending' : 'Missed',
+    reason: state === 'complete'
+      ? 'The scheduled check-in was completed.'
+      : state === 'pending'
+        ? 'This day is still open, so the scheduled check-in is not counted as missed yet.'
+        : 'The scheduled check-in was not completed.',
+  };
+});
+
+const DEMO_SCORECARD_RESPONSE: CoachScorecardResponse = {
+  scorecard: {
+    methodologyVersion: '2.2.3',
+    coherence: {
+      score: 76,
+      status: 'available',
+      confidence: 'moderate',
+      evidenceCoveragePercent: 71,
+      trendDelta: 3,
+      components: [{ key: 'showing_up', dayStates: DEMO_SHOWING_UP_DAYS }],
+    },
+    wellbeing: { score: 78, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 4 },
+    recovery: { score: 72, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 64, trendDelta: -2 },
+    adherence: {
+      score: 77,
+      status: 'available',
+      confidence: 'strong',
+      evidenceCoveragePercent: 93,
+      trendDelta: 6,
+      components: [{
+        key: 'scheduled_check_ins',
+        score: 77,
+        configuredWeightPercent: 100,
+        detail: '10 of 13 scorable scheduled check-ins completed.',
+        dayStates: DEMO_SHOWING_UP_DAYS,
+      }],
+    },
+  },
+  coachContext: {
+    mixedRecoverySignals: false,
+    mixedSignalSummary: null,
+    physicalTrainingBoundary: 'PulseCheck reports evidence and uncertainty. Coaches and sports medicine staff make physical training decisions.',
+  },
+};
+
+const SHOWING_UP_STATE_META: Record<
+  PulseCheckScoreComponentDayState['state'],
+  { label: string; color: string; background: string; border: string }
+> = {
+  complete: {
+    label: 'Complete',
+    color: '#BEF264',
+    background: 'rgba(190, 242, 100, 0.82)',
+    border: '1px solid rgba(190, 242, 100, 0.3)',
+  },
+  missed: {
+    label: 'Missed',
+    color: '#FB7185',
+    background: 'rgba(244, 63, 94, 0.56)',
+    border: '1px solid rgba(251, 113, 133, 0.42)',
+  },
+  pending: {
+    label: 'Pending',
+    color: '#D4D4D8',
+    background: 'rgba(255, 255, 255, 0.16)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+  },
+  excused: {
+    label: 'Not scheduled',
+    color: '#7DD3FC',
+    background: 'rgba(56, 189, 248, 0.34)',
+    border: '1px solid rgba(125, 211, 252, 0.34)',
+  },
+};
+
+const showingUpDayStyle = (state: PulseCheckScoreComponentDayState['state']): React.CSSProperties => {
+  const meta = SHOWING_UP_STATE_META[state] || SHOWING_UP_STATE_META.pending;
+  return { background: meta.background, border: meta.border };
+};
+
+const formatShowingUpDate = (dateKey: string): string => {
+  const date = new Date(`${dateKey}T12:00:00`);
+  return Number.isNaN(date.getTime())
+    ? dateKey
+    : date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+const showingUpStateMeta = (state: string) => {
+  if (state in SHOWING_UP_STATE_META) {
+    return SHOWING_UP_STATE_META[state as PulseCheckScoreComponentDayState['state']];
+  }
+  return SHOWING_UP_STATE_META.pending;
+};
+
+// Showing Up is the daily view of scheduled check-in completion.
+const showingUpBreakdown = (day: PulseCheckScoreComponentDayState) => ({
+  checkInLabel: day.checkInLabel || 'Not available',
+  reason: day.reason || day.label,
+});
 
 // Trend-level theme extraction from a day's check-in messages (no transcripts).
 const TOPIC_RULES: { label: string; rx: RegExp }[] = [
@@ -128,6 +263,31 @@ const ageGroupLabel = (age?: number, track?: string): string => {
 
 const profileInitial = (name: string) => (name.trim().charAt(0) || 'A').toUpperCase();
 
+const AthleteAvatar: React.FC<{
+  src?: string;
+  name: string;
+  size?: 'sm' | 'lg';
+}> = ({ src, name, size = 'sm' }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  const sizeClass = size === 'lg' ? 'h-11 w-11 text-sm' : 'h-9 w-9 text-xs';
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        onError={() => setFailed(true)}
+        className={`${sizeClass} flex-none rounded-full object-cover ring-1 ring-white/10 transition group-hover/athlete-profile:ring-white/30`}
+      />
+    );
+  }
+  return (
+    <span className={`${sizeClass} flex flex-none items-center justify-center rounded-full bg-zinc-800 font-bold text-zinc-200 ring-1 ring-white/10 transition group-hover/athlete-profile:ring-white/30`}>
+      {profileInitial(name)}
+    </span>
+  );
+};
+
 const formatDeviceTime = (seconds?: number | null): string => {
   if (!seconds) return 'No data yet';
   const date = new Date(seconds * 1000);
@@ -150,8 +310,6 @@ const formatDuration = (seconds?: number | null): string => {
   return `${h}h ${m}m`;
 };
 
-const pct = (value: number): number => Math.max(0, Math.min(100, Math.round(value)));
-
 const sentimentLabel = (score: number | null | undefined): string => {
   if (score == null) return 'No chat sentiment';
   if (score >= 0.25) return 'Positive';
@@ -168,7 +326,10 @@ const sentimentToneClass = (score: number | null | undefined): string => {
 
 const deriveStatus = (a: AthleteData): StatusKey => {
   const stale = daysSince(a.lastActiveDate);
-  if ((a.conversationCount ?? 0) === 0 || stale === null || stale > 7) return 'pending';
+  const lastCheckInDays = daysSince(a.lastCheckInDate);
+  const hasCurrentSignal = (a.conversationCount ?? 0) > 0
+    || (lastCheckInDays !== null && lastCheckInDays <= 7);
+  if (!hasCurrentSignal || stale === null || stale > 7) return 'pending';
   const s = a.sentimentScore ?? 0;
   if (s >= 0.25) return 'optimal';
   if (s >= -0.1) return 'flagged';
@@ -185,6 +346,7 @@ type DayPoint = { has: boolean; score: number };
 type DayDetail = DayPoint & {
   date: Date;
   moodLabel: string;
+  moodEvidence: PulseCheckMoodEvidence;
   checkInCompleted: boolean;
   checkInCount: number;
   noraChatCount: number;
@@ -300,136 +462,91 @@ const AthleteReadinessCard: React.FC<{
   demo?: boolean;
   teamId?: string;
   organizationId?: string;
-}> = ({ athlete, demo, teamId, organizationId }) => {
-  const [history, setHistory] = useState<DailySentimentRecord[] | null>(null);
-  const [readinessDetails, setReadinessDetails] = useState<AthleteReadinessDailyDetail[] | null>(demo ? [] : null);
+  readinessSnapshot?: AthleteReadinessWorkspaceSnapshot;
+  scorecardResponse?: CoachScorecardResponse | null;
+}> = ({ athlete, demo, teamId, organizationId, readinessSnapshot, scorecardResponse }) => {
+  const readinessDetails = demo ? [] : readinessSnapshot?.details ?? null;
+  const readinessAvailability = demo
+    ? { checkIns: 'available', modules: 'available', nora: 'available' } as const
+    : readinessSnapshot?.availability ?? null;
   const [messagingOpen, setMessagingOpen] = useState(false);
-  const [scorecardRead, setScorecardRead] = useState<CoachScorecardResponse | null>(
-    demo
-      ? {
-          scorecard: {
-            methodologyVersion: '2.2.0',
-            coherence: { score: 80, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 3 },
-            wellbeing: { score: 78, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 71, trendDelta: 4 },
-            recovery: { score: 72, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 64, trendDelta: -2 },
-            adherence: { score: 84, status: 'available', confidence: 'moderate', evidenceCoveragePercent: 79, trendDelta: 6 },
-          },
-          coachContext: {
-            mixedRecoverySignals: false,
-            mixedSignalSummary: null,
-            physicalTrainingBoundary: 'PulseCheck reports evidence and uncertainty. Coaches and sports medicine staff make physical training decisions.',
-          },
-        }
-      : null
-  );
+  const scorecardRead = demo ? DEMO_SCORECARD_RESPONSE : scorecardResponse ?? null;
   const [profileHover, setProfileHover] = useState<{ x: number; y: number; placement: 'above' | 'below' } | null>(null);
   const currentUser = useUser();
-
-  useEffect(() => {
-    let cancelled = false;
-    if (demo) return () => { cancelled = true; };
-    const normalizedTeamId = String(teamId || '').trim();
-    if (!normalizedTeamId) {
-      setScorecardRead(null);
-      return () => { cancelled = true; };
-    }
-    const load = async () => {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Authentication required');
-      const response = await fetch('/.netlify/functions/get-pulsecheck-scorecard', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ athleteUserId: athlete.id, teamId: normalizedTeamId }),
-      });
-      if (!response.ok) throw new Error(`Scorecard request failed with ${response.status}`);
-      return response.json() as Promise<CoachScorecardResponse>;
+  const showingUpDays = useMemo(() => {
+    const components = [
+      ...(scorecardRead?.scorecard.coherence.components || []),
+      ...(scorecardRead?.scorecard.adherence.components || []),
+    ];
+    const days = components.find((component) => component.dayStates?.length)?.dayStates || [];
+    return [...days].sort((left, right) => left.dateKey.localeCompare(right.dateKey)).slice(-14);
+  }, [scorecardRead]);
+  const showingUpSummary = useMemo(() => {
+    const completed = showingUpDays.filter((day) => day.state === 'complete').length;
+    const scorable = showingUpDays.filter((day) => day.state === 'complete' || day.state === 'missed').length;
+    return {
+      completed,
+      scorable,
+      score: scorecardRead?.scorecard.adherence.score ?? null,
     };
-    load()
-      .then((read) => { if (!cancelled) setScorecardRead(read); })
-      .catch(() => { if (!cancelled) setScorecardRead(null); });
-    return () => { cancelled = true; };
-  }, [athlete.id, demo, teamId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    coachService
-      .getDailySentimentHistory(athlete.id, 28)
-      .then((h) => !cancelled && setHistory(h))
-      .catch(() => !cancelled && setHistory([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [athlete.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (demo) {
-      setReadinessDetails([]);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setReadinessDetails(null);
-    const coachID = String(currentUser?.id || '').trim();
-    const normalizedTeamID = String(teamId || '').trim();
-    const normalizedOrganizationID = String(organizationId || '').trim();
-    if (!coachID || !normalizedTeamID || !normalizedOrganizationID) {
-      setReadinessDetails([]);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    coachService
-      .getCoachReadinessDailyDetailsForWorkspace(
-        athlete.id,
-        coachID,
-        {
-          teamId: normalizedTeamID,
-          organizationId: normalizedOrganizationID,
-        },
-        14
-      )
-      .then((details) => !cancelled && setReadinessDetails(details))
-      .catch(() => !cancelled && setReadinessDetails([]));
-
-    return () => {
-      cancelled = true;
-    };
-  }, [athlete.id, currentUser?.id, demo, organizationId, teamId]);
+  }, [scorecardRead, showingUpDays]);
 
   const status = deriveStatus(athlete);
   const meta = STATUS[status];
-  const stale = daysSince(athlete.lastActiveDate);
+  const lastCheckInDays = daysSince(demo ? athlete.lastActiveDate : athlete.lastCheckInDate);
 
   // Build the last 14 days of readiness detail (most recent last). Per-day
   // device/modules/topics are synthesized in the demo; live wires to real data.
   const last14 = useMemo<DayDetail[]>(() => {
-    const byDate = new Map((history ?? []).map((r) => [r.date, r]));
     const detailByDate = new Map((readinessDetails ?? []).map((r) => [r.date, r]));
+    const historyByDate = new Map(
+      (athlete.sentimentHistory ?? []).map((record) => [record.date, record])
+    );
     const out: DayDetail[] = [];
     const today = new Date();
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const dateKey = ymd(d);
-      const rec = byDate.get(dateKey);
       const detail = detailByDate.get(dateKey);
-      const signalHas = !!rec && rec.messageCount > 0;
       const h = hashStr(`${athlete.id}:${dateKey}`);
+      const demoHas = status !== 'pending' && i < 11 && h % 5 !== 0;
       // Device per-day: real from the device monitor's dailyPresence on live
       // (index aligned oldest→today), synth in demo. Topics stay demo-only synth
       // here; live topics are fetched lazily on hover.
-      const checkInCompleted = demo ? signalHas : detail?.checkInCompleted === true;
-      const noraChatCount = demo && signalHas ? (h % 3 === 0 ? 2 : 1) : detail?.noraChatCount ?? 0;
-      const noraMessageCount = demo && signalHas ? 2 + (h % 5) : detail?.noraMessageCount ?? 0;
-      const noraSentimentScore = demo && signalHas ? rec?.sentimentScore ?? 0 : detail?.noraSentimentScore ?? null;
-      const has = signalHas || checkInCompleted || noraMessageCount > 0;
-      const score = signalHas ? rec!.sentimentScore : noraSentimentScore ?? 0;
+      const checkInCompleted = demo ? demoHas : detail?.checkInCompleted === true;
+      const historyRecord = historyByDate.get(dateKey);
+      const historySignalAvailable = !demo && (historyRecord?.messageCount ?? 0) > 0;
+      const noraChatCount = demo && demoHas ? (h % 3 === 0 ? 2 : 1) : detail?.noraChatCount ?? 0;
+      const noraMessageCount = demo && demoHas ? 2 + (h % 5) : detail?.noraMessageCount ?? 0;
+      const demoScore = status === 'optimal'
+        ? 0.5
+        : status === 'flagged'
+          ? 0.05
+          : status === 'elevated'
+            ? -0.3
+            : -0.65;
+      const noraSentimentScore = demo && demoHas
+        ? Math.max(-1, Math.min(1, demoScore + ((h % 3) - 1) * 0.12))
+        : detail?.noraSentimentScore ?? null;
+      const has = checkInCompleted || noraMessageCount > 0 || historySignalAvailable;
+      const selectedSelfReportLevel = detail?.coherenceEveningLevel || detail?.coherenceMorningLevel;
+      const moodEvidence = derivePulseCheckMoodEvidence({
+        hasEvidence: has,
+        selfReportLevel: selectedSelfReportLevel,
+        selfReportPeriod: detail?.coherenceEveningLevel
+          ? 'Evening'
+          : detail?.coherenceMorningLevel
+            ? 'Morning'
+            : null,
+        noraSentimentScore,
+        noraMessageCount,
+        historySentimentScore: historyRecord?.sentimentScore ?? null,
+        historyMessageCount: historyRecord?.messageCount ?? 0,
+        historySources: historyRecord?.sources,
+        demoSignalScore: demo && demoHas ? noraSentimentScore : null,
+      });
+      const score = moodEvidence.score;
       const moduleAssignedCount = demo ? (has ? 3 : 0) : detail?.moduleAssignedCount ?? 0;
       const moduleCompletedCount = demo && has
         ? Math.min(3, score < -0.3 ? h % 2 : 1 + (h % 3))
@@ -437,7 +554,11 @@ const AthleteReadinessCard: React.FC<{
       const moduleDurationSeconds = demo && moduleCompletedCount > 0
         ? moduleCompletedCount * 180
         : detail?.moduleDurationSeconds ?? 0;
-      const moodLabel = !has ? 'No check-in' : score >= 0.3 ? 'Good' : score >= -0.3 ? 'Mixed' : 'Low';
+      const moodLabel = !has
+        ? !demo && readinessAvailability?.checkIns !== 'available'
+          ? 'Unavailable'
+          : 'No check-in'
+        : score >= 0.3 ? 'Good' : score >= -0.3 ? 'Mixed' : 'Low';
       let topics: string[] = [];
       if (demo && has && score < 0.3) {
         topics = [THEMES_NEG[h % THEMES_NEG.length]];
@@ -449,8 +570,9 @@ const AthleteReadinessCard: React.FC<{
         score,
         date: d,
         moodLabel,
+        moodEvidence,
         checkInCompleted,
-        checkInCount: demo && signalHas ? 1 : detail?.checkInCount ?? Number(checkInCompleted),
+        checkInCount: demo && demoHas ? 1 : detail?.checkInCount ?? Number(checkInCompleted),
         noraChatCount,
         noraMessageCount,
         noraSentimentScore,
@@ -461,20 +583,30 @@ const AthleteReadinessCard: React.FC<{
       });
     }
     return out;
-  }, [history, readinessDetails, athlete.id, demo]);
+  }, [readinessAvailability, readinessDetails, athlete.id, athlete.sentimentHistory, demo, status]);
 
   // Per-day hover tooltip state. On live, the day's themes are fetched lazily
   // from that day's check-in messages (trend-level keywords only).
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
+  const [showingUpHover, setShowingUpHover] = useState<{
+    day: PulseCheckScoreComponentDayState;
+    x: number;
+    y: number;
+    placement: 'above' | 'below';
+  } | null>(null);
   const [deviceHover, setDeviceHover] = useState<{ x: number; y: number; device: ReadinessDeviceSource } | null>(null);
   const [dayTopics, setDayTopics] = useState<Record<string, string[]>>({});
   const fetchedDaysRef = useRef<Set<string>>(new Set());
   const onDayEnter = useCallback(
-    (idx: number, e: React.MouseEvent) => {
+    (idx: number, e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>) => {
       const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const half = 160; // ~half the tooltip width; keep it on screen
-      const x = Math.max(half + 8, Math.min((typeof window !== 'undefined' ? window.innerWidth : 1280) - half - 8, r.left + r.width / 2));
-      setHover({ idx, x, y: r.top });
+      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const tooltipHeight = 410;
+      const x = Math.max(half + 8, Math.min(viewportWidth - half - 8, r.left + r.width / 2));
+      const y = Math.max(8, Math.min(r.top - tooltipHeight - 10, viewportHeight - tooltipHeight - 8));
+      setHover({ idx, x, y });
       if (demo) return;
       const d = last14[idx];
       if (!d || !d.has) return;
@@ -489,6 +621,24 @@ const AthleteReadinessCard: React.FC<{
     [demo, last14, athlete.id]
   );
   const onDayLeave = useCallback(() => setHover(null), []);
+
+  const onShowingUpEnter = useCallback((
+    day: PulseCheckScoreComponentDayState,
+    e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>,
+  ) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const half = 152;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    const placement = rect.top < 260 ? 'below' : 'above';
+    const x = Math.max(half + 8, Math.min(viewportWidth - half - 8, rect.left + rect.width / 2));
+    setShowingUpHover({
+      day,
+      x,
+      y: placement === 'below' ? rect.bottom : rect.top,
+      placement,
+    });
+  }, []);
+  const onShowingUpLeave = useCallback(() => setShowingUpHover(null), []);
 
   const onDeviceEnter = useCallback((device: ReadinessDeviceSource, e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -522,7 +672,9 @@ const AthleteReadinessCard: React.FC<{
 
   const why = useMemo(() => {
     if (status === 'pending') {
-      return stale != null ? `No check-in in ${stale} day${stale === 1 ? '' : 's'}` : 'No recent check-in';
+      return lastCheckInDays != null
+        ? `No check-in in ${lastCheckInDays} day${lastCheckInDays === 1 ? '' : 's'}`
+        : 'No recorded check-ins';
     }
     const last7 = last14.slice(-7).filter((d) => d.has);
     const neg = last7.filter((d) => d.score < -0.1).length;
@@ -531,7 +683,7 @@ const AthleteReadinessCard: React.FC<{
     if (status === 'elevated') return neg ? `${neg} tough day${neg === 1 ? '' : 's'} this week` : 'Mood dipping this week';
     if (status === 'flagged') return 'Mixed week — worth a check-in';
     return pos >= 4 ? 'Consistent and dialed in' : 'Steady this week';
-  }, [status, last14, stale]);
+  }, [status, last14, lastCheckInDays]);
 
   // Risk tier + themes: real on live, synthesized only in the demo.
   const tier = demo ? deriveTier(status, athlete.sentimentScore ?? 0) : athlete.activeEscalationTier ?? 0;
@@ -540,17 +692,26 @@ const AthleteReadinessCard: React.FC<{
   const isAttention = status === 'escalated' || status === 'elevated' || status === 'flagged';
   const urgent = status === 'escalated' || status === 'elevated';
   const lastCheckin = useMemo(() => {
+    if (!demo && readinessAvailability?.checkIns !== 'available') {
+      return readinessAvailability ? 'Check-in data unavailable' : 'Loading check-ins';
+    }
     for (let i = last14.length - 1; i >= 0; i--) {
       if (last14[i].checkInCompleted) {
         const ago = last14.length - 1 - i;
         return ago === 0 ? 'Checked in today' : ago === 1 ? 'Checked in yesterday' : `Last check-in ${ago}d ago`;
       }
     }
-    return stale != null ? `No check-in · seen ${stale}d ago` : 'No check-ins yet';
-  }, [last14, stale]);
+    if (lastCheckInDays === 0) return 'Checked in today';
+    if (lastCheckInDays === 1) return 'Last check-in yesterday';
+    return lastCheckInDays != null
+      ? `Last check-in ${lastCheckInDays}d ago`
+      : 'No recorded check-ins';
+  }, [demo, last14, readinessAvailability, lastCheckInDays]);
 
   // Device: real connection + wear coverage on live, synthesized in demo.
   // Mental modules come from the daily readiness detail feed on live.
+  const deviceEvidenceState = demo ? 'available' : athlete.deviceStatus?.evidenceState ?? 'unavailable';
+  const deviceDataUnavailable = !demo && deviceEvidenceState === 'unavailable';
   const deviceConnected = demo
     ? (athlete.conversationCount ?? 0) > 0 || (athlete.weeklyGoalProgress ?? 0) > 10
     : athlete.deviceStatus
@@ -597,8 +758,13 @@ const AthleteReadinessCard: React.FC<{
         : [];
     }
 
+    if (deviceDataUnavailable) return [];
+
     const connectedSources = (athlete.deviceStatus?.devices || [])
-      .filter((device) => device.connectionStatus !== 'not_connected')
+      .filter((device) =>
+        device.connectionStatus !== 'not_connected'
+        && device.wearDaysCovered > 0
+      )
       .map((device): ReadinessDeviceSource => ({
         key: device.sourceFamily,
         label: device.label,
@@ -612,24 +778,36 @@ const AthleteReadinessCard: React.FC<{
         dailyDetails: device.dailyDetails || device.dailyPresence.map(() => null),
       }));
 
-    if (connectedSources.length > 0) return connectedSources;
-    if (!deviceConnected) return [];
+    const hasUnattributedWearDays = devicePresence.some((present, index) => {
+      if (!present) return false;
+      return !connectedSources.some((source) => {
+        const sourceIndex = source.dailyPresence.length - devicePresence.length + index;
+        return sourceIndex >= 0
+          && sourceIndex < source.dailyPresence.length
+          && source.dailyPresence[sourceIndex];
+      });
+    });
+    if (hasUnattributedWearDays) {
+      const wearableSummary: ReadinessDeviceSource = {
+        key: 'wearable-summary',
+        label: 'Wearable data',
+        connectionStatus: athlete.deviceStatus?.connectionStatus ?? 'synced',
+        lastObservedAt: athlete.deviceStatus?.lastObservedAt ?? null,
+        lastSyncedAt: athlete.deviceStatus?.lastSyncedAt ?? null,
+        wearDaysCovered: deviceDaysCovered,
+        windowDays: deviceWindowDays,
+        wearCoveragePct: deviceCoveragePct,
+        dailyPresence: devicePresence,
+        dailyDetails: devicePresence.map(() => null),
+      };
+      return [wearableSummary, ...connectedSources.filter((source) => source.wearDaysCovered > 0)];
+    }
 
-    return [{
-      key: athlete.deviceStatus?.currentDeviceFamily || 'device-summary',
-      label: deviceLabel,
-      connectionStatus: athlete.deviceStatus?.connectionStatus ?? 'synced',
-      lastObservedAt: athlete.deviceStatus?.lastObservedAt ?? null,
-      lastSyncedAt: athlete.deviceStatus?.lastSyncedAt ?? null,
-      wearDaysCovered: deviceDaysCovered,
-      windowDays: deviceWindowDays,
-      wearCoveragePct: deviceCoveragePct,
-      dailyPresence: devicePresence,
-      dailyDetails: devicePresence.map(() => null),
-    }];
+    return connectedSources;
   }, [
     athlete.deviceStatus,
     demo,
+    deviceDataUnavailable,
     deviceConnected,
     deviceCoveragePct,
     deviceDaysCovered,
@@ -667,9 +845,10 @@ const AthleteReadinessCard: React.FC<{
         sourceNames: wornSources.map((entry) => entry.source.label),
         observedSeconds,
         wearNotes,
+        evidenceState: deviceEvidenceState,
       };
     },
-    [deviceSources, last14.length]
+    [deviceEvidenceState, deviceSources, last14.length]
   );
 
   const adherenceStats = useMemo(() => {
@@ -735,13 +914,7 @@ const AthleteReadinessCard: React.FC<{
             className="group/athlete-profile flex min-w-0 cursor-help items-center gap-2.5 rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-[#E0FE10]/50"
             aria-label={`Preview ${athlete.displayName}'s profile`}
           >
-            {athlete.profileImageUrl ? (
-              <img src={athlete.profileImageUrl} alt={athlete.displayName} className="h-9 w-9 flex-none rounded-full object-cover ring-1 ring-white/10 transition group-hover/athlete-profile:ring-white/30" />
-            ) : (
-              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-zinc-800 ring-1 ring-white/10 transition group-hover/athlete-profile:ring-white/30">
-                <User className="h-4 w-4 text-zinc-400" />
-              </span>
-            )}
+            <AthleteAvatar src={athlete.profileImageUrl} name={athlete.displayName} />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white transition group-hover/athlete-profile:text-[#E0FE10]">{athlete.displayName}</p>
               <p className="truncate text-[11px] text-zinc-500">{lastCheckin}</p>
@@ -785,7 +958,7 @@ const AthleteReadinessCard: React.FC<{
           </div>
           <MoodStrip
             days={last14}
-            loading={history === null}
+            loading={readinessDetails === null}
             onEnter={onDayEnter}
             onLeave={onDayLeave}
             hoveredIdx={hover?.idx ?? null}
@@ -820,22 +993,74 @@ const AthleteReadinessCard: React.FC<{
             <span className="text-[9px] font-semibold text-zinc-600">v{scorecardRead?.scorecard.methodologyVersion || '2.0'}</span>
           </div>
           {scorecardRead ? (
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
-              {([
-                ['Coherence', scorecardRead.scorecard.coherence],
-                ['Wellbeing', scorecardRead.scorecard.wellbeing],
-                ['Recovery', scorecardRead.scorecard.recovery],
-                ['Adherence', scorecardRead.scorecard.adherence],
-              ] as const).map(([label, score]) => (
-                <div key={label} className="rounded-md border border-white/[0.07] bg-black/15 px-2 py-1.5">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[10px] font-semibold text-zinc-300">{label}</span>
-                    <span className="text-sm font-bold text-white">{score.score ?? 'Building'}</span>
+            <>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {([
+                  ['Coherence', scorecardRead.scorecard.coherence],
+                  ['Wellbeing', scorecardRead.scorecard.wellbeing],
+                  ['Recovery', scorecardRead.scorecard.recovery],
+                  ['Showing Up', scorecardRead.scorecard.adherence],
+                ] as const).map(([label, score]) => (
+                  <div key={label} className="rounded-md border border-white/[0.07] bg-black/15 px-2 py-1.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-zinc-300">{label}</span>
+                      <span className="text-sm font-bold text-white">{pulseCheckScoreDisplayLabel(score)}</span>
+                    </div>
+                    <p className="mt-0.5 text-[9px] text-zinc-600">
+                      Calculation coverage {score.evidenceCoveragePercent}% · {score.confidence}
+                    </p>
                   </div>
-                  <p className="mt-0.5 text-[9px] text-zinc-600">{score.evidenceCoveragePercent}% evidence · {score.confidence}</p>
+                ))}
+              </div>
+              {showingUpDays.length > 0 && (
+                <div className="mt-2.5 rounded-md border border-white/[0.07] bg-black/15 px-2 py-2">
+                  <div className="mb-1.5 flex items-center justify-between text-[9px] font-semibold uppercase tracking-wide text-zinc-500">
+                    <span>Showing up</span>
+                    <span>Last 14 days</span>
+                  </div>
+                  <p className="mb-2 text-[9px] leading-4 text-zinc-500">
+                    {showingUpSummary.scorable > 0
+                      ? `${showingUpSummary.completed} of ${showingUpSummary.scorable} completed = ${showingUpSummary.score}/100`
+                      : 'No scorable scheduled check-ins yet'}
+                  </p>
+                  <div className="flex gap-1">
+                    {showingUpDays.map((day) => {
+                      const stateMeta = showingUpStateMeta(day.state);
+                      const breakdown = showingUpBreakdown(day);
+                      return (
+                      <span
+                        key={day.dateKey}
+                        tabIndex={0}
+                        role="img"
+                        onMouseEnter={(event) => onShowingUpEnter(day, event)}
+                        onMouseLeave={onShowingUpLeave}
+                        onFocus={(event) => onShowingUpEnter(day, event)}
+                        onBlur={onShowingUpLeave}
+                        aria-label={`${formatShowingUpDate(day.dateKey)}. ${stateMeta.label}. Scheduled check-in: ${breakdown.checkInLabel}. ${breakdown.reason}`}
+                        className="h-3 min-w-0 flex-1 cursor-help rounded-[2px] outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-1 focus-visible:ring-offset-zinc-900"
+                        style={showingUpDayStyle(day.state)}
+                      />
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 flex justify-between text-[9px] font-semibold text-zinc-600">
+                    <span>{showingUpDays[0]?.dateKey.slice(5).replace('-', '/')}</span>
+                    <span>{showingUpDays.at(-1)?.dateKey.slice(5).replace('-', '/')}</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[8px] text-zinc-500">
+                    {(['complete', 'missed', 'pending', 'excused'] as const).map((state) => (
+                      <span key={state} className="inline-flex items-center gap-1">
+                        <span
+                          className="h-1.5 w-1.5 rounded-[1px]"
+                          style={{ background: SHOWING_UP_STATE_META[state].background }}
+                        />
+                        {SHOWING_UP_STATE_META[state].label}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           ) : (
             <p className="mt-2 text-[10px] leading-4 text-zinc-600">Scorecard evidence is not available yet.</p>
           )}
@@ -846,7 +1071,7 @@ const AthleteReadinessCard: React.FC<{
           )}
         </div>
 
-        {/* Data context. Device wear is evidence coverage, never Adherence. */}
+        {/* Device coverage and module activity stay separate from Showing Up. */}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-zinc-500">
           <span className="inline-flex min-w-0 items-center gap-1.5">
             <span className="inline-flex flex-none items-center gap-1">
@@ -874,18 +1099,35 @@ const AthleteReadinessCard: React.FC<{
                 ))}
               </span>
             ) : (
-              <span className="text-zinc-500">No device connected</span>
+              <span className="text-zinc-500">
+                {deviceDataUnavailable
+                  ? 'Device data unavailable'
+                  : deviceEvidenceState === 'partial'
+                    ? 'Device data incomplete'
+                    : deviceConnected
+                      ? 'Connected integrations · no measured data'
+                    : 'No device connected'}
+              </span>
             )}
           </span>
-          {(modulesDone !== null || adherenceStats.moduleAssignedCount > 0 || adherenceStats.moduleCompletedCount > 0) && (
+          {(modulesDone !== null
+            || adherenceStats.moduleAssignedCount > 0
+            || adherenceStats.moduleCompletedCount > 0
+            || (!demo && readinessAvailability && readinessAvailability.modules !== 'available')) && (
             <span className="inline-flex items-center gap-1">
               <Sparkles className="h-3.5 w-3.5" /> Mental modules{' '}
               <span className="text-zinc-300">
                 {demo
                   ? `${modulesDone ?? 0}/3`
+                  : readinessAvailability?.modules === 'unavailable'
+                    ? 'Data unavailable'
+                    : readinessAvailability?.modules === 'partial'
+                      ? adherenceStats.moduleCompletedCount > 0
+                        ? `${adherenceStats.moduleCompletedCount} practices completed · partial data`
+                        : 'Partial data'
                   : adherenceStats.moduleAssignedCount > 0
-                    ? `${adherenceStats.moduleCompletedCount} completed`
-                    : `${adherenceStats.moduleCompletedCount} completed`}
+                    ? `${adherenceStats.moduleCompletedCount} practices completed`
+                    : `${adherenceStats.moduleCompletedCount} practices completed`}
               </span>
               {!demo && adherenceStats.moduleAssignedCount > 0 && (
                 <span className="text-zinc-600">· {adherenceStats.moduleAssignedCount} assigned · last 14 days</span>
@@ -941,17 +1183,7 @@ const AthleteReadinessCard: React.FC<{
         >
           <div className="w-72 rounded-xl border border-white/10 bg-zinc-900/[0.98] p-3 shadow-2xl backdrop-blur">
             <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-              {athlete.profileImageUrl ? (
-                <img
-                  src={athlete.profileImageUrl}
-                  alt=""
-                  className="h-11 w-11 flex-none rounded-full object-cover ring-1 ring-white/10"
-                />
-              ) : (
-                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-zinc-800 text-sm font-bold text-zinc-200 ring-1 ring-white/10">
-                  {profileInitial(athlete.displayName)}
-                </span>
-              )}
+              <AthleteAvatar src={athlete.profileImageUrl} name={athlete.displayName} size="lg" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-white">{athlete.displayName}</div>
                 <div className="mt-0.5 flex items-center gap-1.5">
@@ -1046,6 +1278,51 @@ const AthleteReadinessCard: React.FC<{
         </div>
       )}
 
+      {/* Daily Showing up evidence */}
+      {showingUpHover && (() => {
+        const stateMeta = showingUpStateMeta(showingUpHover.day.state);
+        const breakdown = showingUpBreakdown(showingUpHover.day);
+        return (
+          <div
+            className="pointer-events-none fixed z-[80]"
+            style={{
+              left: showingUpHover.x,
+              top: showingUpHover.y,
+              transform: showingUpHover.placement === 'below'
+                ? 'translate(-50%, 10px)'
+                : 'translate(-50%, calc(-100% - 10px))',
+            }}
+          >
+            <div className="w-[19rem] rounded-lg border border-white/10 bg-zinc-900/[0.98] p-3 shadow-2xl backdrop-blur">
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2">
+                <span className="text-xs font-semibold text-white">
+                  {formatShowingUpDate(showingUpHover.day.dateKey)}
+                </span>
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{ color: stateMeta.color, background: stateMeta.background }}
+                >
+                  {stateMeta.label}
+                </span>
+              </div>
+              <div className="mt-2 space-y-1.5 text-[11px]">
+                <div className="flex justify-between gap-4">
+                  <span className="text-zinc-500">Scheduled check-in</span>
+                  <span className="max-w-[150px] text-right text-zinc-200">{breakdown.checkInLabel}</span>
+                </div>
+                <div className="border-t border-white/10 pt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Why this square</div>
+                  <p className="mt-1 text-[11px] leading-4 text-zinc-300">{breakdown.reason}</p>
+                </div>
+                <p className="border-t border-white/10 pt-2 text-[10px] leading-4 text-zinc-500">
+                  Showing Up is completed scheduled check-ins divided by scorable scheduled check-ins. Device coverage and module activity are reported separately.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Per-day hover detail (mood squares + check-in dots share this) */}
       {hover &&
         last14[hover.idx] &&
@@ -1053,25 +1330,50 @@ const AthleteReadinessCard: React.FC<{
           const d = last14[hover.idx];
           const c = d.has ? moodColor(d.score) : '#71717a';
           const deviceDay = deviceSummaryForDay(hover.idx);
-          const deviceLabelForDay = deviceDay.worn ? deviceDay.sourceNames.join(', ') : 'Not worn';
+          const deviceLabelForDay = deviceDay.worn
+            ? deviceDay.sourceNames.join(', ')
+            : deviceDay.evidenceState === 'unavailable'
+              ? 'Unavailable'
+              : deviceDay.evidenceState === 'partial'
+                ? 'Data incomplete'
+                : 'Not worn';
           const deviceTimeLabel = deviceDay.worn
             ? deviceDay.observedSeconds > 0
               ? formatDuration(deviceDay.observedSeconds)
               : 'Recorded'
-            : 'Not worn';
-          const moduleLabel = d.moduleAssignedCount > 0
-            ? `${d.moduleCompletedCount} of ${d.moduleAssignedCount}`
-            : d.moduleCompletedCount > 0
-              ? `${d.moduleCompletedCount} completed`
-              : '0 completed';
-          const noraChatLabel = d.noraChatCount > 0
+            : deviceDay.evidenceState === 'available' ? 'Not worn' : deviceLabelForDay;
+          const moduleLabel = readinessAvailability?.modules === 'unavailable'
+            ? 'Unavailable'
+            : readinessAvailability?.modules === 'partial'
+              ? d.moduleCompletedCount > 0
+                ? `${d.moduleCompletedCount} completed · partial data`
+                : 'Data incomplete'
+              : d.moduleAssignedCount > 0
+                ? `${d.moduleCompletedCount} of ${d.moduleAssignedCount}`
+                : d.moduleCompletedCount > 0
+                  ? `${d.moduleCompletedCount} completed`
+                  : '0 completed';
+          const checkInLabel = readinessAvailability?.checkIns === 'unavailable'
+            ? 'Unavailable'
+            : readinessAvailability?.checkIns === 'partial'
+              ? d.checkInCompleted
+                ? `${d.checkInCount > 1 ? `Completed (${d.checkInCount})` : 'Completed'} · partial data`
+                : 'Data incomplete'
+              : d.checkInCompleted
+                ? d.checkInCount > 1 ? `Completed (${d.checkInCount})` : 'Completed'
+                : 'No check-in';
+          const noraChatLabel = readinessAvailability?.nora === 'unavailable'
+            ? 'Unavailable'
+            : readinessAvailability?.nora === 'partial' && d.noraChatCount === 0
+              ? 'Data incomplete'
+              : d.noraChatCount > 0
             ? `${d.noraChatCount} chat${d.noraChatCount === 1 ? '' : 's'}`
             : 'No chat';
           const topics = demo ? d.topics : dayTopics[ymd(d.date)] || [];
           return (
             <div
               className="pointer-events-none fixed z-[70]"
-              style={{ left: hover.x, top: hover.y, transform: 'translate(-50%, calc(-100% - 10px))' }}
+              style={{ left: hover.x, top: hover.y, transform: 'translateX(-50%)' }}
             >
               <div className="w-80 rounded-xl border border-white/10 bg-zinc-900/[0.98] p-3 shadow-2xl backdrop-blur">
                 <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2">
@@ -1083,12 +1385,26 @@ const AthleteReadinessCard: React.FC<{
                   </span>
                 </div>
                 <div className="mt-2 space-y-1.5 text-[11px]">
+                  {d.has && (
+                    <>
+                      <div className="flex justify-between gap-3" data-mood-source>
+                        <span className="text-zinc-500">Mood source</span>
+                        <span className="max-w-[190px] text-right text-zinc-200">
+                          {d.moodEvidence.sourceLabel}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-zinc-500">Source reading</span>
+                        <span className="max-w-[190px] text-right text-zinc-200">
+                          {d.moodEvidence.sourceReadingLabel}
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between gap-3">
-                    <span className="text-zinc-500">Check-in</span>
+                    <span className="text-zinc-500">Team check-in</span>
                     <span className={d.checkInCompleted ? 'text-zinc-200' : 'text-zinc-500'}>
-                      {d.checkInCompleted
-                        ? d.checkInCount > 1 ? `Completed (${d.checkInCount})` : 'Completed'
-                        : 'No check-in'}
+                      {checkInLabel}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3">
@@ -1123,8 +1439,27 @@ const AthleteReadinessCard: React.FC<{
                   )}
                   <div className="flex justify-between gap-3">
                     <span className="text-zinc-500">Chat sentiment</span>
-                    <span className={sentimentToneClass(d.noraSentimentScore)}>{sentimentLabel(d.noraSentimentScore)}</span>
+                    <span className={sentimentToneClass(d.noraSentimentScore)}>
+                      {readinessAvailability?.nora === 'available'
+                        ? sentimentLabel(d.noraSentimentScore)
+                        : readinessAvailability?.nora === 'partial' && d.noraSentimentScore !== null
+                          ? `${sentimentLabel(d.noraSentimentScore)} · partial data`
+                          : readinessAvailability ? 'Unavailable' : 'Loading'}
+                    </span>
                   </div>
+                  {d.has && (
+                    <div className="border-t border-white/10 pt-2" data-mood-explanation>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                        Why {d.moodLabel}
+                      </div>
+                      <p className="mt-1 text-[11px] leading-4 text-zinc-300">
+                        {d.moodEvidence.explanation}
+                      </p>
+                      <p className="mt-1 text-[10px] leading-4 text-emerald-300">
+                        {d.moodEvidence.wearableRole}
+                      </p>
+                    </div>
+                  )}
                   {deviceDay.wearNotes.length > 0 && (
                     <p className="pt-1 text-[10px] leading-4 text-zinc-500">
                       {deviceDay.wearNotes.join(' · ')}
@@ -1208,7 +1543,7 @@ const moodColor = (score: number) => (score >= 0.3 ? '#10B981' : score >= -0.3 ?
 const MoodStrip: React.FC<{
   days: DayDetail[];
   loading?: boolean;
-  onEnter: (idx: number, e: React.MouseEvent) => void;
+  onEnter: (idx: number, e: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>) => void;
   onLeave: () => void;
   hoveredIdx: number | null;
 }> = ({ days, loading, onEnter, onLeave, hoveredIdx }) => {
@@ -1225,9 +1560,22 @@ const MoodStrip: React.FC<{
           <span
             key={i}
             data-mood-square
+            role="img"
+            tabIndex={0}
+            aria-label={`${p.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}. ${p.moodLabel}. Mood source: ${p.moodEvidence.sourceLabel}. ${p.moodEvidence.explanation} ${p.moodEvidence.wearableRole}`}
             onMouseEnter={(e) => onEnter(i, e)}
-            onMouseLeave={onLeave}
-            className="h-5 flex-1 cursor-pointer rounded-[3px]"
+            onMouseLeave={(e) => {
+              if (typeof document === 'undefined' || document.activeElement !== e.currentTarget) {
+                onLeave();
+              }
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEnter(i, e);
+            }}
+            onFocus={(e) => onEnter(i, e)}
+            onBlur={onLeave}
+            className="h-5 flex-1 cursor-pointer rounded-[3px] outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             style={{
               background: p.has ? moodColor(p.score) : 'transparent',
               border: p.has ? 'none' : '1px solid rgba(255,255,255,0.12)',

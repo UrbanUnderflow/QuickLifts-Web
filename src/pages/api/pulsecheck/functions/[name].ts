@@ -4,6 +4,7 @@ const SUPPORTED_FUNCTIONS = new Set([
   'submit-pulsecheck-checkin',
   'get-pulsecheck-team-standings',
   'get-pulsecheck-team-showing-up-history',
+  'get-pulsecheck-scorecard',
   'repair-pulsecheck-daily-assignment',
   'record-pulsecheck-assignment-event',
   'record-pilot-survey-response',
@@ -78,7 +79,11 @@ function resolveSiteOrigin(req: NextApiRequest) {
 
 async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
   const upstreamOrigin = resolveSiteOrigin(req);
-  const targetURL = new URL(`/.netlify/functions/${name}`, upstreamOrigin);
+  const localFunctionsOrigin = process.env.NODE_ENV !== 'production'
+    ? process.env.PULSECHECK_LOCAL_FUNCTIONS_ORIGIN?.trim().replace(/\/+$/, '')
+    : '';
+  const functionOrigin = localFunctionsOrigin || upstreamOrigin;
+  const targetURL = new URL(`/.netlify/functions/${name}`, functionOrigin);
 
   Object.entries(req.query).forEach(([key, value]) => {
     if (key === 'name') return;

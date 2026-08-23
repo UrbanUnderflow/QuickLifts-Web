@@ -41,7 +41,7 @@ test('whitepaper is registered in the public Research library', () => {
 test('public method documents each canonical score once', () => {
   assert.deepEqual(
     scoreDefinitions.map((score) => score.key).sort(),
-    ['adherence', 'coherence', 'recovery', 'wellbeing'],
+    ['coherence', 'recovery', 'showing-up', 'wellbeing'],
   );
   assert.equal(new Set(scoreDefinitions.map((score) => score.key)).size, 4);
   scoreDefinitions.forEach((score) => {
@@ -52,17 +52,39 @@ test('public method documents each canonical score once', () => {
   });
 });
 
-test('public Coherence method gives Adherence a bounded 10-percent contribution', () => {
+test('public Coherence method gives Showing Up a bounded 10-percent contribution', () => {
   const coherence = scoreDefinitions.find((score) => score.key === 'coherence');
   assert.ok(coherence);
   assert.equal(
     coherence.equation,
-    'Current Coherence = round(0.45(Wellbeing) + 0.45(Recovery) + 0.10(Adherence))',
+    'Current Coherence = round(0.45(Wellbeing) + 0.45(Recovery) + 0.10(Showing Up))',
   );
-  assert.match(coherence.summary, /bounded 10-percent behavioral contribution/i);
+  assert.match(coherence.summary, /bounded 10-percent Showing Up contribution/i);
   assert.match(coherence.inputs.join(' '), /maximum influence to 10 points/i);
   assert.match(coherence.excludes.join(' '), /nonlinear disagreement or spread multiplier/i);
   assert.match(COHERENCE_SCORE_WHITE_PAPER_CONTENT, /not a correlation, synchrony coefficient, or nonlinear disagreement score/i);
+  assert.match(COHERENCE_SCORE_WHITE_PAPER_CONTENT, /Current Coherence: round\(33\.75 \+ 44\.55 \+ 4\.30\) = \*\*83\*\*/);
+  assert.match(COHERENCE_SCORE_WHITE_PAPER_CONTENT, /result cannot be lower than 43/i);
+});
+
+test('Showing Up is check-in only and discloses its exact arithmetic', () => {
+  const showingUp = scoreDefinitions.find((score) => score.key === 'showing-up');
+
+  assert.ok(showingUp);
+  assert.match(showingUp.equation, /completed scheduled check-ins \/ scorable scheduled check-ins/i);
+  assert.match(showingUp.excludes.join(' '), /Mental-module assignments/i);
+  assert.match(showingUp.excludes.join(' '), /connected-device coverage/i);
+  assert.match(COHERENCE_SCORE_WHITE_PAPER_CONTENT, /6 completed check-ins across 14 scorable scheduled days produces round\(100 x 6 \/ 14\) = \*\*43\*\*/i);
+});
+
+test('public rationale describes a formative composite without borrowing physiological synchrony validity', () => {
+  const publicMethod = JSON.stringify({ evidenceMap, limitations }).toLowerCase();
+
+  assert.match(publicMethod, /formative measurement model/);
+  assert.match(publicMethod, /need not be interchangeable or internally consistent/);
+  assert.match(publicMethod, /composite-index governance/);
+  assert.match(publicMethod, /does not mean the components are statistically synchronized/);
+  assert.doesNotMatch(publicMethod, /interpersonal autonomic physiology/);
 });
 
 test('claim limits remain explicit in public evidence copy', () => {

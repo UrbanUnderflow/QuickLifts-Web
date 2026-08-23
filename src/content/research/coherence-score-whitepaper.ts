@@ -1,5 +1,5 @@
-export const COHERENCE_SCORE_METHOD_VERSION = '2.2.2';
-export const COHERENCE_SCORE_PUBLICATION_DATE = 'August 21, 2026';
+export const COHERENCE_SCORE_METHOD_VERSION = '2.2.3';
+export const COHERENCE_SCORE_PUBLICATION_DATE = 'August 22, 2026';
 
 export const COHERENCE_SCORE_WHITE_PAPER_SLUG =
   'coherence-score-methodology-evidence-and-validation';
@@ -7,7 +7,7 @@ export const COHERENCE_SCORE_WHITE_PAPER_SLUG =
 export const COHERENCE_SCORE_WHITE_PAPER_METADATA = {
   title: 'The PulseCheck Coherence Score System: Methodology, Evidence, and Validation',
   subtitle:
-    'The scientific basis, exact calculations, source-normalization rules, governance, and validation plan for Coherence, Wellbeing, Recovery, and Adherence.',
+    'The scientific basis, exact calculations, source-normalization rules, governance, and validation plan for Coherence, Wellbeing, Recovery, and Showing Up.',
   excerpt:
     'A methods white paper defining the four PulseCheck scores, the evidence each score can support, the information each score excludes, and the validation still required.',
   category: 'Performance Science',
@@ -18,7 +18,7 @@ export const COHERENCE_SCORE_WHITE_PAPER_METADATA = {
   featured: false,
   status: 'published' as const,
   createdAt: '2026-08-16T12:00:00.000Z',
-  updatedAt: '2026-08-18T12:00:00.000Z',
+  updatedAt: '2026-08-22T12:00:00.000Z',
   publishedAt: '2026-08-16T12:00:00.000Z',
   featuredImage: '/pulsecheck-pro/hero-athletes.webp',
 };
@@ -26,7 +26,7 @@ export const COHERENCE_SCORE_WHITE_PAPER_METADATA = {
 export type ScoreAccent = 'lime' | 'mint' | 'blue' | 'amber';
 
 export interface ScoreDefinition {
-  key: 'coherence' | 'wellbeing' | 'recovery' | 'adherence';
+  key: 'coherence' | 'wellbeing' | 'recovery' | 'showing-up';
   label: string;
   accent: ScoreAccent;
   question: string;
@@ -44,27 +44,27 @@ export const scoreDefinitions: ScoreDefinition[] = [
     accent: 'lime',
     question: 'How strong is the athlete\'s recent pattern across Wellbeing, Recovery, and follow-through?',
     summary:
-      'Coherence is a continuous formative index with a 90-percent state core and a bounded 10-percent behavioral contribution. Wellbeing and Recovery remain the dominant read, while Adherence allows verified follow-through to matter without turning Coherence into a compliance grade. It is not a statistical correlation or a measure of obedience. The latest 14 days update the athlete\'s established read rather than restarting it.',
-    equation: 'Current Coherence = round(0.45(Wellbeing) + 0.45(Recovery) + 0.10(Adherence))',
+      'Coherence is a continuous formative index with a 90-percent state core and a bounded 10-percent Showing Up contribution. Wellbeing and Recovery remain the dominant read, while scheduled check-in completion adds transparent participation context. It is not a statistical correlation or a measure of obedience. The latest 14 days update the athlete\'s established read rather than restarting it.',
+    equation: 'Current Coherence = round(0.45(Wellbeing) + 0.45(Recovery) + 0.10(Showing Up))',
     inputs: [
       'Wellbeing = the current Wellbeing score for the same 14-day window',
       'Recovery = the current Recovery score for the same 14-day window',
-      'Adherence = scheduled check-in completion and verified commitment follow-through for the same 14-day window',
+      'Showing Up = scheduled check-in completion for the same 14-day window',
       'Both Wellbeing and Recovery must be independently available to compute a current-window value',
-      'When Adherence is unavailable, the valid Wellbeing and Recovery inputs are reweighted equally and evidence coverage reflects the missing 10-percent component',
-      'The 10-percent Adherence weight bounds its maximum influence to 10 points on the 0-to-100 scale',
+      'When Showing Up is unavailable, the valid Wellbeing and Recovery inputs are reweighted equally and calculation coverage reflects the missing 10-percent component',
+      'The 10-percent Showing Up weight bounds its maximum influence to 10 points on the 0-to-100 scale',
       'The established display scale is 1 to 100; missingness is represented by status and confidence, never by zero',
       'When a mature account has too little current evidence, the last established positive read remains visible with reduced current-window confidence',
     ],
     excludes: [
       'A nonlinear disagreement or spread multiplier',
       'App usage, screen time, or connected-device wear',
-      'Any signal not already scored within Wellbeing, Recovery, or Adherence',
+      'Any signal not already scored within Wellbeing, Recovery, or Showing Up',
       'Comparison between athletes; Coherence is a within-person read',
       'Training load, performance outcomes, or competition results',
     ],
     minimumEvidence:
-      'Building is limited to the first 3 account days. A current-window calculation requires both Wellbeing and Recovery to be independently available. Adherence contributes when available and is never imputed as zero; after onboarding, insufficient current evidence does not reset an established read.',
+      'Building is limited to the first 3 account days. A current-window calculation requires both Wellbeing and Recovery to be independently available. Showing Up contributes when available and is never imputed as zero; after onboarding, insufficient current evidence does not reset an established read.',
   },
   {
     key: 'wellbeing',
@@ -109,38 +109,26 @@ export const scoreDefinitions: ScoreDefinition[] = [
       'A score can display from available evidence. HRV and resting heart rate require 14 valid prior nights in the active source lane before contributing.',
   },
   {
-    key: 'adherence',
-    label: 'Adherence',
+    key: 'showing-up',
+    label: 'Showing Up',
     accent: 'amber',
-    question: 'Is the athlete showing up for the commitments recorded in PulseCheck?',
+    question: 'How consistently did the athlete complete scheduled check-ins?',
     summary:
-      'Adherence represents follow-through on valid opportunities, not app activity or obedience. It measures scorable scheduled check-in completion and final, verifiable outcomes for assigned or athlete-accepted mental-performance commitments.',
-    equation: 'Adherence = 0.40(K) + 0.60(F)',
+      'Showing Up is the completion rate for scorable scheduled check-ins. It does not score modules, wearable coverage, conversations, sessions, or general app activity.',
+    equation: 'Showing Up = 100 x (completed scheduled check-ins / scorable scheduled check-ins)',
     inputs: [
-      'K = completed scheduled check-ins divided by scorable scheduled check-ins; the open current day remains pending until completed or closed',
-      'F = followed-through commitments divided by scorable commitments',
-      'Planned rest counts only when it remains within the current plan and weekly follow-through policy',
+      'Completed = scheduled check-ins recorded as completed in the selected team context',
+      'Scorable = completed scheduled days plus past scheduled days that closed without a check-in',
+      'The open current day remains pending until completed or closed and does not lower the score early',
     ],
     excludes: [
-      'Screen time, taps, sessions opened, or connected-device wear',
-      'Pre-activation check-in days and coach-excused, technical-failure, or no-assignment commitment outcomes',
-      'Unverifiable self-reported claims that a task was completed elsewhere',
+      'Mental-module assignments, starts, completions, or practice counts',
+      'Screen time, taps, sessions, conversations, or connected-device coverage',
+      'Pre-activation and explicitly unscheduled days',
     ],
-    minimumEvidence: 'The score remains in Building until at least 3 scheduled opportunity days are present in the window.',
+    minimumEvidence: 'The score remains in Building until at least 3 scorable scheduled check-in days are present in the window.',
   },
 ];
-
-export const commitmentOutcomes = [
-  ['Completed', 'Followed through', 'Included'],
-  ['Planned rest within plan', 'Followed through', 'Included'],
-  ['Planned rest over plan', 'Not followed through', 'Included'],
-  ['Missed', 'Not followed through', 'Included'],
-  ['Accepted or replacement accepted today', 'Pending', 'Not scored yet'],
-  ['Accepted on a prior day without completion', 'Not followed through', 'Included'],
-  ['Coach excused', 'Neutral', 'Excluded'],
-  ['Technical failure', 'Neutral', 'Excluded'],
-  ['No assignment', 'Neutral', 'Excluded'],
-] as const;
 
 export const evidenceMap = [
   {
@@ -198,59 +186,37 @@ export const evidenceMap = [
     sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/35719238/',
   },
   {
-    construct: 'Adherence and commitment definitions',
+    construct: 'Showing Up definition',
     productUse:
-      'Operational definitions based on scheduled check-ins and final product-recorded commitment outcomes.',
+      'An operational completion rate based only on scheduled check-ins in the selected team context.',
     evidenceStatement:
-      'Behavioral consistency and follow-through are useful implementation constructs, but their meaning depends on the defined behavior and opportunity to perform it.',
+      'A participation rate is interpretable only when the scheduled opportunity, completed event, open day, and excluded day are defined consistently.',
     claimLimit:
       'The PulseCheck weights are product-designed. They have not yet been established as validated psychometric constructs.',
     sourceLabel: 'Method definition and validation plan in this whitepaper',
     sourceUrl: '#validation',
   },
   {
-    construct: 'Behavioral goal alignment',
+    construct: 'Formative measurement model',
     productUse:
-      'Adherence contributes 10 percent of Coherence so verified follow-through matters while the Wellbeing and Recovery state core remains dominant.',
+      'Wellbeing, Recovery, and Showing Up remain distinct components that jointly define a transparent product index rather than interchangeable items intended to measure one latent trait.',
     evidenceStatement:
-      'Alignment between a person\'s self-concordant goals or commitments and their actual behavior is associated with sustained effort and durable well-being gains in longitudinal goal-pursuit research.',
+      'Measurement theory distinguishes causal or formative indicator models from reflective scales; formative components need not be interchangeable or internally consistent.',
     claimLimit:
-      'This literature supports self-endorsed behavioral follow-through as a meaningful construct in general. It does not validate the PulseCheck Adherence measure, the 10-percent bound, or the complete Coherence equation.',
-    sourceLabel: 'Sheldon & Elliot, 1999, Journal of Personality and Social Psychology',
-    sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/10101878/',
+      'Calling Coherence formative describes the direction of the measurement model. It does not validate the selected components, weights, score interpretation, or product name.',
+    sourceLabel: 'Bollen & Lennox, 1991, Psychological Bulletin',
+    sourceUrl: 'https://doi.org/10.1037/0033-2909.110.2.305',
   },
   {
-    construct: 'State-signal agreement',
+    construct: 'Composite-index governance',
     productUse:
-      'Coherence keeps Wellbeing, Recovery, and Adherence visible as separate components. Cross-domain differences remain auditable instead of being converted into a nonlinear penalty.',
+      'The equation, component weights, missing-data treatment, and sensitivity plan are published so the composite remains auditable.',
     evidenceStatement:
-      'Measuring the degree to which independently collected physiological and behavioral signal streams move together is an established methodological approach for characterizing coordinated versus divergent states.',
+      'Composite-indicator guidance treats component selection, weighting, missing-data handling, and aggregation as consequential modeling choices that require transparency and sensitivity analysis.',
     claimLimit:
-      'This literature establishes signal agreement as a measurable property between independent channels. PulseCheck Coherence is a weighted formative index, not a validated synchrony statistic or clinical state measure.',
-    sourceLabel: 'Palumbo et al., 2017, Personality and Social Psychology Review',
-    sourceUrl: 'https://journals.sagepub.com/doi/abs/10.1177/1088868316628405',
-  },
-  {
-    construct: 'Self-report and objective divergence',
-    productUse:
-      'Coherence gives athlete-reported Wellbeing and available Recovery equal weight in its state core without treating either signal as automatically correct.',
-    evidenceStatement:
-      'Self-reported and objectively measured signals do not always agree, and studying that disagreement directly is an established approach distinct from treating either measure as uniquely correct.',
-    claimLimit:
-      'This literature examines self-report and objective-measure divergence in a different domain. It does not establish that PulseCheck\'s specific alignment calculation is clinically meaningful.',
-    sourceLabel: 'Murphy et al., 2020, Quarterly Journal of Experimental Psychology',
-    sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/31519137/',
-  },
-  {
-    construct: 'Multi-system divergence under stress',
-    productUse:
-      'The rationale for treating state-signal disagreement as informative draws on broader stress-physiology literature about coordinated versus divergent system function.',
-    evidenceStatement:
-      'Chronic stress is associated with dysregulation across multiple interdependent physiological systems rather than a single isolated marker.',
-    claimLimit:
-      'This literature describes physiological system dysregulation. It does not establish that PulseCheck\'s product-level Coherence score measures allostatic load or any specific physiological state.',
-    sourceLabel: 'Juster, McEwen & Lupien, 2010, Neuroscience & Biobehavioral Reviews',
-    sourceUrl: 'https://pubmed.ncbi.nlm.nih.gov/19822172/',
+      'General composite-indicator guidance does not establish that PulseCheck\'s component choices or 45/45/10 weights are reliable, valid, fair, or clinically meaningful.',
+    sourceLabel: 'OECD and European Commission Joint Research Centre, 2008',
+    sourceUrl: 'https://doi.org/10.1787/9789264043466-en',
   },
 ] as const;
 
@@ -303,7 +269,7 @@ export const validationPlan = [
     phase: '01',
     title: 'Technical verification',
     body: 'Deterministic fixtures, property tests, missingness tests, source-switch tests, permission tests, and cross-platform contract tests verify that implementation matches the published method.',
-    status: 'Server fixtures implemented for method 2.2.2; native release verification remains required',
+    status: 'Server and cross-surface fixtures implemented for method 2.2.3; native release verification remains required',
   },
   {
     phase: '02',
@@ -314,7 +280,7 @@ export const validationPlan = [
   {
     phase: '03',
     title: 'Reliability and construct study',
-    body: 'Pre-registered prospective work should evaluate stability, sensitivity to change, convergent and discriminant relationships, subgroup performance, missingness, source effects, and sensitivity of conclusions to alternative Adherence weights such as 0, 5, and 15 percent. The 10-percent production weight must not be tuned and validated on the same sample.',
+    body: 'Pre-registered prospective work should evaluate stability, sensitivity to change, convergent and discriminant relationships, subgroup performance, missingness, source effects, and sensitivity of conclusions to alternative Showing Up weights such as 0, 5, and 15 percent. The 10-percent production weight must not be tuned and validated on the same sample.',
     status: 'Not yet completed',
   },
   {
@@ -327,9 +293,10 @@ export const validationPlan = [
 
 export const verificationMatrix = [
   ['Formula fixtures', 'Exact component weights, caps, rounding, trends, and status thresholds', 'Automated unit tests'],
+  ['Formula invariants', 'With all components available, Coherence stays between the lowest and highest component and Showing Up can move the result by no more than 10 points', 'Automated property tests'],
   ['Missing data', 'No missing value becomes zero; coverage and confidence decline as designed', 'Automated unit tests'],
   ['Device change', 'New source lane recalibrates; incompatible raw HRV values never pool', 'Automated unit and ingestion tests'],
-  ['Commitment lifecycle', 'Replacement, completion, planned rest, over-plan rest, excuses, and technical failures', 'Runtime API tests'],
+  ['Showing Up lifecycle', 'Completed, missed, pending, pre-activation, and unscheduled check-in days', 'Runtime API tests'],
   ['Access and permission boundary', 'Self access, team-scoped staff access, athlete-safe redaction, and denied cross-team access', 'Endpoint and Firestore rules tests'],
   ['Cross-platform display', 'iOS, Android, and coach web read the canonical four-score contract', 'Native build, unit, simulator, emulator, and browser checks'],
 ] as const;
@@ -337,9 +304,10 @@ export const verificationMatrix = [
 export const limitations = [
   'The four scores are evidence-informed proprietary indices. They are not diagnoses, medical clearance, treatment recommendations, or clinically validated outcomes.',
   'Evidence supporting an input does not validate the selected product weights or the complete composite score.',
-  'The 10-percent Adherence weight is an a priori governance bound selected to limit influence. It is not an empirically estimated or clinically validated coefficient.',
+  'The 10-percent Showing Up weight is an a priori governance bound selected to limit influence. It is not an empirically estimated or clinically validated coefficient.',
+  'Coherence is a product label for a formative composite. It does not mean the components are statistically synchronized or that they measure one validated latent construct.',
   'A score describes the evidence available to PulseCheck, not the athlete as a person and not every behavior that occurred outside the product.',
-  'Adherence can be underestimated when legitimate activity occurs outside the verifiable workflow. The product intentionally does not accept an unverifiable completed-elsewhere claim.',
+  'Showing Up measures only scheduled check-ins recorded in the selected team context. It does not describe every form of athlete participation.',
   'Consumer wearable accuracy, algorithms, missingness, source access, device fit, and measurement windows can differ across athletes and over time.',
   'The periodic wellbeing component is a governed integration slot, not an active claim that WHO-5 or another instrument is currently administered.',
   'The scores must not independently determine training decisions. Coaches and sports medicine staff review them alongside workload, symptoms, and direct observation.',
@@ -359,9 +327,9 @@ export const references = [
   ['Charlton PH et al. Validity and reliability of wearable HRV measurement: artifact and methodological considerations. Physiological Measurement. 2022.', 'https://pubmed.ncbi.nlm.nih.gov/35719238/'],
   ['Herzig D et al. Reproducibility and longitudinal validity of nocturnal HRV and resting heart rate. Journal of Sports Sciences. 2021.', 'https://pubmed.ncbi.nlm.nih.gov/34883936/'],
   ['Sheldon KM, Elliot AJ. Goal striving, need satisfaction, and longitudinal well-being: the self-concordance model. Journal of Personality and Social Psychology. 1999;76(3):482-497.', 'https://pubmed.ncbi.nlm.nih.gov/10101878/'],
-  ['Palumbo RV, Marraccini ME, Weyandt LL, Wilder-Smith O, McGee HA, Liu S, Goodwin MS. Interpersonal autonomic physiology: a systematic review of the literature. Personality and Social Psychology Review. 2017;21(2):99-141.', 'https://journals.sagepub.com/doi/abs/10.1177/1088868316628405'],
-  ['Murphy J, Brewer R, Plans D, Khalsa SS, Catmur C, Bird G. Testing the independence of self-reported interoceptive accuracy and attention. Quarterly Journal of Experimental Psychology. 2020;73(1):115-133.', 'https://pubmed.ncbi.nlm.nih.gov/31519137/'],
-  ['Juster RP, McEwen BS, Lupien SJ. Allostatic load biomarkers of chronic stress and impact on health and cognition. Neuroscience & Biobehavioral Reviews. 2010;35(1):2-16.', 'https://pubmed.ncbi.nlm.nih.gov/19822172/'],
+  ['Smith A, Ntoumanis N, Duda J. Goal striving, goal attainment, and well-being: adapting and testing the self-concordance model in sport. Journal of Sport & Exercise Psychology. 2007;29(6):763-782.', 'https://pubmed.ncbi.nlm.nih.gov/18089903/'],
+  ['Bollen KA, Lennox R. Conventional wisdom on measurement: a structural equation perspective. Psychological Bulletin. 1991;110(2):305-314.', 'https://doi.org/10.1037/0033-2909.110.2.305'],
+  ['OECD and European Commission Joint Research Centre. Handbook on Constructing Composite Indicators: Methodology and User Guide. OECD Publishing. 2008.', 'https://doi.org/10.1787/9789264043466-en'],
   ['Jeffries AC, Wallace L, Coutts AJ, McLaren SJ, McCall A, Impellizzeri FM. Athlete-reported outcome measures for monitoring training responses: a systematic review of risk of bias and measurement property quality according to the COSMIN guidelines. International Journal of Sports Physiology and Performance. 2020;15(9):1203-1215.', 'https://pubmed.ncbi.nlm.nih.gov/32957081/'],
 ] as const;
 
@@ -386,10 +354,6 @@ ${renderList(score.excludes)}
 
 **Minimum evidence:** ${score.minimumEvidence}
 `;
-
-const commitmentOutcomeTable = commitmentOutcomes
-  .map(([outcome, interpretation, treatment]) => `| ${outcome} | ${interpretation} | ${treatment} |`)
-  .join('\n');
 
 const implementationControlCopy = implementationControls
   .map((control) => `## 8.${implementationControls.indexOf(control) + 1} ${control.title}\n\n${control.body}`)
@@ -417,18 +381,18 @@ const referenceBlock = references
 
 export const COHERENCE_SCORE_WHITE_PAPER_CONTENT = `
 :::abstract
-PulseCheck reports four evidence-informed constructs. Wellbeing, Recovery, and Adherence are independent domain scores, each answering one question about the athlete's recent record. Coherence is a fourth, transparent formative index: Wellbeing and Recovery form a 90-percent state core, and Adherence provides a bounded 10-percent behavioral contribution. Separating the domain scores from the composite keeps each question distinct and auditable while still providing one recent-pattern read across self-report, recovery evidence, and verified follow-through. Each score uses a rolling 14-day window, carries its own evidence coverage and confidence state, and can remain unavailable when the record is too limited. Coherence is continuous after onboarding: the rolling window refreshes an established read rather than resetting the athlete every 14 days.
+PulseCheck reports four evidence-informed constructs. Wellbeing, Recovery, and Showing Up are independent domain scores, each answering one question about the athlete's recent record. Coherence is a fourth, transparent formative index: Wellbeing and Recovery form a 90-percent state core, and Showing Up provides a bounded 10-percent scheduled check-in contribution. Separating the domain scores from the composite keeps each question distinct and auditable while still providing one recent-pattern read across self-report, recovery evidence, and scheduled check-in completion. Each score uses a rolling 14-day window, carries its own calculation coverage and confidence state, and can remain unavailable when the record is too limited. Coherence is continuous after onboarding: the rolling window refreshes an established read rather than resetting the athlete every 14 days.
 
-This paper defines the exact production method for version ${COHERENCE_SCORE_METHOD_VERSION}. Wellbeing summarizes athlete-reported experience. Recovery presents athlete report alongside recent sleep and source-normalized autonomic context. Adherence asks whether the athlete is showing up for scheduled check-ins and recorded mental-performance commitments. Coherence combines those three domain scores with a deliberately bounded behavioral weight. It never replaces the supporting scores or stands in as a single overall grade.
+This paper defines the exact production method for version ${COHERENCE_SCORE_METHOD_VERSION}. Wellbeing summarizes athlete-reported experience. Recovery presents athlete report alongside recent sleep and source-normalized autonomic context. Showing Up reports scheduled check-in completion. Coherence combines those three domain scores with a deliberately bounded participation weight. It never replaces the supporting scores or stands in as a single overall grade.
 
 The four scores are evidence-informed proprietary descriptive indices. Research supports the relevance and careful use of several inputs, but it does not validate PulseCheck's selected weights, equations, or complete scorecard as a clinical outcome. The scores do not diagnose, prescribe physical training, determine medical clearance, or replace athlete, coach, athletic trainer, sports medicine, or licensed clinical judgment.
 :::
 
 # 1. Why the Domain Scores Stay Separate
 
-An athlete can feel well while recovering poorly from a demanding schedule. Another athlete can show strong physiological recovery while not following through on commitments. A third can complete every assigned task while reporting a sustained decline in wellbeing. Treating those patterns as one construct makes the output difficult to explain and easier to misuse.
+An athlete can feel well while recovering poorly from a demanding schedule. Another athlete can show strong physiological recovery while missing scheduled check-ins. A third can complete every scheduled check-in while reporting a sustained decline in wellbeing. Treating those patterns as one construct makes the output difficult to explain and easier to misuse.
 
-PulseCheck therefore keeps Wellbeing, Recovery, and Adherence as independent domain scores, and adds Coherence as a published weighted composite rather than a hidden or punitive calculation. The component cards show what changed, what evidence is present, and what remains unknown. The 45/45/10 weighting makes the athlete's state dominant while allowing verified follow-through to influence the headline within a fixed 10-point maximum.
+PulseCheck therefore keeps Wellbeing, Recovery, and Showing Up as independent domain scores, and adds Coherence as a published weighted composite rather than a hidden or punitive calculation. The component cards show what changed, what evidence is present, and what remains unknown. The 45/45/10 weighting makes the athlete's state dominant while allowing scheduled check-in completion to influence the headline within a fixed 10-point maximum.
 
 :::callout
 Evidence-informed does not mean clinically validated. Technical verification can establish that software follows the published method. Reliability, construct validity, fairness, decision impact, and improved athlete outcomes require separate prospective study.
@@ -439,6 +403,19 @@ Evidence-informed does not mean clinically validated. Technical verification can
 Each score answers one defined question. Every result is accompanied by its methodology version, current window, observed days, evidence coverage, confidence, status, component record, trend, notes, and limitations. Missing evidence never becomes a zero.
 
 ${scoreDefinitions.map(renderScoreSection).join('\n')}
+
+## 2.5 Worked Coherence Example
+
+For an illustrative component set, Wellbeing is 75, Recovery is 99, and Showing Up is 43:
+
+- Wellbeing contribution: 0.45 x 75 = 33.75
+- Recovery contribution: 0.45 x 99 = 44.55
+- Showing Up contribution: 0.10 x 43 = 4.30
+- Current Coherence: round(33.75 + 44.55 + 4.30) = **83**
+
+The Wellbeing and Recovery state core alone is 87. Adding a Showing Up score of 43 moves the displayed result to 83 under the full weighted equation. The influence remains inside the published 10-point bound.
+
+Because all weights are nonnegative and sum to 1, a fully observed Coherence result must remain between the lowest and highest component scores. With components of 43, 75, and 99, the result cannot be lower than 43. A value outside that range cannot be produced by method ${COHERENCE_SCORE_METHOD_VERSION}; it must be rejected and recalculated from the component record.
 
 # 3. Windows, Missingness, and Trend
 
@@ -454,17 +431,15 @@ When a configured component is unavailable, the score may reweight the valid com
 - A trend is not shown as meaningful when either comparison window lacks enough evidence.
 - A score describes the evidence available to PulseCheck, not the athlete as a person.
 
-# 4. Adherence as Showing Up
+# 4. Showing Up
 
-Adherence is not screen time, app opens, device wear, obedience, or a reward for using more product features. It represents follow-through on valid opportunities: scheduled check-ins and final, verifiable outcomes for assigned or athlete-accepted mental-performance commitments. Pre-activation days are excluded from the check-in denominator. Coach-excused, technical-failure, and no-assignment outcomes are excluded from the commitment denominator rather than treated as failures. An unverifiable self-reported claim that a task was completed elsewhere does not enter the calculation, because the product cannot confirm that claim consistently.
+Showing Up is not screen time, app opens, device coverage, module work, obedience, or a reward for using more product features. It is completed scheduled check-ins divided by scorable scheduled check-ins in the rolling 14-day window. Pre-activation and explicitly unscheduled days are excluded from the denominator.
 
-A replacement skill keeps the original commitment lineage. Planned rest can count as follow-through only when it remains inside the current plan and weekly policy. Repeated rest outside the plan remains visible as a follow-through issue rather than being silently rewarded.
+The score uses the canonical selected-team check-in record. Mood messages, Nora conversations, module assignments, module practices, and wearable records cannot create a completed check-in.
 
-The open current day remains pending until the athlete completes the check-in or the day closes. It is visible in the 14-day grid but does not lower Adherence early merely because the athlete has not checked in yet.
+The open current day remains pending until the athlete completes the check-in or the day closes. It is visible in the 14-day grid but does not lower Showing Up early merely because the athlete has not checked in yet.
 
-| Recorded outcome | Interpretation | Adherence treatment |
-| --- | --- | --- |
-${commitmentOutcomeTable}
+For example, 6 completed check-ins across 14 scorable scheduled days produces round(100 x 6 / 14) = **43**. Each daily square discloses its date, state, scheduled check-in result, and the reason for that state.
 
 # 5. Scientific Basis and Claim Limits
 
@@ -490,19 +465,17 @@ Longitudinal resting heart rate and HRV can provide individual physiological con
 
 Wearable device, algorithm, recording window, method, and artifact handling can materially alter HRV estimates. [cite:6,7,8,10] The system does not claim that all consumer devices are interchangeable or equally accurate.
 
-## 5.5 Adherence and Commitment Definitions
+## 5.5 Showing Up Definition
 
-Adherence is an operational product construct defined by scheduled opportunities and final product-recorded outcomes. Its usefulness depends on whether the behavior, opportunity, exclusions, and follow-through rules remain stable. The selected weights are product-designed. They have not yet been established as validated psychometric constructs.
+Showing Up is an operational product construct defined by scheduled check-in opportunities and canonical completion records. Its usefulness depends on whether scheduling, completion, pending-day, and exclusion rules remain stable. The selected weights are product-designed. They have not yet been established as validated psychometric constructs.
 
 ## 5.6 Coherence as a Bounded Formative Index
 
-Alignment between a person's self-concordant commitments and their follow-through is associated with sustained effort and durable well-being gains in longitudinal goal-pursuit research. [cite:12] PulseCheck therefore includes Adherence as a bounded 10-percent contribution. This is a product-design rationale, not evidence that 10 percent is a biologically or psychometrically optimal weight.
+Measurement theory distinguishes formative or causal indicator models from reflective scales. [cite:14] PulseCheck uses the formative structure: Wellbeing, Recovery, and Showing Up remain separate, non-interchangeable components that help define a product index. They are not assumed to correlate, move together, or reflect one validated underlying state. The headline is not a correlation, synchrony coefficient, or nonlinear disagreement score. The product name Coherence therefore does not mean statistical correlation or physiological synchrony.
 
-Measuring the degree to which independently collected signal streams move together, rather than only their individual levels, is an established methodological approach in psychophysiology research. [cite:13] PulseCheck preserves that information by showing all three component scores and their evidence. The headline Coherence number itself is a weighted formative index, not a correlation, synchrony coefficient, or nonlinear disagreement score.
+Composite-indicator guidance emphasizes that component selection, missing-data handling, aggregation, and weights are consequential modeling choices that should be transparent and examined through sensitivity analysis. [cite:15] The equal 45-percent weights for Wellbeing and Recovery are an a priori governance decision that keeps the athlete-reported and recovery domains balanced. The 10-percent Showing Up weight is an a priori bound that lets scheduled check-in completion matter without allowing it to dominate the state core. These choices remain hypotheses for prospective validation.
 
-Self-reported and objectively measured signals do not always agree, and studying that disagreement directly is an established approach distinct from treating either measure as uniquely correct. [cite:14] Wellbeing and Recovery therefore receive equal weight inside the 90-percent state core. Their component cards keep a mixed state visible without applying the former spread multiplier. Divergence across behavioral, subjective, and physiological systems is also consistent with broader stress-physiology literature on multi-system dysregulation. [cite:15]
-
-The selected Coherence equation is product-designed and prespecified for auditability. Its nonnegative weights sum to 100, so the result remains inside the range of its available component scores. Adherence can change the headline by no more than 10 points, and no multiplicative spread penalty can collapse the result. These mathematical properties make the behavior bounded and testable; they do not establish reliability, validity, fairness, or clinical meaning.
+The selected Coherence equation is product-designed and prespecified for auditability. Its nonnegative weights sum to 100, so the result remains inside the range of its available component scores. Showing Up can change the headline by no more than 10 points, and no multiplicative spread penalty can collapse the result. These mathematical properties make the behavior bounded and testable; they do not establish reliability, validity, fairness, or clinical meaning.
 
 # 6. Wearable Source Normalization
 
@@ -534,7 +507,7 @@ ${confidenceRuleTable}
 
 The canonical score is server-owned. The server reads source records, computes current and previous 14-day windows under method ${COHERENCE_SCORE_METHOD_VERSION}, and writes a versioned result to the shared scorecard contract. iOS, Android, athlete, coach, and staff surfaces read that contract instead of independently recreating formulas.
 
-The source record includes check-ins, commitments and assignment outcomes, health snapshots, and governed assessments when active. Access is permission-scoped. Athletes can request their own scorecard. Team staff require active team scope. Athlete responses omit raw autonomic values and internal source-lane identifiers, while authorized staff can receive limited source-transition context.
+The source record includes canonical selected-team check-ins, health snapshots, and governed assessments when active. Module records and wearable coverage remain separate dashboard context and do not enter Showing Up. Access is permission-scoped. Athletes can request their own scorecard. Team staff require active team scope. Athlete responses omit raw autonomic values and internal source-lane identifiers, while authorized staff can receive limited source-transition context.
 
 ${implementationControlCopy}
 

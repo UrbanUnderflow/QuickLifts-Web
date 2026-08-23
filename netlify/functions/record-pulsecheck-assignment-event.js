@@ -71,7 +71,7 @@ function evaluatePlannedRestPolicy(assignment, recentAssignments = []) {
   const previousDate = shiftSourceDate(sourceDate, -1);
   const priorRests = recentAssignments.filter((candidate) => {
     const candidateDate = String(candidate?.sourceDate || '');
-    const outcome = String(candidate?.commitmentOutcomeState || candidate?.status || '');
+    const outcome = String(candidate?.moduleOutcomeState || candidate?.status || '');
     return candidateDate >= windowStart
       && candidateDate < sourceDate
       && ['planned_rest', 'rest_over_plan'].includes(outcome);
@@ -86,7 +86,7 @@ function evaluatePlannedRestPolicy(assignment, recentAssignments = []) {
     consecutiveRest,
     plannedRestWithinPlan,
     weeklyFollowThroughMet,
-    commitmentOutcomeState: weeklyFollowThroughMet ? 'planned_rest' : 'rest_over_plan',
+    moduleOutcomeState: weeklyFollowThroughMet ? 'planned_rest' : 'rest_over_plan',
   };
 }
 
@@ -678,7 +678,7 @@ async function maybeApplyPlanStepSideEffects({
   };
 }
 
-function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventAt, commitmentPolicy = null) {
+function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventAt, plannedRestPolicy = null) {
   switch (eventType) {
     case 'viewed':
       if (existing.status !== 'assigned') return null;
@@ -733,14 +733,14 @@ function buildAssignmentUpdates(existing, eventType, actorUserId, reason, eventA
       };
     case 'planned_rest': {
       if (TERMINAL_STATUSES.has(existing.status)) return null;
-      const outcomeState = commitmentPolicy?.commitmentOutcomeState || 'rest_over_plan';
+      const outcomeState = plannedRestPolicy?.moduleOutcomeState || 'rest_over_plan';
       return {
         status: outcomeState,
-        commitmentOutcomeState: outcomeState,
+        moduleOutcomeState: outcomeState,
         plannedRestAt: eventAt,
-        plannedRestWithinPlan: Boolean(commitmentPolicy?.plannedRestWithinPlan),
-        weeklyFollowThroughMet: Boolean(commitmentPolicy?.weeklyFollowThroughMet),
-        plannedRestPolicy: commitmentPolicy || undefined,
+        plannedRestWithinPlan: Boolean(plannedRestPolicy?.plannedRestWithinPlan),
+        weeklyFollowThroughMet: Boolean(plannedRestPolicy?.weeklyFollowThroughMet),
+        plannedRestPolicy: plannedRestPolicy || undefined,
         updatedAt: eventAt,
       };
     }
@@ -859,10 +859,10 @@ exports.handler = async (event) => {
     const assignment = { id: assignmentSnap.id, ...(assignmentSnap.data() || {}) };
     const requesterRole = await assertAuthorized(db, assignment, eventType, decodedToken.uid);
     const eventAt = Date.now();
-    const commitmentPolicy = eventType === 'planned_rest'
+    const plannedRestPolicy = eventType === 'planned_rest'
       ? await resolvePlannedRestPolicy(db, assignment)
       : null;
-    const updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt, commitmentPolicy);
+    const updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt, plannedRestPolicy);
     if (updates && eventType === 'completed' && metadata?.completionSummary) {
       updates.completionSummary = metadata.completionSummary;
     }
@@ -906,7 +906,7 @@ exports.handler = async (event) => {
       metadata: {
         ...(metadata || {}),
         ...(reason ? { reason } : {}),
-        ...(commitmentPolicy ? { commitmentPolicy } : {}),
+        ...(plannedRestPolicy ? { plannedRestPolicy } : {}),
         previousStatus: assignment.status || null,
         nextStatus: nextAssignment.status || assignment.status || null,
         previousAssignmentSummary: summarizeAssignmentForEvent(assignment, previousExecutionTruthOwner),

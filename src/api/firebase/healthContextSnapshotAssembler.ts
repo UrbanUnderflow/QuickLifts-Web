@@ -63,6 +63,7 @@ const FAMILY_TO_SNAPSHOT_SOURCE: Record<HealthContextSourceFamily, SnapshotSourc
   health_kit: 'health_kit',
   apple_watch: 'apple_watch',
   healthconnect: 'health_kit',
+  google_health: 'google_health',
   polar: 'polar',
   fitbit: 'fitbit',
   whoop: 'whoop',
@@ -91,13 +92,13 @@ const familyToSnapshotSource = (family: HealthContextSourceFamily): SnapshotSour
 // activity, and ahead of Oura/Polar for biometrics when Apple Health is absent.
 const DOMAIN_PRECEDENCE: Record<HealthContextDomain, HealthContextSourceFamily[]> = {
   identity: ['fit_with_pulse', 'macra', 'coach_entered'],
-  training: ['fit_with_pulse', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'whoop', 'garmin', 'fitbit', 'oura'],
-  recovery: ['polar', 'whoop', 'oura', 'garmin', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'pulsecheck_self_report'],
-  activity: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'polar', 'garmin', 'whoop', 'fitbit', 'oura', 'pulsecheck_self_report'],
+  training: ['fit_with_pulse', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'google_health', 'polar', 'whoop', 'garmin', 'fitbit', 'oura'],
+  recovery: ['polar', 'whoop', 'oura', 'garmin', 'google_health', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'pulsecheck_self_report'],
+  activity: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'google_health', 'polar', 'garmin', 'whoop', 'fitbit', 'oura', 'pulsecheck_self_report'],
   nutrition: ['macra', 'pulsecheck_self_report', 'fit_with_pulse'],
-  biometrics: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fitbit', 'polar', 'whoop', 'garmin', 'oura', 'coach_entered'],
+  biometrics: ['healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'google_health', 'fitbit', 'polar', 'whoop', 'garmin', 'oura', 'coach_entered'],
   behavioral: ['pulsecheck_self_report', 'macra', 'coach_entered'],
-  summary: ['oura', 'whoop', 'polar', 'garmin', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fit_with_pulse', 'macra'],
+  summary: ['oura', 'whoop', 'polar', 'garmin', 'google_health', 'fitbit', 'healthkit', 'apple_health', 'apple_watch', 'health_kit', 'healthconnect', 'fit_with_pulse', 'macra'],
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -224,6 +225,123 @@ const scrubZeroMeansMissing = (payload: Record<string, unknown>): Record<string,
   return result;
 };
 
+const WEARABLE_SOURCE_FAMILIES = new Set<HealthContextSourceFamily>([
+  'oura',
+  'apple_health',
+  'healthkit',
+  'health_kit',
+  'apple_watch',
+  'healthconnect',
+  'google_health',
+  'polar',
+  'fitbit',
+  'whoop',
+  'garmin',
+]);
+
+const MEASURED_FIELDS_BY_DOMAIN: Partial<Record<HealthContextDomain, Set<string>>> = {
+  recovery: new Set([
+    'sleepDuration',
+    'sleepDurationHours',
+    'totalSleepHours',
+    'totalSleepMin',
+    'totalSleepMinutes',
+    'sleepDurationMinutes',
+    'timeInBed',
+    'timeInBedHours',
+    'sleepEfficiency',
+    'sleepScore',
+    'sleep_score',
+    'sleepQualityScore',
+    'sleepCharge',
+    'deepSleepDuration',
+    'remSleepDuration',
+    'lightSleepDuration',
+    'sleepMidpoint',
+    'heartRateResting',
+    'restingHeartRate',
+    'heartRateVariability',
+    'respiratoryRate',
+    'oxygenSaturation',
+    'readinessScore',
+    'sleepTemperatureDeviationCelsius',
+  ]),
+  biometrics: new Set([
+    'heartRateAvg',
+    'averageHeartRate',
+    'avgHeartRate',
+    'heartRateMin',
+    'heartRateMax',
+    'continuousHeartRateSampleCount',
+    'heartRateResting',
+    'restingHeartRate',
+    'heartRateVariability',
+    'respiratoryRate',
+    'oxygenSaturation',
+    'vo2Max',
+    'bodyWeight',
+    'bodyFatPercentage',
+    'height',
+    'maximumHeartRate',
+    'aerobicThreshold',
+    'anaerobicThreshold',
+  ]),
+  activity: new Set([
+    'steps',
+    'totalSteps',
+    'activeSteps',
+    'stepSampleCount',
+    'activeCalories',
+    'totalCalories',
+    'activeMinutes',
+    'activeZoneMinutes',
+    'exerciseMinutes',
+    'distance',
+    'distanceKm',
+    'distanceMeters',
+    'activityGoalPercentage',
+    'cardioLoad',
+  ]),
+  training: new Set([
+    'workoutCount',
+    'totalWorkoutDurationMinutes',
+    'workouts',
+  ]),
+};
+
+const ZERO_IS_MEASURED_FIELDS = new Set(['sleepTemperatureDeviationCelsius']);
+
+const isMeasuredFieldValue = (field: string, value: unknown): boolean => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return false;
+    return ZERO_IS_MEASURED_FIELDS.has(field) || value > 0;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && (ZERO_IS_MEASURED_FIELDS.has(field) || numeric > 0);
+  }
+  return false;
+};
+
+const measuredFieldNames = (
+  domain: HealthContextDomain,
+  payload: Record<string, unknown>,
+): string[] => {
+  const fields = MEASURED_FIELDS_BY_DOMAIN[domain];
+  if (!fields) return [];
+  return Array.from(fields).filter((field) => isMeasuredFieldValue(field, payload[field]));
+};
+
+const recordCarriesMeasuredDomainData = (record: HealthContextSourceRecord): boolean => {
+  if (!WEARABLE_SOURCE_FAMILIES.has(record.sourceFamily)) return true;
+  if (!MEASURED_FIELDS_BY_DOMAIN[record.domain]) return true;
+  return measuredFieldNames(
+    record.domain,
+    scrubZeroMeansMissing(record.payload as Record<string, unknown>),
+  ).length > 0;
+};
+
 const SLEEP_SCORE_FIELDS = ['sleepScore', 'sleep_score', 'sleepQualityScore', 'sleepEfficiency'];
 const SLEEP_FIELD_SOURCE_KEYS = [
   'sleepDuration',
@@ -312,7 +430,11 @@ const buildDomainBlock = <T extends Record<string, unknown>>(
 
   const precedence = DOMAIN_PRECEDENCE[domain] || [];
   const domainRecords = records
-    .filter((record) => record.domain === domain && record.status === 'active')
+    .filter((record) => (
+      record.domain === domain
+      && record.status === 'active'
+      && recordCarriesMeasuredDomainData(record)
+    ))
     .sort((a, b) => b.observedAt - a.observedAt);
 
   if (domainRecords.length === 0) return null;
@@ -347,18 +469,24 @@ const buildDomainBlock = <T extends Record<string, unknown>>(
   // gaps for fields the winner didn't carry. Zero-means-missing fields are
   // scrubbed first so a no-wear night's 0 doesn't count as carrying a value.
   const mergedPayload: Record<string, unknown> = scrubZeroMeansMissing(winnerRecord.payload as Record<string, unknown>);
+  const fieldSources: Record<string, SnapshotSourceId> = {};
+  for (const field of measuredFieldNames(domain, mergedPayload)) {
+    fieldSources[field] = familyToSnapshotSource(winnerRecord.sourceFamily);
+  }
   for (const family of contributingFamilies) {
     const familyRecord = (byFamily.get(family) || [])[0];
     if (!familyRecord) continue;
     for (const [key, value] of Object.entries(scrubZeroMeansMissing(familyRecord.payload as Record<string, unknown>))) {
       if (mergedPayload[key] === undefined && value !== undefined) {
         mergedPayload[key] = value;
+        if (MEASURED_FIELDS_BY_DOMAIN[domain]?.has(key) && isMeasuredFieldValue(key, value)) {
+          fieldSources[key] = familyToSnapshotSource(family);
+        }
         notes.push(`[${domain}] field "${key}" filled from "${family}" (winner "${winnerFamily}" had no value).`);
       }
     }
   }
 
-  const fieldSources: Record<string, SnapshotSourceId> = {};
   if (domain === 'recovery') {
     const sleepWinner = bestSleepRecord(domainRecords);
     if (sleepWinner) {
@@ -597,7 +725,11 @@ export const assembleAthleteContextSnapshot = async (
     sourceStatus: {},
   };
 
-  const summary = buildSummaryBlock(assemblies, records.length, notes);
+  const contributingRecordIds = new Set(
+    Object.values(assemblies).flatMap((assembly) => assembly?.contributorIds || []),
+  );
+  const contributingRecords = records.filter((record) => contributingRecordIds.has(record.id));
+  const summary = buildSummaryBlock(assemblies, contributingRecords.length, notes);
 
   // Optional: compute sleepMidpointShiftMinutes by reading prior 7 days of
   // recovery records and comparing midpoints on a circular 24h clock.
@@ -634,7 +766,7 @@ export const assembleAthleteContextSnapshot = async (
 
   // Aggregate top-level provenance + freshness.
   const sourcesUsed = Array.from(
-    new Set(records.map((record) => familyToSnapshotSource(record.sourceFamily))),
+    new Set(contributingRecords.map((record) => familyToSnapshotSource(record.sourceFamily))),
   );
   const domainWinners: Partial<Record<DomainKey, SnapshotSourceId>> = {};
   for (const key of Object.keys(assemblies) as DomainKey[]) {
@@ -645,7 +777,7 @@ export const assembleAthleteContextSnapshot = async (
   }
 
   const sourceObservationTimes: Partial<Record<SnapshotSourceId, string>> = {};
-  for (const record of records) {
+  for (const record of contributingRecords) {
     const sid = familyToSnapshotSource(record.sourceFamily);
     const iso = new Date(record.observedAt * 1000).toISOString();
     if (!sourceObservationTimes[sid] || sourceObservationTimes[sid]! < iso) {

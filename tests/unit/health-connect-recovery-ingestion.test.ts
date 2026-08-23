@@ -44,6 +44,19 @@ test('direct vendor snapshots take priority over Health Connect aggregation', ()
   assert.equal(__internal.isDirectWearableSource('healthkit'), false);
 });
 
+test('direct vendor priority preserves Health Connect provider evidence', () => {
+  assert.deepEqual(__internal.ingestionPlanFor('whoop'), {
+    writeSourceRecord: true,
+    writeSnapshot: false,
+    linkSourceRecordToExistingSnapshot: true,
+  });
+  assert.deepEqual(__internal.ingestionPlanFor(''), {
+    writeSourceRecord: true,
+    writeSnapshot: true,
+    linkSourceRecordToExistingSnapshot: false,
+  });
+});
+
 test('recovery payload preserves source identity and method metadata', () => {
   const observation = __internal.normalizeObservation({
     dateKey: '2026-08-15',
@@ -61,4 +74,12 @@ test('recovery payload preserves source identity and method metadata', () => {
   assert.equal(recovery.rawDeviceId, 'com.ouraring.oura');
   assert.equal(recovery.restingHeartRateMeasurementWindow, 'full_day');
   assert.equal(recovery.sleepMidpointShiftMinutes, 22);
+  assert.equal(
+    (recovery.fieldSources as Record<string, string>).heartRateVariability,
+    'healthconnect',
+  );
+  assert.equal(
+    (recovery.fieldSourceLabels as Record<string, string>).heartRateVariability,
+    'Health Connect',
+  );
 });

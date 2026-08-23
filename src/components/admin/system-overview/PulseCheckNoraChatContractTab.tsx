@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle,
@@ -805,6 +806,15 @@ const PulseCheckNoraChatContractTab: React.FC = () => {
             <Callout tone="green" icon={CheckCircle2} title="Release gates">
               <BulletList items={RELEASE_GATES} tone="green" />
             </Callout>
+            <div className="flex justify-end pt-1">
+              <Link
+                href="/admin/noraRedTeam"
+                className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/15"
+              >
+                <FlaskConical className="h-4 w-4" aria-hidden="true" />
+                Open Nora Red Team
+              </Link>
+            </div>
           </ContractSection>
 
           <ContractSection id="nora-contract-change-control" number="11" title="Incident Response And Change Control" icon={AlertTriangle}>

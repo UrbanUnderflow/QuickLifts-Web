@@ -63,6 +63,7 @@ export type HealthContextSourceFamily =
   | 'health_kit'
   | 'apple_watch'
   | 'healthconnect'
+  | 'google_health'
   | 'polar'
   | 'fitbit'
   | 'whoop'
@@ -284,6 +285,12 @@ export const listHealthContextSourceRecordsForWindow = async (
     domain?: HealthContextDomain;
     max?: number;
     workspace?: PulseCheckWorkspaceScope;
+    /**
+     * Self-service reads can avoid a composite-index dependency by loading the
+     * signed-in athlete's records through the single-field athlete index, then
+     * applying the window/status filters locally.
+     */
+    indexIndependent?: boolean;
   } = {},
 ): Promise<HealthContextSourceRecord[]> => {
   const scopedAthleteId = requireString(athleteUserId, 'athleteUserId');
@@ -295,6 +302,29 @@ export const listHealthContextSourceRecordsForWindow = async (
       '[HealthContextSourceRecord] teamId and organizationId are required together.'
     );
   }
+
+  if (options.indexIndependent && !workspace) {
+    const snap = await getDocs(query(
+      sourceRecordsCollection(),
+      where('athleteUserId', '==', scopedAthleteId),
+    ));
+    const records = snap.docs
+      .map((docSnap) => ({ ...(docSnap.data() as HealthContextSourceRecord), id: docSnap.id }))
+      .filter((record) =>
+        record.status === 'active'
+        && typeof record.observedAt === 'number'
+        && record.observedAt >= windowStart
+        && record.observedAt <= windowEnd
+        && (!options.sourceFamily || record.sourceFamily === options.sourceFamily)
+        && (!options.domain || record.domain === options.domain)
+      )
+      .sort((left, right) => right.observedAt - left.observedAt);
+    const max = options.max && Number.isFinite(options.max)
+      ? Math.max(1, Math.min(Math.floor(options.max), 200))
+      : records.length;
+    return records.slice(0, max);
+  }
+
   const constraints: Parameters<typeof query>[1][] = [
     where('athleteUserId', '==', scopedAthleteId),
     where('observedAt', '>=', windowStart),

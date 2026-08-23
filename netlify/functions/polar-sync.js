@@ -11,6 +11,11 @@ const {
   verifyAuth,
 } = require('./polar-utils');
 const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-team-scope');
+const {
+  hasMeasuredPayload,
+  measuredFieldSources,
+  mergePayloadWithAttribution,
+} = require('./lib/health-context-measurements');
 
 const HEALTH_CONTEXT_COLLECTIONS = {
   sourceStatus: 'health-context-source-status',
@@ -700,23 +705,32 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
   const existingSourceRecordIds = Array.isArray(existingProvenance.sourceRecordIds) ? existingProvenance.sourceRecordIds : [];
   const nextSourceRecordIds = Array.from(new Set([...existingSourceRecordIds, ...sourceRecordDocs.map((record) => record.id)]));
   const existingSourcesUsed = Array.isArray(existingProvenance.sourcesUsed) ? existingProvenance.sourcesUsed : [];
-  const nextSourcesUsed = Array.from(new Set([...existingSourcesUsed, 'polar']));
+  const domainHasMeasuredData = {
+    recovery: hasMeasuredPayload('recovery', payloads.recovery),
+    biometrics: hasMeasuredPayload('biometrics', payloads.biometrics),
+    activity: hasMeasuredPayload('activity', payloads.activity),
+    training: hasMeasuredPayload('training', payloads.training),
+  };
+  const hasAnyMeasuredData = Object.values(domainHasMeasuredData).some(Boolean);
+  const nextSourcesUsed = hasAnyMeasuredData
+    ? Array.from(new Set([...existingSourcesUsed, 'polar']))
+    : existingSourcesUsed;
   const nextDomainWinners = {
     ...(existingProvenance.domainWinners || {}),
-    ...(Object.keys(payloads.recovery).length ? { recovery: 'polar' } : {}),
-    ...(Object.keys(payloads.biometrics).length ? { biometrics: 'polar' } : {}),
-    ...(Object.keys(payloads.activity).length ? { activity: 'polar' } : {}),
-    ...(Object.keys(payloads.training).length ? { training: 'polar' } : {}),
+    ...(domainHasMeasuredData.recovery ? { recovery: 'polar' } : {}),
+    ...(domainHasMeasuredData.biometrics ? { biometrics: 'polar' } : {}),
+    ...(domainHasMeasuredData.activity ? { activity: 'polar' } : {}),
+    ...(domainHasMeasuredData.training ? { training: 'polar' } : {}),
   };
   // When the winning lane last actually had data for each domain. Other
   // lanes use this to take over a domain whose winner has gone dark (see
   // shouldWriteDomain in google-health-sync.js).
   const nextDomainObservedAt = {
     ...(existingProvenance.domainObservedAt || {}),
-    ...(Object.keys(payloads.recovery).length ? { recovery: syncAt } : {}),
-    ...(Object.keys(payloads.biometrics).length ? { biometrics: syncAt } : {}),
-    ...(Object.keys(payloads.activity).length ? { activity: syncAt } : {}),
-    ...(Object.keys(payloads.training).length ? { training: syncAt } : {}),
+    ...(domainHasMeasuredData.recovery ? { recovery: syncAt } : {}),
+    ...(domainHasMeasuredData.biometrics ? { biometrics: syncAt } : {}),
+    ...(domainHasMeasuredData.activity ? { activity: syncAt } : {}),
+    ...(domainHasMeasuredData.training ? { training: syncAt } : {}),
   };
 
   const snapshot = {
@@ -740,11 +754,11 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
     },
     freshness: {
       ...(existingSnapshot?.freshness || {}),
-      recovery: Object.keys(payloads.recovery).length ? 'fresh' : existingSnapshot?.freshness?.recovery || 'missing',
-      biometrics: Object.keys(payloads.biometrics).length ? 'fresh' : existingSnapshot?.freshness?.biometrics || 'missing',
-      activity: Object.keys(payloads.activity).length ? 'fresh' : existingSnapshot?.freshness?.activity || 'missing',
-      training: Object.keys(payloads.training).length ? 'fresh' : existingSnapshot?.freshness?.training || 'missing',
-      overall: 'fresh',
+      recovery: domainHasMeasuredData.recovery ? 'fresh' : existingSnapshot?.freshness?.recovery || 'missing',
+      biometrics: domainHasMeasuredData.biometrics ? 'fresh' : existingSnapshot?.freshness?.biometrics || 'missing',
+      activity: domainHasMeasuredData.activity ? 'fresh' : existingSnapshot?.freshness?.activity || 'missing',
+      training: domainHasMeasuredData.training ? 'fresh' : existingSnapshot?.freshness?.training || 'missing',
+      overall: hasAnyMeasuredData ? 'fresh' : existingSnapshot?.freshness?.overall || 'missing',
       evaluatedAt: syncAt,
     },
     provenance: {
@@ -759,10 +773,34 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
     domains: {
       ...existingDomains,
       identity: existingDomains.identity || { athleteUserId: userId, timezone, snapshotDate: dateKey },
-      recovery: compactObject({ ...(existingDomains.recovery || {}), ...payloads.recovery }),
-      biometrics: compactObject({ ...(existingDomains.biometrics || {}), ...payloads.biometrics }),
-      activity: compactObject({ ...(existingDomains.activity || {}), ...payloads.activity }),
-      training: compactObject({ ...(existingDomains.training || {}), ...payloads.training }),
+      recovery: domainHasMeasuredData.recovery
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.recovery,
+          payloads.recovery,
+          measuredFieldSources('recovery', payloads.recovery, 'polar')
+        ))
+        : existingDomains.recovery || {},
+      biometrics: domainHasMeasuredData.biometrics
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.biometrics,
+          payloads.biometrics,
+          measuredFieldSources('biometrics', payloads.biometrics, 'polar')
+        ))
+        : existingDomains.biometrics || {},
+      activity: domainHasMeasuredData.activity
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.activity,
+          payloads.activity,
+          measuredFieldSources('activity', payloads.activity, 'polar')
+        ))
+        : existingDomains.activity || {},
+      training: domainHasMeasuredData.training
+        ? compactObject(mergePayloadWithAttribution(
+          existingDomains.training,
+          payloads.training,
+          measuredFieldSources('training', payloads.training, 'polar')
+        ))
+        : existingDomains.training || {},
       summary: compactObject({
         ...(existingDomains.summary || {}),
         dataSourcesUsed: nextSourcesUsed,
@@ -826,7 +864,7 @@ async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateK
     dateKey: requestedDateKey,
   });
   const syncAt = Date.now() / 1000;
-  const hasPayload = Object.values(payloads).some((payload) => Object.keys(payload).length > 0);
+  const hasPayload = Object.entries(payloads).some(([domain, payload]) => hasMeasuredPayload(domain, payload));
   const observedAt = hasPayload ? buildDayWindow(requestedDateKey, timezone).endAt : null;
   const sourceStatusDoc = buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError: null });
 
@@ -856,7 +894,7 @@ async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateK
   }
 
   const sourceRecordDocs = Object.entries(payloads)
-    .filter(([, payload]) => Object.keys(payload).length > 0)
+    .filter(([domain, payload]) => hasMeasuredPayload(domain, payload))
     .map(([domain, payload]) => buildSourceRecord({
       userId,
       dateKey: requestedDateKey,
@@ -899,7 +937,9 @@ async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateK
   batch.set(connectionRef, {
     lastSuccessfulSyncAt: admin.firestore.FieldValue.serverTimestamp(),
     lastSuccessfulSnapshotDateKey: requestedDateKey,
-    lastImportedDomains: Object.entries(payloads).filter(([, payload]) => Object.keys(payload).length > 0).map(([domain]) => domain),
+    lastImportedDomains: Object.entries(payloads)
+      .filter(([domain, payload]) => hasMeasuredPayload(domain, payload))
+      .map(([domain]) => domain),
     lastPolarActivityDebug: activityDebug,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
@@ -912,7 +952,9 @@ async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateK
     snapshotDateKey: requestedDateKey,
     sourceRecordIds: sourceRecordDocs.map((record) => record.id),
     sourcesUsed: artifacts.snapshot.provenance.sourcesUsed,
-    importedDomains: Object.entries(payloads).filter(([, payload]) => Object.keys(payload).length > 0).map(([domain]) => domain),
+    importedDomains: Object.entries(payloads)
+      .filter(([domain, payload]) => hasMeasuredPayload(domain, payload))
+      .map(([domain]) => domain),
     activityDebug,
     detail: 'PulseCheck imported the latest Polar health context.',
   };
@@ -970,6 +1012,8 @@ exports.__test = {
   summarizeV3ActivitySampleSteps,
   summarizeV4ActivitySteps,
   mapTrainingPayload,
+  buildSnapshotArtifacts,
+  hasMeasuredPayload,
 };
 
 exports.syncPolarSnapshotForConnection = syncPolarSnapshotForConnection;

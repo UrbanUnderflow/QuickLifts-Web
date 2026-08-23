@@ -229,7 +229,7 @@ test('planned rest is verified against the rolling plan allowance and consecutiv
     athleteId: 'athlete-1',
     sourceDate: '2026-03-19',
     status: 'planned_rest',
-    commitmentOutcomeState: 'planned_rest',
+    moduleOutcomeState: 'planned_rest',
   };
   const db = createDb({
     assignment: currentAssignment,
@@ -253,7 +253,7 @@ test('planned rest is verified against the rolling plan allowance and consecutiv
   assert.equal(policy.plannedRestWithinPlan, true);
   assert.equal(policy.consecutiveRest, true);
   assert.equal(policy.weeklyFollowThroughMet, false);
-  assert.equal(policy.commitmentOutcomeState, 'rest_over_plan');
+  assert.equal(policy.moduleOutcomeState, 'rest_over_plan');
 
   const response = parseBody(await recordModule.handler({
     httpMethod: 'POST',
@@ -266,7 +266,7 @@ test('planned rest is verified against the rolling plan allowance and consecutiv
   }));
 
   assert.equal(response.assignment.status, 'rest_over_plan');
-  assert.equal(response.assignment.commitmentOutcomeState, 'rest_over_plan');
+  assert.equal(response.assignment.moduleOutcomeState, 'rest_over_plan');
   assert.equal(response.assignment.plannedRestWithinPlan, true);
   assert.equal(response.assignment.weeklyFollowThroughMet, false);
   assert.equal(response.event.actorType, 'athlete');
