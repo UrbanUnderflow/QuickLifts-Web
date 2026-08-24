@@ -76,8 +76,7 @@ type InviteActivityEventType =
   | 'authenticated-view'
   | 'redeem-started'
   | 'redeem-succeeded'
-  | 'redeem-failed'
-  | 'follow-up-requested';
+  | 'redeem-failed';
 type BrowserAccountGateState = 'checking' | 'clearing' | 'ready';
 type NativeHandoffState = 'waiting' | 'consuming' | 'ready' | 'error' | 'none';
 
@@ -278,9 +277,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const [redirectingAfterRedeem, setRedirectingAfterRedeem] = useState(false);
   const [athleteCompletionMode, setAthleteCompletionMode] = useState<AthleteCompletionMode>('existing-account');
   const [showWebOnboarding, setShowWebOnboarding] = useState(false);
-  const [followUpEmail, setFollowUpEmail] = useState(invite.targetEmail || '');
-  const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
-  const [followUpSubmitted, setFollowUpSubmitted] = useState(false);
   const inviteActivitySessionIdRef = useRef('');
   const trackedInviteActivityKeysRef = useRef<Set<string>>(new Set());
   const nativeHandoffPromiseRef = useRef<Promise<FirebaseAuthUser> | null>(null);
@@ -305,10 +301,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     if (!router.isReady) return;
     setShowWebOnboarding(router.query.web === '1');
   }, [router.isReady, router.query.web]);
-
-  useEffect(() => {
-    setFollowUpEmail((current) => current || authUser?.email || invite.targetEmail || '');
-  }, [authUser?.email, invite.targetEmail]);
 
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
@@ -840,39 +832,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       type: 'success',
       text: `You're signed in. Review the ${athleteMonthlyPrice} monthly subscription, then continue to Stripe when you're ready.`,
     });
-  };
-
-  const handleSubmitFollowUp = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (submittingFollowUp) return;
-
-    const normalizedEmail = followUpEmail.trim().toLowerCase();
-    if (!normalizedEmail) {
-      setMessage({ type: 'error', text: 'Enter an email so staff can follow up.' });
-      return;
-    }
-
-    setSubmittingFollowUp(true);
-    try {
-      await recordInviteActivity('follow-up-requested', {
-        dedupeKey: `follow-up-requested:${normalizedEmail}`,
-        includeAuth: Boolean(authUser),
-        email: normalizedEmail,
-      });
-      setFollowUpSubmitted(true);
-      setMessage({
-        type: 'success',
-        text: 'Follow-up email captured. Staff can now send a direct individual link.',
-      });
-    } catch (error) {
-      console.error('[pulsecheck-team-invite] Failed to capture follow-up request:', error);
-      setMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to capture follow-up email.',
-      });
-    } finally {
-      setSubmittingFollowUp(false);
-    }
   };
 
   const handleCreateAccount = async (event: React.FormEvent) => {
@@ -2064,42 +2023,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 )}
               </div>
             )}
-
-            {invite.teamMembershipRole === 'athlete' && !redeemedState ? (
-              <div className="mt-6 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4">
-                <div className="flex items-center gap-2">
-                  <MailPlus className="h-4 w-4 text-amber-200" />
-                  <p className="text-sm font-semibold text-white">Need a direct follow-up link?</p>
-                </div>
-                <p className="mt-2 text-sm leading-7 text-zinc-300">
-                  If someone scanned this QR and got blocked, leave the email tied to their PulseCheck account. Staff can see it in the
-                  pilot dashboard and send an individual link.
-                </p>
-                {followUpSubmitted ? (
-                  <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                    Follow-up request saved for <span className="font-medium">{followUpEmail}</span>.
-                  </div>
-                ) : (
-                  <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={handleSubmitFollowUp}>
-                    <input
-                      type="email"
-                      value={followUpEmail}
-                      onChange={(event) => setFollowUpEmail(event.target.value)}
-                      placeholder="athlete@email.com"
-                      className="min-w-0 flex-1 rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300"
-                    />
-                    <button
-                      type="submit"
-                      disabled={submittingFollowUp}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-300/35 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-50 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {submittingFollowUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <MailPlus className="h-4 w-4" />}
-                      {submittingFollowUp ? 'Saving...' : 'Flag for Staff Follow-Up'}
-                    </button>
-                  </form>
-                )}
-              </div>
-            ) : null}
           </div>
         </section>
         )}
