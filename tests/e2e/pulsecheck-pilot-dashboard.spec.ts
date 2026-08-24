@@ -19,6 +19,10 @@ const pilotDashboardThemeSource = readFileSync(
   path.resolve(process.cwd(), 'src/components/admin/pilot-dashboard/PilotDashboardTheme.tsx'),
   'utf8'
 );
+const pulseCheckProvisioningServiceSource = readFileSync(
+  path.resolve(process.cwd(), 'src/api/firebase/pulsecheckProvisioning/service.ts'),
+  'utf8'
+);
 
 interface AuthIdentity {
   uid: string;
@@ -63,13 +67,13 @@ function shiftDateKey(dateKey: string, dayOffset: number): string {
 
 async function confirmPilotStartDateSave(page: Page) {
   const confirmationPromise = page.waitForEvent('dialog');
-  await page.getByTestId('pilot-start-date-save').click();
+  const clickPromise = page.getByTestId('pilot-start-date-save').click();
   const confirmation = await confirmationPromise;
 
   expect(confirmation.type()).toBe('confirm');
   expect(confirmation.message()).toContain('can change which athlete activity qualifies for pilot reporting after study metrics refresh');
-  expect(confirmation.message()).toContain('The pilot end date will not change.');
   await confirmation.accept();
+  await clickPromise;
 }
 
 async function waitForStableAppFrame(page: Page) {
@@ -310,6 +314,21 @@ async function expectReadableContrast(locator: Locator, label: string): Promise<
   return readability;
 }
 
+test('production pilot dashboard repairs a stale development invite without rotating its token', () => {
+  expect(pilotDashboardDetailSource).toMatch(
+    /const canonicalInviteNeedsProductionRepair = Boolean\([\s\S]*?canonicalInvite[\s\S]*?!demoModeEnabled[\s\S]*?!isUsingDevFirebase\(\)[\s\S]*?hasPulseCheckInviteDevFirebaseMarker\(canonicalInvite\.activationUrl\)/
+  );
+  expect(pilotDashboardDetailSource).toMatch(
+    /\(canonicalInvite && !canonicalInviteNeedsProductionRepair\)[\s\S]*?inviteEnsureAttemptedScopeKeysRef\.current\.has\(selectedInviteScopeKey\)[\s\S]*?inviteEnsureAttemptedScopeKeysRef\.current\.add\(selectedInviteScopeKey\);[\s\S]*?void ensureCanonicalInviteLink\(\)/
+  );
+  expect(pulseCheckProvisioningServiceSource).toMatch(
+    /const token =[\s\S]*?mostRecentMatchingLink\?\.data\(\)[\s\S]*?\.token[\s\S]*?\|\| crypto\.randomUUID\(\)/
+  );
+  expect(pulseCheckProvisioningServiceSource).toMatch(
+    /if \(redemptionMode === 'general' && mostRecentMatchingLink\) \{[\s\S]*?updateDoc\(mostRecentMatchingLink\.ref,[\s\S]*?token,[\s\S]*?activationUrl,[\s\S]*?return mostRecentMatchingLink\.id/
+  );
+});
+
 test.describe('PulseCheck pilot dashboard light-mode readability', () => {
   test.skip(
     !hasAuthState && !remoteLoginToken && !hasDevAuthBypass,
@@ -342,6 +361,7 @@ test.describe('PulseCheck pilot dashboard light-mode readability', () => {
       'text-orange-100',
       'text-emerald-50/90',
       'text-emerald-100/75',
+      'text-amber-100/90',
       'text-zinc-500',
     ];
     requiredLightThemeTokens.forEach((token) => {
@@ -385,6 +405,9 @@ test.describe('PulseCheck pilot dashboard light-mode readability', () => {
           <p data-readability-probe="privacy-body" class="text-sm leading-6 text-emerald-50/90">This aggregate excludes private check-in content.</p>
           <div data-readability-probe="privacy-footer" class="mt-3 text-[13px] leading-5 text-emerald-100/75">Private check-in content is excluded from this summary.</div>
         </div>
+        <div class="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4">
+          <p data-readability-probe="closed-enrollment-body" class="text-sm leading-6 text-amber-100/90">This join link is preserved and cannot be shared while enrollment is closed.</p>
+        </div>
       `;
       root.appendChild(probe);
     });
@@ -396,12 +419,14 @@ test.describe('PulseCheck pilot dashboard light-mode readability', () => {
     const followUpValue = readabilityProbe.locator('[data-readability-probe="orange-value"]');
     const privacyBody = readabilityProbe.locator('[data-readability-probe="privacy-body"]');
     const privacyFooter = readabilityProbe.locator('[data-readability-probe="privacy-footer"]');
+    const closedEnrollmentBody = readabilityProbe.locator('[data-readability-probe="closed-enrollment-body"]');
     const mutedHelper = readabilityProbe.locator('[data-readability-probe="muted-helper"]');
 
     const checkInReadability = await expectReadableContrast(checkInValue, 'Check-in-only value');
     await expectReadableContrast(followUpValue, 'Follow-up-needed value');
     await expectReadableContrast(privacyBody, 'Privacy explanation');
     await expectReadableContrast(privacyFooter, 'Privacy footer');
+    await expectReadableContrast(closedEnrollmentBody, 'Closed-enrollment explanation');
     await expectReadableContrast(mutedHelper, 'Expected-days helper');
 
     const smallLabelReadability = await measureComputedReadability(checkInLabel);
@@ -532,6 +557,21 @@ test.describe('PulseCheck pilot dashboard QR invites', () => {
     await expect(page.getByTestId('pilot-invite-qr-show-active')).toHaveCount(0);
     await expect(page.getByTestId('pilot-canonical-invite-copy')).toHaveCount(0);
     await expect(page.getByTestId('pilot-canonical-invite-open')).toHaveCount(0);
+
+    await page.getByTestId('pilot-dashboard-manage-pilot').click();
+    await expect(page.getByTestId('pilot-schedule-reopen-note')).toContainText(
+      'The pilot is still marked completed'
+    );
+    await expect(page.getByTestId('pilot-start-date-save')).toHaveText('Reopen enrollment');
+    await confirmPilotStartDateSave(page);
+    await expect(
+      page.getByText('Pilot schedule updated and enrollment reopened.', { exact: true }).first()
+    ).toBeVisible();
+
+    await page.getByTestId('pilot-dashboard-tab-people').click();
+    await page.getByTestId('pilot-dashboard-people-invitations').click();
+    await expect(page.getByTestId('pilot-invite-qr-show-active')).toBeVisible();
+    await expect(page.getByTestId('pilot-canonical-athlete-invite-link')).toHaveText(pilotJoinUrl);
   });
 });
 
@@ -569,6 +609,14 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
     await expect(page.getByTestId('pilot-dashboard-theme-frame')).toHaveAttribute('data-pilot-theme', 'dark');
     await expect(page.getByTestId('pilot-dashboard-detail-demo-banner')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Correlation Engine Spring Pilot Demo' })).toBeVisible();
+    await expect(page.getByTestId('pilot-detail-organization-link')).toHaveAttribute(
+      'href',
+      '/admin/pulsecheckPilotDashboard/organizations/demo-org-pulsecheck-labs'
+    );
+    await expect(page.getByTestId('pilot-detail-team-link')).toHaveAttribute(
+      'href',
+      '/admin/pulsecheckPilotDashboard/teams/demo-team-quicklifts-performance'
+    );
     await expect(page.getByTestId('pilot-dashboard-tab-people')).toBeVisible();
     await expect(page.getByTestId('pilot-dashboard-tab-activity-outcomes')).toBeVisible();
     await expect(page.getByTestId('pilot-dashboard-tab-operations')).toBeVisible();
@@ -586,29 +634,33 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
     await expect(page.getByRole('heading', { name: 'Settings and admin tools' })).toBeVisible();
 
     await expect(page.getByTestId('pilot-start-date-settings')).toBeVisible();
-    await expect(page.getByText(/Demo mode: this start date is saved only in this browser/i)).toBeVisible();
+    await expect(page.getByText(/Demo mode: this schedule is saved only in this browser/i)).toBeVisible();
     await page.getByTestId('pilot-dashboard-detail-demo-reset').click();
 
     const originalDemoStartDate = await page.getByTestId('pilot-start-date-input').inputValue();
+    const originalDemoEndDate = await page.getByTestId('pilot-end-date-input').inputValue();
     const nextDemoStartDate = shiftDateKey(originalDemoStartDate, 2);
     await page.getByTestId('pilot-start-date-input').fill(nextDemoStartDate);
+    await page.getByTestId('pilot-schedule-length').selectOption('14');
+    const expectedDemoEndDate = shiftDateKey(nextDemoStartDate, 13);
+    await expect(page.getByTestId('pilot-end-date-input')).toHaveValue(expectedDemoEndDate);
     await confirmPilotStartDateSave(page);
-    await expect(
-      page.getByText('Pilot start date updated. The pilot end date was not changed.', { exact: true }).first()
-    ).toBeVisible();
+    await expect(page.getByText('Pilot schedule updated.', { exact: true }).first()).toBeVisible();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await waitForStableAppFrame(page);
     await page.getByTestId('pilot-dashboard-manage-pilot').click();
     await expect(page.getByTestId('pilot-start-date-input')).toHaveValue(nextDemoStartDate);
+    await expect(page.getByTestId('pilot-end-date-input')).toHaveValue(expectedDemoEndDate);
 
     await page.getByTestId('pilot-dashboard-detail-demo-reset').click();
     await expect(page.getByTestId('pilot-start-date-input')).toHaveValue(originalDemoStartDate);
+    await expect(page.getByTestId('pilot-end-date-input')).toHaveValue(originalDemoEndDate);
     await page.getByTestId('pilot-dashboard-detail-demo-toggle').click();
     await expect(page).toHaveURL(/\/admin\/pulsecheckPilotDashboard$/);
   });
 
-  test('edits and persists a pilot start date from Manage pilot', async ({ page }) => {
+  test('edits and persists a pilot schedule from Manage pilot', async ({ page }) => {
     const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
 
     try {
@@ -618,39 +670,54 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
       await page.getByTestId('pilot-dashboard-manage-pilot').click();
 
       const startDateInput = page.getByTestId('pilot-start-date-input');
-      const fixedEndDate = page.getByTestId('pilot-start-date-fixed-end');
+      const endDateInput = page.getByTestId('pilot-end-date-input');
+      const lengthSelect = page.getByTestId('pilot-schedule-length');
       await expect(page.getByTestId('pilot-start-date-settings')).toBeVisible();
       await expect(page.getByLabel('Start date')).toBeVisible();
-      await expect(page.getByText('End date (unchanged)', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('Length')).toBeVisible();
+      await expect(page.getByLabel('End date')).toBeVisible();
 
       const originalStartDate = await startDateInput.inputValue();
-      const originalEndDate = await fixedEndDate.getAttribute('data-date-key');
+      const originalEndDate = await endDateInput.inputValue();
       expect(originalStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(originalEndDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      await expect(startDateInput).toHaveAttribute('max', originalEndDate!);
 
       const nextStartDate = shiftDateKey(originalStartDate, 1);
       await startDateInput.fill(nextStartDate);
+      await lengthSelect.selectOption('30');
+      const expectedEndDate = shiftDateKey(nextStartDate, 29);
+      await expect(endDateInput).toHaveValue(expectedEndDate);
       await expect(page.getByTestId('pilot-start-date-save')).toBeEnabled();
       await confirmPilotStartDateSave(page);
 
-      await expect(
-        page.getByText('Pilot start date updated. The pilot end date was not changed.', { exact: true }).first()
-      ).toBeVisible();
-      await expect(fixedEndDate).toHaveAttribute('data-date-key', originalEndDate!);
+      await expect(page.getByText('Pilot schedule updated.', { exact: true }).first()).toBeVisible();
+      await expect(endDateInput).toHaveValue(expectedEndDate);
 
       await page.reload({ waitUntil: 'domcontentloaded' });
       await waitForStableAppFrame(page);
       await expect(page.getByRole('heading', { name: fixture.pilotName })).toBeVisible();
       await page.getByTestId('pilot-dashboard-manage-pilot').click();
       await expect(page.getByTestId('pilot-start-date-input')).toHaveValue(nextStartDate);
-      await expect(page.getByTestId('pilot-start-date-fixed-end')).toHaveAttribute('data-date-key', originalEndDate!);
+      await expect(page.getByTestId('pilot-end-date-input')).toHaveValue(expectedEndDate);
+      await expect(page.getByTestId('pilot-schedule-length')).toHaveValue('30');
+
+      await page.getByTestId('pilot-schedule-clear').click();
+      await expect(page.getByTestId('pilot-start-date-input')).toHaveValue('');
+      await expect(page.getByTestId('pilot-end-date-input')).toHaveValue('');
+      await confirmPilotStartDateSave(page);
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+      await page.getByTestId('pilot-dashboard-manage-pilot').click();
+      await expect(page.getByTestId('pilot-start-date-input')).toHaveValue('');
+      await expect(page.getByTestId('pilot-end-date-input')).toHaveValue('');
+      await expect(page.getByTestId('pilot-schedule-length')).toHaveValue('custom');
     } finally {
       await cleanupPilotDashboardFixture(page, adminIdentity);
     }
   });
 
-  test('rejects a pilot start date after the fixed end date', async ({ page }) => {
+  test('rejects a custom pilot schedule when the start date is after the end date', async ({ page }) => {
     const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
 
     try {
@@ -661,9 +728,11 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
 
       const startDateInput = page.getByTestId('pilot-start-date-input');
       const originalStartDate = await startDateInput.inputValue();
-      const endDate = await page.getByTestId('pilot-start-date-fixed-end').getAttribute('data-date-key');
+      const endDateInput = page.getByTestId('pilot-end-date-input');
+      const endDate = await endDateInput.inputValue();
       expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
+      await page.getByTestId('pilot-schedule-length').selectOption('custom');
       await startDateInput.fill(shiftDateKey(endDate!, 1));
       await expect(page.getByTestId('pilot-start-date-error')).toHaveText(
         'Start date must be on or before the pilot end date.'
@@ -830,6 +899,114 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
         .getByText('Athletes joined', { exact: true })
         .locator('xpath=../div[contains(@class, "text-2xl")]');
       await expect(athletesJoinedValue).toHaveText('0');
+
+      await page.getByTestId('pilot-dashboard-tab-people').click();
+      await page.getByTestId('pilot-dashboard-people-eligible').click();
+      const eligibleAthleteRow = page
+        .locator('tr')
+        .filter({ has: page.getByText(fixture.athleteNames[0], { exact: true }) })
+        .first();
+      await expect(eligibleAthleteRow).toBeVisible({ timeout: 30_000 });
+      await eligibleAthleteRow.getByRole('button', { name: 'Remove from team' }).click();
+      await expect(page.getByTestId('pilot-athlete-removal-modal')).toBeVisible();
+      await expect(page.getByTestId('pilot-athlete-removal-description')).toContainText(
+        `Remove ${fixture.athleteNames[0]} from`
+      );
+      await page.getByTestId('pilot-athlete-removal-cancel').click();
+      await expect(page.getByTestId('pilot-athlete-removal-modal')).toHaveCount(0);
+    } finally {
+      await cleanupPilotDashboardFixture(page, adminIdentity);
+    }
+  });
+
+  test('navigates organization and team detail routes and handles missing hierarchy records', async ({ page }) => {
+    const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
+
+    const dashboardPath = '/admin/pulsecheckPilotDashboard';
+    const organizationPath = `${dashboardPath}/organizations/${encodeURIComponent(fixture.organizationId)}`;
+    const teamPath = `${dashboardPath}/teams/${encodeURIComponent(fixture.teamId)}`;
+    const pilotPath = `${dashboardPath}/${encodeURIComponent(fixture.pilotId)}`;
+
+    try {
+      await page.goto(dashboardPath, { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+
+      const organizationOpenLink = page.getByTestId(`pilot-organization-open-${fixture.organizationId}`);
+      const teamOpenLink = page.getByTestId(`pilot-team-open-${fixture.teamId}`);
+      await expect(organizationOpenLink).toBeVisible({ timeout: 30_000 });
+      await expect(organizationOpenLink).toHaveAttribute('href', organizationPath);
+      await expect(teamOpenLink).toBeVisible();
+      await expect(teamOpenLink).toHaveAttribute('href', teamPath);
+
+      await organizationOpenLink.click();
+      await expect(page).toHaveURL(new URL(organizationPath, appBaseURL).toString());
+      const organizationDetail = page.getByTestId('pilot-organization-detail');
+      await expect(organizationDetail).toBeVisible({ timeout: 30_000 });
+
+      await page.getByTestId('pilot-hierarchy-tab-pilots').click();
+      await expect(page.getByTestId('pilots-section')).toBeVisible();
+      await expect(page.getByTestId(`pilot-pilot-open-${fixture.pilotId}`)).toContainText(fixture.pilotName);
+
+      await page.getByTestId('pilot-hierarchy-tab-teams').click();
+      await expect(page.getByTestId('teams-section')).toBeVisible();
+      const organizationTeamLink = page.getByTestId(`pilot-team-open-${fixture.teamId}`);
+      await expect(organizationTeamLink).toBeVisible();
+      await expect(organizationTeamLink).toHaveAttribute('href', teamPath);
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+      await expect(page).toHaveURL(new URL(organizationPath, appBaseURL).toString());
+      await expect(page.getByTestId('pilot-organization-detail')).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('pilot-hierarchy-tab-teams').click();
+      await page.getByTestId(`pilot-team-open-${fixture.teamId}`).click();
+
+      await expect(page).toHaveURL(new URL(teamPath, appBaseURL).toString());
+      const teamDetail = page.getByTestId('pilot-team-detail');
+      await expect(teamDetail).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('pilot-hierarchy-tab-pilots').click();
+      await expect(page.getByTestId('pilots-section')).toBeVisible();
+      const teamPilotLink = page.getByTestId(`pilot-pilot-open-${fixture.pilotId}`);
+      await expect(teamPilotLink).toBeVisible();
+      await expect(teamPilotLink).toContainText(fixture.pilotName);
+      await expect(teamPilotLink).toHaveAttribute('href', pilotPath);
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+      await expect(page).toHaveURL(new URL(teamPath, appBaseURL).toString());
+      await expect(page.getByTestId('pilot-team-detail')).toBeVisible({ timeout: 30_000 });
+      await page.getByTestId('pilot-hierarchy-tab-pilots').click();
+      await page.getByTestId(`pilot-pilot-open-${fixture.pilotId}`).click();
+
+      await expect(page).toHaveURL(new URL(pilotPath, appBaseURL).toString());
+      await expect(page.getByRole('heading', { name: fixture.pilotName })).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId('pilot-detail-organization-link')).toHaveAttribute('href', organizationPath);
+      await expect(page.getByTestId('pilot-detail-team-link')).toHaveAttribute('href', teamPath);
+
+      await page.goto(dashboardPath, { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+      await page.getByTestId(`pilot-team-open-${fixture.teamId}`).click();
+      await expect(page).toHaveURL(new URL(teamPath, appBaseURL).toString());
+      await expect(page.getByTestId('pilot-team-detail')).toBeVisible({ timeout: 30_000 });
+
+      const missingOrganizationPath = `${dashboardPath}/organizations/missing-organization`;
+      await page.goto(missingOrganizationPath, { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+      await expect(page).toHaveURL(new URL(missingOrganizationPath, appBaseURL).toString());
+      await expect(page.getByTestId('pilot-organization-not-found')).toBeVisible({ timeout: 30_000 });
+      const missingOrganizationBackLink = page.getByTestId('pilot-organization-not-found-back');
+      await expect(missingOrganizationBackLink).toHaveAttribute('href', dashboardPath);
+      await missingOrganizationBackLink.click();
+      await expect(page).toHaveURL(new URL(dashboardPath, appBaseURL).toString());
+
+      const missingTeamPath = `${dashboardPath}/teams/missing-team`;
+      await page.goto(missingTeamPath, { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(page);
+      await expect(page).toHaveURL(new URL(missingTeamPath, appBaseURL).toString());
+      await expect(page.getByTestId('pilot-team-not-found')).toBeVisible({ timeout: 30_000 });
+      const missingTeamBackLink = page.getByTestId('pilot-team-not-found-back');
+      await expect(missingTeamBackLink).toHaveAttribute('href', dashboardPath);
+      await missingTeamBackLink.click();
+      await expect(page).toHaveURL(new URL(dashboardPath, appBaseURL).toString());
     } finally {
       await cleanupPilotDashboardFixture(page, adminIdentity);
     }
@@ -842,7 +1019,7 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
       await page.goto('/admin/pulsecheckPilotDashboard', { waitUntil: 'domcontentloaded' });
       await waitForStableAppFrame(page);
 
-      await expect(page.getByRole('heading', { name: 'Active Pilot Dashboard' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Pilot Dashboard' })).toBeVisible();
       await expect(page.getByRole('link', { name: fixture.pilotName })).toBeVisible();
 
       await page.getByRole('link', { name: fixture.pilotName }).click();

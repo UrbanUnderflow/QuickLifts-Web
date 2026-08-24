@@ -17,6 +17,7 @@ import {
   FileText,
   FlaskConical,
   Loader2,
+  MailPlus,
   MonitorPlay,
   QrCode,
   RefreshCcw,
@@ -41,11 +42,12 @@ import PilotAthleteCommunicationModal, {
   type PilotAthleteCommunicationPreview,
   type PilotAthleteCommunicationRecord,
 } from '../../../components/admin/pilot-dashboard/PilotAthleteCommunicationModal';
+import PilotAthleteRemovalModal from '../../../components/admin/pilot-dashboard/PilotAthleteRemovalModal';
 import PilotAthleteTransferModal from '../../../components/admin/pilot-dashboard/PilotAthleteTransferModal';
 import { PilotInviteQrModal } from '../../../components/admin/pilot-dashboard/PilotInviteQrModal';
 import { StaffPilotSurveyModal } from '../../../components/admin/pilot-dashboard/StaffPilotSurveyModal';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
-import { db, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
+import { db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../../../api/firebase/config';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import { getDefaultPulseCheckRequiredConsents } from '../../../api/firebase/pulsecheckProvisioning/types';
@@ -58,12 +60,19 @@ import type {
   PulseCheckRequiredConsentDocument,
   PulseCheckTeam,
 } from '../../../api/firebase/pulsecheckProvisioning/types';
-import { analyzePulseCheckInviteOneLink, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import {
+  analyzePulseCheckInviteOneLink,
+  hasPulseCheckInviteDevFirebaseMarker,
+} from '../../../utils/pulsecheckInviteLinks';
+import {
+  formatPulseCheckPilotDateKey,
   parsePulseCheckPilotDateKey,
   resolvePulseCheckPilotEnrollmentAcceptance,
-  validatePulseCheckPilotStartDate,
+  resolvePulseCheckPilotDateKeyEndOfDay,
+  shiftPulseCheckPilotDateKey,
+  validatePulseCheckPilotSchedule,
 } from '../../../utils/pulseCheckPilotSchedule';
+import { isPulseCheckParentAwaitingActivation } from '../../../utils/pulseCheckActivationLifecycle';
 import {
   resolvePilotInviteShareUrl,
   selectActiveReusableAthleteInvite,
@@ -89,6 +98,7 @@ import type {
 type DetailTab = 'overview' | 'people' | 'activity-outcomes' | 'operations' | 'insights-research' | 'manage-pilot';
 type InsightSection = 'learning' | 'hypotheses' | 'reports';
 type PilotRosterView = 'participants' | 'eligible';
+type PilotScheduleLengthDraft = '14' | '30' | '60' | '90' | 'custom';
 type PeopleSection = PilotRosterView | 'invitations';
 type InviteActivityParticipantRow = {
   key: string;
@@ -126,6 +136,11 @@ type AthleteTransferModalState = {
   selectedTeamId: string;
   selectedPilotId: string;
   selectedCohortId: string;
+};
+type AthleteRemovalModalState = {
+  athlete: PilotDashboardDetail['rosterAthletes'][number];
+  saving: boolean;
+  error: string | null;
 };
 
 const STUDY_MODE_DISCLOSURE_PACKAGE_META: Record<PulseCheckPilot['studyMode'], { label: string; actionLabel: string }> = {
@@ -177,6 +192,14 @@ const peopleSections: Array<{ id: PeopleSection; label: string }> = [
 ];
 
 const TEAM_INVITE_SCOPE_VALUE = '__team__';
+const pilotScheduleLengthOptions: Array<{ value: PilotScheduleLengthDraft; label: string }> = [
+  { value: '14', label: '14 days' },
+  { value: '30', label: '30 days' },
+  { value: '60', label: '60 days' },
+  { value: '90', label: '90 days' },
+  { value: 'custom', label: 'Custom' },
+];
+const presetPilotScheduleLengths = new Set<PilotScheduleLengthDraft>(['14', '30', '60', '90']);
 
 const READOUT_REVIEW_STATE_OPTIONS: Array<{ value: PilotResearchReadoutReviewState; label: string }> = [
   { value: 'draft', label: 'Draft' },
@@ -280,11 +303,24 @@ const formatPilotDate = (value: any) => {
     : '';
 };
 const toInputDateValue = (value: Date | null) => {
-  if (!value) return '';
-  const year = value.getFullYear();
-  const month = `${value.getMonth() + 1}`.padStart(2, '0');
-  const day = `${value.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return formatPulseCheckPilotDateKey(value);
+};
+const getInclusiveDateWindowLength = (startDateKey: string, endDateKey: string) => {
+  const start = parsePulseCheckPilotDateKey(startDateKey);
+  const end = parsePulseCheckPilotDateKey(endDateKey);
+  if (!start || !end) return null;
+  const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  const days = Math.round((endUtc - startUtc) / (24 * 60 * 60 * 1000)) + 1;
+  return Number.isFinite(days) && days > 0 ? days : null;
+};
+const resolvePilotScheduleLengthDraft = (startDateKey: string, endDateKey: string): PilotScheduleLengthDraft => {
+  const length = getInclusiveDateWindowLength(startDateKey, endDateKey);
+  return length === 14 || length === 30 || length === 60 || length === 90 ? String(length) as PilotScheduleLengthDraft : 'custom';
+};
+const resolvePresetEndDateKey = (startDateKey: string, length: PilotScheduleLengthDraft) => {
+  if (!presetPilotScheduleLengths.has(length) || !startDateKey) return '';
+  return shiftPulseCheckPilotDateKey(startDateKey, Number(length) - 1);
 };
 const formatTimeValue = (value: any) => {
   const nextDate = toDateValue(value);
@@ -335,6 +371,226 @@ type StudyMetricsStatusModalProps = {
   onClose: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
+};
+
+type TeamActivationGuideModalProps = {
+  isOpen: boolean;
+  organizationName: string;
+  organizationStatus?: string | null;
+  teamName: string;
+  teamStatus?: string | null;
+  activationHref: string;
+  activationIncomplete: boolean;
+  recipientName: string;
+  recipientEmail: string;
+  activeActivationUrl?: string;
+  action: 'send' | 'copy' | null;
+  message?: { type: 'success' | 'error'; text: string } | null;
+  onRecipientNameChange: (value: string) => void;
+  onRecipientEmailChange: (value: string) => void;
+  onSendActivationEmail: () => void;
+  onCopyActivationLink: () => void;
+  onClose: () => void;
+};
+
+const TeamActivationGuideModal: React.FC<TeamActivationGuideModalProps> = ({
+  isOpen,
+  organizationName,
+  organizationStatus,
+  teamName,
+  teamStatus,
+  activationHref,
+  activationIncomplete,
+  recipientName,
+  recipientEmail,
+  activeActivationUrl,
+  action,
+  message,
+  onRecipientNameChange,
+  onRecipientEmailChange,
+  onSendActivationEmail,
+  onCopyActivationLink,
+  onClose,
+}) => {
+  if (!isOpen) return null;
+
+  const formatStatus = (value?: string | null) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return 'Not available';
+    return normalized
+      .split(/[_-\s]+/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[140] flex items-center justify-center bg-[#03060d]/88 px-4 py-6 backdrop-blur-xl"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 18, scale: 0.98 }}
+          transition={{ duration: 0.22, ease: 'easeOut' }}
+          className="relative w-full max-w-3xl overflow-hidden rounded-[28px] border border-white/10 bg-[#0a0f18]/95 p-6 text-white shadow-[0_28px_120px_rgba(0,0,0,0.45)]"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="team-activation-guide-title"
+          data-testid="pilot-team-activation-modal"
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/5 p-2 text-white/55 transition hover:bg-white/10 hover:text-white"
+            aria-label="Close team activation guide"
+          >
+            <X className="h-4 w-4" />
+          </button>
+
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-100">
+            <Settings2 className="h-3.5 w-3.5" />
+            Team activation
+          </div>
+          <h2 id="team-activation-guide-title" className="pilot-font-display mt-4 text-2xl font-semibold text-white">
+            Finish activation before athletes join
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
+            {activationIncomplete
+              ? `${organizationName} and ${teamName} are set up, but the owner activation step has not been completed yet. Athlete QR codes and join links stay locked until this step is done.`
+              : `${teamName} needs a status review before athlete QR codes and join links can be shared.`}
+          </p>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Organization</div>
+              <div className="mt-2 text-sm font-semibold text-white">{organizationName}</div>
+              <div className="mt-2 inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-100">
+                {formatStatus(organizationStatus)}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Team</div>
+              <div className="mt-2 text-sm font-semibold text-white">{teamName}</div>
+              <div className="mt-2 inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs font-medium text-amber-100">
+                {formatStatus(teamStatus)}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-[#123348]">
+            <div className="text-sm font-semibold text-[#075985]">What needs to happen</div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-2 text-sm font-medium text-[#27435c]" htmlFor="team-activation-recipient-name">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#47637b]">Owner name</span>
+                  <input
+                    id="team-activation-recipient-name"
+                    type="text"
+                    value={recipientName}
+                    onChange={(event) => onRecipientNameChange(event.target.value)}
+                    placeholder="Team owner"
+                    className="w-full rounded-xl border border-[#9ec7d8] bg-white px-3 py-2.5 text-sm text-[#102235] outline-none transition placeholder:text-[#7890a3] focus:border-[#1688ad] focus:ring-2 focus:ring-[#1688ad]/20"
+                  />
+                </label>
+                <label className="space-y-2 text-sm font-medium text-[#27435c]" htmlFor="team-activation-recipient-email">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#47637b]">Owner email</span>
+                  <input
+                    id="team-activation-recipient-email"
+                    type="email"
+                    value={recipientEmail}
+                    onChange={(event) => onRecipientEmailChange(event.target.value)}
+                    placeholder="owner@example.com"
+                    className="w-full rounded-xl border border-[#9ec7d8] bg-white px-3 py-2.5 text-sm text-[#102235] outline-none transition placeholder:text-[#7890a3] focus:border-[#1688ad] focus:ring-2 focus:ring-[#1688ad]/20"
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <button
+                  type="button"
+                  onClick={onSendActivationEmail}
+                  disabled={Boolean(action)}
+                  data-testid="pilot-team-activation-modal-send-email"
+                  className="inline-flex min-h-[42px] items-center gap-2 rounded-xl bg-[#075985] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#0c6f9c] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {action === 'send' ? <Loader2 className="h-4 w-4 animate-spin" /> : <MailPlus className="h-4 w-4" />}
+                  Send activation email
+                </button>
+                <button
+                  type="button"
+                  onClick={onCopyActivationLink}
+                  disabled={Boolean(action)}
+                  data-testid="pilot-team-activation-modal-copy-link"
+                  className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-[#9ec7d8] bg-white px-3.5 py-2 text-sm font-semibold text-[#075985] transition hover:bg-[#f2fbff] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {action === 'copy' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clipboard className="h-4 w-4" />}
+                  Copy activation link
+                </button>
+                {activeActivationUrl ? (
+                  <a
+                    href={activeActivationUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-testid="pilot-team-activation-modal-open-link"
+                    className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-[#9ec7d8] bg-white px-3.5 py-2 text-sm font-semibold text-[#075985] transition hover:bg-[#f2fbff]"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Open link
+                  </a>
+                ) : null}
+              </div>
+            </div>
+            <ol className="mt-4 space-y-2 text-sm leading-6 text-[#24445c]">
+              <li>1. Send the activation email or copy the activation link for the team owner.</li>
+              <li>2. The owner opens that link and signs in to complete activation.</li>
+              <li>3. PulseCheck creates the admin membership and activation record.</li>
+              <li>4. Return here. The saved athlete QR and join link unlock once the team is active.</li>
+            </ol>
+            {message ? (
+              <div
+                role="status"
+                data-testid="pilot-team-activation-modal-message"
+                className={`mt-3 rounded-xl border px-3 py-2 text-sm font-medium ${
+                  message.type === 'success'
+                    ? 'border-emerald-500/30 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-500/30 bg-rose-50 text-rose-800'
+                }`}
+              >
+                {message.text}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-white/65">
+            This does not require making a new athlete QR code. The current join link is preserved; PulseCheck is only waiting for the team owner activation step.
+          </div>
+
+          <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
+            >
+              Close
+            </button>
+            <Link
+              href={activationHref}
+              data-testid="pilot-team-activation-modal-open-provisioning"
+              className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/12 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/18"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open provisioning
+            </Link>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
 };
 
 const StudyMetricsStatusModal: React.FC<StudyMetricsStatusModalProps> = ({
@@ -993,8 +1249,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
   const [communicationPreviewModal, setCommunicationPreviewModal] = useState<AthleteCommunicationPreviewModalState | null>(null);
   const [athleteTransferModal, setAthleteTransferModal] = useState<AthleteTransferModalState | null>(null);
+  const [athleteRemovalModal, setAthleteRemovalModal] = useState<AthleteRemovalModalState | null>(null);
   const [studyMetricsStatusModalOpen, setStudyMetricsStatusModalOpen] = useState(false);
+  const [teamActivationGuideOpen, setTeamActivationGuideOpen] = useState(false);
+  const [teamActivationRecipientName, setTeamActivationRecipientName] = useState('');
+  const [teamActivationRecipientEmail, setTeamActivationRecipientEmail] = useState('');
+  const [teamActivationAction, setTeamActivationAction] = useState<'send' | 'copy' | null>(null);
+  const [teamActivationMessage, setTeamActivationMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [pilotStartDateDraft, setPilotStartDateDraft] = useState('');
+  const [pilotEndDateDraft, setPilotEndDateDraft] = useState('');
+  const [pilotScheduleLengthDraft, setPilotScheduleLengthDraft] = useState<PilotScheduleLengthDraft>('custom');
   const [pilotStartDateError, setPilotStartDateError] = useState<string | null>(null);
   const [savingPilotStartDate, setSavingPilotStartDate] = useState(false);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
@@ -1059,7 +1323,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       const nextDetail = await pulseCheckPilotDashboardService.getPilotDashboardDetail(pilotId);
       if (requestId !== loadRequestIdRef.current) return;
       setDetail(nextDetail);
-      setPilotStartDateDraft(toInputDateValue(toDateValue(nextDetail?.pilot.startAt)));
+      const nextStartDateKey = toInputDateValue(toDateValue(nextDetail?.pilot.startAt));
+      const nextEndDateKey = toInputDateValue(toDateValue(nextDetail?.pilot.endAt));
+      setPilotStartDateDraft(nextStartDateKey);
+      setPilotEndDateDraft(nextEndDateKey);
+      setPilotScheduleLengthDraft(resolvePilotScheduleLengthDraft(nextStartDateKey, nextEndDateKey));
       setPilotStartDateError(null);
       if (nextDetail?.pilot.id) {
         await loadCommunicationRecords(nextDetail.pilot.id);
@@ -1389,6 +1657,61 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const openAthleteRemovalModal = (athlete: PilotDashboardDetail['rosterAthletes'][number]) => {
+    if (!detail) return;
+    if (pulseCheckPilotDashboardService.isDemoModeEnabled()) {
+      setPageMessage({ type: 'error', text: 'Demo mode does not support removing athletes from teams.' });
+      return;
+    }
+
+    if (!athlete.teamMembership || athlete.teamMembership.teamId !== detail.team.id) {
+      setPageMessage({ type: 'error', text: `${athlete.displayName} is not currently attached to this team.` });
+      return;
+    }
+
+    setPageMessage(null);
+    setAthleteRemovalModal({
+      athlete,
+      saving: false,
+      error: null,
+    });
+  };
+
+  const closeAthleteRemovalModal = () => {
+    if (athleteRemovalModal?.saving) return;
+    setAthleteRemovalModal(null);
+  };
+
+  const confirmAthleteRemoval = async () => {
+    if (!detail || !athleteRemovalModal || athleteRemovalModal.saving) return;
+    const { athlete } = athleteRemovalModal;
+
+    setAthleteRemovalModal((current) => (current ? { ...current, saving: true, error: null } : current));
+    setPageMessage(null);
+
+    try {
+      const result = await pulseCheckProvisioningService.removeAthleteFromTeam({
+        teamId: detail.team.id,
+        athleteId: athlete.athleteId,
+      });
+      const successText = result.alreadyRemoved
+        ? `${athlete.displayName} was already removed from ${detail.team.displayName}.`
+        : `${athlete.displayName} was removed from ${detail.team.displayName}.`;
+
+      setAthleteRemovalModal(null);
+      setPageMessage({ type: 'success', text: successText });
+      dispatch(showToast({ message: successText, type: 'success' }));
+      await load('refresh');
+    } catch (removalError: any) {
+      const message =
+        removalError?.message ||
+        `Could not remove ${athlete.displayName} from ${detail.team.displayName}. Nothing changed. Try again.`;
+      console.error('[PulseCheckPilotDashboard] Failed to remove athlete from team:', removalError);
+      setAthleteRemovalModal((current) => (current ? { ...current, saving: false, error: message } : current));
+      dispatch(showToast({ message, type: 'error' }));
+    }
+  };
+
   const handleTransferTeamChange = (teamId: string) => {
     setAthleteTransferModal((current) =>
       current
@@ -1577,10 +1900,30 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const selectedPilotEnrollmentAcceptance = detail
     ? resolvePulseCheckPilotEnrollmentAcceptance(detail.pilot)
     : null;
-  const selectedInviteScopeCanAcceptJoins = Boolean(
+  const inviteParentScopeMatches = Boolean(
+    detail && detail.team.organizationId === detail.organization.id
+  );
+  const inviteParentScopesAreActive = Boolean(
     detail &&
     detail.organization.status === 'active' &&
     detail.team.status === 'active' &&
+    inviteParentScopeMatches
+  );
+  const inviteOrganizationAwaitsActivation = isPulseCheckParentAwaitingActivation(detail?.organization.status);
+  const inviteTeamAwaitsActivation = isPulseCheckParentAwaitingActivation(detail?.team.status);
+  const inviteParentActivationIncomplete = Boolean(
+    detail &&
+    inviteParentScopeMatches &&
+    (inviteOrganizationAwaitsActivation || inviteTeamAwaitsActivation) &&
+    (detail.organization.status === 'active' || inviteOrganizationAwaitsActivation) &&
+    (detail.team.status === 'active' || inviteTeamAwaitsActivation)
+  );
+  const inviteTeamActivationHref = detail
+    ? `/admin/pulsecheckProvisioning?focusOrg=${encodeURIComponent(detail.organization.id)}&focusTeam=${encodeURIComponent(detail.team.id)}`
+    : '/admin/pulsecheckProvisioning';
+  const selectedInviteScopeCanAcceptJoins = Boolean(
+    detail &&
+    inviteParentScopesAreActive &&
     (selectedInviteScopeKind === 'team' || selectedPilotEnrollmentAcceptance?.acceptsEnrollment) &&
     (selectedInviteScopeKind !== 'cohort' || selectedInviteCohort?.status === 'active')
   );
@@ -1597,26 +1940,79 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         selectedInviteScopeKind === 'cohort' ? selectedInviteCohort?.name || '' : '',
       ].filter(Boolean).join(' / ')
     : '';
-  const selectedInviteEnrollmentClosedCopy = selectedInviteScopeKind === 'team'
-    ? 'The organization or team is not active, so this destination cannot accept new athletes.'
-    : selectedPilotEnrollmentAcceptance?.reason === 'not-started'
-      ? `${detail?.pilot.name || 'This pilot'} has not started, so enrollment is not open yet.`
-      : selectedPilotEnrollmentAcceptance?.reason === 'invalid-schedule'
-        ? `${detail?.pilot.name || 'This pilot'} needs a valid enrollment schedule before athletes can join.`
-        : detail?.pilot.status === 'completed' || selectedPilotEnrollmentAcceptance?.reason === 'ended'
-          ? `${detail?.pilot.name || 'This pilot'} is completed and no longer accepts new athletes.`
-          : `${detail?.pilot.name || 'This pilot'} is ${detail?.pilot.status || 'inactive'} and does not currently accept new athletes.`;
+  const selectedInviteEnrollmentClosedCopy = (() => {
+    if (!inviteParentScopesAreActive) {
+      if (!inviteParentScopeMatches) {
+        return `${detail?.team.displayName || 'This team'} has an organization assignment that needs review. Open team setup to confirm the assignment before sharing athlete invitations.`;
+      }
+      if (inviteParentActivationIncomplete) {
+        return `${detail?.team.displayName || 'This team'} is waiting for organization and team activation. Open team setup and finish activation before sharing athlete invitations.`;
+      }
+      return `${detail?.team.displayName || 'This team'} is ${detail?.team.status || 'unavailable'}, and its organization is ${detail?.organization.status || 'unavailable'}. Review their operational status before sharing athlete invitations.`;
+    }
+    if (selectedInviteScopeKind === 'cohort' && selectedInviteCohort?.status !== 'active') {
+      return `${selectedInviteCohort?.name || 'This cohort'} is ${selectedInviteCohort?.status || 'inactive'}. Set the cohort to active before sharing athlete invitations.`;
+    }
+    if (selectedInviteScopeKind === 'team') {
+      return 'Activate this team before sharing athlete invitations.';
+    }
+    if (selectedPilotEnrollmentAcceptance?.reason === 'not-started') {
+      return `${detail?.pilot.name || 'This pilot'} has not started, so enrollment is not open yet.`;
+    }
+    if (selectedPilotEnrollmentAcceptance?.reason === 'invalid-schedule') {
+      return `${detail?.pilot.name || 'This pilot'} needs a valid enrollment schedule before athletes can join.`;
+    }
+    if (detail?.pilot.status === 'completed' || selectedPilotEnrollmentAcceptance?.reason === 'ended') {
+      return `${detail?.pilot.name || 'This pilot'} is completed and no longer accepts new athletes.`;
+    }
+    return `${detail?.pilot.name || 'This pilot'} is ${detail?.pilot.status || 'inactive'}. Reopen enrollment before sharing athlete invitations.`;
+  })();
+  const selectedInviteEnrollmentClosedTitle = !inviteParentScopeMatches
+    ? 'Team setup needs review'
+    : inviteParentActivationIncomplete
+      ? 'Team activation is incomplete'
+      : !inviteParentScopesAreActive
+        ? 'Team is unavailable'
+        : selectedInviteScopeKind === 'team'
+          ? 'Team enrollment is closed'
+          : 'Pilot enrollment is closed';
+  const selectedInviteStatusLabel = selectedInviteScopeCanAcceptJoins
+    ? 'Ready to share'
+    : inviteParentActivationIncomplete
+      ? 'Team activation required'
+      : 'Enrollment closed';
+  const selectedInvitePreservationCopy = inviteParentActivationIncomplete
+    ? 'The saved join link remains locked until team activation is complete.'
+    : 'The saved join link stays private while enrollment is closed.';
   const selectedInviteScopeKey = [
     selectedInviteScope.organizationId,
     selectedInviteScope.teamId,
     selectedInviteScope.pilotId || 'team',
     selectedInviteScope.cohortId || 'all',
   ].join(':');
+  const normalizedTeamActivationRecipientEmail = teamActivationRecipientEmail.trim().toLowerCase();
+  const activeTeamActivationLink = useMemo(() => {
+    if (!detail || !normalizedTeamActivationRecipientEmail) return null;
+    return inviteLinks.find(
+      (invite) =>
+        invite.inviteType === 'admin-activation' &&
+        invite.status === 'active' &&
+        invite.teamId === detail.team.id &&
+        (invite.targetEmail || '').trim().toLowerCase() === normalizedTeamActivationRecipientEmail
+    ) || null;
+  }, [detail, inviteLinks, normalizedTeamActivationRecipientEmail]);
 
   useEffect(() => {
     setHypothesisAssistSuggestions([]);
     setHypothesisAssistMeta(null);
   }, [pilotId, cohortFilter]);
+
+  useEffect(() => {
+    if (!detail) return;
+    setTeamActivationRecipientName(detail.team.defaultAdminName || '');
+    setTeamActivationRecipientEmail(detail.team.defaultAdminEmail || detail.pilot.ownerInternalEmail || '');
+    setTeamActivationMessage(null);
+  }, [detail?.team.id, detail?.team.defaultAdminName, detail?.team.defaultAdminEmail, detail?.pilot.ownerInternalEmail]);
 
   useEffect(() => {
     const tabUsesCohortScope = activeTab === 'activity-outcomes' || activeTab === 'insights-research';
@@ -2076,15 +2472,21 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     () => selectActiveReusableAthleteInvite(inviteLinks, selectedInviteScope),
     [inviteLinks, selectedInviteScope]
   );
+  const canonicalInviteNeedsProductionRepair = Boolean(
+    canonicalInvite &&
+    !demoModeEnabled &&
+    !isUsingDevFirebase() &&
+    hasPulseCheckInviteDevFirebaseMarker(canonicalInvite.activationUrl)
+  );
   const wholePilotQrInvite = useMemo(() => {
-    if (!detail || !selectedPilotEnrollmentAcceptance?.acceptsEnrollment) return null;
+    if (!detail || !inviteParentScopesAreActive || !selectedPilotEnrollmentAcceptance?.acceptsEnrollment) return null;
     return selectActiveReusableAthleteInvite(inviteLinks, {
       organizationId: detail.organization.id,
       teamId: detail.team.id,
       pilotId: detail.pilot.id,
       cohortId: '',
     });
-  }, [detail, inviteLinks, selectedPilotEnrollmentAcceptance?.acceptsEnrollment]);
+  }, [detail, inviteLinks, inviteParentScopesAreActive, selectedPilotEnrollmentAcceptance?.acceptsEnrollment]);
   const scopedInviteDiagnostic = useMemo(
     () => analyzeInviteShareTarget(canonicalInvite),
     [canonicalInvite]
@@ -2573,6 +2975,127 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const resolveTeamActivationLink = async (): Promise<PulseCheckInviteLink | null> => {
+    if (!detail) return null;
+    const targetEmail = teamActivationRecipientEmail.trim();
+    if (!targetEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(targetEmail)) {
+      setTeamActivationMessage({ type: 'error', text: 'Enter the team owner email before sending or copying the activation link.' });
+      return null;
+    }
+    if (demoModeEnabled) {
+      setTeamActivationMessage({ type: 'error', text: 'Demo mode cannot create or send activation links. Open provisioning in live mode.' });
+      return null;
+    }
+
+    if (activeTeamActivationLink?.activationUrl) return activeTeamActivationLink;
+
+    const inviteId = await pulseCheckProvisioningService.createAdminActivationLink({
+      organizationId: detail.organization.id,
+      teamId: detail.team.id,
+      targetEmail,
+      recipientName: teamActivationRecipientName.trim(),
+      createdByUserId: currentUser?.id || '',
+      createdByEmail: currentUser?.email || '',
+    });
+
+    const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail.team.id);
+    setInviteLinks(refreshedInviteLinks);
+    return refreshedInviteLinks.find((invite) => invite.id === inviteId)
+      || refreshedInviteLinks.find(
+        (invite) =>
+          invite.inviteType === 'admin-activation' &&
+          invite.status === 'active' &&
+          invite.teamId === detail.team.id &&
+          (invite.targetEmail || '').trim().toLowerCase() === targetEmail.toLowerCase()
+      )
+      || null;
+  };
+
+  const handleCopyTeamActivationLink = async () => {
+    setTeamActivationAction('copy');
+    setTeamActivationMessage(null);
+    try {
+      const link = await resolveTeamActivationLink();
+      if (!link?.activationUrl) {
+        setTeamActivationMessage({ type: 'error', text: 'PulseCheck could not prepare an activation link for that email.' });
+        return;
+      }
+      await navigator.clipboard.writeText(link.activationUrl);
+      const successText = `Activation link copied for ${teamActivationRecipientEmail.trim()}.`;
+      setTeamActivationMessage({ type: 'success', text: successText });
+      setPageMessage({ type: 'success', text: successText });
+      dispatch(showToast({ message: successText, type: 'success', duration: 2500 }));
+    } catch (copyError) {
+      console.error('[PulseCheckPilotDashboard] Failed to copy team activation link:', copyError);
+      const errorText = 'Failed to copy the activation link. Open provisioning to manage activation.';
+      setTeamActivationMessage({ type: 'error', text: errorText });
+      dispatch(showToast({ message: errorText, type: 'error', duration: 3500 }));
+    } finally {
+      setTeamActivationAction(null);
+    }
+  };
+
+  const handleSendTeamActivationEmail = async () => {
+    if (!detail) return;
+    setTeamActivationAction('send');
+    setTeamActivationMessage(null);
+    try {
+      const link = await resolveTeamActivationLink();
+      const targetEmail = teamActivationRecipientEmail.trim();
+      if (!link?.activationUrl) {
+        setTeamActivationMessage({ type: 'error', text: 'PulseCheck could not prepare an activation link for that email.' });
+        return;
+      }
+
+      const response = await fetch('/.netlify/functions/send-pulsecheck-admin-activation-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail: targetEmail,
+          activationUrl: link.activationUrl,
+          recipientName: teamActivationRecipientName.trim(),
+          organizationName: detail.organization.displayName,
+          teamName: detail.team.displayName,
+          senderName: currentUser?.displayName || currentUser?.email || 'the PulseCheck team',
+        }),
+      });
+
+      const result = await response.json().catch(() => ({ success: false, error: 'Bad response' }));
+      const success = response.ok && result?.success === true;
+      await pulseCheckProvisioningService.recordAdminActivationEmailResult({
+        token: link.token,
+        success,
+        messageId: result?.messageId,
+        sentByUserId: currentUser?.id || '',
+        sentByEmail: currentUser?.email || '',
+        targetEmail,
+        organizationId: detail.organization.id,
+        teamId: detail.team.id,
+        errorMessage: success ? '' : String(result?.error || 'Send failed'),
+      });
+      const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail.team.id);
+      setInviteLinks(refreshedInviteLinks);
+
+      if (success) {
+        const successText = `Activation email sent to ${targetEmail}.`;
+        setTeamActivationMessage({ type: 'success', text: successText });
+        setPageMessage({ type: 'success', text: successText });
+        dispatch(showToast({ message: successText, type: 'success', duration: 3000 }));
+      } else {
+        const errorText = `Activation email could not be sent: ${result?.error || 'unknown error'}.`;
+        setTeamActivationMessage({ type: 'error', text: errorText });
+        dispatch(showToast({ message: errorText, type: 'error', duration: 4000 }));
+      }
+    } catch (sendError) {
+      console.error('[PulseCheckPilotDashboard] Failed to send team activation email:', sendError);
+      const errorText = 'Failed to send the activation email. Try copying the activation link or open provisioning.';
+      setTeamActivationMessage({ type: 'error', text: errorText });
+      dispatch(showToast({ message: errorText, type: 'error', duration: 4000 }));
+    } finally {
+      setTeamActivationAction(null);
+    }
+  };
+
   const ensureCanonicalInviteLink = useCallback(async (): Promise<PulseCheckInviteLink | null> => {
     if (!detail || !selectedInviteScopeCanAcceptJoins) return null;
 
@@ -2637,7 +3160,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     if (
       !detail ||
       !selectedInviteScopeCanAcceptJoins ||
-      canonicalInvite ||
+      (canonicalInvite && !canonicalInviteNeedsProductionRepair) ||
       inviteEnsureAttemptedScopeKeysRef.current.has(selectedInviteScopeKey)
     ) {
       return;
@@ -2647,6 +3170,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     void ensureCanonicalInviteLink();
   }, [
     canonicalInvite,
+    canonicalInviteNeedsProductionRepair,
     detail,
     ensureCanonicalInviteLink,
     selectedInviteScopeCanAcceptJoins,
@@ -3076,32 +3600,73 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const handlePilotStartDateDraftChange = (value: string) => {
-    setPilotStartDateDraft(value);
-    setPilotStartDateError(
-      validatePulseCheckPilotStartDate(
-        parsePulseCheckPilotDateKey(value),
-        toDateValue(detail?.pilot.endAt)
-      )
-    );
+  const validatePilotScheduleDraft = (startDateKey: string, endDateKey: string) => {
+    const nextStartAt = parsePulseCheckPilotDateKey(startDateKey);
+    const nextEndAt = parsePulseCheckPilotDateKey(endDateKey);
+    if (startDateKey && !nextStartAt) return 'Choose a valid pilot start date.';
+    if (endDateKey && !nextEndAt) return 'Choose a valid pilot end date.';
+    return validatePulseCheckPilotSchedule(nextStartAt, nextEndAt);
   };
 
-  const savePilotStartDate = async () => {
+  const handlePilotStartDateDraftChange = (value: string) => {
+    const nextEndDateDraft = presetPilotScheduleLengths.has(pilotScheduleLengthDraft)
+      ? resolvePresetEndDateKey(value, pilotScheduleLengthDraft)
+      : pilotEndDateDraft;
+    setPilotStartDateDraft(value);
+    setPilotEndDateDraft(nextEndDateDraft);
+    setPilotStartDateError(validatePilotScheduleDraft(value, nextEndDateDraft));
+  };
+
+  const handlePilotEndDateDraftChange = (value: string) => {
+    setPilotEndDateDraft(value);
+    setPilotScheduleLengthDraft(resolvePilotScheduleLengthDraft(pilotStartDateDraft, value));
+    setPilotStartDateError(validatePilotScheduleDraft(pilotStartDateDraft, value));
+  };
+
+  const handlePilotScheduleLengthChange = (value: PilotScheduleLengthDraft) => {
+    const nextLength = value;
+    const nextEndDateDraft = presetPilotScheduleLengths.has(nextLength)
+      ? resolvePresetEndDateKey(pilotStartDateDraft, nextLength)
+      : pilotEndDateDraft;
+    setPilotScheduleLengthDraft(nextLength);
+    setPilotEndDateDraft(nextEndDateDraft);
+    setPilotStartDateError(validatePilotScheduleDraft(pilotStartDateDraft, nextEndDateDraft));
+  };
+
+  const clearPilotScheduleDraft = () => {
+    setPilotStartDateDraft('');
+    setPilotEndDateDraft('');
+    setPilotScheduleLengthDraft('custom');
+    setPilotStartDateError(null);
+  };
+
+  const savePilotSchedule = async () => {
     if (!detail) return;
 
     const nextStartAt = parsePulseCheckPilotDateKey(pilotStartDateDraft);
-    const validationError = validatePulseCheckPilotStartDate(nextStartAt, toDateValue(detail.pilot.endAt));
-    if (validationError || !nextStartAt) {
-      setPilotStartDateError(validationError || 'Choose a valid pilot start date.');
+    const nextEndAt = resolvePulseCheckPilotDateKeyEndOfDay(pilotEndDateDraft);
+    const validationError = validatePilotScheduleDraft(pilotStartDateDraft, pilotEndDateDraft);
+    if (validationError) {
+      setPilotStartDateError(validationError);
       return;
     }
 
     const currentStartDateKey = toInputDateValue(toDateValue(detail.pilot.startAt));
-    if (pilotStartDateDraft === currentStartDateKey) return;
+    const currentEndDateKey = toInputDateValue(toDateValue(detail.pilot.endAt));
+    const reopensCompletedPilot =
+      detail.pilot.status === 'completed' &&
+      (!nextEndAt || nextEndAt.getTime() >= Date.now());
+    const scheduleChanged =
+      pilotStartDateDraft !== currentStartDateKey ||
+      pilotEndDateDraft !== currentEndDateKey;
+    if (!scheduleChanged && !reopensCompletedPilot) return;
 
     const confirmationDetails = [
-      `Change the pilot start date to ${formatPilotDate(nextStartAt)}?`,
-      'This can change which athlete activity qualifies for pilot reporting after study metrics refresh. The pilot end date will not change.',
+      `Change the pilot schedule to ${nextStartAt ? formatPilotDate(nextStartAt) : 'no start date'} through ${nextEndAt ? formatPilotDate(nextEndAt) : 'no end date'}?`,
+      reopensCompletedPilot
+        ? 'This schedule reopens the pilot. Athlete enrollment will follow the new date window.'
+        : '',
+      'This can change which athlete activity qualifies for pilot reporting after study metrics refresh.',
       demoModeEnabled ? 'In demo mode, this change is saved only in this browser.' : '',
     ].filter(Boolean);
     if (!window.confirm(confirmationDetails.join('\n\n'))) return;
@@ -3110,17 +3675,21 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     setPilotStartDateError(null);
     setPageMessage(null);
     try {
-      await pulseCheckPilotDashboardService.updatePilotStartDate({
+      await pulseCheckPilotDashboardService.updatePilotSchedule({
         pilotId: detail.pilot.id,
         startAt: nextStartAt,
+        endAt: nextEndAt,
+        reopenCompletedPilot: reopensCompletedPilot,
       });
       await load('refresh');
-      const successText = 'Pilot start date updated. The pilot end date was not changed.';
+      const successText = reopensCompletedPilot
+        ? 'Pilot schedule updated and enrollment reopened.'
+        : 'Pilot schedule updated.';
       setPageMessage({ type: 'success', text: successText });
       dispatch(showToast({ message: successText, type: 'success' }));
     } catch (saveError: any) {
-      const message = saveError?.message || 'Failed to update the pilot start date.';
-      console.error('[PulseCheckPilotDashboard] Failed to update pilot start date:', saveError);
+      const message = saveError?.message || 'Failed to update the pilot schedule.';
+      console.error('[PulseCheckPilotDashboard] Failed to update pilot schedule:', saveError);
       setPilotStartDateError(message);
       setPageMessage({ type: 'error', text: message });
       dispatch(showToast({ message, type: 'error' }));
@@ -3130,13 +3699,22 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   };
 
   const currentPilotStartDateKey = toInputDateValue(toDateValue(detail?.pilot.startAt));
-  const pilotEndDateKey = toInputDateValue(toDateValue(detail?.pilot.endAt));
-  const pilotStartDateDraftValidationError = validatePulseCheckPilotStartDate(
-    parsePulseCheckPilotDateKey(pilotStartDateDraft),
-    toDateValue(detail?.pilot.endAt)
+  const currentPilotEndDateKey = toInputDateValue(toDateValue(detail?.pilot.endAt));
+  const pilotStartDateDraftValidationError = validatePilotScheduleDraft(pilotStartDateDraft, pilotEndDateDraft);
+  const pilotStartDateDirty =
+    Boolean(detail) && (pilotStartDateDraft !== currentPilotStartDateKey || pilotEndDateDraft !== currentPilotEndDateKey);
+  const pilotScheduleReopenAvailable = Boolean(
+    detail?.pilot.status === 'completed' &&
+    !pilotStartDateDraftValidationError &&
+    (
+      !pilotEndDateDraft ||
+      (resolvePulseCheckPilotDateKeyEndOfDay(pilotEndDateDraft)?.getTime() || 0) >= Date.now()
+    )
   );
-  const pilotStartDateDirty = Boolean(detail) && pilotStartDateDraft !== currentPilotStartDateKey;
-  const canSavePilotStartDate = pilotStartDateDirty && !pilotStartDateDraftValidationError && !savingPilotStartDate;
+  const canSavePilotStartDate =
+    (pilotStartDateDirty || pilotScheduleReopenAvailable) &&
+    !pilotStartDateDraftValidationError &&
+    !savingPilotStartDate;
 
   return (
     <AdminRouteGuard>
@@ -3175,7 +3753,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   className="inline-flex items-center gap-2 truncate text-xs text-white/40 transition hover:text-white/75"
                 >
                   <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-                  Active Pilots
+                  Pilots
                 </Link>
               </div>
 
@@ -3198,9 +3776,34 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             <div className="mx-auto max-w-[1700px] px-4 pb-5 pt-6 sm:px-8">
               <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-4xl">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#00d4aa]">
-                    {detail ? `${detail.organization.displayName} / ${detail.team.displayName}` : 'PulseCheck Admin'}
-                  </div>
+                  {detail ? (
+                    <nav
+                      aria-label="Pilot dashboard hierarchy"
+                      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#00d4aa]"
+                    >
+                      <Link
+                        href={`/admin/pulsecheckPilotDashboard/organizations/${encodeURIComponent(detail.organization.id)}`}
+                        className="rounded-sm transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00d4aa]"
+                        data-testid="pilot-detail-organization-link"
+                      >
+                        {detail.organization.displayName}
+                      </Link>
+                      <span aria-hidden="true" className="text-[#00d4aa]/55">
+                        /
+                      </span>
+                      <Link
+                        href={`/admin/pulsecheckPilotDashboard/teams/${encodeURIComponent(detail.team.id)}`}
+                        className="rounded-sm transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00d4aa]"
+                        data-testid="pilot-detail-team-link"
+                      >
+                        {detail.team.displayName}
+                      </Link>
+                    </nav>
+                  ) : (
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#00d4aa]">
+                      PulseCheck Admin
+                    </div>
+                  )}
                   <h1 className="pilot-font-display mt-2 text-3xl font-bold tracking-[-0.04em] text-white sm:text-[2.35rem]">
                     {detail?.pilot.name || 'Pilot dashboard'}
                   </h1>
@@ -3241,15 +3844,27 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
                 {detail ? (
                 <div className="flex flex-wrap gap-2.5 xl:max-w-[640px] xl:justify-end">
-                  <button
-                    type="button"
-                    onClick={handleHeaderJoinQr}
-                    data-testid="pilot-dashboard-header-join-qr"
-                    className="pilot-theme-primary-action inline-flex items-center gap-2 rounded-xl border border-sky-400/25 bg-sky-400/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
-                  >
-                    <QrCode className="h-4 w-4" />
-                    {wholePilotQrInvite ? 'Show join QR' : 'View join link'}
-                  </button>
+                  {!inviteParentScopesAreActive ? (
+                    <button
+                      type="button"
+                      onClick={() => setTeamActivationGuideOpen(true)}
+                      data-testid="pilot-dashboard-finish-team-activation"
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-400/15"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      {inviteParentActivationIncomplete ? 'Finish team activation' : 'Review team status'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleHeaderJoinQr}
+                      data-testid="pilot-dashboard-header-join-qr"
+                      className="pilot-theme-primary-action inline-flex items-center gap-2 rounded-xl border border-sky-400/25 bg-sky-400/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
+                    >
+                      <QrCode className="h-4 w-4" />
+                      {wholePilotQrInvite ? 'Show join QR' : 'View join link'}
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {
@@ -3979,7 +4594,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                       : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
                                   }`}
                                 >
-                                  {selectedInviteScopeCanAcceptJoins ? 'Ready to share' : 'Enrollment closed'}
+                                  {selectedInviteStatusLabel}
                                 </span>
                                 <span className="text-xs text-zinc-500">
                                   Created {formatTimeValue(canonicalInvite.createdAt)}
@@ -3989,12 +4604,21 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 </span>
                               </div>
 
-                              <div
-                                className="mt-4 break-all rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-cyan-100"
-                                data-testid="pilot-canonical-athlete-invite-link"
-                              >
-                                {resolveInviteShareUrl(canonicalInvite)}
-                              </div>
+                              {selectedInviteScopeCanAcceptJoins ? (
+                                <div
+                                  className="mt-4 break-all rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-cyan-100"
+                                  data-testid="pilot-canonical-athlete-invite-link"
+                                >
+                                  {resolveInviteShareUrl(canonicalInvite)}
+                                </div>
+                              ) : (
+                                <div
+                                  className="mt-4 rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-zinc-300"
+                                  data-testid="pilot-canonical-athlete-invite-link-locked"
+                                >
+                                  The join link is saved. QR, copy, open, and link details unlock when this destination can accept athletes.
+                                </div>
+                              )}
 
                               {selectedInviteScopeCanAcceptJoins ? (
                                 <>
@@ -4035,12 +4659,22 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               ) : (
                                 <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4">
                                   <div className="text-sm font-semibold text-amber-100">
-                                    {selectedInviteScopeKind === 'team' ? 'Team enrollment is closed' : 'Pilot enrollment is closed'}
+                                    {selectedInviteEnrollmentClosedTitle}
                                   </div>
                                   <p className="mt-2 text-sm leading-6 text-amber-100/90">
-                                    {selectedInviteEnrollmentClosedCopy} This join link is preserved and cannot be shared while enrollment is closed.
+                                    {selectedInviteEnrollmentClosedCopy} {selectedInvitePreservationCopy}
                                   </p>
-                                  {selectedInviteScopeKind !== 'team' ? (
+                                  {!inviteParentScopesAreActive ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setTeamActivationGuideOpen(true)}
+                                      data-testid="pilot-invite-finish-team-activation"
+                                      className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15"
+                                    >
+                                      <Settings2 className="h-4 w-4" />
+                                      {inviteParentActivationIncomplete ? 'Finish team activation' : 'Review team status'}
+                                    </button>
+                                  ) : selectedInviteScopeKind !== 'team' ? (
                                     <button
                                       type="button"
                                       onClick={() => setActiveTab('manage-pilot')}
@@ -4056,12 +4690,22 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           ) : !selectedInviteScopeCanAcceptJoins ? (
                             <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4">
                               <div className="text-sm font-semibold text-amber-100">
-                                {selectedInviteScopeKind === 'team' ? 'Team enrollment is closed' : 'Pilot enrollment is closed'}
+                                {selectedInviteEnrollmentClosedTitle}
                               </div>
                               <p className="mt-2 text-sm leading-6 text-amber-100/90">
                                 {selectedInviteEnrollmentClosedCopy} PulseCheck will prepare its one join link automatically when enrollment becomes available.
                               </p>
-                              {selectedInviteScopeKind !== 'team' ? (
+                              {!inviteParentScopesAreActive ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setTeamActivationGuideOpen(true)}
+                                  data-testid="pilot-invite-finish-team-activation"
+                                  className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15"
+                                >
+                                  <Settings2 className="h-4 w-4" />
+                                  {inviteParentActivationIncomplete ? 'Finish team activation' : 'Review team status'}
+                                </button>
+                              ) : selectedInviteScopeKind !== 'team' ? (
                                 <button
                                   type="button"
                                   onClick={() => setActiveTab('manage-pilot')}
@@ -4275,9 +4919,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot schedule</div>
-                        <h2 className="mt-2 text-lg font-semibold text-white">Start date</h2>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Schedule</h2>
                         <p id="pilot-start-date-help" className="mt-1 max-w-3xl text-sm leading-6 text-zinc-400">
-                          Change the pilot&apos;s configured start date. The end date stays unchanged. This can change which days count in reporting after study metrics refresh.
+                          Change the pilot&apos;s configured dates. Preset lengths set the end date from the start date, and blank dates leave the pilot open-ended for schedule checks.
                         </p>
                       </div>
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
@@ -4285,7 +4929,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                    <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1fr)_auto] lg:items-end">
                       <label className="space-y-2 text-sm text-zinc-300" htmlFor="pilot-start-date-input">
                         <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Start date</span>
                         <input
@@ -4293,7 +4937,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           data-testid="pilot-start-date-input"
                           type="date"
                           value={pilotStartDateDraft}
-                          max={pilotEndDateKey || undefined}
                           aria-describedby={`pilot-start-date-help${pilotStartDateError ? ' pilot-start-date-error' : ''}${demoModeEnabled ? ' pilot-start-date-demo-note' : ''}`}
                           aria-invalid={Boolean(pilotStartDateError)}
                           onChange={(event) => handlePilotStartDateDraftChange(event.target.value)}
@@ -4301,27 +4944,65 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         />
                       </label>
 
-                      <div className="space-y-2 text-sm text-zinc-300">
-                        <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">End date (unchanged)</div>
-                        <div
-                          data-testid="pilot-start-date-fixed-end"
-                          data-date-key={pilotEndDateKey}
-                          className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                      <label className="space-y-2 text-sm text-zinc-300" htmlFor="pilot-schedule-length">
+                        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Length</span>
+                        <select
+                          id="pilot-schedule-length"
+                          data-testid="pilot-schedule-length"
+                          value={pilotScheduleLengthDraft}
+                          onChange={(event) => handlePilotScheduleLengthChange(event.target.value as PilotScheduleLengthDraft)}
+                          className="pilot-detail-select w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
                         >
-                          {formatPilotDate(detail.pilot.endAt) || 'Open ended'}
-                        </div>
-                      </div>
+                          {pilotScheduleLengthOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
 
-                      <button
-                        type="button"
-                        data-testid="pilot-start-date-save"
-                        disabled={!canSavePilotStartDate}
-                        onClick={() => void savePilotStartDate()}
-                        className="pilot-theme-primary-action inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {savingPilotStartDate ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
-                        {savingPilotStartDate ? 'Saving...' : 'Save start date'}
-                      </button>
+                      <label className="space-y-2 text-sm text-zinc-300" htmlFor="pilot-end-date-input">
+                        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">End date</span>
+                        <input
+                          id="pilot-end-date-input"
+                          data-testid="pilot-end-date-input"
+                          data-date-key={pilotEndDateDraft}
+                          type="date"
+                          value={pilotEndDateDraft}
+                          min={pilotStartDateDraft || undefined}
+                          disabled={presetPilotScheduleLengths.has(pilotScheduleLengthDraft)}
+                          aria-describedby={`pilot-start-date-help${pilotStartDateError ? ' pilot-start-date-error' : ''}${demoModeEnabled ? ' pilot-start-date-demo-note' : ''}`}
+                          aria-invalid={Boolean(pilotStartDateError)}
+                          onChange={(event) => handlePilotEndDateDraftChange(event.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-70"
+                        />
+                      </label>
+
+                      <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                        <button
+                          type="button"
+                          data-testid="pilot-schedule-clear"
+                          onClick={clearPilotScheduleDraft}
+                          disabled={savingPilotStartDate || (!pilotStartDateDraft && !pilotEndDateDraft)}
+                          className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/70 transition hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          Clear dates
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="pilot-start-date-save"
+                          disabled={!canSavePilotStartDate}
+                          onClick={() => void savePilotSchedule()}
+                          className="pilot-theme-primary-action inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {savingPilotStartDate ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                          {savingPilotStartDate
+                            ? 'Saving...'
+                            : pilotScheduleReopenAvailable && !pilotStartDateDirty
+                              ? 'Reopen enrollment'
+                              : 'Save schedule'}
+                        </button>
+                      </div>
                     </div>
 
                     {pilotStartDateError ? (
@@ -4335,13 +5016,22 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </p>
                     ) : null}
 
+                    {pilotScheduleReopenAvailable ? (
+                      <p
+                        data-testid="pilot-schedule-reopen-note"
+                        className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm leading-6 text-cyan-100"
+                      >
+                        The pilot is still marked completed. Reopen it so athlete enrollment can follow this date window and the existing join link can become usable again.
+                      </p>
+                    ) : null}
+
                     {demoModeEnabled ? (
                       <p
                         id="pilot-start-date-demo-note"
                         data-testid="pilot-start-date-demo-note"
                         className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
                       >
-                        Demo mode: this start date is saved only in this browser and resets with the demo data.
+                        Demo mode: this schedule is saved only in this browser and resets with the demo data.
                       </p>
                     ) : null}
                   </div>
@@ -4985,6 +5675,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                         >
                                           Transfer team
                                         </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openAthleteRemovalModal(athlete)}
+                                          disabled={athleteRemovalModal?.saving || !athlete.teamMembership}
+                                          className="text-rose-200 transition hover:text-rose-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                          data-testid={`pilot-detail-remove-team-${athlete.athleteId}`}
+                                        >
+                                          Remove from team
+                                        </button>
                                       </>
                                     ) : (
                                       <>
@@ -4996,6 +5695,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                           className="text-cyan-200 transition hover:text-cyan-100 disabled:cursor-not-allowed disabled:text-zinc-500"
                                         >
                                           Transfer team
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openAthleteRemovalModal(athlete)}
+                                          disabled={athleteRemovalModal?.saving || !athlete.teamMembership}
+                                          className="text-rose-200 transition hover:text-rose-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                          data-testid={`pilot-detail-remove-team-${athlete.athleteId}`}
+                                        >
+                                          Remove from team
                                         </button>
                                       </>
                                     )}
@@ -6457,11 +7165,32 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         ) : null}
         {detail ? (
           <PilotInviteQrModal
-            invite={qrInvite}
+            invite={inviteParentScopesAreActive ? qrInvite : null}
             pilotName={qrInvite?.pilotId ? detail.pilot.name : undefined}
             teamName={detail.team.displayName}
             organizationName={detail.organization.displayName}
             onClose={closeQrInvite}
+          />
+        ) : null}
+        {detail ? (
+          <TeamActivationGuideModal
+            isOpen={teamActivationGuideOpen}
+            organizationName={detail.organization.displayName}
+            organizationStatus={detail.organization.status}
+            teamName={detail.team.displayName}
+            teamStatus={detail.team.status}
+            activationHref={inviteTeamActivationHref}
+            activationIncomplete={inviteParentActivationIncomplete}
+            recipientName={teamActivationRecipientName}
+            recipientEmail={teamActivationRecipientEmail}
+            activeActivationUrl={activeTeamActivationLink?.activationUrl}
+            action={teamActivationAction}
+            message={teamActivationMessage}
+            onRecipientNameChange={setTeamActivationRecipientName}
+            onRecipientEmailChange={setTeamActivationRecipientEmail}
+            onSendActivationEmail={() => void handleSendTeamActivationEmail()}
+            onCopyActivationLink={() => void handleCopyTeamActivationLink()}
+            onClose={() => setTeamActivationGuideOpen(false)}
           />
         ) : null}
         {detail && athleteTransferModal ? (
@@ -6504,6 +7233,19 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
             onPilotChange={handleTransferPilotChange}
             onCohortChange={handleTransferCohortChange}
             onConfirm={() => void confirmAthleteTransfer()}
+          />
+        ) : null}
+        {detail && athleteRemovalModal ? (
+          <PilotAthleteRemovalModal
+            open={Boolean(athleteRemovalModal)}
+            athleteName={athleteRemovalModal.athlete.displayName}
+            teamName={detail.team.displayName}
+            pilotName={athleteRemovalModal.athlete.pilotEnrollment ? detail.pilot.name : undefined}
+            isOnlyTeamContext={false}
+            saving={athleteRemovalModal.saving}
+            error={athleteRemovalModal.error}
+            onClose={closeAthleteRemovalModal}
+            onConfirm={() => void confirmAthleteRemoval()}
           />
         ) : null}
         {communicationPreviewModal ? (

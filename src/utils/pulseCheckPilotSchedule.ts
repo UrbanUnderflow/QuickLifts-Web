@@ -74,6 +74,29 @@ const hasScheduleValue = (value: unknown) =>
   value !== undefined && value !== null && value !== '';
 
 /**
+ * A schedule edit can explicitly reopen a completed pilot, but only when the
+ * new window has not already ended. Paused, archived, draft, and active pilots
+ * keep their current lifecycle state.
+ */
+export const shouldReopenPulseCheckPilotAfterScheduleUpdate = (
+  currentStatus: unknown,
+  nextEndAt: unknown,
+  reopenCompletedPilot: boolean,
+  nowValue: unknown = new Date()
+) => {
+  if (!reopenCompletedPilot || String(currentStatus || '').trim().toLowerCase() !== 'completed') {
+    return false;
+  }
+
+  const now = toPulseCheckPilotScheduleDate(nowValue);
+  if (!now) return false;
+  if (!hasScheduleValue(nextEndAt)) return true;
+
+  const endAt = toPulseCheckPilotScheduleDate(nextEndAt);
+  return Boolean(endAt && endAt.getTime() >= now.getTime());
+};
+
+/**
  * One enrollment gate shared by invite issuance and redemption. Active legacy
  * pilots without dates remain open, while an explicitly scheduled pilot only
  * accepts enrollment from its start instant through its end instant.
@@ -129,6 +152,28 @@ export const parsePulseCheckPilotDateKey = (value: string): Date | null => {
   return date;
 };
 
+export const formatPulseCheckPilotDateKey = (date: Date | null): string => {
+  if (!date || !Number.isFinite(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const shiftPulseCheckPilotDateKey = (dateKey: string, dayOffset: number): string => {
+  const date = parsePulseCheckPilotDateKey(dateKey);
+  if (!date) return '';
+  date.setDate(date.getDate() + dayOffset);
+  return formatPulseCheckPilotDateKey(date);
+};
+
+export const resolvePulseCheckPilotDateKeyEndOfDay = (dateKey: string): Date | null => {
+  const date = parsePulseCheckPilotDateKey(dateKey);
+  if (!date) return null;
+  date.setHours(23, 59, 59, 999);
+  return date;
+};
+
 export const validatePulseCheckPilotStartDate = (
   startAt: Date | null,
   endAt: Date | null
@@ -138,6 +183,25 @@ export const validatePulseCheckPilotStartDate = (
   }
 
   if (endAt && Number.isFinite(endAt.getTime()) && startAt.getTime() > endAt.getTime()) {
+    return 'Start date must be on or before the pilot end date.';
+  }
+
+  return null;
+};
+
+export const validatePulseCheckPilotSchedule = (
+  startAt: Date | null,
+  endAt: Date | null
+): string | null => {
+  if (startAt && !Number.isFinite(startAt.getTime())) {
+    return 'Choose a valid pilot start date.';
+  }
+
+  if (endAt && !Number.isFinite(endAt.getTime())) {
+    return 'Choose a valid pilot end date.';
+  }
+
+  if (startAt && endAt && startAt.getTime() > endAt.getTime()) {
     return 'Start date must be on or before the pilot end date.';
   }
 

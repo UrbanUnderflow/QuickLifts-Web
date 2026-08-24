@@ -497,6 +497,10 @@ export interface PilotDashboardAthleteRosterFilter {
   organizationId?: string;
   teamId?: string;
   studyMode?: PulseCheckPilot['studyMode'] | '';
+  /** Include draft, paused, completed, and archived pilot contexts. Defaults to false. */
+  includeHistoricalPilots?: boolean;
+  /** Include matching active team rosters even when a team has no in-scope pilot. Defaults to false. */
+  includeTeamsWithoutPilots?: boolean;
 }
 
 export interface PilotDashboardAthleteProfileSummary {
@@ -531,6 +535,51 @@ export interface PilotDashboardDirectoryEntry {
   outcomeDiagnostics?: PilotDashboardOutcomeSurveyDiagnostics;
   hypothesisEvaluation?: PilotDashboardHypothesisEvaluation;
   operationalWatchListSummary?: PilotDashboardOperationalWatchListSummary | null;
+}
+
+export interface PilotDashboardHierarchyEnrollmentCounts {
+  totalEnrollmentCount: number;
+  activeEnrollmentCount: number;
+  pendingConsentEnrollmentCount: number;
+  withdrawnEnrollmentCount: number;
+}
+
+export interface PilotDashboardHierarchyPilotSummary extends PilotDashboardHierarchyEnrollmentCounts {
+  pilot: PulseCheckPilot;
+  cohorts: PulseCheckPilotCohort[];
+}
+
+export interface PilotDashboardHierarchyTeamSummary extends PilotDashboardHierarchyEnrollmentCounts {
+  team: PulseCheckTeam;
+  pilotIds: string[];
+  pilotCount: number;
+  cohortCount: number;
+  activeRosterAthleteCount: number;
+}
+
+export interface PilotDashboardHierarchyScopeSummary extends PilotDashboardHierarchyEnrollmentCounts {
+  teamCount: number;
+  pilotCount: number;
+  cohortCount: number;
+  activeRosterAthleteCount: number;
+}
+
+export interface PilotDashboardOrganizationDetail {
+  organization: PulseCheckOrganization;
+  summary: PilotDashboardHierarchyScopeSummary;
+  teams: PilotDashboardHierarchyTeamSummary[];
+  pilots: PilotDashboardHierarchyPilotSummary[];
+  cohorts: PulseCheckPilotCohort[];
+  athletes: PilotDashboardAthleteRosterEntry[];
+}
+
+export interface PilotDashboardTeamDetail {
+  organization: PulseCheckOrganization;
+  team: PulseCheckTeam;
+  summary: PilotDashboardHierarchyTeamSummary;
+  pilots: PilotDashboardHierarchyPilotSummary[];
+  cohorts: PulseCheckPilotCohort[];
+  athletes: PilotDashboardAthleteRosterEntry[];
 }
 
 export interface PilotDashboardMetrics {

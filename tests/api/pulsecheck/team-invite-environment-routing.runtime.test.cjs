@@ -17,6 +17,14 @@ const redeemHandlerSource = fs.readFileSync(
   path.resolve(__dirname, '../../../src/pages/api/pulsecheck/team-invite/redeem.ts'),
   'utf8'
 );
+const pilotDashboardPageSource = fs.readFileSync(
+  path.resolve(__dirname, '../../../src/pages/admin/pulsecheckPilotDashboard/[pilotId].tsx'),
+  'utf8'
+);
+const pilotDashboardDemoSource = fs.readFileSync(
+  path.resolve(__dirname, '../../../src/api/firebase/pulsecheckPilotDashboard/demoMode.ts'),
+  'utf8'
+);
 
 test('team invite SSR keeps invite, team, and organization reads in one Firebase environment', () => {
   assert.match(
@@ -100,6 +108,24 @@ test('pilot invite creation and redemption share the schedule-aware enrollment g
   );
 });
 
+test('a completed pilot reopens only through the explicit schedule-edit intent', () => {
+  assert.match(
+    pilotDashboardPageSource,
+    /reopenCompletedPilot:\s*reopensCompletedPilot/,
+    'the admin schedule editor must explicitly request a completed-pilot reopen'
+  );
+  assert.match(
+    provisioningServiceSource,
+    /shouldReopenPulseCheckPilotAfterScheduleUpdate\([\s\S]*?input\.reopenCompletedPilot === true[\s\S]*?status: 'active'/,
+    'the Firestore schedule transaction must reactivate only an eligible completed pilot'
+  );
+  assert.match(
+    pilotDashboardDemoSource,
+    /shouldReopenPulseCheckPilotAfterScheduleUpdate\([\s\S]*?input\.reopenCompletedPilot === true[\s\S]*?store\.pilot\.status = 'active'/,
+    'demo schedule behavior must match the live completed-pilot reopen policy'
+  );
+});
+
 test('pilot and cohort invite redemption validates ownership and existing enrollment scope', () => {
   assert.match(redeemHandlerSource, /const PILOT_COHORTS_COLLECTION = 'pulsecheck-pilot-cohorts';/);
   assert.match(
@@ -109,12 +135,12 @@ test('pilot and cohort invite redemption validates ownership and existing enroll
   );
   assert.match(
     redeemHandlerSource,
-    /normalizeString\(cohortData\.status\) !== 'active'[\s\S]*?normalizeString\(cohortData\.pilotId\) !== pilotId/,
+    /normalizeString\(cohortData\.pilotId\) !== pilotId[\s\S]*?COHORT_SCOPE_MISMATCH[\s\S]*?normalizeString\(cohortData\.status\) !== 'active'[\s\S]*?COHORT_INACTIVE/,
     'cohort redemption must require an active cohort owned by the selected pilot'
   );
   assert.match(
     redeemHandlerSource,
-    /hasCurrentPilotEnrollment[\s\S]*?normalizeString\(existingPilotEnrollment\.cohortId\) !== cohortId[\s\S]*?already enrolled in a different pilot cohort/,
+    /hasCurrentPilotEnrollment[\s\S]*?normalizeString\(existingPilotEnrollment\.cohortId\) !== cohortId[\s\S]*?ENROLLMENT_COHORT_CONFLICT/,
     'scanning a different QR must not move or clear an existing athlete cohort'
   );
 });

@@ -1,19 +1,27 @@
 import type {
   PilotDashboardAthleteDetail,
+  PilotDashboardAthleteRosterEntry,
+  PilotDashboardAthleteRosterFilter,
   PilotDashboardAthleteSummary,
+  PilotDashboardAthleteTeamContext,
   PilotDashboardCohortSummary,
   PilotDashboardCoverageMetrics,
   PilotDashboardDetail,
   PilotDashboardDirectoryEntry,
   PilotDashboardEngineSummary,
+  PilotDashboardHierarchyEnrollmentCounts,
+  PilotDashboardHierarchyPilotSummary,
+  PilotDashboardHierarchyTeamSummary,
   PilotDashboardHypothesisSummary,
   PilotDashboardMetrics,
   PilotDashboardOperationalWatchListState,
   PilotDashboardOperationalWatchListSummary,
+  PilotDashboardOrganizationDetail,
   PilotDashboardRecentEvidence,
   PilotDashboardRecentPattern,
   PilotDashboardRecentProjection,
   PilotDashboardSnapshotHistoryItem,
+  PilotDashboardTeamDetail,
   PilotResearchReadout,
   PilotResearchReadoutGenerationInput,
   PilotResearchReadoutReviewInput,
@@ -33,10 +41,13 @@ import type {
   PulseCheckPilotEnrollment,
   PulseCheckTeam,
   PulseCheckTeamMembership,
+  UpdatePulseCheckPilotScheduleInput,
   UpdatePulseCheckPilotStartDateInput,
 } from '../pulsecheckProvisioning/types';
 import {
+  shouldReopenPulseCheckPilotAfterScheduleUpdate,
   toPulseCheckPilotScheduleDate,
+  validatePulseCheckPilotSchedule,
   validatePulseCheckPilotStartDate,
 } from '../../../utils/pulseCheckPilotSchedule';
 
@@ -165,6 +176,24 @@ function buildOperationalWatchListSummary(
 
 const resolveCohortEffectiveStatus = (cohort: PulseCheckPilotCohort): PulseCheckPilotCohort['status'] =>
   cohort.status === 'paused' || cohort.status === 'archived' ? cohort.status : 'active';
+
+const toDemoTimestampMs = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (value && typeof value === 'object') {
+    const candidate = value as { toMillis?: () => number; toDate?: () => Date; seconds?: number };
+    if (typeof candidate.toMillis === 'function') return candidate.toMillis();
+    if (typeof candidate.toDate === 'function') return candidate.toDate().getTime();
+    if (typeof candidate.seconds === 'number') return candidate.seconds * 1000;
+  }
+  return 0;
+};
+
+const resolveDemoPilotEffectiveStatus = (pilot: PulseCheckPilot): PulseCheckPilot['status'] => {
+  if (pilot.status === 'archived' || pilot.status === 'completed' || pilot.status === 'paused') return pilot.status;
+  const endAtMs = toDemoTimestampMs(pilot.endAt);
+  return endAtMs > 0 && endAtMs < Date.now() ? 'completed' : 'active';
+};
 
 function buildCohortSummaries(cohorts: PulseCheckPilotCohort[], athletes: PilotDashboardAthleteSummary[]): PilotDashboardCohortSummary[] {
   return cohorts.map((cohort) => {
@@ -1084,6 +1113,161 @@ function buildDirectoryEntryFromStore(store: PilotDashboardDemoStore): PilotDash
   };
 }
 
+function buildDemoHierarchyEnrollmentCounts(
+  enrollments: PulseCheckPilotEnrollment[]
+): PilotDashboardHierarchyEnrollmentCounts {
+  return {
+    totalEnrollmentCount: enrollments.length,
+    activeEnrollmentCount: enrollments.filter((enrollment) => enrollment.status === 'active').length,
+    pendingConsentEnrollmentCount: enrollments.filter((enrollment) => enrollment.status === 'pending-consent').length,
+    withdrawnEnrollmentCount: enrollments.filter((enrollment) => enrollment.status === 'withdrawn').length,
+  };
+}
+
+function buildDemoAthleteRosterEntries(
+  store: PilotDashboardDemoStore,
+  filter: PilotDashboardAthleteRosterFilter = {}
+): PilotDashboardAthleteRosterEntry[] {
+  if (normalizeString(filter.organizationId) && normalizeString(filter.organizationId) !== store.organization.id) return [];
+  if (normalizeString(filter.teamId) && normalizeString(filter.teamId) !== store.team.id) return [];
+  if (normalizeString(filter.studyMode) && normalizeString(filter.studyMode) !== store.pilot.studyMode) return [];
+
+  const teamIntakeQuestions = Array.isArray(store.team.intake?.athlete?.questions)
+    ? store.team.intake?.athlete?.questions || []
+    : [];
+
+  return store.athletes
+    .filter((entry) => {
+      const membership = entry.summary.teamMembership;
+      if (!membership) return false;
+      const status = normalizeString(membership.status);
+      return (!status || status === 'active') && membership.revokedAt == null && membership.role === 'athlete';
+    })
+    .map((entry) => {
+      const { summary, athleteDetail } = entry;
+      const enrollment = summary.pilotEnrollment;
+      const membership = summary.teamMembership!;
+      const onboarding = membership.athleteOnboarding;
+      const enrollmentStatus = enrollment.status === 'active'
+        ? 'active'
+        : enrollment.status === 'pending-consent' ? 'pending' : 'none';
+      const intakeCompleted = Boolean(onboarding?.intakeCompletedAt);
+      const teamContext: PilotDashboardAthleteTeamContext = {
+        key: `${store.team.id}:${store.pilot.id}:${membership.id}`,
+        teamId: store.team.id,
+        teamName: store.team.displayName,
+        organizationId: store.organization.id,
+        organizationName: store.organization.displayName,
+        pilotId: store.pilot.id,
+        pilotName: store.pilot.name,
+        cohortId: summary.cohort?.id,
+        cohortName: summary.cohort?.name,
+        enrollmentStatus,
+        consentStatus:
+          enrollment.status === 'active' || Boolean(onboarding?.productConsentAccepted)
+            ? 'complete'
+            : 'pending',
+        intakeCompleted,
+        intakeQuestionCount: teamIntakeQuestions.length,
+        intakeRequiredQuestionCount: teamIntakeQuestions.filter((question) => question.required).length,
+        onboardingStatus: membership.onboardingStatus,
+        phone: normalizeString(membership.phone),
+        role: membership.role,
+        intake: [],
+      };
+
+      return {
+        athleteUserId: summary.athleteId,
+        displayName: summary.displayName,
+        email: summary.email,
+        profileImageUrl: normalizeString(athleteDetail.profile.profileImageUrl) || undefined,
+        teamId: teamContext.teamId,
+        teamName: teamContext.teamName,
+        organizationId: teamContext.organizationId,
+        organizationName: teamContext.organizationName,
+        pilotId: teamContext.pilotId,
+        pilotName: teamContext.pilotName,
+        cohortName: teamContext.cohortName,
+        enrollmentStatus: teamContext.enrollmentStatus,
+        onboardingStatus: teamContext.onboardingStatus,
+        intakeCompleted: teamContext.intakeCompleted,
+        intakeQuestionCount: teamContext.intakeQuestionCount,
+        intakeRequiredQuestionCount: teamContext.intakeRequiredQuestionCount,
+        phone: teamContext.phone,
+        role: teamContext.role,
+        intake: [],
+        teamContexts: [teamContext],
+      };
+    })
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+function buildDemoHierarchyPilotSummary(store: PilotDashboardDemoStore): PilotDashboardHierarchyPilotSummary {
+  const enrollments = store.athletes.map((entry) => entry.summary.pilotEnrollment);
+  return {
+    pilot: {
+      ...store.pilot,
+      status: resolveDemoPilotEffectiveStatus(store.pilot),
+    },
+    cohorts: [...store.cohorts].sort((left, right) => left.name.localeCompare(right.name)),
+    ...buildDemoHierarchyEnrollmentCounts(enrollments),
+  };
+}
+
+function buildDemoHierarchyTeamSummary(
+  store: PilotDashboardDemoStore,
+  athletes: PilotDashboardAthleteRosterEntry[]
+): PilotDashboardHierarchyTeamSummary {
+  const enrollments = store.athletes.map((entry) => entry.summary.pilotEnrollment);
+  return {
+    team: store.team,
+    pilotIds: [store.pilot.id],
+    pilotCount: 1,
+    cohortCount: store.cohorts.length,
+    activeRosterAthleteCount: athletes.length,
+    ...buildDemoHierarchyEnrollmentCounts(enrollments),
+  };
+}
+
+function buildDemoOrganizationDashboardDetail(store: PilotDashboardDemoStore): PilotDashboardOrganizationDetail {
+  const athletes = buildDemoAthleteRosterEntries(store, {
+    organizationId: store.organization.id,
+    includeHistoricalPilots: true,
+    includeTeamsWithoutPilots: true,
+  });
+  const pilot = buildDemoHierarchyPilotSummary(store);
+  const team = buildDemoHierarchyTeamSummary(store, athletes);
+  return {
+    organization: store.organization,
+    summary: {
+      teamCount: 1,
+      pilotCount: 1,
+      cohortCount: store.cohorts.length,
+      activeRosterAthleteCount: athletes.length,
+      totalEnrollmentCount: pilot.totalEnrollmentCount,
+      activeEnrollmentCount: pilot.activeEnrollmentCount,
+      pendingConsentEnrollmentCount: pilot.pendingConsentEnrollmentCount,
+      withdrawnEnrollmentCount: pilot.withdrawnEnrollmentCount,
+    },
+    teams: [team],
+    pilots: [pilot],
+    cohorts: [...store.cohorts],
+    athletes,
+  };
+}
+
+function buildDemoTeamDashboardDetail(store: PilotDashboardDemoStore): PilotDashboardTeamDetail {
+  const organizationDetail = buildDemoOrganizationDashboardDetail(store);
+  return {
+    organization: store.organization,
+    team: store.team,
+    summary: organizationDetail.teams[0],
+    pilots: organizationDetail.pilots,
+    cohorts: organizationDetail.cohorts,
+    athletes: organizationDetail.athletes,
+  };
+}
+
 type DemoWatchListMutationAction = 'request' | 'apply' | 'clear';
 
 interface DemoWatchListMutationInput {
@@ -1277,25 +1461,66 @@ export const pilotDashboardDemoMode = {
     return [buildDirectoryEntryFromStore(readStore())];
   },
 
+  getPilotDashboardAthletes(
+    filter: PilotDashboardAthleteRosterFilter = {}
+  ): PilotDashboardAthleteRosterEntry[] {
+    return cloneStore(buildDemoAthleteRosterEntries(readStore(), filter));
+  },
+
+  getOrganizationDashboardDetail(organizationId: string): PilotDashboardOrganizationDetail | null {
+    if (normalizeString(organizationId) !== DEMO_ORGANIZATION_ID) return null;
+    return cloneStore(buildDemoOrganizationDashboardDetail(readStore()));
+  },
+
+  getTeamDashboardDetail(teamId: string): PilotDashboardTeamDetail | null {
+    if (normalizeString(teamId) !== DEMO_TEAM_ID) return null;
+    return cloneStore(buildDemoTeamDashboardDetail(readStore()));
+  },
+
   getPilotDashboardDetail(pilotId: string): PilotDashboardDetail | null {
     if (normalizeString(pilotId) !== DEMO_PILOT_ID) return null;
     return cloneStore(buildDetailFromStore(readStore()));
   },
 
-  updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput) {
+  updatePilotSchedule(input: UpdatePulseCheckPilotScheduleInput) {
     if (normalizeString(input.pilotId) !== DEMO_PILOT_ID) {
       throw new Error('Demo pilot not found.');
     }
 
     const store = readStore();
     const startAt = toPulseCheckPilotScheduleDate(input.startAt);
-    const endAt = toPulseCheckPilotScheduleDate(store.pilot.endAt);
-    const scheduleError = validatePulseCheckPilotStartDate(startAt, endAt);
+    const endAt = toPulseCheckPilotScheduleDate(input.endAt);
+    if (input.startAt && !startAt) throw new Error('Choose a valid pilot start date.');
+    if (input.endAt && !endAt) throw new Error('Choose a valid pilot end date.');
+    const scheduleError = validatePulseCheckPilotSchedule(startAt, endAt);
     if (scheduleError) throw new Error(scheduleError);
 
-    store.pilot.startAt = asTimestamp((startAt as Date).getTime());
+    const shouldReopenPilot = shouldReopenPulseCheckPilotAfterScheduleUpdate(
+      store.pilot.status,
+      endAt,
+      input.reopenCompletedPilot === true
+    );
+
+    store.pilot.startAt = startAt ? asTimestamp(startAt.getTime()) : null;
+    store.pilot.endAt = endAt ? asTimestamp(endAt.getTime()) : null;
+    if (shouldReopenPilot) {
+      store.pilot.status = 'active';
+    }
     store.pilot.updatedAt = asTimestamp(Date.now());
     writeStore(store);
+  },
+
+  updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput) {
+    const store = readStore();
+    const startAt = toPulseCheckPilotScheduleDate(input.startAt);
+    const startDateError = validatePulseCheckPilotStartDate(startAt, null);
+    if (startDateError || !startAt) throw new Error(startDateError || 'Choose a valid pilot start date.');
+
+    this.updatePilotSchedule({
+      pilotId: input.pilotId,
+      startAt,
+      endAt: toPulseCheckPilotScheduleDate(store.pilot.endAt),
+    });
   },
 
   getPilotAthleteDetail(pilotId: string, athleteId: string): PilotDashboardAthleteDetail | null {

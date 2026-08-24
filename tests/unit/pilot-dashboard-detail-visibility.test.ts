@@ -33,14 +33,13 @@ test('direct pilot detail remains available after the final active athlete leave
   assert.match(detailLookup, /activeAthleteCount: activeEnrollments\.length/);
 });
 
-test('the Active Pilots directory retains operational-scope filtering', () => {
-  const activeDirectoryLookup = sourceBetween(
+test('the pilot directory keeps completed pilots visible while hiding archived pilots', () => {
+  const directoryLookup = sourceBetween(
     'async listActivePilotDirectory(',
     'async getPilotDashboardAthletes('
   );
 
-  assert.match(
-    activeDirectoryLookup,
-    /if \(!isPilotOperationallyActive\(pilot, pilotCohorts, pilotEnrollments\)\) return null/
-  );
+  assert.match(directoryLookup, /if \(!shouldShowPilotInDirectory\(pilot\)\) return null/);
+  assert.match(serviceSource, /const shouldShowPilotInDirectory = \(pilot: PulseCheckPilot\) => resolvePilotEffectiveStatus\(pilot\) !== 'archived'/);
+  assert.doesNotMatch(directoryLookup, /if \(!isPilotOperationallyActive\(pilot, pilotCohorts, pilotEnrollments\)\) return null/);
 });

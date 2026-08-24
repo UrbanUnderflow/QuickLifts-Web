@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import {
   parsePulseCheckPilotDateKey,
   resolvePulseCheckPilotEnrollmentAcceptance,
+  resolvePulseCheckPilotDateKeyEndOfDay,
+  shouldReopenPulseCheckPilotAfterScheduleUpdate,
+  shiftPulseCheckPilotDateKey,
   toPulseCheckPilotScheduleDate,
+  validatePulseCheckPilotSchedule,
   validatePulseCheckPilotStartDate,
 } from '../../src/utils/pulseCheckPilotSchedule';
 
@@ -85,6 +89,89 @@ test('rejects a start date after the fixed end date', () => {
       new Date(2026, 7, 31, 23, 59, 59, 999)
     ),
     'Start date must be on or before the pilot end date.'
+  );
+});
+
+test('computes inclusive preset pilot end date keys', () => {
+  assert.equal(shiftPulseCheckPilotDateKey('2026-04-08', 13), '2026-04-21');
+  assert.equal(shiftPulseCheckPilotDateKey('2026-04-08', 29), '2026-05-07');
+  assert.equal(shiftPulseCheckPilotDateKey('2026-04-08', 59), '2026-06-06');
+  assert.equal(shiftPulseCheckPilotDateKey('2026-04-08', 89), '2026-07-06');
+});
+
+test('resolves a selected pilot end date through the end of that day', () => {
+  const endOfDay = resolvePulseCheckPilotDateKeyEndOfDay('2026-07-06');
+
+  assert.ok(endOfDay);
+  assert.equal(endOfDay.getFullYear(), 2026);
+  assert.equal(endOfDay.getMonth(), 6);
+  assert.equal(endOfDay.getDate(), 6);
+  assert.equal(endOfDay.getHours(), 23);
+  assert.equal(endOfDay.getMinutes(), 59);
+  assert.equal(endOfDay.getSeconds(), 59);
+  assert.equal(endOfDay.getMilliseconds(), 999);
+});
+
+test('allows clearing both pilot schedule dates', () => {
+  assert.equal(validatePulseCheckPilotSchedule(null, null), null);
+  assert.equal(validatePulseCheckPilotSchedule(new Date(2026, 3, 8), null), null);
+  assert.equal(validatePulseCheckPilotSchedule(null, new Date(2026, 6, 6)), null);
+  assert.equal(
+    validatePulseCheckPilotSchedule(new Date(2026, 6, 7), new Date(2026, 6, 6)),
+    'Start date must be on or before the pilot end date.'
+  );
+});
+
+test('explicit schedule edits reopen only completed pilots with a non-ended window', () => {
+  const now = new Date('2026-08-24T12:00:00.000Z');
+
+  assert.equal(
+    shouldReopenPulseCheckPilotAfterScheduleUpdate(
+      'completed',
+      new Date('2026-08-31T23:59:59.999Z'),
+      true,
+      now
+    ),
+    true
+  );
+  assert.equal(
+    shouldReopenPulseCheckPilotAfterScheduleUpdate('completed', null, true, now),
+    true,
+    'clearing the end date creates an open-ended schedule'
+  );
+  assert.equal(
+    shouldReopenPulseCheckPilotAfterScheduleUpdate(
+      'completed',
+      new Date('2026-08-23T23:59:59.999Z'),
+      true,
+      now
+    ),
+    false,
+    'a completed pilot must stay completed when the replacement window already ended'
+  );
+
+  for (const status of ['draft', 'active', 'paused', 'archived']) {
+    assert.equal(
+      shouldReopenPulseCheckPilotAfterScheduleUpdate(
+        status,
+        new Date('2026-08-31T23:59:59.999Z'),
+        true,
+        now
+      ),
+      false,
+      `${status} must not be changed by the completed-pilot reopen intent`
+    );
+  }
+
+  assert.equal(
+    shouldReopenPulseCheckPilotAfterScheduleUpdate(
+      'completed',
+      new Date('2026-08-31T23:59:59.999Z'),
+      false,
+      now
+    ),
+    false,
+    'callers must opt into reopening a completed pilot'
   );
 });
 

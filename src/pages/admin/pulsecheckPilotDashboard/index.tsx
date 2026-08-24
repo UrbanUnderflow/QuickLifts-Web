@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import {
   Activity,
@@ -66,8 +67,15 @@ import { filterBySelectedTeamIds } from '../../../utils/pilotDashboardTeamFilter
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
 const getPilotCountLabel = (count: number) => `${count} pilot${count === 1 ? '' : 's'}`;
+const getDashboardQueryValue = (value: string | string[] | undefined) => {
+  if (Array.isArray(value)) {
+    return value.find((item) => item.trim())?.trim() || '';
+  }
+  return typeof value === 'string' ? value.trim() : '';
+};
 
 type StudyModeValue = PilotDashboardDirectoryEntry['pilot']['studyMode'];
+type PilotLifecycleStatus = PilotDashboardDirectoryEntry['pilot']['status'];
 type MetricTone = 'teal' | 'emerald' | 'amber' | 'blue' | 'violet';
 type InviteToastTone = 'success' | 'error' | 'info';
 
@@ -143,6 +151,53 @@ const getStudyModeMeta = (studyMode: StudyModeValue) => {
         badgeClassName: 'border-white/15 bg-white/10 text-white/80',
         dotClassName: 'bg-white/60',
         legendCountClassName: 'text-white/80',
+      };
+  }
+};
+
+const getPilotLifecycleMeta = (status: PilotLifecycleStatus) => {
+  switch (status) {
+    case 'active':
+      return {
+        label: 'Active',
+        badgeClassName: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
+        cardClassName:
+          'border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.05]',
+      };
+    case 'completed':
+      return {
+        label: 'Completed',
+        badgeClassName: 'border-amber-400/30 bg-amber-400/10 text-amber-100',
+        cardClassName:
+          'border-amber-400/25 bg-amber-400/5 hover:border-amber-400/40 hover:bg-amber-400/10',
+      };
+    case 'paused':
+      return {
+        label: 'Paused',
+        badgeClassName: 'border-sky-400/25 bg-sky-400/10 text-sky-100',
+        cardClassName:
+          'border-sky-400/20 bg-sky-400/[0.06] hover:border-sky-400/35 hover:bg-sky-400/10',
+      };
+    case 'draft':
+      return {
+        label: 'Draft',
+        badgeClassName: 'border-white/15 bg-white/[0.04] text-white/55',
+        cardClassName:
+          'border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.05]',
+      };
+    case 'archived':
+      return {
+        label: 'Archived',
+        badgeClassName: 'border-rose-400/25 bg-rose-400/10 text-rose-100',
+        cardClassName:
+          'border-rose-400/20 bg-rose-400/10 hover:border-rose-400/35 hover:bg-rose-400/15',
+      };
+    default:
+      return {
+        label: status || 'Unknown',
+        badgeClassName: 'border-white/15 bg-white/[0.04] text-white/55',
+        cardClassName:
+          'border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.05]',
       };
   }
 };
@@ -294,7 +349,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
-  const [activeSidebarItem, setActiveSidebarItem] = useState('Active Pilots');
+  const [activeSidebarItem, setActiveSidebarItem] = useState('Pilots');
   const [athletes, setAthletes] = useState<PilotDashboardAthleteRosterEntry[]>([]);
   const [athletesLoading, setAthletesLoading] = useState(true);
   const [athletesError, setAthletesError] = useState<string | null>(null);
@@ -321,6 +376,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const athleteJoinToastTimersRef = useRef<Map<string, number>>(new Map());
   const athleteRemovalNoticeTimerRef = useRef<number | null>(null);
   const athletesDirectoryRef = useRef<HTMLElement | null>(null);
+  const hydratedFilterDeepLinkRef = useRef('');
   const currentAccountEmail = currentUser?.email || auth.currentUser?.email || '';
   const canLoadLiveDashboardData = !currentUserLoading && Boolean(currentAccountEmail);
 
@@ -350,7 +406,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       return;
     }
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canLoadLiveDashboardData, currentAccountEmail]);
 
   const loadAthletes = async () => {
@@ -379,7 +434,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       return;
     }
     void loadAthletes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, studyMode, demoModeEnabled, canLoadLiveDashboardData, currentAccountEmail]);
 
   useEffect(() => () => {
@@ -562,8 +616,8 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
 
   useEffect(() => {
     if (!router.isReady) return;
-    const linkedTeamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
-    const linkedAthleteId = typeof router.query.athleteId === 'string' ? router.query.athleteId : '';
+    const linkedTeamId = getDashboardQueryValue(router.query.teamId);
+    const linkedAthleteId = getDashboardQueryValue(router.query.athleteId);
     if (!linkedAthleteId) return;
     const deepLinkKey = `${linkedTeamId || 'all'}:${linkedAthleteId}`;
     if (hydratedAthleteDeepLinkRef.current === deepLinkKey) return;
@@ -582,6 +636,38 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       document.getElementById('athletes-directory')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 0);
   }, [router.isReady, router.query.athleteId, router.query.teamId, teamContextById]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (getDashboardQueryValue(router.query.athleteId)) return;
+    const linkedTeamId = getDashboardQueryValue(router.query.teamId);
+    const linkedOrganizationId = getDashboardQueryValue(router.query.organizationId);
+    if (!linkedTeamId && !linkedOrganizationId) return;
+
+    const linkedTeamContext = linkedTeamId ? teamContextById.get(linkedTeamId) : undefined;
+    const nextOrganizationId = linkedTeamContext?.organizationId || linkedOrganizationId;
+    const deepLinkKey = `${nextOrganizationId || 'all'}:${linkedTeamId || 'all'}`;
+    if (hydratedFilterDeepLinkRef.current === deepLinkKey) return;
+    hydratedFilterDeepLinkRef.current = deepLinkKey;
+
+    setOrganizationId(nextOrganizationId || '');
+    setTeamId(linkedTeamId || '');
+    setSelectedAthleteTeamIds(linkedTeamId ? [linkedTeamId] : []);
+    setStudyMode('');
+    setPilotSearchQuery('');
+
+    const targetSectionId =
+      typeof window !== 'undefined' && window.location.hash
+        ? window.location.hash.replace(/^#/, '')
+        : linkedTeamId
+          ? 'teams-directory'
+          : 'organizations-directory';
+    const nextSidebarItem = targetSectionId === 'teams-directory' ? 'Teams' : 'Organizations';
+    setActiveSidebarItem(nextSidebarItem);
+    window.setTimeout(() => {
+      document.getElementById(targetSectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, [router.isReady, router.query.athleteId, router.query.organizationId, router.query.teamId, teamContextById]);
 
   useEffect(() => {
     const pendingAthleteId = pendingAthleteDeepLinkRef.current;
@@ -1198,7 +1284,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     testId?: string;
   }> = [
     {
-      label: 'Active Pilots',
+      label: 'Pilots',
       value: String(summary.activePilots),
       icon: FlaskConical,
       iconClassName: 'text-[#00d4aa]',
@@ -1350,7 +1436,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     {
       label: 'Monitoring',
       items: [
-        { label: 'Active Pilots', value: summary.activePilots, icon: Activity, destination: { type: 'section', id: 'pilot-directory' } },
+        { label: 'Pilots', value: summary.activePilots, icon: Activity, destination: { type: 'section', id: 'pilot-directory' } },
         { label: 'Athletes', value: filteredAthletes.length, icon: Users2, destination: { type: 'section', id: 'athletes-directory' } },
         { label: 'Hypotheses', value: summary.hypothesisCount, icon: Layers3, destination: { type: 'section', id: 'aggregate-summary' } },
         { label: 'Watch List', value: operationalWatchListSummary.stateCount, icon: ShieldAlert, destination: { type: 'section', id: 'watch-list-summary' } },
@@ -1378,6 +1464,27 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const areFiltersActive = Boolean(
     organizationId || teamId || selectedAthleteTeamIds.length || studyMode || pilotSearchQuery.trim()
   );
+  const clearDashboardFilters = () => {
+    hydratedFilterDeepLinkRef.current = '';
+    hydratedAthleteDeepLinkRef.current = '';
+    pendingAthleteDeepLinkRef.current = null;
+    setOrganizationId('');
+    setTeamId('');
+    setSelectedAthleteTeamIds([]);
+    setStudyMode('');
+    setPilotSearchQuery('');
+    setSelectedAthleteId(null);
+
+    if (router.query.organizationId || router.query.teamId || router.query.athleteId) {
+      const nextQuery = { ...router.query };
+      delete nextQuery.organizationId;
+      delete nextQuery.teamId;
+      delete nextQuery.athleteId;
+      void router.replace({ pathname: '/admin/pulsecheckPilotDashboard', query: nextQuery }, undefined, {
+        shallow: true,
+      });
+    }
+  };
   const pilotCountText = loading ? 'Loading pilots...' : error ? 'Directory unavailable' : getPilotCountLabel(filteredEntries.length);
   const accountEmail = currentAccountEmail;
   const accountName =
@@ -1668,11 +1775,11 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                       PulseCheck Admin
                     </div>
                     <h1 className="pilot-font-display text-3xl font-bold tracking-[-0.04em] text-white sm:text-[2.2rem]">
-                      Active Pilot Dashboard
+                      Pilot Dashboard
                     </h1>
                     <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55 sm:text-[15px]">
-                      Pilot-native directory for active PulseCheck pilots. Review pilot-scoped athletes, engine health,
-                      findings, and manual hypothesis tracking inside the active enrollment boundary.
+                      Pilot-native directory for PulseCheck pilots. Review pilot-scoped athletes, engine health,
+                      findings, and manual hypothesis tracking across active and completed pilot records.
                     </p>
                   </div>
 
@@ -1884,13 +1991,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                     {areFiltersActive ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          setOrganizationId('');
-                          setTeamId('');
-                          setSelectedAthleteTeamIds([]);
-                          setStudyMode('');
-                          setPilotSearchQuery('');
-                        }}
+                        onClick={clearDashboardFilters}
                         className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-white/60 transition hover:bg-white/[0.06] hover:text-white"
                       >
                         Clear filters
@@ -1939,9 +2040,15 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                                 <Building2 className="h-4 w-4 text-cyan-100" />
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-white">{row.organization.displayName}</div>
+                                <Link
+                                  href={`/admin/pulsecheckPilotDashboard/organizations/${encodeURIComponent(row.organization.id)}`}
+                                  data-testid={`pilot-organization-open-${row.organization.id}`}
+                                  className="block truncate rounded-sm text-sm font-semibold text-white transition hover:text-[#9cf4e2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00d4aa]"
+                                >
+                                  {row.organization.displayName}
+                                </Link>
                                 <div className="mt-1 text-xs text-white/42">
-                                  {row.teamCount} team{row.teamCount === 1 ? '' : 's'} - {row.pilotCount} active pilot{row.pilotCount === 1 ? '' : 's'}
+                                  {row.teamCount} team{row.teamCount === 1 ? '' : 's'} - {row.pilotCount} pilot{row.pilotCount === 1 ? '' : 's'}
                                 </div>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {row.studyModeList.map((mode) => {
@@ -2027,7 +2134,13 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                                 <FlaskConical className="h-4 w-4 text-emerald-100" />
                               </div>
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-white">{row.team.displayName}</div>
+                                <Link
+                                  href={`/admin/pulsecheckPilotDashboard/teams/${encodeURIComponent(row.team.id)}`}
+                                  data-testid={`pilot-team-open-${row.team.id}`}
+                                  className="block truncate rounded-sm text-sm font-semibold text-white transition hover:text-[#9cf4e2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#00d4aa]"
+                                >
+                                  {row.team.displayName}
+                                </Link>
                                 <div className="mt-1 truncate text-xs text-white/42">{row.organization.displayName}</div>
                                 <div className="mt-2 flex flex-wrap gap-1.5">
                                   {row.studyModeList.map((mode) => {
@@ -2153,7 +2266,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                               className="flex w-full items-start gap-4 px-4 py-3.5 text-left transition hover:bg-white/[0.04] sm:px-5"
                             >
                               {athlete.profileImageUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={athlete.profileImageUrl}
                                   alt=""
@@ -2263,20 +2375,14 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   </div>
                 ) : filteredEntries.length === 0 ? (
                   <div className="pilot-fade-in rounded-[28px] border border-white/10 bg-white/[0.03] p-8">
-                    <div className="pilot-font-display text-xl font-semibold text-white">No active pilots match the current filters</div>
+                    <div className="pilot-font-display text-xl font-semibold text-white">No pilots match the current filters</div>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-white/50">
                       Adjust the search, organization, team, or study mode filters to bring pilots back into scope.
                     </p>
                     {areFiltersActive ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          setOrganizationId('');
-                          setTeamId('');
-                          setSelectedAthleteTeamIds([]);
-                          setStudyMode('');
-                          setPilotSearchQuery('');
-                        }}
+                        onClick={clearDashboardFilters}
                         className="mt-5 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/80 transition hover:bg-white/[0.06] hover:text-white"
                       >
                         Clear filters
@@ -2287,6 +2393,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   <div className="grid gap-4 xl:grid-cols-2">
                     {filteredEntries.map((entry, index) => {
                       const studyModeMeta = getStudyModeMeta(entry.pilot.studyMode);
+                      const lifecycleMeta = getPilotLifecycleMeta(entry.pilot.status);
                       const pilotMetrics: Array<{
                         label: string;
                         value: string;
@@ -2355,7 +2462,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                       return (
                         <div
                           key={entry.pilot.id}
-                          className="pilot-fade-in group overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.035] shadow-[0_20px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-200 hover:border-white/20 hover:bg-white/[0.05]"
+                          className={`pilot-fade-in group overflow-hidden rounded-[28px] border shadow-[0_20px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl transition duration-200 ${lifecycleMeta.cardClassName}`}
                           style={{ animationDelay: `${160 + index * 60}ms` }}
                         >
                           <div className="border-b border-white/10 px-5 py-5">
@@ -2373,11 +2480,18 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                                 <div className="mt-1 text-sm text-white/40">{entry.team.displayName}</div>
                               </div>
 
-                              <span
-                                className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${studyModeMeta.badgeClassName}`}
-                              >
-                                {studyModeMeta.label}
-                              </span>
+                              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                                <span
+                                  className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${lifecycleMeta.badgeClassName}`}
+                                >
+                                  {lifecycleMeta.label}
+                                </span>
+                                <span
+                                  className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${studyModeMeta.badgeClassName}`}
+                                >
+                                  {studyModeMeta.label}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
@@ -2514,7 +2628,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
                     {selectedAthlete.profileImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={selectedAthlete.profileImageUrl}
                         alt=""

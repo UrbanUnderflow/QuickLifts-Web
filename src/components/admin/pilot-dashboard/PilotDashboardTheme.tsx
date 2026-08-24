@@ -327,6 +327,9 @@ export const PilotDashboardThemeFrame: React.FC<React.PropsWithChildren> = ({ ch
 
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-50'],
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-100'],
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-100/90'],
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-100/80'],
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-100/75'],
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-200'],
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-amber-300'] {
           color: #92400e !important;

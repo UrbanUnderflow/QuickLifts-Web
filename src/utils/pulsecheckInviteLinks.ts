@@ -41,6 +41,26 @@ export const isPulseCheckInviteOneLink = (url?: string | null) => {
   return value.includes(`${APPS_FLYER_SUBDOMAIN}/${APPS_FLYER_TEMPLATE_ID}`);
 };
 
+export const hasPulseCheckInviteDevFirebaseMarker = (url?: string | null) => {
+  const value = String(url || '').trim();
+  if (!value) return false;
+
+  try {
+    const parsedUrl = new URL(value, PULSE_WEB_ORIGIN);
+    if (parsedUrl.searchParams.get('devFirebase') === '1') {
+      return true;
+    }
+
+    const fallbackUrl = parsedUrl.searchParams.get('af_r');
+    if (!fallbackUrl) return false;
+
+    const parsedFallbackUrl = new URL(fallbackUrl, PULSE_WEB_ORIGIN);
+    return parsedFallbackUrl.searchParams.get('devFirebase') === '1';
+  } catch {
+    return false;
+  }
+};
+
 export const buildPulseCheckTeamInviteWebUrl = (token: string, siteOrigin?: string | null) => {
   const normalizedToken = String(token || '').trim();
   const normalizedOrigin = String(siteOrigin || PULSE_WEB_ORIGIN).trim().replace(/\/+$/, '') || PULSE_WEB_ORIGIN;

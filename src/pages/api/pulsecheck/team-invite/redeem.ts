@@ -29,6 +29,12 @@ import {
   normalizePulseCheckAthleteTrackOverride,
 } from '../../../../utils/pulsecheckAthleteTrack';
 import { resolvePulseCheckPilotEnrollmentAcceptance } from '../../../../utils/pulseCheckPilotSchedule';
+import {
+  normalizeTeamInviteRedemptionError,
+  serializeTeamInviteRedemptionError,
+  teamInviteRedemptionError,
+  type TeamInviteRedemptionErrorCode,
+} from '../../../../lib/server/pulsecheck/teamInviteRedemptionErrors';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -39,9 +45,27 @@ const PILOTS_COLLECTION = 'pulsecheck-pilots';
 const PILOT_COHORTS_COLLECTION = 'pulsecheck-pilot-cohorts';
 const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const ATHLETE_APP_ENTITLEMENTS_COLLECTION = 'pulsecheck-athlete-app-entitlements';
+const PRE_ACTIVATION_PARENT_STATUSES = new Set([
+  'draft',
+  'provisioning',
+  'ready-for-activation',
+]);
+
+const sendRedemptionError = (
+  res: NextApiResponse,
+  code: TeamInviteRedemptionErrorCode
+) => {
+  const error = teamInviteRedemptionError(code);
+  return res.status(error.statusCode).json(serializeTeamInviteRedemptionError(error));
+};
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const isSafeDocumentId = (value: string) =>
+  value.length > 0
+  && value.length <= 240
+  && !value.includes('/')
+  && !/[\u0000-\u001f\u007f]/.test(value);
 const normalizeInviteRedemptionMode = (value: unknown): PulseCheckInviteLinkRedemptionMode =>
   value === 'general' ? 'general' : 'single-use';
 const isInviteLinkUsable = (status: unknown, redemptionMode: unknown) => {
@@ -344,19 +368,22 @@ const permissionSetByRole: Record<PulseCheckTeamMembershipRole, string> = {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method not allowed.' });
+    return sendRedemptionError(res, 'METHOD_NOT_ALLOWED');
   }
 
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authenticated session required.' });
+    return sendRedemptionError(res, 'AUTH_REQUIRED');
   }
 
   const idToken = authHeader.slice('Bearer '.length);
   const token = normalizeString(req.body?.token);
   const forceDevFirebase = req.body?.forceDevFirebase === true;
   if (!token) {
-    return res.status(400).json({ error: 'Invite token is required.' });
+    return sendRedemptionError(res, 'INVITE_TOKEN_REQUIRED');
+  }
+  if (!isSafeDocumentId(token)) {
+    return sendRedemptionError(res, 'INVITE_TOKEN_INVALID');
   }
 
   try {
@@ -365,7 +392,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userId = decoded.uid;
     const userEmail = normalizeEmail(decoded.email);
     if (!userEmail) {
-      return res.status(400).json({ error: 'Authenticated user must have an email address.' });
+      return sendRedemptionError(res, 'AUTH_EMAIL_REQUIRED');
     }
 
     const firestore = admin.firestore(adminApp);
@@ -375,21 +402,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const result = await firestore.runTransaction(async (transaction) => {
       const inviteSnap = await transaction.get(inviteRef);
       if (!inviteSnap.exists) {
-        throw new Error('Invite not found.');
+        throw teamInviteRedemptionError('INVITE_NOT_FOUND');
       }
 
       const invite = inviteSnap.data() || {};
       if ((invite.inviteType || '') !== 'team-access') {
-        throw new Error('Invite type is invalid for this route.');
+        throw teamInviteRedemptionError('INVITE_TYPE_INVALID');
       }
+      const inviteStatus = normalizeString(invite.status);
       const inviteExpiresAt = epochSeconds(invite.expiresAt || invite.expirationDate);
+      if (invite.revokedAt != null || inviteStatus === 'revoked') {
+        throw teamInviteRedemptionError('INVITE_REVOKED');
+      }
+      if (invite.archivedAt != null || invite.deletedAt != null) {
+        throw teamInviteRedemptionError('INVITE_INACTIVE');
+      }
       if (
-        invite.revokedAt != null
-        || invite.archivedAt != null
-        || invite.deletedAt != null
+        inviteStatus === 'expired'
         || (inviteExpiresAt > 0 && inviteExpiresAt <= Math.floor(Date.now() / 1000))
       ) {
-        throw new Error('Invite is no longer active.');
+        throw teamInviteRedemptionError('INVITE_EXPIRED');
       }
       const redemptionMode = normalizeInviteRedemptionMode(invite.redemptionMode);
       const alreadyRedeemedByThisUser =
@@ -399,10 +431,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const targetEmail = normalizeEmail(invite.targetEmail);
       if (targetEmail && targetEmail !== userEmail) {
-        throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
+        throw teamInviteRedemptionError('INVITE_EMAIL_MISMATCH');
       }
       if (targetEmail && decoded.email_verified !== true) {
-        throw new Error('Verify the invited email address before accepting this invite.');
+        throw teamInviteRedemptionError('INVITE_EMAIL_UNVERIFIED');
       }
 
       const organizationId = normalizeString(invite.organizationId);
@@ -422,8 +454,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Coach-preloaded invite image + notify-coach context (read here so the
       // membership inherits the avatar and the accept email can name the coach).
       const prefilledProfileImageUrl = normalizeString(invite.prefilledProfileImageUrl);
-      if (!organizationId || !teamId || !teamMembershipRole) {
-        throw new Error('Invite is missing organization, team, or role context.');
+      if (
+        !isSafeDocumentId(organizationId)
+        || !isSafeDocumentId(teamId)
+        || (pilotId && !isSafeDocumentId(pilotId))
+        || (cohortId && !isSafeDocumentId(cohortId))
+        || !teamMembershipRole
+        || !permissionSetByRole[teamMembershipRole]
+      ) {
+        throw teamInviteRedemptionError('INVITE_CONTEXT_INVALID');
       }
       // Staff capabilities encoded on the invite (team-access staff invites). Copied
       // onto the membership; the derived roster scope replaces the default below.
@@ -473,7 +512,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const isIdempotentSingleUseReplay = alreadyRedeemedByThisUser
         && hasActiveMatchingTeamMembership;
       if (!isInviteLinkUsable(invite.status, redemptionMode) && !isIdempotentSingleUseReplay) {
-        throw new Error('Invite is no longer active.');
+        throw teamInviteRedemptionError(
+          redemptionMode === 'single-use' && normalizeString(invite.status) === 'redeemed'
+            ? 'INVITE_ALREADY_REDEEMED'
+            : 'INVITE_INACTIVE'
+        );
       }
       const [pilotSnap, cohortSnap, existingPilotEnrollmentSnap] = await Promise.all([
         pilotRef ? transaction.get(pilotRef) : Promise.resolve(null),
@@ -483,71 +526,97 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const hadExistingPilotEnrollment = Boolean(existingPilotEnrollmentSnap?.exists);
 
       if (!organizationSnap.exists) {
-        throw new Error('Organization not found.');
+        throw teamInviteRedemptionError('ORGANIZATION_NOT_FOUND');
       }
       if (!teamSnap.exists) {
-        throw new Error('Team not found.');
+        throw teamInviteRedemptionError('TEAM_NOT_FOUND');
       }
       const organizationData = organizationSnap.data() || {};
       const teamData = teamSnap.data() || {};
+      const organizationStatus = normalizeString(organizationData.status).toLowerCase();
+      const teamStatus = normalizeString(teamData.status).toLowerCase();
       const organizationIsActive =
-        normalizeString(organizationData.status) === 'active'
+        organizationStatus === 'active'
         && organizationData.archivedAt == null
         && organizationData.deletedAt == null
         && organizationData.revokedAt == null;
       const teamIsActive =
-        normalizeString(teamData.status) === 'active'
+        teamStatus === 'active'
         && teamData.archivedAt == null
         && teamData.deletedAt == null
         && teamData.revokedAt == null
         && normalizeString(teamData.organizationId) === organizationId;
-      if (!organizationIsActive || !teamIsActive) {
-        throw new Error('Invite team is inactive.');
+      if (PRE_ACTIVATION_PARENT_STATUSES.has(organizationStatus)) {
+        throw teamInviteRedemptionError('ORGANIZATION_ACTIVATION_REQUIRED');
+      }
+      if (!organizationIsActive) {
+        throw teamInviteRedemptionError('ORGANIZATION_INACTIVE');
+      }
+      if (normalizeString(teamData.organizationId) !== organizationId) {
+        throw teamInviteRedemptionError('TEAM_SCOPE_MISMATCH');
+      }
+      if (PRE_ACTIVATION_PARENT_STATUSES.has(teamStatus)) {
+        throw teamInviteRedemptionError('TEAM_ACTIVATION_REQUIRED');
+      }
+      if (!teamIsActive) {
+        throw teamInviteRedemptionError('TEAM_INACTIVE');
       }
       if (pilotId && !pilotSnap?.exists) {
-        throw new Error('Pilot not found.');
+        throw teamInviteRedemptionError('PILOT_NOT_FOUND');
       }
       const pilotData = pilotSnap?.exists ? pilotSnap.data() || {} : {};
       if (
         pilotId &&
         (
           normalizeString(pilotData.organizationId) !== organizationId ||
-          normalizeString(pilotData.teamId) !== teamId ||
-          pilotData.archivedAt != null ||
-          pilotData.deletedAt != null
+          normalizeString(pilotData.teamId) !== teamId
         )
       ) {
-        throw new Error('Invite pilot is inactive or no longer belongs to this team.');
+        throw teamInviteRedemptionError('PILOT_SCOPE_MISMATCH');
+      }
+      if (pilotId && (pilotData.archivedAt != null || pilotData.deletedAt != null)) {
+        throw teamInviteRedemptionError('PILOT_INACTIVE');
       }
       if (pilotId) {
         const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
         if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
-          const errorMessage =
+          const code: TeamInviteRedemptionErrorCode =
             pilotEnrollmentAcceptance.reason === 'not-started'
-              ? 'This pilot is not accepting enrollment yet.'
+              ? 'PILOT_ENROLLMENT_NOT_STARTED'
               : pilotEnrollmentAcceptance.reason === 'ended'
-                ? 'This pilot is no longer accepting enrollment.'
+                ? 'PILOT_ENROLLMENT_ENDED'
                 : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
-                  ? 'This pilot cannot accept enrollment because its schedule is invalid.'
-                  : 'This pilot is not currently accepting enrollment.';
-          throw new Error(errorMessage);
+                  ? 'PILOT_SCHEDULE_INVALID'
+                  : 'PILOT_INACTIVE';
+          throw teamInviteRedemptionError(code);
         }
       }
       const cohortData = cohortSnap?.exists ? cohortSnap.data() || {} : {};
+      if (cohortId && !pilotId) {
+        throw teamInviteRedemptionError('COHORT_SCOPE_MISMATCH');
+      }
+      if (cohortId && !cohortSnap?.exists) {
+        throw teamInviteRedemptionError('COHORT_NOT_FOUND');
+      }
       if (
-        cohortId &&
-        (
-          !pilotId ||
-          !cohortSnap?.exists ||
-          normalizeString(cohortData.status) !== 'active' ||
-          normalizeString(cohortData.organizationId) !== organizationId ||
-          normalizeString(cohortData.teamId) !== teamId ||
-          normalizeString(cohortData.pilotId) !== pilotId ||
-          cohortData.archivedAt != null ||
-          cohortData.deletedAt != null
+        cohortId
+        && (
+          normalizeString(cohortData.organizationId) !== organizationId
+          || normalizeString(cohortData.teamId) !== teamId
+          || normalizeString(cohortData.pilotId) !== pilotId
         )
       ) {
-        throw new Error('Invite cohort is inactive or no longer belongs to this pilot.');
+        throw teamInviteRedemptionError('COHORT_SCOPE_MISMATCH');
+      }
+      if (
+        cohortId
+        && (
+          normalizeString(cohortData.status) !== 'active'
+          || cohortData.archivedAt != null
+          || cohortData.deletedAt != null
+        )
+      ) {
+        throw teamInviteRedemptionError('COHORT_INACTIVE');
       }
       const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists
         ? existingPilotEnrollmentSnap.data() || {}
@@ -559,7 +628,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         hasCurrentPilotEnrollment &&
         normalizeString(existingPilotEnrollment.cohortId) !== cohortId
       ) {
-        throw new Error('You are already enrolled in a different pilot cohort. Ask a team admin to move your enrollment.');
+        throw teamInviteRedemptionError('ENROLLMENT_COHORT_CONFLICT');
       }
 
       const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
@@ -617,7 +686,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             entitlement.currentPeriodEndEpochSeconds || entitlement.currentPeriodEnd
           ) > nowEpochSeconds;
         if (!hasMatchingCoachOfferEntitlement) {
-          throw new Error('Active PulseCheck app access is required before joining this team.');
+          throw teamInviteRedemptionError('ATHLETE_APP_ACCESS_REQUIRED');
         }
       }
       const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
@@ -913,23 +982,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } = result;
     return res.status(200).json(clientResult);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to redeem invite.';
-    const statusCode =
-      message === 'Invite not found.'
-        ? 404
-          : message === 'Invite is no longer active.' || message === 'Invite type is invalid for this route.'
-          ? 409
-          : message === 'Invite team is inactive.'
-            ? 403
-          : message.startsWith('This invite is restricted to')
-            ? 403
-            : message.startsWith('Verify the invited email address')
-              ? 403
-            : message.startsWith('Active PulseCheck app access is required')
-              ? 402
-            : 400;
-
     console.error('[pulsecheck-team-invite/redeem] Failed to redeem invite:', error);
-    return res.status(statusCode).json({ error: message });
+    const publicError = normalizeTeamInviteRedemptionError(error);
+    return res
+      .status(publicError.statusCode)
+      .json(serializeTeamInviteRedemptionError(publicError));
   }
 }

@@ -689,6 +689,13 @@ export interface UpdatePulseCheckPilotStartDateInput {
   startAt: Timestamp | Date;
 }
 
+export interface UpdatePulseCheckPilotScheduleInput {
+  pilotId: string;
+  startAt?: Timestamp | Date | null;
+  endAt?: Timestamp | Date | null;
+  reopenCompletedPilot?: boolean;
+}
+
 export interface PulseCheckPilotCohort {
   id: string;
   organizationId: string;

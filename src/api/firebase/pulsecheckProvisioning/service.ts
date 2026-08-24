@@ -24,10 +24,13 @@ import type { AthleteMentalProgress } from '../mentaltraining/types';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
 import {
   resolvePulseCheckPilotEnrollmentAcceptance,
+  shouldReopenPulseCheckPilotAfterScheduleUpdate,
   toPulseCheckPilotScheduleDate,
+  validatePulseCheckPilotSchedule,
   validatePulseCheckPilotStartDate,
 } from '../../../utils/pulseCheckPilotSchedule';
 import { getCompletedBaselineEvidence } from './athleteTaskState';
+import { shouldAdvancePulseCheckParentToReadyForActivation } from '../../../utils/pulseCheckActivationLifecycle';
 import {
   requiresReConsentForVersion,
   resolvePilotEnrollmentStatus,
@@ -94,6 +97,7 @@ import type {
   SavePulseCheckAdultMemberSetupInput,
   SavePulseCheckPostActivationSetupInput,
   UpdatePulseCheckTeamMembershipAccessInput,
+  UpdatePulseCheckPilotScheduleInput,
   UpdatePulseCheckPilotStartDateInput,
   UpsertPulseCheckAuntEdnaClinicianProfileInput,
   MigrateLegacyCoachRosterInput,
@@ -3353,15 +3357,18 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput): Promise<void> {
+  async updatePilotSchedule(input: UpdatePulseCheckPilotScheduleInput): Promise<void> {
     const pilotId = normalizeString(input.pilotId);
     if (!pilotId) {
       throw new Error('Pilot id is required.');
     }
 
     const startAt = toPulseCheckPilotScheduleDate(input.startAt);
-    const startDateError = validatePulseCheckPilotStartDate(startAt, null);
-    if (startDateError) throw new Error(startDateError);
+    const endAt = toPulseCheckPilotScheduleDate(input.endAt);
+    if (input.startAt && !startAt) throw new Error('Choose a valid pilot start date.');
+    if (input.endAt && !endAt) throw new Error('Choose a valid pilot end date.');
+    const scheduleError = validatePulseCheckPilotSchedule(startAt, endAt);
+    if (scheduleError) throw new Error(scheduleError);
 
     const pilotRef = doc(db, PILOTS_COLLECTION, pilotId);
     await runTransaction(db, async (transaction) => {
@@ -3371,14 +3378,42 @@ export const pulseCheckProvisioningService = {
       }
 
       const pilotData = pilotSnap.data() as Record<string, unknown>;
-      const endAt = toPulseCheckPilotScheduleDate(pilotData.endAt);
-      const scheduleError = validatePulseCheckPilotStartDate(startAt, endAt);
-      if (scheduleError) throw new Error(scheduleError);
+      const shouldReopenPilot = shouldReopenPulseCheckPilotAfterScheduleUpdate(
+        pilotData.status,
+        endAt,
+        input.reopenCompletedPilot === true
+      );
 
       transaction.update(pilotRef, {
-        startAt: Timestamp.fromDate(startAt as Date),
+        startAt: startAt ? Timestamp.fromDate(startAt) : null,
+        endAt: endAt ? Timestamp.fromDate(endAt) : null,
+        ...(shouldReopenPilot ? { status: 'active' } : {}),
         updatedAt: serverTimestamp(),
       });
+    });
+  },
+
+  async updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput): Promise<void> {
+    const pilotId = normalizeString(input.pilotId);
+    if (!pilotId) {
+      throw new Error('Pilot id is required.');
+    }
+
+    const startAt = toPulseCheckPilotScheduleDate(input.startAt);
+    const startDateError = validatePulseCheckPilotStartDate(startAt, null);
+    if (startDateError || !startAt) throw new Error(startDateError || 'Choose a valid pilot start date.');
+
+    const pilotRef = doc(db, PILOTS_COLLECTION, pilotId);
+    const pilotSnap = await getDoc(pilotRef);
+    if (!pilotSnap.exists()) {
+      throw new Error('Pilot not found.');
+    }
+
+    const pilotData = pilotSnap.data() as Record<string, unknown>;
+    await this.updatePilotSchedule({
+      pilotId,
+      startAt,
+      endAt: toPulseCheckPilotScheduleDate(pilotData.endAt),
     });
   },
 
@@ -3458,18 +3493,37 @@ export const pulseCheckProvisioningService = {
     );
 
     const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, token);
-    await setDoc(inviteDocRef, payload);
+    const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, payload.organizationId);
+    const teamRef = doc(db, TEAMS_COLLECTION, payload.teamId);
+    await runTransaction(db, async (transaction) => {
+      const [organizationSnap, teamSnap] = await Promise.all([
+        transaction.get(organizationRef),
+        transaction.get(teamRef),
+      ]);
+      if (!organizationSnap.exists()) {
+        throw new Error('Organization not found.');
+      }
+      if (!teamSnap.exists()) {
+        throw new Error('Team not found.');
+      }
 
-    await Promise.all([
-      updateDoc(doc(db, ORGANIZATIONS_COLLECTION, input.organizationId), {
-        status: 'ready-for-activation',
-        updatedAt: serverTimestamp(),
-      }),
-      updateDoc(doc(db, TEAMS_COLLECTION, input.teamId), {
-        status: 'ready-for-activation',
-        updatedAt: serverTimestamp(),
-      }),
-    ]);
+      transaction.set(inviteDocRef, payload);
+
+      // Regenerating an administrator link preserves every operational or held
+      // parent state. Only pre-activation records advance to the ready state.
+      if (shouldAdvancePulseCheckParentToReadyForActivation(organizationSnap.data().status)) {
+        transaction.update(organizationRef, {
+          status: 'ready-for-activation',
+          updatedAt: serverTimestamp(),
+        });
+      }
+      if (shouldAdvancePulseCheckParentToReadyForActivation(teamSnap.data().status)) {
+        transaction.update(teamRef, {
+          status: 'ready-for-activation',
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
 
     return inviteDocRef.id;
   },
@@ -4610,6 +4664,27 @@ export const pulseCheckProvisioningService = {
 
           const organizationData = organizationSnap.data() as Record<string, any>;
           const teamData = teamSnap.data() as Record<string, any>;
+          const organizationIsActive =
+            normalizeString(organizationData.status) === 'active'
+            && organizationData.archivedAt == null
+            && organizationData.deletedAt == null
+            && organizationData.revokedAt == null;
+          const teamBelongsToOrganization = normalizeString(teamData.organizationId) === organizationId;
+          const teamIsActive =
+            normalizeString(teamData.status) === 'active'
+            && teamData.archivedAt == null
+            && teamData.deletedAt == null
+            && teamData.revokedAt == null
+            && teamBelongsToOrganization;
+          if (!organizationIsActive) {
+            throw new Error('This organization is not accepting new members right now. Ask an organization admin to reactivate it.');
+          }
+          if (!teamBelongsToOrganization) {
+            throw new Error('This invite no longer matches its organization. Ask your team admin to replace the QR code or link.');
+          }
+          if (!teamIsActive) {
+            throw new Error('This team is not accepting new members right now. Ask a team admin to reactivate the team.');
+          }
           const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
           const teamName = normalizeString(teamData.displayName) || 'Team';
           const teamCommercialConfig = normalizeTeamCommercialConfig(teamData.commercialConfig);

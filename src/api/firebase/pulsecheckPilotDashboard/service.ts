@@ -51,6 +51,7 @@ import type {
   PulseCheckRequiredConsentDocument,
   PulseCheckTeam,
   PulseCheckTeamMembership,
+  UpdatePulseCheckPilotScheduleInput,
   UpdatePulseCheckPilotStartDateInput,
 } from '../pulsecheckProvisioning/types';
 import type { SurveyQuestion } from '../creatorPages/service';
@@ -75,7 +76,11 @@ import type {
   PilotDashboardDetail,
   PilotDashboardDirectoryEntry,
   PilotDashboardEngineSummary,
+  PilotDashboardHierarchyEnrollmentCounts,
+  PilotDashboardHierarchyPilotSummary,
+  PilotDashboardHierarchyTeamSummary,
   PilotDashboardHypothesisSummary,
+  PilotDashboardOrganizationDetail,
   PilotDashboardRecentEvidence,
   PilotDashboardRecentPattern,
   PilotDashboardRecentProjection,
@@ -87,6 +92,7 @@ import type {
   PilotResearchReadoutCitation,
   PilotResearchReadoutReadinessGateResult,
   PilotDashboardSnapshotHistoryItem,
+  PilotDashboardTeamDetail,
   PilotDashboardOperationalStatus,
   PilotDashboardOperationalWatchListLifecycleStatus,
   PilotDashboardOperationalWatchListReasonCode,
@@ -328,6 +334,8 @@ const isPilotOperationallyActive = (
   if (cohorts.some((cohort) => resolveCohortEffectiveStatus(cohort) === 'active')) return true;
   return false;
 };
+
+const shouldShowPilotInDirectory = (pilot: PulseCheckPilot) => resolvePilotEffectiveStatus(pilot) !== 'archived';
 
 const toHypothesis = (id: string, data: Record<string, any>): PulseCheckPilotHypothesis => ({
   id,
@@ -1980,6 +1988,74 @@ const scoreAthleteCandidate = (
   return score;
 };
 
+const buildHierarchyEnrollmentCounts = (
+  enrollments: PulseCheckPilotEnrollment[]
+): PilotDashboardHierarchyEnrollmentCounts => ({
+  totalEnrollmentCount: enrollments.length,
+  activeEnrollmentCount: enrollments.filter((enrollment) => enrollment.status === 'active').length,
+  pendingConsentEnrollmentCount: enrollments.filter((enrollment) => enrollment.status === 'pending-consent').length,
+  withdrawnEnrollmentCount: enrollments.filter((enrollment) => enrollment.status === 'withdrawn').length,
+});
+
+const buildHierarchyPilotSummaries = (
+  pilots: PulseCheckPilot[],
+  cohorts: PulseCheckPilotCohort[],
+  enrollments: PulseCheckPilotEnrollment[]
+): PilotDashboardHierarchyPilotSummary[] => {
+  const cohortsByPilotId = new Map<string, PulseCheckPilotCohort[]>();
+  cohorts.forEach((cohort) => {
+    const current = cohortsByPilotId.get(cohort.pilotId) || [];
+    current.push(cohort);
+    cohortsByPilotId.set(cohort.pilotId, current);
+  });
+
+  const enrollmentsByPilotId = new Map<string, PulseCheckPilotEnrollment[]>();
+  enrollments.forEach((enrollment) => {
+    const current = enrollmentsByPilotId.get(enrollment.pilotId) || [];
+    current.push(enrollment);
+    enrollmentsByPilotId.set(enrollment.pilotId, current);
+  });
+
+  return pilots
+    .map((pilot) => ({
+      pilot: {
+        ...pilot,
+        status: resolvePilotEffectiveStatus(pilot),
+      },
+      cohorts: (cohortsByPilotId.get(pilot.id) || [])
+        .sort((left, right) => left.name.localeCompare(right.name)),
+      ...buildHierarchyEnrollmentCounts(enrollmentsByPilotId.get(pilot.id) || []),
+    }))
+    .sort((left, right) => left.pilot.name.localeCompare(right.pilot.name));
+};
+
+const athleteIsOnHierarchyTeam = (athlete: PilotDashboardAthleteRosterEntry, teamId: string): boolean =>
+  athlete.teamId === teamId || athlete.teamContexts.some((context) => context.teamId === teamId);
+
+const buildHierarchyTeamSummary = (
+  team: PulseCheckTeam,
+  pilots: PulseCheckPilot[],
+  cohorts: PulseCheckPilotCohort[],
+  enrollments: PulseCheckPilotEnrollment[],
+  athletes: PilotDashboardAthleteRosterEntry[]
+): PilotDashboardHierarchyTeamSummary => {
+  const teamPilots = pilots.filter((pilot) => pilot.teamId === team.id);
+  const pilotIds = new Set(teamPilots.map((pilot) => pilot.id));
+  const teamCohorts = cohorts.filter((cohort) => cohort.teamId === team.id || pilotIds.has(cohort.pilotId));
+  const teamEnrollments = enrollments.filter(
+    (enrollment) => enrollment.teamId === team.id && pilotIds.has(enrollment.pilotId)
+  );
+
+  return {
+    team,
+    pilotIds: Array.from(pilotIds).sort(),
+    pilotCount: teamPilots.length,
+    cohortCount: teamCohorts.length,
+    activeRosterAthleteCount: athletes.filter((athlete) => athleteIsOnHierarchyTeam(athlete, team.id)).length,
+    ...buildHierarchyEnrollmentCounts(teamEnrollments),
+  };
+};
+
 export const pulseCheckPilotDashboardService = {
   isDemoModeEnabled(): boolean {
     return pilotDashboardDemoMode.isEnabled();
@@ -2483,7 +2559,7 @@ export const pulseCheckPilotDashboardService = {
       .map((pilot) => {
         const pilotCohorts = cohortsByPilot.get(pilot.id) || [];
         const pilotEnrollments = enrollmentsByPilot.get(pilot.id) || [];
-        if (!isPilotOperationallyActive(pilot, pilotCohorts, pilotEnrollments)) return null;
+        if (!shouldShowPilotInDirectory(pilot)) return null;
 
         const organization = organizationMap.get(pilot.organizationId);
         const team = teamMap.get(pilot.teamId);
@@ -2526,6 +2602,7 @@ export const pulseCheckPilotDashboardService = {
         operationallyActivePilots: pilots.filter((pilot) =>
           isPilotOperationallyActive(pilot, cohortsByPilot.get(pilot.id) || [], enrollmentsByPilot.get(pilot.id) || [])
         ).length,
+        visiblePilots: pilots.filter(shouldShowPilotInDirectory).length,
         entriesAfterJoin: baseEntries.length,
       });
     }
@@ -2558,12 +2635,116 @@ export const pulseCheckPilotDashboardService = {
       );
   },
 
+  async getOrganizationDashboardDetail(organizationId: string): Promise<PilotDashboardOrganizationDetail | null> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getOrganizationDashboardDetail(organizationId);
+    }
+
+    const normalizedOrganizationId = normalizeString(organizationId);
+    if (!normalizedOrganizationId) return null;
+
+    const organization = await pulseCheckProvisioningService.getOrganization(normalizedOrganizationId);
+    if (!organization) return null;
+
+    const [allTeams, allPilots, allCohorts, allEnrollments, athletes] = await Promise.all([
+      pulseCheckProvisioningService.listTeams(),
+      pulseCheckProvisioningService.listPilots(),
+      pulseCheckProvisioningService.listPilotCohorts(),
+      pulseCheckProvisioningService.listPilotEnrollments(),
+      this.getPilotDashboardAthletes({
+        organizationId: normalizedOrganizationId,
+        includeHistoricalPilots: true,
+        includeTeamsWithoutPilots: true,
+      }),
+    ]);
+
+    const teams = allTeams
+      .filter((team) => team.organizationId === normalizedOrganizationId)
+      .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    const pilots = allPilots.filter((pilot) => pilot.organizationId === normalizedOrganizationId);
+    const pilotIds = new Set(pilots.map((pilot) => pilot.id));
+    const cohorts = allCohorts
+      .filter((cohort) => cohort.organizationId === normalizedOrganizationId || pilotIds.has(cohort.pilotId))
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const enrollments = allEnrollments.filter((enrollment) => pilotIds.has(enrollment.pilotId));
+    const pilotSummaries = buildHierarchyPilotSummaries(pilots, cohorts, enrollments);
+    const teamSummaries = teams.map((team) =>
+      buildHierarchyTeamSummary(team, pilots, cohorts, enrollments, athletes)
+    );
+
+    return {
+      organization,
+      summary: {
+        teamCount: teamSummaries.length,
+        pilotCount: pilotSummaries.length,
+        cohortCount: cohorts.length,
+        activeRosterAthleteCount: athletes.length,
+        ...buildHierarchyEnrollmentCounts(enrollments),
+      },
+      teams: teamSummaries,
+      pilots: pilotSummaries,
+      cohorts,
+      athletes,
+    };
+  },
+
+  async getTeamDashboardDetail(teamId: string): Promise<PilotDashboardTeamDetail | null> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getTeamDashboardDetail(teamId);
+    }
+
+    const normalizedTeamId = normalizeString(teamId);
+    if (!normalizedTeamId) return null;
+
+    const team = await pulseCheckProvisioningService.getTeam(normalizedTeamId);
+    if (!team) return null;
+    const organization = await pulseCheckProvisioningService.getOrganization(team.organizationId);
+    if (!organization) return null;
+
+    const [allPilots, allCohorts, allEnrollments, athletes] = await Promise.all([
+      pulseCheckProvisioningService.listPilots(),
+      pulseCheckProvisioningService.listPilotCohorts(),
+      pulseCheckProvisioningService.listPilotEnrollments(),
+      this.getPilotDashboardAthletes({
+        organizationId: organization.id,
+        teamId: normalizedTeamId,
+        includeHistoricalPilots: true,
+        includeTeamsWithoutPilots: true,
+      }),
+    ]);
+
+    const pilots = allPilots.filter((pilot) => pilot.teamId === normalizedTeamId);
+    const pilotIds = new Set(pilots.map((pilot) => pilot.id));
+    const cohorts = allCohorts
+      .filter((cohort) => cohort.teamId === normalizedTeamId || pilotIds.has(cohort.pilotId))
+      .sort((left, right) => left.name.localeCompare(right.name));
+    const enrollments = allEnrollments.filter(
+      (enrollment) => enrollment.teamId === normalizedTeamId && pilotIds.has(enrollment.pilotId)
+    );
+    const pilotSummaries = buildHierarchyPilotSummaries(pilots, cohorts, enrollments);
+
+    return {
+      organization,
+      team,
+      summary: buildHierarchyTeamSummary(team, pilots, cohorts, enrollments, athletes),
+      pilots: pilotSummaries,
+      cohorts,
+      athletes,
+    };
+  },
+
   async getPilotDashboardAthletes(
     filter: PilotDashboardAthleteRosterFilter = {}
   ): Promise<PilotDashboardAthleteRosterEntry[]> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getPilotDashboardAthletes(filter);
+    }
+
     const normalizedOrganizationId = normalizeString(filter.organizationId);
     const normalizedTeamId = normalizeString(filter.teamId);
     const normalizedStudyMode = normalizeString(filter.studyMode);
+    const includeHistoricalPilots = Boolean(filter.includeHistoricalPilots);
+    const includeTeamsWithoutPilots = Boolean(filter.includeTeamsWithoutPilots);
 
     const [organizations, teams, pilots, cohorts, enrollments] = await Promise.all([
       pulseCheckProvisioningService.listOrganizations(),
@@ -2592,12 +2773,12 @@ export const pulseCheckPilotDashboardService = {
       enrollmentsByPilot.set(enrollment.pilotId, current);
     });
 
-    // Scope to the same operationally-active pilots the directory surfaces, then
-    // honor the page-level org/team/study-mode filters.
+    // The home roster preserves its operational-pilot scope by default. Hierarchy
+    // detail callers can explicitly include every configured pilot lifecycle.
     const inScopePilots = pilots.filter((pilot) => {
       const pilotCohorts = cohortsByPilot.get(pilot.id) || [];
       const pilotEnrollments = enrollmentsByPilot.get(pilot.id) || [];
-      if (!isPilotOperationallyActive(pilot, pilotCohorts, pilotEnrollments)) return false;
+      if (!includeHistoricalPilots && !isPilotOperationallyActive(pilot, pilotCohorts, pilotEnrollments)) return false;
       if (!organizationMap.has(pilot.organizationId) || !teamMap.has(pilot.teamId)) return false;
       if (normalizedOrganizationId && pilot.organizationId !== normalizedOrganizationId) return false;
       if (normalizedTeamId && pilot.teamId !== normalizedTeamId) return false;
@@ -2614,6 +2795,15 @@ export const pulseCheckPilotDashboardService = {
         primaryPilotByTeamId.set(pilot.teamId, pilot);
       }
     });
+
+    if (includeTeamsWithoutPilots && !normalizedStudyMode) {
+      teams.forEach((team) => {
+        if (!organizationMap.has(team.organizationId)) return;
+        if (normalizedOrganizationId && team.organizationId !== normalizedOrganizationId) return;
+        if (normalizedTeamId && team.id !== normalizedTeamId) return;
+        inScopeTeamIds.add(team.id);
+      });
+    }
 
     if (inScopeTeamIds.size === 0) return [];
 
@@ -3005,6 +3195,15 @@ export const pulseCheckPilotDashboardService = {
     }
 
     await pulseCheckProvisioningService.updatePilotStartDate(input);
+  },
+
+  async updatePilotSchedule(input: UpdatePulseCheckPilotScheduleInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.updatePilotSchedule(input);
+      return;
+    }
+
+    await pulseCheckProvisioningService.updatePilotSchedule(input);
   },
 
   async getPilotAthleteDetail(pilotId: string, athleteId: string): Promise<PilotDashboardAthleteDetail | null> {
