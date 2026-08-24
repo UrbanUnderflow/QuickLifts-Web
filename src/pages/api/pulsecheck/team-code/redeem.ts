@@ -85,6 +85,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const userRef = firestore.collection('users').doc(userId);
     const teamName = normalizeString(teamData.displayName) || 'Team';
     const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
+    const teamCommercialConfig = teamData.commercialConfig && typeof teamData.commercialConfig === 'object'
+      ? teamData.commercialConfig
+      : {};
+    const commercialAccess = {
+      ...teamCommercialConfig,
+      sourceOrganizationId: organizationId,
+      sourceTeamId: teamId,
+      teamPlanBypassesPaywall: true,
+      grantedVia: GRANTED_VIA,
+    };
 
     const result = await firestore.runTransaction(async (transaction) => {
       const [membershipSnap, userSnap] = await Promise.all([
@@ -110,12 +120,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             email: userEmail,
             role: 'athlete',
             status: 'active',
+            revokedAt: null,
+            revoked: false,
+            archivedAt: null,
+            deletedAt: null,
+            removedAt: null,
+            removedByUserId: '',
+            removedByEmail: '',
+            removalReason: '',
+            removalOperationId: '',
             rosterVisibilityScope: 'none',
             allowedAthleteIds: [],
             grantedVia: GRANTED_VIA,
             grantedByTeamCode: teamCode,
+            commercialAccess,
             grantedAt: now,
             createdAt: existingMembership.createdAt || now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      } else {
+        transaction.set(
+          teamMembershipRef,
+          {
+            grantedVia: GRANTED_VIA,
+            grantedByTeamCode: teamCode,
+            commercialAccess,
+            grantedAt: now,
             updatedAt: now,
           },
           { merge: true }
@@ -128,6 +160,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         {
           subscriptionType: SubscriptionType.teamPlan,
           subscriptionPlatform: SubscriptionPlatform.Web,
+          pulseCheckTeamCommercialAccess: commercialAccess,
           onboardInvite: {
             ...(existingUserData.onboardInvite || {}),
             source: 'pulsecheck-team-code',

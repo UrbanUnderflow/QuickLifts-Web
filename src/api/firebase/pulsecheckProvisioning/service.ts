@@ -1,5 +1,5 @@
-import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
-import { auth, db, getFirebaseModeRequestHeaders } from '../config';
+import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { auth, db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../config';
 import {
   buildPulseCheckAthleteOfferWebUrl,
   buildPulseCheckTeamInviteOneLink,
@@ -22,6 +22,11 @@ import {
 import { ATHLETE_MENTAL_PROGRESS_COLLECTION } from '../mentaltraining/collections';
 import type { AthleteMentalProgress } from '../mentaltraining/types';
 import { resolvePulseCheckFunctionUrl } from '../mentaltraining/pulseCheckFunctionsUrl';
+import {
+  resolvePulseCheckPilotEnrollmentAcceptance,
+  toPulseCheckPilotScheduleDate,
+  validatePulseCheckPilotStartDate,
+} from '../../../utils/pulseCheckPilotSchedule';
 import { getCompletedBaselineEvidence } from './athleteTaskState';
 import {
   requiresReConsentForVersion,
@@ -89,6 +94,7 @@ import type {
   SavePulseCheckAdultMemberSetupInput,
   SavePulseCheckPostActivationSetupInput,
   UpdatePulseCheckTeamMembershipAccessInput,
+  UpdatePulseCheckPilotStartDateInput,
   UpsertPulseCheckAuntEdnaClinicianProfileInput,
   MigrateLegacyCoachRosterInput,
   SavePulseCheckAthleteOnboardingProgressInput,
@@ -109,6 +115,8 @@ const ADMIN_ACTIVATION_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const COACH_INTAKE_DRAFTS_COLLECTION = 'pulsecheck-coach-intake-drafts';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const PILOT_OPERATIONAL_STATES_COLLECTION = 'pulsecheck-pilot-operational-states';
+const TEAM_CODE_GRANTED_VIA = 'team-code-manual-entry';
 const LEGACY_ROSTER_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
 const USERS_COLLECTION = 'users';
 const COACHES_COLLECTION = 'coaches';
@@ -132,17 +140,13 @@ const resolveInviteLinkStatus = (
   status: unknown,
   redemptionMode?: unknown
 ): PulseCheckInviteLinkStatus => {
-  if (normalizeInviteRedemptionMode(redemptionMode) === 'general') {
-    return 'active';
-  }
-
   const normalizedStatus = normalizeString(typeof status === 'string' ? status : '');
   if (normalizedStatus === 'revoked') {
     return 'revoked';
   }
 
-  if (normalizedStatus === 'redeemed' && normalizeInviteRedemptionMode(redemptionMode) !== 'general') {
-    return 'redeemed';
+  if (normalizedStatus === 'redeemed') {
+    return normalizeInviteRedemptionMode(redemptionMode) === 'general' ? 'active' : 'redeemed';
   }
 
   return 'active';
@@ -152,11 +156,11 @@ const isInviteLinkUsable = (status: unknown, redemptionMode?: unknown) =>
 const isLocalHostname = (hostname?: string | null) => LOCALHOST_HOSTNAMES.has(normalizeString(hostname ?? undefined).toLowerCase());
 const getCurrentSiteOrigin = () =>
   typeof window !== 'undefined' ? window.location.origin.replace(/\/+$/, '') : DEFAULT_PUBLIC_SITE_ORIGIN;
-// Origin for new PulseCheck activation/invite links. Keeps localhost during dev
-// (so local testing + devFirebase stamping work), otherwise the canonical
-// pulsecheckmind.ai origin regardless of the generating domain.
+// Origin for new PulseCheck activation/invite links. Localhost is valid only
+// when this browser is actually connected to development Firebase. A local
+// admin session connected to production must still mint a public phone-safe URL.
 const getPulseCheckLinkOrigin = () =>
-  typeof window !== 'undefined' && isLocalHostname(window.location.hostname)
+  typeof window !== 'undefined' && isLocalHostname(window.location.hostname) && isUsingDevFirebase()
     ? window.location.origin.replace(/\/+$/, '')
     : PULSECHECK_LINK_ORIGIN;
 const buildCoachIntakeDraftLookupKey = (teamId: string, targetEmail: string) =>
@@ -171,8 +175,8 @@ const generateCoachIntakeDraftToken = () => {
 };
 const shouldStampDevFirebaseLinks = () =>
   typeof window !== 'undefined' &&
-  (isLocalHostname(window.location.hostname) ||
-    (window.localStorage.getItem('forceDevFirebase') === 'true' && isLocalHostname(window.location.hostname)));
+  isLocalHostname(window.location.hostname) &&
+  isUsingDevFirebase();
 const shouldUseLocalRedeemFallback = () =>
   typeof window !== 'undefined' &&
   (isLocalHostname(window.location.hostname) ||
@@ -202,14 +206,8 @@ const normalizeInviteActivationUrl = (value?: unknown) => {
     return rawValue;
   }
 };
-const toTimestampMillis = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (value instanceof Date) return value.getTime();
-  if (typeof (value as { toDate?: () => Date })?.toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate().getTime();
-  }
-  return 0;
-};
+const toTimestampMillis = (value: unknown) =>
+  toPulseCheckPilotScheduleDate(value)?.getTime() || 0;
 const defaultNotificationPreferences = (): PulseCheckNotificationPreferences => ({
   email: true,
   sms: false,
@@ -334,12 +332,18 @@ const buildTeamCommercialSnapshot = (input: {
   teamId: string;
   commercialConfig: PulseCheckTeamCommercialConfig;
   inviteToken?: string;
+  grantedVia?: 'team-code-manual-entry';
+  teamPlanBypassesPaywall?: boolean;
 }): PulseCheckTeamCommercialSnapshot => ({
   ...input.commercialConfig,
   sourceOrganizationId: normalizeString(input.organizationId),
   sourceTeamId: normalizeString(input.teamId),
   inviteToken: normalizeString(input.inviteToken),
-  teamPlanBypassesPaywall: derivePulseCheckTeamPlanBypass(input.commercialConfig),
+  ...(input.grantedVia ? { grantedVia: input.grantedVia } : {}),
+  teamPlanBypassesPaywall:
+    input.grantedVia === 'team-code-manual-entry'
+      ? true
+      : input.teamPlanBypassesPaywall ?? derivePulseCheckTeamPlanBypass(input.commercialConfig),
 });
 const resolveTeamAdminCommercialConfig = (
   commercialConfig: PulseCheckTeamCommercialConfig,
@@ -1002,6 +1006,11 @@ const toPilotEnrollment = (id: string, data: Record<string, any>): PulseCheckPil
   completedConsentVersions: normalizeCompletedConsentVersionRecord(data.completedConsentVersions),
   eligibleForResearchDataset: Boolean(data.eligibleForResearchDataset),
   grantedByInviteToken: data.grantedByInviteToken || '',
+  withdrawnAt: data.withdrawnAt || null,
+  withdrawnByUserId: data.withdrawnByUserId || '',
+  withdrawnByEmail: data.withdrawnByEmail || '',
+  withdrawalReason: data.withdrawalReason || '',
+  removalOperationId: data.removalOperationId || '',
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });
@@ -1136,6 +1145,11 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   role: (data.role as PulseCheckTeamMembershipRole) || 'coach',
   status: data.status || undefined,
   revokedAt: data.revokedAt || null,
+  removedAt: data.removedAt || null,
+  removedByUserId: data.removedByUserId || '',
+  removedByEmail: data.removedByEmail || '',
+  removalReason: data.removalReason || '',
+  removalOperationId: data.removalOperationId || '',
   title: data.title || '',
   permissionSetId: data.permissionSetId || '',
   staffCapabilities: normalizeStaffCapabilities(data.staffCapabilities),
@@ -1156,6 +1170,8 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   onboardingStatus: data.onboardingStatus || 'pending',
   postActivationCompletedAt: data.postActivationCompletedAt || null,
   grantedByInviteToken: data.grantedByInviteToken || '',
+  grantedVia: data.grantedVia || undefined,
+  grantedByTeamCode: data.grantedByTeamCode || '',
   grantedAt: data.grantedAt || null,
   handoffMetadata: data.handoffMetadata || undefined,
   commercialAccess: data.commercialAccess
@@ -1164,6 +1180,8 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
         teamId: data.teamId || '',
         commercialConfig: normalizeTeamCommercialConfig(data.commercialAccess),
         inviteToken: data.commercialAccess?.inviteToken || data.grantedByInviteToken || '',
+        grantedVia: data.commercialAccess?.grantedVia || data.grantedVia || undefined,
+        teamPlanBypassesPaywall: data.commercialAccess?.teamPlanBypassesPaywall,
       })
     : undefined,
   createdAt: data.createdAt || null,
@@ -1441,6 +1459,227 @@ const withLocalRedeemFallback = async <T>(
   }
 };
 
+const isLocallyActiveAthleteMembership = (data: Record<string, any>, membershipId: string, excludedId: string) => {
+  const status = normalizeString(data.status).toLowerCase();
+  return membershipId !== excludedId
+    && normalizeString(data.role) === 'athlete'
+    && (!status || status === 'active')
+    && data.revokedAt == null
+    && data.removedAt == null
+    && data.archivedAt == null
+    && data.deletedAt == null
+    && data.revoked !== true;
+};
+
+const resolveLocalMembershipTeamPlanAccess = (data: Record<string, any>): Record<string, any> | null => {
+  const commercialAccess = data.commercialAccess && typeof data.commercialAccess === 'object'
+    ? data.commercialAccess as Record<string, any>
+    : {};
+  const sourceTeamId = normalizeString(
+    commercialAccess.sourceTeamId || commercialAccess.teamId || data.teamId
+  );
+  const sourceOrganizationId = normalizeString(
+    commercialAccess.sourceOrganizationId || commercialAccess.organizationId || data.organizationId
+  );
+  if (commercialAccess.teamPlanBypassesPaywall === true && sourceTeamId) {
+    return {
+      ...commercialAccess,
+      sourceTeamId,
+      sourceOrganizationId,
+      teamPlanBypassesPaywall: true,
+    };
+  }
+  if (normalizeString(data.grantedVia) === TEAM_CODE_GRANTED_VIA && sourceTeamId) {
+    return {
+      sourceTeamId,
+      sourceOrganizationId,
+      teamPlanBypassesPaywall: true,
+      grantedVia: TEAM_CODE_GRANTED_VIA,
+    };
+  }
+  return null;
+};
+
+const clearLocalMembershipPilotScope = (value: unknown) => ({
+  ...defaultAthleteOnboardingState(),
+  ...(value && typeof value === 'object' ? value as Record<string, any> : {}),
+  enrollmentMode: 'product-only' as const,
+  targetPilotId: '',
+  targetPilotName: '',
+  targetCohortId: '',
+  targetCohortName: '',
+  requiredConsents: [] as PulseCheckRequiredConsentDocument[],
+  completedConsentIds: [] as string[],
+  completedConsentVersions: {} as Record<string, string>,
+  researchConsentStatus: 'not-required' as const,
+  researchConsentVersion: '',
+  researchConsentRespondedAt: null,
+  eligibleForResearchDataset: false,
+});
+
+// Local Next development does not have production Admin SDK credentials by
+// default. Keep the dashboard testable on localhost by falling back to the
+// signed-in platform admin's Firestore permissions. Production always uses the
+// audited server route above this fallback.
+const removeAthleteFromTeamLocally = async (input: {
+  teamId: string;
+  athleteId: string;
+  operationId: string;
+  actorUserId: string;
+  actorEmail: string;
+}): Promise<{
+  alreadyRemoved: boolean;
+  withdrawnPilotIds: string[];
+  withdrawnEnrollmentCount: number;
+}> => {
+  const membershipId = `${input.teamId}_${input.athleteId}`;
+  const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, membershipId);
+  const userRef = doc(db, USERS_COLLECTION, input.athleteId);
+  const [enrollmentQuerySnap, membershipQuerySnap] = await Promise.all([
+    getDocs(query(collection(db, PILOT_ENROLLMENTS_COLLECTION), where('userId', '==', input.athleteId))),
+    getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('userId', '==', input.athleteId))),
+  ]);
+  const matchingEnrollmentRefs = enrollmentQuerySnap.docs
+    .filter((entry) => normalizeString(entry.data().teamId) === input.teamId)
+    .map((entry) => entry.ref);
+  const operationalStateSnaps = await Promise.all(
+    matchingEnrollmentRefs.map((enrollmentRef) =>
+      getDoc(doc(db, PILOT_OPERATIONAL_STATES_COLLECTION, enrollmentRef.id))
+    )
+  );
+  if (operationalStateSnaps.some((entry) => entry.data()?.watchListActive === true)) {
+    throw new Error('Clear the athlete watch list before removing this team membership.');
+  }
+
+  const alternativeMemberships = membershipQuerySnap.docs
+    .filter((entry) => isLocallyActiveAthleteMembership(entry.data(), entry.id, membershipId))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const alternativeCommercialAccess = alternativeMemberships
+    .map((entry) => resolveLocalMembershipTeamPlanAccess(entry.data()))
+    .find((candidate): candidate is Record<string, any> => Boolean(candidate));
+
+  return runTransaction(db, async (transaction) => {
+    const [membershipSnap, userSnap, ...enrollmentSnaps] = await Promise.all([
+      transaction.get(membershipRef),
+      transaction.get(userRef),
+      ...matchingEnrollmentRefs.map((enrollmentRef) => transaction.get(enrollmentRef)),
+    ]);
+    if (!membershipSnap.exists()) {
+      throw new Error('The athlete team membership was not found.');
+    }
+
+    const membership = membershipSnap.data() as Record<string, any>;
+    if (
+      normalizeString(membership.teamId) !== input.teamId
+      || normalizeString(membership.userId) !== input.athleteId
+      || normalizeString(membership.role) !== 'athlete'
+    ) {
+      throw new Error('The stored team membership does not match this athlete removal request.');
+    }
+
+    const membershipAlreadyRemoved = normalizeString(membership.status) === 'removed'
+      && membership.revokedAt != null
+      && membership.removedAt != null;
+    const onboarding = membership.athleteOnboarding as Record<string, any> | undefined;
+    const membershipHasPilotScope = Boolean(
+      normalizeString(onboarding?.targetPilotId)
+      || normalizeString(onboarding?.targetCohortId)
+      || normalizeString(onboarding?.enrollmentMode) === 'pilot'
+      || normalizeString(onboarding?.enrollmentMode) === 'research'
+      || onboarding?.eligibleForResearchDataset === true
+    );
+    const enrollmentUpdates = enrollmentSnaps.filter((entry) => {
+      const enrollment = entry.data() as Record<string, any>;
+      return normalizeString(enrollment.status) !== 'withdrawn'
+        || enrollment.eligibleForResearchDataset === true;
+    });
+    const timestamp = serverTimestamp();
+
+    if (!membershipAlreadyRemoved || membershipHasPilotScope) {
+      transaction.update(membershipRef, {
+        status: 'removed',
+        revokedAt: membership.revokedAt || timestamp,
+        removedAt: membership.removedAt || timestamp,
+        removedByUserId: normalizeString(membership.removedByUserId) || input.actorUserId,
+        removedByEmail: normalizeEmail(membership.removedByEmail) || input.actorEmail,
+        removalReason: normalizeString(membership.removalReason) || 'platform-admin-removal',
+        removalOperationId: normalizeString(membership.removalOperationId) || input.operationId,
+        athleteOnboarding: clearLocalMembershipPilotScope(membership.athleteOnboarding),
+        updatedAt: timestamp,
+      });
+    }
+
+    enrollmentUpdates.forEach((entry) => {
+      const enrollment = entry.data() as Record<string, any>;
+      transaction.set(entry.ref, {
+        status: 'withdrawn',
+        eligibleForResearchDataset: false,
+        withdrawnAt: enrollment.withdrawnAt || timestamp,
+        withdrawnByUserId: normalizeString(enrollment.withdrawnByUserId) || input.actorUserId,
+        withdrawnByEmail: normalizeEmail(enrollment.withdrawnByEmail) || input.actorEmail,
+        withdrawalReason: normalizeString(enrollment.withdrawalReason) || 'team-removal',
+        removalOperationId: input.operationId,
+        updatedAt: timestamp,
+      }, { merge: true });
+    });
+
+    const user = userSnap.exists() ? userSnap.data() as Record<string, any> : {};
+    const commercialAccess = user.pulseCheckTeamCommercialAccess as Record<string, any> | undefined;
+    const onboardInvite = user.onboardInvite as Record<string, any> | undefined;
+    const clearCommercialAccess = normalizeString(
+      commercialAccess?.sourceTeamId || commercialAccess?.teamId
+    ) === input.teamId;
+    const clearOnboardInvite = normalizeString(onboardInvite?.teamId) === input.teamId;
+    const removedTeamPlanAccess = Boolean(resolveLocalMembershipTeamPlanAccess(membership))
+      || clearCommercialAccess
+      || (
+        clearOnboardInvite
+        && (
+          normalizeString(onboardInvite?.source) === 'pulsecheck-team-code'
+          || normalizeString(onboardInvite?.grantedVia) === TEAM_CODE_GRANTED_VIA
+        )
+      );
+    const shouldDowngradeTeamPlan = normalizeString(user.subscriptionType) === SubscriptionType.teamPlan
+      && removedTeamPlanAccess
+      && !alternativeCommercialAccess;
+    const shouldSwitchCommercialAccess = removedTeamPlanAccess && Boolean(alternativeCommercialAccess);
+    if (
+      userSnap.exists()
+      && (clearCommercialAccess || clearOnboardInvite || shouldDowngradeTeamPlan || shouldSwitchCommercialAccess)
+    ) {
+      transaction.update(userRef, {
+        ...(clearCommercialAccess || shouldSwitchCommercialAccess
+          ? {
+              pulseCheckTeamCommercialAccess: alternativeCommercialAccess || deleteField(),
+            }
+          : {}),
+        ...(shouldDowngradeTeamPlan ? { subscriptionType: SubscriptionType.unsubscribed } : {}),
+        ...(clearOnboardInvite ? { onboardInvite: deleteField() } : {}),
+        updatedAt: timestamp,
+      });
+    }
+
+    const withdrawnPilotIds = Array.from(new Set(
+      enrollmentUpdates
+        .map((entry) => normalizeString((entry.data() as Record<string, any>).pilotId))
+        .filter(Boolean)
+    )).sort();
+
+    return {
+      alreadyRemoved:
+        membershipAlreadyRemoved
+        && !membershipHasPilotScope
+        && enrollmentUpdates.length === 0
+        && !clearCommercialAccess
+        && !clearOnboardInvite
+        && !shouldDowngradeTeamPlan
+        && !shouldSwitchCommercialAccess,
+      withdrawnPilotIds,
+      withdrawnEnrollmentCount: enrollmentUpdates.length,
+    };
+  });
+};
+
 export const pulseCheckProvisioningService = {
   async listOrganizations(): Promise<PulseCheckOrganization[]> {
     const snapshot = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
@@ -1506,7 +1745,7 @@ export const pulseCheckProvisioningService = {
       return (
         (data.inviteType || '') === 'team-access' &&
         normalizeInviteRedemptionMode(data.redemptionMode) === 'general' &&
-        normalizeString(data.status) !== 'active'
+        normalizeString(data.status) === 'redeemed'
       );
     });
 
@@ -1801,6 +2040,76 @@ export const pulseCheckProvisioningService = {
         { merge: true }
       );
     });
+  },
+
+  async removeAthleteFromTeam(input: {
+    teamId: string;
+    athleteId: string;
+    operationId?: string;
+  }): Promise<{
+    alreadyRemoved: boolean;
+    withdrawnPilotIds: string[];
+    withdrawnEnrollmentCount: number;
+  }> {
+    const teamId = normalizeString(input.teamId);
+    const athleteId = normalizeString(input.athleteId);
+    if (!teamId || !athleteId) {
+      throw new Error('Team and athlete are required to remove this athlete.');
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authenticated admin session required.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const operationId = normalizeString(input.operationId) || (
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `team-removal-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    );
+    try {
+      const response = await fetch('/api/admin/pulsecheck/remove-athlete-from-team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+        },
+        body: JSON.stringify({ teamId, athleteId, operationId }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const error = new Error(payload?.error || 'Failed to remove this athlete from the team.') as Error & {
+          statusCode?: number;
+          code?: string;
+        };
+        error.statusCode = response.status;
+        error.code = normalizeString(payload?.code);
+        throw error;
+      }
+
+      return {
+        alreadyRemoved: payload?.alreadyRemoved === true,
+        withdrawnPilotIds: Array.isArray(payload?.withdrawnPilotIds)
+          ? payload.withdrawnPilotIds.map((value: unknown) => normalizeString(String(value))).filter(Boolean)
+          : [],
+        withdrawnEnrollmentCount: Math.max(0, Number(payload?.withdrawnEnrollmentCount) || 0),
+      };
+    } catch (error: any) {
+      const serverStatus = Number(error?.statusCode) || 0;
+      if (!shouldUseLocalRedeemFallback() || (serverStatus > 0 && serverStatus < 500)) {
+        throw error;
+      }
+      console.warn('[PulseCheck provisioning] Falling back to local admin team removal:', error?.message || error);
+      return removeAthleteFromTeamLocally({
+        teamId,
+        athleteId,
+        operationId,
+        actorUserId: currentUser.uid,
+        actorEmail: normalizeEmail(currentUser.email || ''),
+      });
+    }
   },
 
   async assignAthleteToPilotCohort(input: {
@@ -2165,6 +2474,11 @@ export const pulseCheckProvisioningService = {
             studyMode: destinationPilotStudyMode || 'operational',
             enrollmentMode: nextAthleteOnboarding.enrollmentMode === 'research' ? 'research' : 'pilot',
             status: nextPilotEnrollmentStatus,
+            withdrawnAt: null,
+            withdrawnByUserId: '',
+            withdrawnByEmail: '',
+            withdrawalReason: '',
+            removalOperationId: '',
             productConsentAccepted: Boolean(nextAthleteOnboarding.productConsentAccepted),
             productConsentAcceptedAt:
               nextAthleteOnboarding.productConsentAcceptedAt ||
@@ -3039,6 +3353,35 @@ export const pulseCheckProvisioningService = {
     });
   },
 
+  async updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput): Promise<void> {
+    const pilotId = normalizeString(input.pilotId);
+    if (!pilotId) {
+      throw new Error('Pilot id is required.');
+    }
+
+    const startAt = toPulseCheckPilotScheduleDate(input.startAt);
+    const startDateError = validatePulseCheckPilotStartDate(startAt, null);
+    if (startDateError) throw new Error(startDateError);
+
+    const pilotRef = doc(db, PILOTS_COLLECTION, pilotId);
+    await runTransaction(db, async (transaction) => {
+      const pilotSnap = await transaction.get(pilotRef);
+      if (!pilotSnap.exists()) {
+        throw new Error('Pilot not found.');
+      }
+
+      const pilotData = pilotSnap.data() as Record<string, unknown>;
+      const endAt = toPulseCheckPilotScheduleDate(pilotData.endAt);
+      const scheduleError = validatePulseCheckPilotStartDate(startAt, endAt);
+      if (scheduleError) throw new Error(scheduleError);
+
+      transaction.update(pilotRef, {
+        startAt: Timestamp.fromDate(startAt as Date),
+        updatedAt: serverTimestamp(),
+      });
+    });
+  },
+
   async createPilotCohort(input: CreatePulseCheckPilotCohortInput): Promise<string> {
     const payload = {
       organizationId: normalizeString(input.organizationId),
@@ -3228,12 +3571,19 @@ export const pulseCheckProvisioningService = {
         normalizeInviteRedemptionMode(link.redemptionMode) === redemptionMode
       );
     });
-    const mostRecentMatchingLink = matchingLinkSnapshots
+    const reusableMatchingLinkSnapshots = redemptionMode === 'general'
+      ? matchingLinkSnapshots.filter((snapshot) => {
+          const status = normalizeString((snapshot.data() as Record<string, any>).status);
+          return status === 'active' || status === 'redeemed';
+        })
+      : matchingLinkSnapshots;
+    const mostRecentMatchingLink = reusableMatchingLinkSnapshots
       .slice()
       .sort(
         (left, right) =>
           toTimestampMillis((right.data() as Record<string, any>).createdAt) -
-          toTimestampMillis((left.data() as Record<string, any>).createdAt)
+          toTimestampMillis((left.data() as Record<string, any>).createdAt) ||
+          right.id.localeCompare(left.id)
       )[0] || null;
     const token =
       redemptionMode === 'general'
@@ -3251,50 +3601,94 @@ export const pulseCheckProvisioningService = {
       inviteToken: token,
     });
 
-    try {
-      const [teamSnapshot, organizationSnapshot] = await Promise.all([
-        getDoc(doc(db, TEAMS_COLLECTION, normalizedTeamId)),
-        getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedOrganizationId)),
-      ]);
-
-      const teamData = (teamSnapshot.data() || {}) as Record<string, any>;
-      const organizationData = (organizationSnapshot.data() || {}) as Record<string, any>;
-      const resolvedTeamName = normalizeString(teamData.displayName) || normalizeString(input.pilotName) || 'Team';
-      const resolvedOrganizationName = normalizeString(organizationData.displayName);
-      const previewImageUrl = resolvePulseCheckInvitePreviewImage(
-        normalizeString(teamData.invitePreviewImageUrl),
-        normalizeString(organizationData.invitePreviewImageUrl)
-      );
-      commercialSnapshot = buildTeamCommercialSnapshot({
-        organizationId: normalizedOrganizationId,
-        teamId: normalizedTeamId,
-        commercialConfig: normalizeTeamCommercialConfig(teamData.commercialConfig),
-        inviteToken: token,
-      });
-
-      const requiresAthleteWebCheckout =
-        normalizedRole === 'athlete' &&
-        commercialSnapshot.teamPlanBypassesPaywall !== true &&
-        isPulseCheckCoachPricedAthleteOfferActive(commercialSnapshot);
-      activationUrl = requiresAthleteWebCheckout
-        ? buildPulseCheckAthleteOfferWebUrl(
-            token,
-            baseUrl,
-            shouldStampDevFirebaseLinks()
-          )
-        : buildPulseCheckTeamInviteOneLink({
-            token,
-            fallbackPath,
-            role: input.teamMembershipRole,
-            pilotName: normalizeString(input.pilotName),
-            teamName: resolvedTeamName,
-            organizationName: resolvedOrganizationName,
-            cohortName: normalizeString(input.cohortName),
-            imageUrl: previewImageUrl,
-          });
-    } catch (error) {
-      console.warn('[pulsecheckProvisioningService] Failed to resolve invite preview metadata, falling back to direct URL.', error);
+    const [teamSnapshot, organizationSnapshot, pilotSnapshot, cohortSnapshot] = await Promise.all([
+      getDoc(doc(db, TEAMS_COLLECTION, normalizedTeamId)),
+      getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedOrganizationId)),
+      normalizedPilotId ? getDoc(doc(db, PILOTS_COLLECTION, normalizedPilotId)) : Promise.resolve(null),
+      normalizedCohortId ? getDoc(doc(db, PILOT_COHORTS_COLLECTION, normalizedCohortId)) : Promise.resolve(null),
+    ]);
+    if (!organizationSnapshot.exists() || normalizeString(organizationSnapshot.data()?.status) !== 'active') {
+      throw new Error('The invite organization must be active.');
     }
+    if (
+      !teamSnapshot.exists() ||
+      normalizeString(teamSnapshot.data()?.status) !== 'active' ||
+      normalizeString(teamSnapshot.data()?.organizationId) !== normalizedOrganizationId
+    ) {
+      throw new Error('The invite team must be active and belong to the selected organization.');
+    }
+    if (normalizedPilotId) {
+      const pilotData = (pilotSnapshot?.data() || {}) as Record<string, any>;
+      if (
+        !pilotSnapshot?.exists() ||
+        normalizeString(pilotData.organizationId) !== normalizedOrganizationId ||
+        normalizeString(pilotData.teamId) !== normalizedTeamId
+      ) {
+        throw new Error('The invite pilot must belong to the selected team.');
+      }
+
+      const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
+      if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
+        const reasonMessage =
+          pilotEnrollmentAcceptance.reason === 'not-started'
+            ? 'has not started yet'
+            : pilotEnrollmentAcceptance.reason === 'ended'
+              ? 'has ended'
+              : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
+                ? 'has an invalid schedule'
+                : 'is not active';
+        throw new Error(`The invite pilot ${reasonMessage} and cannot accept enrollment.`);
+      }
+    }
+    if (normalizedCohortId) {
+      const cohortData = (cohortSnapshot?.data() || {}) as Record<string, any>;
+      if (
+        !normalizedPilotId ||
+        !cohortSnapshot?.exists() ||
+        normalizeString(cohortData.status) !== 'active' ||
+        normalizeString(cohortData.organizationId) !== normalizedOrganizationId ||
+        normalizeString(cohortData.teamId) !== normalizedTeamId ||
+        normalizeString(cohortData.pilotId) !== normalizedPilotId
+      ) {
+        throw new Error('The invite cohort must be active and belong to the selected pilot.');
+      }
+    }
+
+    const teamData = (teamSnapshot.data() || {}) as Record<string, any>;
+    const organizationData = (organizationSnapshot.data() || {}) as Record<string, any>;
+    const resolvedTeamName = normalizeString(teamData.displayName) || normalizeString(input.pilotName) || 'Team';
+    const resolvedOrganizationName = normalizeString(organizationData.displayName);
+    const previewImageUrl = resolvePulseCheckInvitePreviewImage(
+      normalizeString(teamData.invitePreviewImageUrl),
+      normalizeString(organizationData.invitePreviewImageUrl)
+    );
+    commercialSnapshot = buildTeamCommercialSnapshot({
+      organizationId: normalizedOrganizationId,
+      teamId: normalizedTeamId,
+      commercialConfig: normalizeTeamCommercialConfig(teamData.commercialConfig),
+      inviteToken: token,
+    });
+
+    const requiresAthleteWebCheckout =
+      normalizedRole === 'athlete' &&
+      commercialSnapshot.teamPlanBypassesPaywall !== true &&
+      isPulseCheckCoachPricedAthleteOfferActive(commercialSnapshot);
+    activationUrl = requiresAthleteWebCheckout
+      ? buildPulseCheckAthleteOfferWebUrl(
+          token,
+          baseUrl,
+          shouldStampDevFirebaseLinks()
+        )
+      : buildPulseCheckTeamInviteOneLink({
+          token,
+          fallbackPath,
+          role: input.teamMembershipRole,
+          pilotName: normalizeString(input.pilotName),
+          teamName: resolvedTeamName,
+          organizationName: resolvedOrganizationName,
+          cohortName: normalizeString(input.cohortName),
+          imageUrl: previewImageUrl,
+        });
 
     if (redemptionMode === 'general' && mostRecentMatchingLink) {
       await updateDoc(mostRecentMatchingLink.ref, {
@@ -4172,7 +4566,6 @@ export const pulseCheckProvisioningService = {
           ]);
           const userSnap = await transaction.get(userRef);
           const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
-          const hadExistingTeamMembership = existingTeamMembershipSnap.exists();
           let pilotStudyMode: PulseCheckPilotStudyMode | null = null;
           let existingPilotEnrollment: Record<string, any> = {};
           let hadExistingPilotEnrollment = false;
@@ -4183,9 +4576,20 @@ export const pulseCheckProvisioningService = {
             if (!pilotSnap.exists()) {
               throw new Error('Pilot not found.');
             }
-            pilotStudyMode = (pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational';
+            const pilotData = pilotSnap.data() as Record<string, any>;
+            if (
+              normalizeString(pilotData.organizationId) !== organizationId ||
+              normalizeString(pilotData.teamId) !== teamId
+            ) {
+              throw new Error('Invite pilot no longer belongs to this team.');
+            }
+            const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
+            if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
+              throw new Error('Invite pilot is not currently accepting enrollment.');
+            }
+            pilotStudyMode = (pilotData.studyMode as PulseCheckPilotStudyMode) || 'operational';
             pilotRequiredConsents = normalizeRequiredConsentDocuments(
-              pilotSnap.data()?.requiredConsents || [],
+              pilotData.requiredConsents || [],
               pilotStudyMode || 'operational'
             );
 
@@ -4222,6 +4626,16 @@ export const pulseCheckProvisioningService = {
           const existingTeamMembership = existingTeamMembershipSnap.exists()
             ? (existingTeamMembershipSnap.data() as Record<string, any>)
             : {};
+          const hasActiveMatchingTeamMembership =
+            existingTeamMembershipSnap.exists()
+            && normalizeString(existingTeamMembership.userId) === userId
+            && normalizeString(existingTeamMembership.organizationId) === organizationId
+            && normalizeString(existingTeamMembership.teamId) === teamId
+            && normalizeString(existingTeamMembership.role) === teamMembershipRole
+            && normalizeString(existingTeamMembership.status) === 'active'
+            && existingTeamMembership.revokedAt == null
+            && existingTeamMembership.archivedAt == null
+            && existingTeamMembership.deletedAt == null;
           const nextAthleteOnboarding =
             teamMembershipRole === 'athlete'
               ? buildAthleteOnboardingFromInvite(
@@ -4277,6 +4691,16 @@ export const pulseCheckProvisioningService = {
               userId,
               email: userEmail,
               role: teamMembershipRole,
+              status: 'active',
+              revokedAt: null,
+              revoked: false,
+              archivedAt: null,
+              deletedAt: null,
+              removedAt: null,
+              removedByUserId: '',
+              removedByEmail: '',
+              removalReason: '',
+              removalOperationId: '',
               title: invitedTitle || null,
               permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
               rosterVisibilityScope: derivedStaffAccess
@@ -4291,7 +4715,7 @@ export const pulseCheckProvisioningService = {
               commercialAccess: commercialSnapshot,
               grantedByInviteToken: token,
               grantedAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
+              createdAt: existingTeamMembership.createdAt || serverTimestamp(),
               updatedAt: serverTimestamp(),
             },
             { merge: true }
@@ -4346,6 +4770,11 @@ export const pulseCheckProvisioningService = {
                 studyMode: pilotStudyMode || 'operational',
                 enrollmentMode: nextAthleteOnboarding.enrollmentMode === 'research' ? 'research' : 'pilot',
                 status: nextPilotEnrollmentStatus,
+                withdrawnAt: null,
+                withdrawnByUserId: '',
+                withdrawnByEmail: '',
+                withdrawalReason: '',
+                removalOperationId: '',
                 productConsentAccepted: Boolean(existingPilotEnrollment.productConsentAccepted),
                 productConsentAcceptedAt: existingPilotEnrollment.productConsentAcceptedAt || null,
                 productConsentVersion: normalizeString(existingPilotEnrollment.productConsentVersion),
@@ -4369,7 +4798,7 @@ export const pulseCheckProvisioningService = {
 
           if (redemptionMode === 'general') {
             const grantedNewScopeAccess =
-              !hadExistingTeamMembership ||
+              !hasActiveMatchingTeamMembership ||
               (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment);
             const shouldRepairInviteStatus = normalizeString(invite.status) !== 'active';
 

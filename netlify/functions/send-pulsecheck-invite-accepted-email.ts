@@ -1,16 +1,16 @@
 import type { Handler } from '@netlify/functions';
-import { sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
+import {
+  buildEmailDedupeKey,
+  sendBrevoTransactionalEmail,
+} from './utils/emailSequenceHelpers';
 import { escapeHtml } from '../../src/lib/emails/pulsecheckAthleteInviteEmail';
 
 /**
  * send-pulsecheck-invite-accepted-email
  *
- * Fired when an athlete ACCEPTS (redeems) a PulseCheck team invite. Mirrors the
- * structure of send-pulsecheck-athlete-invite-email.ts (Brevo via the shared
- * helper, CORS/OPTIONS, email-logs handled inside the helper).
- *
- * hello@fitwithpulse.ai is ALWAYS notified. When the inviting coach opted in
- * (notifyCoach === true) and a valid coachEmail is present, the coach is CC'd.
+ * Sends the optional coach copy when an athlete accepts a PulseCheck team
+ * invite. The collection-wide Firebase membership trigger owns the internal
+ * info@fitwithpulse.ai join alert so every join path is covered once.
  *
  * POST body:
  *   athleteName      (required) – who accepted
@@ -19,14 +19,17 @@ import { escapeHtml } from '../../src/lib/emails/pulsecheckAthleteInviteEmail';
  *   organizationName (optional) – org context
  *   role             (optional) – membership role (athlete)
  *   coachName        (optional) – the inviting coach's display name
- *   coachEmail       (optional) – the inviting coach's email (CC target)
- *   notifyCoach      (optional, bool) – opt-in to CC the coach
+ *   coachEmail       (optional) – the inviting coach's email
+ *   notifyCoach      (optional, bool) – opt-in to email the coach
+ *   membershipId     (optional) – stable team membership id for deduplication
+ *   teamId           (optional) – team id for deduplication and logging
+ *   athleteUserId    (optional) – athlete id for deduplication and logging
  *
  * Never throws to the caller in a way that blocks redemption — the caller
  * fires-and-forgets and ignores the response.
  */
 
-const ALWAYS_NOTIFY_EMAIL = 'hello@fitwithpulse.ai';
+const INTERNAL_TEAM_JOIN_EMAIL = 'info@fitwithpulse.ai';
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function renderInviteAcceptedEmail(opts: {
@@ -172,6 +175,9 @@ export const handler: Handler = async (event) => {
   const coachName = (body.coachName || '').trim();
   const coachEmail = (body.coachEmail || '').trim();
   const notifyCoach = body.notifyCoach === true;
+  const membershipId = (body.membershipId || '').trim();
+  const teamId = (body.teamId || '').trim();
+  const athleteUserId = (body.athleteUserId || '').trim();
 
   if (!athleteName || !teamName) {
     return {
@@ -181,13 +187,19 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // CC the inviting coach only when they opted in AND we have a valid address
-  // that isn't the always-notify inbox (avoid a duplicate recipient).
-  const ccCoach =
+  const shouldNotifyCoach =
     notifyCoach &&
     !!coachEmail &&
     EMAIL_REGEX.test(coachEmail) &&
-    coachEmail.toLowerCase() !== ALWAYS_NOTIFY_EMAIL;
+    coachEmail.toLowerCase() !== INTERNAL_TEAM_JOIN_EMAIL;
+
+  if (!shouldNotifyCoach) {
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: JSON.stringify({ success: true, skipped: true, reason: 'coach-notification-not-requested' }),
+    };
+  }
 
   try {
     const { subject, html } = renderInviteAcceptedEmail({
@@ -200,12 +212,11 @@ export const handler: Handler = async (event) => {
     });
 
     const result = await sendBrevoTransactionalEmail({
-      toEmail: ALWAYS_NOTIFY_EMAIL,
-      toName: 'PulseCheck',
+      toEmail: coachEmail,
+      toName: coachName || coachEmail,
       subject,
       htmlContent: html,
-      ...(ccCoach ? { cc: [{ email: coachEmail, name: coachName || coachEmail }] } : {}),
-      tags: ['pulsecheck', 'team-invite', 'invite-accepted'],
+      tags: ['pulsecheck', 'team-invite', 'invite-accepted', 'coach-notification'],
       sender: {
         email: process.env.BREVO_SENDER_EMAIL || 'hello@fitwithpulse.ai',
         name: 'PulseCheck',
@@ -216,8 +227,24 @@ export const handler: Handler = async (event) => {
           emailType: 'pulsecheck-invite-accepted',
           organizationName: organizationName || null,
           teamName: teamName || null,
-          notifiedCoach: ccCoach || false,
+          notifiedCoach: true,
+          membershipId: membershipId || null,
+          teamId: teamId || null,
+          athleteUserId: athleteUserId || null,
         }),
+      },
+      idempotencyKey: buildEmailDedupeKey([
+        'pulsecheck-invite-accepted-coach-v1',
+        membershipId || teamId,
+        athleteUserId || athleteEmail || athleteName,
+        coachEmail.toLowerCase(),
+      ]),
+      idempotencyMetadata: {
+        product: 'pulsecheck',
+        emailType: 'pulsecheck-invite-accepted-coach',
+        membershipId: membershipId || null,
+        teamId: teamId || null,
+        athleteUserId: athleteUserId || null,
       },
       bypassDailyRecipientLimit: true,
     });
@@ -226,8 +253,12 @@ export const handler: Handler = async (event) => {
       return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ success: false, error: result.error }) };
     }
 
-    console.log('[send-pulsecheck-invite-accepted-email] Sent for:', athleteName, 'team:', teamName, 'ccCoach:', ccCoach, 'messageId:', result.messageId);
-    return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ success: true, messageId: result.messageId }) };
+    console.log('[send-pulsecheck-invite-accepted-email] Coach copy sent for:', athleteName, 'team:', teamName, 'coach:', coachEmail, 'messageId:', result.messageId);
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: JSON.stringify({ success: true, skipped: result.skipped || false, messageId: result.messageId }),
+    };
   } catch (error: any) {
     console.error('[send-pulsecheck-invite-accepted-email] Error:', error);
     return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ success: false, error: error.message || 'Internal error' }) };

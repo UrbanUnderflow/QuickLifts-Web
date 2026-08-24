@@ -28,6 +28,7 @@ import {
   normalizePulseCheckAthleteAge,
   normalizePulseCheckAthleteTrackOverride,
 } from '../../../../utils/pulsecheckAthleteTrack';
+import { resolvePulseCheckPilotEnrollmentAcceptance } from '../../../../utils/pulseCheckPilotSchedule';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -35,6 +36,7 @@ const TEAMS_COLLECTION = 'pulsecheck-teams';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PILOTS_COLLECTION = 'pulsecheck-pilots';
+const PILOT_COHORTS_COLLECTION = 'pulsecheck-pilot-cohorts';
 const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const ATHLETE_APP_ENTITLEMENTS_COLLECTION = 'pulsecheck-athlete-app-entitlements';
 
@@ -441,6 +443,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .collection(ATHLETE_APP_ENTITLEMENTS_COLLECTION)
         .doc(`${teamId}_${userId}`);
       const pilotRef = pilotId ? firestore.collection(PILOTS_COLLECTION).doc(pilotId) : null;
+      const cohortRef = cohortId ? firestore.collection(PILOT_COHORTS_COLLECTION).doc(cohortId) : null;
       const pilotEnrollmentRef = pilotId
         ? firestore.collection(PILOT_ENROLLMENTS_COLLECTION).doc(buildPilotEnrollmentId(pilotId, userId))
         : null;
@@ -454,7 +457,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         transaction.get(teamMembershipRef),
         transaction.get(athleteAppEntitlementRef),
       ]);
-      const hadExistingTeamMembership = existingTeamMembershipSnap.exists;
       const existingTeamMembership = existingTeamMembershipSnap.exists
         ? existingTeamMembershipSnap.data() || {}
         : {};
@@ -473,8 +475,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!isInviteLinkUsable(invite.status, redemptionMode) && !isIdempotentSingleUseReplay) {
         throw new Error('Invite is no longer active.');
       }
-      const pilotSnap = pilotRef ? await transaction.get(pilotRef) : null;
-      const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await transaction.get(pilotEnrollmentRef) : null;
+      const [pilotSnap, cohortSnap, existingPilotEnrollmentSnap] = await Promise.all([
+        pilotRef ? transaction.get(pilotRef) : Promise.resolve(null),
+        cohortRef ? transaction.get(cohortRef) : Promise.resolve(null),
+        pilotEnrollmentRef ? transaction.get(pilotEnrollmentRef) : Promise.resolve(null),
+      ]);
       const hadExistingPilotEnrollment = Boolean(existingPilotEnrollmentSnap?.exists);
 
       if (!organizationSnap.exists) {
@@ -501,6 +506,60 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
       if (pilotId && !pilotSnap?.exists) {
         throw new Error('Pilot not found.');
+      }
+      const pilotData = pilotSnap?.exists ? pilotSnap.data() || {} : {};
+      if (
+        pilotId &&
+        (
+          normalizeString(pilotData.organizationId) !== organizationId ||
+          normalizeString(pilotData.teamId) !== teamId ||
+          pilotData.archivedAt != null ||
+          pilotData.deletedAt != null
+        )
+      ) {
+        throw new Error('Invite pilot is inactive or no longer belongs to this team.');
+      }
+      if (pilotId) {
+        const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
+        if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
+          const errorMessage =
+            pilotEnrollmentAcceptance.reason === 'not-started'
+              ? 'This pilot is not accepting enrollment yet.'
+              : pilotEnrollmentAcceptance.reason === 'ended'
+                ? 'This pilot is no longer accepting enrollment.'
+                : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
+                  ? 'This pilot cannot accept enrollment because its schedule is invalid.'
+                  : 'This pilot is not currently accepting enrollment.';
+          throw new Error(errorMessage);
+        }
+      }
+      const cohortData = cohortSnap?.exists ? cohortSnap.data() || {} : {};
+      if (
+        cohortId &&
+        (
+          !pilotId ||
+          !cohortSnap?.exists ||
+          normalizeString(cohortData.status) !== 'active' ||
+          normalizeString(cohortData.organizationId) !== organizationId ||
+          normalizeString(cohortData.teamId) !== teamId ||
+          normalizeString(cohortData.pilotId) !== pilotId ||
+          cohortData.archivedAt != null ||
+          cohortData.deletedAt != null
+        )
+      ) {
+        throw new Error('Invite cohort is inactive or no longer belongs to this pilot.');
+      }
+      const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists
+        ? existingPilotEnrollmentSnap.data() || {}
+        : {};
+      const hasCurrentPilotEnrollment =
+        existingPilotEnrollmentSnap?.exists &&
+        normalizeString(existingPilotEnrollment.status) !== 'withdrawn';
+      if (
+        hasCurrentPilotEnrollment &&
+        normalizeString(existingPilotEnrollment.cohortId) !== cohortId
+      ) {
+        throw new Error('You are already enrolled in a different pilot cohort. Ask a team admin to move your enrollment.');
       }
 
       const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
@@ -561,7 +620,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           throw new Error('Active PulseCheck app access is required before joining this team.');
         }
       }
-      const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists ? existingPilotEnrollmentSnap.data() || {} : {};
       const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
       const pilotRequiredConsents = normalizeRequiredConsentDocuments(
         pilotSnap?.data()?.requiredConsents || [],
@@ -623,6 +681,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           email: userEmail,
           role: teamMembershipRole,
           status: 'active',
+          revokedAt: null,
+          revoked: false,
+          archivedAt: null,
+          deletedAt: null,
+          removedAt: null,
+          removedByUserId: '',
+          removedByEmail: '',
+          removalReason: '',
+          removalOperationId: '',
           title: invitedTitle || null,
           permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
           rosterVisibilityScope: derivedStaffAccess
@@ -648,7 +715,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           commercialAccess: commercialSnapshot,
           grantedByInviteToken: token,
           grantedAt: now,
-          createdAt: now,
+          createdAt: existingTeamMembership.createdAt || now,
           updatedAt: now,
         },
         { merge: true }
@@ -703,6 +770,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             studyMode: pilotStudyMode || 'operational',
             enrollmentMode: nextAthleteOnboarding.enrollmentMode === 'research' ? 'research' : 'pilot',
             status: nextPilotEnrollmentStatus,
+            withdrawnAt: null,
+            withdrawnByUserId: '',
+            withdrawnByEmail: '',
+            withdrawalReason: '',
+            removalOperationId: '',
             productConsentAccepted: Boolean(existingPilotEnrollment.productConsentAccepted),
             productConsentAcceptedAt: existingPilotEnrollment.productConsentAcceptedAt || null,
             productConsentVersion: normalizeString(existingPilotEnrollment.productConsentVersion),
@@ -730,9 +802,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // guard above already blocks a second redeem, so reaching here is a fresh join.
       const isNewJoin =
         redemptionMode === 'general'
-          ? !hadExistingTeamMembership ||
+          ? !hasActiveMatchingTeamMembership ||
             (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment)
-          : !hadExistingTeamMembership;
+          : !hasActiveMatchingTeamMembership;
 
       if (redemptionMode === 'general') {
         const grantedNewScopeAccess = isNewJoin;
@@ -783,8 +855,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         invitedTitle,
         commercialSnapshot,
         teamPlanBypassesPaywall: commercialSnapshot.teamPlanBypassesPaywall,
-        // Internal (stripped from the client response below): drives the
-        // fire-and-forget "athlete accepted" email after the transaction commits.
+        // Internal (stripped from the client response below): drives the optional
+        // coach-facing "athlete accepted" email after the transaction commits.
         _isNewJoin: isNewJoin,
         _recipientName: normalizeString(invite.recipientName),
         _coachName: normalizeString(invite.createdByName),
@@ -793,9 +865,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // Fire-and-forget the "athlete accepted" email for real new athlete joins only.
-    // Email failure must NOT fail the redemption response.
-    if (result._isNewJoin && result.teamMembershipRole === 'athlete') {
+    // The collection-wide Firebase membership trigger owns the internal company
+    // join alert. This route only sends the optional coach copy requested on the
+    // invite, and email failure must not fail redemption.
+    if (
+      result._isNewJoin &&
+      result.teamMembershipRole === 'athlete' &&
+      result._notifyCoachOnAccept &&
+      result._coachEmail
+    ) {
       try {
         const athleteName =
           result._recipientName || normalizeString(decoded.name) || userEmail.split('@')[0] || 'An athlete';
@@ -813,6 +891,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             coachName: result._coachName,
             coachEmail: result._coachEmail,
             notifyCoach: result._notifyCoachOnAccept,
+            membershipId: result.teamMembershipId,
+            teamId: result.teamId,
+            athleteUserId: userId,
           }),
         }).catch((mailErr) => {
           console.error('[pulsecheck-team-invite/redeem] accept email send failed:', mailErr);

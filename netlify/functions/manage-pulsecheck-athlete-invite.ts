@@ -342,6 +342,12 @@ const findReusableOrMatchingInvite = async ({
       return false;
     }
     const data = document.data() || {};
+    if (
+      normalizeString(data.pilotId) !== ''
+      || normalizeString(data.cohortId) !== ''
+    ) {
+      return false;
+    }
     const storedMode = normalizeString(data.redemptionMode) === 'general'
       ? 'general'
       : 'single-use';
@@ -465,6 +471,8 @@ const createInvite = async ({
     redemptionCount: 0,
     organizationId,
     teamId,
+    pilotId: '',
+    cohortId: '',
     teamMembershipRole: 'athlete',
     staffCapabilities: [],
     ...inviteFieldPayload(fields),

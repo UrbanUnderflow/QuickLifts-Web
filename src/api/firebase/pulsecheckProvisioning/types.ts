@@ -145,6 +145,7 @@ export interface PulseCheckTeamCommercialSnapshot extends PulseCheckTeamCommerci
   sourceOrganizationId: string;
   sourceTeamId: string;
   inviteToken?: string;
+  grantedVia?: 'team-code-manual-entry';
   teamPlanBypassesPaywall: boolean;
 }
 
@@ -683,6 +684,11 @@ export interface CreatePulseCheckPilotInput {
   notes?: string;
 }
 
+export interface UpdatePulseCheckPilotStartDateInput {
+  pilotId: string;
+  startAt: Timestamp | Date;
+}
+
 export interface PulseCheckPilotCohort {
   id: string;
   organizationId: string;
@@ -720,6 +726,11 @@ export interface PulseCheckPilotEnrollment {
   completedConsentVersions?: Record<string, string>;
   eligibleForResearchDataset: boolean;
   grantedByInviteToken?: string;
+  withdrawnAt?: Timestamp | null;
+  withdrawnByUserId?: string;
+  withdrawnByEmail?: string;
+  withdrawalReason?: string;
+  removalOperationId?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
@@ -921,6 +932,11 @@ export interface PulseCheckTeamMembership {
    */
   status?: PulseCheckTeamMembershipStatus;
   revokedAt?: Timestamp | null;
+  removedAt?: Timestamp | null;
+  removedByUserId?: string;
+  removedByEmail?: string;
+  removalReason?: string;
+  removalOperationId?: string;
   title?: string;
   // Name the admin entered when generating the activation link (invite.recipientName),
   // carried over at redeem so post-activation can prefill the profile name field
@@ -947,6 +963,8 @@ export interface PulseCheckTeamMembership {
   onboardingStatus?: 'pending' | 'pending-profile' | 'profile-complete' | 'pending-consent' | 'complete';
   postActivationCompletedAt?: Timestamp | null;
   grantedByInviteToken?: string;
+  grantedVia?: 'team-code-manual-entry';
+  grantedByTeamCode?: string;
   grantedAt?: Timestamp | null;
   handoffMetadata?: PulseCheckProvisioningHandoffMetadata;
   commercialAccess?: PulseCheckTeamCommercialSnapshot;

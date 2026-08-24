@@ -185,6 +185,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/pulsecheck/remove-athlete-from-team"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/pulsecheck/remove-athlete-from-team"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/system-overview/share-links"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/system-overview/share-links"
   status = 200

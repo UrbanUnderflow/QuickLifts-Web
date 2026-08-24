@@ -173,7 +173,7 @@ export const PilotAthleteCommunicationModal: React.FC<Props> = ({
                 type="button"
                 onClick={onSend}
                 disabled={loadingPreview || sending || !preview}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d7ff00] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#c5eb00] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-300"
+                className="pilot-theme-primary-action inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d7ff00] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#c5eb00] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-300"
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {sending ? 'Sending...' : channel === 'email' ? 'Send email' : 'Send push'}

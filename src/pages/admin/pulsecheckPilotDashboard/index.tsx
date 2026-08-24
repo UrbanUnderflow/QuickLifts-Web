@@ -19,17 +19,29 @@ import {
   ShieldAlert,
   LogOut,
   UserCircle2,
+  UserMinus,
+  UserPlus,
   Users2,
   X,
   type LucideIcon,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
+import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import SignInModal from '../../../components/SignInModal';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import {
+  PilotDashboardThemeFrame,
+  PilotDashboardThemeToggle,
+} from '../../../components/admin/pilot-dashboard/PilotDashboardTheme';
+import PilotTeamMultiSelect, {
+  type PilotTeamFilterOption,
+} from '../../../components/admin/pilot-dashboard/PilotTeamMultiSelect';
+import PilotAthleteRemovalModal from '../../../components/admin/pilot-dashboard/PilotAthleteRemovalModal';
 import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import {
   auth,
+  db,
   getFirebaseModeRequestHeaders,
 } from '../../../api/firebase/config';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
@@ -39,12 +51,17 @@ import type {
   PilotDashboardAthleteTeamContext,
   PilotDashboardDirectoryEntry,
 } from '../../../api/firebase/pulsecheckPilotDashboard/types';
-import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
+import {
+  isActivePulseCheckTeamMembership,
+  type PulseCheckInviteLink,
+  type PulseCheckTeamMembership,
+} from '../../../api/firebase/pulsecheckProvisioning/types';
 import {
   buildAthleteInviteEmailDraft,
   renderAthleteInviteEmail,
 } from '../../../lib/emails/pulsecheckAthleteInviteEmail';
 import { useUser, useUserLoading } from '../../../hooks/useUser';
+import { filterBySelectedTeamIds } from '../../../utils/pilotDashboardTeamFilter';
 
 const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
@@ -71,6 +88,23 @@ interface AdminInviteEmailDraft {
   introText: string;
   detailText: string;
   buttonLabel: string;
+}
+
+interface AthleteJoinToast {
+  id: string;
+  membershipId: string;
+  athleteId: string;
+  athleteName: string;
+  organizationId: string;
+  teamId: string;
+  teamName: string;
+}
+
+interface AthleteRemovalTarget {
+  athleteId: string;
+  athleteName: string;
+  context: PilotDashboardAthleteTeamContext;
+  totalTeamContexts: number;
 }
 
 const studyModeOptions: Array<{ value: '' | StudyModeValue; label: string }> = [
@@ -253,6 +287,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [entries, setEntries] = useState<PilotDashboardDirectoryEntry[]>([]);
   const [organizationId, setOrganizationId] = useState('');
   const [teamId, setTeamId] = useState('');
+  const [selectedAthleteTeamIds, setSelectedAthleteTeamIds] = useState<string[]>([]);
   const [studyMode, setStudyMode] = useState<'' | StudyModeValue>('');
   const [pilotSearchQuery, setPilotSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -268,10 +303,24 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [preparingInviteKey, setPreparingInviteKey] = useState<string | null>(null);
   const [sendingInviteKey, setSendingInviteKey] = useState<string | null>(null);
   const [inviteToast, setInviteToast] = useState<{ type: InviteToastTone; text: string } | null>(null);
+  const [athleteJoinToasts, setAthleteJoinToasts] = useState<AthleteJoinToast[]>([]);
+  const [athleteJoinListenerReady, setAthleteJoinListenerReady] = useState(false);
+  const [athleteRemovalTarget, setAthleteRemovalTarget] = useState<AthleteRemovalTarget | null>(null);
+  const [athleteRemovalSaving, setAthleteRemovalSaving] = useState(false);
+  const [athleteRemovalError, setAthleteRemovalError] = useState<string | null>(null);
+  const [athleteRemovalNotice, setAthleteRemovalNotice] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const [showDashboardSignIn, setShowDashboardSignIn] = useState(false);
   const loadRequestIdRef = useRef(0);
   const athletesRequestIdRef = useRef(0);
   const intakeAnswerCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingAthleteDeepLinkRef = useRef<string | null>(null);
+  const hydratedAthleteDeepLinkRef = useRef('');
+  const athleteJoinToastTimersRef = useRef<Map<string, number>>(new Map());
+  const athleteRemovalNoticeTimerRef = useRef<number | null>(null);
+  const athletesDirectoryRef = useRef<HTMLElement | null>(null);
   const currentAccountEmail = currentUser?.email || auth.currentUser?.email || '';
   const canLoadLiveDashboardData = !currentUserLoading && Boolean(currentAccountEmail);
 
@@ -311,7 +360,6 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     try {
       const nextAthletes = await pulseCheckPilotDashboardService.getPilotDashboardAthletes({
         organizationId: organizationId || undefined,
-        teamId: teamId || undefined,
         studyMode: studyMode || undefined,
       });
       if (requestId !== athletesRequestIdRef.current) return;
@@ -332,7 +380,15 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     }
     void loadAthletes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organizationId, teamId, studyMode, demoModeEnabled, canLoadLiveDashboardData, currentAccountEmail]);
+  }, [organizationId, studyMode, demoModeEnabled, canLoadLiveDashboardData, currentAccountEmail]);
+
+  useEffect(() => () => {
+    athleteJoinToastTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    athleteJoinToastTimersRef.current.clear();
+    if (athleteRemovalNoticeTimerRef.current) {
+      window.clearTimeout(athleteRemovalNoticeTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     setInviteEmailDraft(null);
@@ -349,6 +405,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     }
     setOrganizationId('');
     setTeamId('');
+    setSelectedAthleteTeamIds([]);
     setStudyMode('');
     setPilotSearchQuery('');
     void load('refresh');
@@ -370,6 +427,170 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       ).sort((left, right) => left.displayName.localeCompare(right.displayName)),
     [entries, studyMode]
   );
+
+  const activePilotTeamIds = useMemo(
+    () => Array.from(new Set(entries.map((entry) => entry.team.id).filter(Boolean))).sort(),
+    [entries]
+  );
+  const activePilotTeamIdsKey = activePilotTeamIds.join('|');
+  const teamContextById = useMemo(
+    () => new Map(entries.map((entry) => [entry.team.id, {
+      organizationId: entry.organization.id,
+      teamName: entry.team.displayName,
+    }])),
+    [entries]
+  );
+
+  useEffect(() => {
+    setAthleteJoinListenerReady(false);
+    if (
+      demoModeEnabled ||
+      loading ||
+      !canLoadLiveDashboardData ||
+      !activePilotTeamIdsKey
+    ) {
+      return undefined;
+    }
+
+    const inScopeTeamIds = new Set(activePilotTeamIdsKey.split('|').filter(Boolean));
+    let armed = false;
+    let previousActiveState = new Map<string, boolean>();
+    const membershipQuery = query(
+      collection(db, 'pulsecheck-team-memberships'),
+      where('role', '==', 'athlete')
+    );
+
+    const unsubscribe = onSnapshot(
+      membershipQuery,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.metadata.fromCache || snapshot.metadata.hasPendingWrites) return;
+
+        const nextActiveState = new Map<string, boolean>();
+        const memberships = new Map<string, PulseCheckTeamMembership>();
+        snapshot.docs.forEach((membershipDoc) => {
+          const membership = {
+            id: membershipDoc.id,
+            ...(membershipDoc.data() as Omit<PulseCheckTeamMembership, 'id'>),
+          };
+          memberships.set(membershipDoc.id, membership);
+          const lifecycle = membership as PulseCheckTeamMembership & {
+            archivedAt?: unknown;
+            deletedAt?: unknown;
+            revoked?: boolean;
+          };
+          nextActiveState.set(
+            membershipDoc.id,
+            isActivePulseCheckTeamMembership(membership) &&
+              !lifecycle.archivedAt &&
+              !lifecycle.deletedAt &&
+              lifecycle.revoked !== true
+          );
+        });
+
+        if (!armed) {
+          previousActiveState = nextActiveState;
+          armed = true;
+          setAthleteJoinListenerReady(true);
+          return;
+        }
+
+        const joinedMemberships = Array.from(memberships.entries()).filter(([membershipId, membership]) => (
+          inScopeTeamIds.has(membership.teamId) &&
+          nextActiveState.get(membershipId) === true &&
+          previousActiveState.get(membershipId) !== true
+        ));
+        previousActiveState = nextActiveState;
+
+        if (joinedMemberships.length === 0) return;
+        void load('refresh');
+        void loadAthletes();
+
+        joinedMemberships.forEach(([membershipId, membership]) => {
+          const teamContext = teamContextById.get(membership.teamId);
+          if (!teamContext) return;
+          void getDoc(doc(db, 'users', membership.userId))
+            .catch(() => null)
+            .then((profileSnapshot) => {
+              const profile = profileSnapshot?.exists() ? profileSnapshot.data() || {} : {};
+              const athleteName = [
+                membership.athleteOnboarding?.entryOnboardingName,
+                membership.invitedDisplayName,
+                profile.displayName,
+                profile.fullName,
+                profile.name,
+                profile.username,
+                membership.email?.split('@')[0],
+                'An athlete',
+              ].find((value) => typeof value === 'string' && value.trim()) as string;
+              const toastId = `${membershipId}-${Date.now()}`;
+              const toast: AthleteJoinToast = {
+                id: toastId,
+                membershipId,
+                athleteId: membership.userId,
+                athleteName: athleteName.trim(),
+                organizationId: membership.organizationId || teamContext.organizationId,
+                teamId: membership.teamId,
+                teamName: teamContext.teamName,
+              };
+              setAthleteJoinToasts((current) => [...current.filter((item) => item.membershipId !== membershipId), toast].slice(-3));
+              const timerId = window.setTimeout(() => {
+                setAthleteJoinToasts((current) => current.filter((item) => item.id !== toastId));
+                athleteJoinToastTimersRef.current.delete(toastId);
+              }, 9000);
+              athleteJoinToastTimersRef.current.set(toastId, timerId);
+            });
+        });
+      },
+      (listenerError) => {
+        setAthleteJoinListenerReady(false);
+        console.error('[PilotDashboard] Athlete join listener failed:', listenerError);
+      }
+    );
+
+    return unsubscribe;
+  }, [
+    activePilotTeamIdsKey,
+    canLoadLiveDashboardData,
+    demoModeEnabled,
+    loading,
+    organizationId,
+    studyMode,
+    teamContextById,
+    teamId,
+  ]);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    const linkedTeamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
+    const linkedAthleteId = typeof router.query.athleteId === 'string' ? router.query.athleteId : '';
+    if (!linkedAthleteId) return;
+    const deepLinkKey = `${linkedTeamId || 'all'}:${linkedAthleteId}`;
+    if (hydratedAthleteDeepLinkRef.current === deepLinkKey) return;
+    hydratedAthleteDeepLinkRef.current = deepLinkKey;
+    pendingAthleteDeepLinkRef.current = linkedAthleteId;
+    if (linkedTeamId) {
+      const linkedTeamContext = teamContextById.get(linkedTeamId);
+      setOrganizationId(linkedTeamContext?.organizationId || '');
+      setTeamId(linkedTeamId);
+      setSelectedAthleteTeamIds([linkedTeamId]);
+    }
+    setStudyMode('');
+    setPilotSearchQuery('');
+    setActiveSidebarItem('Athletes');
+    window.setTimeout(() => {
+      document.getElementById('athletes-directory')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, [router.isReady, router.query.athleteId, router.query.teamId, teamContextById]);
+
+  useEffect(() => {
+    const pendingAthleteId = pendingAthleteDeepLinkRef.current;
+    if (!pendingAthleteId || athletesLoading) return;
+    if (athletes.some((athlete) => athlete.athleteUserId === pendingAthleteId)) {
+      setSelectedAthleteId(pendingAthleteId);
+      pendingAthleteDeepLinkRef.current = null;
+    }
+  }, [athletes, athletesLoading]);
 
   const teams = useMemo(
     () =>
@@ -442,7 +663,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     [filteredEntries]
   );
 
-  const filteredAthletes = useMemo(() => {
+  const searchFilteredAthletes = useMemo(() => {
     const normalizedQuery = pilotSearchQuery.trim().toLowerCase();
     if (!normalizedQuery) return athletes;
     return athletes.filter((athlete) => {
@@ -467,6 +688,79 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       return searchableText.includes(normalizedQuery);
     });
   }, [athletes, pilotSearchQuery]);
+
+  const athleteTeamFilterOptions = useMemo<PilotTeamFilterOption[]>(() => {
+    const teamDetailsById = new Map<string, Omit<PilotTeamFilterOption, 'athleteCount'>>();
+    athletes.forEach((athlete) => {
+      getAthleteTeamContexts(athlete).forEach((context) => {
+        if (!context.teamId) return;
+        const existing = teamDetailsById.get(context.teamId);
+        teamDetailsById.set(context.teamId, {
+          id: context.teamId,
+          teamName: context.teamName || existing?.teamName || 'Unnamed team',
+          organizationName:
+            context.organizationName || existing?.organizationName || 'Organization not available',
+        });
+      });
+    });
+
+    const countsByTeamId = new Map<string, number>();
+    searchFilteredAthletes.forEach((athlete) => {
+      const athleteTeamIds = new Set(
+        getAthleteTeamContexts(athlete)
+          .map((context) => context.teamId)
+          .filter(Boolean)
+      );
+      athleteTeamIds.forEach((athleteTeamId) => {
+        countsByTeamId.set(athleteTeamId, (countsByTeamId.get(athleteTeamId) || 0) + 1);
+      });
+    });
+
+    return Array.from(teamDetailsById.values())
+      .map((team) => ({
+        ...team,
+        athleteCount: countsByTeamId.get(team.id) || 0,
+      }))
+      .sort(
+        (left, right) =>
+          left.organizationName.localeCompare(right.organizationName) ||
+          left.teamName.localeCompare(right.teamName)
+      );
+  }, [athletes, searchFilteredAthletes]);
+
+  const availableAthleteTeamIdsKey = athleteTeamFilterOptions.map((option) => option.id).sort().join('|');
+
+  useEffect(() => {
+    if (athletesLoading || athletesError) return;
+    const availableTeamIds = new Set(availableAthleteTeamIdsKey.split('|').filter(Boolean));
+    setSelectedAthleteTeamIds((current) => {
+      const next = current.filter((selectedTeamId) => availableTeamIds.has(selectedTeamId));
+      return next.length === current.length ? current : next;
+    });
+  }, [athletesError, athletesLoading, availableAthleteTeamIdsKey]);
+
+  const updateSelectedAthleteTeams = (nextTeamIds: string[]) => {
+    const normalizedTeamIds = Array.from(new Set(nextTeamIds.map((value) => value.trim()).filter(Boolean)));
+    setSelectedAthleteTeamIds(normalizedTeamIds);
+    if (teamId) setTeamId('');
+    if (router.query.teamId) {
+      const nextQuery = { ...router.query };
+      delete nextQuery.teamId;
+      void router.replace(
+        { pathname: '/admin/pulsecheckPilotDashboard', query: nextQuery, hash: 'athletes-directory' },
+        undefined,
+        { shallow: true }
+      );
+    }
+  };
+
+  const filteredAthletes = useMemo(() => {
+    return filterBySelectedTeamIds(
+      searchFilteredAthletes,
+      selectedAthleteTeamIds,
+      (athlete) => getAthleteTeamContexts(athlete).map((context) => context.teamId)
+    );
+  }, [searchFilteredAthletes, selectedAthleteTeamIds]);
 
   const selectedAthlete = useMemo(
     () => filteredAthletes.find((athlete) => athlete.athleteUserId === selectedAthleteId) || null,
@@ -1081,7 +1375,9 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     },
   ];
 
-  const areFiltersActive = Boolean(organizationId || teamId || studyMode || pilotSearchQuery.trim());
+  const areFiltersActive = Boolean(
+    organizationId || teamId || selectedAthleteTeamIds.length || studyMode || pilotSearchQuery.trim()
+  );
   const pilotCountText = loading ? 'Loading pilots...' : error ? 'Directory unavailable' : getPilotCountLabel(filteredEntries.length);
   const accountEmail = currentAccountEmail;
   const accountName =
@@ -1123,8 +1419,128 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     }
   };
 
+  const dismissAthleteJoinToast = (toastId: string) => {
+    const timerId = athleteJoinToastTimersRef.current.get(toastId);
+    if (timerId) window.clearTimeout(timerId);
+    athleteJoinToastTimersRef.current.delete(toastId);
+    setAthleteJoinToasts((current) => current.filter((item) => item.id !== toastId));
+  };
+
+  const viewJoinedAthlete = (toast: AthleteJoinToast) => {
+    dismissAthleteJoinToast(toast.id);
+    pendingAthleteDeepLinkRef.current = toast.athleteId;
+    setOrganizationId(toast.organizationId);
+    setTeamId(toast.teamId);
+    setSelectedAthleteTeamIds([toast.teamId]);
+    setStudyMode('');
+    setPilotSearchQuery('');
+    setActiveSidebarItem('Athletes');
+    const visibleAthlete = athletes.find((athlete) => athlete.athleteUserId === toast.athleteId);
+    if (visibleAthlete) {
+      setSelectedAthleteId(visibleAthlete.athleteUserId);
+      pendingAthleteDeepLinkRef.current = null;
+    }
+    const linkedPath = `/admin/pulsecheckPilotDashboard?teamId=${encodeURIComponent(toast.teamId)}&athleteId=${encodeURIComponent(toast.athleteId)}#athletes-directory`;
+    void router.replace(linkedPath, undefined, { shallow: true });
+    window.setTimeout(() => {
+      document.getElementById('athletes-directory')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
+  const closeSelectedAthlete = () => {
+    setSelectedAthleteId(null);
+    pendingAthleteDeepLinkRef.current = null;
+    if (typeof router.query.athleteId !== 'string') return;
+    const nextQuery = { ...router.query };
+    delete nextQuery.athleteId;
+    void router.replace(
+      { pathname: '/admin/pulsecheckPilotDashboard', query: nextQuery, hash: 'athletes-directory' },
+      undefined,
+      { shallow: true }
+    );
+  };
+
+  const showAthleteRemovalNotice = (type: 'success' | 'error', text: string) => {
+    if (athleteRemovalNoticeTimerRef.current) {
+      window.clearTimeout(athleteRemovalNoticeTimerRef.current);
+    }
+    setAthleteRemovalNotice({ type, text });
+    athleteRemovalNoticeTimerRef.current = window.setTimeout(() => {
+      setAthleteRemovalNotice(null);
+      athleteRemovalNoticeTimerRef.current = null;
+    }, 7000);
+  };
+
+  const openAthleteRemoval = (
+    athlete: PilotDashboardAthleteRosterEntry,
+    context: PilotDashboardAthleteTeamContext
+  ) => {
+    if (demoModeEnabled) {
+      showAthleteRemovalNotice('error', 'Athlete removal is unavailable in demo mode.');
+      return;
+    }
+    setAthleteRemovalError(null);
+    setAthleteRemovalTarget({
+      athleteId: athlete.athleteUserId,
+      athleteName: athlete.displayName,
+      context,
+      totalTeamContexts: getAthleteTeamContexts(athlete).length,
+    });
+  };
+
+  const closeAthleteRemoval = () => {
+    if (athleteRemovalSaving) return;
+    setAthleteRemovalTarget(null);
+    setAthleteRemovalError(null);
+  };
+
+  const confirmAthleteRemoval = async () => {
+    const target = athleteRemovalTarget;
+    if (!target || athleteRemovalSaving) return;
+
+    setAthleteRemovalSaving(true);
+    setAthleteRemovalError(null);
+    try {
+      const result = await pulseCheckProvisioningService.removeAthleteFromTeam({
+        teamId: target.context.teamId,
+        athleteId: target.athleteId,
+      });
+      const remainingContexts = selectedAthleteTeamContexts.filter(
+        (context) => context.teamId !== target.context.teamId
+      );
+
+      setAthleteRemovalTarget(null);
+      if (remainingContexts.length === 0) {
+        closeSelectedAthlete();
+      } else if (selectedAthleteTeamIds.includes(target.context.teamId)) {
+        updateSelectedAthleteTeams(
+          selectedAthleteTeamIds.filter((selectedTeamId) => selectedTeamId !== target.context.teamId)
+        );
+      }
+
+      await Promise.all([load('refresh'), loadAthletes()]);
+      showAthleteRemovalNotice(
+        'success',
+        result.alreadyRemoved
+          ? `${target.athleteName} was already removed from ${target.context.teamName}.`
+          : `${target.athleteName} was removed from ${target.context.teamName}.`
+      );
+      window.requestAnimationFrame(() => {
+        athletesDirectoryRef.current?.focus({ preventScroll: true });
+      });
+    } catch (removalError: any) {
+      setAthleteRemovalError(
+        removalError?.message ||
+          `Could not remove ${target.athleteName} from ${target.context.teamName}. Nothing changed. Try again.`
+      );
+    } finally {
+      setAthleteRemovalSaving(false);
+    }
+  };
+
   return (
     <AdminRouteGuard>
+      <PilotDashboardThemeFrame>
       <Head>
         <title>PulseCheck Pilot Dashboard</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1261,6 +1677,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-2.5 xl:justify-end">
+                    <PilotDashboardThemeToggle />
                     {demoModeEnabled ? (
                       <button
                         type="button"
@@ -1417,6 +1834,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                       onChange={(event) => {
                         setOrganizationId(event.target.value);
                         setTeamId('');
+                        setSelectedAthleteTeamIds([]);
                       }}
                       className="pilot-select rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/80 outline-none transition hover:border-white/15 hover:text-white focus:border-[#00d4aa]/35"
                     >
@@ -1430,7 +1848,11 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
 
                     <select
                       value={teamId}
-                      onChange={(event) => setTeamId(event.target.value)}
+                      onChange={(event) => {
+                        const nextTeamId = event.target.value;
+                        setTeamId(nextTeamId);
+                        setSelectedAthleteTeamIds(nextTeamId ? [nextTeamId] : []);
+                      }}
                       className="pilot-select rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/80 outline-none transition hover:border-white/15 hover:text-white focus:border-[#00d4aa]/35"
                     >
                       <option value="">All teams</option>
@@ -1443,7 +1865,11 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
 
                     <select
                       value={studyMode}
-                      onChange={(event) => setStudyMode(event.target.value as '' | StudyModeValue)}
+                      onChange={(event) => {
+                        setStudyMode(event.target.value as '' | StudyModeValue);
+                        setTeamId('');
+                        setSelectedAthleteTeamIds([]);
+                      }}
                       className="pilot-select rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/80 outline-none transition hover:border-white/15 hover:text-white focus:border-[#00d4aa]/35"
                     >
                       {studyModeOptions.map((option) => (
@@ -1461,6 +1887,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                         onClick={() => {
                           setOrganizationId('');
                           setTeamId('');
+                          setSelectedAthleteTeamIds([]);
                           setStudyMode('');
                           setPilotSearchQuery('');
                         }}
@@ -1654,7 +2081,13 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 </div>
               </section>
 
-              <section id="athletes-directory" className="pilot-slide-up scroll-mt-24 border-b border-white/10 px-4 py-6 sm:px-8 sm:py-8" style={{ animationDelay: '120ms' }}>
+              <section
+                ref={athletesDirectoryRef}
+                id="athletes-directory"
+                tabIndex={-1}
+                className="pilot-slide-up scroll-mt-24 border-b border-white/10 px-4 py-6 outline-none sm:px-8 sm:py-8"
+                style={{ animationDelay: '120ms' }}
+              >
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/30">
@@ -1669,6 +2102,17 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                     {athletesLoading ? 'Loading...' : `${filteredAthletes.length} athlete${filteredAthletes.length === 1 ? '' : 's'}`}
                   </span>
                 </div>
+
+                {!athletesLoading && !athletesError ? (
+                  <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 sm:p-5">
+                    <PilotTeamMultiSelect
+                      options={athleteTeamFilterOptions}
+                      selectedTeamIds={selectedAthleteTeamIds}
+                      totalAthleteCount={searchFilteredAthletes.length}
+                      onChange={updateSelectedAthleteTeams}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="mt-5">
                   {athletesLoading ? (
@@ -1829,6 +2273,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                         onClick={() => {
                           setOrganizationId('');
                           setTeamId('');
+                          setSelectedAthleteTeamIds([]);
                           setStudyMode('');
                           setPilotSearchQuery('');
                         }}
@@ -1987,12 +2432,81 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           </div>
         </div>
 
+        <div
+          className="pointer-events-none fixed right-4 top-5 z-[80] flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 sm:right-6 sm:top-6"
+          aria-live="polite"
+          aria-atomic="false"
+          data-testid="pilot-dashboard-athlete-join-toasts"
+          data-listener-state={athleteJoinListenerReady ? 'ready' : 'waiting'}
+        >
+          {athleteRemovalNotice ? (
+            <div
+              className={`pilot-athlete-removal-notice pointer-events-auto overflow-hidden rounded-2xl border p-4 shadow-2xl backdrop-blur-xl ${
+                athleteRemovalNotice.type === 'success'
+                  ? 'border-emerald-400/25 text-emerald-100'
+                  : 'border-rose-400/25 text-rose-100'
+              }`}
+              data-tone={athleteRemovalNotice.type}
+              role="status"
+              data-testid="pilot-athlete-removal-notice"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm font-medium leading-5">{athleteRemovalNotice.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setAthleteRemovalNotice(null)}
+                  className="rounded-full p-1 text-white/50 transition hover:bg-white/[0.08] hover:text-white"
+                  aria-label="Dismiss athlete removal notice"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {athleteJoinToasts.map((toast) => (
+            <div
+              key={toast.id}
+              className="pilot-athlete-join-toast pointer-events-auto overflow-hidden rounded-2xl border shadow-2xl backdrop-blur-xl"
+              data-testid="pilot-dashboard-athlete-join-toast"
+            >
+              <div className="flex items-start gap-3 p-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10">
+                  <UserPlus className="h-5 w-5 text-emerald-200" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => viewJoinedAthlete(toast)}
+                  className="min-w-0 flex-1 text-left"
+                  data-testid="pilot-dashboard-athlete-join-view"
+                >
+                  <span className="block text-sm font-semibold text-white">New athlete joined</span>
+                  <span className="mt-1 block text-sm leading-5 text-white/60">
+                    {toast.athleteName} joined {toast.teamName}.
+                  </span>
+                  <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-[#7cefd6]">
+                    View athlete
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dismissAthleteJoinToast(toast.id)}
+                  className="rounded-full p-1 text-white/40 transition hover:bg-white/[0.08] hover:text-white"
+                  aria-label="Dismiss athlete joined notification"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {selectedAthlete ? (
           <div className="fixed inset-0 z-50 flex justify-end">
             <button
               type="button"
               aria-label="Close athlete detail"
-              onClick={() => setSelectedAthleteId(null)}
+              onClick={closeSelectedAthlete}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
             <div className="pilot-drawer relative ml-auto flex h-full w-full max-w-[74rem] flex-col overflow-hidden border-l border-white/10 bg-[rgba(9,12,19,0.98)] shadow-[0_0_80px_rgba(0,0,0,0.6)]">
@@ -2020,7 +2534,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSelectedAthleteId(null)}
+                    onClick={closeSelectedAthlete}
                     className="shrink-0 rounded-full border border-white/10 bg-white/[0.03] p-1.5 text-white/60 transition hover:bg-white/[0.08] hover:text-white"
                   >
                     <X className="h-4 w-4" />
@@ -2126,11 +2640,29 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                             type="button"
                             onClick={() => void sendDefaultAdminInviteEmail(selectedAthlete, context)}
                             disabled={!selectedAthlete.email || preparingInviteKey === context.key || sendingInviteKey === context.key}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#d9ff00]/25 bg-[#d9ff00]/10 px-3 py-2 text-xs font-semibold text-[#ecff70] transition hover:bg-[#d9ff00]/15 disabled:cursor-not-allowed disabled:opacity-45"
+                            className="pilot-theme-soft-action inline-flex items-center justify-center gap-2 rounded-xl border border-[#d9ff00]/25 bg-[#d9ff00]/10 px-3 py-2 text-xs font-semibold text-[#ecff70] transition hover:bg-[#d9ff00]/15 disabled:cursor-not-allowed disabled:opacity-45"
                           >
                             <Send className="h-3.5 w-3.5" />
                             {sendingInviteKey === context.key ? 'Sending...' : 'Send email'}
                           </button>
+                        </div>
+                        <div className="mt-3 border-t border-white/10 pt-3">
+                          <button
+                            type="button"
+                            onClick={() => openAthleteRemoval(selectedAthlete, context)}
+                            disabled={demoModeEnabled || athleteRemovalSaving}
+                            className="pilot-theme-danger-action inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300/70 disabled:cursor-not-allowed disabled:opacity-50"
+                            title={demoModeEnabled ? 'Unavailable in demo mode' : undefined}
+                            data-testid={`pilot-athlete-remove-team-${context.teamId}`}
+                          >
+                            <UserMinus className="h-3.5 w-3.5" aria-hidden="true" />
+                            Remove from {context.teamName || 'team'}
+                          </button>
+                          {context.pilotName ? (
+                            <p className="mt-2 text-center text-[11px] leading-4 text-white/35">
+                              Also withdraws this athlete from {context.pilotName}.
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                         ))}
@@ -2249,7 +2781,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                         type="button"
                         onClick={() => void sendAdminInviteEmail(inviteEmailDraft)}
                         disabled={sendingInviteKey === inviteEmailDraft.contextKey}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#d9ff00]/25 bg-[#d9ff00] px-3 py-2 text-xs font-bold text-black transition hover:bg-[#e6ff3f] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="pilot-theme-primary-action inline-flex items-center gap-2 rounded-xl border border-[#d9ff00]/25 bg-[#d9ff00] px-3 py-2 text-xs font-bold text-black transition hover:bg-[#e6ff3f] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Send className="h-3.5 w-3.5" />
                         {sendingInviteKey === inviteEmailDraft.contextKey ? 'Sending...' : 'Send invite email'}
@@ -2346,6 +2878,18 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           </div>
         ) : null}
 
+        <PilotAthleteRemovalModal
+          open={Boolean(athleteRemovalTarget)}
+          athleteName={athleteRemovalTarget?.athleteName || 'This athlete'}
+          teamName={athleteRemovalTarget?.context.teamName || 'this team'}
+          pilotName={athleteRemovalTarget?.context.pilotName}
+          isOnlyTeamContext={(athleteRemovalTarget?.totalTeamContexts || 0) <= 1}
+          saving={athleteRemovalSaving}
+          error={athleteRemovalError}
+          onClose={closeAthleteRemoval}
+          onConfirm={() => void confirmAthleteRemoval()}
+        />
+
         <style jsx global>{`
           .pilot-drawer {
             animation: pilotDrawerIn 0.28s ease forwards;
@@ -2439,10 +2983,12 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           }
 
           .pilot-select {
+            -webkit-appearance: none;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.28)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2210%22%20height%3D%226%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M1%201l4%204%204-4%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.28%29%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
             background-position: right 0.9rem center;
             background-repeat: no-repeat;
+            background-size: 10px 6px;
             padding-right: 2.5rem;
           }
 
@@ -2497,6 +3043,9 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           }
         `}</style>
       </div>
+
+      {/* Shared authentication stays outside the Pilot theme boundary. */}
+      </PilotDashboardThemeFrame>
 
       <SignInModal
         isVisible={showDashboardSignIn}

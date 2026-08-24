@@ -33,7 +33,12 @@ import type {
   PulseCheckPilotEnrollment,
   PulseCheckTeam,
   PulseCheckTeamMembership,
+  UpdatePulseCheckPilotStartDateInput,
 } from '../pulsecheckProvisioning/types';
+import {
+  toPulseCheckPilotScheduleDate,
+  validatePulseCheckPilotStartDate,
+} from '../../../utils/pulseCheckPilotSchedule';
 
 const DEMO_MODE_KEY = 'pulsecheckPilotDashboardDemoMode';
 const DEMO_STORE_KEY = 'pulsecheckPilotDashboardDemoStore';
@@ -205,7 +210,7 @@ function buildInviteConfig(now: number): PulseCheckPilotInviteConfig {
   } as PulseCheckPilotInviteConfig;
 }
 
-function buildResearchReadoutSectionSet(now: number): PilotResearchReadoutSection[] {
+function buildResearchReadoutSectionSet(_now: number): PilotResearchReadoutSection[] {
   return [
     {
       sectionKey: 'pilot-summary',
@@ -641,6 +646,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
     },
   ] as Array<any>;
 
+  const operationalWatchListStates: PilotDashboardOperationalWatchListState[] = [];
   const athletes = athleteProfiles.map((athlete, index) => {
     const enrollment = {
       id: `${pilot.id}_${athlete.athleteId}`,
@@ -868,7 +874,6 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
   ] as PulseCheckPilotHypothesis[];
 
   const readoutSections = buildResearchReadoutSectionSet(now);
-  const operationalWatchListStates: PilotDashboardOperationalWatchListState[] = [];
   const researchReadouts = [
     {
       id: 'demo-readout-older',
@@ -1277,6 +1282,22 @@ export const pilotDashboardDemoMode = {
     return cloneStore(buildDetailFromStore(readStore()));
   },
 
+  updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput) {
+    if (normalizeString(input.pilotId) !== DEMO_PILOT_ID) {
+      throw new Error('Demo pilot not found.');
+    }
+
+    const store = readStore();
+    const startAt = toPulseCheckPilotScheduleDate(input.startAt);
+    const endAt = toPulseCheckPilotScheduleDate(store.pilot.endAt);
+    const scheduleError = validatePulseCheckPilotStartDate(startAt, endAt);
+    if (scheduleError) throw new Error(scheduleError);
+
+    store.pilot.startAt = asTimestamp((startAt as Date).getTime());
+    store.pilot.updatedAt = asTimestamp(Date.now());
+    writeStore(store);
+  },
+
   getPilotAthleteDetail(pilotId: string, athleteId: string): PilotDashboardAthleteDetail | null {
     if (normalizeString(pilotId) !== DEMO_PILOT_ID) return null;
     const athlete = readStore().athletes.find((entry) => entry.summary.athleteId === normalizeString(athleteId));
@@ -1458,12 +1479,18 @@ export const pilotDashboardDemoMode = {
     const cohortSegment = normalizeString(input.cohortId) ? `-${normalizeString(input.cohortId)}` : '';
     const existingGeneralInvite =
       redemptionMode === 'general'
-        ? store.inviteLinks.find((invite) =>
-            invite.inviteType === 'team-access' &&
-            (invite.redemptionMode || 'single-use') === 'general' &&
-            normalizeString(invite.pilotId) === normalizeString(input.pilotId) &&
-            normalizeString(invite.cohortId) === normalizeString(input.cohortId)
-          ) || null
+        ? store.inviteLinks
+            .filter((invite) =>
+              invite.inviteType === 'team-access' &&
+              (invite.redemptionMode || 'single-use') === 'general' &&
+              (invite.status === 'active' || invite.status === 'redeemed') &&
+              !normalizeString(invite.targetEmail) &&
+              normalizeString(invite.pilotId) === normalizeString(input.pilotId) &&
+              normalizeString(invite.cohortId) === normalizeString(input.cohortId)
+            )
+            .sort((left, right) =>
+              Number(right.createdAt || 0) - Number(left.createdAt || 0) || right.id.localeCompare(left.id)
+            )[0] || null
         : null;
 
     if (existingGeneralInvite) {

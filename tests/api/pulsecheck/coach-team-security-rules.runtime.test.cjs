@@ -40,6 +40,10 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
     'pulsecheck-coach-services',
     'pulsecheck-daily-assignments',
     'pulsecheck-morning-checkins',
+    'pulsecheck-pilot-cohorts',
+    'pulsecheck-pilot-enrollments',
+    'pulsecheck-pilots',
+    'pulsecheck-provisioning-audit-events',
     'pulsecheck-scorecards',
     'pulsecheck-referral-attributions',
     'pulsecheck-team-memberships',
@@ -56,6 +60,23 @@ test('Firestore makes every coach/mobile security collection explicit', () => {
       `${collectionName} must not fall through to the signed-in compatibility rule`
     );
   }
+});
+
+test('pilot enrollment lifecycle writes are identity-bound and removal audits are server-owned', () => {
+  const rules = read('firestore.rules');
+
+  assert.match(
+    rules,
+    /function pcOwnPilotEnrollmentIdentityIsValid\(data, enrollmentId\)[\s\S]*enrollmentId == data\.pilotId \+ '_' \+ request\.auth\.uid[\s\S]*data\.status in \['pending-consent', 'active'\]/
+  );
+  assert.match(
+    rules,
+    /function pcOwnPilotEnrollmentUpdateIsValid\(data, enrollmentId\)[\s\S]*affectedKeys\(\)\.hasOnly\([\s\S]*'eligibleForResearchDataset'[\s\S]*'updatedAt'/
+  );
+  assert.match(
+    rules,
+    /match \/pulsecheck-provisioning-audit-events\/\{eventId\}[\s\S]*allow create, update, delete: if false/
+  );
 });
 
 test('readiness, device, sentiment, escalation, and user policies are explicit and scoped', () => {
@@ -337,6 +358,14 @@ test('team workspaces, reports, messaging, and payment truth fail closed', () =>
   assert.match(
     rules,
     /match \/pulsecheck-team-memberships\/\{membershipId\}[\s\S]*pcIsSafeOwnMembershipUpdate/
+  );
+  assert.match(
+    rules,
+    /match \/pulsecheck-pilot-enrollments\/\{enrollmentId\}[\s\S]*request\.resource\.data\.userId == resource\.data\.userId[\s\S]*allow delete: if isAdminUser\(\)/
+  );
+  assert.match(
+    rules,
+    /match \/pulsecheck-provisioning-audit-events\/\{eventId\}[\s\S]*allow create, update, delete: if false/
   );
   assert.match(
     rules,

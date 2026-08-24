@@ -5,6 +5,11 @@ const {
   loadPulseCheckPushTargets,
   logPushSendFailures,
 } = require('./utils/pulsecheckPushTargets');
+const {
+  buildPulseCheckTeamJoinNotificationKey,
+  resolveTeamJoinLifecycle,
+  sendPulseCheckTeamJoinEmail,
+} = require('./utils/pulsecheckTeamJoinEmail');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -15,6 +20,7 @@ const db = admin.firestore();
 const COACH_NOTIFICATIONS_COLLECTION = 'coach-notifications';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const CHECKINS_ROOT = 'mental-check-ins';
 const ATHLETE_APP_REVENUE_EVENTS_COLLECTION = 'pulsecheck-athlete-app-revenue-events';
 const PULSECHECK_REVENUE_EVENTS_COLLECTION = 'pulsecheck-revenue-events';
@@ -74,6 +80,14 @@ function teamDisplayName(teamData = {}) {
   ).slice(0, 100);
 }
 
+function organizationDisplayName(organizationData = {}) {
+  return firstCleanString(
+    organizationData.displayName,
+    organizationData.name,
+    organizationData.organizationName
+  ).slice(0, 100);
+}
+
 function isActiveRecord(data = {}) {
   if (!data || data.revoked === true || data.revokedAt || data.deletedAt || data.archivedAt) {
     return false;
@@ -125,6 +139,14 @@ async function loadTeamData(teamId) {
     return {};
   }
   const snap = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
+  return snap.exists ? snap.data() || {} : {};
+}
+
+async function loadOrganizationData(organizationId) {
+  if (!organizationId) {
+    return {};
+  }
+  const snap = await db.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).get();
   return snap.exists ? snap.data() || {} : {};
 }
 
@@ -508,39 +530,98 @@ exports.onCoachNotificationCreated = onDocumentCreated(
   }
 );
 
-async function notifyTeamJoin({membershipId, membership}) {
+async function loadTeamJoinContext(membership) {
   const athleteId = cleanString(membership.userId);
   const teamId = cleanString(membership.teamId);
   if (!teamId || !athleteId || !isAthleteMembership(membership)) {
     return null;
   }
 
-  const [athleteData, teamData] = await Promise.all([
+  const organizationId = cleanString(membership.organizationId);
+  const [athleteData, teamData, organizationData] = await Promise.all([
     loadUserData(athleteId),
     loadTeamData(teamId),
+    loadOrganizationData(organizationId),
   ]);
-  const athleteName = userDisplayName(athleteData);
+  const membershipAthleteName = firstCleanString(
+    membership.athleteOnboarding?.entryOnboardingName,
+    membership.invitedDisplayName,
+    cleanString(membership.email).split('@')[0],
+    'Athlete'
+  );
+  const athleteName = userDisplayName(athleteData, membershipAthleteName);
   const teamName = teamDisplayName(teamData);
+  const organizationName = organizationDisplayName(organizationData);
+  const athleteEmail = firstCleanString(membership.email, athleteData.email);
+
+  return {
+    athleteEmail,
+    athleteId,
+    athleteName,
+    organizationId,
+    organizationName,
+    teamId,
+    teamName,
+  };
+}
+
+async function notifyTeamJoin({
+  membershipId,
+  membership,
+  lifecycle = 'join',
+  lifecycleEventId = '',
+}) {
+  const context = await loadTeamJoinContext(membership);
+  if (!context) return null;
+  const {
+    athleteId,
+    athleteName,
+    organizationId,
+    teamId,
+    teamName,
+  } = context;
   const coachIds = await loadCoachIdsForTeam({
     teamId,
     athleteId,
     extraCoachIds: [membership.coachId, membership.createdBy, membership.grantedBy],
   });
 
-  return fanOutCoachNotification({
-    notificationKey: sanitizeDocId(`pulsecheck_team_join_${membershipId}`),
+  const isRejoin = lifecycle === 'rejoin';
+  await fanOutCoachNotification({
+    notificationKey: sanitizeDocId(buildPulseCheckTeamJoinNotificationKey({
+      membershipId,
+      lifecycle,
+      lifecycleEventId,
+    })),
     coachIds,
     type: 'pulsecheck_team_join',
     category: 'athlete',
-    title: 'New athlete joined',
-    message: `${athleteName} joined ${teamName}.`,
+    title: isRejoin ? 'Athlete rejoined' : 'New athlete joined',
+    message: `${athleteName} ${isRejoin ? 'rejoined' : 'joined'} ${teamName}.`,
     teamId,
-    organizationId: cleanString(membership.organizationId),
+    organizationId,
     athleteId,
     sourceId: membershipId,
     target: 'coach_roster',
     webUrl: 'https://fitwithpulse.ai/coach/dashboard?tab=roster',
+    metadata: {
+      membershipLifecycle: lifecycle,
+      lifecycleEventId: cleanString(lifecycleEventId),
+    },
   });
+  return null;
+}
+
+async function emailTeamJoin({eventId, membership, lifecycle = 'join'}) {
+  const context = await loadTeamJoinContext(membership);
+  if (!context) return null;
+  await sendPulseCheckTeamJoinEmail({
+    db,
+    eventId,
+    lifecycle,
+    ...context,
+  });
+  return null;
 }
 
 exports.onPulseCheckTeamMembershipCreated = onDocumentCreated(
@@ -553,6 +634,7 @@ exports.onPulseCheckTeamMembershipCreated = onDocumentCreated(
     return notifyTeamJoin({
       membershipId: event.params.membershipId,
       membership,
+      lifecycle: 'join',
     });
   }
 );
@@ -571,9 +653,56 @@ exports.onPulseCheckTeamMembershipUpdated = onDocumentUpdated(
       return null;
     }
 
+    const lifecycle = resolveTeamJoinLifecycle(before);
     return notifyTeamJoin({
       membershipId: event.params.membershipId,
       membership: after,
+      lifecycle,
+      lifecycleEventId: lifecycle === 'rejoin' ? event.id : '',
+    });
+  }
+);
+
+exports.emailPulseCheckTeamMembershipCreated = onDocumentCreated(
+  {
+    document: `${TEAM_MEMBERSHIPS_COLLECTION}/{membershipId}`,
+    retry: true,
+  },
+  async (event) => {
+    const membership = event.data?.data();
+    if (!membership) {
+      return null;
+    }
+    return emailTeamJoin({
+      eventId: event.id,
+      membership,
+      lifecycle: 'join',
+    });
+  }
+);
+
+exports.emailPulseCheckTeamMembershipUpdated = onDocumentUpdated(
+  {
+    document: `${TEAM_MEMBERSHIPS_COLLECTION}/{membershipId}`,
+    retry: true,
+  },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after) {
+      return null;
+    }
+
+    const becameActiveAthlete = !isAthleteMembership(before) && isAthleteMembership(after);
+    if (!becameActiveAthlete) {
+      return null;
+    }
+
+    const lifecycle = resolveTeamJoinLifecycle(before);
+    return emailTeamJoin({
+      eventId: event.id,
+      membership: after,
+      lifecycle,
     });
   }
 );

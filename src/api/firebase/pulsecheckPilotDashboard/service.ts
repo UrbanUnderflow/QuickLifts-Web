@@ -42,6 +42,7 @@ import {
   isRescuedAdherenceCompletion,
   resolveAthleteDayAdherenceState,
 } from './adherenceOrchestrator';
+import { isActivePulseCheckTeamMembership } from '../pulsecheckProvisioning/types';
 import type {
   PulseCheckIntakeResponses,
   PulseCheckPilot,
@@ -50,6 +51,7 @@ import type {
   PulseCheckRequiredConsentDocument,
   PulseCheckTeam,
   PulseCheckTeamMembership,
+  UpdatePulseCheckPilotStartDateInput,
 } from '../pulsecheckProvisioning/types';
 import type { SurveyQuestion } from '../creatorPages/service';
 import type {
@@ -160,6 +162,21 @@ const DEFAULT_PILOT_HYPOTHESES: Array<Pick<PulseCheckPilotHypothesis, 'code' | '
 ];
 
 const normalizeString = (value?: string | null) => value?.trim() || '';
+
+const isActivePilotDashboardTeamMembership = (membership: PulseCheckTeamMembership): boolean => {
+  const lifecycle = membership as PulseCheckTeamMembership & {
+    archivedAt?: unknown;
+    deletedAt?: unknown;
+    revoked?: boolean;
+  };
+  return isActivePulseCheckTeamMembership(membership)
+    && lifecycle.archivedAt == null
+    && lifecycle.deletedAt == null
+    && lifecycle.revoked !== true;
+};
+
+const isWithdrawnPilotEnrollment = (enrollment: PulseCheckPilotEnrollment): boolean =>
+  normalizeString(enrollment.status) === 'withdrawn';
 const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => {
   if (!Array.isArray(value)) return [];
 
@@ -2608,6 +2625,7 @@ export const pulseCheckPilotDashboardService = {
     inScopePilots.forEach((pilot) => {
       const teamEnrollments = enrollmentByTeamAndAthlete.get(pilot.teamId) || new Map<string, PulseCheckPilotEnrollment>();
       (enrollmentsByPilot.get(pilot.id) || []).forEach((enrollment) => {
+        if (isWithdrawnPilotEnrollment(enrollment)) return;
         const athleteId = normalizeString(enrollment.userId);
         if (!athleteId) return;
         const existing = teamEnrollments.get(athleteId);
@@ -2640,9 +2658,20 @@ export const pulseCheckPilotDashboardService = {
       const memberships = membershipsByTeam[index] || [];
       const teamEnrollments = enrollmentByTeamAndAthlete.get(teamId) || new Map<string, PulseCheckPilotEnrollment>();
       const seenAthleteIds = new Set<string>();
+      const inactiveAthleteIds = new Set(
+        memberships
+          .filter((membership) => normalizeString(membership.role) === 'athlete')
+          .filter((membership) => !isActivePilotDashboardTeamMembership(membership))
+          .map((membership) => normalizeString(membership.userId))
+          .filter(Boolean)
+      );
 
       memberships
-        .filter((membership) => normalizeString(membership.role) === 'athlete')
+        .filter(
+          (membership) =>
+            normalizeString(membership.role) === 'athlete' &&
+            isActivePilotDashboardTeamMembership(membership)
+        )
         .forEach((membership) => {
           const athleteId = normalizeString(membership.userId);
           if (!athleteId) return;
@@ -2657,6 +2686,7 @@ export const pulseCheckPilotDashboardService = {
 
       // Union enrolled athletes who have no athlete membership on this team.
       teamEnrollments.forEach((enrollment, athleteId) => {
+        if (inactiveAthleteIds.has(athleteId)) return;
         if (seenAthleteIds.has(athleteId)) return;
         seenAthleteIds.add(athleteId);
         candidates.push({
@@ -2813,19 +2843,33 @@ export const pulseCheckPilotDashboardService = {
     if (!organization || !team) return null;
 
     const pilotCohorts = cohorts.filter((cohort) => cohort.pilotId === pilot.id);
-    if (!isPilotOperationallyActive(pilot, pilotCohorts, enrollments)) return null;
+    // A direct pilot detail route is also the administrative and historical view
+    // for that pilot. Keep it addressable when its last active athlete leaves;
+    // active-scope filtering belongs to the directory, not this direct lookup.
     const cohortMap = new Map(pilotCohorts.map((cohort) => [cohort.id, cohort]));
-    const teamMembershipMap = new Map(teamMemberships.map((membership) => [membership.userId, membership]));
+    const activeTeamMemberships = teamMemberships.filter(isActivePilotDashboardTeamMembership);
+    const inactiveTeamAthleteIds = new Set(
+      teamMemberships
+        .filter((membership) => membership.role === 'athlete' && !isActivePilotDashboardTeamMembership(membership))
+        .map((membership) => membership.userId)
+        .filter(Boolean)
+    );
+    const visibleEnrollments = enrollments.filter(
+      (enrollment) =>
+        !isWithdrawnPilotEnrollment(enrollment) &&
+        !inactiveTeamAthleteIds.has(enrollment.userId)
+    );
+    const teamMembershipMap = new Map(activeTeamMemberships.map((membership) => [membership.userId, membership]));
     const operationalWatchListByEnrollmentId = new Map(
       operationalWatchListStates.map((state) => [state.pilotEnrollmentId, state])
     );
-    const activeEnrollments = enrollments.filter((enrollment) => enrollment.status === 'active');
-    const pilotEnrollmentByAthleteId = new Map(enrollments.map((enrollment) => [enrollment.userId, enrollment]));
-    const teamAthleteMemberships = teamMemberships.filter((membership) => membership.role === 'athlete');
+    const activeEnrollments = visibleEnrollments.filter((enrollment) => enrollment.status === 'active');
+    const pilotEnrollmentByAthleteId = new Map(visibleEnrollments.map((enrollment) => [enrollment.userId, enrollment]));
+    const teamAthleteMemberships = activeTeamMemberships.filter((membership) => membership.role === 'athlete');
     const rosterAthleteIds = Array.from(
       new Set([
         ...teamAthleteMemberships.map((membership) => membership.userId),
-        ...enrollments.map((enrollment) => enrollment.userId),
+        ...visibleEnrollments.map((enrollment) => enrollment.userId),
       ])
     );
     const effectivePilot = {
@@ -2954,6 +2998,15 @@ export const pulseCheckPilotDashboardService = {
     };
   },
 
+  async updatePilotStartDate(input: UpdatePulseCheckPilotStartDateInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.updatePilotStartDate(input);
+      return;
+    }
+
+    await pulseCheckProvisioningService.updatePilotStartDate(input);
+  },
+
   async getPilotAthleteDetail(pilotId: string, athleteId: string): Promise<PilotDashboardAthleteDetail | null> {
     if (pilotDashboardDemoMode.isEnabled()) {
       return pilotDashboardDemoMode.getPilotAthleteDetail(pilotId, athleteId);
@@ -2980,6 +3033,7 @@ export const pulseCheckPilotDashboardService = {
     };
 
     const teamMembership = teamMemberships.find((membership) => membership.userId === athleteId) || null;
+    if (teamMembership && !isActivePilotDashboardTeamMembership(teamMembership)) return null;
     const athleteProfile = (await loadAthleteProfileSummary(athleteId, teamMembership, team.sportOrProgram)).profile;
     const cohort = pilotCohorts.find((entry) => entry.id === enrollment.cohortId) || null;
     const timelineItems = await loadAthleteTimelineItems(athleteId);

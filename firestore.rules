@@ -204,6 +204,10 @@ service cloud.firestore {
         'pulsecheck-invite-links',
         'pulsecheck-organizations',
         'pulsecheck-organization-memberships',
+        'pulsecheck-pilots',
+        'pulsecheck-pilot-cohorts',
+        'pulsecheck-pilot-enrollments',
+        'pulsecheck-provisioning-audit-events',
         'pulsecheck-push-installations',
         'pulsecheck-morning-checkins',
         'pulsecheck-scorecards',
@@ -240,6 +244,9 @@ service cloud.firestore {
     }
     function pcOrganizationPath(organizationId) {
       return /databases/$(database)/documents/pulsecheck-organizations/$(organizationId);
+    }
+    function pcPilotPath(pilotId) {
+      return /databases/$(database)/documents/pulsecheck-pilots/$(pilotId);
     }
     function pcMembershipDataIsActive(data) {
       return (!('status' in data) || data.status == 'active')
@@ -291,6 +298,82 @@ service cloud.firestore {
         && membership.organizationId == team.organizationId
         && membership.role == 'athlete'
         && pcMembershipDataIsActive(membership);
+    }
+    function pcOwnPilotEnrollmentIdentityIsValid(data, enrollmentId) {
+      let membership = get(pcUserMembershipPath(data.teamId, request.auth.uid)).data;
+      let pilot = get(pcPilotPath(data.pilotId)).data;
+      return isSignedIn()
+        && data.userId == request.auth.uid
+        && enrollmentId == data.pilotId + '_' + request.auth.uid
+        && data.teamMembershipId == data.teamId + '_' + request.auth.uid
+        && pcUserHasActiveAthleteMembership(data.teamId, request.auth.uid)
+        && exists(pcPilotPath(data.pilotId))
+        && pilot.teamId == data.teamId
+        && pilot.organizationId == data.organizationId
+        && pilot.studyMode == data.studyMode
+        && membership.athleteOnboarding.targetPilotId == data.pilotId
+        && (
+          (
+            'targetCohortId' in membership.athleteOnboarding
+            && 'cohortId' in data
+            && membership.athleteOnboarding.targetCohortId == data.cohortId
+          )
+          || (
+            !('targetCohortId' in membership.athleteOnboarding)
+            && (!('cohortId' in data) || data.cohortId == '')
+          )
+        )
+        && data.status in ['pending-consent', 'active']
+        && data.enrollmentMode in ['pilot', 'research']
+        && data.researchConsentStatus in ['not-required', 'pending', 'accepted', 'declined']
+        && data.eligibleForResearchDataset == (data.researchConsentStatus == 'accepted');
+    }
+    function pcOwnPilotEnrollmentCreateIsValid(data, enrollmentId) {
+      return pcOwnPilotEnrollmentIdentityIsValid(data, enrollmentId)
+        && data.keys().hasOnly([
+          'organizationId',
+          'teamId',
+          'pilotId',
+          'cohortId',
+          'userId',
+          'teamMembershipId',
+          'studyMode',
+          'enrollmentMode',
+          'status',
+          'productConsentAccepted',
+          'productConsentAcceptedAt',
+          'productConsentVersion',
+          'researchConsentStatus',
+          'researchConsentVersion',
+          'researchConsentRespondedAt',
+          'requiredConsentIds',
+          'completedConsentIds',
+          'completedConsentVersions',
+          'eligibleForResearchDataset',
+          'grantedByInviteToken',
+          'createdAt',
+          'updatedAt'
+        ]);
+    }
+    function pcOwnPilotEnrollmentUpdateIsValid(data, enrollmentId) {
+      return pcOwnPilotEnrollmentIdentityIsValid(data, enrollmentId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'cohortId',
+          'enrollmentMode',
+          'status',
+          'productConsentAccepted',
+          'productConsentAcceptedAt',
+          'productConsentVersion',
+          'researchConsentStatus',
+          'researchConsentVersion',
+          'researchConsentRespondedAt',
+          'requiredConsentIds',
+          'completedConsentIds',
+          'completedConsentVersions',
+          'eligibleForResearchDataset',
+          'grantedByInviteToken',
+          'updatedAt'
+        ]);
     }
     function pcUserHasActiveStaffMembership(teamId, userId) {
       let membership = get(pcUserMembershipPath(teamId, userId)).data;
@@ -1562,7 +1645,17 @@ service cloud.firestore {
       allow create: if isCanonicalRootUserCreate(userId);
 
       allow update: if isSafeOwnPulseCheckPushMetadataUpdate(userId)
-        || isCanonicalRootUserUpdate(userId);
+        || isCanonicalRootUserUpdate(userId)
+        || (
+          isAdminUser()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'pulseCheckTeamCommercialAccess',
+            'onboardInvite',
+            'subscriptionType',
+            'subscriptionPlatform',
+            'updatedAt'
+          ])
+        );
 
       allow read: if true;
     }
@@ -2783,6 +2876,97 @@ service cloud.firestore {
           && membershipId == resource.data.teamId + '_' + resource.data.userId
         );
       allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // Pilot definitions are visible to authenticated PulseCheck clients, but
+    // provisioning changes remain limited to platform or team administrators.
+    match /pulsecheck-pilots/{pilotId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminUser()
+        || (
+          pcCanManageTeam(request.resource.data.teamId)
+          && pcTeamScopedDataIsActive(request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          pcCanManageTeam(resource.data.teamId)
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+        );
+      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    match /pulsecheck-pilot-cohorts/{cohortId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminUser()
+        || (
+          pcCanManageTeam(request.resource.data.teamId)
+          && pcTeamScopedDataIsActive(request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          pcCanManageTeam(resource.data.teamId)
+          && request.resource.data.teamId == resource.data.teamId
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.pilotId == resource.data.pilotId
+        );
+      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // Enrollment identity and lifecycle state must not fall through to the
+    // generic signed-in write rule. Athletes may maintain only their own
+    // enrollment while their team membership is active; removals are server-owned.
+    match /pulsecheck-pilot-enrollments/{enrollmentId} {
+      allow read: if isAdminUser()
+        || (
+          isSignedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || pcIsTeamStaff(resource.data.teamId)
+          )
+        );
+      allow create: if isAdminUser()
+        || (
+          pcOwnPilotEnrollmentCreateIsValid(request.resource.data, enrollmentId)
+          && pcTeamScopedDataIsActive(request.resource.data)
+        );
+      allow update: if isAdminUser()
+        || (
+          isSignedIn()
+          && resource.data.userId == request.auth.uid
+          && pcOwnPilotEnrollmentUpdateIsValid(request.resource.data, enrollmentId)
+        );
+      allow delete: if isAdminUser();
+
+      match /{document=**} {
+        allow read: if isAdminUser()
+          || (
+            isSignedIn()
+            && (
+              get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.userId == request.auth.uid
+              || pcIsTeamStaff(
+                get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.teamId
+              )
+            )
+          );
+        allow create, update: if isAdminUser()
+          || (
+            isSignedIn()
+            && get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.userId == request.auth.uid
+            && pcUserHasActiveAthleteMembership(
+              get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.teamId,
+              request.auth.uid
+            )
+          );
+        allow delete: if isAdminUser();
+      }
+    }
+
+    // Immutable lifecycle/audit records are written only through trusted Admin
+    // SDK routes. Platform admins can read them for operational review.
+    match /pulsecheck-provisioning-audit-events/{eventId} {
+      allow read: if isAdminUser();
+      allow create, update, delete: if false;
     }
 
     // Stripe webhooks and authenticated server routes are the only readers and

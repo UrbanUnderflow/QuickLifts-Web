@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -9,25 +9,33 @@ import {
   Activity,
   ArrowLeft,
   Brain,
+  CalendarDays,
   CheckCircle2,
   Clipboard,
   Database,
   ExternalLink,
   FileText,
   FlaskConical,
+  Loader2,
   MonitorPlay,
   QrCode,
   RefreshCcw,
   Save,
   Search,
+  Settings2,
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserPlus,
   Users2,
   X,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import {
+  PilotDashboardThemeFrame,
+  PilotDashboardThemeToggle,
+} from '../../../components/admin/pilot-dashboard/PilotDashboardTheme';
 import PilotAthleteCommunicationModal, {
   type PilotAthleteCommunicationChannel,
   type PilotAthleteCommunicationPreview,
@@ -50,7 +58,16 @@ import type {
   PulseCheckRequiredConsentDocument,
   PulseCheckTeam,
 } from '../../../api/firebase/pulsecheckProvisioning/types';
-import { analyzePulseCheckInviteOneLink, buildPulseCheckTeamInviteWebUrl, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
+import { analyzePulseCheckInviteOneLink, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
+import {
+  parsePulseCheckPilotDateKey,
+  resolvePulseCheckPilotEnrollmentAcceptance,
+  validatePulseCheckPilotStartDate,
+} from '../../../utils/pulseCheckPilotSchedule';
+import {
+  resolvePilotInviteShareUrl,
+  selectActiveReusableAthleteInvite,
+} from '../../../utils/pilotInviteQr';
 import { useUser } from '../../../hooks/useUser';
 import Tier3RoutingReadinessBanner from '../../../components/clinical-escalation/Tier3RoutingReadinessBanner';
 import { showToast } from '../../../redux/toastSlice';
@@ -69,8 +86,10 @@ import type {
   PulseCheckPilotHypothesis,
 } from '../../../api/firebase/pulsecheckPilotDashboard/types';
 
-type DetailTab = 'overview' | 'engine-health' | 'findings' | 'hypotheses' | 'research-readout';
-type InviteCreationMode = 'single-use' | 'general';
+type DetailTab = 'overview' | 'people' | 'activity-outcomes' | 'operations' | 'insights-research' | 'manage-pilot';
+type InsightSection = 'learning' | 'hypotheses' | 'reports';
+type PilotRosterView = 'participants' | 'eligible';
+type PeopleSection = PilotRosterView | 'invitations';
 type InviteActivityParticipantRow = {
   key: string;
   email: string;
@@ -139,11 +158,25 @@ const CONFIDENCE_OPTIONS: Array<{ value: PilotHypothesisConfidenceLevel; label: 
 
 const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
-  { id: 'engine-health', label: 'Engine Health' },
-  { id: 'findings', label: 'Findings' },
-  { id: 'hypotheses', label: 'Hypotheses' },
-  { id: 'research-readout', label: 'Research Readout' },
+  { id: 'people', label: 'People' },
+  { id: 'activity-outcomes', label: 'Activity & outcomes' },
+  { id: 'operations', label: 'Operations' },
+  { id: 'insights-research', label: 'Insights & research' },
 ];
+
+const insightSections: Array<{ id: InsightSection; label: string }> = [
+  { id: 'learning', label: 'Learning' },
+  { id: 'hypotheses', label: 'Hypotheses' },
+  { id: 'reports', label: 'Reports' },
+];
+
+const peopleSections: Array<{ id: PeopleSection; label: string }> = [
+  { id: 'participants', label: 'Participants' },
+  { id: 'eligible', label: 'Eligible athletes' },
+  { id: 'invitations', label: 'Join link & QR' },
+];
+
+const TEAM_INVITE_SCOPE_VALUE = '__team__';
 
 const READOUT_REVIEW_STATE_OPTIONS: Array<{ value: PilotResearchReadoutReviewState; label: string }> = [
   { value: 'draft', label: 'Draft' },
@@ -177,10 +210,6 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
 const toScopedPercent = (numerator: number, denominator: number) => (denominator > 0 ? (numerator / denominator) * 100 : 0);
 const normalizeInvitePreviewValue = (value: string) => value.replace(/\r\n/g, '\n').trim();
-const inviteRedemptionModeClassName = (mode?: InviteCreationMode) =>
-  mode === 'general'
-    ? 'border border-sky-400/20 bg-sky-400/10 text-sky-100'
-    : 'border border-white/10 bg-white/5 text-zinc-200';
 const formatInviteUsageCount = (count?: number) => {
   const safeCount = Math.max(0, Number(count || 0));
   return `Used ${safeCount} time${safeCount === 1 ? '' : 's'}`;
@@ -205,6 +234,13 @@ const athleteEnrollmentBadgePresentation = (status?: PulseCheckPilotEnrollmentSt
     };
   }
 
+  if (status === 'withdrawn') {
+    return {
+      label: 'Withdrawn',
+      className: 'border-white/10 bg-white/5 text-zinc-400',
+    };
+  }
+
   return {
     label: 'Not enrolled',
     className: 'border-white/10 bg-white/5 text-zinc-300',
@@ -216,8 +252,7 @@ const getInviteShareOrigin = () =>
     : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai'
   ).replace(/\/+$/, '');
 const resolveInviteShareUrl = (invite?: PulseCheckInviteLink | null) => {
-  if (!invite) return '';
-  return invite.activationUrl || buildPulseCheckTeamInviteWebUrl(invite.token || invite.id, getInviteShareOrigin());
+  return resolvePilotInviteShareUrl(invite, getInviteShareOrigin());
 };
 const analyzeInviteShareTarget = (invite?: PulseCheckInviteLink | null) => {
   if (!invite) {
@@ -237,6 +272,12 @@ const toDateValue = (value: any): Date | null => {
   if (value instanceof Date) return value;
   if (typeof value?.toDate === 'function') return value.toDate();
   return null;
+};
+const formatPilotDate = (value: any) => {
+  const date = toDateValue(value);
+  return date
+    ? date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
 };
 const toInputDateValue = (value: Date | null) => {
   if (!value) return '';
@@ -582,12 +623,12 @@ const RESEARCH_SECTION_PRESENTATION: Record<
   'findings-interpreter': {
     eyebrow: 'Interpretation',
     title: 'Findings Interpreter',
-    helper: 'Read this as a disciplined interpretation layer, not as proof. Stronger sections should still stay denominator-aware and caveated.',
+    helper: 'This section offers a disciplined interpretation with clear denominators and caveats. Human review determines how the evidence may be used.',
   },
   'research-notes': {
     eyebrow: 'Research Notes',
     title: 'Candidate Publishable Findings',
-    helper: 'Treat these as leads worth discussing, not finished conclusions. Strong candidates still need stronger validation and replication.',
+    helper: 'These are early leads worth discussing. Strong candidates still need validation and replication.',
   },
   limitations: {
     eyebrow: 'Limitations',
@@ -700,7 +741,7 @@ const formatOutcomeValue = (metricKey: typeof OUTCOME_CARD_ORDER[number], metric
     case 'speedToCare':
       return metrics.medianMinutesToCare !== null ? `${metrics.medianMinutesToCare.toFixed(1)} min` : 'No escalations yet';
     case 'athleteTrust':
-      return metrics.athleteTrust !== null ? metrics.athleteTrust.toFixed(1) : 'Not enough responses yet';
+      return metrics.athleteTrust !== null ? `${metrics.athleteTrust.toFixed(1)}/10` : 'Not enough responses yet';
     case 'athleteNps':
       return metrics.athleteNps !== null ? metrics.athleteNps.toFixed(1) : 'Not enough responses yet';
     default:
@@ -755,7 +796,8 @@ const formatSurveyMetricValue = (
 ) => {
   if (!metrics) return 'No study metrics yet';
   const value = metrics[metricKey];
-  return value !== null ? value.toFixed(1) : 'Not enough responses yet';
+  if (value === null) return 'Not enough responses yet';
+  return metricKey.endsWith('Trust') ? `${value.toFixed(1)}/10` : value.toFixed(1);
 };
 
 const formatSurveyMetricSubtext = (
@@ -907,6 +949,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [pageMessage, setPageMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
+  const [activeInsightSection, setActiveInsightSection] = useState<InsightSection>('learning');
+  const [activePeopleSection, setActivePeopleSection] = useState<PeopleSection>('participants');
   const [cohortFilter, setCohortFilter] = useState('');
   const [athleteSearchQuery, setAthleteSearchQuery] = useState('');
   const [inviteCohortId, setInviteCohortId] = useState('');
@@ -923,13 +967,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [savingInviteDefaultScope, setSavingInviteDefaultScope] = useState<'team' | 'organization' | null>(null);
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
-  const [creatingInviteMode, setCreatingInviteMode] = useState<InviteCreationMode | null>(null);
-  const [deletingInviteId, setDeletingInviteId] = useState<string | null>(null);
+  const [ensuringInviteScopeKey, setEnsuringInviteScopeKey] = useState<string | null>(null);
+  const [inviteEnsureError, setInviteEnsureError] = useState<{ scopeKey: string; text: string } | null>(null);
   const [unenrollingAthleteId, setUnenrollingAthleteId] = useState<string | null>(null);
   const [savingAthleteCohortId, setSavingAthleteCohortId] = useState<string | null>(null);
   const [seedingAthleteDataId, setSeedingAthleteDataId] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [qrInvite, setQrInvite] = useState<PulseCheckInviteLink | null>(null);
+  const closeQrInvite = useCallback(() => setQrInvite(null), []);
   const [staffSurveyModalRole, setStaffSurveyModalRole] = useState<'coach' | 'clinician' | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
@@ -949,9 +994,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [communicationPreviewModal, setCommunicationPreviewModal] = useState<AthleteCommunicationPreviewModalState | null>(null);
   const [athleteTransferModal, setAthleteTransferModal] = useState<AthleteTransferModalState | null>(null);
   const [studyMetricsStatusModalOpen, setStudyMetricsStatusModalOpen] = useState(false);
+  const [pilotStartDateDraft, setPilotStartDateDraft] = useState('');
+  const [pilotStartDateError, setPilotStartDateError] = useState<string | null>(null);
+  const [savingPilotStartDate, setSavingPilotStartDate] = useState(false);
   const copyFeedbackTimeoutRef = useRef<number | null>(null);
+  const inviteEnsureAttemptedScopeKeysRef = useRef(new Set<string>());
   const loadRequestIdRef = useRef(0);
   const communicationLoadRequestIdRef = useRef(0);
+  const rosterView: PilotRosterView = activePeopleSection === 'eligible' ? 'eligible' : 'participants';
 
   const loadCommunicationRecords = async (resolvedPilotId: string) => {
     if (!resolvedPilotId) {
@@ -1009,6 +1059,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       const nextDetail = await pulseCheckPilotDashboardService.getPilotDashboardDetail(pilotId);
       if (requestId !== loadRequestIdRef.current) return;
       setDetail(nextDetail);
+      setPilotStartDateDraft(toInputDateValue(toDateValue(nextDetail?.pilot.startAt)));
+      setPilotStartDateError(null);
       if (nextDetail?.pilot.id) {
         await loadCommunicationRecords(nextDetail.pilot.id);
         if (requestId !== loadRequestIdRef.current) return;
@@ -1035,6 +1087,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       });
       setInviteCohortId((current) => {
         if (!current) return '';
+        if (current === TEAM_INVITE_SCOPE_VALUE) return current;
         return nextDetail?.cohorts.some((cohort) => cohort.id === current) ? current : '';
       });
       setAthleteCohortDrafts(
@@ -1491,23 +1544,102 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [filteredResearchReadouts, selectedReadoutId]);
 
   const availableCohorts = detail?.cohorts || [];
+  const activeCohorts = useMemo(
+    () => availableCohorts.filter((cohort) => cohort.status === 'active'),
+    [availableCohorts]
+  );
 
   const selectedCohort = useMemo(
     () => availableCohorts.find((cohort) => cohort.id === cohortFilter) || null,
     [availableCohorts, cohortFilter]
   );
 
-  const inviteScopeCohorts = detail?.cohorts || [];
+  const inviteScopeCohorts = activeCohorts;
 
   const selectedInviteCohort = useMemo(
     () => inviteScopeCohorts.find((cohort) => cohort.id === inviteCohortId) || null,
     [inviteCohortId, inviteScopeCohorts]
   );
+  const selectedInviteScopeKind = inviteCohortId === TEAM_INVITE_SCOPE_VALUE
+    ? 'team'
+    : selectedInviteCohort
+      ? 'cohort'
+      : 'pilot';
+  const selectedInviteScope = useMemo(
+    () => ({
+      organizationId: detail?.organization.id || '',
+      teamId: detail?.team.id || '',
+      pilotId: selectedInviteScopeKind === 'team' ? '' : detail?.pilot.id || '',
+      cohortId: selectedInviteScopeKind === 'cohort' ? selectedInviteCohort?.id || '' : '',
+    }),
+    [detail, selectedInviteCohort?.id, selectedInviteScopeKind]
+  );
+  const selectedPilotEnrollmentAcceptance = detail
+    ? resolvePulseCheckPilotEnrollmentAcceptance(detail.pilot)
+    : null;
+  const selectedInviteScopeCanAcceptJoins = Boolean(
+    detail &&
+    detail.organization.status === 'active' &&
+    detail.team.status === 'active' &&
+    (selectedInviteScopeKind === 'team' || selectedPilotEnrollmentAcceptance?.acceptsEnrollment) &&
+    (selectedInviteScopeKind !== 'cohort' || selectedInviteCohort?.status === 'active')
+  );
+  const selectedInviteScopeLabel = selectedInviteScopeKind === 'team'
+    ? 'Team only'
+    : selectedInviteScopeKind === 'cohort'
+      ? selectedInviteCohort?.name || 'Selected cohort'
+      : 'Whole pilot';
+  const selectedInviteDestinationPath = detail
+    ? [
+        detail.organization.displayName,
+        detail.team.displayName,
+        selectedInviteScopeKind === 'team' ? '' : detail.pilot.name,
+        selectedInviteScopeKind === 'cohort' ? selectedInviteCohort?.name || '' : '',
+      ].filter(Boolean).join(' / ')
+    : '';
+  const selectedInviteEnrollmentClosedCopy = selectedInviteScopeKind === 'team'
+    ? 'The organization or team is not active, so this destination cannot accept new athletes.'
+    : selectedPilotEnrollmentAcceptance?.reason === 'not-started'
+      ? `${detail?.pilot.name || 'This pilot'} has not started, so enrollment is not open yet.`
+      : selectedPilotEnrollmentAcceptance?.reason === 'invalid-schedule'
+        ? `${detail?.pilot.name || 'This pilot'} needs a valid enrollment schedule before athletes can join.`
+        : detail?.pilot.status === 'completed' || selectedPilotEnrollmentAcceptance?.reason === 'ended'
+          ? `${detail?.pilot.name || 'This pilot'} is completed and no longer accepts new athletes.`
+          : `${detail?.pilot.name || 'This pilot'} is ${detail?.pilot.status || 'inactive'} and does not currently accept new athletes.`;
+  const selectedInviteScopeKey = [
+    selectedInviteScope.organizationId,
+    selectedInviteScope.teamId,
+    selectedInviteScope.pilotId || 'team',
+    selectedInviteScope.cohortId || 'all',
+  ].join(':');
 
   useEffect(() => {
     setHypothesisAssistSuggestions([]);
     setHypothesisAssistMeta(null);
   }, [pilotId, cohortFilter]);
+
+  useEffect(() => {
+    const tabUsesCohortScope = activeTab === 'activity-outcomes' || activeTab === 'insights-research';
+    if (!tabUsesCohortScope && cohortFilter) {
+      setCohortFilter('');
+    }
+  }, [activeTab, cohortFilter]);
+
+  useEffect(() => {
+    if (cohortFilter && !activeCohorts.some((cohort) => cohort.id === cohortFilter)) {
+      setCohortFilter('');
+    }
+  }, [activeCohorts, cohortFilter]);
+
+  useEffect(() => {
+    if (
+      inviteCohortId &&
+      inviteCohortId !== TEAM_INVITE_SCOPE_VALUE &&
+      !activeCohorts.some((cohort) => cohort.id === inviteCohortId)
+    ) {
+      setInviteCohortId('');
+    }
+  }, [activeCohorts, inviteCohortId]);
 
   const visibleActiveAthletes = useMemo(() => {
     if (!detail) return [];
@@ -1518,10 +1650,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const visibleRosterAthletes = useMemo(() => {
     if (!detail) return [];
     const normalizedQuery = athleteSearchQuery.trim().toLowerCase();
-    const filtered = (cohortFilter
-      ? detail.rosterAthletes.filter((athlete) => athlete.pilotEnrollment?.cohortId === cohortFilter)
-      : detail.rosterAthletes
-    ).filter((athlete) => {
+    const filtered = detail.rosterAthletes.filter((athlete) => {
+      const isParticipant = Boolean(athlete.pilotEnrollment);
+      if (rosterView === 'participants' ? !isParticipant : isParticipant) return false;
       if (!normalizedQuery) return true;
       const enrollmentBadge = athleteEnrollmentBadgePresentation(athlete.pilotEnrollment?.status);
       const searchableText = [
@@ -1543,7 +1674,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         athleteRosterStatusRank(left.pilotEnrollment?.status) - athleteRosterStatusRank(right.pilotEnrollment?.status) ||
         left.displayName.localeCompare(right.displayName)
     );
-  }, [athleteSearchQuery, cohortFilter, detail]);
+  }, [athleteSearchQuery, detail, rosterView]);
 
   const transferTeamOptions = useMemo(() => {
     if (!athleteTransferModal || !detail) return [];
@@ -1567,10 +1698,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [athleteTransferModal]);
 
   const visibleMetrics = useMemo(() => {
-    const activeCohortCount = detail?.cohorts.length || 0;
     return {
       activeAthleteCount: visibleActiveAthletes.length,
-      cohortCount: cohortFilter ? (selectedCohort ? 1 : 0) : activeCohortCount,
+      cohortCount: cohortFilter ? (selectedCohort ? 1 : 0) : activeCohorts.length,
       athletesWithEngineRecord: visibleActiveAthletes.filter((athlete) => athlete.engineSummary.hasEngineRecord).length,
       athletesWithStablePatterns: visibleActiveAthletes.filter((athlete) => athlete.engineSummary.stablePatternCount > 0).length,
       totalEvidenceRecords: visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.engineSummary.evidenceRecordCount, 0),
@@ -1580,13 +1710,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         0
       ),
     };
-  }, [cohortFilter, detail?.cohorts.length, selectedCohort, visibleActiveAthletes]);
+  }, [activeCohorts.length, cohortFilter, selectedCohort, visibleActiveAthletes]);
 
   const visibleCohortSummaries = useMemo(() => {
     if (!detail) return [];
-    if (!cohortFilter) return detail.cohortSummaries;
+    const activeCohortIds = new Set(activeCohorts.map((cohort) => cohort.id));
+    if (!cohortFilter) return detail.cohortSummaries.filter((summary) => activeCohortIds.has(summary.cohortId));
     return detail.cohortSummaries.filter((summary) => summary.cohortId === cohortFilter);
-  }, [cohortFilter, detail]);
+  }, [activeCohorts, cohortFilter, detail]);
 
   const visibleCoverage = useMemo(() => ({
     engineCoverageRate: toScopedPercent(visibleMetrics.athletesWithEngineRecord, visibleMetrics.activeAthleteCount),
@@ -1623,7 +1754,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const visibleAdherenceOrchestrator = useMemo(() => {
     if (!detail) return null;
     if (cohortFilter) {
-      return detail.adherenceOrchestratorByCohort?.[cohortFilter] || detail.adherenceOrchestrator || null;
+      return detail.adherenceOrchestratorByCohort?.[cohortFilter] || null;
     }
     return detail.adherenceOrchestrator || null;
   }, [cohortFilter, detail]);
@@ -1651,9 +1782,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       : detail.outcomeRecommendationTypeSlices || null;
     return hasRecommendationTypeSliceMetrics(recommendationTypeSlices) ? recommendationTypeSlices : null;
   }, [cohortFilter, detail]);
-  const visibleSurveyMetricSlices = useMemo(() => (
-    hasSurveyMetricSliceValues(visibleOutcomeMetrics) ? visibleOutcomeMetrics : null
-  ), [visibleOutcomeMetrics]);
+  const showSurveyMetricSlices = useMemo(
+    () => Boolean(visibleOutcomeDiagnostics || hasSurveyMetricSliceValues(visibleOutcomeMetrics)),
+    [visibleOutcomeDiagnostics, visibleOutcomeMetrics]
+  );
 
   const visibleOperationalDiagnostics = detail?.outcomeOperationalDiagnostics || null;
   const visibleEscalationOperationalDiagnostics = visibleOperationalDiagnostics?.escalations || null;
@@ -1772,31 +1904,32 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       accentClassName: 'border-white/10 bg-white/5 text-zinc-100',
     },
   ];
+  const operationalWatchListHasActivity = operationalWatchListSummaryCards.some((card) => Number(card.value) > 0);
 
   const adherenceOrchestratorCards = visibleAdherenceOrchestrator
     ? [
         {
-          label: 'Expected',
+          label: 'Expected days',
           value: String(visibleAdherenceOrchestrator.expectedAthleteDays),
-          helper: 'Athlete-days currently counted in the adherence denominator.',
+          helper: 'Athlete days included in the current participation total.',
           className: 'text-white',
         },
         {
-          label: 'Closed',
+          label: 'Completed',
           value: String(visibleAdherenceOrchestrator.closedDays),
-          helper: `${visibleAdherenceOrchestrator.closedRate.toFixed(1)}% fully closed days.`,
+          helper: `${visibleAdherenceOrchestrator.closedRate.toFixed(1)}% of expected days completed.`,
           className: 'text-emerald-100',
         },
         {
-          label: 'Rescued',
+          label: 'Completed after a delay',
           value: String(visibleAdherenceOrchestrator.rescuedDays),
-          helper: 'Days saved through a short-version, late, reminder, or comeback path.',
+          helper: 'Days completed through a shorter, late, reminder, or comeback path.',
           className: 'text-cyan-100',
         },
         {
           label: 'Missed',
           value: String(visibleAdherenceOrchestrator.missedDays),
-          helper: 'Expected days with no check-in or completed task signal.',
+          helper: 'Expected days with no check-in or completed daily practice.',
           className: 'text-rose-100',
         },
         {
@@ -1808,19 +1941,19 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         {
           label: 'Check-in only',
           value: String(visibleAdherenceOrchestrator.checkInOnlyDays),
-          helper: 'Athletes gave Nora the signal but did not close the assigned task.',
+          helper: 'The daily check-in is saved while the assigned practice remains open.',
           className: 'text-sky-100',
         },
         {
-          label: 'Task only',
+          label: 'Practice only',
           value: String(visibleAdherenceOrchestrator.taskOnlyDays),
-          helper: 'Assigned task completed without the daily check-in signal.',
+          helper: 'The assigned practice is complete while the daily check-in remains open.',
           className: 'text-violet-100',
         },
         {
-          label: 'At risk',
+          label: 'Follow-up needed',
           value: String(visibleAdherenceOrchestrator.atRiskAthleteCount),
-          helper: 'Athletes with at least one open expected day in this view.',
+          helper: 'Athletes with at least one expected day still open in this view.',
           className: 'text-orange-100',
         },
       ]
@@ -1939,52 +2072,23 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     return `H${nextNumericCode}`;
   }, [detail?.hypotheses]);
 
-  const scopedInvites = useMemo(() => {
-    if (!detail) return [] as PulseCheckInviteLink[];
-    return inviteLinks.filter((invite) => {
-      if (invite.inviteType !== 'team-access') return false;
-      if (invite.teamMembershipRole !== 'athlete') return false;
-      if ((invite.pilotId || '') !== detail.pilot.id) return false;
-      if (selectedInviteCohort) {
-        return (invite.cohortId || '') === selectedInviteCohort.id;
-      }
-      return !(invite.cohortId || '');
+  const canonicalInvite = useMemo(
+    () => selectActiveReusableAthleteInvite(inviteLinks, selectedInviteScope),
+    [inviteLinks, selectedInviteScope]
+  );
+  const wholePilotQrInvite = useMemo(() => {
+    if (!detail || !selectedPilotEnrollmentAcceptance?.acceptsEnrollment) return null;
+    return selectActiveReusableAthleteInvite(inviteLinks, {
+      organizationId: detail.organization.id,
+      teamId: detail.team.id,
+      pilotId: detail.pilot.id,
+      cohortId: '',
     });
-  }, [detail, inviteLinks, selectedInviteCohort]);
-
-  const scopedSingleUseInvites = useMemo(
-    () => scopedInvites.filter((invite) => invite.redemptionMode !== 'general'),
-    [scopedInvites]
-  );
-  const scopedGeneralInvites = useMemo(
-    () => scopedInvites.filter((invite) => invite.redemptionMode === 'general'),
-    [scopedInvites]
-  );
-  const scopedInvite = scopedGeneralInvites?.[0] || scopedInvites?.[0] || null;
+  }, [detail, inviteLinks, selectedPilotEnrollmentAcceptance?.acceptsEnrollment]);
   const scopedInviteDiagnostic = useMemo(
-    () => analyzeInviteShareTarget(scopedInvite),
-    [scopedInvite]
+    () => analyzeInviteShareTarget(canonicalInvite),
+    [canonicalInvite]
   );
-  const scopedInviteSummary = useMemo(() => {
-    if (!scopedInvites.length) {
-      return 'No invite links exist for this scope yet.';
-    }
-
-    const statusSummary = `${scopedInvites.length} invite link${scopedInvites.length === 1 ? '' : 's'} currently visible for this scope.`;
-    const modeSegments: string[] = [];
-    if (scopedSingleUseInvites.length > 0) {
-      modeSegments.push(`${scopedSingleUseInvites.length} single-use`);
-    }
-    if (scopedGeneralInvites.length > 0) {
-      modeSegments.push(`${scopedGeneralInvites.length} general`);
-    }
-
-    return modeSegments.length > 0 ? `${statusSummary} ${modeSegments.join(', ')}.` : statusSummary;
-  }, [
-    scopedGeneralInvites.length,
-    scopedInvites.length,
-    scopedSingleUseInvites.length,
-  ]);
 
   const inviteActivityParticipants = useMemo(() => {
     const grouped = new Map<string, InviteActivityParticipantRow>();
@@ -2070,7 +2174,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     if (detail.hasPilotInviteConfigOverride) {
       return {
         label: 'Pilot override',
-        description: 'This pilot has its own saved invite instructions and does not currently inherit the team or organization copy.',
+        description: 'This pilot uses its own saved invite instructions. Team and organization copy remain available as defaults.',
         className: 'border-amber-400/30 bg-amber-400/10 text-amber-100',
       };
     }
@@ -2126,35 +2230,173 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     };
   }, [detail, inviteConfigDraft]);
 
+  const pendingConsentCount = useMemo(
+    () => detail?.rosterAthletes.filter((athlete) => athlete.pilotEnrollment?.status === 'pending-consent').length || 0,
+    [detail]
+  );
+  const eligibleAthleteCount = useMemo(
+    () => detail?.rosterAthletes.filter((athlete) => !athlete.pilotEnrollment).length || 0,
+    [detail]
+  );
+  const withdrawnParticipantCount = useMemo(
+    () => detail?.rosterAthletes.filter((athlete) => athlete.pilotEnrollment?.status === 'withdrawn').length || 0,
+    [detail]
+  );
+  const overviewAdherence = detail?.adherenceOrchestrator || null;
+  const overviewOutcomeMetrics = detail?.outcomeMetrics || null;
+  const overviewOutcomeDiagnostics = detail?.outcomeDiagnostics || null;
+  const athleteFeedbackResponseCount = overviewOutcomeDiagnostics?.athleteTrust?.responseCount || 0;
+  const athleteFeedbackThreshold = overviewOutcomeDiagnostics?.minimumResponseThreshold || 5;
+  const pilotProgressStep = useMemo(() => {
+    if (!detail) return 0;
+    if (detail.pilot.status === 'draft') return 0;
+    if (detail.metrics.activeAthleteCount === 0) return 1;
+    if (detail.metrics.athletesWithStablePatterns === 0) return 2;
+    return 3;
+  }, [detail]);
+  const pilotProgressLabel = ['Activate pilot', 'Enroll athletes', 'Collect baseline', 'Review learning'][pilotProgressStep];
   const overviewCards = useMemo(() => {
     if (!detail) return [];
+
+    const participationValue = !overviewAdherence
+      ? 'Not available'
+      : overviewAdherence.expectedAthleteDays === 0
+        ? 'Waiting'
+        : `${overviewAdherence.closedRate.toFixed(0)}%`;
+    const participationHelper = !overviewAdherence
+      ? 'Participation has not been measured for this pilot yet.'
+      : overviewAdherence.expectedAthleteDays === 0
+        ? 'Activity will appear after the first expected athlete day.'
+        : `${overviewAdherence.closedDays} of ${overviewAdherence.expectedAthleteDays} expected athlete days complete.${
+            metricsRefreshCompletedMs ? ` Last saved ${new Date(metricsRefreshCompletedMs).toLocaleString()}.` : ' Latest saved summary.'
+          }`;
+    const feedbackValue = typeof overviewOutcomeMetrics?.athleteTrust === 'number'
+      ? `${overviewOutcomeMetrics.athleteTrust.toFixed(1)}/10`
+      : athleteFeedbackResponseCount > 0
+        ? `${athleteFeedbackResponseCount} response${athleteFeedbackResponseCount === 1 ? '' : 's'}`
+        : 'Waiting';
+    const feedbackHelper = typeof overviewOutcomeMetrics?.athleteTrust === 'number'
+      ? athleteFeedbackResponseCount > 0
+        ? `Average athlete trust score from ${athleteFeedbackResponseCount} whole-pilot response${athleteFeedbackResponseCount === 1 ? '' : 's'}.`
+        : 'Average whole-pilot athlete trust score from the latest saved summary.'
+      : athleteFeedbackResponseCount > 0
+        ? `${athleteFeedbackThreshold} responses are needed before a score is shown.`
+        : 'Athlete feedback will appear after survey responses arrive.';
+
     return [
       {
-        label: 'Active Pilot Athletes',
-        value: String(visibleMetrics.activeAthleteCount),
+        label: 'Athletes joined',
+        value: String(detail.metrics.activeAthleteCount),
+        helper: pendingConsentCount > 0
+          ? `${pendingConsentCount} athlete${pendingConsentCount === 1 ? '' : 's'} still completing consent.`
+          : 'Athletes with active pilot enrollment.',
         icon: <Users2 className="h-5 w-5" />,
-        metricKey: 'active-pilot-athletes' as PilotDashboardMetricExplanationKey,
       },
       {
-        label: cohortFilter ? 'Selected Cohort' : 'Active Cohorts',
-        value: String(visibleMetrics.cohortCount),
-        icon: <FlaskConical className="h-5 w-5" />,
-        metricKey: (cohortFilter ? 'selected-cohort' : 'active-cohorts') as PilotDashboardMetricExplanationKey,
+        label: 'Participation to date',
+        value: participationValue,
+        helper: participationHelper,
+        icon: <Activity className="h-5 w-5" />,
       },
       {
-        label: 'Athletes With Stable Patterns',
-        value: String(visibleMetrics.athletesWithStablePatterns),
+        label: 'Data readiness',
+        value: detail.metrics.activeAthleteCount === 0 || detail.metrics.athletesWithEngineRecord === 0
+          ? 'Waiting'
+          : detail.metrics.athletesWithStablePatterns > 0
+            ? `${detail.metrics.athletesWithStablePatterns} ready`
+            : 'Collecting',
+        helper: detail.metrics.activeAthleteCount === 0
+          ? 'Data collection starts after the first athlete joins.'
+          : detail.metrics.athletesWithEngineRecord === 0
+            ? 'Waiting for the first connected activity or check-in record.'
+          : detail.metrics.athletesWithStablePatterns > 0
+            ? `${detail.metrics.athletesWithStablePatterns} athlete${detail.metrics.athletesWithStablePatterns === 1 ? '' : 's'} have enough repeated days to compare change over time.`
+            : 'PulseCheck is collecting repeated days before comparing change over time.',
         icon: <Brain className="h-5 w-5" />,
-        metricKey: 'athletes-with-stable-patterns' as PilotDashboardMetricExplanationKey,
       },
       {
-        label: 'Hypotheses',
-        value: String(detail.metrics.hypothesisCount),
+        label: 'Athlete feedback',
+        value: feedbackValue,
+        helper: feedbackHelper,
         icon: <CheckCircle2 className="h-5 w-5" />,
-        metricKey: 'hypotheses' as PilotDashboardMetricExplanationKey,
       },
     ];
-  }, [cohortFilter, detail, visibleMetrics.activeAthleteCount, visibleMetrics.athletesWithStablePatterns, visibleMetrics.cohortCount]);
+  }, [
+    athleteFeedbackResponseCount,
+    athleteFeedbackThreshold,
+    detail,
+    pendingConsentCount,
+    overviewAdherence,
+    overviewOutcomeMetrics?.athleteTrust,
+    metricsRefreshCompletedMs,
+  ]);
+  const overviewSummary = useMemo(() => {
+    if (!detail) return '';
+    if (detail.pilot.status === 'draft') {
+      return 'The pilot is still being prepared. Review the pilot settings and urgent support status before enrollment begins.';
+    }
+    if (detail.metrics.activeAthleteCount === 0) {
+      return 'The pilot is active and waiting for its first athlete. Participation and learning will begin after enrollment.';
+    }
+    if (detail.metrics.athletesWithEngineRecord === 0) {
+      return `${detail.metrics.activeAthleteCount} athlete${detail.metrics.activeAthleteCount === 1 ? ' has' : 's have'} joined. PulseCheck is waiting for the first connected activity and check-in records.`;
+    }
+    if (detail.metrics.athletesWithStablePatterns === 0) {
+      return `Data is arriving for ${detail.metrics.athletesWithEngineRecord} athlete${detail.metrics.athletesWithEngineRecord === 1 ? '' : 's'}. PulseCheck is still building enough repeated history to show stable patterns.`;
+    }
+    return `${detail.metrics.athletesWithStablePatterns} athlete${detail.metrics.athletesWithStablePatterns === 1 ? ' has' : 's have'} enough repeated data for stable patterns. Review learning before turning it into a pilot conclusion.`;
+  }, [detail]);
+  const overviewNextSteps = useMemo(() => {
+    if (!detail) return [];
+    const steps: Array<{ title: string; detail: string; destination: DetailTab; peopleSection?: PeopleSection }> = [];
+    if (detail.pilot.status === 'draft') {
+      steps.push({ title: 'Review pilot setup', detail: 'Confirm pilot details, onboarding instructions, and disclosures.', destination: 'manage-pilot' });
+    } else if (detail.metrics.activeAthleteCount === 0) {
+      steps.push({
+        title: 'Invite the first athletes',
+        detail: 'Create a join link and share it with the pilot roster.',
+        destination: 'people',
+        peopleSection: 'invitations',
+      });
+    }
+    if (pendingConsentCount > 0) {
+      steps.push({
+        title: `Follow up with ${pendingConsentCount} consent-pending athlete${pendingConsentCount === 1 ? '' : 's'}`,
+        detail: 'Open People to see who still needs to finish enrollment.',
+        destination: 'people',
+        peopleSection: 'participants',
+      });
+    }
+    const athletesWaitingForData = Math.max(0, detail.metrics.activeAthleteCount - detail.metrics.athletesWithEngineRecord);
+    if (athletesWaitingForData > 0) {
+      steps.push({
+        title: `Check data connection for ${athletesWaitingForData} athlete${athletesWaitingForData === 1 ? '' : 's'}`,
+        detail: 'Review device and evidence coverage in Operations.',
+        destination: 'operations',
+      });
+    }
+    if (
+      detail.metrics.athletesWithEngineRecord > 0
+      && detail.metrics.athletesWithStablePatterns === 0
+    ) {
+      steps.push({
+        title: 'Keep collecting baseline activity',
+        detail: 'Repeated days are needed before PulseCheck can compare change over time.',
+        destination: 'activity-outcomes',
+      });
+    }
+    if (athleteFeedbackResponseCount < athleteFeedbackThreshold) {
+      steps.push({
+        title: 'Collect athlete feedback',
+        detail: `${athleteFeedbackThreshold} responses are needed before the athlete trust score is shown.`,
+        destination: 'activity-outcomes',
+      });
+    }
+    if (detail.metrics.athletesWithStablePatterns > 0) {
+      steps.push({ title: 'Review what the pilot is learning', detail: 'Compare patterns with the current hypotheses and evidence limits.', destination: 'insights-research' });
+    }
+    return steps.slice(0, 3);
+  }, [athleteFeedbackResponseCount, athleteFeedbackThreshold, detail, pendingConsentCount]);
 
   const updateHypothesisField = (id: string, field: keyof PulseCheckPilotHypothesis, value: string) => {
     setEditingHypotheses((current) => ({
@@ -2196,7 +2438,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     try {
       await pulseCheckPilotDashboardService.seedDefaultHypotheses(pilotId);
       await load('refresh');
-      setActiveTab('hypotheses');
+      setActiveTab('insights-research');
+      setActiveInsightSection('hypotheses');
     } catch (seedError: any) {
       setPageMessage({ type: 'error', text: seedError?.message || 'Failed to seed default hypotheses.' });
     } finally {
@@ -2270,7 +2513,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         text:
           result.suggestions.length > 0
             ? `Hypothesis Assist generated ${result.suggestions.length} pilot-scoped suggestion${result.suggestions.length === 1 ? '' : 's'}.`
-            : 'Hypothesis Assist did not find a strong new suggestion in the current pilot frame.',
+            : 'Hypothesis Assist found no strong new suggestion in the current pilot frame.',
       });
     } catch (assistError) {
       console.error('[PulseCheckPilotDashboard] Failed to generate hypothesis suggestions:', assistError);
@@ -2299,7 +2542,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       });
       setHypothesisAssistSuggestions((current) => current.filter((item) => item.suggestionKey !== suggestion.suggestionKey));
       await load('refresh');
-      setActiveTab('hypotheses');
+      setActiveTab('insights-research');
+      setActiveInsightSection('hypotheses');
       setPageMessage({
         type: 'success',
         text: `Created ${assignedCode} from Hypothesis Assist.`,
@@ -2329,99 +2573,105 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const handleCreatePilotInviteLink = async (redemptionMode: InviteCreationMode) => {
-    if (!detail) return;
-    setCreatingInviteMode(redemptionMode);
-    setPageMessage(null);
+  const ensureCanonicalInviteLink = useCallback(async (): Promise<PulseCheckInviteLink | null> => {
+    if (!detail || !selectedInviteScopeCanAcceptJoins) return null;
+
+    const scopeKey = selectedInviteScopeKey;
+    setEnsuringInviteScopeKey(scopeKey);
+    setInviteEnsureError((current) => (current?.scopeKey === scopeKey ? null : current));
     try {
       if (demoModeEnabled) {
-        const createdInvite = pulseCheckPilotDashboardService.createDemoInviteLink({
-          pilotId: detail.pilot.id,
-          pilotName: detail.pilot.name,
-          redemptionMode,
-          cohortId: selectedInviteCohort?.id || '',
-          cohortName: selectedInviteCohort?.name || '',
+        const ensuredInvite = pulseCheckPilotDashboardService.createDemoInviteLink({
+          pilotId: selectedInviteScope.pilotId,
+          pilotName: selectedInviteScopeKind === 'team' ? '' : detail.pilot.name,
+          redemptionMode: 'general',
+          cohortId: selectedInviteScope.cohortId || '',
+          cohortName: selectedInviteScopeKind === 'cohort' ? selectedInviteCohort?.name || '' : '',
           createdByUserId: currentUser?.id || '',
           createdByEmail: currentUser?.email || '',
         });
         setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
-        if (createdInvite) {
-          await navigator.clipboard.writeText(resolveInviteShareUrl(createdInvite));
-        }
-        setPageMessage({
-          type: 'success',
-          text: selectedInviteCohort
-            ? `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot share link for ${selectedInviteCohort.name} is ready and copied.`
-            : `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot athlete share link is ready and copied.`,
-        });
-        return;
+        return ensuredInvite || null;
       }
 
       const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
         organizationId: detail.organization.id,
         teamId: detail.team.id,
         teamMembershipRole: 'athlete',
-        redemptionMode,
-        revokeExistingMatchingLinks: redemptionMode === 'general',
-        pilotId: detail.pilot.id,
-        pilotName: detail.pilot.name,
-        cohortId: selectedInviteCohort?.id || '',
-        cohortName: selectedInviteCohort?.name || '',
+        redemptionMode: 'general',
+        revokeExistingMatchingLinks: false,
+        pilotId: selectedInviteScope.pilotId,
+        pilotName: selectedInviteScopeKind === 'team' ? '' : detail.pilot.name,
+        cohortId: selectedInviteScope.cohortId || '',
+        cohortName: selectedInviteScopeKind === 'cohort' ? selectedInviteCohort?.name || '' : '',
         createdByUserId: currentUser?.id || '',
         createdByEmail: currentUser?.email || '',
       });
 
       const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail.team.id);
       setInviteLinks(refreshedInviteLinks);
-      const createdInvite = refreshedInviteLinks.find((invite) => invite.id === inviteId);
-      if (createdInvite) {
-        await navigator.clipboard.writeText(resolveInviteShareUrl(createdInvite));
-      }
-
-      setPageMessage({
-        type: 'success',
-        text: selectedInviteCohort
-          ? `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot share link for ${selectedInviteCohort.name} is ready and copied.`
-          : `${redemptionMode === 'general' ? 'General' : 'Single-use'} pilot athlete share link is ready and copied.`,
-      });
+      return refreshedInviteLinks.find((invite) => invite.id === inviteId) || null;
     } catch (inviteError) {
-      console.error('[PulseCheckPilotDashboard] Failed to create pilot invite link:', inviteError);
-      setPageMessage({ type: 'error', text: 'Failed to create pilot athlete invite link.' });
+      console.error('[PulseCheckPilotDashboard] Failed to prepare the destination join link:', inviteError);
+      setInviteEnsureError({
+        scopeKey,
+        text: 'PulseCheck could not prepare this destination link. Try again.',
+      });
+      return null;
     } finally {
-      setCreatingInviteMode(null);
+      setEnsuringInviteScopeKey((current) => (current === scopeKey ? null : current));
     }
+  }, [
+    currentUser?.email,
+    currentUser?.id,
+    demoModeEnabled,
+    detail,
+    selectedInviteCohort?.name,
+    selectedInviteScope,
+    selectedInviteScopeCanAcceptJoins,
+    selectedInviteScopeKey,
+    selectedInviteScopeKind,
+  ]);
+
+  useEffect(() => {
+    if (
+      !detail ||
+      !selectedInviteScopeCanAcceptJoins ||
+      canonicalInvite ||
+      inviteEnsureAttemptedScopeKeysRef.current.has(selectedInviteScopeKey)
+    ) {
+      return;
+    }
+
+    inviteEnsureAttemptedScopeKeysRef.current.add(selectedInviteScopeKey);
+    void ensureCanonicalInviteLink();
+  }, [
+    canonicalInvite,
+    detail,
+    ensureCanonicalInviteLink,
+    selectedInviteScopeCanAcceptJoins,
+    selectedInviteScopeKey,
+  ]);
+
+  const retryCanonicalInviteLink = () => {
+    inviteEnsureAttemptedScopeKeysRef.current.delete(selectedInviteScopeKey);
+    setInviteEnsureError((current) => (current?.scopeKey === selectedInviteScopeKey ? null : current));
+    inviteEnsureAttemptedScopeKeysRef.current.add(selectedInviteScopeKey);
+    void ensureCanonicalInviteLink();
   };
 
-  const handleDeletePilotInviteLink = async (invite: PulseCheckInviteLink) => {
-    const confirmed = window.confirm(
-      invite.redemptionMode === 'general'
-        ? 'Delete this general invite link? Once removed, the QR code and share URL will stop working until you generate a new link.'
-        : 'Delete this invite link? Once removed, this share URL will stop working.'
-    );
-    if (!confirmed) return;
-
-    setDeletingInviteId(invite.id);
-    setPageMessage(null);
-    try {
-      if (demoModeEnabled) {
-        pulseCheckPilotDashboardService.deleteDemoInviteLink(invite.id);
-        setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
-      } else {
-        await pulseCheckProvisioningService.deleteInviteLink(invite.id);
-        const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail?.team.id || '');
-        setInviteLinks(refreshedInviteLinks);
-      }
-
-      setPageMessage({
-        type: 'success',
-        text: invite.redemptionMode === 'general' ? 'General invite link deleted.' : 'Invite link deleted.',
-      });
-    } catch (deleteError) {
-      console.error('[PulseCheckPilotDashboard] Failed to delete pilot invite link:', deleteError);
-      setPageMessage({ type: 'error', text: 'Failed to delete pilot invite link.' });
-    } finally {
-      setDeletingInviteId(null);
+  const handleHeaderJoinQr = () => {
+    if (wholePilotQrInvite) {
+      setQrInvite(wholePilotQrInvite);
+      return;
     }
+
+    setInviteCohortId('');
+    setActiveTab('people');
+    setActivePeopleSection('invitations');
+    window.requestAnimationFrame(() => {
+      document.getElementById('pilot-athlete-invite-qr')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   const handleUnenrollAthlete = async (athlete: PilotDashboardDetail['rosterAthletes'][number]) => {
@@ -2743,7 +2993,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         },
       });
       await load('refresh');
-      setActiveTab('research-readout');
+      setActiveTab('insights-research');
+      setActiveInsightSection('reports');
       setPageMessage({ type: 'success', text: 'Pilot research readout generated and saved as a draft.' });
     } catch (generateError) {
       console.error('[PulseCheckPilotDashboard] Failed to generate research readout:', generateError);
@@ -2825,8 +3076,71 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const handlePilotStartDateDraftChange = (value: string) => {
+    setPilotStartDateDraft(value);
+    setPilotStartDateError(
+      validatePulseCheckPilotStartDate(
+        parsePulseCheckPilotDateKey(value),
+        toDateValue(detail?.pilot.endAt)
+      )
+    );
+  };
+
+  const savePilotStartDate = async () => {
+    if (!detail) return;
+
+    const nextStartAt = parsePulseCheckPilotDateKey(pilotStartDateDraft);
+    const validationError = validatePulseCheckPilotStartDate(nextStartAt, toDateValue(detail.pilot.endAt));
+    if (validationError || !nextStartAt) {
+      setPilotStartDateError(validationError || 'Choose a valid pilot start date.');
+      return;
+    }
+
+    const currentStartDateKey = toInputDateValue(toDateValue(detail.pilot.startAt));
+    if (pilotStartDateDraft === currentStartDateKey) return;
+
+    const confirmationDetails = [
+      `Change the pilot start date to ${formatPilotDate(nextStartAt)}?`,
+      'This can change which athlete activity qualifies for pilot reporting after study metrics refresh. The pilot end date will not change.',
+      demoModeEnabled ? 'In demo mode, this change is saved only in this browser.' : '',
+    ].filter(Boolean);
+    if (!window.confirm(confirmationDetails.join('\n\n'))) return;
+
+    setSavingPilotStartDate(true);
+    setPilotStartDateError(null);
+    setPageMessage(null);
+    try {
+      await pulseCheckPilotDashboardService.updatePilotStartDate({
+        pilotId: detail.pilot.id,
+        startAt: nextStartAt,
+      });
+      await load('refresh');
+      const successText = 'Pilot start date updated. The pilot end date was not changed.';
+      setPageMessage({ type: 'success', text: successText });
+      dispatch(showToast({ message: successText, type: 'success' }));
+    } catch (saveError: any) {
+      const message = saveError?.message || 'Failed to update the pilot start date.';
+      console.error('[PulseCheckPilotDashboard] Failed to update pilot start date:', saveError);
+      setPilotStartDateError(message);
+      setPageMessage({ type: 'error', text: message });
+      dispatch(showToast({ message, type: 'error' }));
+    } finally {
+      setSavingPilotStartDate(false);
+    }
+  };
+
+  const currentPilotStartDateKey = toInputDateValue(toDateValue(detail?.pilot.startAt));
+  const pilotEndDateKey = toInputDateValue(toDateValue(detail?.pilot.endAt));
+  const pilotStartDateDraftValidationError = validatePulseCheckPilotStartDate(
+    parsePulseCheckPilotDateKey(pilotStartDateDraft),
+    toDateValue(detail?.pilot.endAt)
+  );
+  const pilotStartDateDirty = Boolean(detail) && pilotStartDateDraft !== currentPilotStartDateKey;
+  const canSavePilotStartDate = pilotStartDateDirty && !pilotStartDateDraftValidationError && !savingPilotStartDate;
+
   return (
     <AdminRouteGuard>
+      <PilotDashboardThemeFrame>
       <Head>
         <title>{detail ? `${detail.pilot.name} | Pilot Dashboard` : 'Pilot Dashboard'}</title>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -2866,11 +3180,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                {detail ? (
-                  <span className="hidden rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-white/60 lg:inline-flex">
-                    {detail.pilot.studyMode}
-                  </span>
-                ) : null}
+                <PilotDashboardThemeToggle compact />
                 <span
                   className={`hidden rounded-lg border px-3 py-1.5 text-[11px] md:inline-flex ${
                     demoModeEnabled
@@ -2895,64 +3205,73 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     {detail?.pilot.name || 'Pilot dashboard'}
                   </h1>
                   <p className="mt-3 max-w-3xl text-sm leading-6 text-white/50 sm:text-[15px]">
-                    Active-pilot monitoring surface rooted in PilotEnrollment. Athletes outside this pilot are excluded from
-                    every KPI, comparison, and drill-down on this page.
+                    Follow enrollment, participation, data readiness, and pilot learning in one place.
                   </p>
 
                   {detail ? (
                     <>
-                      <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
-                        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-cyan-100">
-                          Study mode: {detail.pilot.studyMode}
-                        </span>
-                        <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-white/65">
-                          Cadence: {detail.pilot.checkpointCadence || 'Not set'}
-                        </span>
+                      <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+                        {[
+                          { label: 'Status', value: detail.pilot.status.replace(/-/g, ' ').replace(/^./, (character) => character.toUpperCase()) },
+                          { label: 'Pilot type', value: detail.pilot.studyMode.replace(/^./, (character) => character.toUpperCase()) },
+                          { label: 'Review cadence', value: detail.pilot.checkpointCadence || 'Not set' },
+                          {
+                            label: 'Dates',
+                            value: [formatPilotDate(detail.pilot.startAt), formatPilotDate(detail.pilot.endAt)].filter(Boolean).join(' to ') || 'Not set',
+                          },
+                          { label: 'Owner', value: detail.pilot.ownerInternalEmail || 'Not assigned' },
+                        ].map((item) => (
+                          <div key={item.label} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
+                            <div className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/30">{item.label}</div>
+                            <div className="mt-1 truncate text-xs font-medium text-white/75" title={item.value}>
+                              {item.value}
+                            </div>
+                          </div>
+                        ))}
                       </div>
 
                       {detail.pilot.objective ? (
-                        <div className="mt-4 max-w-3xl rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">Objective</div>
-                          <div className="mt-2 text-sm leading-6 text-zinc-300">{detail.pilot.objective}</div>
+                        <div className="mt-3 max-w-4xl text-sm leading-6 text-white/55">
+                          <span className="font-semibold text-white/75">Pilot goal:</span> {detail.pilot.objective}
                         </div>
                       ) : null}
                     </>
                   ) : null}
                 </div>
 
+                {detail ? (
                 <div className="flex flex-wrap gap-2.5 xl:max-w-[640px] xl:justify-end">
                   <button
-                    onClick={() => void load('refresh')}
-                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                    type="button"
+                    onClick={handleHeaderJoinQr}
+                    data-testid="pilot-dashboard-header-join-qr"
+                    className="pilot-theme-primary-action inline-flex items-center gap-2 rounded-xl border border-sky-400/25 bg-sky-400/10 px-4 py-2.5 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15"
                   >
-                    <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    {refreshing ? 'Refreshing...' : 'Refresh'}
+                    <QrCode className="h-4 w-4" />
+                    {wholePilotQrInvite ? 'Show join QR' : 'View join link'}
                   </button>
 
                   <button
-                    onClick={() => void toggleDemoMode()}
-                    data-testid="pilot-dashboard-detail-demo-toggle"
-                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
-                      demoModeEnabled
-                        ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
-                        : 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
-                    }`}
+                    onClick={() => {
+                      setActiveTab('people');
+                      setActivePeopleSection('invitations');
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-4 py-2.5 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/15"
                   >
-                    <MonitorPlay className="h-4 w-4" />
-                    {demoModeEnabled ? 'Exit Demo Mode' : 'Switch To Demo Mode'}
+                    <UserPlus className="h-4 w-4" />
+                    Invite athletes
                   </button>
 
-                  {demoModeEnabled ? (
-                    <button
-                      onClick={() => void resetDemoModeData()}
-                      data-testid="pilot-dashboard-detail-demo-reset"
-                      className="inline-flex items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 transition hover:bg-amber-400/15"
-                    >
-                      <RefreshCcw className="h-4 w-4" />
-                      Reset Demo Data
-                    </button>
-                  ) : null}
+                  <button
+                    onClick={() => setActiveTab('manage-pilot')}
+                    data-testid="pilot-dashboard-manage-pilot"
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Manage pilot
+                  </button>
                 </div>
+                ) : null}
               </div>
 
               {demoModeEnabled ? (
@@ -2960,17 +3279,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   data-testid="pilot-dashboard-detail-demo-banner"
                   className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
                 >
-                  Demo mode is on. This pilot dashboard is using safe local mock data, mock athlete enrollments, and
-                  mock AI research briefs so you can demo and QA without touching live pilot records.
-                </div>
-              ) : null}
-
-              {detail?.team?.id ? (
-                <div className="mt-5">
-                  <Tier3RoutingReadinessBanner
-                    teamId={detail.team.id}
-                    membershipsHref={`/admin/pulsecheckProvisioning?team=${encodeURIComponent(detail.team.id)}`}
-                  />
+                  Demo mode is on. This page is using safe local mock data, athlete enrollments, and research briefs for demos and QA. Live pilot records stay unchanged.
                 </div>
               ) : null}
             </div>
@@ -2986,36 +3295,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 <div className="pilot-detail-panel rounded-[28px] p-8 text-sm text-white/50">Pilot not found.</div>
               ) : (
                 <>
-                  <div className="grid gap-3 xl:grid-cols-4">
-                    {overviewCards.map((card) => (
-                      <div key={card.label} className="pilot-detail-panel rounded-[22px] border border-white/10 bg-[#11151f] p-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex min-w-0 items-start gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[#7cefd6]">
-                              {card.icon}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">
-                                {card.label}
-                              </div>
-                              <div className="pilot-font-mono mt-4 text-[2rem] leading-none text-white">{card.value}</div>
-                            </div>
-                          </div>
-                          <NoraMetricHelpButton
-                            metricKey={card.metricKey}
-                            className="border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-[#7cefd6] hover:bg-white/[0.08]"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-6 overflow-x-auto border-b border-white/10">
+                  <div className="overflow-x-auto border-b border-white/10">
                     <div className="flex min-w-max gap-1">
                       {tabs.map((tab) => (
                         <button
                           key={tab.id}
-                          onClick={() => setActiveTab(tab.id)}
+                          onClick={() => {
+                            setActiveTab(tab.id);
+                            if (tab.id === 'people') setActivePeopleSection('participants');
+                          }}
                           data-testid={`pilot-dashboard-tab-${tab.id}`}
                           className={`relative -mb-px whitespace-nowrap px-5 py-3 text-sm font-medium transition ${
                             activeTab === tab.id
@@ -3029,69 +3317,254 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pilot-detail-panel mt-4 grid grid-cols-1 gap-4 rounded-[22px] border border-white/10 bg-[#11151f] p-4 lg:grid-cols-[minmax(0,300px),1fr]">
-                    <label className="space-y-2 text-sm text-white/75">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">Cohort</span>
-                      <select
-                        value={cohortFilter}
-                        onChange={(event) => setCohortFilter(event.target.value)}
-                        className="pilot-detail-select w-full rounded-xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                  {activeTab === 'manage-pilot' ? (
+                    <div className="mt-5 flex flex-col gap-3 rounded-[22px] border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Manage pilot</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Settings and admin tools</h2>
+                        <p className="mt-1 text-sm text-white/50">Update onboarding instructions, disclosures, data refresh, and demo controls.</p>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('overview')}
+                        className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/[0.06] hover:text-white"
                       >
-                        <option value="">All pilot cohorts</option>
-                        {availableCohorts.map((cohort) => (
-                          <option key={cohort.id} value={cohort.id}>
-                            {cohort.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className="pilot-detail-inset rounded-[18px] border border-white/5 bg-black/20 p-4 text-sm leading-6 text-white/55">
-                      All KPI cards, comparisons, and tables on this page stay locked to active <code>PilotEnrollment</code>{' '}
-                      records in this pilot
-                      {selectedCohort ? ` and the ${selectedCohort.name} cohort filter.` : '.'} Athletes outside this pilot
-                      are excluded.
+                        Back to overview
+                      </button>
                     </div>
-                  </div>
+                  ) : null}
 
-              {activeTab === 'overview' ? (
+                  {activeTab === 'people' ? (
+                    <div className="mt-4 flex flex-wrap gap-2" aria-label="People sections">
+                      {peopleSections.map((section) => (
+                        <button
+                          key={section.id}
+                          onClick={() => {
+                            setActivePeopleSection(section.id);
+                            setAthleteSearchQuery('');
+                          }}
+                          data-testid={`pilot-dashboard-people-${section.id}`}
+                          className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                            activePeopleSection === section.id
+                              ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
+                              : 'border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.06] hover:text-white'
+                          }`}
+                        >
+                          {section.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {activeTab === 'insights-research' ? (
+                    <div className="mt-4 flex flex-wrap gap-2" aria-label="Insights and research sections">
+                      {insightSections.map((section) => (
+                        <button
+                          key={section.id}
+                          onClick={() => setActiveInsightSection(section.id)}
+                          data-testid={`pilot-dashboard-insights-${section.id}`}
+                          className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                            activeInsightSection === section.id
+                              ? 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100'
+                              : 'border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.06] hover:text-white'
+                          }`}
+                        >
+                          {section.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {(activeTab === 'activity-outcomes' || activeTab === 'insights-research') && activeCohorts.length > 0 ? (
+                    <div className="pilot-detail-panel mt-4 grid grid-cols-1 gap-4 rounded-[22px] border border-white/10 bg-[#11151f] p-4 lg:grid-cols-[minmax(0,300px),1fr]">
+                      <label className="space-y-2 text-sm text-white/75">
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/30">View by cohort</span>
+                        <select
+                          value={cohortFilter}
+                          onChange={(event) => setCohortFilter(event.target.value)}
+                          className="pilot-detail-select w-full rounded-xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                        >
+                          <option value="">Whole pilot</option>
+                          {activeCohorts.map((cohort) => (
+                            <option key={cohort.id} value={cohort.id}>
+                              {cohort.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="pilot-detail-inset rounded-[18px] border border-white/5 bg-black/20 p-4 text-sm leading-6 text-white/55">
+                        This filter applies to the activity, learning, and research measures that have a saved cohort rollup.
+                        Whole-pilot operational counts are labeled where they appear.
+                      </div>
+                    </div>
+                  ) : null}
+
+              {(['overview', 'people', 'activity-outcomes', 'operations', 'manage-pilot'] as DetailTab[]).includes(activeTab) ? (
                 <div className="mt-6 space-y-6">
+                  {activeTab === 'overview' ? (
+                    <>
+                      {detail.team.id ? (
+                        <Tier3RoutingReadinessBanner
+                          teamId={detail.team.id}
+                          membershipsHref={`/admin/pulsecheckProvisioning?team=${encodeURIComponent(detail.team.id)}`}
+                          variant="compact"
+                        />
+                      ) : null}
+
+                      <section className="pilot-detail-panel rounded-[26px] border border-white/10 bg-[#11151f] p-5 sm:p-6">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7cefd6]">
+                              <CalendarDays className="h-3.5 w-3.5" />
+                              Pilot progress
+                            </div>
+                            <h2 className="mt-2 text-xl font-semibold text-white">{pilotProgressLabel}</h2>
+                            <p className="mt-1 text-sm text-white/50">Follow the pilot from activation through enrollment, baseline collection, and review.</p>
+                          </div>
+                          <span className="w-fit rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-100">
+                            Step {pilotProgressStep + 1} of 4
+                          </span>
+                        </div>
+                        <div className="mt-5 grid gap-3 md:grid-cols-4">
+                          {['Activate', 'Enroll', 'Collect baseline', 'Review'].map((label, index) => {
+                            const isComplete = index < pilotProgressStep;
+                            const isCurrent = index === pilotProgressStep;
+                            return (
+                              <div key={label} className="flex items-center gap-3">
+                                <div
+                                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+                                    isComplete
+                                      ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100'
+                                      : isCurrent
+                                        ? 'border-cyan-400/35 bg-cyan-400/15 text-cyan-100'
+                                        : 'border-white/10 bg-white/[0.03] text-white/30'
+                                  }`}
+                                >
+                                  {isComplete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                                </div>
+                                <div className={isCurrent || isComplete ? 'text-sm font-medium text-white/80' : 'text-sm text-white/30'}>{label}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+
+                      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                        {overviewCards.map((card) => (
+                          <div key={card.label} className="pilot-detail-panel rounded-[22px] border border-white/10 bg-[#11151f] p-5">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-[#7cefd6]">
+                                {card.icon}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">{card.label}</div>
+                                <div className="mt-3 text-2xl font-semibold leading-none text-white">{card.value}</div>
+                              </div>
+                            </div>
+                            <p className="mt-4 text-xs leading-5 text-white/45">{card.helper}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr),minmax(360px,0.85fr)]">
+                        <section className="rounded-3xl border border-white/10 bg-[#11151f] p-5 sm:p-6">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">What the data means now</div>
+                          <h2 className="mt-2 text-lg font-semibold text-white">A plain summary of this pilot</h2>
+                          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/60">{overviewSummary}</p>
+                          <button
+                            onClick={() => {
+                              setActiveTab('insights-research');
+                              setActiveInsightSection('learning');
+                            }}
+                            className="mt-5 inline-flex items-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/75 transition hover:bg-white/[0.06] hover:text-white"
+                          >
+                            Review learning
+                          </button>
+                        </section>
+
+                        <section className="rounded-3xl border border-white/10 bg-[#11151f] p-5 sm:p-6">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">Next steps</div>
+                          <h2 className="mt-2 text-lg font-semibold text-white">Keep the pilot moving</h2>
+                          <div className="mt-4 space-y-3">
+                            {overviewNextSteps.map((step, index) => (
+                              <button
+                                key={`${step.title}-${index}`}
+                                onClick={() => {
+                                  setActiveTab(step.destination);
+                                  if (step.peopleSection) setActivePeopleSection(step.peopleSection);
+                                }}
+                                className="flex w-full items-start gap-3 rounded-2xl border border-white/5 bg-black/20 p-4 text-left transition hover:border-white/10 hover:bg-white/[0.04]"
+                              >
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-400/10 text-xs font-semibold text-cyan-100">{index + 1}</span>
+                                <span>
+                                  <span className="block text-sm font-medium text-white/85">{step.title}</span>
+                                  <span className="mt-1 block text-xs leading-5 text-white/45">{step.detail}</span>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {activeTab === 'operations' ? (
+                  <>
+                  <Tier3RoutingReadinessBanner
+                    teamId={detail.team.id}
+                    membershipsHref={`/admin/pulsecheckProvisioning?team=${encodeURIComponent(detail.team.id)}`}
+                    variant="compact"
+                  />
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Operational Watch List</div>
-                        <h2 className="mt-2 text-lg font-semibold text-white">Restriction summary</h2>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Athlete safety operations</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Restrictions and holds</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Compact view of review-queued states and active suppression flags across this pilot.
+                          Whole-pilot view of active holds, queued reviews, and paused athlete prompts.
                         </p>
                       </div>
                       <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
-                        Internal-only operational overlay
+                        Whole pilot
                       </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4 2xl:grid-cols-8">
-                      {operationalWatchListSummaryCards.map((card) => (
-                        <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                          <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{card.label}</div>
-                          <div className={`pilot-font-mono mt-3 text-2xl leading-none ${card.accentClassName.replace(/border-[^ ]+ bg-[^ ]+ /g, '')}`}>
-                            {card.value}
+                    {!visibleOperationalWatchListSummary ? (
+                      <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/10 p-4 text-sm text-amber-100">
+                        Restriction and hold status is unavailable. Refresh pilot data to try again.
+                      </div>
+                    ) : operationalWatchListHasActivity ? (
+                      <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4 2xl:grid-cols-8">
+                        {operationalWatchListSummaryCards.map((card) => (
+                          <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{card.label}</div>
+                            <div className={`mt-3 text-2xl font-semibold leading-none ${card.accentClassName.replace(/border-[^ ]+ bg-[^ ]+ /g, '')}`}>
+                              {card.value}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/10 p-4 text-sm text-emerald-100">
+                        No active restrictions, holds, or queued reviews across this pilot.
+                      </div>
+                    )}
                   </div>
+                  </>
+                  ) : null}
 
+                  {activeTab === 'activity-outcomes' ? (
+                  <>
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-dashboard-adherence-orchestrator">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Adherence Orchestrator</div>
-                        <h2 className="mt-2 text-lg font-semibold text-white">Closed-day operating system</h2>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Participation</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Latest saved participation</h2>
                         <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-                          Canonical athlete-day state for the pilot adherence loop: expected, closed, rescued, partial, missed, and excused.
+                          See how many expected athlete days were completed, recovered after a delay, missed, or excused in the saved summary.
                         </p>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[11px] text-emerald-100">
                         <ShieldCheck className="h-3.5 w-3.5" />
-                        Privacy-safe coach view
+                        Aggregate participation only
                       </div>
                     </div>
 
@@ -3100,9 +3573,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 2xl:grid-cols-8">
                           {adherenceOrchestratorCards.map((card) => (
                             <div key={card.label} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{card.label}</div>
-                              <div className={`pilot-font-mono mt-3 text-2xl leading-none ${card.className}`}>{card.value}</div>
-                              <div className="mt-2 text-xs leading-5 text-zinc-500">{card.helper}</div>
+                              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">{card.label}</div>
+                              <div className={`mt-3 text-2xl font-semibold leading-none tabular-nums ${card.className}`}>{card.value}</div>
+                              <div className="mt-2 text-[13px] leading-5 text-zinc-500">{card.helper}</div>
                             </div>
                           ))}
                         </div>
@@ -3110,34 +3583,36 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr),minmax(280px,420px)]">
                           <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
                             <div className="flex items-center justify-between gap-3 text-sm">
-                              <span className="text-zinc-300">Closed-day rate</span>
+                              <span className="text-zinc-300">Completion rate</span>
                               <span className="font-medium text-white">{visibleAdherenceOrchestrator.closedRate.toFixed(1)}%</span>
                             </div>
-                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+                            <div className="pilot-participation-progress-track mt-3 h-2 overflow-hidden rounded-full bg-white/10">
                               <div
-                                className="h-full rounded-full bg-emerald-300"
+                                className="pilot-participation-progress-fill h-full rounded-full bg-emerald-300"
                                 style={{ width: `${Math.max(0, Math.min(100, visibleAdherenceOrchestrator.closedRate))}%` }}
                               />
                             </div>
-                            <div className="mt-3 text-xs leading-5 text-zinc-500">
-                              Open days include missed, check-in-only, task-only, and task-started states. Rescued days count as closed because the athlete still completed the pact.
+                            <div className="mt-3 text-[13px] leading-5 text-zinc-500">
+                              Open days include missed, check-in-only, practice-only, and practice-started states. Days completed after a delay count as complete.
                             </div>
                           </div>
 
                           <div className="rounded-2xl border border-emerald-400/15 bg-emerald-400/10 p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-emerald-100">Nora privacy boundary</div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-emerald-100">Privacy</div>
                             <p className="mt-2 text-sm leading-6 text-emerald-50/90">
                               {visibleAdherenceOrchestrator.privacyBoundary}
                             </p>
-                            <div className="mt-3 text-xs text-emerald-100/75">
-                              Private content exposed: {visibleAdherenceOrchestrator.privateContentExposed ? 'Review immediately' : 'No'}
-                            </div>
+                            {visibleAdherenceOrchestrator.privateContentExposed ? (
+                              <div className="mt-3 text-[13px] leading-5 text-rose-100">Private check-in content needs immediate review.</div>
+                            ) : (
+                              <div className="mt-3 text-[13px] leading-5 text-emerald-100/75">Private check-in content is excluded from this summary.</div>
+                            )}
                           </div>
                         </div>
                       </>
                     ) : (
                       <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-5 text-sm text-zinc-400">
-                        No adherence orchestrator rollup has been computed for this pilot yet.
+                        Participation has not been measured for this {selectedCohort ? 'cohort' : 'pilot'} yet.
                       </div>
                     )}
                   </div>
@@ -3145,12 +3620,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study Metrics</p>
-                        <h2 className="mt-2 text-lg font-semibold text-white">Study Metrics Snapshot</h2>
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Activity and outcomes</p>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Pilot measures</h2>
                         <p className="mt-1 text-sm text-zinc-400">
                           {selectedCohort
-                            ? `Showing ${selectedCohort.name} when cohort-specific study metrics are available.`
-                            : 'Showing the whole-pilot study metrics summary for the active pilot.'}
+                            ? `Showing the saved measures for ${selectedCohort.name}.`
+                            : 'Showing saved measures for the whole pilot.'}
                         </p>
                       </div>
                       {selectedCohort ? (
@@ -3174,36 +3649,40 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       ) : null}
                     </div>
 
-                    <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      {OUTCOME_CARD_ORDER.map((metricKey) => {
-                        const metric = visibleOutcomeMetrics;
-                        return (
-                          <div key={metricKey} className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                              {OUTCOME_CARD_PRESENTATION[metricKey].label}
+                    {visibleOutcomeMetrics ? (
+                      <>
+                        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                          {OUTCOME_CARD_ORDER.map((metricKey) => (
+                            <div key={metricKey} className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                                {OUTCOME_CARD_PRESENTATION[metricKey].label}
+                              </div>
+                              <div className="mt-3 text-3xl font-semibold text-white">
+                                {formatOutcomeValue(metricKey, visibleOutcomeMetrics)}
+                              </div>
+                              <div className="mt-2 text-sm text-zinc-400">
+                                {formatOutcomeSubtext(
+                                  metricKey,
+                                  visibleOutcomeMetrics,
+                                  visibleOutcomeDiagnostics,
+                                  metricKey === 'enrollment' ? visibleEnrollmentCount : null
+                                )}
+                              </div>
                             </div>
-                            <div className="mt-3 text-3xl font-semibold text-white">
-                              {formatOutcomeValue(metricKey, metric)}
-                            </div>
-                            <div className="mt-2 text-sm text-zinc-400">
-                              {formatOutcomeSubtext(
-                                metricKey,
-                                metric,
-                                visibleOutcomeDiagnostics,
-                                metricKey === 'enrollment' ? visibleEnrollmentCount : null
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          ))}
+                        </div>
 
-                    <div className="mt-4 text-xs text-zinc-500">
-                      Trust and NPS stay separate. When the sample is below the minimum threshold, the dashboard shows
-                      “Not enough responses yet” instead of a misleading score.
-                    </div>
+                        <div className="mt-4 text-xs text-zinc-500">
+                          Trust and recommendation scores use separate questions. Response progress appears until each measure reaches its minimum sample.
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-5 rounded-2xl border border-white/5 bg-black/20 p-5 text-sm leading-6 text-zinc-400">
+                        Pilot measures are waiting for the first saved activity and feedback summary in this view.
+                      </div>
+                    )}
 
-                    {visibleSurveyMetricSlices ? (
+                    {showSurveyMetricSlices ? (
                       <div className="mt-6 rounded-3xl border border-white/10 bg-black/20 p-5">
                         <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                           <div>
@@ -3228,7 +3707,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 <span className={`rounded-full border px-2 py-1 text-[11px] ${card.accentClassName}`}>{card.label}</span>
                               </div>
                               <div className="mt-3 text-3xl font-semibold text-white">
-                                {formatSurveyMetricValue(card.key, visibleSurveyMetricSlices)}
+                                {formatSurveyMetricValue(card.key, visibleOutcomeMetrics)}
                               </div>
                               <div className="mt-2 text-sm text-zinc-400">
                                 {formatSurveyMetricSubtext(card.key, visibleOutcomeDiagnostics)}
@@ -3354,7 +3833,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   ].map(([label, value]) => (
                                     <div key={String(label)} className="flex items-center justify-between rounded-2xl border border-white/5 bg-black/20 px-4 py-3">
                                       <div className="text-sm text-zinc-300">{label}</div>
-                                      <div className="pilot-font-mono text-lg text-white">{value}</div>
+                                      <div className="text-lg font-semibold tabular-nums text-white">{value}</div>
                                     </div>
                                   ))}
                                 </div>
@@ -3405,22 +3884,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-readout-workspace">
-                    <div className="max-w-3xl">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">V1 Lock</div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        Overview, engine health, athlete drill-down, and manual hypothesis tracking are in scope here. Adoption automation and review queue stay deferred to V2.
-                      </div>
-                    </div>
-                  </div>
-
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
                       <div>
                         <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Staff Feedback</p>
                         <h2 className="mt-2 text-lg font-semibold text-white">Coach and clinician survey entry</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Capture trust, NPS, and optional diagnostic trust battery feedback without leaving the pilot detail page.
+                          Capture trust, recommendation, and optional diagnostic feedback on this pilot page.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -3439,108 +3909,196 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
+                  </>
+                  ) : null}
 
+                  {activeTab === 'people' && activePeopleSection === 'invitations' ? (
+                  <>
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                       <div className="max-w-3xl">
                         <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Athlete Onboarding</p>
-                        <h2 className="mt-2 text-lg font-semibold text-white">Athlete Join Links</h2>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Athlete join link</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Choose where athletes should land, then create either a one-person link or a reusable group link
-                          for this pilot.
+                          Each destination has one join link. Share the same link or QR with every athlete who should join
+                          that team, pilot, or cohort.
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,320px),1fr]">
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                        <label className="space-y-2">
-                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Join Scope</span>
-                          <select
-                            value={inviteCohortId}
-                            onChange={(event) => setInviteCohortId(event.target.value)}
-                            className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                          >
-                            <option value="">Whole pilot (no cohort)</option>
-                            {inviteScopeCohorts.map((cohort) => (
-                              <option key={cohort.id} value={cohort.id}>
-                                {cohort.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                    <section
+                      id="pilot-athlete-invite-qr"
+                      data-testid="pilot-athlete-invite-qr-card"
+                      className="mt-4 overflow-hidden rounded-[26px] border border-sky-400/25 bg-sky-400/[0.06]"
+                    >
+                      <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,360px),1fr] lg:items-start">
+                        <div>
+                          <label className="space-y-2">
+                            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Join destination</span>
+                            <select
+                              value={inviteCohortId}
+                              onChange={(event) => setInviteCohortId(event.target.value)}
+                              data-testid="pilot-invite-qr-scope"
+                              className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                            >
+                              <option value={TEAM_INVITE_SCOPE_VALUE}>Team only: {detail.team.displayName}</option>
+                              <option value="">Pilot: {detail.pilot.name}</option>
+                              {inviteScopeCohorts.map((cohort) => (
+                                <option key={cohort.id} value={cohort.id}>
+                                  Cohort: {cohort.name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                        <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Athletes will land in</div>
-                          <div className="mt-2 text-sm font-medium text-white">
-                            {selectedInviteCohort ? `${detail.pilot.name} -> ${selectedInviteCohort.name}` : `${detail.pilot.name} (no cohort)`}
-                          </div>
-                          <div className="mt-2 text-sm text-zinc-400">
-                            {selectedInviteCohort
-                              ? `New joins will enter ${detail.pilot.name} and start in ${selectedInviteCohort.name}.`
-                              : `New joins will enter ${detail.pilot.name} without a cohort assignment.`}
+                          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Athletes will join</div>
+                            <div className="mt-2 text-sm font-semibold text-white">{selectedInviteScopeLabel}</div>
+                            <div className="mt-2 text-sm leading-6 text-zinc-300">{selectedInviteDestinationPath}</div>
                           </div>
                         </div>
 
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300">
-                            {scopedInviteSummary}
-                          </span>
-                          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-cyan-100">
-                            {scopedSingleUseInvites.length} one-person
-                          </span>
-                          <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-sky-100">
-                            {scopedGeneralInvites.length} reusable
-                          </span>
+                        <div className="min-w-0">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">One link per destination</div>
+                              <h3 className="mt-2 text-xl font-semibold text-white">Athlete join link</h3>
+                            </div>
+                            <div className="rounded-2xl border border-sky-400/25 bg-sky-400/10 p-3 text-sky-100">
+                              <QrCode className="h-6 w-6" />
+                            </div>
+                          </div>
+
+                          {canonicalInvite ? (
+                            <>
+                              <div className="mt-4 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`rounded-full border px-3 py-1 text-[11px] ${
+                                    selectedInviteScopeCanAcceptJoins
+                                      ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
+                                      : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+                                  }`}
+                                >
+                                  {selectedInviteScopeCanAcceptJoins ? 'Ready to share' : 'Enrollment closed'}
+                                </span>
+                                <span className="text-xs text-zinc-500">
+                                  Created {formatTimeValue(canonicalInvite.createdAt)}
+                                  {Number(canonicalInvite.redemptionCount || 0) > 0
+                                    ? ` / ${formatInviteUsageCount(canonicalInvite.redemptionCount)}`
+                                    : ' / Not used yet'}
+                                </span>
+                              </div>
+
+                              <div
+                                className="mt-4 break-all rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-cyan-100"
+                                data-testid="pilot-canonical-athlete-invite-link"
+                              >
+                                {resolveInviteShareUrl(canonicalInvite)}
+                              </div>
+
+                              {selectedInviteScopeCanAcceptJoins ? (
+                                <>
+                                  <p className="mt-3 text-sm leading-6 text-zinc-300">
+                                    This is the one join link for {selectedInviteScopeLabel.toLowerCase()}. It stays the same for every athlete in this destination.
+                                  </p>
+                                  <div className="mt-4 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setQrInvite(canonicalInvite)}
+                                      data-testid="pilot-invite-qr-show-active"
+                                      className="pilot-theme-primary-action inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm font-semibold text-sky-100 transition hover:bg-sky-400/15"
+                                    >
+                                      <QrCode className="h-4 w-4" />
+                                      Show QR
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-testid="pilot-canonical-invite-copy"
+                                      onClick={() => void copyInviteLink(canonicalInvite.id, resolveInviteShareUrl(canonicalInvite), 'Athlete join link copied.')}
+                                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                                    >
+                                      {copiedInviteId === canonicalInvite.id ? <CheckCircle2 className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+                                      {copiedInviteId === canonicalInvite.id ? 'Copied' : 'Copy link'}
+                                    </button>
+                                    <a
+                                      href={resolveInviteShareUrl(canonicalInvite)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      data-testid="pilot-canonical-invite-open"
+                                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                                    >
+                                      <ExternalLink className="h-4 w-4" />
+                                      Open
+                                    </a>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4">
+                                  <div className="text-sm font-semibold text-amber-100">
+                                    {selectedInviteScopeKind === 'team' ? 'Team enrollment is closed' : 'Pilot enrollment is closed'}
+                                  </div>
+                                  <p className="mt-2 text-sm leading-6 text-amber-100/90">
+                                    {selectedInviteEnrollmentClosedCopy} This join link is preserved and cannot be shared while enrollment is closed.
+                                  </p>
+                                  {selectedInviteScopeKind !== 'team' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveTab('manage-pilot')}
+                                      className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15"
+                                    >
+                                      <Settings2 className="h-4 w-4" />
+                                      Manage pilot
+                                    </button>
+                                  ) : null}
+                                </div>
+                              )}
+                            </>
+                          ) : !selectedInviteScopeCanAcceptJoins ? (
+                            <div className="mt-4 rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4">
+                              <div className="text-sm font-semibold text-amber-100">
+                                {selectedInviteScopeKind === 'team' ? 'Team enrollment is closed' : 'Pilot enrollment is closed'}
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-amber-100/90">
+                                {selectedInviteEnrollmentClosedCopy} PulseCheck will prepare its one join link automatically when enrollment becomes available.
+                              </p>
+                              {selectedInviteScopeKind !== 'team' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('manage-pilot')}
+                                  className="mt-3 inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/15"
+                                >
+                                  <Settings2 className="h-4 w-4" />
+                                  Manage pilot
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : ensuringInviteScopeKey === selectedInviteScopeKey ? (
+                            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-300" role="status">
+                              <Loader2 className="h-4 w-4 animate-spin text-sky-200" />
+                              Preparing the one join link for this destination...
+                            </div>
+                          ) : inviteEnsureError?.scopeKey === selectedInviteScopeKey ? (
+                            <div className="mt-4 rounded-2xl border border-rose-400/25 bg-rose-400/10 p-4">
+                              <p className="text-sm text-rose-100">{inviteEnsureError.text}</p>
+                              <button
+                                type="button"
+                                onClick={retryCanonicalInviteLink}
+                                className="mt-3 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/15"
+                              >
+                                Try again
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-zinc-300" role="status">
+                              <Loader2 className="h-4 w-4 animate-spin text-sky-200" />
+                              Preparing the one join link for this destination...
+                            </div>
+                          )}
                         </div>
                       </div>
+                    </section>
 
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-xs uppercase tracking-[0.18em] text-cyan-200">One athlete</div>
-                              <h3 className="mt-2 text-base font-semibold text-white">Single-use link</h3>
-                            </div>
-                            <Clipboard className="h-4 w-4 text-cyan-200" />
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-zinc-300">
-                            Best when you are sending a link to one specific athlete and want it redeemed once.
-                          </p>
-                          <button
-                            onClick={() => void handleCreatePilotInviteLink('single-use')}
-                            disabled={Boolean(creatingInviteMode)}
-                            className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Clipboard className="h-4 w-4" />
-                            {creatingInviteMode === 'single-use' ? 'Generating Single Link...' : 'Create Single-Use Link'}
-                          </button>
-                        </div>
-
-                        <div className="rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="text-xs uppercase tracking-[0.18em] text-sky-200">Group or roster</div>
-                              <h3 className="mt-2 text-base font-semibold text-white">Reusable link</h3>
-                            </div>
-                            <Users2 className="h-4 w-4 text-sky-200" />
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-zinc-300">
-                            Best when the same QR code or shared URL needs to work for a whole group in this pilot scope.
-                          </p>
-                          <button
-                            onClick={() => void handleCreatePilotInviteLink('general')}
-                            disabled={Boolean(creatingInviteMode)}
-                            className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-sky-400/30 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Users2 className="h-4 w-4" />
-                            {creatingInviteMode === 'general' ? 'Generating General Link...' : 'Create Reusable Link'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {scopedInvite && scopedInviteDiagnostic.status !== 'valid' ? (
+                    {canonicalInvite && scopedInviteDiagnostic.status !== 'valid' ? (
                       <div
                         data-testid="pilot-invite-diagnostics"
                         className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4"
@@ -3560,124 +4118,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     ) : null}
 
-                    <div className="mt-5">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active Links</div>
-                          <h3 className="mt-2 text-base font-semibold text-white">
-                            {selectedInviteCohort ? `Links for ${selectedInviteCohort.name}` : 'Links for whole pilot'}
-                          </h3>
-                          <p className="mt-1 text-sm text-zinc-400">
-                            Copy, open, or delete the athlete join links currently tied to this scope.
-                          </p>
-                        </div>
-                      </div>
-
-                      {scopedInvites.length > 0 ? (
-                        <div className="mt-4 space-y-3">
-                          {scopedInvites.map((invite) => (
-                            <div key={invite.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className={`rounded-full px-3 py-1 text-[11px] ${inviteRedemptionModeClassName(invite.redemptionMode)}`}>
-                                      {invite.redemptionMode === 'general' ? 'Reusable link' : 'Single-use link'}
-                                    </span>
-                                    {invite.redemptionMode === 'general' && Number(invite.redemptionCount || 0) > 0 ? (
-                                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] text-emerald-100">
-                                        {formatInviteUsageCount(invite.redemptionCount)}
-                                      </span>
-                                    ) : null}
-                                  </div>
-
-                                  <div className="mt-2 text-xs text-zinc-500">
-                                    Created {formatTimeValue(invite.createdAt)}
-                                    {invite.redeemedAt
-                                      ? ` • ${invite.redemptionMode === 'general' ? 'Last used' : 'Redeemed'} ${formatTimeValue(invite.redeemedAt)}`
-                                      : ''}
-                                  </div>
-
-                                  <div className="mt-3 rounded-2xl border border-white/5 bg-[#0b0f17] px-4 py-3 break-all text-xs text-cyan-100">
-                                    {resolveInviteShareUrl(invite)}
-                                  </div>
-
-                                  <div className="mt-2 text-xs text-zinc-400">
-                                    {invite.redemptionMode === 'general'
-                                      ? 'Reusable link for a group in this scope.'
-                                      : 'One athlete can redeem this link once.'}
-                                  </div>
-
-                                  {invite.redeemedByEmail ? (
-                                    <div className="mt-1 text-xs text-zinc-400">
-                                      {invite.redemptionMode === 'general' ? 'Last used by' : 'Redeemed by'} {invite.redeemedByEmail}
-                                    </div>
-                                  ) : null}
-
-                                  {!isPulseCheckInviteOneLink(resolveInviteShareUrl(invite)) ? (
-                                    <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/[0.08] px-3 py-2 text-xs text-amber-100">
-                                      This link is currently using the fallback web invite path.
-                                    </div>
-                                  ) : null}
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    data-testid={`pilot-invite-copy-${invite.id}`}
-                                    onClick={() => void copyInviteLink(invite.id, resolveInviteShareUrl(invite), 'Pilot athlete share link copied to clipboard.')}
-                                    className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition-all duration-200 ${
-                                      copiedInviteId === invite.id
-                                        ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)]'
-                                        : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
-                                    }`}
-                                  >
-                                    {copiedInviteId === invite.id ? <CheckCircle2 className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
-                                    {copiedInviteId === invite.id ? 'Copied' : 'Copy Link'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    data-testid={`pilot-invite-qr-${invite.id}`}
-                                    onClick={() => setQrInvite(invite)}
-                                    className="inline-flex items-center gap-2 rounded-2xl border border-sky-400/20 bg-sky-400/10 px-4 py-3 text-sm text-sky-100 transition hover:bg-sky-400/15"
-                                  >
-                                    <QrCode className="h-4 w-4" />
-                                    QR Code
-                                  </button>
-                                  <a
-                                    href={resolveInviteShareUrl(invite)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                    Open
-                                  </a>
-                                  <button
-                                    onClick={() => void handleDeletePilotInviteLink(invite)}
-                                    disabled={deletingInviteId === invite.id}
-                                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    {deletingInviteId === invite.id ? 'Deleting...' : 'Delete'}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-[#0b0f17] px-4 py-6 text-sm text-zinc-400">
-                          No athlete join links exist for this scope yet.
-                        </div>
-                      )}
-                    </div>
-
                     <div className="mt-5 rounded-2xl border border-white/5 bg-black/20 p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Web Invite Activity</div>
                           <h3 className="mt-2 text-base font-semibold text-white">Recovery Queue</h3>
                           <p className="mt-1 text-sm text-zinc-400">
-                            Use this when someone reaches the web invite flow and needs follow-up. It is not the full join ledger.
+                            Use this when someone reaches the web invite flow and needs follow-up. Participant enrollment records live in Participants.
                           </p>
                         </div>
                         <div className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
@@ -3705,8 +4152,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
 
                       <div className="mt-4 text-xs leading-6 text-zinc-500">
-                        Native-app deep links that resolve fully inside PulseCheck may not create a row here, so treat this
-                        as a recovery queue for web invite issues rather than a full scan history.
+                        This table captures web invite activity. Native-app deep links can resolve inside PulseCheck and appear in Participants after enrollment.
                       </div>
 
                       {inviteActivityParticipants.length > 0 ? (
@@ -3771,6 +4217,134 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       )}
                     </div>
                   </div>
+                  </>
+                  ) : null}
+
+                  {activeTab === 'manage-pilot' ? (
+                  <>
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot controls</div>
+                      <h2 className="mt-2 text-lg font-semibold text-white">Settings and data tools</h2>
+                      <p className="mt-1 text-sm text-zinc-400">Use these controls for pilot setup, refresh, and safe demonstrations.</p>
+                    </div>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <Link
+                        href={`/admin/pulsecheckProvisioning?team=${encodeURIComponent(detail.team.id)}`}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        Edit pilot details
+                      </Link>
+                      <button
+                        onClick={() => void load('refresh')}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white"
+                      >
+                        <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        {refreshing ? 'Refreshing data...' : 'Refresh pilot data'}
+                      </button>
+                      <button
+                        onClick={() => void toggleDemoMode()}
+                        data-testid="pilot-dashboard-detail-demo-toggle"
+                        className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition ${
+                          demoModeEnabled
+                            ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
+                            : 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
+                        }`}
+                      >
+                        <MonitorPlay className="h-4 w-4" />
+                        {demoModeEnabled ? 'Exit demo mode' : 'Switch to demo mode'}
+                      </button>
+                      {demoModeEnabled ? (
+                        <button
+                          onClick={() => void resetDemoModeData()}
+                          data-testid="pilot-dashboard-detail-demo-reset"
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm font-medium text-amber-100 transition hover:bg-amber-400/15"
+                        >
+                          <RefreshCcw className="h-4 w-4" />
+                          Reset demo data
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div
+                    data-testid="pilot-start-date-settings"
+                    className="rounded-3xl border border-white/10 bg-[#11151f] p-5"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot schedule</div>
+                        <h2 className="mt-2 text-lg font-semibold text-white">Start date</h2>
+                        <p id="pilot-start-date-help" className="mt-1 max-w-3xl text-sm leading-6 text-zinc-400">
+                          Change the pilot&apos;s configured start date. The end date stays unchanged. This can change which days count in reporting after study metrics refresh.
+                        </p>
+                      </div>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
+                        <CalendarDays className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                      <label className="space-y-2 text-sm text-zinc-300" htmlFor="pilot-start-date-input">
+                        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Start date</span>
+                        <input
+                          id="pilot-start-date-input"
+                          data-testid="pilot-start-date-input"
+                          type="date"
+                          value={pilotStartDateDraft}
+                          max={pilotEndDateKey || undefined}
+                          aria-describedby={`pilot-start-date-help${pilotStartDateError ? ' pilot-start-date-error' : ''}${demoModeEnabled ? ' pilot-start-date-demo-note' : ''}`}
+                          aria-invalid={Boolean(pilotStartDateError)}
+                          onChange={(event) => handlePilotStartDateDraftChange(event.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+                        />
+                      </label>
+
+                      <div className="space-y-2 text-sm text-zinc-300">
+                        <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">End date (unchanged)</div>
+                        <div
+                          data-testid="pilot-start-date-fixed-end"
+                          data-date-key={pilotEndDateKey}
+                          className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                        >
+                          {formatPilotDate(detail.pilot.endAt) || 'Open ended'}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        data-testid="pilot-start-date-save"
+                        disabled={!canSavePilotStartDate}
+                        onClick={() => void savePilotStartDate()}
+                        className="pilot-theme-primary-action inline-flex min-h-[46px] items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-5 py-3 text-sm font-medium text-cyan-100 transition hover:bg-cyan-400/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {savingPilotStartDate ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                        {savingPilotStartDate ? 'Saving...' : 'Save start date'}
+                      </button>
+                    </div>
+
+                    {pilotStartDateError ? (
+                      <p
+                        id="pilot-start-date-error"
+                        data-testid="pilot-start-date-error"
+                        role="alert"
+                        className="mt-3 text-sm text-rose-200"
+                      >
+                        {pilotStartDateError}
+                      </p>
+                    ) : null}
+
+                    {demoModeEnabled ? (
+                      <p
+                        id="pilot-start-date-demo-note"
+                        data-testid="pilot-start-date-demo-note"
+                        className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100"
+                      >
+                        Demo mode: this start date is saved only in this browser and resets with the demo data.
+                      </p>
+                    ) : null}
+                  </div>
 
                   {inviteConfigDraft ? (
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
@@ -3822,7 +4396,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 </div>
                               ) : (
                                 <p className="mt-3 text-sm text-zinc-400">
-                                  The override currently matches the inherited baseline, so the reset action would not change the live text yet.
+                                  The override matches the inherited baseline. Resetting keeps the current live text.
                                 </p>
                               )}
                             </div>
@@ -4077,95 +4651,45 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
                   ) : null}
+                  </>
+                  ) : null}
 
+                  {activeTab === 'people' && activePeopleSection !== 'invitations' ? (
+                  <>
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="enrollment-boundary" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Enrollment Boundary</div>
-                      <div className="mt-3 text-2xl font-semibold text-white">
-                        {visibleMetrics.activeAthleteCount} / {detail.metrics.totalEnrollmentCount}
-                      </div>
-                      <div className="mt-2 text-sm text-zinc-400">
-                        Active pilot athletes in view versus total enrollments recorded for this pilot.
-                      </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active participants</div>
+                      <div className="mt-3 text-2xl font-semibold text-white">{detail.metrics.activeAthleteCount}</div>
+                      <div className="mt-2 text-sm text-zinc-400">Athletes with active enrollment in this pilot.</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="engine-coverage" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Engine Coverage</div>
-                      <div className="mt-3 text-2xl font-semibold text-white">{formatPercent(visibleCoverage.engineCoverageRate)}</div>
-                      <div className="mt-2 text-sm text-zinc-400">
-                        Active pilot athletes with a correlation-engine record.
-                      </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pending consent</div>
+                      <div className="mt-3 text-2xl font-semibold text-white">{pendingConsentCount}</div>
+                      <div className="mt-2 text-sm text-zinc-400">Athletes who started enrollment and still need to finish consent.</div>
                     </div>
-                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <NoraMetricHelpButton metricKey="stable-pattern-rate" className="absolute right-4 top-4" />
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Stable Pattern Rate</div>
-                      <div className="mt-3 text-2xl font-semibold text-white">{formatPercent(visibleCoverage.stablePatternRate)}</div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Eligible to invite</div>
+                      <div className="mt-3 text-2xl font-semibold text-white">{eligibleAthleteCount}</div>
                       <div className="mt-2 text-sm text-zinc-400">
-                        Share of active pilot athletes with at least one stable pattern.
+                        Team athletes who have no pilot enrollment yet{withdrawnParticipantCount > 0 ? `, plus ${withdrawnParticipantCount} withdrawn participant${withdrawnParticipantCount === 1 ? '' : 's'} kept in history` : ''}.
                       </div>
                     </div>
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <h2 className="text-lg font-semibold">Cohort Rollup</h2>
+                        <h2 className="text-lg font-semibold">
+                          {rosterView === 'participants' ? 'Pilot participants' : 'Eligible team athletes'}
+                        </h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Pilot-native cohort comparison using only active athletes in this pilot{selectedCohort ? ` and filtered to ${selectedCohort.name}.` : '.'}
+                          {rosterView === 'participants'
+                            ? 'Current and former pilot participants, including athletes still completing consent.'
+                            : 'Athletes on this team who can still be invited into the pilot.'}
                         </p>
                       </div>
                     </div>
-                    <div className="mt-4 overflow-x-auto">
-                      <table className="min-w-full text-sm">
-                        <thead className="text-xs uppercase tracking-wide text-zinc-500">
-                          <tr>
-                            <th className="px-3 py-2 text-left">Cohort</th>
-                            <th className="px-3 py-2 text-left">Active Athletes</th>
-                            <th className="px-3 py-2 text-left">Engine Coverage</th>
-                            <th className="px-3 py-2 text-left">Stable Patterns</th>
-                            <th className="px-3 py-2 text-left">Projections</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {visibleCohortSummaries.length === 0 ? (
-                            <tr className="border-t border-white/5">
-                              <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
-                                No cohort study metrics match the current filter.
-                              </td>
-                            </tr>
-                          ) : (
-                            visibleCohortSummaries.map((summary) => (
-                              <tr key={summary.cohortId} className="border-t border-white/5">
-                                <td className="px-3 py-3 font-medium text-white">{summary.cohortName}</td>
-                                <td className="px-3 py-3 text-zinc-300">{summary.activeAthleteCount}</td>
-                                <td className="px-3 py-3 text-zinc-300">
-                                  {formatPercent(
-                                    summary.activeAthleteCount > 0
-                                      ? (summary.athletesWithEngineRecord / summary.activeAthleteCount) * 100
-                                      : 0
-                                  )}
-                                </td>
-                                <td className="px-3 py-3 text-zinc-300">{summary.athletesWithStablePatterns}</td>
-                                <td className="px-3 py-3 text-zinc-300">{summary.totalRecommendationProjections}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold">Pilot Athletes</h2>
-                        <p className="mt-1 text-sm text-zinc-400">
-                          All athlete team members appear here with active enrollments first, then consent-pending athletes, then not-enrolled athletes{selectedCohort ? `, filtered to ${selectedCohort.name}.` : '.'}
-                        </p>
-                      </div>
-                    </div>
-                    {detail.cohorts.length === 0 ? (
+                    {rosterView === 'participants' && detail.cohorts.length === 0 ? (
                       <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-4 text-sm text-amber-100">
                         This pilot does not have any cohort records yet, so every athlete is currently unassigned. Create cohorts in{' '}
                         <Link href="/admin/pulsecheckProvisioning" className="font-semibold underline hover:text-white">
@@ -4180,7 +4704,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <input
                           value={athleteSearchQuery}
                           onChange={(event) => setAthleteSearchQuery(event.target.value)}
-                          placeholder="Search athletes by name, email, cohort, or status..."
+                          placeholder={`Search ${rosterView === 'participants' ? 'participants' : 'eligible athletes'} by name or email...`}
                           className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-500 hover:border-white/15 focus:border-cyan-400/35"
                         />
                       </label>
@@ -4215,7 +4739,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           {visibleRosterAthletes.length === 0 ? (
                             <tr className="border-t border-white/5">
                               <td colSpan={8} className="px-3 py-6 text-center text-sm text-zinc-500">
-                                No athlete team members match the current cohort filter or search.
+                                {rosterView === 'participants'
+                                  ? 'No pilot participants match this search.'
+                                  : 'No eligible team athletes match this search.'}
                               </td>
                             </tr>
                           ) : (
@@ -4329,9 +4855,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     ) : null}
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.evidenceRecordCount : '—'}</td>
-                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.patternModelCount : '—'}</td>
-                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.recommendationProjectionCount : '—'}</td>
+                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.evidenceRecordCount : 'Not available'}</td>
+                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.patternModelCount : 'Not available'}</td>
+                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.recommendationProjectionCount : 'Not available'}</td>
                                 <td className="px-3 py-3 align-top">
                                   <div className="flex min-w-[220px] flex-col items-start gap-2">
                                     <button
@@ -4483,83 +5009,100 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </table>
                     </div>
                   </div>
+                  </>
+                  ) : null}
                 </div>
               ) : null}
 
-              {activeTab === 'engine-health' ? (
+              {activeTab === 'operations' ? (
                 <div className="mt-6 space-y-6">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Data operations</div>
+                    <h2 className="mt-2 text-xl font-semibold text-white">Coverage and processing</h2>
+                    <p className="mt-1 max-w-3xl text-sm leading-6 text-zinc-400">
+                      Whole-pilot view of athlete data arriving, evidence built, and patterns ready for review.
+                    </p>
+                  </div>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-emerald-300">
                         <Database className="h-5 w-5" />
-                          <span className="text-sm font-medium leading-tight">Athletes With Engine Record</span>
+                          <span className="text-sm font-medium leading-tight">Athletes with data</span>
                         </div>
                         <NoraMetricHelpButton metricKey="athletes-with-engine-record" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.athletesWithEngineRecord}</div>
+                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount > 0 ? visibleMetrics.athletesWithEngineRecord : 'Waiting'}</div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-cyan-300">
                         <Activity className="h-5 w-5" />
-                          <span className="text-sm font-medium leading-tight">Evidence Records</span>
+                          <span className="text-sm font-medium leading-tight">Evidence entries</span>
                         </div>
                         <NoraMetricHelpButton metricKey="evidence-records" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.totalEvidenceRecords}</div>
+                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount > 0 ? visibleMetrics.totalEvidenceRecords : 'Waiting'}</div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-amber-300">
                         <Brain className="h-5 w-5" />
-                          <span className="text-sm font-medium leading-tight">Pattern Models</span>
+                          <span className="text-sm font-medium leading-tight">Saved pattern models</span>
                         </div>
                         <NoraMetricHelpButton metricKey="pattern-models" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.totalPatternModels}</div>
+                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount > 0 ? visibleMetrics.totalPatternModels : 'Waiting'}</div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-violet-300">
                         <Users2 className="h-5 w-5" />
-                          <span className="text-sm font-medium leading-tight">Engine Coverage</span>
+                          <span className="text-sm font-medium leading-tight">Data coverage</span>
                         </div>
                         <NoraMetricHelpButton metricKey="engine-coverage" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-3xl font-semibold">{formatPercent(visibleCoverage.engineCoverageRate)}</div>
+                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount > 0 ? formatPercent(visibleCoverage.engineCoverageRate) : 'Not available'}</div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-cyan-300">
                         <FlaskConical className="h-5 w-5" />
-                          <span className="text-sm font-medium leading-tight">Avg Evidence / Athlete</span>
+                          <span className="text-sm font-medium leading-tight">Average evidence per athlete</span>
                         </div>
                         <NoraMetricHelpButton metricKey="avg-evidence-per-athlete" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-3xl font-semibold">{formatAverage(visibleCoverage.avgEvidenceRecordsPerActiveAthlete)}</div>
+                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount > 0 ? formatAverage(visibleCoverage.avgEvidenceRecordsPerActiveAthlete) : 'Not available'}</div>
                     </div>
                   </div>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(360px,1fr))] gap-4">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Pattern Density</div>
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Pattern coverage</div>
                         <NoraMetricHelpButton metricKey="pattern-density" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        Average pattern models per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgPatternModelsPerActiveAthlete)}</span>
-                      </div>
-                      <div className="mt-2 text-sm text-zinc-300">
-                        Average recommendation projections per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgRecommendationProjectionsPerActiveAthlete)}</span>
-                      </div>
+                      {visibleMetrics.activeAthleteCount > 0 ? (
+                        <>
+                          <div className="mt-3 text-sm text-zinc-300">
+                            Average pattern models per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgPatternModelsPerActiveAthlete)}</span>
+                          </div>
+                          <div className="mt-2 text-sm text-zinc-300">
+                            Average recommendation projections per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgRecommendationProjectionsPerActiveAthlete)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="mt-3 text-sm text-zinc-400">Pattern density will appear after athletes join and begin sending data.</div>
+                      )}
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Pilot Health Read</div>
+                        <div className="min-w-0 flex-1 pr-2 text-xs uppercase tracking-[0.18em] leading-tight text-zinc-500">Stable pattern coverage</div>
                         <NoraMetricHelpButton metricKey="pilot-health-read" className="shrink-0" />
                       </div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        Stable pattern rate currently sits at <span className="font-medium text-white">{formatPercent(visibleCoverage.stablePatternRate)}</span>. This remains a trustworthy V1 signal because it is derived from persisted pattern-model confidence tiers inside the active pilot population.
+                      <div className="mt-3 text-sm leading-6 text-zinc-300">
+                        {visibleMetrics.activeAthleteCount > 0
+                          ? `${formatPercent(visibleCoverage.stablePatternRate)} of active pilot athletes have at least one stable pattern.`
+                          : 'Stable-pattern coverage will appear after athletes join and build repeated history.'}
                       </div>
                     </div>
                   </div>
@@ -4567,63 +5110,77 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recommendation Slices</div>
-                        <h3 className="mt-2 text-lg font-semibold text-white">Recommendation Type Breakdown</h3>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recommendation delivery</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">Where recommendation output is used</h3>
                         <p className="mt-1 text-sm text-zinc-400">
-                          This slices persisted recommendation projections by consumer so we can see whether the engine is actually serving multiple audiences.
+                          See which PulseCheck experiences received saved recommendation output for active pilot athletes.
                         </p>
                       </div>
                       <NoraMetricHelpButton metricKey="recommendation-type-slices" />
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                      {RECOMMENDATION_CONSUMER_ORDER.map((consumer) => {
-                        const count = visibleRecommendationProjectionConsumerCounts[consumer] || 0;
-                        return (
-                          <div key={consumer} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{formatConsumerLabel(consumer)}</div>
-                            <div className="mt-2 text-2xl font-semibold text-white">{count}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 text-xs text-zinc-500">
-                      Counts are summed from persisted recommendation projections on the active athletes currently in view, so cohort filtering is honored automatically.
-                    </div>
+                    {visibleMetrics.totalRecommendationProjections > 0 ? (
+                      <>
+                        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                          {RECOMMENDATION_CONSUMER_ORDER.map((consumer) => {
+                            const count = visibleRecommendationProjectionConsumerCounts[consumer] || 0;
+                            return (
+                              <div key={consumer} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{formatConsumerLabel(consumer)}</div>
+                                <div className="mt-2 text-2xl font-semibold text-white">{count}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-3 text-xs text-zinc-500">Counts use saved recommendation output for active athletes in this pilot.</div>
+                      </>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
+                        Recommendation delivery will appear after the pilot has saved recommendation output.
+                      </div>
+                    )}
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5 text-sm text-zinc-300">
-                    The pilot scope and denominator rules are locked here. Additional stale-data, contradiction-rate, and source-quality metrics remain V1 contract items, but still need dedicated telemetry joins before they should be treated as trustworthy dashboard numbers.
+                    Counts in Operations use active participants across the whole pilot. Missing summaries appear as waiting or not available so they are easy to distinguish from measured zeros.
                   </div>
                 </div>
               ) : null}
 
-              {activeTab === 'findings' ? (
+              {activeTab === 'insights-research' && activeInsightSection === 'learning' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current V1 Read</div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        This pilot currently has {visibleMetrics.athletesWithStablePatterns} athletes with at least one stable pattern and {visibleMetrics.totalRecommendationProjections} persisted recommendation projections across the active pilot athletes in view.
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Current learning</div>
+                      <div className="mt-3 text-sm leading-6 text-zinc-300">
+                        {visibleMetrics.activeAthleteCount === 0
+                          ? 'Learning will begin after the first athlete joins.'
+                          : visibleMetrics.athletesWithStablePatterns === 0
+                            ? 'Repeated athlete history is still being collected. Pattern review will begin after enough days are available to compare change over time.'
+                            : `The pilot has enough repeated history to review athlete-level change for ${visibleMetrics.athletesWithStablePatterns} athlete${visibleMetrics.athletesWithStablePatterns === 1 ? '' : 's'} in this view. Shared team conclusions require a reviewed report.`}
                       </div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evidence Maturity Proxy</div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        V1 uses evidence-record and stable-pattern coverage as the current proxy for whether this pilot is learning enough to justify personalization.
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Data readiness</div>
+                      <div className="mt-3 text-sm leading-6 text-zinc-300">
+                        {visibleMetrics.activeAthleteCount > 0
+                          ? `${visibleMetrics.athletesWithEngineRecord} of ${visibleMetrics.activeAthleteCount} active athletes have a saved data record.`
+                          : 'Data readiness is waiting for active pilot athletes.'}
                       </div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study Metrics Lens</div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        Study-metrics validation is now flowing through pilot summaries for adherence, trust, NPS, mental-performance change, and speed to care. The next interpretation risk is not missing data contracts, but over-reading small slices without checking the sample behind them.
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome sample</div>
+                      <div className="mt-3 text-sm leading-6 text-zinc-300">
+                        {visibleOutcomeMetrics
+                          ? 'Saved participation, feedback, wellbeing, and support measures are available for this view. Check the sample count before drawing a conclusion.'
+                          : 'Outcome measures will appear after a saved activity and feedback summary is available.'}
                       </div>
                     </div>
                   </div>
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <h2 className="text-lg font-semibold">Cohort Findings Snapshot</h2>
+                        <h2 className="text-lg font-semibold">Learning by cohort</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Early pilot comparison of where the engine is producing usable structure across cohorts.
+                          Compare data readiness and pattern coverage across active pilot cohorts.
                         </p>
                       </div>
                     </div>
@@ -4642,7 +5199,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           {visibleCohortSummaries.length === 0 ? (
                             <tr className="border-t border-white/5">
                               <td colSpan={5} className="px-3 py-6 text-center text-sm text-zinc-500">
-                                No cohort findings are available for the current filter.
+                                No active cohort learning summary is available for this view yet.
                               </td>
                             </tr>
                           ) : (
@@ -4650,11 +5207,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <tr key={summary.cohortId} className="border-t border-white/5">
                                 <td className="px-3 py-3 font-medium text-white">{summary.cohortName}</td>
                                 <td className="px-3 py-3 text-zinc-300">
-                                  {formatPercent(
-                                    summary.activeAthleteCount > 0
-                                      ? (summary.athletesWithStablePatterns / summary.activeAthleteCount) * 100
-                                      : 0
-                                  )}
+                                  {summary.activeAthleteCount > 0
+                                    ? formatPercent((summary.athletesWithStablePatterns / summary.activeAthleteCount) * 100)
+                                    : 'Not available'}
                                 </td>
                                 <td className="px-3 py-3 text-zinc-300">{summary.totalEvidenceRecords}</td>
                                 <td className="px-3 py-3 text-zinc-300">{summary.totalPatternModels}</td>
@@ -4669,8 +5224,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 </div>
               ) : null}
 
-              {activeTab === 'hypotheses' ? (
+              {activeTab === 'insights-research' && activeInsightSection === 'hypotheses' ? (
                 <div className="mt-6 space-y-6">
+                  <div className="rounded-2xl border border-cyan-400/15 bg-cyan-400/10 px-4 py-3 text-sm leading-6 text-cyan-50/90">
+                    Hypothesis records and status totals belong to the whole pilot. The cohort filter changes the saved comparison evidence shown below.
+                  </div>
                   <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -4714,8 +5272,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Study-Metrics Comparison Slices</div>
                         <h2 className="mt-2 text-lg font-semibold text-white">H3, H5, and H6 study-metrics comparisons</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          These governed slices read the current pilot study metrics summary instead of rescanning raw collections at render time.
-                          They are designed to keep recommendation exposure, adherence, mental-performance delta, and trust in the same frame.
+                          These governed comparisons use the current saved pilot summary, keeping recommendation exposure, participation, mental-performance change, and trust in the same frame.
                         </p>
                       </div>
                       <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
@@ -4870,7 +5427,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <h2 className="mt-3 text-lg font-semibold">Ask Nora what this pilot should test next</h2>
                         <p className="mt-2 text-sm text-zinc-400">
                           Nora can suggest pilot-scoped hypotheses from the governed dashboard frame, including the current cohort filter.
-                          These are candidate research questions, not conclusions. You still choose which ones become official pilot hypotheses.
+                          You decide which candidate research questions become official pilot hypotheses.
                         </p>
                         <div className="mt-3 text-xs text-zinc-500">
                           Current frame: {selectedCohort ? `${selectedCohort.name}` : 'Whole pilot'} • {visibleMetrics.activeAthleteCount} active athletes • {formatPercent(visibleCoverage.engineCoverageRate)} coverage
@@ -4983,9 +5540,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div>
-                      <h2 className="text-lg font-semibold">Manual Hypothesis Tracking</h2>
+                      <h2 className="text-lg font-semibold">Pilot hypotheses</h2>
                       <p className="mt-1 text-sm text-zinc-400">
-                        Hypothesis persistence is in scope for V1. This is the manual governance layer for the selected pilot.
+                        Record what the team expects to learn, the evidence to watch, and the current review status.
                       </p>
                     </div>
                     <button
@@ -5099,14 +5656,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 </div>
               ) : null}
 
-              {activeTab === 'research-readout' ? (
+              {activeTab === 'insights-research' && activeInsightSection === 'reports' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                     <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <NoraMetricHelpButton metricKey="saved-readout" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-cyan-300">
                         <FileText className="h-5 w-5" />
-                        <span className="text-sm font-medium">Saved Readout</span>
+                        <span className="text-sm font-medium">Saved reports, all scopes</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.researchReadouts.length}</div>
                     </div>
@@ -5114,7 +5671,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <NoraMetricHelpButton metricKey="readiness-frame" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-emerald-300">
                         <ShieldCheck className="h-5 w-5" />
-                        <span className="text-sm font-medium">Readiness Frame</span>
+                        <span className="text-sm font-medium">Current report frame</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">
                         {selectedCohort ? selectedCohort.name : 'Whole Pilot'}
@@ -5124,7 +5681,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <NoraMetricHelpButton metricKey="eligible-athletes" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-amber-300">
                         <Users2 className="h-5 w-5" />
-                        <span className="text-sm font-medium">Eligible Athletes</span>
+                        <span className="text-sm font-medium">Athletes in current frame</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount}</div>
                     </div>
@@ -5132,7 +5689,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <NoraMetricHelpButton metricKey="hypotheses-in-scope" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-violet-300">
                         <CheckCircle2 className="h-5 w-5" />
-                        <span className="text-sm font-medium">Hypotheses In Scope</span>
+                        <span className="text-sm font-medium">Hypotheses, whole pilot</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypotheses.length}</div>
                     </div>
@@ -5162,7 +5719,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <p className="mt-2">
                         This brief will lock to pilot <span className="font-medium text-white">{detail.pilot.name}</span>
                         {selectedCohort ? `, cohort ${selectedCohort.name},` : ','} and the currently selected pilot-scoped denominator frame.
-                        It will not interpret athletes outside this pilot.
+                        It interprets only athletes enrolled in this pilot.
                       </p>
                     </div>
                   </div>
@@ -5207,7 +5764,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <ul className="mt-3 space-y-2 text-sm text-zinc-300">
                         <li>Pilot must be active or completed.</li>
                         <li>Readiness checks must pass for sample size, freshness, telemetry completeness, and denominator availability.</li>
-                        <li>Sections that fail evidence thresholds will be suppressed instead of softened into generic prose.</li>
+                        <li>Sections below the evidence threshold stay suppressed.</li>
                       </ul>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
@@ -5215,7 +5772,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <ul className="mt-3 space-y-2 text-sm text-zinc-300">
                         <li>Every claim must be tagged as Observed, Inferred, or Speculative.</li>
                         <li>Every section must cite its evidence frame, linked hypotheses, and active limitations.</li>
-                        <li>The system may suggest hypothesis posture, but only a human reviewer sets the official hypothesis status.</li>
+                        <li>A human reviewer alone sets the official hypothesis status. System suggestions remain advisory.</li>
                       </ul>
                     </div>
                   </div>
@@ -5710,7 +6267,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           {[
                             ['1', 'Pilot Summary', 'Start with the plain-language read before you dive into claims or candidate findings.'],
                             ['2', 'Hypothesis Mapper', 'Check whether the brief is actually mapping back to the hypotheses you set for the pilot.'],
-                            ['3', 'Candidate Publishable Findings', 'Treat these as disciplined leads for discussion, not finished conclusions.'],
+                            ['3', 'Candidate Publishable Findings', 'Treat these as early leads for discussion that still need validation.'],
                             ['4', 'Limitations and Reviewer Resolution', 'This is what keeps the brief honest and prevents overclaiming.'],
                           ].map((row) => (
                             <tr key={row[0]} className="border-t border-white/5">
@@ -5814,10 +6371,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         }
 
         .pilot-detail-select {
+          -webkit-appearance: none;
           appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.28)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2210%22%20height%3D%226%22%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M1%201l4%204%204-4%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.28%29%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
           background-position: right 0.9rem center;
           background-repeat: no-repeat;
+          background-size: 10px 6px;
           padding-right: 2.5rem;
         }
 
@@ -5899,10 +6458,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         {detail ? (
           <PilotInviteQrModal
             invite={qrInvite}
-            pilotName={detail.pilot.name}
+            pilotName={qrInvite?.pilotId ? detail.pilot.name : undefined}
             teamName={detail.team.displayName}
             organizationName={detail.organization.displayName}
-            onClose={() => setQrInvite(null)}
+            onClose={closeQrInvite}
           />
         ) : null}
         {detail && athleteTransferModal ? (
@@ -6010,6 +6569,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         </AnimatePresence>
       </div>
     </div>
+      </PilotDashboardThemeFrame>
     </AdminRouteGuard>
   );
 };

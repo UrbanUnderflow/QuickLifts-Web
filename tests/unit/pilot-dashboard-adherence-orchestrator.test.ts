@@ -75,6 +75,7 @@ test('adherence orchestrator summarizes dashboard counts without private content
     },
   });
 
+  assert.ok(summary);
   assert.equal(summary.expectedAthleteDays, 6);
   assert.equal(summary.closedDays, 3);
   assert.equal(summary.rescuedDays, 1);
@@ -85,6 +86,47 @@ test('adherence orchestrator summarizes dashboard counts without private content
   assert.equal(summary.atRiskAthleteCount, 2);
   assert.equal(summary.privateContentExposed, false);
   assert.match(summary.privacyBoundary, /does not show coaches raw reflections/i);
+});
+
+test('adherence orchestrator distinguishes absent diagnostics from measured zeros', async () => {
+  const {
+    buildPilotAdherenceOrchestratorByCohort,
+    buildPilotAdherenceOrchestratorSummary,
+  } = await loadModules();
+
+  assert.equal(buildPilotAdherenceOrchestratorSummary(undefined), undefined);
+  assert.equal(buildPilotAdherenceOrchestratorSummary(null), undefined);
+  assert.equal(JSON.stringify({
+    adherenceOrchestrator: buildPilotAdherenceOrchestratorSummary(undefined),
+  }), '{}');
+
+  const measuredZero = buildPilotAdherenceOrchestratorSummary({
+    expectedAthleteDays: 0,
+    completedCheckInDays: 0,
+    completedAssignmentDays: 0,
+    adheredDays: 0,
+    activeAthleteCount: 0,
+  });
+
+  assert.ok(measuredZero);
+  assert.equal(measuredZero.expectedAthleteDays, 0);
+  assert.equal(measuredZero.closedDays, 0);
+  assert.equal(measuredZero.closedRate, 0);
+  assert.equal(measuredZero.activeAthleteCount, 0);
+
+  const byCohort = buildPilotAdherenceOrchestratorByCohort({
+    measuredZero: {
+      expectedAthleteDays: 0,
+      completedCheckInDays: 0,
+      completedAssignmentDays: 0,
+      adheredDays: 0,
+      activeAthleteCount: 0,
+    },
+    unavailable: null,
+  });
+
+  assert.deepEqual(Object.keys(byCohort), ['measuredZero']);
+  assert.equal(byCohort.measuredZero.expectedAthleteDays, 0);
 });
 
 test('adherence orchestrator detects explicit rescue completion signals', async () => {

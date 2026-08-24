@@ -11,7 +11,6 @@ import {
   query,
   setDoc,
   startAt,
-  updateDoc,
   where,
 } from 'firebase/firestore';
 
@@ -68,6 +67,7 @@ const PULSECHECK_TEAMS_COLLECTION = 'pulsecheck-teams';
 const PULSECHECK_PILOTS_COLLECTION = 'pulsecheck-pilots';
 const PULSECHECK_PILOT_COHORTS_COLLECTION = 'pulsecheck-pilot-cohorts';
 const PULSECHECK_PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
+const PULSECHECK_INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const PULSECHECK_PILOT_HYPOTHESES_COLLECTION = 'pulsecheck-pilot-hypotheses';
@@ -756,6 +756,7 @@ function buildPilotDashboardFixtureIds(namespace: string) {
   const athleteOneId = `${prefix}athlete-a`;
   const athleteTwoId = `${prefix}athlete-b`;
   const athleteThreeId = `${prefix}athlete-c`;
+  const liveJoinAthleteId = `${prefix}athlete-live-join`;
 
   return {
     namespace: sanitizeNamespace(namespace),
@@ -773,12 +774,15 @@ function buildPilotDashboardFixtureIds(namespace: string) {
     athleteOneId,
     athleteTwoId,
     athleteThreeId,
+    liveJoinAthleteId,
     athleteOneEmail: `${prefix}athlete-a@pulse.test`,
     athleteTwoEmail: `${prefix}athlete-b@pulse.test`,
     athleteThreeEmail: `${prefix}athlete-c@pulse.test`,
     athleteOneName: `E2E Pilot Athlete A ${label}`,
     athleteTwoName: `E2E Pilot Athlete B ${label}`,
     athleteThreeName: `E2E Pilot Athlete C ${label}`,
+    liveJoinAthleteEmail: `${prefix}athlete-live-join@pulse.test`,
+    liveJoinAthleteName: `E2E New Pilot Athlete ${label}`,
     hypothesisIds: ['h1', 'h2', 'h3'].map((suffix) => `${prefix}${suffix}`),
     readoutIds: ['readout-1', 'readout-2'].map((suffix) => `${prefix}${suffix}`),
   };
@@ -1975,14 +1979,21 @@ async function cleanupPulseCheckPilotDashboardFixture(
   }
 ) {
   const fixture = buildPilotDashboardFixtureIds(input.namespace);
-  const athleteIds = [fixture.athleteOneId, fixture.athleteTwoId, fixture.athleteThreeId];
+  const athleteIds = [
+    fixture.athleteOneId,
+    fixture.athleteTwoId,
+    fixture.athleteThreeId,
+    fixture.liveJoinAthleteId,
+  ];
 
   await Promise.all([
+    deleteQueryDocs(db, COACH_NOTIFICATIONS_COLLECTION, 'teamId', fixture.teamId),
     deleteQueryDocs(db, PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION, 'pilotId', fixture.pilotId),
     deleteQueryDocs(db, PULSECHECK_PILOT_HYPOTHESES_COLLECTION, 'pilotId', fixture.pilotId),
     deleteQueryDocs(db, PULSECHECK_PILOT_ENROLLMENTS_COLLECTION, 'pilotId', fixture.pilotId),
     deleteQueryDocs(db, PULSECHECK_PILOT_COHORTS_COLLECTION, 'pilotId', fixture.pilotId),
     deleteQueryDocs(db, PULSECHECK_PILOT_SURVEY_RESPONSES_COLLECTION, 'pilotId', fixture.pilotId),
+    deleteQueryDocs(db, PULSECHECK_INVITE_LINKS_COLLECTION, 'teamId', fixture.teamId),
     deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION, fixture.pilotId, PULSECHECK_PILOT_METRIC_ROLLUP_SUMMARY_SUBCOLLECTION, 'current')).catch(() => undefined),
     deleteDoc(doc(db, PULSECHECK_PILOT_METRIC_ROLLUPS_COLLECTION, fixture.pilotId)).catch(() => undefined),
     deleteDoc(doc(db, PULSECHECK_PILOT_OUTCOME_RELEASE_SETTINGS_COLLECTION, fixture.pilotId)).catch(() => undefined),
@@ -2021,6 +2032,98 @@ async function cleanupPulseCheckPilotDashboardFixture(
     teamId: fixture.teamId,
     pilotId: fixture.pilotId,
     athleteIds,
+  };
+}
+
+async function addPulseCheckPilotDashboardAthlete(
+  db: Firestore,
+  input: {namespace: string}
+) {
+  const fixture = buildPilotDashboardFixtureIds(input.namespace);
+  const now = new Date();
+
+  await Promise.all([
+    setDoc(
+      doc(db, USERS_COLLECTION, fixture.liveJoinAthleteId),
+      {
+        email: fixture.liveJoinAthleteEmail,
+        displayName: fixture.liveJoinAthleteName,
+        username: fixture.liveJoinAthleteName.toLowerCase().replace(/[^a-z0-9]+/g, ''),
+        role: 'athlete',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {merge: true}
+    ),
+    setDoc(
+      doc(
+        db,
+        PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION,
+        `${fixture.organizationId}_${fixture.liveJoinAthleteId}`
+      ),
+      {
+        organizationId: fixture.organizationId,
+        userId: fixture.liveJoinAthleteId,
+        email: fixture.liveJoinAthleteEmail,
+        role: 'athlete',
+        status: 'active',
+        grantedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {merge: true}
+    ),
+  ]);
+
+  await setDoc(
+    doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${fixture.liveJoinAthleteId}`),
+    {
+      organizationId: fixture.organizationId,
+      teamId: fixture.teamId,
+      userId: fixture.liveJoinAthleteId,
+      email: fixture.liveJoinAthleteEmail,
+      role: 'athlete',
+      status: 'active',
+      revokedAt: null,
+      revoked: false,
+      archivedAt: null,
+      deletedAt: null,
+      removedAt: null,
+      removedByUserId: '',
+      removedByEmail: '',
+      removalReason: '',
+      removalOperationId: '',
+      permissionSetId: 'pulsecheck-athlete-v1',
+      rosterVisibilityScope: 'none',
+      allowedAthleteIds: [],
+      invitedDisplayName: fixture.liveJoinAthleteName,
+      onboardingStatus: 'pending',
+      athleteOnboarding: {
+        productConsentAccepted: false,
+        researchConsentStatus: 'not-required',
+        eligibleForResearchDataset: false,
+        enrollmentMode: 'pilot',
+        targetPilotId: fixture.pilotId,
+        targetPilotName: fixture.pilotName,
+        baselinePathStatus: 'pending',
+        entryOnboardingName: fixture.liveJoinAthleteName,
+      },
+      grantedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {merge: true}
+  );
+
+  return {
+    namespace: fixture.namespace,
+    organizationId: fixture.organizationId,
+    teamId: fixture.teamId,
+    pilotId: fixture.pilotId,
+    athleteId: fixture.liveJoinAthleteId,
+    athleteName: fixture.liveJoinAthleteName,
+    athleteEmail: fixture.liveJoinAthleteEmail,
+    teamName: fixture.teamName,
   };
 }
 
@@ -3940,6 +4043,18 @@ export interface PulseE2EHarness {
     pilotId: string;
     athleteIds: string[];
   }>;
+  addPulseCheckPilotDashboardAthlete: (input: {
+    namespace: string;
+  }) => Promise<{
+    namespace: string;
+    organizationId: string;
+    teamId: string;
+    pilotId: string;
+    athleteId: string;
+    athleteName: string;
+    athleteEmail: string;
+    teamName: string;
+  }>;
   cleanupLegacyCoachRosterFixtures: (namespace: string) => Promise<{
     namespace: string;
     coachId: string;
@@ -4138,6 +4253,7 @@ export function installPulseE2EHarness(db: Firestore) {
       seedPulseCheckAdminWorkspaceFixture(db, namespace, adminUserId, adminEmail),
     seedPulseCheckPilotDashboardFixture: (input) => seedPulseCheckPilotDashboardFixture(db, input),
     cleanupPulseCheckPilotDashboardFixture: (input) => cleanupPulseCheckPilotDashboardFixture(db, input),
+    addPulseCheckPilotDashboardAthlete: (input) => addPulseCheckPilotDashboardAthlete(db, input),
     cleanupLegacyCoachRosterFixtures: (namespace: string) => cleanupLegacyCoachRosterFixtures(db, namespace),
     seedPulseCheckAthleteJourneyFixture: (input) => seedPulseCheckAthleteJourneyFixture(db, input),
     cleanupPulseCheckAthleteJourneyFixture: (input) => cleanupPulseCheckAthleteJourneyFixture(db, input),

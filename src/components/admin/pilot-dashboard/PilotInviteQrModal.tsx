@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Download, ExternalLink, Loader2, QrCode, X } from 'lucide-react';
-import QRCode from 'qrcode';
+import { Check, Clipboard, Download, ExternalLink, Loader2, QrCode, X } from 'lucide-react';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
-import { buildPulseCheckTeamInviteWebUrl } from '../../../utils/pulsecheckInviteLinks';
+import {
+  renderPilotInviteQrDataUrl,
+  resolvePilotInviteShareUrl,
+} from '../../../utils/pilotInviteQr';
+import { usePilotDashboardTheme } from './PilotDashboardTheme';
 
 type PilotInviteQrModalProps = {
   invite: PulseCheckInviteLink | null;
@@ -24,11 +28,6 @@ const truncateUrl = (value: string) => {
   return `${value.slice(0, 42)}...${value.slice(-22)}`;
 };
 
-const resolveInviteShareUrl = (invite: PulseCheckInviteLink | null) => {
-  if (!invite) return '';
-  return invite.activationUrl || buildPulseCheckTeamInviteWebUrl(invite.token || invite.id);
-};
-
 export function PilotInviteQrModal({
   invite,
   pilotName,
@@ -36,10 +35,18 @@ export function PilotInviteQrModal({
   organizationName,
   onClose,
 }: PilotInviteQrModalProps) {
+  const { theme } = usePilotDashboardTheme();
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const shareUrl = resolveInviteShareUrl(invite);
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const shareUrl = resolvePilotInviteShareUrl(
+    invite,
+    typeof window !== 'undefined' ? window.location.origin : undefined
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -56,15 +63,7 @@ export function PilotInviteQrModal({
     setLoading(true);
     setError('');
 
-    QRCode.toDataURL(shareUrl, {
-      errorCorrectionLevel: 'M',
-      margin: 1,
-      width: 720,
-      color: {
-        dark: '#09111e',
-        light: '#ffffff',
-      },
-    })
+    renderPilotInviteQrDataUrl(shareUrl)
       .then((dataUrl: string) => {
         if (cancelled) return;
         setQrDataUrl(dataUrl);
@@ -83,13 +82,59 @@ export function PilotInviteQrModal({
     };
   }, [shareUrl]);
 
+  useEffect(() => {
+    setCopied(false);
+    setCopyError('');
+  }, [shareUrl]);
+
+  useEffect(() => {
+    if (!invite) return undefined;
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const focusTimeout = window.setTimeout(() => closeButtonRef.current?.focus(), 0);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => !element.hasAttribute('aria-hidden'));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimeout);
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [invite, onClose]);
+
   const handleDownload = () => {
     if (!invite || !shareUrl || !qrDataUrl) return;
 
     const link = document.createElement('a');
     const fileBase = [
       pilotName || teamName || 'pulsecheck',
-      invite.redemptionMode === 'general' ? 'general' : 'single',
+      invite.redemptionMode === 'general' ? 'join' : 'single',
       'invite-qr',
     ]
       .filter(Boolean)
@@ -102,20 +147,41 @@ export function PilotInviteQrModal({
     document.body.removeChild(link);
   };
 
-  const isOpen = Boolean(invite);
-  const inviteLabel = invite?.redemptionMode === 'general' ? 'General Link' : 'Single-use Link';
-  const headline = pilotName?.trim()
-    ? `Scan to join ${pilotName.trim()}`
-    : `Scan to join ${teamName?.trim() || 'this PulseCheck invite'}`;
+  const handleCopy = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setCopyError('');
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch (copyError) {
+      console.error('[PilotInviteQrModal] Failed to copy invite link:', copyError);
+      setCopyError('The QR is ready, but the invite link could not be copied.');
+    }
+  };
 
-  return (
+  const isOpen = Boolean(invite);
+  const inviteLabel = invite?.redemptionMode === 'general' ? 'Athlete join QR' : 'One-athlete QR';
+  const destinationName = invite?.cohortName?.trim() || pilotName?.trim() || teamName?.trim();
+  const headline = destinationName
+    ? `Scan to join ${destinationName}`
+    : `Scan to join ${teamName?.trim() || 'this PulseCheck invite'}`;
+  const assignedScopeLabel = pilotName?.trim() ? 'this team and pilot' : 'this team';
+  const destinationPath = [organizationName, teamName, pilotName, invite?.cohortName]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join(' / ');
+
+  if (typeof document === 'undefined') return null;
+
+  const modal = (
     <AnimatePresence>
       {isOpen ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-[#03060d]/88 px-4 py-6 backdrop-blur-xl"
+          className="fixed inset-0 z-[140] flex items-start justify-center overflow-y-auto bg-[#03060d]/88 px-4 py-6 backdrop-blur-xl sm:items-center"
           onClick={onClose}
         >
           <motion.div
@@ -123,7 +189,8 @@ export function PilotInviteQrModal({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="relative w-full max-w-4xl overflow-hidden rounded-[34px] border border-white/10 bg-[#0a0f18]/95 shadow-[0_28px_120px_rgba(0,0,0,0.45)]"
+            ref={dialogRef}
+            className="relative max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-[34px] border border-white/10 bg-[#0a0f18]/95 shadow-[0_28px_120px_rgba(0,0,0,0.45)]"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -154,22 +221,27 @@ export function PilotInviteQrModal({
                         <div className="flex aspect-square items-center justify-center rounded-[18px] bg-slate-50 px-6 text-center text-sm text-slate-500">
                           {error}
                         </div>
-                      ) : (
+                      ) : qrDataUrl ? (
                         <img
                           src={qrDataUrl}
                           alt={headline}
                           className="block aspect-square w-full rounded-[18px]"
                           data-testid="pilot-invite-qr-image"
+                          data-encoded-value={shareUrl}
                         />
+                      ) : (
+                        <div className="flex aspect-square items-center justify-center rounded-[18px] bg-slate-50 px-6 text-center text-sm text-slate-500">
+                          Preparing QR code...
+                        </div>
                       )}
                     </div>
 
-                    <div className="mt-4 rounded-[20px] bg-[#09111e] px-4 py-3 text-center">
-                      <div className="text-sm font-semibold text-white">{headline}</div>
-                      <div className="mt-1 text-xs leading-5 text-slate-300">
+                    <div className="pilot-invite-qr-fixed-dark mt-4 rounded-[20px] bg-[#09111e] px-4 py-3 text-center">
+                      <div className="pilot-invite-qr-fixed-dark-title text-sm font-semibold text-white">{headline}</div>
+                      <div className="pilot-invite-qr-fixed-dark-copy mt-1 text-xs leading-5 text-slate-300">
                         {invite?.redemptionMode === 'general'
-                          ? 'This QR encodes the reusable PulseCheck OneLink so scans can open the app directly while the invite itself stays valid until you delete it.'
-                          : 'Open the invite on a phone camera and move directly into onboarding for this pilot.'}
+                          ? 'Open your phone camera and scan this code to begin PulseCheck onboarding.'
+                          : 'This code is intended for the one athlete attached to this invite.'}
                       </div>
                     </div>
                   </div>
@@ -180,16 +252,17 @@ export function PilotInviteQrModal({
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="inline-flex rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-sky-100">
-                      QR Code
+                      Athlete invite QR
                     </div>
                     <h2 id="pilot-invite-qr-title" className="mt-3 text-2xl font-semibold text-white sm:text-3xl">
                       {headline}
                     </h2>
                     <p className="mt-3 max-w-xl text-sm leading-7 text-zinc-300">
-                      This QR code is generated directly from the current invite link, so the scan target stays in sync with the share URL you already copy and open from this card.
+                      This code uses the active invite link already assigned to {assignedScopeLabel}.
                     </p>
                   </div>
                   <button
+                    ref={closeButtonRef}
                     type="button"
                     onClick={onClose}
                     className="rounded-full border border-white/10 bg-white/5 p-2.5 text-zinc-300 transition hover:bg-white/10 hover:text-white"
@@ -201,24 +274,26 @@ export function PilotInviteQrModal({
 
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Pilot</div>
-                    <div className="mt-2 text-sm font-medium text-white">{pilotName || 'Current pilot'}</div>
-                    <div className="mt-1 text-xs text-zinc-400">{teamName || 'Team'}{organizationName ? ` • ${organizationName}` : ''}</div>
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Destination</div>
+                    <div className="mt-2 text-sm font-medium text-white">{destinationPath || 'Current pilot'}</div>
+                    <div className="mt-1 text-xs text-zinc-400">Confirm this scope before displaying or printing the code.</div>
                   </div>
                   <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Link Type</div>
-                    <div className="mt-2 text-sm font-medium text-white">{inviteLabel}</div>
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Join link</div>
+                    <div className="mt-2 text-sm font-medium text-white">
+                      {invite?.redemptionMode === 'general' ? 'One destination link' : inviteLabel}
+                    </div>
                     <div className="mt-1 text-xs text-zinc-400">
                       {invite?.redemptionMode === 'general'
-                        ? 'Reusable for group scans and shared screens.'
-                        : 'Best for sending to one athlete at a time.'}
+                        ? 'The same link works for every athlete joining this destination.'
+                        : 'This code stops working after the assigned athlete redeems it.'}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-white/8 bg-black/20 p-4">
                   <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
-                    {invite?.redemptionMode === 'general' ? 'Encoded Reusable OneLink' : 'Encoded Share Link'}
+                    Encoded invite link
                   </div>
                   <div className="mt-2 break-all font-mono text-xs leading-6 text-cyan-100" title={shareUrl}>
                     {truncateUrl(shareUrl)}
@@ -235,10 +310,21 @@ export function PilotInviteQrModal({
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                     Download PNG
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy()}
+                    disabled={!shareUrl}
+                    data-testid="pilot-invite-qr-copy-link"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
                   <a
                     href={shareUrl || '#'}
                     target="_blank"
                     rel="noreferrer"
+                    data-testid="pilot-invite-qr-open-link"
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -252,11 +338,23 @@ export function PilotInviteQrModal({
                     Close
                   </button>
                 </div>
+                {copyError ? (
+                  <div className="mt-3 text-sm text-amber-100" role="status">
+                    {copyError}
+                  </div>
+                ) : null}
               </div>
             </div>
           </motion.div>
         </motion.div>
       ) : null}
     </AnimatePresence>
+  );
+
+  return createPortal(
+    <div className="pilot-dashboard-theme-frame" data-pilot-theme={theme}>
+      {modal}
+    </div>,
+    document.body
   );
 }

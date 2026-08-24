@@ -80,8 +80,10 @@ export const resolveAthleteDayAdherenceState = ({
 
 export const buildPilotAdherenceOrchestratorSummary = (
   diagnostics?: Record<string, any> | null,
-): PilotDashboardAdherenceOrchestratorSummary => {
-  const adherence = diagnostics || {};
+): PilotDashboardAdherenceOrchestratorSummary | undefined => {
+  if (!diagnostics || typeof diagnostics !== 'object') return undefined;
+
+  const adherence = diagnostics;
   const orchestrator = adherence.orchestrator && typeof adherence.orchestrator === 'object'
     ? adherence.orchestrator
     : adherence;
@@ -155,7 +157,8 @@ export const buildPilotAdherenceOrchestratorByCohort = (
   return Object.entries(diagnosticsByCohort).reduce<Record<string, PilotDashboardAdherenceOrchestratorSummary>>(
     (accumulator, [cohortId, diagnostics]) => {
       if (!cohortId) return accumulator;
-      accumulator[cohortId] = buildPilotAdherenceOrchestratorSummary(diagnostics as Record<string, any>);
+      const summary = buildPilotAdherenceOrchestratorSummary(diagnostics as Record<string, any> | null);
+      if (summary) accumulator[cohortId] = summary;
       return accumulator;
     },
     {},

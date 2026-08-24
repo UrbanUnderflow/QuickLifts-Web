@@ -24,6 +24,16 @@ import { generateDailyAssignmentAdmin } from './utils/dailyCurriculumAdmin';
 const BATCH_LIMIT = 500;
 const WINDOW_MINUTES = 30;
 
+const isActiveAthleteMembership = (data: Record<string, unknown>): boolean => {
+  const status = typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
+  return data.role === 'athlete'
+    && (!status || status === 'active')
+    && data.revokedAt == null
+    && data.archivedAt == null
+    && data.deletedAt == null
+    && data.revoked !== true;
+};
+
 const formatYmd = (d: Date): string => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -77,7 +87,8 @@ export const handler: Handler = async () => {
   };
 
   for (const mem of memSnap.docs) {
-    const m = mem.data();
+    const m = mem.data() as Record<string, unknown>;
+    if (!isActiveAthleteMembership(m)) continue;
     if (!m.userId) continue;
     summary.candidates += 1;
     const tz = (m.timezone as string | undefined) || 'America/New_York';
@@ -105,7 +116,7 @@ export const handler: Handler = async () => {
 
     try {
       const result = await generateDailyAssignmentAdmin(db, {
-        athleteUserId: m.userId,
+        athleteUserId: m.userId as string,
         teamId: (m.teamId as string | undefined) || '',
         teamMembershipId: (m.id as string | undefined) || mem.id,
         sportId: (m.sportId as string | undefined) ||

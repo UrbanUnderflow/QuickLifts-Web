@@ -41,7 +41,6 @@ function compileTypeScriptRuntime({ cacheKey, entryPaths, assets = [] }) {
 
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), `ql-${cacheKey}-`));
   const compileArgs = [
-    'tsc',
     '--module', 'commonjs',
     '--target', 'es2020',
     '--moduleResolution', 'node',
@@ -53,7 +52,7 @@ function compileTypeScriptRuntime({ cacheKey, entryPaths, assets = [] }) {
     ...entryPaths,
   ];
 
-  const result = spawnSync('npx', compileArgs, {
+  const result = spawnSync(path.join(repoRoot, 'node_modules/.bin/tsc'), compileArgs, {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -231,6 +230,9 @@ function createFirestoreAdminMock({ collections = {}, queryErrors = {} } = {}) {
     increment(value) {
       return { __op: 'increment', value };
     },
+    delete() {
+      return { __op: 'delete' };
+    },
   };
   const Timestamp = {
     now() {
@@ -306,6 +308,10 @@ function createFirestoreAdminMock({ collections = {}, queryErrors = {} } = {}) {
     }
 
     const finalKey = segments.at(-1);
+    if (rawValue && typeof rawValue === 'object' && rawValue.__op === 'delete') {
+      delete cursor[finalKey];
+      return;
+    }
     if (rawValue && typeof rawValue === 'object' && rawValue.__op === 'arrayUnion') {
       const existing = Array.isArray(cursor[finalKey]) ? [...cursor[finalKey]] : [];
       for (const candidate of rawValue.values) {
@@ -537,6 +543,13 @@ function createFirestoreAdminMock({ collections = {}, queryErrors = {} } = {}) {
         },
         update(ref, data) {
           return ref.update(data);
+        },
+        async create(ref, data) {
+          const snapshot = await ref.get();
+          if (snapshot.exists) {
+            throw new Error(`Mock transaction create conflict at ${ref.path}`);
+          }
+          return ref.set(data);
         },
         delete(ref) {
           return ref.delete();

@@ -6,6 +6,10 @@ import { Activity, AlertTriangle, ArrowLeft, Brain, Database, FileText, MonitorP
 import AdminRouteGuard from '../../../../../components/auth/AdminRouteGuard';
 import CoachNoraTransparencyPanel from '../../../../../components/admin/CoachNoraTransparencyPanel';
 import NoraMetricHelpButton from '../../../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import {
+  PilotDashboardThemeFrame,
+  PilotDashboardThemeToggle,
+} from '../../../../../components/admin/pilot-dashboard/PilotDashboardTheme';
 import { pulseCheckPilotDashboardService } from '../../../../../api/firebase/pulsecheckPilotDashboard/service';
 import type {
   PilotDashboardAthleteDetail,
@@ -349,6 +353,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
 
   return (
     <AdminRouteGuard>
+      <PilotDashboardThemeFrame>
       <Head>
         <title>{detail ? `${detail.displayName} | Pilot Athlete` : 'Pilot Athlete'}</title>
       </Head>
@@ -374,6 +379,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <PilotDashboardThemeToggle />
               <button
                 onClick={() => void toggleDemoMode()}
                 data-testid="pilot-dashboard-athlete-demo-toggle"
@@ -972,6 +978,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
           )}
         </div>
       </div>
+      </PilotDashboardThemeFrame>
     </AdminRouteGuard>
   );
 };

@@ -253,7 +253,7 @@ export const PilotAthleteTransferModal: React.FC<Props> = ({
                     type="button"
                     onClick={onConfirm}
                     disabled={saving || loadingOptions || !selectedTeamId}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d7ff00] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#c5eb00] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-300"
+                    className="pilot-theme-primary-action inline-flex items-center justify-center gap-2 rounded-2xl bg-[#d7ff00] px-4 py-3 text-sm font-semibold text-black transition hover:bg-[#c5eb00] disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-300"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
                     {saving ? 'Transferring...' : 'Transfer athlete'}

@@ -453,6 +453,61 @@ test('repeated reusable invite requests return one stable team link', async () =
   );
 });
 
+test('team-wide reusable lookup never reuses pilot or cohort invite links', async () => {
+  const pilotInvite = personalInvite({ id: 'pilot-general-invite' });
+  pilotInvite.data.redemptionMode = 'general';
+  pilotInvite.data.recipientName = '';
+  pilotInvite.data.targetEmail = '';
+  pilotInvite.data.athleteAge = null;
+  pilotInvite.data.athleteTrackOverride = null;
+  pilotInvite.data.pilotId = 'pilot-1';
+  pilotInvite.data.cohortId = '';
+
+  const cohortInvite = personalInvite({ id: 'cohort-general-invite' });
+  cohortInvite.data.redemptionMode = 'general';
+  cohortInvite.data.recipientName = '';
+  cohortInvite.data.targetEmail = '';
+  cohortInvite.data.athleteAge = null;
+  cohortInvite.data.athleteTrackOverride = null;
+  cohortInvite.data.pilotId = 'pilot-1';
+  cohortInvite.data.cohortId = 'cohort-1';
+
+  const { handler, firebaseMock } = loadHandler({
+    invites: [pilotInvite, cohortInvite],
+  });
+  const createRequest = request({
+    action: 'create',
+    teamId: 'team-1',
+    mode: 'general',
+  });
+
+  const firstResponse = await handler(createRequest);
+  const secondResponse = await handler(createRequest);
+
+  assert.equal(firstResponse.statusCode, 200);
+  assert.equal(secondResponse.statusCode, 200);
+
+  const firstInvite = JSON.parse(firstResponse.body).invite;
+  const secondInvite = JSON.parse(secondResponse.body).invite;
+  assert.notEqual(firstInvite.id, pilotInvite.id);
+  assert.notEqual(firstInvite.id, cohortInvite.id);
+  assert.equal(secondInvite.id, firstInvite.id);
+
+  const storedTeamInvite = firebaseMock.getDocument(
+    `pulsecheck-invite-links/${firstInvite.id}`
+  );
+  assert.equal(storedTeamInvite.pilotId, '');
+  assert.equal(storedTeamInvite.cohortId, '');
+  assert.equal(
+    firebaseMock.getDocument('pulsecheck-invite-links/pilot-general-invite').pilotId,
+    'pilot-1'
+  );
+  assert.equal(
+    firebaseMock.getDocument('pulsecheck-invite-links/cohort-general-invite').cohortId,
+    'cohort-1'
+  );
+});
+
 test('enabling coach pricing upgrades a reusable legacy invite to checkout', async () => {
   const legacyInvite = personalInvite({ id: 'legacy-general-invite' });
   legacyInvite.data.redemptionMode = 'general';

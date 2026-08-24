@@ -83,8 +83,10 @@ function isActiveMembership(data: Record<string, unknown>): boolean {
   const role = stringValue(data.role).toLowerCase();
   return role === 'athlete'
     && (!status || status === 'active')
+    && data.revokedAt == null
     && data.archivedAt == null
-    && data.deletedAt == null;
+    && data.deletedAt == null
+    && data.revoked !== true;
 }
 
 function mapReminder(
@@ -213,7 +215,9 @@ async function resolveAthletesForReminder(
   teamCache: Map<string, AthleteCandidate[]>,
 ): Promise<AthleteCandidate[]> {
   if (reminder.scope === 'athlete') {
-    return reminder.athleteId ? [{ athleteId: reminder.athleteId }] : [];
+    if (!reminder.athleteId) return [];
+    const teamAthletes = await loadTeamAthletes(db, reminder.teamId, teamCache);
+    return teamAthletes.filter((candidate) => candidate.athleteId === reminder.athleteId);
   }
   return loadTeamAthletes(db, reminder.teamId, teamCache);
 }
