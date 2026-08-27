@@ -1,5 +1,6 @@
 import type {
   PilotDashboardAthleteDetail,
+  PilotDashboardAthleteJourneySummary,
   PilotDashboardAthleteRosterEntry,
   PilotDashboardAthleteRosterFilter,
   PilotDashboardAthleteSummary,
@@ -113,6 +114,33 @@ function buildEngineSummary(input: {
     degradedPatternCount: input.degradedPatternCount,
     recommendationProjectionCount: input.recommendationProjectionCount,
     recommendationProjectionCountsByConsumer: input.recommendationProjectionCountsByConsumer || {},
+  };
+}
+
+function buildDemoJourneySummary(input: Partial<PilotDashboardAthleteJourneySummary> = {}): PilotDashboardAthleteJourneySummary {
+  const startingPoint = input.startingPoint || {
+    status: 'complete' as const,
+    score: 72,
+    strengths: ['coherence', 'self_talk_reframing', 'visualization'],
+    startingFocus: ['attention_cues', 'belief_identity'],
+    familyScores: {},
+    evidenceCount: 8,
+  };
+  return {
+    startingPoint,
+    checkInCount: input.checkInCount ?? 4,
+    assignmentCount: input.assignmentCount ?? 5,
+    assignmentCompletedCount: input.assignmentCompletedCount ?? 3,
+    noraConversationCount: input.noraConversationCount ?? 2,
+    noraSavedChatConversationCount: input.noraSavedChatConversationCount ?? 1,
+    noraStructuredConversationCount: input.noraStructuredConversationCount ?? 1,
+    noraMessageCount: input.noraMessageCount ?? 6,
+    lastCheckInAt: input.lastCheckInAt,
+    lastAssignmentAt: input.lastAssignmentAt,
+    lastAssignmentCompletedAt: input.lastAssignmentCompletedAt,
+    lastNoraConversationAt: input.lastNoraConversationAt,
+    hasPulseCheckPushToken: input.hasPulseCheckPushToken ?? true,
+    hasEmail: input.hasEmail ?? true,
   };
 }
 
@@ -749,6 +777,40 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       activePatternKeys: athlete.recentPatterns.map((pattern: PilotDashboardRecentPattern) => pattern.patternKey),
       activeProjectionKeys: athlete.recentProjections.map((projection: PilotDashboardRecentProjection) => projection.projectionKey),
     });
+    const journey = buildDemoJourneySummary({
+      startingPoint:
+        athlete.evidenceCount > 0
+          ? {
+              status: 'complete',
+              score: 64 + index * 3,
+              strengths: ['coherence', 'self_talk_reframing', 'visualization'],
+              startingFocus: ['attention_cues', 'belief_identity'],
+              familyScores: {},
+              evidenceCount: 8,
+              completedAt: now - oneDay * (14 - index),
+            }
+          : {
+              status: index % 2 === 0 ? 'ready' : 'started',
+              score: null,
+              strengths: [],
+              startingFocus: [],
+              familyScores: {},
+              evidenceCount: 0,
+            },
+      checkInCount: Math.max(0, 4 - index),
+      assignmentCount: 6 + index,
+      assignmentCompletedCount: Math.max(0, 3 - index),
+      noraConversationCount: index < 4 ? Math.max(1, 4 - index) : 0,
+      noraSavedChatConversationCount: index < 4 ? Math.max(1, 3 - index) : 0,
+      noraStructuredConversationCount: index < 3 ? 1 : 0,
+      noraMessageCount: index < 4 ? (4 - index) * 3 : 0,
+      lastCheckInAt: index < 4 ? now - oneDay * (index + 1) : undefined,
+      lastAssignmentAt: now - oneHour * (index + 2),
+      lastAssignmentCompletedAt: index < 3 ? now - oneDay * (index + 2) : undefined,
+      lastNoraConversationAt: index < 4 ? now - oneHour * (index * 3 + 2) : undefined,
+      hasPulseCheckPushToken: index < 3,
+      hasEmail: Boolean(athlete.email),
+    });
     const cohort = cohorts.find((entry) => entry.id === athlete.cohortId) || null;
     const operationalWatchList =
       athlete.athleteId === 'demo-athlete-morgan'
@@ -797,6 +859,7 @@ function buildBaseDemoStore(): PilotDashboardDemoStore {
       teamMembership,
       cohort,
       engineSummary,
+      journey,
       operationalWatchList,
     } as PilotDashboardAthleteSummary;
     const athleteDetail = {

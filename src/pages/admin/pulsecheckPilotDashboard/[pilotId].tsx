@@ -82,6 +82,7 @@ import Tier3RoutingReadinessBanner from '../../../components/clinical-escalation
 import { showToast } from '../../../redux/toastSlice';
 import type {
   PilotDashboardDetail,
+  PilotDashboardStartingPointStatus,
   PilotHypothesisAssistSuggestion,
   PilotHypothesisConfidenceLevel,
   PilotHypothesisStatus,
@@ -268,6 +269,66 @@ const athleteEnrollmentBadgePresentation = (status?: PulseCheckPilotEnrollmentSt
     label: 'Not enrolled',
     className: 'border-white/10 bg-white/5 text-zinc-300',
   };
+};
+const mentalSkillLabel = (value?: string | null) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  const labels: Record<string, string> = {
+    attention_cues: 'Attention cues',
+    belief_identity: 'Belief + identity',
+    breathing_body_awareness: 'Body awareness',
+    coherence: 'Coherence',
+    emotional_regulation: 'Emotional regulation',
+    reflection_learning: 'Reflection',
+    self_talk_reframing: 'Self-talk',
+    visualization: 'Visualization',
+  };
+  return labels[normalized] || normalized
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+const startingPointPresentation = (status: PilotDashboardStartingPointStatus) => {
+  if (status === 'complete') {
+    return {
+      label: 'Complete',
+      className: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100',
+    };
+  }
+  if (status === 'started') {
+    return {
+      label: 'Started',
+      className: 'border-amber-400/25 bg-amber-400/10 text-amber-100',
+    };
+  }
+  if (status === 'ready') {
+    return {
+      label: 'Ready',
+      className: 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100',
+    };
+  }
+  return {
+    label: 'Not started',
+    className: 'border-white/10 bg-white/5 text-zinc-400',
+  };
+};
+const resolveAthleteNextStep = (
+  athlete: Pick<PilotDashboardDetail['rosterAthletes'][number], 'journey' | 'pilotEnrollment' | 'engineSummary'> & {
+    isEnrolled?: boolean;
+  }
+) => {
+  if (athlete.isEnrolled === false || !athlete.pilotEnrollment) return 'Not in this pilot right now';
+  if (athlete.pilotEnrollment.status === 'pending-consent') return 'Finish consent';
+  if (athlete.journey.startingPoint.status === 'ready' || athlete.journey.startingPoint.status === 'not-started') {
+    return 'Complete Starting Point';
+  }
+  if (athlete.journey.startingPoint.status === 'started') return 'Finish Starting Point';
+  if (!athlete.journey.hasPulseCheckPushToken) return 'Open the app once';
+  if (athlete.journey.checkInCount === 0) return 'First daily check-in';
+  if (athlete.journey.noraConversationCount === 0) return 'Start first Nora chat';
+  if (athlete.journey.assignmentCount > athlete.journey.assignmentCompletedCount) return 'Complete assigned practice';
+  return athlete.engineSummary.stablePatternCount > 0 ? 'Review patterns' : 'Keep collecting days';
 };
 const getInviteShareOrigin = () =>
   (typeof window !== 'undefined' && window.location?.origin
@@ -951,7 +1012,7 @@ const formatReadinessStatusLabel = (value: PilotResearchReadoutSection['readines
 
 const OUTCOME_CARD_ORDER = ['enrollment', 'adherence', 'escalations', 'speedToCare', 'athleteTrust', 'athleteNps'] as const;
 const OUTCOME_CARD_PRESENTATION: Record<typeof OUTCOME_CARD_ORDER[number], { label: string; help: string }> = {
-  enrollment: { label: 'Enrollment', help: 'Enrollment complete rate' },
+  enrollment: { label: 'Active athletes', help: 'Current active pilot athletes' },
   adherence: { label: 'Adherence', help: 'Full-day adherence rate' },
   escalations: { label: 'Care Escalations', help: 'Pilot care-escalation volume' },
   speedToCare: { label: 'Speed to Care', help: 'Median minutes to handoff initiated' },
@@ -985,11 +1046,22 @@ const RECOMMENDATION_CONSUMER_LABELS: Record<typeof RECOMMENDATION_CONSUMER_ORDE
   research: 'Research',
 };
 
-const formatOutcomeValue = (metricKey: typeof OUTCOME_CARD_ORDER[number], metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined) => {
+type VisibleEnrollmentSummary = {
+  activeAthleteCount: number;
+  consentCompleteCount: number;
+  consentCompletionRate: number;
+  withdrawnExcludedCount: number;
+};
+
+const formatOutcomeValue = (
+  metricKey: typeof OUTCOME_CARD_ORDER[number],
+  metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined,
+  enrollmentCount?: VisibleEnrollmentSummary | null
+) => {
   if (!metrics) return 'No study metrics yet';
   switch (metricKey) {
     case 'enrollment':
-      return `${metrics.enrollmentRate.toFixed(1)}%`;
+      return enrollmentCount ? String(enrollmentCount.activeAthleteCount) : `${metrics.enrollmentRate.toFixed(1)}%`;
     case 'adherence':
       return `${metrics.adherenceRate.toFixed(1)}%`;
     case 'escalations':
@@ -1009,7 +1081,7 @@ const formatOutcomeSubtext = (
   metricKey: typeof OUTCOME_CARD_ORDER[number],
   metrics: PilotDashboardDetail['outcomeMetrics'] | null | undefined,
   diagnostics: PilotDashboardDetail['outcomeDiagnostics'] | null | undefined,
-  enrollmentCount?: { enrolledCount: number; totalCount: number } | null
+  enrollmentCount?: VisibleEnrollmentSummary | null
 ) => {
   if (!metrics) return '';
   const surveySummary =
@@ -1021,7 +1093,7 @@ const formatOutcomeSubtext = (
   switch (metricKey) {
     case 'enrollment':
       return enrollmentCount
-        ? `${enrollmentCount.enrolledCount} of ${enrollmentCount.totalCount} fully enrolled · ${metrics.consentCompletionRate.toFixed(1)}% consent completion`
+        ? `${enrollmentCount.activeAthleteCount} active athlete${enrollmentCount.activeAthleteCount === 1 ? '' : 's'} in this view · ${enrollmentCount.consentCompletionRate.toFixed(1)}% consent completion${enrollmentCount.withdrawnExcludedCount > 0 ? ` · ${enrollmentCount.withdrawnExcludedCount} withdrawn record${enrollmentCount.withdrawnExcludedCount === 1 ? '' : 's'} excluded` : ''}`
         : `${metrics.consentCompletionRate.toFixed(1)}% consent completion`;
     case 'adherence':
       return `${metrics.dailyCheckInRate.toFixed(1)}% check-ins, ${metrics.assignmentCompletionRate.toFixed(1)}% assignments`;
@@ -1141,7 +1213,6 @@ const buildDefaultPushPreview = (detail: PilotDashboardDetail, athlete: PilotDas
   ctaLabel: 'Open PulseCheck App',
   ctaUrl: PULSECHECK_APP_DEEP_LINK_URL,
 });
-const COMMUNICATION_STATUS_STAGES = ['sent', 'delivered', 'opened'] as const;
 const toCommunicationDateValue = (value: any): Date | null => {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -1164,24 +1235,6 @@ const formatCommunicationTimestamp = (value: any) => {
       })
     : 'Not yet';
 };
-const communicationStageLabel = (stage: typeof COMMUNICATION_STATUS_STAGES[number]) => `${stage.charAt(0).toUpperCase()}${stage.slice(1)}`;
-const communicationStageIsComplete = (
-  record: PilotAthleteCommunicationRecord | null,
-  stage: typeof COMMUNICATION_STATUS_STAGES[number]
-) => {
-  if (!record) return false;
-  if (stage === 'sent') {
-    return Boolean(record.sentAt || record.messageId || ['sent', 'delivered', 'opened'].includes(record.status));
-  }
-  if (stage === 'delivered') {
-    return Boolean(record.deliveredAt || ['delivered', 'opened'].includes(record.status));
-  }
-  return Boolean(record.openedAt || record.status === 'opened');
-};
-const communicationStageClassName = (active: boolean) =>
-  active
-    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100'
-    : 'border-white/10 bg-white/5 text-zinc-500';
 const summarizeCommunicationStatus = (record: PilotAthleteCommunicationRecord | null) => {
   if (!record) return 'Not sent yet';
   if (record.status === 'failed') return record.lastError || 'Last send failed';
@@ -2240,10 +2293,96 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const visibleEnrollmentCount = useMemo(() => {
     if (!visibleOutcomeMetrics) return null;
-    const totalCount = cohortFilter ? visibleActiveAthletes.length : (detail?.metrics.totalEnrollmentCount || 0);
-    const enrolledCount = totalCount > 0 ? Math.round((visibleOutcomeMetrics.enrollmentRate / 100) * totalCount) : 0;
-    return { enrolledCount, totalCount };
-  }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleActiveAthletes.length, visibleOutcomeMetrics]);
+    const activeAthleteCount = visibleActiveAthletes.length;
+    const consentCompleteCount = visibleActiveAthletes.filter((athlete) =>
+      Boolean(
+        (athlete.pilotEnrollment as any)?.productConsentAccepted
+        || (athlete.teamMembership as any)?.athleteOnboarding?.productConsentAccepted
+      )
+    ).length;
+    const withdrawnExcludedCount = cohortFilter
+      ? 0
+      : Math.max(0, (detail?.metrics.totalEnrollmentCount || 0) - activeAthleteCount);
+    return {
+      activeAthleteCount,
+      consentCompleteCount,
+      consentCompletionRate: activeAthleteCount > 0 ? (consentCompleteCount / activeAthleteCount) * 100 : 0,
+      withdrawnExcludedCount,
+    };
+  }, [cohortFilter, detail?.metrics.totalEnrollmentCount, visibleActiveAthletes, visibleOutcomeMetrics]);
+  const visibleActivityStory = useMemo(() => {
+    const totalAthletes = visibleActiveAthletes.length;
+    const startingPointComplete = visibleActiveAthletes.filter((athlete) => athlete.journey.startingPoint.status === 'complete').length;
+    const startingPointStarted = visibleActiveAthletes.filter((athlete) => athlete.journey.startingPoint.status === 'started').length;
+    const checkInStarted = visibleActiveAthletes.filter((athlete) => athlete.journey.checkInCount > 0).length;
+    const noraStarted = visibleActiveAthletes.filter((athlete) => athlete.journey.noraConversationCount > 0).length;
+    const noraConversationCount = visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.journey.noraConversationCount, 0);
+    const noraSavedChatConversationCount = visibleActiveAthletes.reduce(
+      (sum, athlete) => sum + athlete.journey.noraSavedChatConversationCount,
+      0
+    );
+    const noraStructuredConversationCount = visibleActiveAthletes.reduce(
+      (sum, athlete) => sum + athlete.journey.noraStructuredConversationCount,
+      0
+    );
+    const noraMessageCount = visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.journey.noraMessageCount, 0);
+    const pushReady = visibleActiveAthletes.filter((athlete) => athlete.journey.hasPulseCheckPushToken).length;
+    const emailReady = visibleActiveAthletes.filter((athlete) => athlete.journey.hasEmail).length;
+    const assignmentCount = visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.journey.assignmentCount, 0);
+    const assignmentCompletedCount = visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.journey.assignmentCompletedCount, 0);
+    const openAssignmentCount = Math.max(0, assignmentCount - assignmentCompletedCount);
+    const focusCounts = visibleActiveAthletes.reduce<Record<string, number>>((counts, athlete) => {
+      athlete.journey.startingPoint.startingFocus.forEach((focus) => {
+        const label = mentalSkillLabel(focus);
+        if (!label) return;
+        counts[label] = (counts[label] || 0) + 1;
+      });
+      return counts;
+    }, {});
+    const topFocus = Object.entries(focusCounts).sort((left, right) => right[1] - left[1])[0] || null;
+    const nextActionAthletes = visibleActiveAthletes
+      .map((athlete) => ({ athlete, nextStep: resolveAthleteNextStep(athlete) }))
+      .filter(({ nextStep }) => nextStep !== 'Keep collecting days' && nextStep !== 'Review patterns')
+      .slice(0, 5);
+    const nextPriority = totalAthletes === 0
+      ? 'Invite athletes'
+      : startingPointComplete < totalAthletes
+        ? 'Get Starting Points completed'
+        : pushReady < totalAthletes
+          ? 'Have athletes open the app'
+          : checkInStarted < totalAthletes
+            ? 'Prompt first daily check-in'
+            : noraStarted < totalAthletes
+              ? 'Start Nora conversations'
+              : openAssignmentCount > 0
+                ? 'Keep practices moving'
+                : 'Keep collecting days';
+
+    return {
+      totalAthletes,
+      startingPointComplete,
+      startingPointStarted,
+      startingPointNeeded: Math.max(0, totalAthletes - startingPointComplete),
+      checkInStarted,
+      noCheckInCount: Math.max(0, totalAthletes - checkInStarted),
+      noraStarted,
+      noNoraCount: Math.max(0, totalAthletes - noraStarted),
+      noraConversationCount,
+      noraSavedChatConversationCount,
+      noraStructuredConversationCount,
+      noraMessageCount,
+      pushReady,
+      noPushCount: Math.max(0, totalAthletes - pushReady),
+      emailReady,
+      assignmentCount,
+      assignmentCompletedCount,
+      openAssignmentCount,
+      assignmentCompletionRate: assignmentCount > 0 ? (assignmentCompletedCount / assignmentCount) * 100 : 0,
+      topFocus,
+      nextPriority,
+      nextActionAthletes,
+    };
+  }, [visibleActiveAthletes]);
 
   const operationalWatchListSummaryCards: Array<{
     label: string;
@@ -4168,6 +4307,192 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
                   {activeTab === 'activity-outcomes' ? (
                   <>
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">What is happening right now</p>
+                        <h2 className="mt-2 text-xl font-semibold text-white">{visibleActivityStory.nextPriority}</h2>
+                        <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.totalAthletes > 0
+                            ? `${visibleActivityStory.startingPointComplete} of ${visibleActivityStory.totalAthletes} athletes have completed the Starting Point. ${visibleActivityStory.checkInStarted} have recorded a daily check-in, ${visibleActivityStory.noraStarted} have started a Nora conversation, and ${visibleActivityStory.assignmentCompletedCount} of ${visibleActivityStory.assignmentCount} assigned practices are complete.`
+                            : 'No active athletes are in this view yet. Invite athletes before activity and outcomes can build.'}
+                        </p>
+                      </div>
+                      {selectedCohort ? (
+                        <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs text-cyan-100">
+                          {selectedCohort.name}
+                        </div>
+                      ) : (
+                        <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+                          Whole pilot
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Starting Point</div>
+                        <div className="mt-3 text-3xl font-semibold text-white">
+                          {visibleActivityStory.startingPointComplete}/{visibleActivityStory.totalAthletes}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.startingPointNeeded > 0
+                            ? `${visibleActivityStory.startingPointNeeded} still need to finish. ${visibleActivityStory.startingPointStarted} have started.`
+                            : 'Every active athlete in this view has a Starting Point.'}
+                        </div>
+                      </div>
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Daily rhythm</div>
+                        <div className="mt-3 text-3xl font-semibold text-white">
+                          {visibleActivityStory.checkInStarted}/{visibleActivityStory.totalAthletes}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.noCheckInCount > 0
+                            ? `${visibleActivityStory.noCheckInCount} have not completed a first daily check-in yet.`
+                            : 'Every active athlete has checked in at least once.'}
+                        </div>
+                      </div>
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Nora chats</div>
+                        <div className="mt-3 text-3xl font-semibold text-white">
+                          {visibleActivityStory.noraStarted}/{visibleActivityStory.totalAthletes}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.noraConversationCount > 0
+                            ? `${visibleActivityStory.noraConversationCount} conversations, ${visibleActivityStory.noraMessageCount} total turns. Includes ${visibleActivityStory.noraSavedChatConversationCount} saved app chat${visibleActivityStory.noraSavedChatConversationCount === 1 ? '' : 's'}.`
+                            : 'No Nora conversations have started in this view yet.'}
+                        </div>
+                      </div>
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Assigned practice</div>
+                        <div className="mt-3 text-3xl font-semibold text-white">
+                          {visibleActivityStory.assignmentCompletedCount}/{visibleActivityStory.assignmentCount}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.assignmentCount > 0
+                            ? `${visibleActivityStory.assignmentCompletionRate.toFixed(1)}% complete. ${visibleActivityStory.openAssignmentCount} still open.`
+                            : 'No assigned practices have been created yet.'}
+                        </div>
+                      </div>
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Reachability</div>
+                        <div className="mt-3 text-3xl font-semibold text-white">
+                          {visibleActivityStory.pushReady}/{visibleActivityStory.totalAthletes}
+                        </div>
+                        <div className="mt-2 text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.noPushCount > 0
+                            ? `${visibleActivityStory.noPushCount} need to open PulseCheck once so push can be reached. ${visibleActivityStory.emailReady} have email.`
+                            : `Push is ready for every active athlete. ${visibleActivityStory.emailReady} have email.`}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr),minmax(320px,420px)]">
+                      <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Coach readout</div>
+                        <h3 className="mt-2 text-lg font-semibold text-white">
+                          {visibleActivityStory.topFocus
+                            ? `Most common first focus: ${visibleActivityStory.topFocus[0]}`
+                            : 'First focus will appear after Starting Points'}
+                        </h3>
+                        <p className="mt-2 text-sm leading-6 text-zinc-400">
+                          {visibleActivityStory.topFocus
+                            ? `${visibleActivityStory.topFocus[1]} athlete${visibleActivityStory.topFocus[1] === 1 ? '' : 's'} surfaced this as an early focus area. This is a team-level summary only; private answers stay out of the dashboard.`
+                            : 'Once athletes complete the Starting Point, this card will summarize team-level focus areas without exposing private answer text.'}
+                        </p>
+                      </div>
+                      <div className="rounded-3xl border border-cyan-400/20 bg-cyan-400/10 p-5">
+                        <div className="text-xs uppercase tracking-[0.18em] text-cyan-100">Who needs attention</div>
+                        {visibleActivityStory.nextActionAthletes.length > 0 ? (
+                          <div className="mt-4 space-y-3">
+                            {visibleActivityStory.nextActionAthletes.map(({ athlete, nextStep }) => (
+                              <Link
+                                key={`activity-next-${athlete.athleteId}`}
+                                href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(detail.pilot.id)}/athletes/${encodeURIComponent(athlete.athleteId)}`}
+                                className="block rounded-2xl border border-cyan-400/20 bg-black/20 p-3 transition hover:bg-cyan-400/10"
+                              >
+                                <div className="text-sm font-semibold text-white">{athlete.displayName}</div>
+                                <div className="mt-1 text-xs text-cyan-100">{nextStep}</div>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-cyan-50/90">
+                            No immediate athlete-level follow-up is showing in this view. Keep collecting daily check-ins and assigned-practice completions.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-5">
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Nora by athlete</div>
+                          <h3 className="mt-2 text-lg font-semibold text-white">Conversation activity</h3>
+                          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+                            Counts include structured Nora prompts and saved app chat transcripts. Private chat text stays out of this dashboard.
+                          </p>
+                        </div>
+                        <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100">
+                          {visibleActivityStory.noraConversationCount} total conversations · {visibleActivityStory.noraStructuredConversationCount} structured
+                        </div>
+                      </div>
+                      {visibleActiveAthletes.length > 0 ? (
+                        <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
+                          <div className="grid min-w-[940px] grid-cols-[minmax(160px,1.4fr)_minmax(100px,0.7fr)_minmax(100px,0.7fr)_minmax(115px,0.8fr)_minmax(150px,1fr)_minmax(160px,1.1fr)] gap-3 border-b border-white/10 bg-white/5 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                            <div>Athlete</div>
+                            <div>Conversations</div>
+                            <div>Turns</div>
+                            <div>Source</div>
+                            <div>Last Nora activity</div>
+                            <div>Next step</div>
+                          </div>
+                          {visibleActiveAthletes.map((athlete) => {
+                            const hasNoraActivity = athlete.journey.noraConversationCount > 0;
+                            const nextStep = resolveAthleteNextStep(athlete);
+                            return (
+                              <Link
+                                key={`activity-nora-${athlete.athleteId}`}
+                                href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(detail.pilot.id)}/athletes/${encodeURIComponent(athlete.athleteId)}`}
+                                className="grid min-w-[940px] grid-cols-[minmax(160px,1.4fr)_minmax(100px,0.7fr)_minmax(100px,0.7fr)_minmax(115px,0.8fr)_minmax(150px,1fr)_minmax(160px,1.1fr)] gap-3 border-b border-white/5 px-4 py-4 text-sm transition last:border-b-0 hover:bg-cyan-400/10"
+                              >
+                                <div>
+                                  <div className="font-semibold text-white">{athlete.displayName}</div>
+                                  <div className="mt-1 text-xs text-zinc-500">{athlete.email || 'No email on file'}</div>
+                                </div>
+                                <div className={hasNoraActivity ? 'font-semibold text-emerald-100' : 'text-zinc-400'}>
+                                  {athlete.journey.noraConversationCount}
+                                </div>
+                                <div className={hasNoraActivity ? 'font-semibold text-emerald-100' : 'text-zinc-400'}>
+                                  {athlete.journey.noraMessageCount}
+                                </div>
+                                <div className="text-zinc-400">
+                                  {athlete.journey.noraStructuredConversationCount > 0 && athlete.journey.noraSavedChatConversationCount > 0
+                                    ? 'Prompt + app'
+                                    : athlete.journey.noraStructuredConversationCount > 0
+                                      ? 'Prompt'
+                                      : athlete.journey.noraSavedChatConversationCount > 0
+                                        ? 'App chat'
+                                        : 'None'}
+                                </div>
+                                <div className="text-zinc-400">
+                                  {athlete.journey.lastNoraConversationAt ? formatTimeValue(athlete.journey.lastNoraConversationAt) : 'No Nora chat yet'}
+                                </div>
+                                <div className={nextStep === 'Start first Nora chat' ? 'font-semibold text-cyan-100' : 'text-zinc-400'}>
+                                  {hasNoraActivity ? 'Nora conversation started' : nextStep}
+                                </div>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-400">
+                          No active athletes are in this view yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-dashboard-adherence-orchestrator">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
@@ -4273,7 +4598,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 {OUTCOME_CARD_PRESENTATION[metricKey].label}
                               </div>
                               <div className="mt-3 text-3xl font-semibold text-white">
-                                {formatOutcomeValue(metricKey, visibleOutcomeMetrics)}
+                                {formatOutcomeValue(
+                                  metricKey,
+                                  visibleOutcomeMetrics,
+                                  metricKey === 'enrollment' ? visibleEnrollmentCount : null
+                                )}
                               </div>
                               <div className="mt-2 text-sm text-zinc-400">
                                 {formatOutcomeSubtext(
@@ -5417,11 +5746,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           <tr>
                             <th className="px-3 py-2 text-left">Athlete</th>
                             <th className="px-3 py-2 text-left">Cohort</th>
-                            <th className="px-3 py-2 text-left">Evidence</th>
-                            <th className="px-3 py-2 text-left">Patterns</th>
-                            <th className="px-3 py-2 text-left">Projections</th>
-                            <th className="px-3 py-2 text-left">Push notification</th>
-                            <th className="px-3 py-2 text-left">Email</th>
+                            <th className="px-3 py-2 text-left">Onboarding</th>
+                            <th className="px-3 py-2 text-left">Starting Point</th>
+                            <th className="px-3 py-2 text-left">Daily activity</th>
+                            <th className="px-3 py-2 text-left">Reachability</th>
+                            <th className="px-3 py-2 text-left">Next step</th>
                             <th className="px-3 py-2 text-left">Action</th>
                           </tr>
                         </thead>
@@ -5449,6 +5778,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 pushRecord && pushRecord.status !== 'not-sent' ? 'Preview & resend' : 'Preview & send';
                               const emailActionLabel =
                                 emailRecord && emailRecord.status !== 'not-sent' ? 'Preview & resend' : 'Preview & send';
+                              const startingPointBadge = startingPointPresentation(athlete.journey.startingPoint.status);
+                              const startingPointFocus = athlete.journey.startingPoint.startingFocus
+                                .map(mentalSkillLabel)
+                                .filter(Boolean)
+                                .slice(0, 3);
+                              const startingPointStrengths = athlete.journey.startingPoint.strengths
+                                .map(mentalSkillLabel)
+                                .filter(Boolean)
+                                .slice(0, 3);
+                              const nextStep = resolveAthleteNextStep(athlete);
 
                               return (
                               <tr key={athlete.athleteId} className="border-t border-white/5">
@@ -5545,81 +5884,126 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                     ) : null}
                                   </div>
                                 </td>
-                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.evidenceRecordCount : 'Not available'}</td>
-                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.patternModelCount : 'Not available'}</td>
-                                <td className="px-3 py-3 text-zinc-300">{canManageEnrollment ? athlete.engineSummary.recommendationProjectionCount : 'Not available'}</td>
                                 <td className="px-3 py-3 align-top">
-                                  <div className="flex min-w-[220px] flex-col items-start gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => void openAthleteCommunicationPreview(athlete, 'push')}
-                                      disabled={!canSendActivationOutreach || !athlete.canReceivePulseCheckPush}
-                                      className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-500"
-                                    >
-                                      {pushActionLabel}
-                                    </button>
-                                    <div className="flex flex-wrap gap-1">
-                                      {COMMUNICATION_STATUS_STAGES.map((stage) => (
-                                        <span
-                                          key={`push-${athlete.athleteId}-${stage}`}
-                                          className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${communicationStageClassName(
-                                            communicationStageIsComplete(pushRecord, stage)
-                                          )}`}
-                                        >
-                                          {communicationStageLabel(stage)}
-                                        </span>
-                                      ))}
+                                  <div className="min-w-[170px] space-y-2 text-xs text-zinc-400">
+                                    <div className="text-sm font-medium text-white">
+                                      {canManageEnrollment ? 'In this pilot' : 'Roster only'}
                                     </div>
-                                    <span className="text-xs text-zinc-500">
-                                      {!canSendActivationOutreach
-                                        ? 'Not enrolled in this pilot'
-                                        : athlete.canReceivePulseCheckPush
-                                          ? summarizeCommunicationStatus(pushRecord)
-                                          : 'No PulseCheck push token on file'}
-                                    </span>
-                                    {pushRecord?.status === 'failed' ? (
-                                      <span className="text-xs text-rose-200">{pushRecord.lastError || 'Last send failed'}</span>
+                                    <div>
+                                      {canManageEnrollment
+                                        ? `Enrollment ${athlete.pilotEnrollment?.status || 'recorded'}`
+                                        : 'No active pilot enrollment'}
+                                    </div>
+                                    {athlete.journey.startingPoint.status === 'complete' ? (
+                                      <span className="inline-flex rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-100">
+                                        Starting Point done
+                                      </span>
                                     ) : (
-                                      <span className="text-[11px] text-zinc-500">
-                                        Delivery and open update when receipts are available.
+                                      <span className="inline-flex rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2 py-1 text-[11px] text-cyan-100">
+                                        Starting Point needed
                                       </span>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3 align-top">
-                                  <div className="flex min-w-[220px] flex-col items-start gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => void openAthleteCommunicationPreview(athlete, 'email')}
-                                      disabled={!canSendActivationOutreach || !hasEmailDestination}
-                                      className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-500"
-                                    >
-                                      {emailActionLabel}
-                                    </button>
-                                    <div className="flex flex-wrap gap-1">
-                                      {COMMUNICATION_STATUS_STAGES.map((stage) => (
-                                        <span
-                                          key={`email-${athlete.athleteId}-${stage}`}
-                                          className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.16em] ${communicationStageClassName(
-                                            communicationStageIsComplete(emailRecord, stage)
-                                          )}`}
-                                        >
-                                          {communicationStageLabel(stage)}
+                                  <div className="min-w-[230px] space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className={`rounded-full border px-2 py-1 text-[11px] ${startingPointBadge.className}`}>
+                                        {startingPointBadge.label}
+                                      </span>
+                                      {athlete.journey.startingPoint.score !== null && athlete.journey.startingPoint.score !== undefined ? (
+                                        <span className="text-sm font-semibold text-white">
+                                          Score {Math.round(athlete.journey.startingPoint.score)}
                                         </span>
-                                      ))}
+                                      ) : null}
                                     </div>
-                                    <span className="text-xs text-zinc-500">
-                                      {!canSendActivationOutreach
-                                        ? 'Not enrolled in this pilot'
-                                        : hasEmailDestination
-                                          ? summarizeCommunicationStatus(emailRecord)
-                                          : 'No email address on file'}
-                                    </span>
-                                    {emailRecord?.status === 'failed' ? (
-                                      <span className="text-xs text-rose-200">{emailRecord.lastError || 'Last send failed'}</span>
+                                    {startingPointStrengths.length > 0 ? (
+                                      <div className="text-xs text-zinc-400">
+                                        Strengths: <span className="text-zinc-200">{startingPointStrengths.join(', ')}</span>
+                                      </div>
+                                    ) : null}
+                                    {startingPointFocus.length > 0 ? (
+                                      <div className="text-xs text-zinc-400">
+                                        First focus: <span className="text-zinc-200">{startingPointFocus.join(', ')}</span>
+                                      </div>
                                     ) : (
-                                      <span className="text-[11px] text-zinc-500">Includes an Open PulseCheck App button.</span>
+                                      <div className="text-xs text-zinc-500">
+                                        {athlete.journey.startingPoint.status === 'complete'
+                                          ? 'Starting Point is complete; focus areas are not available yet.'
+                                          : 'Waiting for athlete to finish the Starting Point.'}
+                                      </div>
                                     )}
+                                    <div className="text-[11px] text-zinc-500">
+                                      {athlete.journey.startingPoint.evidenceCount > 0
+                                        ? `${athlete.journey.startingPoint.evidenceCount} skill areas scored`
+                                        : 'No Starting Point scores yet'}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 align-top">
+                                  <div className="min-w-[180px] space-y-2 text-xs text-zinc-400">
+                                    <div className="text-sm font-medium text-white">
+                                      {athlete.journey.checkInCount} daily check-in{athlete.journey.checkInCount === 1 ? '' : 's'}
+                                    </div>
+                                    <div>
+                                      {athlete.journey.assignmentCompletedCount}/{athlete.journey.assignmentCount} assigned practice
+                                      {athlete.journey.assignmentCount === 1 ? '' : 's'} complete
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500">
+                                      {athlete.journey.lastCheckInAt
+                                        ? `Last check-in ${formatTimeValue(athlete.journey.lastCheckInAt)}`
+                                        : 'No daily check-in recorded yet'}
+                                    </div>
+                                    <div className="text-[11px] text-zinc-500">
+                                      {athlete.engineSummary.stablePatternCount > 0
+                                        ? `${athlete.engineSummary.stablePatternCount} stable pattern${athlete.engineSummary.stablePatternCount === 1 ? '' : 's'}`
+                                        : 'Patterns will appear after repeated days'}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 align-top">
+                                  <div className="flex min-w-[260px] flex-col gap-3 text-xs text-zinc-400">
+                                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className={athlete.journey.hasPulseCheckPushToken ? 'text-emerald-100' : 'text-amber-100'}>
+                                          {athlete.journey.hasPulseCheckPushToken ? 'Push ready' : 'No push token'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => void openAthleteCommunicationPreview(athlete, 'push')}
+                                          disabled={!canSendActivationOutreach || !athlete.canReceivePulseCheckPush}
+                                          className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-medium text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-500"
+                                        >
+                                          {pushActionLabel}
+                                        </button>
+                                      </div>
+                                      <div className="mt-1 text-[11px] text-zinc-500">
+                                        {athlete.canReceivePulseCheckPush ? summarizeCommunicationStatus(pushRecord) : 'Athlete needs to open PulseCheck once.'}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className={athlete.journey.hasEmail ? 'text-emerald-100' : 'text-amber-100'}>
+                                          {athlete.journey.hasEmail ? 'Email ready' : 'No email'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => void openAthleteCommunicationPreview(athlete, 'email')}
+                                          disabled={!canSendActivationOutreach || !hasEmailDestination}
+                                          className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[11px] font-medium text-amber-100 transition hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-zinc-500"
+                                        >
+                                          {emailActionLabel}
+                                        </button>
+                                      </div>
+                                      <div className="mt-1 text-[11px] text-zinc-500">
+                                        {hasEmailDestination ? summarizeCommunicationStatus(emailRecord) : 'Add an email address before emailing.'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3 align-top">
+                                  <div className="min-w-[160px] rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-3 text-sm font-medium text-cyan-100">
+                                    {nextStep}
                                   </div>
                                 </td>
                                 <td className="px-3 py-3">

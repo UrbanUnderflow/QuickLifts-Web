@@ -415,6 +415,37 @@ export interface PilotDashboardEngineSummary {
   recommendationProjectionCountsByConsumer?: Record<string, number>;
 }
 
+export type PilotDashboardStartingPointStatus = 'not-started' | 'ready' | 'started' | 'complete';
+
+export interface PilotDashboardStartingPointSummary {
+  status: PilotDashboardStartingPointStatus;
+  completedAt?: PilotDashboardTimeValue;
+  score?: number | null;
+  sportArchetype?: string | null;
+  strengths: string[];
+  startingFocus: string[];
+  disciplineFocus?: Record<string, string>;
+  familyScores: Record<string, { score: number | null; stage: string | null }>;
+  evidenceCount: number;
+}
+
+export interface PilotDashboardAthleteJourneySummary {
+  startingPoint: PilotDashboardStartingPointSummary;
+  checkInCount: number;
+  assignmentCount: number;
+  assignmentCompletedCount: number;
+  noraConversationCount: number;
+  noraSavedChatConversationCount: number;
+  noraStructuredConversationCount: number;
+  noraMessageCount: number;
+  lastCheckInAt?: PilotDashboardTimeValue;
+  lastAssignmentAt?: PilotDashboardTimeValue;
+  lastAssignmentCompletedAt?: PilotDashboardTimeValue;
+  lastNoraConversationAt?: PilotDashboardTimeValue;
+  hasPulseCheckPushToken: boolean;
+  hasEmail: boolean;
+}
+
 export interface PilotDashboardAthleteSummary {
   athleteId: string;
   displayName: string;
@@ -423,6 +454,7 @@ export interface PilotDashboardAthleteSummary {
   teamMembership: PulseCheckTeamMembership | null;
   cohort: PulseCheckPilotCohort | null;
   engineSummary: PilotDashboardEngineSummary;
+  journey: PilotDashboardAthleteJourneySummary;
   operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }
 
@@ -436,6 +468,7 @@ export interface PilotDashboardRosterAthleteSummary {
   teamMembership: PulseCheckTeamMembership | null;
   cohort: PulseCheckPilotCohort | null;
   engineSummary: PilotDashboardEngineSummary;
+  journey: PilotDashboardAthleteJourneySummary;
   operationalWatchList?: PilotDashboardOperationalWatchListState | null;
 }
 

@@ -76,6 +76,8 @@ import type {
   PilotDashboardDetail,
   PilotDashboardDirectoryEntry,
   PilotDashboardEngineSummary,
+  PilotDashboardAthleteJourneySummary,
+  PilotDashboardStartingPointStatus,
   PilotDashboardHierarchyEnrollmentCounts,
   PilotDashboardHierarchyPilotSummary,
   PilotDashboardHierarchyTeamSummary,
@@ -124,6 +126,9 @@ const PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
 const PILOT_RESEARCH_READ_MODEL_VERSION = 'pilot-dashboard-v1';
 const ESCALATION_RECORDS_COLLECTION = 'escalation-records';
 const PILOT_OPERATIONAL_STATE_COLLECTION = 'pulsecheck-pilot-operational-states';
+const PULSECHECK_MORNING_CHECKINS_COLLECTION = 'pulsecheck-morning-checkins';
+const PULSECHECK_NORA_CONVERSATIONS_COLLECTION = 'pulsecheck-nora-conversations';
+const PULSECHECK_SAVED_CHAT_CONVERSATIONS_COLLECTION = 'conversations';
 const CHECKINS_SUBCOLLECTION = 'check-ins';
 const ADHERENCE_ACTIVATION_DAY_CUTOFF_HOUR = 12;
 const NO_TASK_ASSIGNMENT_ACTION_TYPES = new Set(['defer', 'rest', 'rest_day', 'rest-day', 'no_task', 'no-task', 'off_day', 'off-day', 'none']);
@@ -1547,6 +1552,225 @@ const buildEmptyEngineSummary = (): PilotDashboardEngineSummary => ({
   recommendationProjectionCountsByConsumer: {},
 });
 
+const normalizeStartingPointStatus = (value: unknown): PilotDashboardStartingPointStatus | null => {
+  const normalized = normalizeString(typeof value === 'string' ? value : String(value ?? '')).toLowerCase();
+  if (!normalized) return null;
+  if (['complete', 'completed', 'done'].includes(normalized)) return 'complete';
+  if (['started', 'in-progress', 'in_progress', 'resume'].includes(normalized)) return 'started';
+  if (['ready', 'pending', 'needed', 'assessment-needed', 'assessment_needed'].includes(normalized)) return 'ready';
+  if (['not-started', 'not_started', 'none'].includes(normalized)) return 'not-started';
+  return null;
+};
+
+const toStringList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeString(typeof entry === 'string' ? entry : String(entry ?? '')))
+    .filter(Boolean);
+};
+
+const buildStartingPointFamilyScores = (
+  value: unknown
+): PilotDashboardAthleteJourneySummary['startingPoint']['familyScores'] => {
+  if (!value || typeof value !== 'object') return {};
+  return Object.entries(value as Record<string, any>).reduce<PilotDashboardAthleteJourneySummary['startingPoint']['familyScores']>(
+    (scores, [family, entry]) => {
+      if (!entry || typeof entry !== 'object') return scores;
+      const score = Number((entry as Record<string, any>).score);
+      scores[family] = {
+        score: Number.isFinite(score) ? score : null,
+        stage: normalizeString((entry as Record<string, any>).stage) || null,
+      };
+      return scores;
+    },
+    {}
+  );
+};
+
+const buildEmptyAthleteJourneySummary = (
+  teamMembership: PulseCheckTeamMembership | null,
+  email: string,
+  canReceivePulseCheckPush: boolean
+): PilotDashboardAthleteJourneySummary => {
+  const onboarding = ((teamMembership as any)?.athleteOnboarding || {}) as Record<string, any>;
+  return {
+    startingPoint: {
+      status: normalizeStartingPointStatus(onboarding.baselinePathStatus) || 'not-started',
+      strengths: [],
+      startingFocus: [],
+      familyScores: {},
+      evidenceCount: 0,
+    },
+    checkInCount: 0,
+    assignmentCount: 0,
+    assignmentCompletedCount: 0,
+    noraConversationCount: 0,
+    noraSavedChatConversationCount: 0,
+    noraStructuredConversationCount: 0,
+    noraMessageCount: 0,
+    hasPulseCheckPushToken: canReceivePulseCheckPush,
+    hasEmail: Boolean(normalizeString(email) || normalizeString(teamMembership?.email)),
+  };
+};
+
+const uniqueRecordsById = (records: Array<{ id: string; data: Record<string, any> }>) => {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    if (seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+};
+
+const loadCollectionRecordsForAthleteFields = async (
+  collectionName: string,
+  athleteId: string,
+  fieldNames: string[]
+): Promise<Array<{ id: string; data: Record<string, any> }>> => {
+  const snapshots = await Promise.all(
+    fieldNames.map((fieldName) =>
+      getDocs(query(collection(db, collectionName), where(fieldName, '==', athleteId))).catch(() => null)
+    )
+  );
+  return uniqueRecordsById(
+    snapshots.flatMap((snapshot) =>
+      snapshot?.docs.map((docSnap) => ({ id: docSnap.id, data: docSnap.data() as Record<string, any> })) || []
+    )
+  );
+};
+
+const assignmentIsComplete = (assignment: Record<string, any>): boolean => {
+  const status = normalizeString(assignment.status).toLowerCase();
+  if (['complete', 'completed', 'done'].includes(status)) return true;
+  return Boolean(assignment.completedAt || assignment.completedDateKey || assignment.completedOn);
+};
+
+async function loadAthleteJourneySummary(
+  pilot: PulseCheckPilot,
+  athleteId: string,
+  teamMembership: PulseCheckTeamMembership | null,
+  enrollment: PulseCheckPilotEnrollment | null,
+  email: string,
+  canReceivePulseCheckPush: boolean
+): Promise<PilotDashboardAthleteJourneySummary> {
+  const emptySummary = buildEmptyAthleteJourneySummary(teamMembership, email, canReceivePulseCheckPush);
+  const [progressSnap, checkInRecords, assignmentRecords, noraConversationRecords, savedChatConversationRecords] = await Promise.all([
+    getDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, athleteId)).catch(() => null),
+    loadCollectionRecordsForAthleteFields(PULSECHECK_MORNING_CHECKINS_COLLECTION, athleteId, ['athleteUserId', 'userId']),
+    loadCollectionRecordsForAthleteFields(PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, athleteId, ['athleteId', 'userId']),
+    loadCollectionRecordsForAthleteFields(PULSECHECK_NORA_CONVERSATIONS_COLLECTION, athleteId, ['athleteUserId', 'userId']),
+    loadCollectionRecordsForAthleteFields(PULSECHECK_SAVED_CHAT_CONVERSATIONS_COLLECTION, athleteId, ['userId']),
+  ]);
+
+  const progress = progressSnap?.exists() ? (progressSnap.data() as Record<string, any>) : {};
+  const baseline = (progress.mentalSkillsBaseline || progress.baselineAssessment || progress.baselineProbe || null) as Record<string, any> | null;
+  const baselineStatus = baseline
+    ? 'complete'
+    : normalizeStartingPointStatus((teamMembership as any)?.athleteOnboarding?.baselinePathStatus) || emptySummary.startingPoint.status;
+  const pilotId = normalizeString(pilot.id);
+  const enrollmentId = normalizeString(enrollment?.id);
+  const checkIns = checkInRecords
+    .map((record) => record.data)
+    .filter((checkIn) => {
+      const checkInPilotId = normalizeString(checkIn.pilotId);
+      return !checkInPilotId || checkInPilotId === pilotId;
+    });
+  const assignments = assignmentRecords
+    .map((record) => record.data)
+    .filter((assignment) => {
+      const assignmentPilotId = normalizeString(assignment.pilotId);
+      const assignmentEnrollmentId = normalizeString(assignment.pilotEnrollmentId);
+      if (assignmentPilotId && assignmentPilotId !== pilotId) return false;
+      if (assignmentEnrollmentId && enrollmentId && assignmentEnrollmentId !== enrollmentId) return false;
+      return true;
+    });
+  const noraConversations = noraConversationRecords
+    .map((record) => record.data)
+    .filter((conversation) => {
+      const conversationPilotId = normalizeString(conversation.pilotId);
+      const conversationTeamId = normalizeString(conversation.teamId);
+      if (conversationPilotId && conversationPilotId !== pilotId) return false;
+      if (conversationTeamId && normalizeString(pilot.teamId) && conversationTeamId !== normalizeString(pilot.teamId)) return false;
+      return true;
+    });
+  const savedChatConversations = savedChatConversationRecords
+    .map((record) => record.data)
+    .filter((conversation) => Array.isArray(conversation.messages) && conversation.messages.length > 0);
+  const completedAssignments = assignments.filter(assignmentIsComplete);
+  const latestCheckIn = checkIns
+    .sort((left, right) => toTimeMs(right.createdAt || right.updatedAt || right.date) - toTimeMs(left.createdAt || left.updatedAt || left.date))[0];
+  const latestAssignment = assignments.sort(
+    (left, right) => toTimeMs(right.createdAt || right.assignedAt || right.updatedAt) - toTimeMs(left.createdAt || left.assignedAt || left.updatedAt)
+  )[0];
+  const latestCompletedAssignment = completedAssignments.sort(
+    (left, right) => toTimeMs(right.completedAt || right.updatedAt) - toTimeMs(left.completedAt || left.updatedAt)
+  )[0];
+  const latestNoraConversation = noraConversations.sort(
+    (left, right) =>
+      toTimeMs(right.updatedAt || right.lastMessageAt || right.closedAt || right.openedAt || right.createdAt) -
+      toTimeMs(left.updatedAt || left.lastMessageAt || left.closedAt || left.openedAt || left.createdAt)
+  )[0];
+  const latestSavedChatConversation = savedChatConversations.sort(
+    (left, right) => toTimeMs(right.updatedAt || right.createdAt) - toTimeMs(left.updatedAt || left.createdAt)
+  )[0];
+  const structuredNoraMessageCount = noraConversations.reduce((sum, conversation) => {
+    const explicitMessageCount = Number(conversation.messageCount);
+    if (Number.isFinite(explicitMessageCount) && explicitMessageCount >= 0) return sum + explicitMessageCount;
+    return sum + (Array.isArray(conversation.turns) ? conversation.turns.length : 0);
+  }, 0);
+  const savedChatMessageCount = savedChatConversations.reduce(
+    (sum, conversation) => sum + (Array.isArray(conversation.messages) ? conversation.messages.length : 0),
+    0
+  );
+  const latestNoraConversationAt =
+    toTimeValue(
+      latestNoraConversation?.updatedAt ||
+      latestNoraConversation?.lastMessageAt ||
+      latestNoraConversation?.closedAt ||
+      latestNoraConversation?.openedAt ||
+      latestNoraConversation?.createdAt
+    ) ||
+    toTimeValue(latestSavedChatConversation?.updatedAt || latestSavedChatConversation?.createdAt);
+
+  return {
+    startingPoint: {
+      status: baselineStatus,
+      completedAt: toTimeValue(baseline?.completedAt),
+      score: Number.isFinite(Number(baseline?.overallCompetencyScore ?? baseline?.score))
+        ? Number(baseline?.overallCompetencyScore ?? baseline?.score)
+        : null,
+      sportArchetype: normalizeString(baseline?.sportArchetype) || null,
+      strengths: toStringList(baseline?.strengths),
+      startingFocus: toStringList(baseline?.startingFocus),
+      disciplineFocus:
+        baseline?.disciplineFocus && typeof baseline.disciplineFocus === 'object'
+          ? Object.entries(baseline.disciplineFocus as Record<string, any>).reduce<Record<string, string>>((accumulator, [key, value]) => {
+              const normalized = normalizeString(typeof value === 'string' ? value : String(value ?? ''));
+              if (normalized) accumulator[key] = normalized;
+              return accumulator;
+            }, {})
+          : undefined,
+      familyScores: buildStartingPointFamilyScores(baseline?.familyScores),
+      evidenceCount: baseline?.familyScores && typeof baseline.familyScores === 'object'
+        ? Object.keys(baseline.familyScores as Record<string, any>).length
+        : 0,
+    },
+    checkInCount: checkIns.length,
+    assignmentCount: assignments.length,
+    assignmentCompletedCount: completedAssignments.length,
+    noraConversationCount: noraConversations.length + savedChatConversations.length,
+    noraSavedChatConversationCount: savedChatConversations.length,
+    noraStructuredConversationCount: noraConversations.length,
+    noraMessageCount: structuredNoraMessageCount + savedChatMessageCount,
+    lastCheckInAt: toTimeValue(latestCheckIn?.createdAt || latestCheckIn?.updatedAt || latestCheckIn?.date),
+    lastAssignmentAt: toTimeValue(latestAssignment?.createdAt || latestAssignment?.assignedAt || latestAssignment?.updatedAt),
+    lastAssignmentCompletedAt: toTimeValue(latestCompletedAssignment?.completedAt || latestCompletedAssignment?.updatedAt),
+    lastNoraConversationAt: latestNoraConversationAt,
+    hasPulseCheckPushToken: canReceivePulseCheckPush,
+    hasEmail: emptySummary.hasEmail,
+  };
+}
+
 async function buildAthleteSummary(
   pilot: PulseCheckPilot,
   enrollment: PulseCheckPilotEnrollment,
@@ -1559,15 +1783,26 @@ async function buildAthleteSummary(
   const engineSummary = isPilotMetricWindowOpen(pilot)
     ? await loadEngineSummaryForAthlete(enrollment.userId)
     : buildEmptyEngineSummary();
+  const athleteProfileContext = await loadAthleteProfileSummary(enrollment.userId, teamMembership);
+  const email = normalizeString(teamMembership?.email) || athleteProfileContext.profile.email;
+  const journey = await loadAthleteJourneySummary(
+    pilot,
+    enrollment.userId,
+    teamMembership,
+    enrollment,
+    email,
+    athleteProfileContext.canReceivePulseCheckPush
+  );
 
   return {
     athleteId: enrollment.userId,
-    displayName: buildAthleteLabel(teamMembership, enrollment.userId, enrollment),
-    email: normalizeString(teamMembership?.email),
+    displayName: buildAthleteLabel(teamMembership, enrollment.userId, enrollment, athleteProfileContext.profile),
+    email,
     pilotEnrollment: enrollment,
     teamMembership,
     cohort,
     engineSummary,
+    journey,
     operationalWatchList: operationalWatchList || null,
   };
 }
@@ -1592,6 +1827,7 @@ async function buildRosterAthleteSummary(
   const engineSummary = isPilotMetricWindowOpen(pilot) && enrollment?.status === 'active'
     ? await loadEngineSummaryForAthlete(athleteId)
     : buildEmptyEngineSummary();
+  const journey = await loadAthleteJourneySummary(pilot, athleteId, teamMembership, enrollment, userEmail, canReceivePulseCheckPush);
 
   return {
     athleteId,
@@ -1603,6 +1839,7 @@ async function buildRosterAthleteSummary(
     teamMembership,
     cohort,
     engineSummary,
+    journey,
     operationalWatchList: isEnrolled ? (operationalWatchList || null) : null,
   };
 }
