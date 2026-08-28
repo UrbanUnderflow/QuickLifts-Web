@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Trash2,
   UserCheck,
   UserRound,
@@ -41,6 +42,15 @@ import {
 } from '../../../lib/nora-red-team/types';
 
 type RiskFilter = 'all' | 'critical' | 'major' | 'minor';
+type RunLogLevel = 'info' | 'success' | 'warning' | 'error';
+
+type RunLogEntry = {
+  id: string;
+  timestamp: string;
+  level: RunLogLevel;
+  message: string;
+  detail?: string;
+};
 
 const SEVERITY_STYLE: Record<NoraRedTeamSeverity, string> = {
   none: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200',
@@ -89,9 +99,34 @@ function createRandomSeed(): number {
   return Math.floor(Math.random() * 2_147_483_646) + 1;
 }
 
+function createLogId(): string {
+  if (typeof window !== 'undefined' && window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `log-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function formatDuration(durationMs: number): string {
   if (durationMs < 1000) return `${durationMs} ms`;
   return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1)} s`;
+}
+
+function formatLogTimestamp(value: string): string {
+  return new Date(value).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function explainRunError(code: string | undefined, fallback: string | undefined): string {
+  if (code === 'AI_PROVIDER_NOT_CONFIGURED') {
+    return 'The OpenAI bridge is not available for this run. Refresh and try again, or check the bridge console entry below.';
+  }
+  if (code === 'AI_BRIDGE_UNAVAILABLE') return 'The OpenAI bridge could not complete this run. No result was saved.';
+  if (code === 'ADMIN_AUTH_REQUIRED') return 'Your admin session was not accepted. Sign in again, then rerun the scenario.';
+  if (code === 'INVALID_SCENARIO') return 'The selected scenario was not recognized. Refresh the page and try again.';
+  if (code === 'INVALID_RANDOM_SEED') return 'The random seed must be a positive whole number.';
+  if (code === 'RED_TEAM_RUN_FAILED') return 'The agent run failed before a complete result was produced. No result was saved.';
+  return fallback || 'The red-team run could not be completed.';
 }
 
 function formatTimestamp(value: string): string {
@@ -135,6 +170,7 @@ const NoraRedTeamConsole: React.FC = () => {
   const [runs, setRuns] = useState<Record<string, NoraRedTeamRun>>({});
   const [runningScenarioId, setRunningScenarioId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [runLogs, setRunLogs] = useState<RunLogEntry[]>([]);
 
   const selectedScenario = useMemo(
     () => NORA_RED_TEAM_SCENARIOS.find((scenario) => scenario.id === selectedScenarioId) || NORA_RED_TEAM_SCENARIOS[0],
@@ -152,21 +188,56 @@ const NoraRedTeamConsole: React.FC = () => {
     (run) => run.humanReview.status === 'pending' || run.humanReview.status === 'inconclusive',
   ).length;
 
+  const appendLog = useCallback((level: RunLogLevel, message: string, detail?: string) => {
+    setRunLogs((current) => [
+      {
+        id: createLogId(),
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        detail,
+      },
+      ...current,
+    ].slice(0, 80));
+  }, []);
+
+  useEffect(() => {
+    appendLog('info', 'Console ready', 'Session-only logs. No tokens, transcripts, or production writes are stored here.');
+  }, [appendLog]);
+
   const changeRiskFilter = (filter: RiskFilter) => {
     setRiskFilter(filter);
+    appendLog('info', `Scenario filter changed to ${filter}.`);
     if (filter === 'all' || selectedScenario.risk === filter) return;
     const firstMatch = NORA_RED_TEAM_SCENARIOS.find((scenario) => scenario.risk === filter);
     if (firstMatch) setSelectedScenarioId(firstMatch.id);
+  };
+
+  const selectScenario = (scenarioId: string) => {
+    const scenario = NORA_RED_TEAM_SCENARIOS.find((item) => item.id === scenarioId);
+    setSelectedScenarioId(scenarioId);
+    if (scenario) appendLog('info', `Selected scenario: ${scenario.title}`, `Risk: ${scenario.risk}. Expected lane: ${scenario.expectedLane}.`);
   };
 
   const runScenario = async () => {
     if (runningScenarioId) return;
     setError(null);
     setRunningScenarioId(selectedScenario.id);
+    const startedAt = Date.now();
+    appendLog(
+      'info',
+      `Starting scenario: ${selectedScenario.title}`,
+      `Seed ${randomSeed}. This run uses synthetic data and should not write to production.`,
+    );
     try {
       const currentUser = auth.currentUser;
-      if (!currentUser) throw new Error('Your admin session is not available. Sign in again.');
+      if (!currentUser) {
+        appendLog('warning', 'Admin session missing', 'The browser does not have a signed-in Firebase admin user for this request.');
+        throw new Error('Your admin session is not available. Sign in again.');
+      }
+      appendLog('success', 'Admin session found', 'Request will include a short-lived admin authorization token. The token is not logged.');
       const idToken = await currentUser.getIdToken();
+      appendLog('info', 'Sending red-team request to the local API.');
       const response = await fetch('/api/admin/pulsecheck/nora-red-team/run', {
         method: 'POST',
         headers: {
@@ -182,15 +253,31 @@ const NoraRedTeamConsole: React.FC = () => {
       const payload = await response.json().catch(() => null) as {
         run?: NoraRedTeamRun;
         error?: string;
+        code?: string;
+        detail?: string;
       } | null;
       if (!response.ok || !payload?.run) {
-        throw new Error(payload?.error || 'The red-team run could not be completed.');
+        const explainedError = explainRunError(payload?.code, payload?.error);
+        appendLog(
+          'error',
+          `Run stopped: ${payload?.code || response.status}`,
+          `${explainedError} HTTP ${response.status}. Nothing was saved.${payload?.detail ? ` Detail: ${payload.detail}` : ''}`,
+        );
+        throw new Error(explainedError);
       }
       setRuns((current) => ({ ...current, [selectedScenario.id]: payload.run! }));
+      appendLog(
+        payload.run.verdict === 'pass' ? 'success' : payload.run.verdict === 'review' ? 'warning' : 'error',
+        `Run completed: ${payload.run.verdict}`,
+        `Severity ${payload.run.severity}. Duration ${formatDuration(payload.run.durationMs)}. Tokens ${payload.run.usage.totalTokens.toLocaleString()}.`,
+      );
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : 'The red-team run could not be completed.');
+      const message = runError instanceof Error ? runError.message : 'The red-team run could not be completed.';
+      setError(message);
+      appendLog('error', 'Scenario did not complete', `${message} Elapsed ${formatDuration(Date.now() - startedAt)}.`);
     } finally {
       setRunningScenarioId(null);
+      appendLog('info', 'Runner returned to idle.');
     }
   };
 
@@ -201,6 +288,7 @@ const NoraRedTeamConsole: React.FC = () => {
       version: NORA_RED_TEAM_VERSION,
       contractVersion: NORA_RED_TEAM_CONTRACT_VERSION,
       runCount: completedRuns.length,
+      runLogs,
       runs: completedRuns,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -219,6 +307,12 @@ const NoraRedTeamConsole: React.FC = () => {
     if (!window.confirm('Clear all red-team results from this page? Export first if you need to keep them.')) return;
     setRuns({});
     setError(null);
+    appendLog('warning', 'Cleared session results', 'Completed run evidence was removed from this browser page.');
+  };
+
+  const clearLogs = () => {
+    setRunLogs([]);
+    appendLog('info', 'Console cleared.');
   };
 
   const recordHumanReview = (runId: string, status: 'confirmed' | 'inconclusive') => {
@@ -340,7 +434,7 @@ const NoraRedTeamConsole: React.FC = () => {
               <span className="sr-only">Selected red-team scenario</span>
               <select
                 value={selectedScenario.id}
-                onChange={(event) => setSelectedScenarioId(event.target.value)}
+                onChange={(event) => selectScenario(event.target.value)}
                 className="h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none focus:border-cyan-500"
               >
                 {filteredScenarios.map((scenario) => (
@@ -360,7 +454,7 @@ const NoraRedTeamConsole: React.FC = () => {
                 index={NORA_RED_TEAM_SCENARIOS.indexOf(scenario) + 1}
                 selected={scenario.id === selectedScenario.id}
                 status={scenarioStatus(scenario.id, runs, runningScenarioId)}
-                onSelect={() => setSelectedScenarioId(scenario.id)}
+                onSelect={() => selectScenario(scenario.id)}
               />
             ))}
           </div>
@@ -399,6 +493,8 @@ const NoraRedTeamConsole: React.FC = () => {
           ) : (
             <ScenarioPreview scenario={selectedScenario} running={runningScenarioId === selectedScenario.id} />
           )}
+
+          <RunConsole logs={runLogs} onClear={clearLogs} />
         </main>
       </div>
     </div>
@@ -806,6 +902,59 @@ const EvidenceSection: React.FC<{
       <h3 className="text-xs font-semibold uppercase text-zinc-400">{title}</h3>
     </div>
     {children}
+  </section>
+);
+
+const LOG_LEVEL_STYLE: Record<RunLogLevel, string> = {
+  info: 'border-zinc-700 bg-zinc-800 text-zinc-300',
+  success: 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200',
+  warning: 'border-amber-500/35 bg-amber-500/10 text-amber-200',
+  error: 'border-red-500/40 bg-red-500/10 text-red-200',
+};
+
+const RunConsole: React.FC<{
+  logs: RunLogEntry[];
+  onClear: () => void;
+}> = ({ logs, onClear }) => (
+  <section className="border-t border-zinc-800 bg-[#080a0f] px-4 py-5 sm:px-6">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Terminal className="h-4 w-4 text-cyan-300" />
+        <h3 className="text-xs font-semibold uppercase text-zinc-400">Run console</h3>
+        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-500">
+          Session only
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onClear}
+        disabled={!logs.length}
+        className="inline-flex h-8 items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-xs font-medium text-zinc-300 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Clear
+      </button>
+    </div>
+    <div className="max-h-72 overflow-auto rounded-md border border-zinc-800 bg-black/35 font-mono text-xs">
+      {logs.length ? (
+        <ol className="divide-y divide-zinc-900">
+          {logs.map((log) => (
+            <li key={log.id} className="grid gap-2 px-3 py-2.5 sm:grid-cols-[96px_76px_minmax(0,1fr)]">
+              <time className="text-zinc-600">{formatLogTimestamp(log.timestamp)}</time>
+              <span className={`w-fit rounded border px-1.5 py-0.5 text-[10px] uppercase ${LOG_LEVEL_STYLE[log.level]}`}>
+                {log.level}
+              </span>
+              <span className="min-w-0 text-zinc-300">
+                <span className="break-words">{log.message}</span>
+                {log.detail && <span className="mt-1 block break-words text-zinc-500">{log.detail}</span>}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div className="px-3 py-4 text-zinc-600">No console entries for this browser session.</div>
+      )}
+    </div>
   </section>
 );
 

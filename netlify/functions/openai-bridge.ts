@@ -21,6 +21,7 @@ const FEATURE_LIMITS: Record<string, { maxTokens: number; modelPattern: RegExp }
   parseMacrosFromLabelImage: { maxTokens: 1000, modelPattern: /gpt-4o|gpt-4/i },
   generateResponse: { maxTokens: 2000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // Nora Chat
   noraRoutineGeneration: { maxTokens: 8000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i }, // 1:1 Routine JSON generation
+  noraRedTeam: { maxTokens: 8000, modelPattern: /gpt-5-mini|gpt-5|gpt-4o-mini|gpt-4o|gpt-4/i }, // Admin-only Nora contract red-team runs
   generateWorkout: { maxTokens: 4000, modelPattern: /gpt-4o|gpt-4/i }, // Workout Generation
   groundedFoodLookup: { maxTokens: 3000, modelPattern: /gpt-5|gpt-4|gpt-4o|o[1-4]/i },
   macraAssessMacros: { maxTokens: 2500, modelPattern: /gpt-5-mini|gpt-5|gpt-4o|gpt-4/i },
@@ -89,6 +90,9 @@ const REMOTE_BRIDGE_FEATURE_ALIASES: Record<string, string> = {
   // for reasoning plus the recipe; after deployment the local policy above is
   // used directly.
   pulsecheckSoundEffects: 'noraRoutineGeneration',
+  // Same compatibility path for local branches before the deployed bridge has
+  // the dedicated Nora Red Team feature id.
+  noraRedTeam: 'noraRoutineGeneration',
 };
 
 const resolveRemoteBridgeOrigin = (): string => {

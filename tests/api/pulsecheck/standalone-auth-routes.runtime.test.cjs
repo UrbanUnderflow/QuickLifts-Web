@@ -116,10 +116,10 @@ test('PipeLists Google login falls back to redirect when the popup is blocked or
     /browserPopupRedirectResolver/,
     'PipeLists popup sign-in should use Firebase browser popup resolver when it uses popups',
   );
-  assert.match(
+  assert.doesNotMatch(
     pipeLists,
-    /const isProductionHost = window\.location\.hostname === 'fitwithpulse\.ai' \|\| window\.location\.hostname\.endsWith\('\.netlify\.app'\)/,
-    'production PipeLists should prefer redirect sign-in over a popup',
+    /window\.location\.hostname === 'fitwithpulse\.ai'[\s\S]*signInWithRedirect/,
+    'desktop production PipeLists should not force redirect sign-in before trying the popup path',
   );
   assert.match(
     pipeLists,

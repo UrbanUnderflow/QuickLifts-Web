@@ -1211,9 +1211,8 @@ const shouldUseRedirectSignIn = () => {
   const userAgent = window.navigator.userAgent || '';
   const isMobileUserAgent = /Android|iPhone|iPad|iPod|CriOS|FxiOS|Mobile/i.test(userAgent);
   const isTouchFirst = window.matchMedia?.('(pointer: coarse)').matches || false;
-  const isProductionHost = window.location.hostname === 'fitwithpulse.ai' || window.location.hostname.endsWith('.netlify.app');
 
-  return isProductionHost || isMobileUserAgent || isTouchFirst;
+  return isMobileUserAgent || isTouchFirst;
 };
 
 const shouldRetryGoogleSignInWithRedirect = (error: unknown) => {

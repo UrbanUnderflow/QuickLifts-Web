@@ -12,6 +12,7 @@ import {
   getNoraRedTeamScenario,
   NORA_RED_TEAM_SCENARIOS,
 } from '../../src/lib/nora-red-team/scenarios';
+import { createNoraRedTeamBridgeClient } from '../../src/lib/nora-red-team/modelClient';
 import { runNoraRedTeamScenario } from '../../src/lib/nora-red-team/orchestrator';
 import type {
   NoraRedTeamJudgeResult,
@@ -244,21 +245,79 @@ test('bounded orchestrator keeps every model response ephemeral and every tool d
   assert.equal(run.usage.totalTokens, 45);
 });
 
+test('Red Team model client routes Responses-style calls through the OpenAI bridge', async () => {
+  const fetchCalls: Array<{ url: string; options: RequestInit }> = [];
+  const client = createNoraRedTeamBridgeClient({
+    authorization: 'Bearer firebase-id-token',
+    bridgeOrigin: 'https://fitwithpulse.ai/',
+    featureId: 'noraRedTeam',
+    fetchImpl: async (url, options) => {
+      fetchCalls.push({ url: String(url), options: options || {} });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: '{"ok":true}' } }],
+          usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
+        }),
+      } as Response;
+    },
+  });
+
+  const response = await client.responses.create({
+    model: 'gpt-5-mini',
+    store: false,
+    max_output_tokens: 1200,
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'nora_red_team_test',
+        strict: true,
+        schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+      },
+    },
+    input: [
+      { role: 'system', content: [{ type: 'input_text', text: 'System rules' }] },
+      { role: 'user', content: [{ type: 'input_text', text: 'Run test' }] },
+    ],
+  });
+
+  assert.equal(response.output_text, '{"ok":true}');
+  assert.deepEqual(response.usage, { input_tokens: 11, output_tokens: 7, total_tokens: 18 });
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, 'https://fitwithpulse.ai/api/openai/v1/chat/completions');
+  assert.equal((fetchCalls[0].options.headers as Record<string, string>)['openai-organization'], 'noraRedTeam');
+
+  const body = JSON.parse(String(fetchCalls[0].options.body));
+  assert.equal(body.store, false);
+  assert.equal(body.max_completion_tokens, 4096);
+  assert.equal(body.response_format.type, 'json_schema');
+  assert.equal(body.response_format.json_schema.name, 'nora_red_team_test');
+  assert.deepEqual(body.messages.map((message: { role: string; content: string }) => message.role), ['system', 'user']);
+});
+
 test('Nora Red Team is admin-only, session-only, dry-run, and wired into both admin surfaces', () => {
   const api = read('src/pages/api/admin/pulsecheck/nora-red-team/run.ts');
   const orchestrator = read('src/lib/nora-red-team/orchestrator.ts');
+  const modelClient = read('src/lib/nora-red-team/modelClient.ts');
   const consoleSource = read('src/components/admin/nora-red-team/NoraRedTeamConsole.tsx');
   const page = read('src/pages/admin/noraRedTeam.tsx');
   const adminHome = read('src/pages/admin/index.tsx');
   const contract = read('src/components/admin/system-overview/PulseCheckNoraChatContractTab.tsx');
 
   assert.match(api, /requireAdminRequest\(req\)/);
+  assert.match(api, /createNoraRedTeamBridgeClient/);
+  assert.doesNotMatch(api, /new OpenAI|OPENAI_API_KEY|OPEN_AI_SECRET_KEY/);
   assert.match(api, /Cache-Control', 'no-store'/);
   assert.match(orchestrator, /store: false/g);
+  assert.match(modelClient, /api\/openai\/v1\/chat\/completions/);
+  assert.match(modelClient, /openai-organization/);
   assert.match(orchestrator, /productionWrites: false/);
   assert.match(orchestrator, /applicationPersistence: false/);
   assert.match(orchestrator, /sideEffect: 'none'/);
   assert.match(consoleSource, /Session only/);
+  assert.match(consoleSource, /Run console/);
+  assert.match(consoleSource, /AI_BRIDGE_UNAVAILABLE/);
   assert.doesNotMatch(consoleSource, /localStorage|sessionStorage|firestore/i);
   assert.match(page, /<AdminRouteGuard>/);
   assert.match(adminHome, /link: "\/admin\/noraRedTeam"/);

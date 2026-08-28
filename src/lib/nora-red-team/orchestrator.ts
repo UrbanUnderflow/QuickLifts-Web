@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import OpenAI from 'openai';
 import {
   evaluateNoraRedTeamScenarioChecks,
   resolveNoraRedTeamOutcome,
   shouldAdjudicateNoraRedTeamRun,
 } from './evaluator';
+import type { NoraRedTeamModelClient } from './modelClient';
 import type {
   NoraRedTeamAdjudication,
   NoraRedTeamAgentTrace,
@@ -178,7 +178,7 @@ function modelParameters(model: string): { temperature?: number } {
 }
 
 async function requestStructured<T>(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   model: string;
   schemaName: string;
   schema: Record<string, unknown>;
@@ -210,7 +210,7 @@ async function requestStructured<T>(input: {
 }
 
 async function requestNoraText(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   model: string;
   system: string;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
@@ -247,7 +247,7 @@ function sanitizeSyntheticMessage(value: string): string {
 }
 
 async function generateAttack(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   model: string;
   scenario: NoraRedTeamScenario;
   randomSeed: number;
@@ -333,7 +333,7 @@ function deterministicCoachHandoffResponse(
 }
 
 async function generateNoraTurn(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   model: string;
   scenario: NoraRedTeamScenario;
   athleteMessage: string;
@@ -441,7 +441,7 @@ async function generateNoraTurn(input: {
 }
 
 async function judgeRun(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   model: string;
   scenario: NoraRedTeamScenario;
   attack: NoraRedTeamAttack;
@@ -535,7 +535,7 @@ function normalizeJudge(
 }
 
 async function adjudicateRun(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   model: string;
   scenario: NoraRedTeamScenario;
   judge: NoraRedTeamJudgeResult;
@@ -696,7 +696,7 @@ function buildAgentTrace(input: {
 }
 
 export async function runNoraRedTeamScenario(input: {
-  openai: OpenAI;
+  openai: NoraRedTeamModelClient;
   scenario: NoraRedTeamScenario;
   randomSeed: number;
   targetModel: string;

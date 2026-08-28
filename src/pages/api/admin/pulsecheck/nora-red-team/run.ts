@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import OpenAI from 'openai';
 import { requireAdminRequest } from '../../_auth';
+import { createNoraRedTeamBridgeClient } from '../../../../../lib/nora-red-team/modelClient';
 import { runNoraRedTeamScenario } from '../../../../../lib/nora-red-team/orchestrator';
 import { getNoraRedTeamScenario } from '../../../../../lib/nora-red-team/scenarios';
 import type {
@@ -11,10 +11,30 @@ import type {
 type ErrorResponse = {
   error: string;
   code: string;
+  detail?: string;
 };
 
 function isValidSeed(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) > 0 && Number(value) <= 2_147_483_647;
+}
+
+function getBridgeOrigin(): string {
+  return (process.env.OPENAI_BRIDGE_FALLBACK_ORIGIN || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai')
+    .replace(/\/+$/, '');
+}
+
+function isLocalRequest(req: NextApiRequest): boolean {
+  const host = String(req.headers.host || '').toLowerCase();
+  return host.includes('localhost') || host.includes('127.0.0.1') || host.startsWith('0.0.0.0');
+}
+
+function getBridgeFeatureId(req: NextApiRequest): string {
+  const configured = process.env.NORA_RED_TEAM_BRIDGE_FEATURE_ID?.trim();
+  if (configured) return configured;
+  // Local next dev does not run Netlify redirects, so it calls the deployed
+  // bridge directly. Use an already-deployed high-token policy until this
+  // branch's noraRedTeam bridge policy is live.
+  return isLocalRequest(req) ? 'noraRoutineGeneration' : 'noraRedTeam';
 }
 
 export const config = {
@@ -51,11 +71,11 @@ export default async function handler(
     return res.status(400).json({ error: 'Choose a valid positive random seed.', code: 'INVALID_RANDOM_SEED' });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY?.trim() || process.env.OPEN_AI_SECRET_KEY?.trim();
-  if (!apiKey) {
-    return res.status(503).json({
-      error: 'The AI provider is not configured for this environment.',
-      code: 'AI_PROVIDER_NOT_CONFIGURED',
+  const authorization = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+  if (!authorization.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Admin authorization is required for the AI bridge.',
+      code: 'ADMIN_AUTH_REQUIRED',
     });
   }
 
@@ -67,7 +87,11 @@ export default async function handler(
     || 'local';
 
   try {
-    const openai = new OpenAI({ apiKey });
+    const openai = createNoraRedTeamBridgeClient({
+      authorization,
+      bridgeOrigin: getBridgeOrigin(),
+      featureId: getBridgeFeatureId(req),
+    });
     const run = await runNoraRedTeamScenario({
       openai,
       scenario,
@@ -79,13 +103,17 @@ export default async function handler(
     return res.status(200).json({ run });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const isBridgeFailure = /bridge/i.test(message);
     console.error('[nora-red-team] Run failed', {
       scenarioId: scenario.id,
       error: message.slice(0, 240),
     });
     return res.status(502).json({
-      error: 'The red-team run could not be completed. No result was saved.',
-      code: 'RED_TEAM_RUN_FAILED',
+      error: isBridgeFailure
+        ? 'The OpenAI bridge could not complete the red-team run. No result was saved.'
+        : 'The red-team run could not be completed. No result was saved.',
+      code: isBridgeFailure ? 'AI_BRIDGE_UNAVAILABLE' : 'RED_TEAM_RUN_FAILED',
+      detail: message.slice(0, 180),
     });
   }
 }
