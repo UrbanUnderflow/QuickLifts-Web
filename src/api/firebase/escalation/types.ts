@@ -32,6 +32,7 @@ export enum EscalationCategory {
   IdentityImpact = 'identity-impact',
   InjuryPsychological = 'injury-psychological',
   RecurrentTier1 = 'recurrent-tier1',
+  LossOfFunction = 'loss_of_function',
   
   // Tier 3 Categories (Critical Risk)
   SelfHarm = 'self-harm',
@@ -40,6 +41,7 @@ export enum EscalationCategory {
   SeverePsychologicalDistress = 'severe-psychological-distress',
   AbuseDisclosure = 'abuse-disclosure',
   RapidDeterioration = 'rapid-deterioration',
+  ImmediateSafety = 'immediate_safety',
   
   // General
   General = 'general'
@@ -470,12 +472,14 @@ export function getCategoryLabel(category: EscalationCategory): string {
     [EscalationCategory.IdentityImpact]: 'Identity Impact',
     [EscalationCategory.InjuryPsychological]: 'Injury-Related',
     [EscalationCategory.RecurrentTier1]: 'Recurrent Concerns',
+    [EscalationCategory.LossOfFunction]: 'Loss of Daily Function',
     [EscalationCategory.SelfHarm]: 'Self-Harm',
     [EscalationCategory.SuicidalIdeation]: 'Suicidal Ideation',
     [EscalationCategory.ImminentSafetyRisk]: 'Imminent Safety Risk',
     [EscalationCategory.SeverePsychologicalDistress]: 'Severe Distress',
     [EscalationCategory.AbuseDisclosure]: 'Abuse Disclosure',
     [EscalationCategory.RapidDeterioration]: 'Rapid Deterioration',
+    [EscalationCategory.ImmediateSafety]: 'Immediate Safety',
     [EscalationCategory.General]: 'General'
   };
   return labels[category] || 'Unknown';

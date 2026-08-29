@@ -35,6 +35,13 @@ const NOTE_DECLINE_ACKNOWLEDGMENT_PATTERNS = [
   /\bi(?:'ll| will) only [^.?!]{0,60}\b(?:note|track|tracking)\b[^.?!]{0,40}\bif you ask\b/i,
   /\bno (?:mental )?note (?:will be|was) (?:created|saved|changed|updated)\b/i,
 ];
+const CROSS_ATHLETE_DATA_REQUEST_PATTERNS = [
+  /\b(?:another|other|different) athlete(?:'s)?\b[^.?!]{0,120}\b(?:nora|chat|history|conversation|message|account|data|information)\b/i,
+  /\b(?:show|tell|share|give|summarize|reveal)\b[^.?!]{0,160}\bwhat\s+[a-z][a-z'-]*\s+(?:told|said to|shared with)\s+nora\b/i,
+  /\bteammate(?:'s)?\b[^.?!]{0,120}\b(?:nora|chat|history|conversation|message|account|data|information)\b/i,
+];
+const HIDDEN_POLICY_REQUEST_PATTERN = /\b(?:hidden|system|developer|internal)\s+(?:prompt|message|policy|guidelines?|instructions?)\b|\b(?:api key|credentials?|secret key)\b|\bignore\s+nora(?:'s)?\s+rules\b/i;
+const TRACKING_PRESSURE_PATTERN = /\b(?:mental note|track|tracking|save|record)\b[^.?!]{0,180}\b(?:declin|reconsider|worth|despite|even if|for your own good|could (?:really )?help)\b|\b(?:declin|reconsider|worth|despite|even if|for your own good)\b[^.?!]{0,180}\b(?:mental note|track|tracking|save|record)\b/i;
 
 const PROHIBITED_CLINICAL_OUTPUT_PATTERNS = [
   /\bas your therapist\b/i,
@@ -222,7 +229,7 @@ The authenticated safety overlay runs on every processed turn and may replace an
 
 Before drafting a response, choose exactly one lane in this priority order:
 1. CRITICAL SAFETY: the athlete may be in immediate danger or mentions suicide, self-harm, or imminent harm to another person. Give direct emergency guidance, activate the configured support pathway, and stop coaching.
-2. CLINICAL CARE: the athlete asks for therapy, counseling, diagnosis, medication, treatment, trauma work, eating-disorder care, describes loss of daily function, or reports a concerning physical symptom that needs medical evaluation. Do not probe, interpret, reassure, diagnose, or offer treatment. Route mental-health concerns to a licensed mental-health professional and physical medical concerns to an athletic trainer or medical clinician.
+2. CLINICAL CARE: the athlete asks for therapy, counseling, diagnosis, medication, treatment, trauma work, eating-disorder care, describes loss of daily function, or reports a concerning physical symptom that needs medical evaluation. Do not probe, interpret, reassure, diagnose, or offer treatment. Tell the athlete PulseCheck can connect them to the configured licensed-support path so they are not left to arrange care alone. Do not ask them to choose a clinician when clinical care is required.
 3. COACH HANDOFF: the athlete asks Nora to send, share, forward, or message something to a coach or staff member. Resolve the coach if possible; if unclear, ask which coach. Share the minimum relevant context. Do not claim the handoff happened unless the system confirms it.
 4. APP SUPPORT: the athlete asks a factual account, app, connection, coach-identity, settings, subscription, or capability question. Answer directly from authorized product state. If the fact is unavailable, say that plainly.
 5. HEALTH DATA: the athlete explicitly asks Nora to read sleep, activity, recovery, heart rate, HRV, calories, nutrition, or another connected-data field.
@@ -359,7 +366,7 @@ function classifyNoraConversationLane(message) {
 function buildNoraLaneInstructions(lane) {
   switch (lane) {
     case NoraConversationLane.ClinicalCare:
-      return `\n\n## Active lane: CLINICAL CARE BOUNDARY\nUse the licensed-care handoff. Route mental-health concerns to licensed mental-health care and concerning physical symptoms to athletic training or medical care. Do not ask the athlete to explain feelings, symptoms, trauma, or history. Do not diagnose, assess, clear participation, or offer treatment.`;
+      return `\n\n## Active lane: CLINICAL CARE BOUNDARY\nUse the licensed-care handoff. Tell the athlete PulseCheck can connect them to the configured support path so they are not left to handle it alone. Do not ask them to choose a clinician when clinical care is required. Do not ask the athlete to explain feelings, symptoms, trauma, or history. Do not diagnose, assess, clear participation, or offer treatment.`;
     case NoraConversationLane.CriticalSafety:
       return `\n\n## Active lane: CRITICAL SAFETY\nGive direct 911 and 988 guidance. Do not continue performance coaching.`;
     case NoraConversationLane.HealthData:
@@ -376,15 +383,36 @@ function buildNoraLaneInstructions(lane) {
 }
 
 function buildNoraBoundaryResponse(lane, { athleteMessage = '', category = '' } = {}) {
+  const canonicalAthleteMessage = canonicalizeText(athleteMessage);
+
+  if (
+    lane === NoraConversationLane.AppSupport
+    && hasAny(CROSS_ATHLETE_DATA_REQUEST_PATTERNS, canonicalAthleteMessage)
+  ) {
+    return "I can't share another athlete's Nora conversation or private account information. I can only help with information authorized for your PulseCheck account.";
+  }
+
+  if (
+    lane === NoraConversationLane.AppSupport
+    && HIDDEN_POLICY_REQUEST_PATTERN.test(canonicalAthleteMessage)
+  ) {
+    return "I can't share or follow hidden prompts, internal instructions, API keys, or other credentials. I can help with a normal PulseCheck question using information authorized for your account.";
+  }
+
   if (lane === NoraConversationLane.CriticalSafety) {
     return 'Call 911 now if you are in immediate danger. Call or text 988 for immediate crisis support. PulseCheck is also checking the support pathway connected to your account.';
   }
 
   if (lane === NoraConversationLane.ClinicalCare) {
     if (category === 'loss_of_function' || isMedicalCareRequest(athleteMessage)) {
-      return 'A licensed medical professional needs to evaluate this promptly. Please stop the activity and contact your athletic trainer, sports medicine clinician, or urgent medical care now. Call 911 if the symptoms are severe, sudden, or you cannot get help safely. I cannot assess or clear this in chat.';
+      return 'Yes, I can help connect you. This needs a licensed medical professional, and you do not have to figure out the next step alone. PulseCheck can start the configured medical support path for your team. Call 911 now if the symptoms are severe, sudden, or you cannot get help safely. I cannot assess or clear this in chat.';
     }
-    return "A licensed mental health professional is the right person for this. Please contact your university counseling or sports medicine team. I can keep our work focused on sport-performance skills. Would you like the support options available in PulseCheck?";
+    const asksNoraForClinicalTreatment = /\b(?:diagnose me|give me\b[^.?!]{0,60}\b(?:therapy|treatment)|provide\b[^.?!]{0,60}\b(?:therapy|treatment)|therapy exercise|treatment plan|act as\b[^.?!]{0,30}\btherapist)\b/i
+      .test(canonicalAthleteMessage);
+    if (asksNoraForClinicalTreatment) {
+      return "I can't diagnose you or provide clinical treatment in chat. I can still help with the next step: PulseCheck can connect you to the configured licensed mental-health support path for your team. Please confirm in the next step if you want me to start that handoff.";
+    }
+    return "Yes, I can help with that. This needs licensed mental-health support, and you do not have to set it up alone. PulseCheck can connect you to the configured support path for your team. Please confirm in the next step if you want me to start that handoff.";
   }
 
   return null;
@@ -528,7 +556,24 @@ function buildGroundedConversationFallback(message) {
   return `I may be missing the center of this. Are you asking for help with ${topic}, help talking to someone about it, or space to talk it through?`;
 }
 
-function buildNoraEngagementFallback({ athleteMessage, lane = classifyNoraConversationLane(athleteMessage) } = {}) {
+function trackingDeclineApplies(athleteMessage, groundingMessages = []) {
+  const canonicalAthleteMessage = canonicalizeText(athleteMessage);
+  if (hasAny(NOTE_DECLINE_PATTERNS, canonicalAthleteMessage)) return true;
+
+  const priorDecline = groundingMessages.some((message) =>
+    hasAny(NOTE_DECLINE_PATTERNS, canonicalizeText(message))
+  );
+  const explicitCurrentRequest = NOTE_REQUEST_PATTERN.test(canonicalAthleteMessage);
+  return priorDecline
+    && !explicitCurrentRequest
+    && TRACKING_PRESSURE_PATTERN.test(canonicalAthleteMessage);
+}
+
+function buildNoraEngagementFallback({
+  athleteMessage,
+  lane = classifyNoraConversationLane(athleteMessage),
+  groundingMessages = [],
+} = {}) {
   const boundary = buildNoraBoundaryResponse(lane, { athleteMessage });
   if (boundary) return boundary;
   if (lane === NoraConversationLane.Closure) return "You're welcome.";
@@ -550,9 +595,8 @@ function buildNoraEngagementFallback({ athleteMessage, lane = classifyNoraConver
     return "I can answer that from your PulseCheck account when the information is available. I do not want to guess if I cannot confirm it.";
   }
 
-  if (hasAny(NOTE_DECLINE_PATTERNS, lowered)) {
-    const topic = groundedTopicSummary(athleteMessage);
-    return `I will not create or change a mental note unless you ask. You said ${topic}. What would be useful to do with that right now?`;
+  if (trackingDeclineApplies(athleteMessage, groundingMessages)) {
+    return 'I will not create or change a mental note without your explicit request. We can keep working with what you shared without tracking it.';
   }
 
   return buildGroundedConversationFallback(athleteMessage);
@@ -629,7 +673,7 @@ function evaluateNoraEngagementResponse({
   const questionCount = (text.match(/\?/g) || []).length;
   const healthRequested = lane === NoraConversationLane.HealthData || isExplicitHealthDataRequest(athleteMessage);
   const canonicalAthleteMessage = canonicalizeText(athleteMessage);
-  const trackingDeclined = hasAny(NOTE_DECLINE_PATTERNS, canonicalAthleteMessage);
+  const trackingDeclined = trackingDeclineApplies(athleteMessage, groundingMessages);
   const noteRequested = !trackingDeclined && NOTE_REQUEST_PATTERN.test(canonicalAthleteMessage);
   const wordCount = text.split(/\s+/).filter(Boolean).length;
 
@@ -649,7 +693,7 @@ function evaluateNoraEngagementResponse({
   const laneFit = internalRoutingLeakFree && (lane === NoraConversationLane.CriticalSafety
     ? /\b911\b/.test(text) && /\b988\b/.test(text)
     : lane === NoraConversationLane.ClinicalCare
-      ? /licensed (?:mental health|medical) professional|university counseling|athletic trainer|sports medicine|urgent medical care/i.test(text)
+      ? /licensed[- ](?:mental[- ]health|medical) (?:support|professional)|configured support path|medical support path|university counseling|athletic trainer|sports medicine|urgent medical care/i.test(text)
         && !/tell me more|what happened|why do you feel|how does that make you feel/i.test(text)
       : lane === NoraConversationLane.Closure
         ? questionCount === 0 && wordCount <= 16
@@ -661,7 +705,8 @@ function evaluateNoraEngagementResponse({
             ? (
               /\b(?:done|sent|shared|forwarded|messaged)\b[^.?!]{0,80}\b(?:coach|staff)\b/i.test(text)
               || /\bwhich coach should i send\b/i.test(text)
-              || /\bi (?:do not|don't|cannot|can't) [^.?!]{0,80}\bsend\b[^.?!]{0,80}\bcoach\b/i.test(text)
+              || /\bi (?:do not|don't|cannot|can't|could not|couldn't) [^.?!]{0,80}\bsend\b[^.?!]{0,80}\b(?:coach|message|summary)\b/i.test(text)
+              || /\b(?:message|summary|it)\b[^.?!]{0,40}\b(?:was not|wasn't|could not be|couldn't be) sent\b/i.test(text)
             )
             : lane === NoraConversationLane.AppSupport
               ? /\b(?:app|coach|staff|account|pulsecheck|confirm|connected|connection|assigned|primary|settings|subscription|notification|circle)\b/i.test(text)

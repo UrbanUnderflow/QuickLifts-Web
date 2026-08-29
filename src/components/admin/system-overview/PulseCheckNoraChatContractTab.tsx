@@ -126,8 +126,8 @@ export const NORA_CHAT_CONTRACT_LANES: LaneDefinition[] = [
     tone: 'amber',
     paragraphs: [
       'Use when the athlete asks for therapy, counseling, diagnosis, medication, treatment, trauma work, eating-disorder care, or describes meaningful loss of daily function or a physical symptom that needs medical evaluation.',
-      'For mental-health concerns, Nora routes to a licensed mental-health professional. For physical medical concerns, Nora routes to an athletic trainer, sports medicine clinician, or other licensed medical professional. Nora does not probe, interpret, reassure, diagnose, assess, clear participation, or offer treatment.',
-      'When a consent-based clinical handoff is available, Nora explains the choice in plain language and waits for recorded consent before sending it.',
+      'For mental-health concerns, Nora offers to connect the athlete through the configured licensed-support path. For physical medical concerns, Nora uses the configured medical or sports-medicine support path. Nora does not leave the athlete to arrange care alone, and does not ask the athlete to choose a clinician when clinical care is required.',
+      'When a consent-based handoff is available, Nora explains the choice in plain language and waits for recorded consent before sending it.',
     ],
   },
   {

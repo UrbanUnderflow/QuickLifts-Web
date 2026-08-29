@@ -4,7 +4,7 @@ import { Brain, Send, Heart, Star, Target, Gauge, Flame, TrendingUp, ChevronLeft
 import { auth, db } from '../../api/firebase/config';
 import { collection, getDocs, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import EscalationModal from './EscalationModal';
+import EscalationModal, { type EscalationSupportOption } from './EscalationModal';
 import NoraIntroCard from './NoraIntroCard';
 import { EscalationTier, EscalationCategory } from '../../api/firebase/escalation/types';
 import {
@@ -94,6 +94,17 @@ const isLaunchableAssignment = (assignment: PulseCheckDailyAssignment | null) =>
         assignment.status === PulseCheckDailyAssignmentStatus.Started
       )
   );
+
+const DEFAULT_TIER_2_SUPPORT_OPTION: EscalationSupportOption = {
+  id: 'configured-team-support',
+  kind: 'configured_route',
+  label: 'Support team',
+  roleLabel: 'Team support',
+  description: 'PulseCheck will loop in the support people configured for your team.',
+  route: 'clinician',
+  selectable: true,
+  default: true,
+};
 
 interface ChatMessage {
   id: string;
@@ -209,6 +220,16 @@ interface EscalationResponse {
   shouldEscalate: boolean;
 }
 
+interface EscalationOutcome {
+  escalationRecordId?: string | null;
+  success?: boolean;
+  handoffStatus?: string | null;
+  supportChoiceMode?: string | null;
+  supportDefaultOptionId?: string | null;
+  supportOptions?: EscalationSupportOption[];
+  requiresClinicalRoute?: boolean;
+}
+
 const Chat: React.FC = () => {
   const currentUser = useUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -236,6 +257,10 @@ const Chat: React.FC = () => {
   });
   const [escalationProcessing, setEscalationProcessing] = useState(false);
   const [currentEscalationId, setCurrentEscalationId] = useState<string | null>(null);
+  const [tier2SupportOptions, setTier2SupportOptions] = useState<EscalationSupportOption[]>([]);
+  const [selectedTier2SupportOptionId, setSelectedTier2SupportOptionId] = useState('');
+  const [tier2SupportOptionsLoading, setTier2SupportOptionsLoading] = useState(false);
+  const [tier2SupportRouteLocked, setTier2SupportRouteLocked] = useState(false);
   const [hasActiveEscalation, setHasActiveEscalation] = useState(false);
   const [uiEscalationTier, setUiEscalationTier] = useState<EscalationTier>(EscalationTier.None);
   
@@ -268,6 +293,63 @@ const Chat: React.FC = () => {
     localStorage.setItem(STORAGE_KEY_NORA_INTRO, 'true');
     setShowNoraIntro(false);
   };
+
+  const applyTier2SupportOptions = useCallback((payload?: Partial<EscalationOutcome> | null) => {
+    const incomingOptions = Array.isArray(payload?.supportOptions)
+      ? payload.supportOptions.filter((option) => option && typeof option.id === 'string' && typeof option.label === 'string')
+      : [];
+    const options = incomingOptions.length > 0 ? incomingOptions : [DEFAULT_TIER_2_SUPPORT_OPTION];
+    const defaultOptionId = typeof payload?.supportDefaultOptionId === 'string' && payload.supportDefaultOptionId.trim()
+      ? payload.supportDefaultOptionId.trim()
+      : options.find((option) => option.default)?.id || options[0]?.id || '';
+
+    setTier2SupportOptions(options);
+    setSelectedTier2SupportOptionId((current) => (
+      options.some((option) => option.id === current)
+        ? current
+        : defaultOptionId
+    ));
+    setTier2SupportRouteLocked(
+      payload?.requiresClinicalRoute === true || payload?.supportChoiceMode === 'clinical_locked'
+    );
+  }, []);
+
+  const loadTier2SupportOptions = useCallback(async (
+    escalationRecordId: string | null | undefined,
+    initialPayload?: Partial<EscalationOutcome> | null,
+  ) => {
+    applyTier2SupportOptions(initialPayload);
+    if (!currentUser || !escalationRecordId) return;
+
+    setTier2SupportOptionsLoading(true);
+    try {
+      const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
+        method: 'POST',
+        headers: await pulseCheckChatHeaders(currentUser.id),
+        body: JSON.stringify({
+          action: 'support-options',
+          escalationId: escalationRecordId,
+          userId: currentUser.id,
+        })
+      });
+      const json = await res.json().catch(() => null) as Partial<EscalationOutcome> | null;
+      if (res.ok && json) {
+        applyTier2SupportOptions(json);
+      }
+    } catch (error) {
+      console.error('[PulseCheck] Failed to load Tier 2 support options:', error);
+    } finally {
+      setTier2SupportOptionsLoading(false);
+    }
+  }, [applyTier2SupportOptions, currentUser]);
+
+  const closeEscalationModal = useCallback(() => {
+    setEscalationModal({ isOpen: false, tier: EscalationTier.None, category: EscalationCategory.General });
+    setTier2SupportOptions([]);
+    setSelectedTier2SupportOptionId('');
+    setTier2SupportRouteLocked(false);
+    setTier2SupportOptionsLoading(false);
+  }, []);
   
   // Handle starting an exercise from external source (e.g., mental training page)
   const handleStartExerciseInChat = useCallback((exercise: SimModule, dailyAssignmentId?: string) => {
@@ -593,7 +675,8 @@ const Chat: React.FC = () => {
           action: 'consent',
           escalationId: currentEscalationId,
           userId: currentUser.id,
-          consent: true
+          consent: true,
+          supportRecipientOptionId: selectedTier2SupportOptionId || undefined
         })
       });
       
@@ -603,12 +686,12 @@ const Chat: React.FC = () => {
         // Add confirmation message to chat
         const confirmMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
-          content: liveStatusMessage || 'Your consent was recorded, but the clinical endpoint did not return a live handoff status. Please contact your support team directly if you need help now.',
+          content: liveStatusMessage || 'Your consent was recorded, but PulseCheck did not receive a live support status yet. If this cannot wait, use your team\'s urgent support plan, or call 911 or 988 if you may be in immediate danger.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000)
         };
         setMessages(prev => [...prev, confirmMsg]);
-        setEscalationModal({ isOpen: false, tier: EscalationTier.None, category: EscalationCategory.General });
+        closeEscalationModal();
       } else {
         const providerMessage = typeof json?.providerError?.message === 'string'
           ? json.providerError.message.trim()
@@ -622,7 +705,7 @@ const Chat: React.FC = () => {
           id: Math.random().toString(36).slice(2),
           content: responseMessage
             || providerMessage
-            || 'Your choice is saved, but the clinical connection could not be confirmed. Please contact your support team directly if you need help now.',
+            || 'Your choice is saved, but PulseCheck could not confirm the live support connection. If this cannot wait, use your team\'s urgent support plan, or call 911 or 988 if you may be in immediate danger.',
           isFromUser: false,
           timestamp: Math.floor(Date.now() / 1000)
         };
@@ -634,7 +717,7 @@ const Chat: React.FC = () => {
       console.error('[PulseCheck] Consent acceptance failed:', e);
       const failureMsg: ChatMessage = {
         id: Math.random().toString(36).slice(2),
-        content: 'We could not confirm the clinical connection. Please contact your support team directly if you need help now.',
+        content: 'PulseCheck could not confirm the live support connection. If this cannot wait, use your team\'s urgent support plan, or call 911 or 988 if you may be in immediate danger.',
         isFromUser: false,
         timestamp: Math.floor(Date.now() / 1000)
       };
@@ -642,7 +725,7 @@ const Chat: React.FC = () => {
     } finally {
       setEscalationProcessing(false);
     }
-  }, [currentUser, currentEscalationId]);
+  }, [closeEscalationModal, currentUser, currentEscalationId, selectedTier2SupportOptionId]);
 
   // Handle escalation modal consent decline
   const handleDeclineConsent = useCallback(async () => {
@@ -672,20 +755,20 @@ const Chat: React.FC = () => {
           timestamp: Math.floor(Date.now() / 1000)
         };
         setMessages(prev => [...prev, declineMsg]);
-        setEscalationModal({ isOpen: false, tier: EscalationTier.None, category: EscalationCategory.General });
+        closeEscalationModal();
       }
     } catch (e) {
       console.error('[PulseCheck] Consent decline failed:', e);
-      setEscalationModal({ isOpen: false, tier: EscalationTier.None, category: EscalationCategory.General });
+      closeEscalationModal();
     } finally {
       setEscalationProcessing(false);
     }
-  }, [currentUser, currentEscalationId]);
+  }, [closeEscalationModal, currentUser, currentEscalationId]);
 
   // Handle escalation response from chat API
   const handleEscalation = useCallback(async (
     escalation: EscalationResponse,
-    outcome?: { success?: boolean; handoffStatus?: string | null },
+    outcome?: EscalationOutcome,
   ) => {
     if (!escalation || !escalation.shouldEscalate) return;
     
@@ -697,6 +780,8 @@ const Chat: React.FC = () => {
     
     // For Tier 2 (Elevated) - show consent modal
     if (escalation.tier === EscalationTier.ElevatedRisk) {
+      const escalationRecordId = outcome?.escalationRecordId || currentEscalationId;
+      void loadTier2SupportOptions(escalationRecordId, outcome);
       setEscalationModal({
         isOpen: true,
         tier: escalation.tier,
@@ -718,7 +803,7 @@ const Chat: React.FC = () => {
       });
       setEscalationProcessing(false);
     }
-  }, []);
+  }, [currentEscalationId, loadTier2SupportOptions]);
 
   const send = async () => {
     if (!input.trim() || !currentUser || sending) return;
@@ -1671,12 +1756,17 @@ const Chat: React.FC = () => {
       reason={escalationModal.reason}
       handoffConfirmed={escalationModal.handoffConfirmed}
       handoffStatus={escalationModal.handoffStatus}
+      supportOptions={tier2SupportOptions}
+      selectedSupportOptionId={selectedTier2SupportOptionId}
+      supportOptionsLoading={tier2SupportOptionsLoading}
+      supportRouteLocked={tier2SupportRouteLocked}
+      onSelectSupportOption={setSelectedTier2SupportOptionId}
       onAcceptConsent={handleAcceptConsent}
       onDeclineConsent={handleDeclineConsent}
       onClose={() => {
         // Only allow closing for Tier 2 (Elevated)
         if (escalationModal.tier === EscalationTier.ElevatedRisk) {
-          setEscalationModal({ isOpen: false, tier: EscalationTier.None, category: EscalationCategory.General });
+          closeEscalationModal();
         }
       }}
       isProcessing={escalationProcessing}

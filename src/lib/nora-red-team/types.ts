@@ -12,6 +12,8 @@ export type NoraRedTeamLane =
 
 export type NoraRedTeamSeverity = 'none' | 'minor' | 'major' | 'critical';
 export type NoraRedTeamVerdict = 'pass' | 'fail' | 'review';
+export type NoraRedTeamEscalationTier = 0 | 1 | 2 | 3;
+export type NoraRedTeamEscalationModal = 'none' | 'tier_2_consent' | 'tier_3_critical';
 export type NoraRedTeamDimension =
   | 'lane_choice'
   | 'safety'
@@ -21,8 +23,12 @@ export type NoraRedTeamDimension =
 
 export type NoraRedTeamCheckType =
   | 'lane_is'
+  | 'escalation_tier_is'
+  | 'escalation_modal_is'
+  | 'escalation_handoff_workflow_is'
   | 'response_includes_any'
   | 'response_excludes_all'
+  | 'response_excludes_unnegated'
   | 'max_questions'
   | 'max_words';
 
@@ -37,6 +43,9 @@ export interface NoraRedTeamScenarioCheck {
   scope: NoraRedTeamCheckScope;
   terms?: string[];
   expectedLane?: NoraRedTeamLane;
+  expectedTier?: NoraRedTeamEscalationTier;
+  expectedModal?: NoraRedTeamEscalationModal;
+  expectedHandoffWorkflow?: 'none' | 'tier_2_pending_consent' | 'tier_3_started';
   maximum?: number;
 }
 
@@ -48,6 +57,7 @@ export interface NoraRedTeamScenario {
   description: string;
   risk: Exclude<NoraRedTeamSeverity, 'none'>;
   expectedLane: NoraRedTeamLane;
+  expectedEscalationTier: NoraRedTeamEscalationTier;
   seedAthleteMessage: string;
   fixedFinalAthleteMessage?: string;
   syntheticContext: string;
@@ -62,11 +72,53 @@ export interface NoraRedTeamAttack {
   followUpMessage: string;
 }
 
+export interface NoraRedTeamEscalationResult {
+  tier: NoraRedTeamEscalationTier;
+  category: string;
+  reason: string;
+  explanation: string;
+  confidence: number;
+  shouldEscalate: boolean;
+  classificationFamily: string;
+  classificationSource: string;
+  requiresCoachReview: boolean;
+  requiresClinicalHandoff: boolean;
+  modal: NoraRedTeamEscalationModal;
+  consentRequired: boolean;
+  recordWouldBeCreated: boolean;
+  consentWorkflowWouldStart: boolean;
+  safetyModeWouldActivate: boolean;
+  handoffWouldStart: boolean;
+  coachNotificationWouldStart: boolean;
+  simulationOnly: true;
+  conditionSource: 'production_firestore';
+  conditionCount: number;
+  model: string;
+  durationMs: number;
+}
+
+export interface NoraRedTeamEscalationClassifierInput {
+  athleteMessage: string;
+  recentMessages: Array<{ isFromUser: boolean; content: string }>;
+  conversationId: string;
+}
+
+export interface NoraRedTeamEscalationClassifierOutput {
+  escalation: NoraRedTeamEscalationResult;
+  usage: NoraRedTeamUsage;
+}
+
+export type NoraRedTeamEscalationClassifier = (
+  input: NoraRedTeamEscalationClassifierInput,
+) => Promise<NoraRedTeamEscalationClassifierOutput>;
+
 export interface NoraRedTeamTurn {
   turn: number;
   athleteMessage: string;
   noraResponse: string;
   lane: NoraRedTeamLane;
+  escalation: NoraRedTeamEscalationResult;
+  escalationBoundaryApplied: boolean;
   generationAttempts: number;
   usedFallback: boolean;
   guardrailIntervened: boolean;
@@ -124,6 +176,7 @@ export interface NoraRedTeamAgentTrace {
     | 'attacker'
     | 'athlete_simulator'
     | 'nora_target'
+    | 'safety_classifier'
     | 'judge'
     | 'adjudicator'
     | 'human_reviewer';
@@ -175,9 +228,11 @@ export interface NoraRedTeamRun {
   simulatedTools: Array<{
     tool: string;
     authorization: 'allowed' | 'denied' | 'not_requested';
-    outcome: 'not_called' | 'blocked' | 'failed';
+    outcome: 'not_called' | 'blocked' | 'failed' | 'pending_consent';
     sideEffect: 'none';
     confirmation: false;
+    workflow?: string;
+    nextStep?: string;
   }>;
   usage: NoraRedTeamUsage;
   evidencePolicy: {

@@ -87,6 +87,7 @@ const EscalationIncidentStatus = {
 const ESCALATION_DEDUPE_WINDOW_SECONDS = 30 * 60;
 const INCIDENT_HISTORY_LIMIT = 10;
 const TEAMS_COLLECTION = 'pulsecheck-teams';
+const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const ATHLETE_SAFETY_STATE_COLLECTION = 'pulsecheck-athlete-safety-state';
 const CLINICAL_ESCALATIONS_COLLECTION = 'pulsecheck-clinical-escalations';
 const HOTLINE_SUPPORT_RESOURCE = Object.freeze({
@@ -213,7 +214,7 @@ async function verifyEscalationCaller(event, runtimeDb = db) {
 async function authorizeEscalationAction({ caller, action, body, runtimeDb = db }) {
   if (caller?.isAdmin) return { ok: true };
 
-  const athleteActions = new Set(['consent', 'care-state']);
+  const athleteActions = new Set(['consent', 'care-state', 'support-options']);
   if (athleteActions.has(action)) {
     const claimedUserId = normalizeString(body?.userId);
     if (claimedUserId && claimedUserId === caller?.uid) return { ok: true };
@@ -293,8 +294,413 @@ function normalizeTeamEscalationRoute(value) {
 
 function buildHotlineSupportMessage(isCritical = false) {
   return isCritical
-    ? `Please call or text ${HOTLINE_SUPPORT_RESOURCE.phone} now, or visit ${HOTLINE_SUPPORT_RESOURCE.url} for immediate support. We have also added you to the watch list so an admin can keep following up.`
-    : `Thank you. Please call or text ${HOTLINE_SUPPORT_RESOURCE.phone} now, or visit ${HOTLINE_SUPPORT_RESOURCE.url} for immediate support. We have also added you to the watch list so an admin can keep following up.`;
+    ? `Please call or text ${HOTLINE_SUPPORT_RESOURCE.phone} now, or visit ${HOTLINE_SUPPORT_RESOURCE.url} for immediate support. PulseCheck also added you to the watch list so the configured support team can keep following up.`
+    : `Thank you. Please call or text ${HOTLINE_SUPPORT_RESOURCE.phone}, or visit ${HOTLINE_SUPPORT_RESOURCE.url} for immediate support. PulseCheck also added you to the watch list so the configured support team can keep following up.`;
+}
+
+function snapshotExists(snapshot) {
+  if (!snapshot) return false;
+  if (typeof snapshot.exists === 'function') return snapshot.exists();
+  return snapshot.exists === true;
+}
+
+function isActiveRecord(data = {}) {
+  const status = normalizeString(data.status).toLowerCase();
+  return (!status || status === 'active')
+    && data.revokedAt == null
+    && data.deletedAt == null
+    && data.archivedAt == null;
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => normalizeString(entry)).filter(Boolean);
+}
+
+function hasStaffCapability(data, capability) {
+  return normalizeStringList(data?.staffCapabilities).includes(capability);
+}
+
+function canReceiveSelectableTier2Support(data = {}) {
+  const role = normalizeString(data.role).toLowerCase();
+  if (!role || role === 'athlete' || !isActiveRecord(data)) return false;
+  if (
+    hasStaffCapability(data, 'admin')
+    || hasStaffCapability(data, 'coaching')
+    || hasStaffCapability(data, 'athletic_trainer')
+  ) {
+    return true;
+  }
+  return ['team-admin', 'coach', 'performance-staff', 'athletic-trainer'].includes(role);
+}
+
+function tier2SupportRoleLabel(data = {}) {
+  const role = normalizeString(data.role).toLowerCase();
+  const title = normalizeString(data.title);
+  if (hasStaffCapability(data, 'athletic_trainer') || role === 'performance-staff' || role === 'athletic-trainer') {
+    return title || 'Athletic trainer';
+  }
+  if (hasStaffCapability(data, 'coaching') || role === 'coach') return title || 'Coach';
+  if (hasStaffCapability(data, 'admin') || role === 'team-admin') return title || 'Team admin';
+  return title || 'Support staff';
+}
+
+function displayNameFromSupportData(data = {}, fallback = 'Support staff') {
+  return [
+    data.displayName,
+    data.preferredName,
+    data.fullName,
+    data.name,
+    data.username,
+    data.email,
+  ].map((entry) => normalizeString(entry)).find(Boolean) || fallback;
+}
+
+async function resolveSupportRecipientIdentity(runtimeDb, userId, fallback) {
+  const cleanUserId = normalizeString(userId);
+  if (!cleanUserId) return { displayName: fallback || 'Support staff', profileImageURL: '' };
+  const [userSnap, coachSnap] = await Promise.all([
+    runtimeDb.collection('users').doc(cleanUserId).get().catch(() => null),
+    runtimeDb.collection('coaches').doc(cleanUserId).get().catch(() => null),
+  ]);
+  const userData = snapshotExists(userSnap) ? (userSnap.data() || {}) : {};
+  const coachData = snapshotExists(coachSnap) ? (coachSnap.data() || {}) : {};
+  return {
+    displayName: displayNameFromSupportData({ ...coachData, ...userData }, fallback),
+    profileImageURL: normalizeString(userData.profileImageURL || userData.photoURL || coachData.profileImageURL),
+  };
+}
+
+function escalationRequiresLockedClinicalRoute(escalationData = {}) {
+  const tier = Number(escalationData.tier) || 0;
+  const category = normalizeString(escalationData.category).toLowerCase();
+  const family = normalizeString(escalationData.classificationFamily).toLowerCase();
+  const disposition = normalizeString(escalationData.disposition).toLowerCase();
+  if (tier >= EscalationTier.CriticalRisk) return true;
+  if (escalationData.requiresClinicalHandoff === true) return true;
+  if ([EscalationClassificationFamily.CareEscalation, EscalationClassificationFamily.CriticalSafety].includes(family)) return true;
+  if (disposition === EscalationDisposition.ClinicalHandoff) return true;
+  return [
+    'persistent-distress',
+    'anxiety-indicators',
+    'disordered-eating',
+    'identity-impact',
+    'injury-psychological',
+    'loss_of_function',
+  ].includes(category);
+}
+
+function buildConfiguredSupportOption({ supportContext = {}, clinicalRouteLocked = false }) {
+  const supportRoute = normalizeString(supportContext.route) || 'clinician';
+  if (supportRoute === 'hotline') {
+    return {
+      id: 'configured-hotline-support',
+      kind: 'configured_route',
+      label: 'Immediate support line',
+      roleLabel: 'Crisis support',
+      description: 'PulseCheck will use the urgent support route configured for your team.',
+      route: 'hotline',
+      selectable: true,
+      default: true,
+      locked: true,
+    };
+  }
+
+  if (clinicalRouteLocked) {
+    return {
+      id: 'configured-clinical-support',
+      kind: 'configured_route',
+      label: 'Care team',
+      roleLabel: 'Licensed support path',
+      description: 'PulseCheck will connect you through the licensed support path configured for your team.',
+      route: 'clinician',
+      selectable: true,
+      default: true,
+      locked: true,
+    };
+  }
+
+  return {
+    id: 'configured-team-support',
+    kind: 'configured_route',
+    label: 'Support team',
+    roleLabel: 'Team support',
+    description: 'PulseCheck will loop in the support people configured for your team.',
+    route: supportRoute,
+    selectable: true,
+    default: true,
+    locked: false,
+  };
+}
+
+function compactSupportOption(option = {}) {
+  const compacted = {
+    id: normalizeString(option.id),
+    kind: normalizeString(option.kind),
+    label: normalizeString(option.label),
+    roleLabel: normalizeString(option.roleLabel),
+    description: normalizeString(option.description),
+    userId: normalizeString(option.userId),
+    teamId: normalizeString(option.teamId),
+    organizationId: normalizeString(option.organizationId),
+    route: normalizeString(option.route),
+    selectable: option.selectable !== false,
+    default: option.default === true,
+    locked: option.locked === true,
+  };
+  return Object.fromEntries(
+    Object.entries(compacted).filter(([, value]) => value !== '' && value !== undefined)
+  );
+}
+
+function supportSelectionFromRecord(record = {}) {
+  if (record.supportSelection && typeof record.supportSelection === 'object') {
+    return compactSupportOption(record.supportSelection);
+  }
+  const id = normalizeString(record.supportSelectionOptionId);
+  if (!id) return null;
+  return compactSupportOption({
+    id,
+    kind: record.supportSelectionKind,
+    label: record.supportSelectionLabel,
+    roleLabel: record.supportSelectionRole,
+    userId: record.supportSelectionUserId,
+    teamId: record.supportSelectionTeamId,
+    organizationId: record.supportSelectionOrganizationId,
+    route: record.supportSelectionRoute,
+    locked: record.supportSelectionLocked === true,
+  });
+}
+
+function buildSupportSelectionFields(option, nowSec) {
+  const selection = compactSupportOption(option);
+  return {
+    supportSelection: selection,
+    supportSelectionOptionId: selection.id || null,
+    supportSelectionKind: selection.kind || null,
+    supportSelectionLabel: selection.label || null,
+    supportSelectionRole: selection.roleLabel || null,
+    supportSelectionUserId: selection.userId || null,
+    supportSelectionTeamId: selection.teamId || null,
+    supportSelectionOrganizationId: selection.organizationId || null,
+    supportSelectionRoute: selection.route || null,
+    supportSelectionLocked: selection.locked === true,
+    supportSelectionRecordedAt: nowSec,
+  };
+}
+
+async function loadSelectableTier2SupportRecipients({
+  athleteId,
+  teamId,
+  organizationId = '',
+}, runtimeDb = db) {
+  const normalizedTeamId = normalizeString(teamId);
+  if (!normalizedTeamId) return [];
+  const normalizedOrgId = normalizeString(organizationId);
+  const normalizedAthleteId = normalizeString(athleteId);
+  const snapshot = await runtimeDb
+    .collection(TEAM_MEMBERSHIPS_COLLECTION)
+    .where('teamId', '==', normalizedTeamId)
+    .get();
+
+  const options = [];
+  for (const docSnap of snapshot.docs || []) {
+    const membership = docSnap.data() || {};
+    const userId = normalizeString(membership.userId);
+    if (
+      !userId
+      || userId === normalizedAthleteId
+      || normalizeString(membership.teamId) !== normalizedTeamId
+      || (normalizedOrgId && normalizeString(membership.organizationId) !== normalizedOrgId)
+      || !canReceiveSelectableTier2Support(membership)
+    ) {
+      continue;
+    }
+
+    const roleLabel = tier2SupportRoleLabel(membership);
+    const identity = await resolveSupportRecipientIdentity(runtimeDb, userId, roleLabel);
+    options.push(compactSupportOption({
+      id: `staff:${normalizedTeamId}:${userId}`,
+      kind: 'staff',
+      label: identity.displayName || roleLabel,
+      roleLabel,
+      description: normalizeString(membership.supportRoutingDescription)
+        || `${roleLabel} on your PulseCheck team.`,
+      userId,
+      teamId: normalizedTeamId,
+      organizationId: normalizeString(membership.organizationId),
+      route: 'selected_staff',
+      selectable: true,
+      default: false,
+      locked: false,
+    }));
+  }
+
+  return options.sort((left, right) => {
+    const roleOrder = (option) => {
+      const role = normalizeString(option.roleLabel).toLowerCase();
+      if (role.includes('athletic trainer')) return 0;
+      if (role.includes('coach')) return 1;
+      if (role.includes('admin')) return 2;
+      return 3;
+    };
+    return roleOrder(left) - roleOrder(right)
+      || normalizeString(left.label).localeCompare(normalizeString(right.label));
+  }).slice(0, 12);
+}
+
+async function buildEscalationSupportOptions({
+  athleteId,
+  escalationData = {},
+  supportContext = null,
+}, runtimeDb = db) {
+  const resolvedSupportContext = supportContext || await resolveEscalationSupportContext({
+    athleteId,
+    preferredPilotId: escalationData?.pilotId || null,
+    preferredTeamMembershipId: escalationData?.teamMembershipId || null,
+    preferredTeamId: escalationData?.teamId || null,
+  }, runtimeDb);
+  const clinicalRouteLocked = escalationRequiresLockedClinicalRoute(escalationData);
+  const teamId = normalizeString(escalationData?.teamId || resolvedSupportContext?.teamId);
+  const organizationId = normalizeString(
+    escalationData?.organizationId || resolvedSupportContext?.pilotContext?.organizationId
+  );
+  const configuredOption = buildConfiguredSupportOption({
+    supportContext: resolvedSupportContext,
+    clinicalRouteLocked,
+  });
+  const staffOptions = clinicalRouteLocked
+    ? []
+    : await loadSelectableTier2SupportRecipients({ athleteId, teamId, organizationId }, runtimeDb);
+  const defaultOptionId = staffOptions[0]?.id || configuredOption.id;
+  const options = (staffOptions.length > 0 ? [...staffOptions, configuredOption] : [configuredOption])
+    .map((option) => compactSupportOption({
+      ...option,
+      default: option.id === defaultOptionId,
+    }));
+
+  return {
+    success: true,
+    supportRoute: normalizeString(resolvedSupportContext?.route) || 'clinician',
+    teamId,
+    organizationId,
+    choiceMode: clinicalRouteLocked ? 'clinical_locked' : 'recipient_picker',
+    requiresClinicalRoute: clinicalRouteLocked,
+    defaultOptionId,
+    options,
+  };
+}
+
+function chooseSupportOption(optionsPayload, requestedOptionId) {
+  const options = Array.isArray(optionsPayload?.options) ? optionsPayload.options : [];
+  const requested = normalizeString(requestedOptionId);
+  const defaultOptionId = normalizeString(optionsPayload?.defaultOptionId);
+  if (requested) {
+    const selected = options.find((option) => option.id === requested && option.selectable !== false);
+    if (!selected) {
+      const error = new Error('The selected support recipient is not available for this escalation.');
+      error.statusCode = 400;
+      error.code = 'INVALID_SUPPORT_RECIPIENT';
+      throw error;
+    }
+    return selected;
+  }
+  return options.find((option) => option.id === defaultOptionId)
+    || options.find((option) => option.selectable !== false)
+    || null;
+}
+
+function supportSelectionLabelForMessage(selection) {
+  if (!selection || selection.kind !== 'staff') return '';
+  return normalizeString(selection.label) || normalizeString(selection.roleLabel);
+}
+
+function selectedStaffUserIdFromSupportContext(escalationData = {}, supportContext = {}) {
+  const selection = supportContext?.selectedSupportOption
+    || supportSelectionFromRecord(escalationData)
+    || null;
+  if (selection?.kind !== 'staff') return '';
+  return normalizeString(selection.userId);
+}
+
+async function applySelectedStaffSupportRouting({
+  userId,
+  escalationId,
+  escalationData = {},
+  supportContext = {},
+  coachNotification = null,
+  runtimeDb = db,
+}) {
+  const completedAt = Math.floor(Date.now() / 1000);
+  const selection = supportContext?.selectedSupportOption
+    || supportSelectionFromRecord(escalationData)
+    || null;
+  const notificationDelivered = coachNotification?.success !== false;
+  await runtimeDb.collection('escalation-records').doc(escalationId).set({
+    supportRoute: 'selected_staff',
+    handoffStatus: notificationDelivered ? HandoffStatus.Completed : HandoffStatus.Failed,
+    ...(notificationDelivered
+      ? {
+          handoffCompletedAt: completedAt,
+          handoffAcceptedAt: completedAt,
+        }
+      : { handoffFailedAt: completedAt }),
+    selectedStaffNotifiedAt: completedAt,
+    selectedStaffNotificationStatus: notificationDelivered ? HandoffStatus.Completed : HandoffStatus.Failed,
+    selectedStaffNotificationReason: coachNotification?.reason || null,
+    incidentStatus: EscalationIncidentStatus.Monitoring,
+    incidentLastActivityAt: completedAt,
+    incident: {
+      ...((escalationData.incident && typeof escalationData.incident === 'object') ? escalationData.incident : {}),
+      id: escalationData.incidentId || escalationId,
+      status: EscalationIncidentStatus.Monitoring,
+      lastActivityAt: completedAt,
+      lifecycleEvents: appendBounded(
+        escalationData?.incident?.lifecycleEvents,
+        buildIncidentLifecycleEntry('monitoring', completedAt, 'selected_staff_support_notified')
+      ),
+    },
+  }, { merge: true });
+
+  await emitPilotMetricEvent({
+    db: runtimeDb,
+    athleteId: userId,
+    eventType: 'support_staff_handoff_completed',
+    actorRole: 'system',
+    actorUserId: selectedStaffUserIdFromSupportContext(escalationData, supportContext) || userId,
+    sourceCollection: 'escalation-records',
+    sourceDocumentId: escalationId,
+    metricPayload: {
+      tier: escalationData.tier,
+      category: escalationData.category,
+      supportRoute: 'selected_staff',
+      selectedSupportOptionId: selection?.id || null,
+      selectedSupportUserId: selection?.userId || null,
+      selectedSupportRole: selection?.roleLabel || null,
+      disposition: escalationData.disposition,
+      classificationFamily: escalationData.classificationFamily,
+      countsTowardCareKpi: false,
+    },
+    createdAt: completedAt * 1000,
+  });
+
+  await refreshPilotOutcomeRollupsForAthlete(userId, completedAt * 1000, runtimeDb);
+
+  return {
+    success: notificationDelivered,
+    ok: notificationDelivered,
+    status: notificationDelivered ? 'completed' : 'failed',
+    supportRoute: 'selected_staff',
+    selectedSupportOption: selection,
+    coachNotification,
+    requestId: coachNotification?.requestId || null,
+    error: notificationDelivered
+      ? null
+      : {
+          code: 'SELECTED_SUPPORT_NOTIFICATION_FAILED',
+          message: 'PulseCheck could not confirm the selected support notification.',
+        },
+  };
 }
 
 function mapTierToSeverity(tier) {
@@ -855,6 +1261,8 @@ exports.handler = async (event, context) => {
     switch (action) {
       case 'create':
         return await handleCreateEscalation(body);
+      case 'support-options':
+        return await handleSupportOptions(body);
       case 'consent':
         return await handleConsent(body);
       case 'handoff':
@@ -1090,6 +1498,13 @@ async function handleCreateEscalation(body, runtimeDb = db) {
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
   }, runtimeDb);
+  const supportOptionsPayload = activeTier === EscalationTier.ElevatedRisk
+    ? await buildEscalationSupportOptions({
+        athleteId: userId,
+        escalationData,
+        supportContext,
+      }, runtimeDb)
+    : null;
   await runtimeDb.collection('conversations').doc(conversationId).set({
     escalationTier: activeTier,
     escalationStatus: EscalationRecordStatus.Active,
@@ -1158,6 +1573,10 @@ async function handleCreateEscalation(body, runtimeDb = db) {
       handoffError,
       handoffResult,
       supportRoute: supportContext.route,
+      supportChoiceMode: supportOptionsPayload?.choiceMode || null,
+      supportDefaultOptionId: supportOptionsPayload?.defaultOptionId || null,
+      supportOptions: supportOptionsPayload?.options || [],
+      requiresClinicalRoute: supportOptionsPayload?.requiresClinicalRoute === true,
       hotlineResource: supportContext.route === 'hotline' ? HOTLINE_SUPPORT_RESOURCE : null,
       message:
         activeTier === EscalationTier.CriticalRisk && supportContext.route === 'hotline'
@@ -1167,11 +1586,66 @@ async function handleCreateEscalation(body, runtimeDb = db) {
   };
 }
 
+async function handleSupportOptions(body, runtimeDb = db) {
+  const { userId, escalationId } = body;
+  const normalizedUserId = normalizeString(userId);
+  const normalizedEscalationId = normalizeString(escalationId);
+  if (!normalizedUserId) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing userId' }) };
+  }
+
+  let escalationData = {
+    tier: EscalationTier.ElevatedRisk,
+    category: normalizeCategoryValue(body?.category),
+    classificationFamily: normalizeString(body?.classificationFamily),
+    disposition: normalizeString(body?.disposition),
+    requiresClinicalHandoff: body?.requiresClinicalHandoff === true,
+    teamId: normalizeString(body?.teamId),
+    pilotId: normalizeString(body?.pilotId),
+    teamMembershipId: normalizeString(body?.teamMembershipId),
+  };
+
+  if (normalizedEscalationId) {
+    const escalationDoc = await runtimeDb.collection('escalation-records').doc(normalizedEscalationId).get();
+    if (!escalationDoc.exists) {
+      return { statusCode: 404, headers, body: JSON.stringify({ error: 'Escalation not found' }) };
+    }
+    escalationData = { id: escalationDoc.id, ...(escalationDoc.data() || {}) };
+    if (normalizeString(escalationData.userId) !== normalizedUserId) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Escalation does not belong to this athlete' }) };
+    }
+    if (Number(escalationData.tier) !== EscalationTier.ElevatedRisk) {
+      return { statusCode: 409, headers, body: JSON.stringify({ error: 'Support recipient selection is only available for Tier 2 escalations' }) };
+    }
+  }
+
+  const supportContext = await resolveEscalationSupportContext({
+    athleteId: normalizedUserId,
+    preferredPilotId: escalationData?.pilotId || null,
+    preferredTeamMembershipId: escalationData?.teamMembershipId || null,
+    preferredTeamId: escalationData?.teamId || null,
+  }, runtimeDb);
+  const payload = await buildEscalationSupportOptions({
+    athleteId: normalizedUserId,
+    escalationData,
+    supportContext,
+  }, runtimeDb);
+
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify(payload),
+  };
+}
+
 /**
  * Handle consent decision (Tier 2 only)
  */
 async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerElevatedHandoff) {
   const { escalationId, userId, consent } = body;
+  const requestedSupportOptionId = normalizeString(
+    body?.supportRecipientOptionId || body?.supportOptionId || body?.selectedSupportOptionId
+  );
 
   if (!escalationId || !userId || typeof consent !== 'boolean') {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
@@ -1180,6 +1654,44 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
   const nowSec = Math.floor(Date.now() / 1000);
   const requestedStatus = consent ? ConsentStatus.Accepted : ConsentStatus.Declined;
   const docRef = runtimeDb.collection('escalation-records').doc(escalationId);
+  let selectedSupportOption = null;
+  let selectedSupportOptionsPayload = null;
+  if (consent) {
+    const selectionSnapshot = await docRef.get();
+    if (!selectionSnapshot.exists) {
+      return { statusCode: 404, headers, body: JSON.stringify({ error: 'Escalation not found' }) };
+    }
+    const current = selectionSnapshot.data() || {};
+    if (normalizeString(current.userId) !== normalizeString(userId)) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+    }
+    if (Number(current.tier) !== EscalationTier.ElevatedRisk) {
+      return { statusCode: 409, headers, body: JSON.stringify({ error: 'Consent is only accepted for Tier 2 escalations' }) };
+    }
+    try {
+      const supportContext = await resolveEscalationSupportContext({
+        athleteId: userId,
+        preferredPilotId: current?.pilotId || null,
+        preferredTeamMembershipId: current?.teamMembershipId || null,
+        preferredTeamId: current?.teamId || null,
+      }, runtimeDb);
+      selectedSupportOptionsPayload = await buildEscalationSupportOptions({
+        athleteId: userId,
+        escalationData: current,
+        supportContext,
+      }, runtimeDb);
+      selectedSupportOption = chooseSupportOption(selectedSupportOptionsPayload, requestedSupportOptionId);
+    } catch (error) {
+      return {
+        statusCode: error?.statusCode || 500,
+        headers,
+        body: JSON.stringify({
+          error: error?.message || 'Support recipient selection failed.',
+          errorCode: error?.code || 'SUPPORT_RECIPIENT_SELECTION_FAILED',
+        }),
+      };
+    }
+  }
   const decision = await runtimeDb.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(docRef);
     if (!snapshot.exists) return { outcome: 'not_found' };
@@ -1209,6 +1721,7 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
         handoffStatus: HandoffStatus.Pending,
         incidentStatus: EscalationIncidentStatus.Open,
         incidentLastActivityAt: nowSec,
+        ...(selectedSupportOption ? buildSupportSelectionFields(selectedSupportOption, nowSec) : {}),
         incident: {
           ...((current.incident && typeof current.incident === 'object') ? current.incident : {}),
           id: current.incidentId || escalationId,
@@ -1284,12 +1797,16 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
       };
     }
 
-    const existingHandoffStatus = normalizeString(decision.data?.handoffStatus) || HandoffStatus.Pending;
+      const existingHandoffStatus = normalizeString(decision.data?.handoffStatus) || HandoffStatus.Pending;
+    const existingSupportSelection = supportSelectionFromRecord(decision.data);
+    const existingSupportRoute = normalizeString(decision.data?.supportRoute);
     const providerConfirmed = existingHandoffStatus === HandoffStatus.Completed
       && Boolean(normalizeString(decision.data?.clinicalReferenceId));
     const hotlineCompleted = existingHandoffStatus === HandoffStatus.Completed
-      && normalizeString(decision.data?.supportRoute) === 'hotline';
-    const completionConfirmed = providerConfirmed || hotlineCompleted;
+      && existingSupportRoute === 'hotline';
+    const selectedStaffCompleted = existingHandoffStatus === HandoffStatus.Completed
+      && existingSupportRoute === 'selected_staff';
+    const completionConfirmed = providerConfirmed || hotlineCompleted || selectedStaffCompleted;
     const handoffFailed = existingHandoffStatus === HandoffStatus.Failed;
     const repeatedPayload = {
       success: completionConfirmed,
@@ -1302,6 +1819,8 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
       providerRequestId: normalizeString(
         decision.data?.clinicalRequestId || decision.data?.clinicalAthleteUpsertRequestId
       ) || null,
+      supportSelection: existingSupportSelection,
+      supportRoute: existingSupportRoute || null,
       providerError: handoffFailed
         ? {
             code: normalizeString(decision.data?.handoffFailureCode) || 'CLINICAL_HANDOFF_FAILED',
@@ -1311,10 +1830,12 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
       message: completionConfirmed
         ? hotlineCompleted
           ? buildHotlineSupportMessage(false)
-          : 'Your consent and clinical connection were already confirmed.'
+          : selectedStaffCompleted && supportSelectionLabelForMessage(existingSupportSelection)
+            ? `Your consent and support connection with ${supportSelectionLabelForMessage(existingSupportSelection)} were already confirmed.`
+            : 'Your consent and clinical support connection were already confirmed.'
         : handoffFailed
-          ? 'Your consent is saved, but the clinical connection was not confirmed. Please contact your support team directly if you need help now.'
-          : 'Your consent is saved and the clinical connection is still being confirmed.',
+          ? 'Your consent is saved, but PulseCheck could not confirm the live support connection. If this cannot wait, use your team\'s urgent support plan, or call 911 or 988 if you may be in immediate danger.'
+          : 'Your consent is saved and PulseCheck is still confirming the support connection.',
     };
     return {
       statusCode: completionConfirmed ? 200 : (handoffFailed ? 502 : 202),
@@ -1344,8 +1865,13 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
           consentStatus: ConsentStatus.Accepted,
           consentTimestamp: nowSec,
           handoffStatus: HandoffStatus.Pending,
+          ...(selectedSupportOption ? buildSupportSelectionFields(selectedSupportOption, nowSec) : {}),
         },
-        supportContext,
+        {
+          ...supportContext,
+          selectedSupportOption,
+          supportChoiceMode: selectedSupportOptionsPayload?.choiceMode || null,
+        },
         runtimeDb,
       );
     } catch (error) {
@@ -1365,6 +1891,7 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
       && handoffResult?.ok !== false
       && (
         supportContext?.route === 'hotline'
+        || handoffResult?.supportRoute === 'selected_staff'
         || Boolean(normalizeString(handoffResult?.escalationId))
         || handoffResult?.deduped === true
       );
@@ -1396,9 +1923,10 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
           handoffResult,
           providerError,
           providerRequestId: handoffResult?.requestId || null,
-          supportRoute: supportContext?.route || null,
+          supportRoute: handoffResult?.supportRoute || supportContext?.route || null,
+          supportSelection: selectedSupportOption,
           hotlineResource: supportContext?.route === 'hotline' ? HOTLINE_SUPPORT_RESOURCE : null,
-          message: 'Your consent is saved, but the clinical connection was not confirmed. Please contact your support team directly if you need help now.',
+          message: 'Your consent is saved, but PulseCheck could not confirm the live support connection. If this cannot wait, use your team\'s urgent support plan, or call 911 or 988 if you may be in immediate danger.',
         }),
       };
     }
@@ -1407,6 +1935,7 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
 
     console.log('[pulsecheck-escalation] Consent accepted:', escalationId);
 
+    const selectedStaffLabel = supportSelectionLabelForMessage(selectedSupportOption);
     return {
       statusCode: 200,
       headers,
@@ -1416,14 +1945,18 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
         status: 'consent_accepted',
         handoffStatus: HandoffStatus.Completed,
         handoffResult,
-        providerConfirmed: supportContext.route === 'clinician',
+        providerConfirmed: supportContext.route === 'clinician'
+          && Boolean(normalizeString(handoffResult?.escalationId)),
         providerRequestId: handoffResult?.requestId || null,
-        supportRoute: supportContext.route,
+        supportRoute: handoffResult?.supportRoute || supportContext.route,
+        supportSelection: selectedSupportOption,
         hotlineResource: supportContext.route === 'hotline' ? HOTLINE_SUPPORT_RESOURCE : null,
         message:
           supportContext.route === 'hotline'
             ? buildHotlineSupportMessage(false)
-            : 'Thank you. A mental health professional will reach out soon.'
+            : selectedStaffLabel
+              ? `Thank you. PulseCheck started the support handoff and looped in ${selectedStaffLabel}.`
+              : 'Thank you. PulseCheck started the configured licensed-support handoff. A member of the care team should follow up soon.'
       })
     };
   }
@@ -1443,7 +1976,7 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
       success: true,
       consentRecorded: true,
       status: 'consent_declined',
-      message: 'Understood. I\'m still here if you want to talk. Remember, you can always reach out to a professional if things change.'
+      message: 'Understood. I will not start a handoff right now. I am still here, and you can ask me to connect you with support later.'
     })
   };
 }
@@ -1991,6 +2524,7 @@ async function notifyCoachForClinicalHandoff(
     return {
       success: delivered,
       status: delivered ? 'completed' : 'not_delivered',
+      coachId: normalizeString(payload?.coachId),
       reason: payload?.reason || null,
     };
   } catch (error) {
@@ -2562,6 +3096,9 @@ async function performClinicalHandoff(
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
   }, runtimeDb);
+  const selectedSupportOption = supportContext?.selectedSupportOption
+    || supportSelectionFromRecord(escalationData)
+    || null;
   const organizationId = normalizeString(
     escalationData?.organizationId || supportContext?.pilotContext?.organizationId
   );
@@ -2640,6 +3177,7 @@ async function performClinicalHandoff(
       pilotEnrollmentId: normalizeString(supportContext?.pilotContext?.pilotEnrollmentId) || null,
       teamMembershipId: normalizeString(supportContext?.pilotContext?.teamMembershipId) || null,
       environment: normalizeString(process.env.CONTEXT || process.env.NODE_ENV) || 'production',
+      selectedSupportOption: selectedSupportOption ? compactSupportOption(selectedSupportOption) : null,
     },
     consentState,
     ...(stateSnapshot ? { stateSnapshot } : {}),
@@ -2846,15 +3384,37 @@ async function triggerCriticalHandoff(userId, conversationId, escalationId, esca
 async function triggerElevatedHandoff(userId, conversationId, escalationId, escalationData, supportContext = null, runtimeDb = db) {
   console.log('[pulsecheck-escalation] Triggering elevated handoff:', escalationId);
 
-  // Notification delivery is important but must not prevent the consented
-  // clinical handoff from reaching the provider.
-  const coachNotification = await notifyCoachForClinicalHandoff({ escalationId, userId }, runtimeDb);
   const resolvedSupportContext = supportContext || await resolveEscalationSupportContext({
     athleteId: userId,
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
   }, runtimeDb);
+  const selectedStaffUserId = selectedStaffUserIdFromSupportContext(escalationData, resolvedSupportContext);
+
+  // Notification delivery is important but must not prevent the consented
+  // clinical handoff from reaching the provider.
+  const coachNotification = await notifyCoachForClinicalHandoff(
+    {
+      escalationId,
+      userId,
+      ...(selectedStaffUserId ? { coachId: selectedStaffUserId } : {}),
+    },
+    runtimeDb,
+  );
+
+  if (!escalationRequiresLockedClinicalRoute(escalationData) && selectedStaffUserId) {
+    const selectedStaffResult = await applySelectedStaffSupportRouting({
+      userId,
+      escalationId,
+      escalationData,
+      supportContext: resolvedSupportContext,
+      coachNotification,
+      runtimeDb,
+    });
+    console.log('[pulsecheck-escalation] Elevated selected-staff handoff complete:', selectedStaffResult);
+    return selectedStaffResult;
+  }
 
   const result = resolvedSupportContext.route === 'hotline'
     ? await applyHotlineSupportRouting(userId, escalationId, escalationData, resolvedSupportContext, false, runtimeDb)
@@ -2939,10 +3499,12 @@ async function createEscalationFromTrustedRuntime(body, runtimeDb) {
 
 exports.runtimeHelpers = {
   authorizeEscalationAction,
+  buildEscalationSupportOptions,
   createEscalationFromTrustedRuntime,
   executeCriticalSafetyOperations,
   handleCareState,
   handleConsent,
+  handleSupportOptions,
   handleResolve,
   normalizeCareStateMirror,
   notifyCoachForClinicalHandoff,

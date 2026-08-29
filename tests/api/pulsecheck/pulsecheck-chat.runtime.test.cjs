@@ -216,7 +216,7 @@ test('web athlete chat callers attach Firebase bearer tokens and canonical user 
   assert.match(componentSource, /Authorization: `Bearer \$\{await firebaseUser\.getIdToken\(\)\}`/);
   assert.equal(
     (componentSource.match(/headers: await pulseCheckChatHeaders\(currentUser\.id\)/g) || []).length,
-    4
+    5
   );
   assert.doesNotMatch(componentSource, /action:\s*['"]create['"]/);
   assert.doesNotMatch(
@@ -248,6 +248,107 @@ test('returns deterministic Tier 3 when hard-risk language is present during cla
     assert.equal(classification?.classificationFamily, 'critical_safety');
     assert.equal(classification?.requiresClinicalHandoff, true);
     assert.equal(classification?.classificationSource, 'deterministic_hard_risk_fallback');
+  } finally {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPEN_AI_SECRET_KEY;
+    } else {
+      process.env.OPEN_AI_SECRET_KEY = originalOpenAiKey;
+    }
+  }
+});
+
+test('does not turn loss of daily function alone into deterministic Tier 3', async () => {
+  const originalOpenAiKey = process.env.OPEN_AI_SECRET_KEY;
+  delete process.env.OPEN_AI_SECRET_KEY;
+
+  try {
+    const { classifyEscalation } = loadRuntimeHelpers();
+    const classification = await classifyEscalation(
+      {
+        collection() {
+          throw new Error('Classifier outage fallback should return before Firestore access.');
+        },
+      },
+      'athlete-1',
+      "I can't function, get out of bed, or go to class and I think I need counseling.",
+      [],
+      'conversation-care-outage'
+    );
+
+    assert.equal(classification, null);
+  } finally {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPEN_AI_SECRET_KEY;
+    } else {
+      process.env.OPEN_AI_SECRET_KEY = originalOpenAiKey;
+    }
+  }
+});
+
+test('production escalation classifier accepts injected conditions and bridge transport', async () => {
+  const originalOpenAiKey = process.env.OPEN_AI_SECRET_KEY;
+  delete process.env.OPEN_AI_SECRET_KEY;
+  let receivedRequest = null;
+
+  try {
+    const { classifyEscalation } = loadRuntimeHelpers();
+    const classification = await classifyEscalation(
+      {
+        collection() {
+          throw new Error('Injected conditions must skip Firestore access.');
+        },
+      },
+      'synthetic-red-team-athlete',
+      'I cannot get out of bed or go to class and I think I need counseling.',
+      [],
+      'red-team-conversation',
+      {
+        conditions: [{
+          id: 'persistent-distress',
+          tier: 2,
+          category: 'persistent-distress',
+          title: 'Persistent Distress',
+          description: 'Meaningful loss of daily function without an immediate safety signal.',
+          examplePhrases: ['I cannot get out of bed or go to class.'],
+          keywords: ['cannot get out of bed'],
+          isActive: true,
+          priority: 100,
+        }],
+        requestClassification: async (request) => {
+          receivedRequest = request;
+          const content = JSON.stringify({
+            tier: 3,
+            category: 'persistent-distress',
+            reason: 'The athlete reports meaningful loss of daily function and asks for counseling.',
+            explanation: 'Use the consent-based licensed-care pathway.',
+            confidence: 0.98,
+            shouldEscalate: true,
+            disposition: 'clinical_handoff',
+            classificationFamily: 'critical_safety',
+            severity: 'critical',
+            requiresCoachReview: true,
+            requiresClinicalHandoff: true,
+            dedupeEligible: true,
+          });
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            headers: {
+              get: () => 'application/json',
+              entries: () => [][Symbol.iterator](),
+            },
+            json: async () => ({ choices: [{ message: { content } }] }),
+            text: async () => content,
+          };
+        },
+      }
+    );
+
+    assert.equal(classification?.tier, 2);
+    assert.equal(classification?.classificationFamily, 'care_escalation');
+    assert.equal(classification?.requiresClinicalHandoff, true);
+    assert.match(receivedRequest.systemPrompt, /loss of daily function by itself is Tier 2, not Tier 3/i);
   } finally {
     if (originalOpenAiKey === undefined) {
       delete process.env.OPEN_AI_SECRET_KEY;
@@ -1049,11 +1150,11 @@ test('dedupes same-conversation escalation records within the merge window', asy
   const { db, recordStore } = createEscalationFlowDb({
     escalationConditions: [
       {
-        id: 'condition-tier2',
-        tier: 2,
+        id: 'condition-tier3',
+        tier: 3,
         category: 'safety',
         title: 'Safety concern',
-        description: 'Consent-based clinical escalation.',
+        description: 'Immediate critical-safety escalation.',
         isActive: true,
         priority: 100,
         examplePhrases: ['cannot stay safe'],
@@ -1163,10 +1264,10 @@ test('dedupes same-conversation escalation records within the merge window', asy
     const secondBody = JSON.parse(secondResponse.body);
     assert.equal(secondResponse.statusCode, 200);
     assert.match(secondBody.assistantMessage, /988/);
-    assert.equal(secondBody.escalation.tier, 2);
-    assert.equal(secondBody.escalation.classificationFamily, 'care_escalation');
+    assert.equal(secondBody.escalation.tier, 3);
+    assert.equal(secondBody.escalation.classificationFamily, 'critical_safety');
     assert.equal(secondBody.escalation.incident.scope, 'same_conversation');
-    assert.equal(secondBody.escalation.incident.family, 'care_escalation');
+    assert.equal(secondBody.escalation.incident.family, 'critical_safety');
     assert.equal(secondBody.escalation.incident.status, 'open');
     await waitFor(() => {
       const activeRecord = [...recordStore.values()].find((entry) => entry.conversationId === 'conversation-escalation');
@@ -1174,8 +1275,8 @@ test('dedupes same-conversation escalation records within the merge window', asy
     });
     const activeRecord = [...recordStore.values()].find((entry) => entry.conversationId === 'conversation-escalation');
     assert.equal(activeRecord?.countsTowardCareKpi, true);
-    assert.equal(activeRecord?.classificationFamily, 'care_escalation');
-    assert.equal(activeRecord?.incident?.family, 'care_escalation');
+    assert.equal(activeRecord?.classificationFamily, 'critical_safety');
+    assert.equal(activeRecord?.incident?.family, 'critical_safety');
     assert.equal(activeRecord?.incident?.status, 'open');
     assert.equal(recordStore.size, 1);
   } finally {

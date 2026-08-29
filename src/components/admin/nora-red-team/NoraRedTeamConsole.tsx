@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Circle,
   Download,
+  Eye,
   FileJson,
   FlaskConical,
   Gavel,
@@ -26,7 +27,9 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { auth } from '../../../api/firebase/config';
+import { auth, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
+import { EscalationCategory, EscalationTier } from '../../../api/firebase/escalation/types';
+import EscalationModal, { type EscalationSupportOption } from '../../pulsecheck/EscalationModal';
 import { NORA_RED_TEAM_SCENARIOS } from '../../../lib/nora-red-team/scenarios';
 import type {
   NoraRedTeamAgentTrace,
@@ -34,6 +37,7 @@ import type {
   NoraRedTeamRun,
   NoraRedTeamScenario,
   NoraRedTeamSeverity,
+  NoraRedTeamTurn,
   NoraRedTeamVerdict,
 } from '../../../lib/nora-red-team/types';
 import {
@@ -85,6 +89,7 @@ const ROLE_META: Record<NoraRedTeamAgentTrace['role'], {
   attacker: { label: 'Attacker', icon: ShieldAlert },
   athlete_simulator: { label: 'Athlete', icon: UserRound },
   nora_target: { label: 'Nora', icon: Bot },
+  safety_classifier: { label: 'Safety check', icon: ShieldCheck },
   judge: { label: 'Judge', icon: Gavel },
   adjudicator: { label: 'Adjudicator', icon: ShieldCheck },
   human_reviewer: { label: 'Human review', icon: UserCheck },
@@ -117,15 +122,17 @@ function formatLogTimestamp(value: string): string {
   });
 }
 
-function explainRunError(code: string | undefined, fallback: string | undefined): string {
+function explainRunError(code: string | undefined, fallback: string | undefined, status?: number): string {
   if (code === 'AI_PROVIDER_NOT_CONFIGURED') {
     return 'The OpenAI bridge is not available for this run. Refresh and try again, or check the bridge console entry below.';
   }
   if (code === 'AI_BRIDGE_UNAVAILABLE') return 'The OpenAI bridge could not complete this run. No result was saved.';
+  if (code === 'ESCALATION_POLICY_UNAVAILABLE') return 'The production escalation safety check is unavailable. No result was saved.';
   if (code === 'ADMIN_AUTH_REQUIRED') return 'Your admin session was not accepted. Sign in again, then rerun the scenario.';
   if (code === 'INVALID_SCENARIO') return 'The selected scenario was not recognized. Refresh the page and try again.';
   if (code === 'INVALID_RANDOM_SEED') return 'The random seed must be a positive whole number.';
   if (code === 'RED_TEAM_RUN_FAILED') return 'The agent run failed before a complete result was produced. No result was saved.';
+  if (status === 500) return 'The server returned an unexpected 500 before sending run details. This is usually a timeout or server runtime error.';
   return fallback || 'The red-team run could not be completed.';
 }
 
@@ -161,6 +168,61 @@ function scenarioStatus(
   if (run.verdict === 'pass') return { label: 'Passed', className: 'text-emerald-300', icon: CheckCircle2 };
   if (run.verdict === 'fail') return { label: 'Failed', className: 'text-red-300', icon: XCircle };
   return { label: 'Review', className: 'text-amber-300', icon: AlertTriangle };
+}
+
+function previewTier2SupportOptions(turn: NoraRedTeamTurn | null): {
+  options: EscalationSupportOption[];
+  defaultOptionId: string;
+  routeLocked: boolean;
+} {
+  if (!turn || turn.escalation.tier !== 2) {
+    return { options: [], defaultOptionId: '', routeLocked: false };
+  }
+  const requiresClinicalRoute = turn.escalation.requiresClinicalHandoff
+    || turn.escalation.classificationFamily === 'care_escalation';
+  if (requiresClinicalRoute) {
+    return {
+      routeLocked: true,
+      defaultOptionId: 'configured-clinical-support',
+      options: [{
+        id: 'configured-clinical-support',
+        kind: 'configured_route',
+        label: 'Care team',
+        roleLabel: 'Licensed support path',
+        description: 'PulseCheck will connect the athlete through the configured licensed support path.',
+        route: 'clinician',
+        selectable: true,
+        default: true,
+        locked: true,
+      }],
+    };
+  }
+
+  return {
+    routeLocked: false,
+    defaultOptionId: 'synthetic-athletic-trainer',
+    options: [
+      {
+        id: 'synthetic-athletic-trainer',
+        kind: 'staff',
+        label: 'Athletic trainer',
+        roleLabel: 'Athletic trainer',
+        description: 'Synthetic red-team recipient. Production loads eligible team staff.',
+        route: 'selected_staff',
+        selectable: true,
+        default: true,
+      },
+      {
+        id: 'synthetic-coach',
+        kind: 'staff',
+        label: 'Coach',
+        roleLabel: 'Coach',
+        description: 'Synthetic red-team recipient. Production validates this against team access.',
+        route: 'selected_staff',
+        selectable: true,
+      },
+    ],
+  };
 }
 
 const NoraRedTeamConsole: React.FC = () => {
@@ -243,6 +305,7 @@ const NoraRedTeamConsole: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
           ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
         },
         body: JSON.stringify({
@@ -257,7 +320,7 @@ const NoraRedTeamConsole: React.FC = () => {
         detail?: string;
       } | null;
       if (!response.ok || !payload?.run) {
-        const explainedError = explainRunError(payload?.code, payload?.error);
+        const explainedError = explainRunError(payload?.code, payload?.error, response.status);
         appendLog(
           'error',
           `Run stopped: ${payload?.code || response.status}`,
@@ -269,7 +332,7 @@ const NoraRedTeamConsole: React.FC = () => {
       appendLog(
         payload.run.verdict === 'pass' ? 'success' : payload.run.verdict === 'review' ? 'warning' : 'error',
         `Run completed: ${payload.run.verdict}`,
-        `Severity ${payload.run.severity}. Duration ${formatDuration(payload.run.durationMs)}. Tokens ${payload.run.usage.totalTokens.toLocaleString()}.`,
+        `Severity ${payload.run.severity}. Highest escalation Tier ${Math.max(...payload.run.turns.map((turn) => turn.escalation.tier))}. Duration ${formatDuration(payload.run.durationMs)}. Tokens ${payload.run.usage.totalTokens.toLocaleString()}.`,
       );
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : 'The red-team run could not be completed.';
@@ -579,6 +642,9 @@ const ScenarioHeader: React.FC<{
           <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300">
             Expected lane: {scenario.expectedLane.replace(/_/g, ' ')}
           </span>
+          <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300">
+            Expected escalation: Tier {scenario.expectedEscalationTier}
+          </span>
           {run && (
             <span className="text-xs text-zinc-500">Last run {formatTimestamp(run.completedAt)}</span>
           )}
@@ -700,12 +766,72 @@ const PreviewSection: React.FC<{
   </section>
 );
 
+const EscalationEvidence: React.FC<{
+  turn: NoraRedTeamTurn;
+  onPreview: () => void;
+}> = ({ turn, onPreview }) => {
+  const escalation = turn.escalation;
+  const tierTone = escalation.tier === 3
+    ? 'border-red-500/40 bg-red-500/10 text-red-100'
+    : escalation.tier === 2
+      ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+      : escalation.tier === 1
+        ? 'border-sky-500/35 bg-sky-500/10 text-sky-100'
+        : 'border-zinc-700 bg-zinc-900 text-zinc-300';
+  const workflow = escalation.tier === 3
+    ? 'Safety mode and the configured clinical/safety handoff would start; coach notification would start.'
+    : escalation.tier === 2
+      ? 'A care record and consent modal would start the handoff workflow; no person is contacted until the athlete confirms.'
+      : escalation.tier === 1
+        ? 'Monitor-only classification; no athlete modal.'
+        : 'No escalation record, modal, safety mode, or handoff.';
+
+  return (
+    <div className="mt-3 border-t border-zinc-800 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-cyan-300" />
+        <span className="text-xs font-medium text-zinc-300">Production safety check</span>
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${tierTone}`}>
+          Tier {escalation.tier}
+        </span>
+        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-400">
+          Dry run
+        </span>
+        {escalation.modal !== 'none' && (
+          <button
+            type="button"
+            onClick={onPreview}
+            className="ml-auto inline-flex h-8 items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 transition hover:border-cyan-500/50 hover:text-cyan-100"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Preview athlete modal
+          </button>
+        )}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-zinc-400">{workflow}</p>
+      <p className="mt-1 break-words text-[11px] leading-5 text-zinc-600">
+        {escalation.category.replace(/_/g, ' ')} | {escalation.classificationSource.replace(/_/g, ' ')} | {escalation.conditionCount} active conditions | {formatDuration(escalation.durationMs)}
+      </p>
+    </div>
+  );
+};
+
 const RunEvidence: React.FC<{
   run: NoraRedTeamRun;
   onHumanReview: (runId: string, status: 'confirmed' | 'inconclusive') => void;
 }> = ({ run, onHumanReview }) => {
   const VerdictIcon = verdictIcon(run.verdict);
+  const [previewTurnNumber, setPreviewTurnNumber] = useState<number | null>(null);
+  const previewTurn = run.turns.find((turn) => turn.turn === previewTurnNumber) || null;
+  const previewSupport = useMemo(() => previewTier2SupportOptions(previewTurn), [previewTurn]);
+  const [previewSupportOptionId, setPreviewSupportOptionId] = useState('');
+
+  useEffect(() => {
+    setPreviewSupportOptionId(previewSupport.defaultOptionId);
+  }, [previewSupport.defaultOptionId]);
+
   return (
+    <>
     <div className="px-4 py-6 sm:px-6">
       <section className={`rounded-md border px-4 py-4 ${VERDICT_STYLE[run.verdict]}`}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -736,7 +862,7 @@ const RunEvidence: React.FC<{
       </section>
 
       <EvidenceSection title="Agent trace" icon={Sparkles}>
-        <div className="grid overflow-hidden rounded-md border border-zinc-800 sm:grid-cols-2 xl:grid-cols-7">
+        <div className="grid overflow-hidden rounded-md border border-zinc-800 sm:grid-cols-2 xl:grid-cols-8">
           {run.agentTrace.map((trace) => (
             <AgentTraceCell key={trace.role} trace={trace} />
           ))}
@@ -769,6 +895,7 @@ const RunEvidence: React.FC<{
                       Pre-delivery guardrail caught: {turn.preDeliveryFailureIds.join(', ')}
                     </p>
                   )}
+                  <EscalationEvidence turn={turn} onPreview={() => setPreviewTurnNumber(turn.turn)} />
                 </div>
               ))}
             </div>
@@ -888,6 +1015,25 @@ const RunEvidence: React.FC<{
         </div>
       </div>
     </div>
+    {previewTurn && previewTurn.escalation.modal !== 'none' && (
+      <EscalationModal
+        isOpen
+        tier={previewTurn.escalation.tier as EscalationTier}
+        category={previewTurn.escalation.category as EscalationCategory}
+        reason={previewTurn.escalation.reason}
+        handoffConfirmed={false}
+        handoffStatus="simulation-only"
+        supportOptions={previewSupport.options}
+        selectedSupportOptionId={previewSupportOptionId}
+        supportRouteLocked={previewSupport.routeLocked}
+        onSelectSupportOption={setPreviewSupportOptionId}
+        onAcceptConsent={async () => setPreviewTurnNumber(null)}
+        onDeclineConsent={async () => setPreviewTurnNumber(null)}
+        onClose={() => setPreviewTurnNumber(null)}
+        previewMode
+      />
+    )}
+    </>
   );
 };
 

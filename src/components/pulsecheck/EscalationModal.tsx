@@ -10,13 +10,27 @@ import {
   MessageCircle,
   CheckCircle,
   ExternalLink,
-  Loader2
+  Loader2,
+  LockKeyhole,
+  UserCheck
 } from 'lucide-react';
 import { EscalationTier, EscalationCategory, getCategoryLabel } from '../../api/firebase/escalation/types';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+export interface EscalationSupportOption {
+  id: string;
+  label: string;
+  roleLabel?: string;
+  description?: string;
+  kind?: string;
+  route?: string;
+  selectable?: boolean;
+  default?: boolean;
+  locked?: boolean;
+}
 
 interface EscalationModalProps {
   isOpen: boolean;
@@ -25,10 +39,16 @@ interface EscalationModalProps {
   reason?: string;
   handoffConfirmed?: boolean;
   handoffStatus?: string;
+  supportOptions?: EscalationSupportOption[];
+  selectedSupportOptionId?: string;
+  supportOptionsLoading?: boolean;
+  supportRouteLocked?: boolean;
+  onSelectSupportOption?: (optionId: string) => void;
   onAcceptConsent?: () => Promise<void>;
   onDeclineConsent?: () => Promise<void>;
   onClose?: () => void;
   isProcessing?: boolean;
+  previewMode?: boolean;
 }
 
 // ============================================================================
@@ -62,10 +82,32 @@ const crisisResources = [
 const Tier2Modal: React.FC<{
   category: EscalationCategory;
   reason?: string;
+  supportOptions: EscalationSupportOption[];
+  selectedSupportOptionId?: string;
+  supportOptionsLoading: boolean;
+  supportRouteLocked: boolean;
+  onSelectSupportOption?: (optionId: string) => void;
   onAccept: () => Promise<void>;
   onDecline: () => Promise<void>;
   isProcessing: boolean;
-}> = ({ category, reason, onAccept, onDecline, isProcessing }) => {
+}> = ({
+  category,
+  reason,
+  supportOptions,
+  selectedSupportOptionId,
+  supportOptionsLoading,
+  supportRouteLocked,
+  onSelectSupportOption,
+  onAccept,
+  onDecline,
+  isProcessing
+}) => {
+  const visibleOptions = supportOptions.filter((option) => option && option.id);
+  const activeOptionId = selectedSupportOptionId
+    || visibleOptions.find((option) => option.default)?.id
+    || visibleOptions[0]?.id
+    || '';
+
   return (
     <div className="relative">
       {/* Header */}
@@ -86,8 +128,8 @@ const Tier2Modal: React.FC<{
       {/* Content */}
       <div className="px-6 py-4 space-y-4">
         <p className="text-zinc-300 leading-relaxed">
-          Based on our conversation, it seems like you might be going through a challenging time. 
-          I want you to know that you're not alone, and there are professionals who can help.
+          Based on what you shared, this is a support moment, not something you
+          have to carry or coordinate by yourself.
         </p>
 
         {reason && (
@@ -100,14 +142,85 @@ const Tier2Modal: React.FC<{
           <div className="flex items-start gap-3">
             <Heart className="w-5 h-5 text-orange-400 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-white font-medium mb-1">Would you like to connect with support?</p>
+              <p className="text-white font-medium mb-1">Would you like me to start the connection?</p>
               <p className="text-sm text-zinc-400">
-                With your permission, I can activate the support path configured for your team.
-                That may connect you with a clinician or direct you to immediate hotline support.
+                With your permission, PulseCheck can start a handoff to the
+                support people configured for your team. Only the minimum
+                necessary context is shared.
               </p>
             </div>
           </div>
         </div>
+
+        {(supportOptionsLoading || visibleOptions.length > 0) && (
+          <div className="rounded-xl border border-zinc-700/60 bg-zinc-900/60 p-4">
+            <div className="mb-3 flex items-start gap-3">
+              {supportRouteLocked ? (
+                <LockKeyhole className="mt-0.5 h-5 w-5 flex-shrink-0 text-cyan-300" />
+              ) : (
+                <UserCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-cyan-300" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">
+                  {supportRouteLocked ? 'Care route' : 'Choose who to loop in'}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-zinc-400">
+                  {supportRouteLocked
+                    ? 'PulseCheck will use the configured licensed support path for this concern.'
+                    : 'Pick the person or support path you want PulseCheck to notify.'}
+                </p>
+              </div>
+            </div>
+
+            {supportOptionsLoading ? (
+              <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-black/20 px-3 py-3 text-sm text-zinc-400">
+                <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+                Loading support options...
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {visibleOptions.map((option) => {
+                  const selected = option.id === activeOptionId;
+                  const disabled = option.selectable === false || isProcessing;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => !disabled && onSelectSupportOption?.(option.id)}
+                      disabled={disabled}
+                      className={`flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left transition ${
+                        selected
+                          ? 'border-cyan-400/50 bg-cyan-500/10'
+                          : 'border-zinc-800 bg-black/20 hover:border-zinc-600'
+                      } ${disabled ? 'cursor-not-allowed opacity-70' : ''}`}
+                    >
+                      <span className={`mt-1 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border ${
+                        selected ? 'border-cyan-300 bg-cyan-300' : 'border-zinc-600'
+                      }`}>
+                        {selected && <span className="h-1.5 w-1.5 rounded-full bg-zinc-950" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="break-words text-sm font-medium text-white">{option.label}</span>
+                          {option.roleLabel && (
+                            <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase text-zinc-400">
+                              {option.roleLabel}
+                            </span>
+                          )}
+                        </span>
+                        {option.description && (
+                          <span className="mt-1 block break-words text-xs leading-5 text-zinc-400">
+                            {option.description}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -120,12 +233,12 @@ const Tier2Modal: React.FC<{
           {isProcessing ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              Connecting...
+              Starting connection...
             </>
           ) : (
             <>
               <CheckCircle className="w-5 h-5" />
-              Yes, I'd like to connect with support
+              Yes, connect me with support
             </>
           )}
         </button>
@@ -139,7 +252,7 @@ const Tier2Modal: React.FC<{
         </button>
 
         <p className="text-xs text-center text-zinc-500 pt-2">
-          You can always change your mind and ask for support later.
+          No handoff starts unless you choose it. You can ask for support later.
         </p>
       </div>
     </div>
@@ -285,15 +398,21 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
   reason,
   handoffConfirmed = false,
   handoffStatus,
+  supportOptions = [],
+  selectedSupportOptionId,
+  supportOptionsLoading = false,
+  supportRouteLocked = false,
+  onSelectSupportOption,
   onAcceptConsent,
   onDeclineConsent,
   onClose,
-  isProcessing = false
+  isProcessing = false,
+  previewMode = false
 }) => {
   // Handle escape key for Tier 2 only (Tier 3 cannot be dismissed)
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && tier === EscalationTier.ElevatedRisk && onClose) {
+      if (e.key === 'Escape' && (tier === EscalationTier.ElevatedRisk || previewMode) && onClose) {
         onClose();
       }
     };
@@ -308,7 +427,7 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
       window.removeEventListener('keydown', handleEscape);
       document.body.style.overflow = '';
     };
-  }, [isOpen, tier, onClose]);
+  }, [isOpen, tier, onClose, previewMode]);
 
   const isCritical = tier === EscalationTier.CriticalRisk;
 
@@ -331,7 +450,7 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
                 ? 'bg-black/90' 
                 : 'bg-black/70 backdrop-blur-sm'
             }`}
-            onClick={!isCritical ? onClose : undefined}
+            onClick={!isCritical || previewMode ? onClose : undefined}
           />
 
           {/* Modal */}
@@ -344,11 +463,18 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
               isCritical ? 'border border-red-500/30' : 'border border-zinc-800'
             }`}
           >
-            {/* Close button - only for Tier 2 */}
-            {!isCritical && onClose && (
+            {previewMode && (
+              <div className="border-b border-cyan-500/25 bg-cyan-500/10 px-12 py-2 text-center text-xs font-medium text-cyan-100">
+                Red-team preview | No live action
+              </div>
+            )}
+
+            {/* Close button - Tier 2 in production, or any red-team preview */}
+            {(!isCritical || previewMode) && onClose && (
               <button
                 onClick={onClose}
-                className="absolute top-4 right-4 z-10 p-2 rounded-full hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition-colors"
+                className={`absolute right-4 z-10 p-2 rounded-full hover:bg-zinc-800/50 text-zinc-400 hover:text-white transition-colors ${previewMode ? 'top-1' : 'top-4'}`}
+                aria-label="Close escalation modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -359,6 +485,11 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
               <Tier2Modal
                 category={category}
                 reason={reason}
+                supportOptions={supportOptions}
+                selectedSupportOptionId={selectedSupportOptionId}
+                supportOptionsLoading={supportOptionsLoading}
+                supportRouteLocked={supportRouteLocked}
+                onSelectSupportOption={onSelectSupportOption}
                 onAccept={onAcceptConsent || (async () => {})}
                 onDecline={onDeclineConsent || (async () => {})}
                 isProcessing={isProcessing}

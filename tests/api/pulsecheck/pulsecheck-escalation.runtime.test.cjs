@@ -77,6 +77,18 @@ function createClinicalRuntimeDb(initialRecord = {}) {
       email: 'athlete@example.test',
       primarySport: 'Track and Field',
     },
+    usersById: {},
+    coachesById: {},
+    team: {
+      id: 'team-1',
+      organizationId: 'organization-1',
+      displayName: 'Test Team',
+      status: 'active',
+      defaultEscalationRoute: 'clinician',
+    },
+    teamMemberships: [],
+    notifications: [],
+    notificationLogs: [],
   };
 
   const notesQuery = {
@@ -130,15 +142,93 @@ function createClinicalRuntimeDb(initialRecord = {}) {
 
       if (name === 'users') {
         return {
-          doc() {
+          doc(id) {
             return {
               async get() {
+                const profile = state.usersById[id] || (id === 'athlete-1' ? state.userProfile : null);
                 return {
-                  exists: true,
-                  data: () => ({ ...state.userProfile }),
+                  exists: Boolean(profile),
+                  data: () => ({ ...(profile || {}) }),
                 };
               },
             };
+          },
+        };
+      }
+
+      if (name === 'coaches') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const profile = state.coachesById[id] || null;
+                return {
+                  exists: Boolean(profile),
+                  data: () => ({ ...(profile || {}) }),
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-teams') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const exists = id === state.team.id;
+                return {
+                  exists,
+                  id,
+                  data: () => (exists ? { ...state.team } : undefined),
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-team-memberships' || name === 'athlete-coach-connections') {
+        const makeQuery = (filters = []) => ({
+          where(field, op, value) {
+            assert.equal(op, '==');
+            return makeQuery([...filters, { field, value }]);
+          },
+          limit() {
+            return makeQuery(filters);
+          },
+          async get() {
+            const source = name === 'pulsecheck-team-memberships'
+              ? state.teamMemberships
+              : [];
+            const docs = source
+              .filter((entry) => filters.every((filter) => entry[filter.field] === filter.value))
+              .map((entry, index) => ({
+                id: entry.id || `doc-${index}`,
+                data: () => ({ ...entry }),
+              }));
+            return {
+              docs,
+              empty: docs.length === 0,
+            };
+          },
+        });
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const membership = state.teamMemberships.find((entry) => entry.id === id) || null;
+                return {
+                  exists: Boolean(membership),
+                  id,
+                  data: () => ({ ...(membership || {}) }),
+                };
+              },
+            };
+          },
+          where(field, op, value) {
+            return makeQuery().where(field, op, value);
           },
         };
       }
@@ -191,6 +281,24 @@ function createClinicalRuntimeDb(initialRecord = {}) {
                 return notesQuery;
               },
             };
+          },
+        };
+      }
+
+      if (name === 'notifications') {
+        return {
+          async add(payload) {
+            state.notifications.push(payload);
+            return { id: `notification-${state.notifications.length}` };
+          },
+        };
+      }
+
+      if (name === 'notification-logs') {
+        return {
+          async add(payload) {
+            state.notificationLogs.push(payload);
+            return { id: `notification-log-${state.notificationLogs.length}` };
           },
         };
       }
@@ -283,6 +391,24 @@ test('care-state authorization is owner-bound while admins may reconcile another
   assert.equal(admin.ok, true);
 });
 
+test('support-options authorization is owner-bound', async () => {
+  const { runtimeHelpers } = loadEscalationModule();
+  const owner = await runtimeHelpers.authorizeEscalationAction({
+    caller: { uid: 'athlete-1', isAdmin: false },
+    action: 'support-options',
+    body: { userId: 'athlete-1' },
+  });
+  const other = await runtimeHelpers.authorizeEscalationAction({
+    caller: { uid: 'athlete-1', isAdmin: false },
+    action: 'support-options',
+    body: { userId: 'athlete-2' },
+  });
+
+  assert.equal(owner.ok, true);
+  assert.equal(other.ok, false);
+  assert.equal(other.statusCode, 403);
+});
+
 test('dispatcher reserves record creation and direct handoff for admins and trusted runtime code', async () => {
   let firestoreReads = 0;
   const runtimeDb = {
@@ -301,6 +427,188 @@ test('dispatcher reserves record creation and direct handoff for admins and trus
 
   assert.equal(response.statusCode, 403);
   assert.equal(firestoreReads, 0);
+});
+
+test('support options return eligible Tier 2 recipients and exclude non-athlete-data roles', async () => {
+  const { db, state } = createClinicalRuntimeDb({
+    id: 'escalation-1',
+    userId: 'athlete-1',
+    conversationId: 'conversation-1',
+    tier: 2,
+    teamId: 'team-1',
+    organizationId: 'organization-1',
+    category: 'performance_support',
+    classificationFamily: 'coach_review',
+    disposition: 'coach_review',
+    requiresClinicalHandoff: false,
+    consentStatus: 'pending',
+    handoffStatus: 'pending',
+    incident: {},
+  });
+  state.teamMemberships = [
+    {
+      id: 'team-1_athlete-1',
+      userId: 'athlete-1',
+      teamId: 'team-1',
+      organizationId: 'organization-1',
+      role: 'athlete',
+      status: 'active',
+    },
+    {
+      id: 'team-1_staff-at',
+      userId: 'staff-at',
+      teamId: 'team-1',
+      organizationId: 'organization-1',
+      role: 'performance-staff',
+      title: 'Athletic Trainer',
+      staffCapabilities: ['athletic_trainer'],
+      status: 'active',
+    },
+    {
+      id: 'team-1_coach-1',
+      userId: 'coach-1',
+      teamId: 'team-1',
+      organizationId: 'organization-1',
+      role: 'coach',
+      title: 'Coach',
+      staffCapabilities: ['coaching'],
+      status: 'active',
+    },
+    {
+      id: 'team-1_manager-1',
+      userId: 'manager-1',
+      teamId: 'team-1',
+      organizationId: 'organization-1',
+      role: 'support-staff',
+      title: 'Manager',
+      staffCapabilities: ['administrative'],
+      status: 'active',
+    },
+  ];
+  state.usersById['staff-at'] = { displayName: 'Alex Trainer' };
+  state.usersById['coach-1'] = { displayName: 'Coach Lane' };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+
+  const response = await runtimeHelpers.handleSupportOptions(
+    { escalationId: 'escalation-1', userId: 'athlete-1' },
+    db,
+  );
+  const payload = JSON.parse(response.body);
+  const optionIds = payload.options.map((option) => option.id);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.choiceMode, 'recipient_picker');
+  assert.equal(payload.requiresClinicalRoute, false);
+  assert.equal(payload.defaultOptionId, 'staff:team-1:staff-at');
+  assert.deepEqual(optionIds, [
+    'staff:team-1:staff-at',
+    'staff:team-1:coach-1',
+    'configured-team-support',
+  ]);
+  assert.equal(payload.options[0].label, 'Alex Trainer');
+  assert.equal(optionIds.includes('staff:team-1:manager-1'), false);
+  assert.equal(optionIds.includes('staff:team-1:athlete-1'), false);
+});
+
+test('clinical Tier 2 support options stay locked to the configured care route', async () => {
+  const { db, state } = createClinicalRuntimeDb({
+    id: 'escalation-1',
+    userId: 'athlete-1',
+    conversationId: 'conversation-1',
+    tier: 2,
+    teamId: 'team-1',
+    organizationId: 'organization-1',
+    category: 'loss_of_function',
+    classificationFamily: 'care_escalation',
+    disposition: 'clinical_handoff',
+    requiresClinicalHandoff: true,
+    consentStatus: 'pending',
+    handoffStatus: 'pending',
+    incident: {},
+  });
+  state.teamMemberships = [{
+    id: 'team-1_staff-at',
+    userId: 'staff-at',
+    teamId: 'team-1',
+    organizationId: 'organization-1',
+    role: 'performance-staff',
+    staffCapabilities: ['athletic_trainer'],
+    status: 'active',
+  }];
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+
+  const response = await runtimeHelpers.handleSupportOptions(
+    { escalationId: 'escalation-1', userId: 'athlete-1' },
+    db,
+  );
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.choiceMode, 'clinical_locked');
+  assert.equal(payload.requiresClinicalRoute, true);
+  assert.equal(payload.defaultOptionId, 'configured-clinical-support');
+  assert.deepEqual(payload.options.map((option) => option.id), ['configured-clinical-support']);
+});
+
+test('accepted Tier 2 consent records the selected support recipient', async () => {
+  const { db, state } = createClinicalRuntimeDb({
+    id: 'escalation-1',
+    userId: 'athlete-1',
+    conversationId: 'conversation-1',
+    tier: 2,
+    teamId: 'team-1',
+    organizationId: 'organization-1',
+    category: 'performance_support',
+    classificationFamily: 'coach_review',
+    disposition: 'coach_review',
+    requiresClinicalHandoff: false,
+    consentStatus: 'pending',
+    handoffStatus: 'pending',
+    incident: {},
+  });
+  state.teamMemberships = [{
+    id: 'team-1_coach-1',
+    userId: 'coach-1',
+    teamId: 'team-1',
+    organizationId: 'organization-1',
+    role: 'coach',
+    title: 'Coach',
+    staffCapabilities: ['coaching'],
+    status: 'active',
+  }];
+  state.usersById['coach-1'] = { displayName: 'Coach Lane' };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  let capturedHandoff = null;
+
+  const response = await runtimeHelpers.handleConsent(
+    {
+      escalationId: 'escalation-1',
+      userId: 'athlete-1',
+      consent: true,
+      supportRecipientOptionId: 'staff:team-1:coach-1',
+    },
+    db,
+    async (handoffUserId, conversationId, escalationId, escalationData, supportContext) => {
+      capturedHandoff = {
+        handoffUserId,
+        conversationId,
+        escalationId,
+        escalationData,
+        supportContext,
+      };
+      return { success: true, ok: true, status: 'completed', supportRoute: 'selected_staff' };
+    },
+  );
+  const payload = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(payload.success, true);
+  assert.equal(payload.supportSelection.userId, 'coach-1');
+  assert.equal(state.record.supportSelectionUserId, 'coach-1');
+  assert.equal(state.record.supportSelectionLabel, 'Coach Lane');
+  assert.equal(capturedHandoff.escalationData.supportSelectionUserId, 'coach-1');
+  assert.equal(capturedHandoff.supportContext.selectedSupportOption.userId, 'coach-1');
+  assert.match(payload.message, /Coach Lane/);
 });
 
 test('accepted consent retries return completed state without a duplicate handoff', async () => {
@@ -502,6 +810,7 @@ test('real handoff upserts the athlete before creating the clinical case', async
   assert.equal(calls[1].input.organizationId, 'organization-1');
   assert.equal(calls[1].input.teamId, 'team-1');
   assert.equal(calls[1].input.routingContext.teamMembershipId, 'membership-1');
+  assert.equal(calls[1].input.routingContext.selectedSupportOption, null);
   assert.equal(calls[1].input.consentState.status, 'opted_in');
   assert.deepEqual(calls[1].input.stateSnapshot, {
     snapshotId: 'snapshot-1',

@@ -90,9 +90,9 @@ const EscalationTier = {
   CriticalRisk: 3
 };
 
-const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function)\b/i;
+const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic)\b/i;
 const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
-const LOSS_OF_FUNCTION_PROMPT_NOTE = 'Loss of function, inability to move or feel a limb, sudden weakness, or stroke-like symptoms are true care escalations.';
+const LOSS_OF_FUNCTION_PROMPT_NOTE = 'Meaningful daily-function impairment without a critical-safety signal is Tier 2. Physical inability to move or feel a limb, sudden weakness, or stroke-like symptoms require prompt medical care.';
 const ESCALATION_DEDUPE_WINDOW_SECONDS = 30 * 60;
 const EscalationDisposition = {
   None: 'none',
@@ -249,21 +249,36 @@ function deriveIncidentStatus({ requiresClinicalHandoff, requiresCoachReview }) 
 function normalizeEscalationClassification(parsed = {}, { userId, message, recentMessages, conversationId } = {}) {
   const nowSec = Math.floor(Date.now() / 1000);
   const tier = Number(parsed.tier);
-  const normalizedTier = Number.isFinite(tier)
+  const modelTier = Number.isFinite(tier)
     ? Math.max(EscalationTier.None, Math.min(EscalationTier.CriticalRisk, Math.round(tier)))
     : EscalationTier.None;
-  const requiresClinicalHandoff = parsed.requiresClinicalHandoff === true || normalizedTier >= EscalationTier.ElevatedRisk;
-  const requiresCoachReview = parsed.requiresCoachReview === true || normalizedTier >= EscalationTier.MonitorOnly;
-  const classificationFamily = String(parsed.classificationFamily || '').trim()
+  const policyLane = classifyNoraConversationLane(message);
+  const combinedSafetyText = [message]
+    .concat((Array.isArray(recentMessages) ? recentMessages : []).slice(-5).map((entry) => entry?.content || ''))
+    .join(' ');
+  const normalizedTier = policyLane === NoraConversationLane.CriticalSafety
+    || HARD_RISK_ESCALATION_PATTERN.test(combinedSafetyText)
+    ? EscalationTier.CriticalRisk
+    : policyLane === NoraConversationLane.ClinicalCare
+      ? EscalationTier.ElevatedRisk
+      : modelTier;
+  const tierWasPolicyForced = normalizedTier !== modelTier;
+  const requiresClinicalHandoff = tierWasPolicyForced
+    ? normalizedTier >= EscalationTier.ElevatedRisk
+    : parsed.requiresClinicalHandoff === true || normalizedTier >= EscalationTier.ElevatedRisk;
+  const requiresCoachReview = tierWasPolicyForced
+    ? normalizedTier >= EscalationTier.MonitorOnly
+    : parsed.requiresCoachReview === true || normalizedTier >= EscalationTier.MonitorOnly;
+  const classificationFamily = (tierWasPolicyForced ? '' : String(parsed.classificationFamily || '').trim())
     || deriveClassificationFamily({
       tier: normalizedTier,
       category: parsed.category,
       message,
       recentMessages,
     });
-  const disposition = String(parsed.disposition || '').trim()
+  const disposition = (tierWasPolicyForced ? '' : String(parsed.disposition || '').trim())
     || deriveDisposition({ tier: normalizedTier, requiresClinicalHandoff, requiresCoachReview });
-  const severity = String(parsed.severity || '').trim() || mapTierToSeverity(normalizedTier);
+  const severity = (tierWasPolicyForced ? '' : String(parsed.severity || '').trim()) || mapTierToSeverity(normalizedTier);
   const reason = String(parsed.reason || '').trim();
   const explanation = String(parsed.explanation || '').trim() || reason;
   const shouldEscalate = parsed.shouldEscalate === true || normalizedTier >= EscalationTier.ElevatedRisk;
@@ -471,6 +486,10 @@ function buildTrustedEscalationOutcome(created = {}) {
     handoffError: created.handoffError || null,
     handoffResult: created.handoffResult || null,
     supportRoute: created.supportRoute || null,
+    supportChoiceMode: created.supportChoiceMode || null,
+    supportDefaultOptionId: created.supportDefaultOptionId || null,
+    supportOptions: Array.isArray(created.supportOptions) ? created.supportOptions : [],
+    requiresClinicalRoute: created.requiresClinicalRoute === true,
     hotlineResource: created.hotlineResource || created.handoffResult?.hotlineResource || null,
     message: created.message || created.handoffResult?.message || null,
     isCritical,
@@ -2902,7 +2921,11 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     }
 
     if (!engagementEvaluation.passed) {
-      assistantMessage = buildNoraEngagementFallback({ athleteMessage: message, lane: conversationLane });
+      assistantMessage = buildNoraEngagementFallback({
+        athleteMessage: message,
+        lane: conversationLane,
+        groundingMessages,
+      });
       engagementEvaluation = evaluateNoraEngagementResponse({
         athleteMessage: message,
         response: assistantMessage,
@@ -3224,7 +3247,7 @@ function buildHardRiskSafetyFallback({ userId, message, recentMessages, conversa
   });
 }
 
-async function classifyEscalation(db, userId, message, recentMessages, conversationId) {
+async function classifyEscalation(db, userId, message, recentMessages, conversationId, options = {}) {
   const safeRecentMessages = Array.isArray(recentMessages) ? recentMessages : [];
   const hardRiskSafetyFallback = buildHardRiskSafetyFallback({
     userId,
@@ -3232,8 +3255,12 @@ async function classifyEscalation(db, userId, message, recentMessages, conversat
     recentMessages: safeRecentMessages,
     conversationId,
   });
+  const injectedConditions = Array.isArray(options.conditions) ? options.conditions : null;
+  const requestClassification = typeof options.requestClassification === 'function'
+    ? options.requestClassification
+    : null;
   const apiKey = process.env.OPEN_AI_SECRET_KEY;
-  if (!apiKey) return hardRiskSafetyFallback;
+  if (!apiKey && !requestClassification) return hardRiskSafetyFallback;
 
   // Load escalation conditions from Firestore
   console.log('[classifyEscalation] [STEP 1] Loading escalation conditions from Firestore...');
@@ -3243,46 +3270,50 @@ async function classifyEscalation(db, userId, message, recentMessages, conversat
     orderBy: ['tier asc', 'priority desc']
   });
   
-  let conditionsSnap;
-  try {
-    const queryStartTime = Date.now();
-    conditionsSnap = await db
-      .collection('escalation-conditions')
-      .where('isActive', '==', true)
-      .orderBy('tier', 'asc')
-      .orderBy('priority', 'desc')
-      .get();
-    const queryDuration = Date.now() - queryStartTime;
-    console.log(`[classifyEscalation] [STEP 1] ✅ Query completed in ${queryDuration}ms`);
-    console.log(`[classifyEscalation] [STEP 1] Loaded ${conditionsSnap.docs.length} documents`);
-  } catch (queryError) {
-    console.error('[classifyEscalation] [STEP 1] ❌ Query FAILED');
-    console.error('[classifyEscalation] [STEP 1] Error type:', queryError.constructor.name);
-    console.error('[classifyEscalation] [STEP 1] Error message:', queryError.message);
-    console.error('[classifyEscalation] [STEP 1] Error code:', queryError.code);
-    console.error('[classifyEscalation] [STEP 1] Error stack:', queryError.stack);
-    // If query fails (e.g., missing index), continue without conditions
-    return hardRiskSafetyFallback;
-  }
+  let conditions = injectedConditions;
+  if (!conditions) {
+    let conditionsSnap;
+    try {
+      const queryStartTime = Date.now();
+      conditionsSnap = await db
+        .collection('escalation-conditions')
+        .where('isActive', '==', true)
+        .orderBy('tier', 'asc')
+        .orderBy('priority', 'desc')
+        .get();
+      const queryDuration = Date.now() - queryStartTime;
+      console.log(`[classifyEscalation] [STEP 1] ✅ Query completed in ${queryDuration}ms`);
+      console.log(`[classifyEscalation] [STEP 1] Loaded ${conditionsSnap.docs.length} documents`);
+    } catch (queryError) {
+      console.error('[classifyEscalation] [STEP 1] ❌ Query FAILED');
+      console.error('[classifyEscalation] [STEP 1] Error type:', queryError.constructor.name);
+      console.error('[classifyEscalation] [STEP 1] Error message:', queryError.message);
+      console.error('[classifyEscalation] [STEP 1] Error code:', queryError.code);
+      console.error('[classifyEscalation] [STEP 1] Error stack:', queryError.stack);
+      return hardRiskSafetyFallback;
+    }
 
-  console.log('[classifyEscalation] [STEP 2] Processing conditions...');
-  const conditions = conditionsSnap.docs.map((doc, index) => {
-    const data = doc.data();
-    console.log(`[classifyEscalation] [STEP 2] Condition ${index + 1}/${conditionsSnap.docs.length}:`, {
-      id: doc.id,
-      tier: data.tier,
-      category: data.category,
-      title: data.title,
-      isActive: data.isActive,
-      priority: data.priority,
-      examplePhrasesCount: data.examplePhrases?.length || 0,
-      keywordsCount: data.keywords?.length || 0
+    console.log('[classifyEscalation] [STEP 2] Processing conditions...');
+    conditions = conditionsSnap.docs.map((doc, index) => {
+      const data = doc.data();
+      console.log(`[classifyEscalation] [STEP 2] Condition ${index + 1}/${conditionsSnap.docs.length}:`, {
+        id: doc.id,
+        tier: data.tier,
+        category: data.category,
+        title: data.title,
+        isActive: data.isActive,
+        priority: data.priority,
+        examplePhrasesCount: data.examplePhrases?.length || 0,
+        keywordsCount: data.keywords?.length || 0
+      });
+      return {
+        id: doc.id,
+        ...data
+      };
     });
-    return {
-      id: doc.id,
-      ...data
-    };
-  });
+  } else {
+    console.log(`[classifyEscalation] [STEP 1] Using ${conditions.length} injected active conditions`);
+  }
   
   if (conditions.length === 0) {
     console.warn('[classifyEscalation] [STEP 2] ⚠️ No active escalation conditions found');
@@ -3312,8 +3343,8 @@ async function classifyEscalation(db, userId, message, recentMessages, conversat
 ESCALATION TIERS:
 - Tier 0 (None): Normal conversation
 - Tier 1 (Monitor-Only): Low-risk concerns, notify coach
-- Tier 2 (Elevated Risk): Consent-based clinical escalation
-- Tier 3 (Critical Risk): MANDATORY immediate escalation
+- Tier 2 (Elevated Risk): Consent-based clinical escalation, including meaningful or persistent loss of daily function or a request for counseling without a clear immediate-safety signal
+- Tier 3 (Critical Risk): MANDATORY immediate escalation for a clear critical-safety signal such as self-harm or suicide, imminent danger, psychosis or severe disorientation, abuse with immediate danger, or rapid deterioration paired with a safety signal
 
 ${trainingContext}
 
@@ -3333,7 +3364,7 @@ ${trainingContext}
     "dedupeEligible":boolean
   }
 
-CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
+CRITICAL: Err on the side of care. Tier 3 has zero threshold for clear critical-safety signals, but loss of daily function by itself is Tier 2, not Tier 3.
 ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
   
 
@@ -3352,30 +3383,39 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
 
   console.log('[classifyEscalation] [STEP 5] Calling OpenAI API for classification...');
   console.log('[classifyEscalation] [STEP 5] API request details:', {
-    endpoint: 'https://api.openai.com/v1/chat/completions',
+    endpoint: requestClassification ? 'injected-model-transport' : 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o-mini',
     hasApiKey: Boolean(apiKey),
+    injectedTransport: Boolean(requestClassification),
   });
 
   try {
     const apiCallStartTime = Date.now();
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Classify this message:\n\n"${message}"${conversationContext}` }
-        ],
-        temperature: 0.1,
-        max_tokens: 200,
-        response_format: { type: 'json_object' }
-      })
-    });
+    const userPrompt = `Classify this message:\n\n"${message}"${conversationContext}`;
+    const res = requestClassification
+      ? await requestClassification({
+          model: 'gpt-4o-mini',
+          systemPrompt,
+          userPrompt,
+          maxOutputTokens: 200,
+        })
+      : await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.1,
+            max_tokens: 200,
+            response_format: { type: 'json_object' }
+          })
+        });
 
     const apiCallDuration = Date.now() - apiCallStartTime;
     console.log(`[classifyEscalation] [STEP 5] API call completed in ${apiCallDuration}ms`);
@@ -3529,6 +3569,11 @@ function buildEscalationTrainingContext(conditions) {
 function suppressBenignPerformanceEscalation(classification, message, recentMessages = [], conversationId) {
   if (!classification || typeof classification !== 'object') return classification;
   if ((classification.tier || 0) <= EscalationTier.None || (classification.tier || 0) >= EscalationTier.CriticalRisk) {
+    return classification;
+  }
+
+  const currentLane = classifyNoraConversationLane(message);
+  if (currentLane === NoraConversationLane.ClinicalCare || currentLane === NoraConversationLane.CriticalSafety) {
     return classification;
   }
 
