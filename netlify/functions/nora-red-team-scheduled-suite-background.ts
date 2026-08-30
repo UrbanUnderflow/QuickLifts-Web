@@ -26,7 +26,7 @@ export default async function handler(request: Request): Promise<void> {
   const workerToken = request.headers.get('x-pulsecheck-internal-worker') || '';
   const body = await request.json().catch(() => ({})) as { suiteId?: string };
   const suiteId = String(body.suiteId || '');
-  if (!/^nrt-suite-\d{8}$/.test(suiteId) || !workerToken) {
+  if (!/^nrt-suite-\d{8}(?:-[a-z0-9]{1,12})?$/.test(suiteId) || !workerToken) {
     throw new Error('Invalid suite worker request.');
   }
 

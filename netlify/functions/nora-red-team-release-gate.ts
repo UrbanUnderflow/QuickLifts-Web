@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { getFirebaseAdminApp } from '../../src/lib/firebase-admin';
 import { NoraRedTeamHistoryStore } from '../../src/lib/nora-red-team/historyStore';
 import { evaluateNoraRedTeamReleaseGate } from '../../src/lib/nora-red-team/releaseGate';
@@ -14,22 +14,23 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-function secureSecretMatch(actual: string, expected: string): boolean {
-  if (!actual || !expected || actual.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
+// Only the one-way digest is deployed. The raw gate token stays in GitHub and local credential storage.
+const RELEASE_GATE_TOKEN_SHA256 = '618846e51e171c0597d5279593a69059481da87ec1f8d624d3578791dad57d43';
+
+function secureSecretMatch(actual: string, expectedHash: string): boolean {
+  if (!actual || !/^[a-f0-9]{64}$/.test(expectedHash)) return false;
+  const actualHash = createHash('sha256').update(actual).digest();
+  const expected = Buffer.from(expectedHash, 'hex');
+  return actualHash.length === expected.length && timingSafeEqual(actualHash, expected);
 }
 
 export default async function handler(request: Request): Promise<Response> {
   if (!['GET', 'POST'].includes(request.method)) {
     return jsonResponse(405, { error: 'Method not allowed.' });
   }
-  const expected = process.env.NORA_RED_TEAM_RELEASE_GATE_TOKEN?.trim() || '';
-  if (!expected) {
-    return jsonResponse(503, { error: 'Release gate token is not configured.' });
-  }
   const authorization = request.headers.get('authorization') || '';
   const actual = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-  if (!secureSecretMatch(actual, expected)) {
+  if (!secureSecretMatch(actual, RELEASE_GATE_TOKEN_SHA256)) {
     return jsonResponse(401, { error: 'Release gate authorization failed.' });
   }
 

@@ -13,8 +13,12 @@ function deploymentOrigin(): string {
   return (process.env.URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 }
 
-function scheduledSuiteId(now: Date): string {
-  return `nrt-suite-${now.toISOString().slice(0, 10).replace(/-/g, '')}`;
+function buildIdentity(build: string): string {
+  return build.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'scheduled';
+}
+
+function scheduledSuiteId(now: Date, build: string): string {
+  return `nrt-suite-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${buildIdentity(build)}`;
 }
 
 export const handler: Handler = async () => {
@@ -25,13 +29,14 @@ export const handler: Handler = async () => {
   const regressions = await historyStore.listEnabledRegressions();
   const scenarios = buildNoraRedTeamSuiteScenarios(regressions);
   const now = new Date();
-  const suiteId = scheduledSuiteId(now);
+  const build = process.env.COMMIT_REF?.trim() || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim() || 'scheduled';
+  const suiteId = scheduledSuiteId(now, build);
   const workerToken = randomBytes(32).toString('hex');
   const created = await suiteStore.createIfMissing(createNoraRedTeamSuiteRecord({
     suiteId,
     scenarioIds: scenarios.map(({ key }) => key),
     workerTokenHash: hashNoraRedTeamWorkerToken(workerToken),
-    build: process.env.COMMIT_REF?.trim() || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim() || 'scheduled',
+    build,
     scheduled: true,
     now,
   }));

@@ -1497,11 +1497,16 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(suiteStore, /nora-red-team-suite-history/);
   assert.match(releaseGate, /openCriticalBlockers/);
   assert.match(scheduledSuite, /createIfMissing/);
+  assert.match(scheduledSuite, /buildIdentity/);
+  assert.match(scheduledSuite, /COMMIT_REF/);
   assert.match(scheduledSuiteWorker, /executeScheduledNoraRedTeamSuite/);
   assert.match(scheduledSuiteWorker, /FIREBASE_WEB_API_KEY/);
+  assert.match(scheduledSuiteWorker, /nrt-suite-\\d\{8\}/);
   assert.match(scheduledSuiteWorker, /export default async function handler\(request: Request\)/);
   assert.match(scheduledSuiteWorker, /background: true/);
-  assert.match(releaseGateFunction, /NORA_RED_TEAM_RELEASE_GATE_TOKEN/);
+  assert.match(releaseGateFunction, /RELEASE_GATE_TOKEN_SHA256/);
+  assert.match(releaseGateFunction, /createHash\('sha256'\)/);
+  assert.doesNotMatch(releaseGateFunction, /process\.env\.NORA_RED_TEAM_RELEASE_GATE_TOKEN\b/);
   assert.match(releaseGateFunction, /timingSafeEqual/);
   assert.match(releaseGateFunction, /export default async function handler\(request: Request\)/);
   assert.match(releaseGateFunction, /new Response/);
