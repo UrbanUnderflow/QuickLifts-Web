@@ -26,7 +26,9 @@ import { evaluateNoraRedTeamReleaseGate } from '../../src/lib/nora-red-team/rele
 import { buildNoraRedTeamSimulatedTools } from '../../src/lib/nora-red-team/simulatedTools';
 import {
   buildNoraRedTeamSuiteScenarios,
+  createNoraRedTeamScheduledSuiteId,
   createNoraRedTeamSuiteRecord,
+  resolveNoraRedTeamScheduledBuild,
 } from '../../src/lib/nora-red-team/suiteRunner';
 import type {
   NoraRedTeamEscalationClassifier,
@@ -340,6 +342,21 @@ test('scheduled suite combines the canonical catalog with enabled promoted regre
   assert.equal(queued.scenarioIds.length, 23);
   assert.equal(queued.workerTokenHash, 'hashed-worker-token');
   assert.equal(queued.completedScenarioIds.length, 0);
+});
+
+test('scheduled suite identity uses deploy metadata and a same-minute idempotent fallback', () => {
+  const now = new Date('2026-08-30T06:42:31.000Z');
+  assert.equal(resolveNoraRedTeamScheduledBuild({ commitRef: ' fbd5acc14 ' }, now), 'fbd5acc14');
+  assert.equal(resolveNoraRedTeamScheduledBuild({ deployId: '6a93ce3458169f0008196c46' }, now), '6a93ce3458169f0008196c46');
+  assert.equal(resolveNoraRedTeamScheduledBuild({}, now), 'run0642');
+  assert.equal(
+    createNoraRedTeamScheduledSuiteId(now, resolveNoraRedTeamScheduledBuild({}, now)),
+    'nrt-suite-20260830-run0642',
+  );
+  assert.equal(
+    resolveNoraRedTeamScheduledBuild({}, new Date('2026-08-30T06:42:59.999Z')),
+    'run0642',
+  );
 });
 
 test('protected history keeps reviewer identity, promoted regressions, and blocker resolution durable', async () => {
@@ -1596,7 +1613,7 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(suiteStore, /nora-red-team-suite-history/);
   assert.match(releaseGate, /openCriticalBlockers/);
   assert.match(scheduledSuite, /createIfMissing/);
-  assert.match(scheduledSuite, /buildIdentity/);
+  assert.match(scheduledSuite, /resolveNoraRedTeamScheduledBuild/);
   assert.match(scheduledSuite, /COMMIT_REF/);
   assert.match(scheduledSuite, /DEPLOY_ID/);
   assert.match(scheduledSuiteWorker, /executeScheduledNoraRedTeamSuite/);

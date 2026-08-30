@@ -4,7 +4,10 @@ import { getFirebaseAdminApp } from '../../src/lib/firebase-admin';
 import {
   hashNoraRedTeamWorkerToken,
 } from '../../src/lib/nora-red-team/jobRunner';
-import { executeScheduledNoraRedTeamSuite } from '../../src/lib/nora-red-team/suiteRunner';
+import {
+  executeScheduledNoraRedTeamSuite,
+  resolveNoraRedTeamScheduledBuild,
+} from '../../src/lib/nora-red-team/suiteRunner';
 import { NoraRedTeamSuiteStore } from '../../src/lib/nora-red-team/suiteStore';
 
 function secureHashMatch(left: string, right: string): boolean {
@@ -49,10 +52,11 @@ export default async function handler(request: Request): Promise<void> {
       '',
     targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL?.trim() || 'gpt-4o-mini',
     agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o-mini',
-    build: process.env.COMMIT_REF?.trim()
-      || process.env.DEPLOY_ID?.trim()
-      || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim()
-      || 'scheduled',
+    build: resolveNoraRedTeamScheduledBuild({
+      commitRef: process.env.COMMIT_REF,
+      deployId: process.env.DEPLOY_ID,
+      publicCommitSha: process.env.NEXT_PUBLIC_COMMIT_SHA,
+    }),
   });
 }
 

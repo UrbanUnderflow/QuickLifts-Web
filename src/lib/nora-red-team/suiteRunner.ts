@@ -16,6 +16,30 @@ export const NORA_RED_TEAM_SCHEDULED_OWNER = 'nora-red-team-scheduled@redteam.in
 export const NORA_RED_TEAM_SCHEDULED_UID = 'nora-red-team-scheduled-runner';
 const SUITE_MAX_DURATION_MS = 13 * 60 * 1000;
 
+export function resolveNoraRedTeamScheduledBuild(input: {
+  commitRef?: string;
+  deployId?: string;
+  publicCommitSha?: string;
+}, now: Date = new Date()): string {
+  const deployedBuild = input.commitRef?.trim()
+    || input.deployId?.trim()
+    || input.publicCommitSha?.trim();
+  if (deployedBuild) return deployedBuild;
+
+  // Netlify's build metadata is not guaranteed to be present in a scheduled
+  // function runtime. A minute bucket permits deliberate same-day reruns while
+  // keeping duplicate invocations of the same scheduled event idempotent.
+  return `run${now.toISOString().slice(11, 16).replace(':', '')}`;
+}
+
+function scheduledBuildIdentity(build: string): string {
+  return build.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'scheduled';
+}
+
+export function createNoraRedTeamScheduledSuiteId(now: Date, build: string): string {
+  return `nrt-suite-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${scheduledBuildIdentity(build)}`;
+}
+
 export type NoraRedTeamSuiteScenario = {
   key: string;
   scenario: NoraRedTeamScenario;
@@ -123,7 +147,7 @@ export async function executeScheduledNoraRedTeamSuite(input: {
           randomSeed: seedForScenario(startedAt, index),
           targetModel: input.targetModel,
           agentModel: input.agentModel,
-          build: input.build,
+          build: suite.build || input.build,
           target: 'policy_sandbox',
           limits,
           signal: controller.signal,

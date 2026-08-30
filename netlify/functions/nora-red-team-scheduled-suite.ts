@@ -5,20 +5,14 @@ import { NoraRedTeamHistoryStore } from '../../src/lib/nora-red-team/historyStor
 import { hashNoraRedTeamWorkerToken } from '../../src/lib/nora-red-team/jobRunner';
 import {
   buildNoraRedTeamSuiteScenarios,
+  createNoraRedTeamScheduledSuiteId,
   createNoraRedTeamSuiteRecord,
+  resolveNoraRedTeamScheduledBuild,
 } from '../../src/lib/nora-red-team/suiteRunner';
 import { NoraRedTeamSuiteStore } from '../../src/lib/nora-red-team/suiteStore';
 
 function deploymentOrigin(): string {
   return (process.env.URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
-}
-
-function buildIdentity(build: string): string {
-  return build.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'scheduled';
-}
-
-function scheduledSuiteId(now: Date, build: string): string {
-  return `nrt-suite-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${buildIdentity(build)}`;
 }
 
 export const handler: Handler = async () => {
@@ -29,11 +23,12 @@ export const handler: Handler = async () => {
   const regressions = await historyStore.listEnabledRegressions();
   const scenarios = buildNoraRedTeamSuiteScenarios(regressions);
   const now = new Date();
-  const build = process.env.COMMIT_REF?.trim()
-    || process.env.DEPLOY_ID?.trim()
-    || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim()
-    || 'scheduled';
-  const suiteId = scheduledSuiteId(now, build);
+  const build = resolveNoraRedTeamScheduledBuild({
+    commitRef: process.env.COMMIT_REF,
+    deployId: process.env.DEPLOY_ID,
+    publicCommitSha: process.env.NEXT_PUBLIC_COMMIT_SHA,
+  }, now);
+  const suiteId = createNoraRedTeamScheduledSuiteId(now, build);
   const workerToken = randomBytes(32).toString('hex');
   const created = await suiteStore.createIfMissing(createNoraRedTeamSuiteRecord({
     suiteId,
