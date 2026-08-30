@@ -32,7 +32,8 @@ const TARGET_COMPONENT_ROWS = [
 const ENV_CONTRACT_ROWS = [
   ['`FIREBASE_SECRET_KEY` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PROJECT_ID`', 'Canonical Netlify production contract', 'Compact Firebase Admin credential surface that fits Netlify constraints and is already present in production.'],
   ['`FIREBASE_SERVICE_ACCOUNT`', 'Optional alternate canonical secret', 'Full service-account JSON string for runtimes that can comfortably store it, but not required for the current Netlify deployment model.'],
-  ['`DEV_FIREBASE_SERVICE_ACCOUNT`', 'Explicit dev-project override', 'Full service-account JSON string for the explicit dev Firebase project when local or forced-dev flows need it.'],
+  ['`DEV_FIREBASE_SERVICE_ACCOUNT`', 'Local dev-project override', 'Full service-account JSON string for local forced-dev work. Keep it out of Netlify because the private key pushes function environments past the platform limit.'],
+  ['`DEV_FIREBASE_IMPERSONATE_SERVICE_ACCOUNT`', 'Production dev-project access', 'Target service-account email for short-lived, keyless access from the production Firebase identity to the dedicated dev runner.'],
   ['Legacy aliases', 'Migration only, resolver-owned', '`FIREBASE_PRIVATE_KEY`, `FIREBASE_PRIVATE_KEY_1..4`, and `FIREBASE_SERVICE_ACCOUNT_KEY` remain readable only inside the shared resolver until cleanup is complete.'],
   ['Logging contract', 'Operational trace only', 'Log credential source, runtime, mode, project id, and app name. Never log private keys or full service-account blobs.'],
   ['Explicit non-goal', 'No route-level secret parsing', 'Routes and functions should not know whether credentials came from service-account JSON, split env vars, or a future ADC path.'],
@@ -43,6 +44,7 @@ const RUNTIME_RULE_ROWS = [
   ['Netlify production functions', 'Use shared resolver + shared app registry', 'This is the validated production runtime for Firebase-backed APIs on the current stack. Fail closed if no valid credential resolves.'],
   ['Bridged Firebase Next APIs', 'Run through `firebase-next-api` or a dedicated function redirect', 'This preserves public route shape while keeping execution on the validated Netlify function runtime.'],
   ['Local development', 'Allow explicit dev-project service account first', 'If `DEV_FIREBASE_SERVICE_ACCOUNT` exists, it wins for forced-dev or local-dev Firebase work.'],
+  ['Netlify forced-dev routing', 'Use short-lived impersonation', 'Use `DEV_FIREBASE_IMPERSONATE_SERVICE_ACCOUNT`; do not copy a second private key into the deployed function environment.'],
   ['PulseCheck request-scoped dev routing', 'Preserve current forced-dev logic', 'Continue honoring the current localhost / override-header behavior, but let the shared registry decide which named app to return.'],
   ['Future ADC path', 'Add only in the shared resolver', 'If Cloud Run or another Google-hosted runtime is introduced later, ADC should be layered in once, not per route.'],
 ];

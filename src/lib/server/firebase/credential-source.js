@@ -183,6 +183,24 @@ function resolveFirebaseAdminCredential(options = {}) {
     return legacyCredential;
   }
 
+  if (mode === 'dev') {
+    const targetPrincipal = process.env.DEV_FIREBASE_IMPERSONATE_SERVICE_ACCOUNT?.trim();
+    if (targetPrincipal) {
+      const sourceCredential = resolveFirebaseAdminCredential({ mode: 'prod' });
+      if (sourceCredential?.clientEmail && sourceCredential.privateKey) {
+        return {
+          mode,
+          source: 'dev:service-account-impersonation',
+          projectId: defaults.projectId,
+          clientEmail: targetPrincipal,
+          privateKey: null,
+          privateKeyId: null,
+          sourceCredential,
+        };
+      }
+    }
+  }
+
   return {
     mode,
     source: `${mode}:unresolved`,
@@ -237,6 +255,7 @@ function summarizeFirebaseAdminEnvPresence(options = {}) {
     hasSecretKey: Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_SECRET_KEY' : 'FIREBASE_SECRET_KEY']),
     hasPrivateKey: Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_PRIVATE_KEY' : 'FIREBASE_PRIVATE_KEY']),
     hasClientEmail: Boolean(process.env[mode === 'dev' ? 'DEV_FIREBASE_CLIENT_EMAIL' : 'FIREBASE_CLIENT_EMAIL']),
+    hasImpersonationTarget: mode === 'dev' && Boolean(process.env.DEV_FIREBASE_IMPERSONATE_SERVICE_ACCOUNT),
     hasProjectId: Boolean(
       process.env[
         mode === 'dev'

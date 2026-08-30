@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type * as FirebaseAdmin from 'firebase-admin';
 
 type FetchLike = typeof fetch;
@@ -16,8 +17,16 @@ export async function createSyntheticFirebaseIdToken(input: {
   }
 
   const auth = input.app.auth();
+  const password = `Nrt!${randomBytes(24).toString('base64url')}`;
   try {
     await auth.getUser(input.uid);
+    await auth.updateUser(input.uid, {
+      email: input.email,
+      emailVerified: true,
+      displayName: 'Nora Red Team Athlete',
+      password,
+      disabled: false,
+    });
   } catch (error) {
     if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error;
     await auth.createUser({
@@ -25,17 +34,18 @@ export async function createSyntheticFirebaseIdToken(input: {
       email: input.email,
       emailVerified: true,
       displayName: 'Nora Red Team Athlete',
+      password,
       disabled: false,
     });
   }
+  await auth.setCustomUserClaims(input.uid, input.claims);
 
-  const customToken = await auth.createCustomToken(input.uid, input.claims);
   const response = await (input.fetchImpl || fetch)(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(apiKey)}`,
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+      body: JSON.stringify({ email: input.email, password, returnSecureToken: true }),
     },
   );
   const payload = await response.json().catch(() => null) as {

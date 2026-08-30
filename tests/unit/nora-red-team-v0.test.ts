@@ -1482,8 +1482,8 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(productionChat, /syntheticRedTeamRunId/);
   assert.match(productionChat, /externalSideEffects: false/);
   assert.doesNotMatch(productionChat, /: primaryCandidates\.find/);
-  assert.match(syntheticAuth, /createCustomToken\(input\.uid, input\.claims\)/);
-  assert.match(syntheticAuth, /signInWithCustomToken/);
+  assert.match(syntheticAuth, /setCustomUserClaims\(input\.uid, input\.claims\)/);
+  assert.match(syntheticAuth, /signInWithPassword/);
   assert.match(historyStore, /nora-red-team-run-history/);
   assert.match(historyStore, /nora-red-team-regression-cases/);
   assert.match(historyStore, /reviewerEmail/);

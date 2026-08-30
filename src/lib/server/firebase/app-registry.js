@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { Impersonated, JWT } = require('google-auth-library');
 const {
   buildFirebaseAdminServiceAccount,
   resolveCredentialSourceSeverity,
@@ -12,7 +13,42 @@ const APP_NAMES = {
 };
 
 const DEFAULT_APP_LABEL = '[DEFAULT]';
+const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const loggedCredentialWarnings = new Set();
+
+function buildImpersonatedCredential(resolvedCredential) {
+  if (resolvedCredential?.source !== 'dev:service-account-impersonation') {
+    return null;
+  }
+
+  const sourceCredential = resolvedCredential.sourceCredential;
+  if (!resolvedCredential.clientEmail || !sourceCredential?.clientEmail || !sourceCredential.privateKey) {
+    return null;
+  }
+
+  const sourceClient = new JWT({
+    email: sourceCredential.clientEmail,
+    key: sourceCredential.privateKey,
+    scopes: [CLOUD_PLATFORM_SCOPE],
+  });
+  const impersonatedClient = new Impersonated({
+    sourceClient,
+    targetPrincipal: resolvedCredential.clientEmail,
+    targetScopes: [CLOUD_PLATFORM_SCOPE],
+    lifetime: 3600,
+  });
+
+  return {
+    async getAccessToken() {
+      const response = await impersonatedClient.getAccessToken();
+      const token = typeof response === 'string' ? response : response?.token;
+      if (!token) {
+        throw new Error('Firebase Admin service-account impersonation returned no access token.');
+      }
+      return { access_token: token, expires_in: 3300 };
+    },
+  };
+}
 
 function findAppByName(name) {
   return admin.apps.find((app) => app && app.name === name) || null;
@@ -92,6 +128,15 @@ function initializeFirebaseAdminApp(options = {}) {
   const failClosed = shouldFailClosed(options);
   const resolvedCredential = resolveFirebaseAdminCredential({ mode });
   logCredentialResolution({ runtime, appName, resolvedCredential });
+
+  const impersonatedCredential = buildImpersonatedCredential(resolvedCredential);
+  if (impersonatedCredential) {
+    const initConfig = {
+      credential: impersonatedCredential,
+      projectId: resolvedCredential.projectId || undefined,
+    };
+    return useDefaultApp ? admin.initializeApp(initConfig) : admin.initializeApp(initConfig, appName);
+  }
 
   const serviceAccount = buildFirebaseAdminServiceAccount(resolvedCredential);
   if (serviceAccount?.clientEmail && serviceAccount.privateKey) {
