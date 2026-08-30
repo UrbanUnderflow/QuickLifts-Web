@@ -1467,6 +1467,7 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(productionEscalation, /productionEscalationRuntime\.classifyEscalation/);
   assert.match(productionEscalation, /production_firestore/);
   assert.match(stagingRunner, /getFirebaseAdminApp\(true\)/);
+  assert.match(stagingRunner, /DEV_FIREBASE_WEB_API_KEY/);
   assert.match(stagingRunner, /x-nora-red-team-synthetic/);
   assert.match(stagingRunner, /STAGING_AUTHORIZATION_FAILED/);
   assert.match(stagingRunner, /externalSideEffects !== false/);

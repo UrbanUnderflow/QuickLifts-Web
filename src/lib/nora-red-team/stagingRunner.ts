@@ -390,7 +390,11 @@ export async function runNoraStagingScenario(input: {
       app,
       uid,
       email: `${uid}@example.invalid`,
-      apiKey: input.apiKey || process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY || '',
+      apiKey:
+        input.apiKey ||
+        process.env.DEV_FIREBASE_WEB_API_KEY ||
+        process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY ||
+        '',
       claims: { noraRedTeamSynthetic: true, noraRedTeamRunId: runId },
       fetchImpl,
     });
