@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
-const { Impersonated, JWT } = require('google-auth-library');
+const { Firestore } = require('@google-cloud/firestore');
+const { GoogleAuth } = require('google-auth-library');
 const {
   buildFirebaseAdminServiceAccount,
   resolveCredentialSourceSeverity,
@@ -16,7 +17,7 @@ const DEFAULT_APP_LABEL = '[DEFAULT]';
 const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 const loggedCredentialWarnings = new Set();
 
-function buildImpersonatedCredential(resolvedCredential) {
+function buildImpersonatedRuntime(resolvedCredential) {
   if (resolvedCredential?.source !== 'dev:service-account-impersonation') {
     return null;
   }
@@ -26,28 +27,56 @@ function buildImpersonatedCredential(resolvedCredential) {
     return null;
   }
 
-  const sourceClient = new JWT({
-    email: sourceCredential.clientEmail,
-    key: sourceCredential.privateKey,
+  const targetPrincipal = resolvedCredential.clientEmail;
+  const auth = new GoogleAuth({
+    credentials: {
+      type: 'impersonated_service_account',
+      service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${targetPrincipal}:generateAccessToken`,
+      source_credentials: {
+        type: 'service_account',
+        project_id: sourceCredential.projectId,
+        private_key: sourceCredential.privateKey,
+        client_email: sourceCredential.clientEmail,
+        token_uri: 'https://oauth2.googleapis.com/token',
+      },
+    },
     scopes: [CLOUD_PLATFORM_SCOPE],
   });
-  const impersonatedClient = new Impersonated({
-    sourceClient,
-    targetPrincipal: resolvedCredential.clientEmail,
-    targetScopes: [CLOUD_PLATFORM_SCOPE],
-    lifetime: 3600,
+  const firestore = new Firestore({
+    projectId: resolvedCredential.projectId,
+    auth,
+    preferRest: true,
   });
 
   return {
-    async getAccessToken() {
-      const response = await impersonatedClient.getAccessToken();
-      const token = typeof response === 'string' ? response : response?.token;
-      if (!token) {
-        throw new Error('Firebase Admin service-account impersonation returned no access token.');
-      }
-      return { access_token: token, expires_in: 3300 };
+    credential: {
+      async getAccessToken() {
+        const client = await auth.getClient();
+        const response = await client.getAccessToken();
+        const token = typeof response === 'string' ? response : response?.token;
+        if (!token) {
+          throw new Error('Firebase Admin service-account impersonation returned no access token.');
+        }
+        const expiryDate = Number(client.credentials?.expiry_date) || (Date.now() + 3_300_000);
+        const expiresIn = Math.max(60, Math.floor((expiryDate - Date.now()) / 1_000));
+        return { access_token: token, expires_in: expiresIn };
+      },
     },
+    firestore,
   };
+}
+
+function attachImpersonatedFirestore(app, firestore) {
+  const originalDelete = app.delete.bind(app);
+  app.firestore = () => firestore;
+  app.delete = async () => {
+    try {
+      await firestore.terminate();
+    } finally {
+      await originalDelete();
+    }
+  };
+  return app;
 }
 
 function findAppByName(name) {
@@ -129,13 +158,14 @@ function initializeFirebaseAdminApp(options = {}) {
   const resolvedCredential = resolveFirebaseAdminCredential({ mode });
   logCredentialResolution({ runtime, appName, resolvedCredential });
 
-  const impersonatedCredential = buildImpersonatedCredential(resolvedCredential);
-  if (impersonatedCredential) {
+  const impersonatedRuntime = buildImpersonatedRuntime(resolvedCredential);
+  if (impersonatedRuntime) {
     const initConfig = {
-      credential: impersonatedCredential,
+      credential: impersonatedRuntime.credential,
       projectId: resolvedCredential.projectId || undefined,
     };
-    return useDefaultApp ? admin.initializeApp(initConfig) : admin.initializeApp(initConfig, appName);
+    const app = useDefaultApp ? admin.initializeApp(initConfig) : admin.initializeApp(initConfig, appName);
+    return attachImpersonatedFirestore(app, impersonatedRuntime.firestore);
   }
 
   const serviceAccount = buildFirebaseAdminServiceAccount(resolvedCredential);

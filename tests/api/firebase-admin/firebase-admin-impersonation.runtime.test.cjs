@@ -85,7 +85,14 @@ test('Firebase Admin exchanges the production identity for a short-lived dev cre
     FIREBASE_CLIENT_EMAIL: 'source@quicklifts-prod-contract.iam.gserviceaccount.com',
     FIREBASE_SECRET_KEY: '-----BEGIN PRIVATE KEY-----\nsource\n-----END PRIVATE KEY-----\n',
   }, async () => {
-    const state = { jwtOptions: null, impersonatedOptions: null, initializeOptions: null };
+    const state = {
+      deleteCalls: 0,
+      firestoreInstance: null,
+      firestoreOptions: null,
+      googleAuthOptions: null,
+      initializeOptions: null,
+      terminateCalls: 0,
+    };
     const firebaseAdmin = {
       apps: [],
       credential: {
@@ -101,29 +108,48 @@ test('Firebase Admin exchanges the production identity for a short-lived dev cre
       },
       initializeApp(options, name) {
         state.initializeOptions = options;
-        const app = { name: name || '[DEFAULT]', options };
+        const app = {
+          name: name || '[DEFAULT]',
+          options,
+          firestore() {
+            throw new Error('The patched dev app must use the impersonated Firestore client.');
+          },
+          async delete() {
+            state.deleteCalls += 1;
+          },
+        };
         this.apps.push(app);
         return app;
       },
     };
-    class JWT {
+    class GoogleAuth {
       constructor(options) {
-        state.jwtOptions = options;
+        state.googleAuthOptions = options;
+      }
+      async getClient() {
+        return {
+          credentials: { expiry_date: Date.now() + 3_300_000 },
+          async getAccessToken() {
+            return { token: 'short-lived-test-token' };
+          },
+        };
       }
     }
-    class Impersonated {
+    class Firestore {
       constructor(options) {
-        state.impersonatedOptions = options;
+        state.firestoreOptions = options;
+        state.firestoreInstance = this;
       }
-      async getAccessToken() {
-        return { token: 'short-lived-test-token' };
+      async terminate() {
+        state.terminateCalls += 1;
       }
     }
 
     const originalLoad = Module._load;
     Module._load = function patchedLoad(request, parent, isMain) {
       if (request === 'firebase-admin') return firebaseAdmin;
-      if (request === 'google-auth-library') return { Impersonated, JWT };
+      if (request === '@google-cloud/firestore') return { Firestore };
+      if (request === 'google-auth-library') return { GoogleAuth };
       return originalLoad.call(this, request, parent, isMain);
     };
 
@@ -141,15 +167,24 @@ test('Firebase Admin exchanges the production identity for a short-lived dev cre
 
       assert.equal(app.name, 'pulsecheck-dev-admin');
       assert.equal(state.initializeOptions.projectId, 'quicklifts-dev-contract');
-      assert.equal(state.jwtOptions.email, 'source@quicklifts-prod-contract.iam.gserviceaccount.com');
       assert.equal(
-        state.impersonatedOptions.targetPrincipal,
-        'nora-runner@quicklifts-dev-contract.iam.gserviceaccount.com',
+        state.googleAuthOptions.credentials.source_credentials.client_email,
+        'source@quicklifts-prod-contract.iam.gserviceaccount.com',
       );
-      assert.deepEqual(await state.initializeOptions.credential.getAccessToken(), {
-        access_token: 'short-lived-test-token',
-        expires_in: 3300,
-      });
+      assert.equal(
+        state.googleAuthOptions.credentials.service_account_impersonation_url,
+        'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/nora-runner@quicklifts-dev-contract.iam.gserviceaccount.com:generateAccessToken',
+      );
+      assert.equal(state.firestoreOptions.projectId, 'quicklifts-dev-contract');
+      assert.equal(state.firestoreOptions.auth instanceof GoogleAuth, true);
+      assert.equal(state.firestoreOptions.preferRest, true);
+      assert.equal(app.firestore(), state.firestoreInstance);
+      const accessToken = await state.initializeOptions.credential.getAccessToken();
+      assert.equal(accessToken.access_token, 'short-lived-test-token');
+      assert.ok(accessToken.expires_in >= 3299 && accessToken.expires_in <= 3300);
+      await app.delete();
+      assert.equal(state.terminateCalls, 1);
+      assert.equal(state.deleteCalls, 1);
     } finally {
       Module._load = originalLoad;
       delete require.cache[credentialSourcePath];
