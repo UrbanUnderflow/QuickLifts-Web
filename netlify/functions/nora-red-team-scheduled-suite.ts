@@ -29,7 +29,10 @@ export const handler: Handler = async () => {
   const regressions = await historyStore.listEnabledRegressions();
   const scenarios = buildNoraRedTeamSuiteScenarios(regressions);
   const now = new Date();
-  const build = process.env.COMMIT_REF?.trim() || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim() || 'scheduled';
+  const build = process.env.COMMIT_REF?.trim()
+    || process.env.DEPLOY_ID?.trim()
+    || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim()
+    || 'scheduled';
   const suiteId = scheduledSuiteId(now, build);
   const workerToken = randomBytes(32).toString('hex');
   const created = await suiteStore.createIfMissing(createNoraRedTeamSuiteRecord({

@@ -49,7 +49,10 @@ export default async function handler(request: Request): Promise<void> {
       '',
     targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL?.trim() || 'gpt-4o-mini',
     agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o-mini',
-    build: process.env.COMMIT_REF?.trim() || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim() || 'scheduled',
+    build: process.env.COMMIT_REF?.trim()
+      || process.env.DEPLOY_ID?.trim()
+      || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim()
+      || 'scheduled',
   });
 }
 
