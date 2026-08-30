@@ -1,12 +1,17 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { Handler } from '@netlify/functions';
 import { getFirebaseAdminApp } from '../../src/lib/firebase-admin';
 import { NoraRedTeamHistoryStore } from '../../src/lib/nora-red-team/historyStore';
 import { evaluateNoraRedTeamReleaseGate } from '../../src/lib/nora-red-team/releaseGate';
 import { NoraRedTeamSuiteStore } from '../../src/lib/nora-red-team/suiteStore';
 
-function headerValue(headers: Record<string, string | undefined>, name: string): string {
-  return headers[name] || headers[name.toLowerCase()] || '';
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/json',
+    },
+  });
 }
 
 function secureSecretMatch(actual: string, expected: string): boolean {
@@ -14,18 +19,18 @@ function secureSecretMatch(actual: string, expected: string): boolean {
   return timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
 }
 
-export const handler: Handler = async (event) => {
-  if (!['GET', 'POST'].includes(event.httpMethod)) {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed.' }) };
+export default async function handler(request: Request): Promise<Response> {
+  if (!['GET', 'POST'].includes(request.method)) {
+    return jsonResponse(405, { error: 'Method not allowed.' });
   }
   const expected = process.env.NORA_RED_TEAM_RELEASE_GATE_TOKEN?.trim() || '';
   if (!expected) {
-    return { statusCode: 503, body: JSON.stringify({ error: 'Release gate token is not configured.' }) };
+    return jsonResponse(503, { error: 'Release gate token is not configured.' });
   }
-  const authorization = headerValue(event.headers, 'authorization');
+  const authorization = request.headers.get('authorization') || '';
   const actual = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
   if (!secureSecretMatch(actual, expected)) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Release gate authorization failed.' }) };
+    return jsonResponse(401, { error: 'Release gate authorization failed.' });
   }
 
   const firestore = getFirebaseAdminApp(false).firestore();
@@ -39,9 +44,5 @@ export const handler: Handler = async (event) => {
     openCriticalBlockers,
     maxSuiteAgeMs: maxAgeDays * 24 * 60 * 60 * 1000,
   });
-  return {
-    statusCode: 200,
-    headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' },
-    body: JSON.stringify(gate),
-  };
-};
+  return jsonResponse(200, gate);
+}

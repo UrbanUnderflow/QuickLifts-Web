@@ -1499,6 +1499,8 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(scheduledSuiteWorker, /executeScheduledNoraRedTeamSuite/);
   assert.match(releaseGateFunction, /NORA_RED_TEAM_RELEASE_GATE_TOKEN/);
   assert.match(releaseGateFunction, /timingSafeEqual/);
+  assert.match(releaseGateFunction, /export default async function handler\(request: Request\)/);
+  assert.match(releaseGateFunction, /new Response/);
   assert.match(releaseGateWorkflow, /test:nora:ci/);
   assert.match(releaseGateWorkflow, /test:nora:release-gate/);
   assert.match(orchestrator, /productionWrites: false/);

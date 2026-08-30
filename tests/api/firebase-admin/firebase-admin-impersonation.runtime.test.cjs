@@ -76,6 +76,26 @@ test('dev Firebase resolves to a short-lived impersonated identity without a sec
   });
 });
 
+test('dev Firebase defaults to the dedicated Nora impersonation identity', () => {
+  withEnv({
+    FIREBASE_PROJECT_ID: 'quicklifts-prod-contract',
+    FIREBASE_CLIENT_EMAIL: 'source@quicklifts-prod-contract.iam.gserviceaccount.com',
+    FIREBASE_SECRET_KEY: '-----BEGIN PRIVATE KEY-----\nsource\n-----END PRIVATE KEY-----\n',
+  }, () => {
+    delete require.cache[credentialSourcePath];
+    const { resolveFirebaseAdminCredential } = require(credentialSourcePath);
+    const resolved = resolveFirebaseAdminCredential({ mode: 'dev' });
+
+    assert.equal(resolved.source, 'dev:service-account-impersonation');
+    assert.equal(resolved.projectId, 'quicklifts-dev-01');
+    assert.equal(
+      resolved.clientEmail,
+      'nora-red-team-runner@quicklifts-dev-01.iam.gserviceaccount.com',
+    );
+    assert.equal(resolved.sourceCredential.clientEmail, 'source@quicklifts-prod-contract.iam.gserviceaccount.com');
+  });
+});
+
 test('Firebase Admin exchanges the production identity for a short-lived dev credential', async () => {
   await withEnv({
     NODE_ENV: 'production',

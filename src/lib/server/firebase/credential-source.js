@@ -1,6 +1,7 @@
 const PROD_PROJECT_ID = 'quicklifts-dd3f1';
 const DEV_PROJECT_ID = 'quicklifts-dev-01';
 const PROD_CLIENT_EMAIL = 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
+const DEV_IMPERSONATION_CLIENT_EMAIL = `nora-red-team-runner@${DEV_PROJECT_ID}.iam.gserviceaccount.com`;
 
 function normalizePrivateKey(value) {
   if (!value || typeof value !== 'string') {
@@ -184,7 +185,9 @@ function resolveFirebaseAdminCredential(options = {}) {
   }
 
   if (mode === 'dev') {
-    const targetPrincipal = process.env.DEV_FIREBASE_IMPERSONATE_SERVICE_ACCOUNT?.trim();
+    const targetPrincipal =
+      process.env.DEV_FIREBASE_IMPERSONATE_SERVICE_ACCOUNT?.trim() ||
+      DEV_IMPERSONATION_CLIENT_EMAIL;
     if (targetPrincipal) {
       const sourceCredential = resolveFirebaseAdminCredential({ mode: 'prod' });
       if (sourceCredential?.clientEmail && sourceCredential.privateKey) {
@@ -271,6 +274,7 @@ function summarizeFirebaseAdminEnvPresence(options = {}) {
 }
 
 module.exports = {
+  DEV_IMPERSONATION_CLIENT_EMAIL,
   DEV_PROJECT_ID,
   PROD_CLIENT_EMAIL,
   PROD_PROJECT_ID,
