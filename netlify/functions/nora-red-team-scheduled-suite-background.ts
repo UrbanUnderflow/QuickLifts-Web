@@ -1,15 +1,11 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { Handler } from '@netlify/functions';
+import type { Config } from '@netlify/functions';
 import { getFirebaseAdminApp } from '../../src/lib/firebase-admin';
 import {
   hashNoraRedTeamWorkerToken,
 } from '../../src/lib/nora-red-team/jobRunner';
 import { executeScheduledNoraRedTeamSuite } from '../../src/lib/nora-red-team/suiteRunner';
 import { NoraRedTeamSuiteStore } from '../../src/lib/nora-red-team/suiteStore';
-
-function headerValue(headers: Record<string, string | undefined>, name: string): string {
-  return headers[name] || headers[name.toLowerCase()] || '';
-}
 
 function secureHashMatch(left: string, right: string): boolean {
   if (!left || !right || left.length !== right.length) return false;
@@ -23,22 +19,22 @@ function bridgeOrigin(): string {
     || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 }
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed.' }) };
+export default async function handler(request: Request): Promise<void> {
+  if (request.method !== 'POST') {
+    throw new Error('Method not allowed.');
   }
-  const workerToken = headerValue(event.headers, 'x-pulsecheck-internal-worker');
-  const body = JSON.parse(event.body || '{}') as { suiteId?: string };
+  const workerToken = request.headers.get('x-pulsecheck-internal-worker') || '';
+  const body = await request.json().catch(() => ({})) as { suiteId?: string };
   const suiteId = String(body.suiteId || '');
   if (!/^nrt-suite-\d{8}$/.test(suiteId) || !workerToken) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid suite worker request.' }) };
+    throw new Error('Invalid suite worker request.');
   }
 
   const app = getFirebaseAdminApp(false);
   const suiteStore = new NoraRedTeamSuiteStore(app.firestore());
   const suite = await suiteStore.get(suiteId);
   if (!suite || !secureHashMatch(suite.workerTokenHash, hashNoraRedTeamWorkerToken(workerToken))) {
-    return { statusCode: 403, body: JSON.stringify({ error: 'Suite worker authorization failed.' }) };
+    throw new Error('Suite worker authorization failed.');
   }
 
   await executeScheduledNoraRedTeamSuite({
@@ -55,6 +51,8 @@ export const handler: Handler = async (event) => {
     agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o-mini',
     build: process.env.COMMIT_REF?.trim() || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim() || 'scheduled',
   });
+}
 
-  return { statusCode: 200, body: JSON.stringify({ ok: true, suiteId }) };
+export const config: Config = {
+  background: true,
 };

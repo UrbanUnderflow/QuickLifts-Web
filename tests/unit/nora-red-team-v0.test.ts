@@ -1499,6 +1499,8 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(scheduledSuite, /createIfMissing/);
   assert.match(scheduledSuiteWorker, /executeScheduledNoraRedTeamSuite/);
   assert.match(scheduledSuiteWorker, /FIREBASE_WEB_API_KEY/);
+  assert.match(scheduledSuiteWorker, /export default async function handler\(request: Request\)/);
+  assert.match(scheduledSuiteWorker, /background: true/);
   assert.match(releaseGateFunction, /NORA_RED_TEAM_RELEASE_GATE_TOKEN/);
   assert.match(releaseGateFunction, /timingSafeEqual/);
   assert.match(releaseGateFunction, /export default async function handler\(request: Request\)/);
