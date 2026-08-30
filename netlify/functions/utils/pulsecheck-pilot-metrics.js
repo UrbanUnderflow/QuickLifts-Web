@@ -3820,7 +3820,7 @@ function isEnrollmentPausedDay({
   return !(pausedDateKey === dateKey && hasSameDayActivity);
 }
 
-const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function)\b/i;
+const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function|(?:going|planning|plan|want|intend)\s+to\s+(?:hurt|kill|attack|shoot|stab)\s+(?:someone|somebody|them|him|her|people|my\s+(?:teammate|coach|opponent)|a\s+(?:teammate|coach|player|person)))\b/i;
 const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
 const LOSS_OF_FUNCTION_PATTERN = /\b(can't walk|cannot walk|can't move|cannot move|can't feel|cannot feel|can't use my (?:arm|leg|hand|foot)|cannot use my (?:arm|leg|hand|foot)|can't lift my (?:arm|leg|hand|foot)|cannot lift my (?:arm|leg|hand|foot)|can't grip|cannot grip|can't hold|cannot hold|arm won't work|leg won't work|hand won't work|foot won't work|went numb|loss of function|lost function|sudden weakness|weakness on one side|numbness|numb|paralysis|dropping things|stroke[- ]?like)\b/i;
 

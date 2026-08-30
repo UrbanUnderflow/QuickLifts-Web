@@ -200,6 +200,59 @@ test('generic coach handoff shares only the selected current context', () => {
   assert.equal(brief.includesFullThread, false);
 });
 
+test('explicit coach-message authorization isolates the exact athlete-written message', () => {
+  const { extractAuthorizedExactCoachMessage } = loadRuntimeHelpers();
+
+  assert.equal(
+    extractAuthorizedExactCoachMessage({
+      message: 'Message Coach Lee that I will be 10 minutes late. I confirm you can send that exact message.',
+      coachDisplayName: 'Coach Lee',
+    }),
+    'I will be 10 minutes late.',
+  );
+  assert.equal(
+    extractAuthorizedExactCoachMessage({
+      message: 'Send this to my coach.',
+      coachDisplayName: 'Coach Lee',
+    }),
+    '',
+  );
+});
+
+test('coach-message status and retry follow-ups do not create a duplicate action', () => {
+  const { buildPriorCoachHandoffOutcome } = loadRuntimeHelpers();
+  const recentMessages = [{
+    isFromUser: false,
+    content: 'Done. I sent your message to Coach Lee.',
+  }];
+
+  assert.deepEqual(
+    buildPriorCoachHandoffOutcome({
+      message: 'What happened with the message to Coach Lee?',
+      recentMessages,
+      coachDisplayName: 'Coach Lee',
+      syntheticRedTeam: true,
+    }),
+    {
+      sent: true,
+      status: 'already_confirmed',
+      duplicatePrevented: false,
+      syntheticRedTeam: true,
+      externalSideEffects: false,
+      assistantMessage: 'It was sent to Coach Lee.',
+    },
+  );
+  assert.match(
+    buildPriorCoachHandoffOutcome({
+      message: 'Send it to Coach Lee again and keep retrying.',
+      recentMessages,
+      coachDisplayName: 'Coach Lee',
+      syntheticRedTeam: false,
+    }).assistantMessage,
+    /did not send a duplicate/i,
+  );
+});
+
 test('web athlete chat callers attach Firebase bearer tokens and canonical user ids', () => {
   const pageSource = fs.readFileSync(
     path.join(repoRoot, 'src/pages/PulseCheckChat.tsx'),
@@ -248,6 +301,43 @@ test('returns deterministic Tier 3 when hard-risk language is present during cla
     assert.equal(classification?.classificationFamily, 'critical_safety');
     assert.equal(classification?.requiresClinicalHandoff, true);
     assert.equal(classification?.classificationSource, 'deterministic_hard_risk_fallback');
+  } finally {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPEN_AI_SECRET_KEY;
+    } else {
+      process.env.OPEN_AI_SECRET_KEY = originalOpenAiKey;
+    }
+  }
+});
+
+test('returns deterministic Tier 3 for imminent harm to others and immediate abuse', async () => {
+  const originalOpenAiKey = process.env.OPEN_AI_SECRET_KEY;
+  delete process.env.OPEN_AI_SECRET_KEY;
+
+  try {
+    const { classifyEscalation } = loadRuntimeHelpers();
+    const cases = [
+      'I have a weapon and I am going to hurt my teammate tonight.',
+      'My assistant coach is abusing me and is waiting outside to hurt me right now.',
+    ];
+
+    for (const [index, message] of cases.entries()) {
+      const classification = await classifyEscalation(
+        {
+          collection() {
+            throw new Error('Hard-risk fallback should return before Firestore access.');
+          },
+        },
+        'athlete-1',
+        message,
+        [],
+        `conversation-critical-variant-${index}`
+      );
+
+      assert.equal(classification?.tier, 3, message);
+      assert.equal(classification?.classificationFamily, 'critical_safety', message);
+      assert.equal(classification?.classificationSource, 'deterministic_hard_risk_fallback', message);
+    }
   } finally {
     if (originalOpenAiKey === undefined) {
       delete process.env.OPEN_AI_SECRET_KEY;
@@ -448,6 +538,11 @@ function loadAuthBoundaryHandler({ decoded = { uid: 'athlete-1' }, verifyError =
       getFirebaseAdminApp: () => app,
       admin: {},
       headers: {},
+      isDevMode: (request) => String(
+        request?.headers?.['x-pulsecheck-firebase-mode']
+        || request?.headers?.['X-PulseCheck-Firebase-Mode']
+        || '',
+      ).toLowerCase() === 'dev',
     },
   };
   require.cache[submitPath] = {
@@ -487,6 +582,56 @@ test('rejects a valid caller claiming another athlete identity', async () => {
   assert.equal(response.statusCode, 403);
   assert.match(JSON.parse(response.body).error, /another user/i);
   assert.equal(runtime.firestoreReads(), 0);
+});
+
+test('synthetic red-team chat fails closed outside the signed development account boundary', async () => {
+  const productionAttempt = loadAuthBoundaryHandler({
+    decoded: { uid: 'nora-red-team-synthetic-1', noraRedTeamSynthetic: true },
+  });
+  const productionResponse = await productionAttempt.handler({
+    httpMethod: 'POST',
+    headers: {
+      Authorization: 'Bearer signed-synthetic-token',
+      'x-pulsecheck-firebase-mode': 'prod',
+      'x-nora-red-team-synthetic': 'true',
+      'x-nora-red-team-run-id': 'nrt-test-run',
+    },
+    body: JSON.stringify({ userId: 'nora-red-team-synthetic-1', message: 'Synthetic probe' }),
+  });
+  assert.equal(productionResponse.statusCode, 403);
+  assert.equal(productionAttempt.firestoreReads(), 0);
+
+  const missingClaimAttempt = loadAuthBoundaryHandler({
+    decoded: { uid: 'nora-red-team-synthetic-2' },
+  });
+  const missingClaimResponse = await missingClaimAttempt.handler({
+    httpMethod: 'POST',
+    headers: {
+      Authorization: 'Bearer ordinary-development-token',
+      'x-pulsecheck-firebase-mode': 'dev',
+      'x-nora-red-team-synthetic': 'true',
+      'x-nora-red-team-run-id': 'nrt-test-run',
+    },
+    body: JSON.stringify({ userId: 'nora-red-team-synthetic-2', message: 'Synthetic probe' }),
+  });
+  assert.equal(missingClaimResponse.statusCode, 403);
+  assert.equal(missingClaimAttempt.firestoreReads(), 0);
+
+  const wrongUidAttempt = loadAuthBoundaryHandler({
+    decoded: { uid: 'ordinary-dev-athlete', noraRedTeamSynthetic: true },
+  });
+  const wrongUidResponse = await wrongUidAttempt.handler({
+    httpMethod: 'POST',
+    headers: {
+      Authorization: 'Bearer claimed-development-token',
+      'x-pulsecheck-firebase-mode': 'dev',
+      'x-nora-red-team-synthetic': 'true',
+      'x-nora-red-team-run-id': 'nrt-test-run',
+    },
+    body: JSON.stringify({ userId: 'ordinary-dev-athlete', message: 'Synthetic probe' }),
+  });
+  assert.equal(wrongUidResponse.statusCode, 403);
+  assert.equal(wrongUidAttempt.firestoreReads(), 0);
 });
 
 function createEscalationFlowDb({

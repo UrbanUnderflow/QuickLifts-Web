@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   AlertTriangle,
   ArrowLeft,
   Bot,
+  BookmarkPlus,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -13,6 +15,7 @@ import {
   FileJson,
   FlaskConical,
   Gavel,
+  History,
   LockKeyhole,
   Play,
   RefreshCw,
@@ -20,6 +23,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Square,
   Terminal,
   Trash2,
   UserCheck,
@@ -27,16 +31,20 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { auth, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
+import { auth, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../../../api/firebase/config';
 import { EscalationCategory, EscalationTier } from '../../../api/firebase/escalation/types';
 import EscalationModal, { type EscalationSupportOption } from '../../pulsecheck/EscalationModal';
 import { NORA_RED_TEAM_SCENARIOS } from '../../../lib/nora-red-team/scenarios';
 import type {
   NoraRedTeamAgentTrace,
   NoraRedTeamDimension,
+  NoraRedTeamHistoryRecord,
+  NoraRedTeamJob,
   NoraRedTeamRun,
   NoraRedTeamScenario,
   NoraRedTeamSeverity,
+  NoraRedTeamSuiteRecord,
+  NoraRedTeamTarget,
   NoraRedTeamTurn,
   NoraRedTeamVerdict,
 } from '../../../lib/nora-red-team/types';
@@ -132,8 +140,30 @@ function explainRunError(code: string | undefined, fallback: string | undefined,
   if (code === 'INVALID_SCENARIO') return 'The selected scenario was not recognized. Refresh the page and try again.';
   if (code === 'INVALID_RANDOM_SEED') return 'The random seed must be a positive whole number.';
   if (code === 'RED_TEAM_RUN_FAILED') return 'The agent run failed before a complete result was produced. No result was saved.';
+  if (code === 'RED_TEAM_WORKER_UNAVAILABLE') return 'The background runner could not start. No model request was made.';
+  if (code === 'NORA_RED_TEAM_REQUEST_TIMEOUT') return 'A model request timed out after the bounded retry. No result was saved.';
+  if (code === 'NORA_RED_TEAM_TIME_LIMIT_EXCEEDED') return 'The run reached its time limit and stopped safely. No result was saved.';
+  if (code === 'NORA_RED_TEAM_COST_LIMIT_EXCEEDED') return 'The run reached its cost limit and stopped safely. No result was saved.';
+  if (code === 'STAGING_REQUIRES_DEVELOPMENT') return 'Switch the admin database selector to Development database before running the real staging chat.';
+  if (code === 'STAGING_AUTH_UNAVAILABLE') return 'The signed synthetic staging account could not be created. Check the development Firebase configuration.';
+  if (code === 'STAGING_ENDPOINT_OUTDATED') return 'The staging chat endpoint has not received the synthetic no-contact lock yet.';
+  if (code === 'STAGING_CHAT_FAILED') return 'The real staging chat endpoint could not complete this scenario.';
+  if (code === 'HISTORY_UNAVAILABLE') return 'Protected red-team history is temporarily unavailable.';
+  if (code === 'JOB_EXPIRED') return 'The temporary run expired. Start the scenario again.';
   if (status === 500) return 'The server returned an unexpected 500 before sending run details. This is usually a timeout or server runtime error.';
   return fallback || 'The red-team run could not be completed.';
+}
+
+function waitForPoll(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function isActiveJob(job: NoraRedTeamJob | null): boolean {
+  return Boolean(job && ['queued', 'running', 'cancelling'].includes(job.status));
+}
+
+function runStorageKey(target: NoraRedTeamTarget, scenarioId: string): string {
+  return `${target}:${scenarioId}`;
 }
 
 function formatTimestamp(value: string): string {
@@ -153,6 +183,7 @@ function verdictIcon(verdict: NoraRedTeamVerdict) {
 
 function scenarioStatus(
   scenarioId: string,
+  target: NoraRedTeamTarget,
   runs: Record<string, NoraRedTeamRun>,
   runningScenarioId: string | null,
 ): { label: string; className: string; icon: React.ComponentType<{ className?: string }> } {
@@ -163,7 +194,7 @@ function scenarioStatus(
       icon: RefreshCw,
     };
   }
-  const run = runs[scenarioId];
+  const run = runs[runStorageKey(target, scenarioId)];
   if (!run) return { label: 'Not run', className: 'text-zinc-500', icon: Circle };
   if (run.verdict === 'pass') return { label: 'Passed', className: 'text-emerald-300', icon: CheckCircle2 };
   if (run.verdict === 'fail') return { label: 'Failed', className: 'text-red-300', icon: XCircle };
@@ -227,28 +258,42 @@ function previewTier2SupportOptions(turn: NoraRedTeamTurn | null): {
 
 const NoraRedTeamConsole: React.FC = () => {
   const [selectedScenarioId, setSelectedScenarioId] = useState(NORA_RED_TEAM_SCENARIOS[0].id);
+  const [target, setTarget] = useState<NoraRedTeamTarget>('policy_sandbox');
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [randomSeed, setRandomSeed] = useState(20_260_820);
   const [runs, setRuns] = useState<Record<string, NoraRedTeamRun>>({});
   const [runningScenarioId, setRunningScenarioId] = useState<string | null>(null);
+  const [activeJob, setActiveJob] = useState<NoraRedTeamJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runLogs, setRunLogs] = useState<RunLogEntry[]>([]);
+  const [history, setHistory] = useState<NoraRedTeamHistoryRecord[]>([]);
+  const [latestSuite, setLatestSuite] = useState<NoraRedTeamSuiteRecord | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const consoleInitialized = useRef(false);
+  const developmentDatabase = isUsingDevFirebase();
 
   const selectedScenario = useMemo(
     () => NORA_RED_TEAM_SCENARIOS.find((scenario) => scenario.id === selectedScenarioId) || NORA_RED_TEAM_SCENARIOS[0],
     [selectedScenarioId],
   );
-  const selectedRun = runs[selectedScenario.id] || null;
+  const selectedRun = runs[runStorageKey(target, selectedScenario.id)] || null;
+  const selectedJob = activeJob?.scenarioId === selectedScenario.id && activeJob.target === target ? activeJob : null;
   const filteredScenarios = useMemo(
     () => NORA_RED_TEAM_SCENARIOS.filter((scenario) => riskFilter === 'all' || scenario.risk === riskFilter),
     [riskFilter],
   );
-  const completedRuns = Object.values(runs);
+  const completedRuns = Object.values(runs).filter((run) => (
+    target === 'staging_chat'
+      ? run.platform === 'web-staging-chat'
+      : run.platform === 'web-admin-policy-sandbox'
+  ));
+  const scenarioFamilyCount = new Set(NORA_RED_TEAM_SCENARIOS.map((scenario) => scenario.familyId)).size;
   const passedRuns = completedRuns.filter((run) => run.verdict === 'pass').length;
-  const criticalBlockers = completedRuns.filter((run) => run.releaseBlocking).length;
-  const reviewCount = completedRuns.filter(
-    (run) => run.humanReview.status === 'pending' || run.humanReview.status === 'inconclusive',
-  ).length;
+  const durableCriticalBlockers = history.filter((record) => (
+    record.releaseStatus === 'blocking' && record.run.releaseBlocking && record.run.severity === 'critical'
+  )).length;
+  const promotedRegressionCount = history.filter((record) => record.promotedRegression).length;
 
   const appendLog = useCallback((level: RunLogLevel, message: string, detail?: string) => {
     setRunLogs((current) => [
@@ -263,9 +308,48 @@ const NoraRedTeamConsole: React.FC = () => {
     ].slice(0, 80));
   }, []);
 
-  useEffect(() => {
-    appendLog('info', 'Console ready', 'Session-only logs. No tokens, transcripts, or production writes are stored here.');
+  const loadHistory = useCallback(async (quiet = false) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    setHistoryLoading(true);
+    try {
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch('/api/admin/pulsecheck/nora-red-team/history?limit=100', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+          ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
+        },
+      });
+      const payload = await response.json().catch(() => null) as {
+        history?: NoraRedTeamHistoryRecord[];
+        latestSuite?: NoraRedTeamSuiteRecord | null;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.history) {
+        throw new Error(payload?.error || 'Protected history could not be loaded.');
+      }
+      setHistory(payload.history);
+      setLatestSuite(payload.latestSuite || null);
+      if (!quiet) appendLog('success', 'Protected history loaded', `${payload.history.length} durable run records are available.`);
+    } catch (historyError) {
+      if (!quiet) {
+        appendLog('warning', 'Protected history unavailable', historyError instanceof Error ? historyError.message : String(historyError));
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
   }, [appendLog]);
+
+  useEffect(() => {
+    if (consoleInitialized.current) return;
+    consoleInitialized.current = true;
+    appendLog('info', 'Console ready', 'Browser evidence is session only. Deployed background status expires after two hours. No auth token or athlete-data write is stored.');
+  }, [appendLog]);
+
+  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
+    if (currentUser) void loadHistory(true);
+  }), [loadHistory]);
 
   const changeRiskFilter = (filter: RiskFilter) => {
     setRiskFilter(filter);
@@ -283,13 +367,15 @@ const NoraRedTeamConsole: React.FC = () => {
 
   const runScenario = async () => {
     if (runningScenarioId) return;
+    const scenarioForRun = selectedScenario;
+    const targetForRun = target;
     setError(null);
-    setRunningScenarioId(selectedScenario.id);
+    setRunningScenarioId(scenarioForRun.id);
     const startedAt = Date.now();
     appendLog(
       'info',
-      `Starting scenario: ${selectedScenario.title}`,
-      `Seed ${randomSeed}. This run uses synthetic data and should not write to production.`,
+      `Starting scenario: ${scenarioForRun.title}`,
+      `Seed ${randomSeed}. Target: ${targetForRun === 'staging_chat' ? 'real development chat' : 'policy sandbox'}. Synthetic evidence only.`,
     );
     try {
       const currentUser = auth.currentUser;
@@ -299,27 +385,29 @@ const NoraRedTeamConsole: React.FC = () => {
       }
       appendLog('success', 'Admin session found', 'Request will include a short-lived admin authorization token. The token is not logged.');
       const idToken = await currentUser.getIdToken();
-      appendLog('info', 'Sending red-team request to the local API.');
+      const requestHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        ...getFirebaseModeRequestHeaders(),
+        ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
+      };
+      appendLog('info', 'Creating a bounded background run.');
       const response = await fetch('/api/admin/pulsecheck/nora-red-team/run', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-          ...getFirebaseModeRequestHeaders(),
-          ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
-        },
+        headers: requestHeaders,
         body: JSON.stringify({
-          scenarioId: selectedScenario.id,
+          scenarioId: scenarioForRun.id,
           randomSeed,
+          target: targetForRun,
         }),
       });
       const payload = await response.json().catch(() => null) as {
-        run?: NoraRedTeamRun;
+        job?: NoraRedTeamJob;
         error?: string;
         code?: string;
         detail?: string;
       } | null;
-      if (!response.ok || !payload?.run) {
+      if (!response.ok || !payload?.job) {
         const explainedError = explainRunError(payload?.code, payload?.error, response.status);
         appendLog(
           'error',
@@ -328,19 +416,113 @@ const NoraRedTeamConsole: React.FC = () => {
         );
         throw new Error(explainedError);
       }
-      setRuns((current) => ({ ...current, [selectedScenario.id]: payload.run! }));
+      let job = payload.job;
+      let lastStage = job.progress.stage;
+      setActiveJob(job);
       appendLog(
-        payload.run.verdict === 'pass' ? 'success' : payload.run.verdict === 'review' ? 'warning' : 'error',
-        `Run completed: ${payload.run.verdict}`,
-        `Severity ${payload.run.severity}. Highest escalation Tier ${Math.max(...payload.run.turns.map((turn) => turn.escalation.tier))}. Duration ${formatDuration(payload.run.durationMs)}. Tokens ${payload.run.usage.totalTokens.toLocaleString()}.`,
+        'success',
+        'Background run accepted',
+        `Time limit ${formatDuration(job.limits.maxDurationMs)}. ${job.limits.maxModelCalls} model calls, ${job.limits.maxRetriesPerRequest} retry per request, ${job.limits.maxTotalTokens.toLocaleString()} tokens maximum.`,
+      );
+
+      while (isActiveJob(job)) {
+        await waitForPoll(900);
+        const pollToken = await currentUser.getIdToken();
+        const pollResponse = await fetch(
+          `/api/admin/pulsecheck/nora-red-team/run?jobId=${encodeURIComponent(job.jobId)}`,
+          {
+            method: 'GET',
+            headers: {
+              ...requestHeaders,
+              Authorization: `Bearer ${pollToken}`,
+            },
+          },
+        );
+        const pollPayload = await pollResponse.json().catch(() => null) as {
+          job?: NoraRedTeamJob;
+          error?: string;
+          code?: string;
+        } | null;
+        if (!pollResponse.ok || !pollPayload?.job) {
+          throw new Error(explainRunError(pollPayload?.code, pollPayload?.error, pollResponse.status));
+        }
+        job = pollPayload.job;
+        setActiveJob(job);
+        if (job.progress.stage !== lastStage) {
+          lastStage = job.progress.stage;
+          appendLog(
+            job.status === 'cancelling' ? 'warning' : 'info',
+            job.progress.message,
+            `${job.progress.percent}% complete. ${job.progress.modelCalls}/${job.limits.maxModelCalls} model calls. ${job.progress.usage.totalTokens.toLocaleString()}/${job.limits.maxTotalTokens.toLocaleString()} tokens. ${job.progress.retryCount} retries.`,
+          );
+        }
+      }
+
+      if (job.status === 'cancelled') {
+        appendLog('warning', 'Run cancelled', 'The active model request was stopped and no result was saved.');
+        return;
+      }
+      if (job.status === 'failed' || !job.run) {
+        const explainedError = explainRunError(job.error?.code, job.error?.message);
+        appendLog('error', `Run stopped: ${job.error?.code || job.status}`, explainedError);
+        throw new Error(explainedError);
+      }
+
+      setRuns((current) => ({
+        ...current,
+        [runStorageKey(targetForRun, scenarioForRun.id)]: job.run!,
+      }));
+      void loadHistory(true);
+      appendLog(
+        job.run.verdict === 'pass' ? 'success' : job.run.verdict === 'review' ? 'warning' : 'error',
+        `Run completed: ${job.run.verdict}`,
+        `Severity ${job.run.severity}. Highest escalation Tier ${Math.max(...job.run.turns.map((turn) => turn.escalation.tier))}. Duration ${formatDuration(job.run.durationMs)}. Tokens ${job.run.usage.totalTokens.toLocaleString()}.`,
       );
     } catch (runError) {
       const message = runError instanceof Error ? runError.message : 'The red-team run could not be completed.';
       setError(message);
       appendLog('error', 'Scenario did not complete', `${message} Elapsed ${formatDuration(Date.now() - startedAt)}.`);
     } finally {
+      setActiveJob(null);
       setRunningScenarioId(null);
       appendLog('info', 'Runner returned to idle.');
+    }
+  };
+
+  const cancelScenario = async () => {
+    if (!activeJob || !isActiveJob(activeJob)) return;
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setError('Your admin session is not available. Sign in again.');
+      return;
+    }
+    appendLog('warning', 'Cancellation requested', 'Stopping the active model request.');
+    try {
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch(
+        `/api/admin/pulsecheck/nora-red-team/run?jobId=${encodeURIComponent(activeJob.jobId)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+            ...getFirebaseModeRequestHeaders(),
+            ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
+          },
+        },
+      );
+      const payload = await response.json().catch(() => null) as {
+        job?: NoraRedTeamJob;
+        error?: string;
+        code?: string;
+      } | null;
+      if (!response.ok || !payload?.job) {
+        throw new Error(explainRunError(payload?.code, payload?.error, response.status));
+      }
+      setActiveJob(payload.job);
+    } catch (cancelError) {
+      const message = cancelError instanceof Error ? cancelError.message : 'The run could not be cancelled.';
+      setError(message);
+      appendLog('error', 'Cancellation failed', message);
     }
   };
 
@@ -378,28 +560,73 @@ const NoraRedTeamConsole: React.FC = () => {
     appendLog('info', 'Console cleared.');
   };
 
-  const recordHumanReview = (runId: string, status: 'confirmed' | 'inconclusive') => {
-    setRuns((current) => Object.fromEntries(
-      Object.entries(current).map(([scenarioId, run]) => {
-        if (run.runId !== runId) return [scenarioId, run];
-        return [scenarioId, {
-          ...run,
-          humanReview: {
-            status,
-            reviewedAt: new Date().toISOString(),
-          },
-          agentTrace: run.agentTrace.map((trace) => trace.role === 'human_reviewer'
-            ? {
-                ...trace,
-                status: 'completed' as const,
-                summary: status === 'confirmed'
-                  ? 'A human reviewer confirmed the recorded finding.'
-                  : 'A human reviewer marked the result inconclusive for follow-up.',
-              }
-            : trace),
-        }];
-      }),
-    ));
+  const recordHumanReview = async (runId: string, status: 'confirmed' | 'inconclusive') => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    try {
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch('/api/admin/pulsecheck/nora-red-team/history', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+          ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
+        },
+        body: JSON.stringify({ runId, status }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        history?: NoraRedTeamHistoryRecord;
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.history) throw new Error(payload?.error || 'The review decision could not be saved.');
+      setHistory((current) => current.map((record) => record.runId === runId ? payload.history! : record));
+      setRuns((current) => Object.fromEntries(
+        Object.entries(current).map(([key, run]) => [key, run.runId === runId ? payload.history!.run : run]),
+      ));
+      appendLog('success', 'Review decision saved', `${status === 'confirmed' ? 'Confirmed finding' : 'Marked inconclusive'} by ${currentUser.email || 'admin reviewer'}.`);
+    } catch (reviewError) {
+      const message = reviewError instanceof Error ? reviewError.message : String(reviewError);
+      setError(message);
+      appendLog('error', 'Review decision was not saved', message);
+    }
+  };
+
+  const promoteRegression = async (run: NoraRedTeamRun) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    try {
+      const idToken = await currentUser.getIdToken();
+      const response = await fetch('/api/admin/pulsecheck/nora-red-team/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          ...getFirebaseModeRequestHeaders(),
+          ...(currentUser.email ? { 'x-admin-email': currentUser.email } : {}),
+        },
+        body: JSON.stringify({
+          action: 'promote_regression',
+          runId: run.runId,
+          scenarioId: run.scenarioId,
+        }),
+      });
+      const payload = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error || 'The regression case could not be saved.');
+      setHistory((current) => current.map((record) => record.runId === run.runId
+        ? {
+            ...record,
+            promotedRegression: true,
+            promotedAt: new Date().toISOString(),
+            promotedBy: currentUser.email || null,
+          }
+        : record));
+      appendLog('success', 'Regression case promoted', `${run.scenarioTitle} is now part of the protected regression set.`);
+    } catch (promoteError) {
+      const message = promoteError instanceof Error ? promoteError.message : String(promoteError);
+      setError(message);
+      appendLog('error', 'Regression case was not saved', message);
+    }
   };
 
   return (
@@ -422,8 +649,29 @@ const NoraRedTeamConsole: React.FC = () => {
               </span>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Contract {NORA_RED_TEAM_CONTRACT_VERSION} | Synthetic data | Session only | No production writes
+              Contract {NORA_RED_TEAM_CONTRACT_VERSION} | Synthetic evidence | Protected run history | No production athlete-data writes
             </p>
+          </div>
+          <div className="grid grid-cols-2 rounded-md border border-zinc-700 bg-zinc-950 p-1" role="group" aria-label="Red-team target">
+            <button
+              type="button"
+              onClick={() => setTarget('policy_sandbox')}
+              disabled={Boolean(runningScenarioId)}
+              aria-pressed={target === 'policy_sandbox'}
+              className={`h-8 rounded px-3 text-xs font-medium transition ${target === 'policy_sandbox' ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              Policy sandbox
+            </button>
+            <button
+              type="button"
+              onClick={() => setTarget('staging_chat')}
+              disabled={Boolean(runningScenarioId) || !developmentDatabase}
+              aria-pressed={target === 'staging_chat'}
+              className={`h-8 rounded px-3 text-xs font-medium transition ${target === 'staging_chat' ? 'bg-cyan-700 text-white' : 'text-zinc-400 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-35`}
+              title={developmentDatabase ? 'Run through the real development chat endpoint' : 'Switch the admin banner to Development database first'}
+            >
+              Staging chat
+            </button>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -433,6 +681,18 @@ const NoraRedTeamConsole: React.FC = () => {
               <LockKeyhole className="h-4 w-4" />
               <span className="hidden sm:inline">Contract</span>
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setHistoryOpen((current) => !current);
+                if (!historyOpen) void loadHistory();
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-md border bg-zinc-900 transition ${historyOpen ? 'border-cyan-500/50 text-cyan-200' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'}`}
+              aria-label="Run history"
+              title="Run history"
+            >
+              <History className={`h-4 w-4 ${historyLoading ? 'animate-spin' : ''}`} />
+            </button>
             <button
               type="button"
               onClick={exportEvidence}
@@ -459,12 +719,23 @@ const NoraRedTeamConsole: React.FC = () => {
 
       <section className="border-b border-zinc-800 bg-[#0b0e13]">
         <div className="mx-auto grid max-w-[1600px] grid-cols-2 divide-x divide-zinc-800 sm:grid-cols-4">
-          <Metric label="Scenario families" value={String(NORA_RED_TEAM_SCENARIOS.length)} detail="Contract coverage" />
+          <Metric label="Scenario families" value={String(scenarioFamilyCount)} detail={`${NORA_RED_TEAM_SCENARIOS.length} cases`} />
           <Metric label="Completed" value={`${completedRuns.length}/${NORA_RED_TEAM_SCENARIOS.length}`} detail={`${passedRuns} passed`} />
-          <Metric label="Critical blockers" value={String(criticalBlockers)} detail="Release gate" tone={criticalBlockers ? 'red' : 'green'} />
-          <Metric label="Human review" value={String(reviewCount)} detail="Open decisions" tone={reviewCount ? 'amber' : 'zinc'} />
+          <Metric label="Critical blockers" value={String(durableCriticalBlockers)} detail={latestSuite ? `Suite ${latestSuite.status}` : 'No scheduled suite'} tone={durableCriticalBlockers ? 'red' : 'green'} />
+          <Metric label="Regression set" value={String(promotedRegressionCount)} detail="Promoted cases" tone={promotedRegressionCount ? 'amber' : 'zinc'} />
         </div>
       </section>
+
+      {historyOpen && (
+        <RunHistory history={history} latestSuite={latestSuite} loading={historyLoading} onSelect={(record) => {
+          setTarget(record.run.platform === 'web-staging-chat' ? 'staging_chat' : 'policy_sandbox');
+          setSelectedScenarioId(record.scenarioId);
+          setRuns((current) => ({
+            ...current,
+            [runStorageKey(record.run.platform === 'web-staging-chat' ? 'staging_chat' : 'policy_sandbox', record.scenarioId)]: record.run,
+          }));
+        }} />
+      )}
 
       <div className="mx-auto grid max-w-[1600px] lg:min-h-[calc(100vh-153px)] lg:grid-cols-[350px_minmax(0,1fr)]">
         <aside className="border-b border-zinc-800 bg-[#0c0f15] lg:border-b-0 lg:border-r">
@@ -516,7 +787,7 @@ const NoraRedTeamConsole: React.FC = () => {
                 scenario={scenario}
                 index={NORA_RED_TEAM_SCENARIOS.indexOf(scenario) + 1}
                 selected={scenario.id === selectedScenario.id}
-                status={scenarioStatus(scenario.id, runs, runningScenarioId)}
+                status={scenarioStatus(scenario.id, target, runs, runningScenarioId)}
                 onSelect={() => selectScenario(scenario.id)}
               />
             ))}
@@ -530,9 +801,11 @@ const NoraRedTeamConsole: React.FC = () => {
             randomSeed={randomSeed}
             running={runningScenarioId === selectedScenario.id}
             anotherRunActive={Boolean(runningScenarioId && runningScenarioId !== selectedScenario.id)}
+            job={selectedJob}
             onSeedChange={setRandomSeed}
             onRefreshSeed={() => setRandomSeed(createRandomSeed())}
             onRun={runScenario}
+            onCancel={cancelScenario}
           />
 
           {error && (
@@ -551,10 +824,17 @@ const NoraRedTeamConsole: React.FC = () => {
             </div>
           )}
 
+          {selectedJob && <RunProgress job={selectedJob} />}
+
           {selectedRun ? (
-            <RunEvidence run={selectedRun} onHumanReview={recordHumanReview} />
+            <RunEvidence
+              run={selectedRun}
+              onHumanReview={recordHumanReview}
+              onPromoteRegression={promoteRegression}
+              promotedRegression={history.some((record) => record.runId === selectedRun.runId && record.promotedRegression)}
+            />
           ) : (
-            <ScenarioPreview scenario={selectedScenario} running={runningScenarioId === selectedScenario.id} />
+            <ScenarioPreview scenario={selectedScenario} />
           )}
 
           <RunConsole logs={runLogs} onClear={clearLogs} />
@@ -563,6 +843,70 @@ const NoraRedTeamConsole: React.FC = () => {
     </div>
   );
 };
+
+const RunHistory: React.FC<{
+  history: NoraRedTeamHistoryRecord[];
+  latestSuite: NoraRedTeamSuiteRecord | null;
+  loading: boolean;
+  onSelect: (record: NoraRedTeamHistoryRecord) => void;
+}> = ({ history, latestSuite, loading, onSelect }) => (
+  <section className="border-b border-zinc-800 bg-[#0c0f15]">
+    <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase text-zinc-500">Protected run history</p>
+          <p className="mt-1 text-sm text-zinc-300">Reviewer identity, release status, and promoted regressions</p>
+        </div>
+        <span className="font-mono text-xs text-zinc-500">{history.length} {history.length === 1 ? 'record' : 'records'}</span>
+      </div>
+      {latestSuite && (
+        <div className="mt-4 grid border-y border-zinc-800 sm:grid-cols-4 sm:divide-x sm:divide-zinc-800">
+          <SuiteValue label="Latest suite" value={latestSuite.status} />
+          <SuiteValue label="Coverage" value={`${latestSuite.completedScenarioIds.length}/${latestSuite.scenarioIds.length}`} />
+          <SuiteValue label="Result" value={`${latestSuite.passed} pass | ${latestSuite.failed} fail | ${latestSuite.review} review`} />
+          <SuiteValue label="Completed" value={latestSuite.completedAt ? formatTimestamp(latestSuite.completedAt) : 'In progress'} />
+        </div>
+      )}
+      {loading && !history.length ? (
+        <div className="mt-4 border-y border-zinc-800 py-4 text-sm text-zinc-500">Loading protected history...</div>
+      ) : history.length ? (
+        <div className="mt-4 max-h-72 overflow-auto border-y border-zinc-800">
+          {history.map((record) => {
+            const RecordIcon = verdictIcon(record.verdict);
+            return (
+              <button
+                type="button"
+                key={record.runId}
+                onClick={() => onSelect(record)}
+                className="grid w-full gap-2 border-t border-zinc-800 px-2 py-3 text-left first:border-t-0 hover:bg-zinc-900 sm:grid-cols-[24px_minmax(220px,1fr)_120px_120px_150px] sm:items-center"
+              >
+                <RecordIcon className={`h-4 w-4 ${record.verdict === 'pass' ? 'text-emerald-300' : record.verdict === 'fail' ? 'text-red-300' : 'text-amber-300'}`} />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-zinc-200">{record.scenarioTitle}</span>
+                  <span className="mt-0.5 block text-[11px] text-zinc-600">{record.run.platform === 'web-staging-chat' ? 'Staging chat' : 'Policy sandbox'} | {record.ownerEmail}</span>
+                </span>
+                <span className={`text-xs capitalize ${record.releaseStatus === 'blocking' ? 'text-red-300' : record.releaseStatus === 'resolved' ? 'text-cyan-300' : 'text-emerald-300'}`}>
+                  {record.releaseStatus}
+                </span>
+                <span className="text-xs text-zinc-400">{record.promotedRegression ? 'Regression' : 'Not promoted'}</span>
+                <span className="text-xs text-zinc-500">{formatTimestamp(record.completedAt)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-4 border-y border-zinc-800 py-4 text-sm text-zinc-500">No durable runs have been recorded in this database yet.</div>
+      )}
+    </div>
+  </section>
+);
+
+const SuiteValue: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="min-w-0 px-3 py-3">
+    <p className="text-[10px] font-medium uppercase text-zinc-600">{label}</p>
+    <p className="mt-1 truncate text-xs capitalize text-zinc-300">{value}</p>
+  </div>
+);
 
 const Metric: React.FC<{
   label: string;
@@ -628,10 +972,12 @@ const ScenarioHeader: React.FC<{
   randomSeed: number;
   running: boolean;
   anotherRunActive: boolean;
+  job: NoraRedTeamJob | null;
   onSeedChange: (value: number) => void;
   onRefreshSeed: () => void;
   onRun: () => void;
-}> = ({ scenario, run, randomSeed, running, anotherRunActive, onSeedChange, onRefreshSeed, onRun }) => (
+  onCancel: () => void;
+}> = ({ scenario, run, randomSeed, running, anotherRunActive, job, onSeedChange, onRefreshSeed, onRun, onCancel }) => (
   <div className="border-b border-zinc-800 bg-[#0b0e13] px-4 py-5 sm:px-6">
     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
       <div className="min-w-0 max-w-3xl">
@@ -681,28 +1027,65 @@ const ScenarioHeader: React.FC<{
             </button>
           </span>
         </label>
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={running || anotherRunActive}
-          className="inline-flex h-10 min-w-36 items-center justify-center gap-2 rounded-md bg-[#d7ff00] px-4 text-sm font-semibold text-black transition hover:bg-[#e3ff55] disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
-          {running ? 'Running scenario' : run ? 'Run again' : 'Run scenario'}
-        </button>
+        {running && job ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={job.status === 'cancelling'}
+            className="inline-flex h-10 min-w-32 items-center justify-center gap-2 rounded-md border border-red-500/50 bg-red-500/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 disabled:cursor-wait disabled:opacity-50"
+          >
+            {job.status === 'cancelling'
+              ? <RefreshCw className="h-4 w-4 animate-spin" />
+              : <Square className="h-3.5 w-3.5 fill-current" />}
+            {job.status === 'cancelling' ? 'Stopping' : 'Stop run'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onRun}
+            disabled={anotherRunActive}
+            className="inline-flex h-10 min-w-36 items-center justify-center gap-2 rounded-md bg-[#d7ff00] px-4 text-sm font-semibold text-black transition hover:bg-[#e3ff55] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <Play className="h-4 w-4 fill-current" />
+            {run ? 'Run again' : 'Run scenario'}
+          </button>
+        )}
       </div>
     </div>
   </div>
 );
 
-const ScenarioPreview: React.FC<{ scenario: NoraRedTeamScenario; running: boolean }> = ({ scenario, running }) => (
-  <div className="px-4 py-6 sm:px-6">
-    {running && (
-      <div className="mb-6 flex items-center gap-3 rounded-md border border-cyan-500/35 bg-cyan-500/[0.06] px-4 py-3 text-sm text-cyan-100">
-        <RefreshCw className="h-4 w-4 animate-spin" />
-        <span>The bounded agent run is in progress. Nothing has been saved.</span>
+const RunProgress: React.FC<{ job: NoraRedTeamJob }> = ({ job }) => (
+  <section
+    className="border-b border-cyan-500/25 bg-cyan-500/[0.045] px-4 py-4 sm:px-6"
+    aria-live="polite"
+    aria-label="Red-team run progress"
+  >
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <RefreshCw className={`h-4 w-4 shrink-0 text-cyan-300 ${job.status === 'cancelling' ? '' : 'animate-spin'}`} />
+          <p className="truncate text-sm font-medium text-cyan-100">{job.progress.message}</p>
+          <span className="shrink-0 font-mono text-xs text-cyan-300">{job.progress.percent}%</span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className={`h-full rounded-full transition-[width] duration-300 ${job.status === 'cancelling' ? 'bg-amber-400' : 'bg-cyan-400'}`}
+            style={{ width: `${job.progress.percent}%` }}
+          />
+        </div>
       </div>
-    )}
+      <dl className="grid shrink-0 grid-cols-3 gap-x-5 text-xs">
+        <EvidenceDatum label="Model calls" value={`${job.progress.modelCalls}/${job.limits.maxModelCalls}`} mono />
+        <EvidenceDatum label="Tokens" value={`${job.progress.usage.totalTokens.toLocaleString()}/${job.limits.maxTotalTokens.toLocaleString()}`} mono />
+        <EvidenceDatum label="Retries" value={`${job.progress.retryCount} total`} mono />
+      </dl>
+    </div>
+  </section>
+);
+
+const ScenarioPreview: React.FC<{ scenario: NoraRedTeamScenario }> = ({ scenario }) => (
+  <div className="px-4 py-6 sm:px-6">
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.72fr)]">
       <div className="min-w-0 space-y-8">
         <PreviewSection title="Opening athlete message" icon={UserRound}>
@@ -818,8 +1201,10 @@ const EscalationEvidence: React.FC<{
 
 const RunEvidence: React.FC<{
   run: NoraRedTeamRun;
-  onHumanReview: (runId: string, status: 'confirmed' | 'inconclusive') => void;
-}> = ({ run, onHumanReview }) => {
+  onHumanReview: (runId: string, status: 'confirmed' | 'inconclusive') => Promise<void>;
+  onPromoteRegression: (run: NoraRedTeamRun) => Promise<void>;
+  promotedRegression: boolean;
+}> = ({ run, onHumanReview, onPromoteRegression, promotedRegression }) => {
   const VerdictIcon = verdictIcon(run.verdict);
   const [previewTurnNumber, setPreviewTurnNumber] = useState<number | null>(null);
   const previewTurn = run.turns.find((turn) => turn.turn === previewTurnNumber) || null;
@@ -917,6 +1302,90 @@ const RunEvidence: React.FC<{
               ))}
             </div>
           </EvidenceSection>
+
+          {run.stagingEvidence && (
+            <EvidenceSection title="Staging workflow evidence" icon={FlaskConical}>
+              <div className="grid gap-px overflow-hidden rounded-md border border-zinc-800 bg-zinc-800 sm:grid-cols-2">
+                {[
+                  { label: 'Anonymous request denied', passed: run.stagingEvidence.anonymousRequestDenied, applicable: true },
+                  { label: 'Cross-account request denied', passed: run.stagingEvidence.crossAccountRequestDenied, applicable: true },
+                  { label: 'Health snapshot read', passed: run.stagingEvidence.stateSnapshotRead, applicable: true },
+                  { label: 'Conversation write observed', passed: run.stagingEvidence.conversationWriteObserved, applicable: true },
+                  {
+                    label: 'Escalation write observed',
+                    passed: run.stagingEvidence.escalationRecordWriteObserved,
+                    applicable: run.turns.some((turn) => turn.escalation.tier >= 2),
+                  },
+                  {
+                    label: `Coach handoff writes observed (${run.stagingEvidence.coachHandoffWriteCount ?? 0})`,
+                    passed: run.stagingEvidence.coachHandoffWriteObserved,
+                    applicable: run.scenarioId === 'successful-action-confirmed' || run.stagingEvidence.coachHandoffWriteObserved,
+                  },
+                  {
+                    label: 'Critical safety state observed',
+                    passed: run.stagingEvidence.safetyStateWriteObserved,
+                    applicable: run.turns.some((turn) => turn.escalation.tier === 3),
+                  },
+                  {
+                    label: 'Tier 2 licensed-care route locked',
+                    passed: run.stagingEvidence.tier2ClinicalRoutingLocked,
+                    applicable: run.turns.some((turn) => turn.escalation.tier === 2),
+                  },
+                  { label: 'Synthetic cleanup completed', passed: run.stagingEvidence.cleanupCompleted, applicable: true },
+                ].map(({ label, passed, applicable }) => (
+                  <div key={label} className="flex items-center gap-2 bg-[#090b10] px-3 py-3 text-xs">
+                    {!applicable
+                      ? <Circle className="h-4 w-4 text-zinc-600" />
+                      : passed
+                        ? <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                        : <XCircle className="h-4 w-4 text-red-300" />}
+                    <span className="min-w-0 flex-1 text-zinc-300">{label}</span>
+                    <span className={applicable ? (passed ? 'text-emerald-300' : 'text-red-300') : 'text-zinc-600'}>
+                      {applicable ? (passed ? 'Confirmed' : 'Missing') : 'Not exercised'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-600">External contact remained disabled for the entire staging run.</p>
+            </EvidenceSection>
+          )}
+
+          <EvidenceSection title="Simulated tool outcomes" icon={FileJson}>
+            {run.simulatedTools.length ? (
+              <div className="overflow-hidden rounded-md border border-zinc-800">
+                {run.simulatedTools.map((tool) => {
+                  const outcomeTone = tool.outcome === 'succeeded'
+                    ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200'
+                    : tool.outcome === 'failed' || tool.outcome === 'blocked'
+                      ? 'border-red-500/35 bg-red-500/10 text-red-200'
+                      : 'border-amber-500/35 bg-amber-500/10 text-amber-200';
+                  return (
+                    <div key={`${tool.tool}-${tool.outcome}`} className="px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-mono text-sm text-zinc-200">{tool.tool}</p>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${outcomeTone}`}>
+                          {tool.outcome.replace(/_/g, ' ')}
+                        </span>
+                        <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[10px] uppercase text-zinc-400">
+                          zero side effects
+                        </span>
+                      </div>
+                      <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3 xl:grid-cols-6">
+                        <EvidenceDatum label="Authorization" value={tool.authorization.replace(/_/g, ' ')} />
+                        <EvidenceDatum label="Confirmation" value={tool.confirmation ? 'Verified' : 'None'} />
+                        <EvidenceDatum label="Receipt" value={tool.confirmationId || 'None'} mono={Boolean(tool.confirmationId)} />
+                        <EvidenceDatum label="Attempts" value={tool.attemptCount === undefined ? 'Not tracked' : String(tool.attemptCount)} mono={tool.attemptCount !== undefined} />
+                        <EvidenceDatum label="Duplicate blocked" value={tool.duplicatePrevented === undefined ? 'Not applicable' : tool.duplicatePrevented ? 'Yes' : 'No'} />
+                        <EvidenceDatum label="Idempotency key" value={tool.idempotencyKey || 'None'} mono={Boolean(tool.idempotencyKey)} />
+                      </dl>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="border-y border-zinc-800 py-4 text-sm text-zinc-500">No simulated tool was requested.</div>
+            )}
+          </EvidenceSection>
         </div>
 
         <div className="min-w-0">
@@ -976,8 +1445,17 @@ const RunEvidence: React.FC<{
                 value={run.humanReview.status.replace(/_/g, ' ')}
                 tone={run.humanReview.status === 'confirmed' || run.humanReview.status === 'not_required' ? 'green' : 'amber'}
               />
-              <DecisionRow label="Production writes" value="Blocked" tone="green" />
-              <DecisionRow label="Application storage" value="Off" tone="green" />
+              <DecisionRow label="Reviewer" value={run.humanReview.reviewerEmail || 'Not reviewed'} />
+              <DecisionRow label="Athlete-data writes" value="None" tone="green" />
+              <DecisionRow
+                label="Run storage"
+                value={run.evidencePolicy.persistenceScope === 'protected_history'
+                  ? 'Protected history'
+                  : run.evidencePolicy.applicationPersistence
+                    ? 'Temporary job state'
+                    : 'Session memory only'}
+                tone="green"
+              />
               <DecisionRow label="OpenAI response storage" value="Off" tone="green" />
             </dl>
             {run.adjudication && (
@@ -1011,6 +1489,15 @@ const RunEvidence: React.FC<{
                 </button>
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => void onPromoteRegression(run)}
+              disabled={promotedRegression}
+              className={`mt-2 inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-md border px-3 text-xs font-semibold transition ${promotedRegression ? 'border-cyan-400/45 bg-cyan-400/10 text-cyan-100' : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-cyan-500/50 hover:text-cyan-100'} disabled:cursor-default`}
+            >
+              <BookmarkPlus className="h-3.5 w-3.5" />
+              {promotedRegression ? 'Regression case saved' : 'Promote to regression'}
+            </button>
           </EvidenceSection>
         </div>
       </div>

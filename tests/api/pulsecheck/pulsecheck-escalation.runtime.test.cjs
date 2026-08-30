@@ -11,6 +11,7 @@ function loadEscalationModule({
   runtimeDb,
   decoded = { uid: 'athlete-1' },
   verifyError = null,
+  pilotMetrics = {},
 } = {}) {
   delete require.cache[escalationPath];
   delete require.cache[configPath];
@@ -51,13 +52,13 @@ function loadEscalationModule({
     filename: pilotMetricsPath,
     loaded: true,
     exports: {
-      applyPilotWatchList: async () => ({}),
-      emitPilotMetricEvent: async () => ({}),
-      evaluateCoachWorkflowContinuity: async () => ({}),
-      recordPilotMetricAlert: async () => ({}),
-      recomputePilotMetricRollups: async () => ({}),
-      resolvePilotEnrollmentContext: async () => ({}),
-      writePilotMetricOpsStatus: async () => ({}),
+      applyPilotWatchList: pilotMetrics.applyPilotWatchList || (async () => ({})),
+      emitPilotMetricEvent: pilotMetrics.emitPilotMetricEvent || (async () => ({})),
+      evaluateCoachWorkflowContinuity: pilotMetrics.evaluateCoachWorkflowContinuity || (async () => ({})),
+      recordPilotMetricAlert: pilotMetrics.recordPilotMetricAlert || (async () => ({})),
+      recomputePilotMetricRollups: pilotMetrics.recomputePilotMetricRollups || (async () => ({})),
+      resolvePilotEnrollmentContext: pilotMetrics.resolvePilotEnrollmentContext || (async () => ({})),
+      writePilotMetricOpsStatus: pilotMetrics.writePilotMetricOpsStatus || (async () => ({})),
       isTrueCareEscalationClassification: (classification) => Number(classification?.tier || 0) >= 2,
     },
   };
@@ -68,6 +69,7 @@ function loadEscalationModule({
 function createClinicalRuntimeDb(initialRecord = {}) {
   const state = {
     record: { ...initialRecord },
+    recordId: 'escalation-1',
     conversation: {},
     conversationWrites: [],
     safetyState: {},
@@ -116,7 +118,34 @@ function createClinicalRuntimeDb(initialRecord = {}) {
     },
     collection(name) {
       if (name === 'escalation-records') {
+        const query = {
+          where() {
+            return query;
+          },
+          async get() {
+            const hasRecord = Boolean(state.record && Object.keys(state.record).length);
+            return {
+              docs: hasRecord ? [{
+                id: state.recordId,
+                data: () => ({ ...state.record }),
+              }] : [],
+              empty: !hasRecord,
+            };
+          },
+        };
         return {
+          where() {
+            return query;
+          },
+          async add(payload) {
+            state.record = { ...payload };
+            return {
+              id: state.recordId,
+              async update(update) {
+                state.record = { ...state.record, ...update };
+              },
+            };
+          },
           doc(id) {
             return {
               id,
@@ -321,6 +350,56 @@ function createClinicalRuntimeDb(initialRecord = {}) {
 
   return { db, state };
 }
+
+test('synthetic Tier 3 staging uses the production escalation record path without contacting anyone', async () => {
+  let pilotMetricWrites = 0;
+  let pilotRollups = 0;
+  const { db, state } = createClinicalRuntimeDb();
+  state.conversation = { userId: 'nora-red-team-athlete-1' };
+  const { runtimeHelpers } = loadEscalationModule({
+    runtimeDb: db,
+    pilotMetrics: {
+      emitPilotMetricEvent: async () => { pilotMetricWrites += 1; },
+      recomputePilotMetricRollups: async () => { pilotRollups += 1; },
+    },
+  });
+
+  const payload = await runtimeHelpers.createEscalationFromTrustedRuntime({
+    userId: 'nora-red-team-athlete-1',
+    conversationId: 'synthetic-conversation-1',
+    tier: 3,
+    category: 'immediate_safety',
+    triggerMessageId: 'synthetic-message-1',
+    triggerContent: 'I cannot stay safe right now.',
+    classificationReason: 'Synthetic critical-safety probe.',
+    classificationConfidence: 1,
+    classificationFamily: 'critical_safety',
+    disposition: 'clinical_handoff',
+    severity: 'critical',
+    requiresCoachReview: true,
+    requiresClinicalHandoff: true,
+  }, db, {
+    syntheticRedTeam: true,
+    syntheticRedTeamRunId: 'nrt-staging-run-1',
+  });
+
+  assert.equal(payload.success, true);
+  assert.equal(payload.syntheticRedTeam, true);
+  assert.equal(payload.externalSideEffects, false);
+  assert.equal(payload.handoffStatus, 'completed');
+  assert.equal(payload.handoffResult.supportRoute, 'synthetic_no_contact');
+  assert.equal(payload.handoffResult.externalSideEffects, false);
+  assert.equal(state.record.syntheticRedTeam, true);
+  assert.equal(state.record.syntheticHandoff, true);
+  assert.equal(state.record.externalSideEffects, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(state.record, 'coachId'), false);
+  assert.equal(state.safetyState.syntheticRedTeam, true);
+  assert.equal(state.safetyState.externalSideEffects, false);
+  assert.equal(state.notifications.length, 0);
+  assert.equal(state.notificationLogs.length, 0);
+  assert.equal(pilotMetricWrites, 0);
+  assert.equal(pilotRollups, 0);
+});
 
 test('dispatcher rejects anonymous requests before Firestore access', async () => {
   let firestoreReads = 0;

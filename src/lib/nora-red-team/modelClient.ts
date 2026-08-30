@@ -30,7 +30,10 @@ export type NoraRedTeamResponse = {
 
 export type NoraRedTeamModelClient = {
   responses: {
-    create: (request: NoraRedTeamResponseRequest) => Promise<NoraRedTeamResponse>;
+    create: (
+      request: NoraRedTeamResponseRequest,
+      options?: { signal?: AbortSignal },
+    ) => Promise<NoraRedTeamResponse>;
   };
 };
 
@@ -115,7 +118,7 @@ export function createNoraRedTeamBridgeClient(options: BridgeClientOptions): Nor
 
   return {
     responses: {
-      create: async (request) => {
+      create: async (request, requestOptions) => {
         const responseFormat = toChatResponseFormat(request.text?.format);
         const response = await fetchImpl(`${bridgeOrigin}/api/openai/v1/chat/completions`, {
           method: 'POST',
@@ -136,6 +139,7 @@ export function createNoraRedTeamBridgeClient(options: BridgeClientOptions): Nor
               content: extractMessageContent(message.content),
             })),
           }),
+          signal: requestOptions?.signal,
         });
 
         const payload = await response.json().catch(() => null) as BridgeChatResponse | null;

@@ -126,6 +126,7 @@ export async function loadActiveProductionEscalationConditions(input: {
   authorization: string;
   projectId: string;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }): Promise<ProductionCondition[]> {
   if (!/^[a-z0-9][a-z0-9-]{3,62}$/i.test(input.projectId)) {
     throw new Error('ESCALATION_POLICY_UNAVAILABLE: Invalid Firebase project id.');
@@ -143,6 +144,7 @@ export async function loadActiveProductionEscalationConditions(input: {
         Authorization: input.authorization,
         Accept: 'application/json',
       },
+      signal: input.signal,
     });
     const payload = await response.json().catch(() => null) as {
       documents?: FirestoreDocument[];

@@ -618,7 +618,7 @@ const normalizeEscalationStatus = (entry: Record<string, any>): 'active' | 'reso
   return 'active';
 };
 
-const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function)\b/i;
+const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic|panic attack|can't function|cannot function|(?:going|planning|plan|want|intend)\s+to\s+(?:hurt|kill|attack|shoot|stab)\s+(?:someone|somebody|them|him|her|people|my\s+(?:teammate|coach|opponent)|a\s+(?:teammate|coach|player|person)))\b/i;
 const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
 
 const hasEscalationWorkflowProgress = (entry: Record<string, any>) =>

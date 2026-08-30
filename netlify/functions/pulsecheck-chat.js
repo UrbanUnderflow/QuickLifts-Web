@@ -11,6 +11,7 @@ const {
   getFirebaseAdminApp,
   admin,
   headers,
+  isDevMode,
 } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
 const {
@@ -91,6 +92,11 @@ const EscalationTier = {
 };
 
 const HARD_RISK_ESCALATION_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|unsafe|can't stay safe|cannot stay safe|want to die|die tonight|abuse|assault|violence|psychosis|hallucinat|manic)\b/i;
+const IMMINENT_HARM_TO_OTHERS_PATTERN = /\b(?:i\s+(?:am|'m)\s+)?(?:going|planning|plan|want|intend)\s+to\s+(?:hurt|kill|attack|shoot|stab)\s+(?:someone|somebody|them|him|her|people|my\s+(?:teammate|coach|opponent)|a\s+(?:teammate|coach|player|person))\b/i;
+const IMMEDIATE_SAFEGUARDING_PATTERN = /\b(?:(?:coach|trainer|teammate|partner|parent|guardian|someone)\b[^.?!]{0,25}\b(?:is|keeps?)\s+(?:abusing|assaulting|hitting|threatening)\s+me|(?:being|am|was|were)\s+(?:physically\s+|sexually\s+)?(?:abused|assaulted|attacked)|(?:threatened|threatening)\s+to\s+(?:hurt|kill|attack)\s+me)\b/i;
+const hasHardRiskEscalationSignal = (value) => HARD_RISK_ESCALATION_PATTERN.test(value)
+  || IMMINENT_HARM_TO_OTHERS_PATTERN.test(value)
+  || IMMEDIATE_SAFEGUARDING_PATTERN.test(value);
 const BENIGN_PERFORMANCE_SUPPORT_PATTERN = /\b(competition|compete|competing|on stage|performance|pre[- ]?competition|nervous|anxious|anxiety|excited|regulate|regulation|focus|attention|sleep|bed|go to sleep|late|mind|what'?s on my mind|talk about|emotional regulation|stress)\b/i;
 const LOSS_OF_FUNCTION_PROMPT_NOTE = 'Meaningful daily-function impairment without a critical-safety signal is Tier 2. Physical inability to move or feel a limb, sudden weakness, or stroke-like symptoms require prompt medical care.';
 const ESCALATION_DEDUPE_WINDOW_SECONDS = 30 * 60;
@@ -257,7 +263,7 @@ function normalizeEscalationClassification(parsed = {}, { userId, message, recen
     .concat((Array.isArray(recentMessages) ? recentMessages : []).slice(-5).map((entry) => entry?.content || ''))
     .join(' ');
   const normalizedTier = policyLane === NoraConversationLane.CriticalSafety
-    || HARD_RISK_ESCALATION_PATTERN.test(combinedSafetyText)
+    || hasHardRiskEscalationSignal(combinedSafetyText)
     ? EscalationTier.CriticalRisk
     : policyLane === NoraConversationLane.ClinicalCare
       ? EscalationTier.ElevatedRisk
@@ -1202,7 +1208,6 @@ async function getUserIdentity(db, userId, fallback = 'Coach') {
 
 async function loadAthleteCoachContacts(db, userId, userData = {}) {
   const contactsByUserId = new Map();
-  const primaryCandidates = [];
   const storedPrimaryCoachId = normalizeScopeString(userData?.primaryCoachUserId);
 
   const putContact = (contact) => {
@@ -1217,9 +1222,6 @@ async function loadAthleteCoachContacts(db, userId, userData = {}) {
       teamNames: [...new Set([...(existing.teamNames || []), ...(contact.teamNames || [])].filter(Boolean))],
     };
     contactsByUserId.set(coachId, merged);
-    if (merged.canBePrimary && !primaryCandidates.includes(coachId)) {
-      primaryCandidates.push(coachId);
-    }
   };
 
   const connectedCoaches = Array.isArray(userData?.connectedCoaches)
@@ -1302,7 +1304,7 @@ async function loadAthleteCoachContacts(db, userId, userData = {}) {
   const contacts = [...contactsByUserId.values()];
   const primaryCoachId = storedPrimaryCoachId && contacts.some((contact) => contact.coachId === storedPrimaryCoachId && contact.canBePrimary)
     ? storedPrimaryCoachId
-    : primaryCandidates.find((coachId) => contactsByUserId.get(coachId)?.canBePrimary) || '';
+    : '';
 
   return contacts
     .map((contact) => ({ ...contact, isPrimary: contact.coachId === primaryCoachId }))
@@ -1420,6 +1422,60 @@ function numberedCoachHandoffOptionSummaries(text) {
     })
     .filter(Boolean)
     .slice(0, 4);
+}
+
+function extractAuthorizedExactCoachMessage({ message, coachDisplayName }) {
+  const request = cleanCoachHandoffText(message);
+  const coachName = cleanCoachHandoffText(coachDisplayName);
+  if (!request || !coachName) return '';
+  if (!/\b(?:confirm|authorize)\b[\s\S]*\b(?:exact message|one message|send)\b/i.test(request)) return '';
+
+  const authorizationStart = request.search(/\s+(?:i\s+)?(?:confirm|authorize)\b/i);
+  if (authorizationStart < 0) return '';
+
+  const command = request.slice(0, authorizationStart).trim();
+  const escapedCoachName = coachName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const prefixes = [
+    new RegExp(`^(?:please\\s+)?(?:message|tell)\\s+${escapedCoachName}\\s+`, 'i'),
+    new RegExp(`^(?:please\\s+)?send\\s+(?:a\\s+message\\s+to\\s+)?${escapedCoachName}\\s*`, 'i'),
+  ];
+  const prefix = prefixes.find((candidate) => candidate.test(command));
+  if (!prefix) return '';
+
+  const content = command
+    .replace(prefix, '')
+    .replace(/^(?:that|saying)\s+/i, '')
+    .trim();
+  return content ? trimCoachHandoffText(content, 1000) : '';
+}
+
+function buildPriorCoachHandoffOutcome({ message, recentMessages, coachDisplayName, syntheticRedTeam }) {
+  const request = cleanCoachHandoffText(message);
+  const coachName = cleanCoachHandoffText(coachDisplayName) || 'your coach';
+  const isStatusQuestion = /\b(?:what happened|was (?:it|the message) sent|did (?:it|the message) send|message status)\b/i.test(request);
+  const isDuplicateRequest = /\b(?:again|retry|keep retrying|one more time)\b/i.test(request);
+  if (!isStatusQuestion && !isDuplicateRequest) return null;
+
+  const normalizedCoachName = coachName.toLowerCase();
+  const priorConfirmation = [...(recentMessages || [])].reverse().find((entry) => {
+    if (entry?.isFromUser === true) return false;
+    const content = cleanCoachHandoffText(entry?.content).toLowerCase();
+    return /\bsent\b/.test(content) && content.includes(normalizedCoachName);
+  });
+  if (!priorConfirmation) return null;
+
+  return {
+    sent: true,
+    status: 'already_confirmed',
+    duplicatePrevented: isDuplicateRequest,
+    ...(syntheticRedTeam ? {
+      syntheticRedTeam: true,
+      externalSideEffects: false,
+    } : {}),
+    assistantMessage: isDuplicateRequest
+      ? `That message was already sent once to ${coachName}. I did not send a duplicate.`
+      : `It was sent to ${coachName}.`,
+  };
 }
 
 function buildCoachHandoffBrief({ athleteName, message, recentMessages }) {
@@ -1565,6 +1621,8 @@ async function sendNoraCoachHandoff({
   coach,
   message,
   recentMessages,
+  syntheticRedTeam = false,
+  syntheticRedTeamRunId = '',
 }) {
   const conversationId = scopedCoachAthleteConversationId({
     organizationId: coach.organizationId,
@@ -1597,16 +1655,37 @@ async function sendNoraCoachHandoff({
       lastMessageTimestamp: now,
       lastMessageSenderId: '',
       unreadCount: { [coach.coachId]: 0, [athleteId]: 0 },
+      ...(syntheticRedTeam ? {
+        syntheticRedTeam: true,
+        syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+      } : {}),
       createdAt: now,
       updatedAt: now,
     }, { merge: true });
   }
 
-  const coachBrief = buildCoachHandoffBrief({
-    athleteName,
+  const exactMessage = extractAuthorizedExactCoachMessage({
     message,
-    recentMessages,
+    coachDisplayName: coach.displayName,
   });
+  const coachBrief = exactMessage
+    ? {
+        title: `Message from ${athleteName || 'Athlete'}`,
+        summary: 'Contains only the exact message the athlete authorized Nora to send.',
+        why: 'The athlete explicitly authorized this exact message.',
+        athleteExcerpts: [exactMessage],
+        noraOptions: [],
+        reviewAsk: '',
+        topic: 'athlete_message',
+        sharingScope: 'exact_message',
+        includesFullThread: false,
+        messageBody: exactMessage,
+      }
+    : buildCoachHandoffBrief({
+        athleteName,
+        message,
+        recentMessages,
+      });
   const handoffText = coachBrief.messageBody;
 
   const messageRef = db.collection('coach-athlete-messages').doc();
@@ -1620,21 +1699,31 @@ async function sendNoraCoachHandoff({
     readBy: { [athleteId]: now },
     messageType: 'text',
     source: 'nora_handoff',
-      noraHandoff: {
-        requestedByAthleteId: athleteId,
-        targetCoachId: coach.coachId,
-        topic: coachBrief.topic,
-        title: coachBrief.title,
-        summary: coachBrief.summary,
-        why: coachBrief.why,
-        athleteExcerpts: coachBrief.athleteExcerpts,
-        noraOptions: coachBrief.noraOptions,
-        reviewAsk: coachBrief.reviewAsk,
-        sharingScope: coachBrief.sharingScope,
-        includesFullThread: coachBrief.includesFullThread,
-        createdAt: now,
-      },
-    });
+    ...(syntheticRedTeam ? {
+      syntheticRedTeam: true,
+      syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+      externalSideEffects: false,
+    } : {}),
+    noraHandoff: {
+      requestedByAthleteId: athleteId,
+      targetCoachId: coach.coachId,
+      topic: coachBrief.topic,
+      title: coachBrief.title,
+      summary: coachBrief.summary,
+      why: coachBrief.why,
+      athleteExcerpts: coachBrief.athleteExcerpts,
+      noraOptions: coachBrief.noraOptions,
+      reviewAsk: coachBrief.reviewAsk,
+      sharingScope: coachBrief.sharingScope,
+      includesFullThread: coachBrief.includesFullThread,
+      ...(syntheticRedTeam ? {
+        syntheticRedTeam: true,
+        syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+        externalSideEffects: false,
+      } : {}),
+      createdAt: now,
+    },
+  });
   batch.set(conversationRef, {
     lastMessage: handoffText,
     lastMessageId: messageRef.id,
@@ -1642,6 +1731,10 @@ async function sendNoraCoachHandoff({
     lastMessageSenderId: athleteId,
     updatedAt: now,
     [`unreadCount.${coach.coachId}`]: admin.firestore.FieldValue.increment(1),
+    ...(syntheticRedTeam ? {
+      syntheticRedTeam: true,
+      syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+    } : {}),
   }, { merge: true });
   await batch.commit();
 
@@ -1649,7 +1742,13 @@ async function sendNoraCoachHandoff({
     sent: true,
     conversationId,
     messageId: messageRef.id,
-    assistantMessage: `Done. I sent ${coach.displayName || 'your coach'} only the selected context.`,
+    ...(syntheticRedTeam ? {
+      syntheticRedTeam: true,
+      externalSideEffects: false,
+    } : {}),
+    assistantMessage: exactMessage
+      ? `Done. I sent your message to ${coach.displayName || 'your coach'}.`
+      : `Done. I sent ${coach.displayName || 'your coach'} only the selected context.`,
   };
 }
 
@@ -2092,8 +2191,8 @@ exports.handler = async (event, context) => {
     // Initialize Firebase Admin
     let db;
     let firebaseApp;
+    const firebaseRequest = { headers: event.headers || {} };
     try {
-      const firebaseRequest = { headers: event.headers || {} };
       initializeFirebaseAdmin(firebaseRequest);
       firebaseApp = getFirebaseAdminApp(firebaseRequest);
       // Keep authentication and Firestore on the same request-selected project.
@@ -2146,6 +2245,20 @@ exports.handler = async (event, context) => {
       };
     }
     const userId = verifiedCaller.userId;
+    const syntheticRedTeamRequested = ['true', '1'].includes(
+      getRequestHeader(event, 'x-nora-red-team-synthetic').toLowerCase()
+    );
+    const syntheticRedTeamRunId = getRequestHeader(event, 'x-nora-red-team-run-id');
+    const syntheticClaimIsValid = verifiedCaller.decoded?.noraRedTeamSynthetic === true
+      && userId.startsWith('nora-red-team-');
+    if (syntheticRedTeamRequested && (!isDevMode(firebaseRequest) || !syntheticClaimIsValid)) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'Synthetic red-team chat is restricted to signed development accounts.' }),
+      };
+    }
+    const syntheticRedTeam = syntheticRedTeamRequested && syntheticClaimIsValid;
     const normalizedClaimedUserId = String(claimedUserId || '').trim();
     if (normalizedClaimedUserId && normalizedClaimedUserId !== userId) {
       return {
@@ -2656,14 +2769,21 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
             };
             handledOnboarding = true;
           } else {
-            coachHandoffOutcome = await sendNoraCoachHandoff({
-              db,
-              athleteId: userId,
-              athleteName: displayName,
-              coach: targetCoach,
+            coachHandoffOutcome = buildPriorCoachHandoffOutcome({
               message,
               recentMessages,
-            });
+              coachDisplayName: targetCoach.displayName,
+              syntheticRedTeam,
+            }) || await sendNoraCoachHandoff({
+                db,
+                athleteId: userId,
+                athleteName: displayName,
+                coach: targetCoach,
+                message,
+                recentMessages,
+                syntheticRedTeam,
+                syntheticRedTeamRunId,
+              });
             assistantMessage = coachHandoffOutcome.assistantMessage;
             handledOnboarding = true;
           }
@@ -3041,6 +3161,10 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           createdAt: nowSec,
           updatedAt: nowSec
         };
+        if (syntheticRedTeam) {
+          data.syntheticRedTeam = true;
+          data.syntheticRedTeamRunId = syntheticRedTeamRunId || null;
+        }
         await convoRef.set(data, { merge: true });
         newConvoId = convoRef.id;
       } else {
@@ -3050,7 +3174,11 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           userId,
           title: convo?.title || 'Nora',
           messages: updated,
-          updatedAt: nowSec
+          updatedAt: nowSec,
+          ...(syntheticRedTeam ? {
+            syntheticRedTeam: true,
+            syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+          } : {}),
         }, { merge: true });
         newConvoId = convoRef.id;
       }
@@ -3101,11 +3229,14 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
             contextTags: currentStateSnapshot.contextTags,
             capturedAt: currentStateSnapshot.updatedAt || currentStateSnapshot.createdAt,
           } : undefined,
-        }, db);
+        }, db, {
+          syntheticRedTeam,
+          syntheticRedTeamRunId,
+        });
 
         escalationOutcome = buildTrustedEscalationOutcome(created);
 
-        if (escalation.tier === EscalationTier.MonitorOnly && escalationOutcome.escalationRecordId) {
+        if (!syntheticRedTeam && escalation.tier === EscalationTier.MonitorOnly && escalationOutcome.escalationRecordId) {
           try {
             await notifyCoachForEscalation(db, escalationOutcome.escalationRecordId, userId, escalation.tier);
           } catch (notifyError) {
@@ -3187,6 +3318,12 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         dailyAssignment: todaysNoraAssignment || null,
         assignmentRefreshApplied,
         coachHandoff: coachHandoffOutcome,
+        syntheticRedTeam: syntheticRedTeam ? {
+          active: true,
+          runId: syntheticRedTeamRunId || null,
+          firebaseMode: 'dev',
+          externalSideEffects: false,
+        } : null,
       })
     };
   } catch (error) {
@@ -3223,7 +3360,7 @@ function buildHardRiskSafetyFallback({ userId, message, recentMessages, conversa
   const combinedText = [message]
     .concat(safeRecentMessages.slice(-5).map((entry) => entry?.content || ''))
     .join(' ');
-  if (!HARD_RISK_ESCALATION_PATTERN.test(combinedText)) return null;
+  if (!hasHardRiskEscalationSignal(combinedText)) return null;
 
   return normalizeEscalationClassification({
     tier: EscalationTier.CriticalRisk,
@@ -3579,7 +3716,7 @@ function suppressBenignPerformanceEscalation(classification, message, recentMess
 
   const combinedText = [message].concat((recentMessages || []).slice(-5).map((entry) => entry?.content || '')).join(' ');
   if (!combinedText.trim()) return classification;
-  if (HARD_RISK_ESCALATION_PATTERN.test(combinedText)) return classification;
+  if (hasHardRiskEscalationSignal(combinedText)) return classification;
   if (!BENIGN_PERFORMANCE_SUPPORT_PATTERN.test(combinedText)) return classification;
 
   return {
@@ -4118,4 +4255,6 @@ exports.runtimeHelpers = {
   resolveAthleteVaultScopes,
   getCoachVaultContext,
   buildCoachHandoffBrief,
+  extractAuthorizedExactCoachMessage,
+  buildPriorCoachHandoffOutcome,
 };

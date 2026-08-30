@@ -385,6 +385,19 @@
   included_files = ["netlify/functions/**"]
   node_bundler = "esbuild"
 
+[functions.nora-red-team-run-background]
+  is_background = true
+
+[functions.nora-red-team-job-cleanup]
+  schedule = "@hourly"
+
+[functions.nora-red-team-scheduled-suite]
+  # Weekly Monday run. The scheduler only queues work; the background worker executes the suite.
+  schedule = "0 8 * * 1"
+
+[functions.nora-red-team-scheduled-suite-background]
+  is_background = true
+
 # Schedule the update-challenge-status function to run daily
 [functions.update-challenge-status]
   schedule = "@daily"

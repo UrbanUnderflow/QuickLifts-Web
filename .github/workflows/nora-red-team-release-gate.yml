@@ -1,0 +1,43 @@
+name: Nora Red Team Release Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "30 9 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-contract-checks:
+    name: Deterministic Nora contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:nora:ci
+
+  protected-agentic-release-gate:
+    name: Protected agentic release gate
+    if: github.event_name != 'pull_request'
+    needs: deterministic-contract-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:nora:release-gate
+        env:
+          NORA_RED_TEAM_RELEASE_GATE_TOKEN: ${{ secrets.NORA_RED_TEAM_RELEASE_GATE_TOKEN }}

@@ -949,7 +949,9 @@ function buildEscalationRecordPayload({
     consentStatus,
     handoffStatus: existingRecord?.handoffStatus || HandoffStatus.Pending,
     coachNotified: Boolean(existingRecord?.coachNotified),
-    coachId: existingRecord?.coachId || undefined,
+    ...(normalizeString(existingRecord?.coachId)
+      ? { coachId: normalizeString(existingRecord.coachId) }
+      : {}),
     coachNotifiedAt: existingRecord?.coachNotifiedAt || null,
     handoffInitiatedAt: existingRecord?.handoffInitiatedAt || null,
     handoffAcceptedAt: existingRecord?.handoffAcceptedAt || null,
@@ -1302,7 +1304,7 @@ exports.handler = async (event, context) => {
 /**
  * Create a new escalation record
  */
-async function handleCreateEscalation(body, runtimeDb = db) {
+async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {}) {
   const {
     userId,
     conversationId,
@@ -1322,6 +1324,8 @@ async function handleCreateEscalation(body, runtimeDb = db) {
     sourceTriggerMessageId,
     incident,
   } = body;
+  const syntheticRedTeam = runtimeOptions.syntheticRedTeam === true;
+  const syntheticRedTeamRunId = normalizeString(runtimeOptions.syntheticRedTeamRunId);
 
   if (!userId || !conversationId || tier === undefined) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
@@ -1462,7 +1466,18 @@ async function handleCreateEscalation(body, runtimeDb = db) {
     createdNewRecord = true;
   }
 
-  if (createdNewRecord) {
+  if (syntheticRedTeam) {
+    escalationData.syntheticRedTeam = true;
+    escalationData.syntheticRedTeamRunId = syntheticRedTeamRunId || null;
+    escalationData.externalSideEffects = false;
+    await runtimeDb.collection('escalation-records').doc(escalationId).set({
+      syntheticRedTeam: true,
+      syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+      externalSideEffects: false,
+    }, { merge: true });
+  }
+
+  if (createdNewRecord && !syntheticRedTeam) {
     await emitPilotMetricEvent({
       db: runtimeDb,
       athleteId: userId,
@@ -1484,7 +1499,9 @@ async function handleCreateEscalation(body, runtimeDb = db) {
     });
   }
 
-  await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000, runtimeDb);
+  if (!syntheticRedTeam) {
+    await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000, runtimeDb);
+  }
 
   // Update conversation with escalation state
   const activeTier = isTrueCareEscalationClassification({
@@ -1519,18 +1536,46 @@ async function handleCreateEscalation(body, runtimeDb = db) {
 
   // For Tier 3 (Critical), immediately initiate and await the safety handoff.
   if (activeTier === EscalationTier.CriticalRisk) {
-    const criticalResult = await executeCriticalSafetyOperations({
-      userId,
-      conversationId,
-      escalationId,
-      escalationData,
-      supportContext,
-      nowSec,
-      runtimeDb,
-    });
-    safetyStateWriteStatus = criticalResult.safetyStateWriteStatus;
-    safetyStateError = criticalResult.safetyStateError;
-    handoffResult = criticalResult.handoffResult;
+    if (syntheticRedTeam) {
+      await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({
+        athleteUserId: userId,
+        active: true,
+        tier: EscalationTier.CriticalRisk,
+        escalationId,
+        conversationId,
+        syntheticRedTeam: true,
+        syntheticRedTeamRunId: syntheticRedTeamRunId || null,
+        externalSideEffects: false,
+        updatedAt: nowSec,
+      }, { merge: true });
+      await runtimeDb.collection('escalation-records').doc(escalationId).set({
+        handoffStatus: HandoffStatus.Completed,
+        handoffCompletedAt: nowSec,
+        syntheticHandoff: true,
+        externalSideEffects: false,
+      }, { merge: true });
+      safetyStateWriteStatus = 'completed';
+      handoffResult = {
+        success: true,
+        status: 'simulated',
+        supportRoute: 'synthetic_no_contact',
+        syntheticRedTeam: true,
+        externalSideEffects: false,
+      };
+    } else {
+      const criticalResult = await executeCriticalSafetyOperations({
+        userId,
+        conversationId,
+        escalationId,
+        escalationData,
+        supportContext,
+        nowSec,
+        runtimeDb,
+      });
+      safetyStateWriteStatus = criticalResult.safetyStateWriteStatus;
+      safetyStateError = criticalResult.safetyStateError;
+      handoffResult = criticalResult.handoffResult;
+    }
   }
 
   console.log('[pulsecheck-escalation] Created escalation:', {
@@ -1577,6 +1622,8 @@ async function handleCreateEscalation(body, runtimeDb = db) {
       supportDefaultOptionId: supportOptionsPayload?.defaultOptionId || null,
       supportOptions: supportOptionsPayload?.options || [],
       requiresClinicalRoute: supportOptionsPayload?.requiresClinicalRoute === true,
+      syntheticRedTeam,
+      externalSideEffects: syntheticRedTeam ? false : undefined,
       hotlineResource: supportContext.route === 'hotline' ? HOTLINE_SUPPORT_RESOURCE : null,
       message:
         activeTier === EscalationTier.CriticalRisk && supportContext.route === 'hotline'
@@ -3477,11 +3524,11 @@ async function generateConversationSummaryInternal(messages) {
   }
 }
 
-async function createEscalationFromTrustedRuntime(body, runtimeDb) {
+async function createEscalationFromTrustedRuntime(body, runtimeDb, runtimeOptions = {}) {
   if (!runtimeDb || typeof runtimeDb.collection !== 'function') {
     throw new Error('A Firestore runtime is required for trusted escalation creation.');
   }
-  const response = await handleCreateEscalation(body, runtimeDb);
+  const response = await handleCreateEscalation(body, runtimeDb, runtimeOptions);
   let payload = {};
   try {
     payload = JSON.parse(response?.body || '{}');

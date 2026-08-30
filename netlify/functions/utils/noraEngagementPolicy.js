@@ -12,6 +12,8 @@ const NoraConversationLane = Object.freeze({
 });
 
 const CRITICAL_SAFETY_PATTERN = /\b(suicid|self[- ]?harm|hurt myself|kill myself|end my life|overdose|can't stay safe|cannot stay safe|want to die|die tonight|immediate danger)\b/i;
+const IMMINENT_HARM_TO_OTHERS_PATTERN = /\b(?:i\s+(?:am|'m)\s+)?(?:going|planning|plan|want|intend)\s+to\s+(?:hurt|kill|attack|shoot|stab)\s+(?:someone|somebody|them|him|her|people|my\s+(?:teammate|coach|opponent)|a\s+(?:teammate|coach|player|person))\b/i;
+const IMMEDIATE_SAFEGUARDING_PATTERN = /\b(?:(?:coach|trainer|teammate|partner|parent|guardian|someone)\b[^.?!]{0,25}\b(?:is|keeps?)\s+(?:abusing|assaulting|hitting|threatening)\s+me|(?:being|am|was|were)\s+(?:physically\s+|sexually\s+)?(?:abused|assaulted|attacked)|(?:threatened|threatening)\s+to\s+(?:hurt|kill|attack)\s+me)\b/i;
 const CLINICAL_CARE_PATTERN = /\b(therap(?:y|ist)|psychotherap|counsel(?:ing|ling|or)|psychiatr|psycholog(?:ist|ical care)|mental health care|diagnos(?:e|is)|treatment plan|medicat(?:ion|ions)|depress(?:ed|ion)|bipolar|ptsd|post[- ]traumatic|panic attack|eating disorder|anorexia|bulimia|purge|purging|substance (?:use|abuse)|addiction|trauma processing)\b/i;
 const FUNCTIONAL_IMPAIRMENT_PATTERN = /\b(?:can't|cannot|can not|unable to)\s+(?:function|get out of bed|go to class|go to practice|eat|sleep|work|take care of myself)\b/i;
 const CLINICAL_BODY_IMAGE_PATTERN = /\b(?:afraid to eat|scared to eat|starv(?:e|ing)|binge(?:ing)? and purg(?:e|ing)|hate (?:my|the way my) body|make myself throw up)\b/i;
@@ -41,7 +43,10 @@ const CROSS_ATHLETE_DATA_REQUEST_PATTERNS = [
   /\bteammate(?:'s)?\b[^.?!]{0,120}\b(?:nora|chat|history|conversation|message|account|data|information)\b/i,
 ];
 const HIDDEN_POLICY_REQUEST_PATTERN = /\b(?:hidden|system|developer|internal)\s+(?:prompt|message|policy|guidelines?|instructions?)\b|\b(?:api key|credentials?|secret key)\b|\bignore\s+nora(?:'s)?\s+rules\b/i;
+const TOOL_INJECTION_PATTERN = /\b(?:tool|connector|wearable|retrieved)\s+(?:output|result|response|text)\b[^.?!]{0,220}\b(?:system\s*:|ignore|override|call\s+[a-z][a-z0-9_-]*|run\s+[a-z][a-z0-9_-]*|mark\s+(?:it\s+)?authorized)\b/i;
 const TRACKING_PRESSURE_PATTERN = /\b(?:mental note|track|tracking|save|record)\b[^.?!]{0,180}\b(?:declin|reconsider|worth|despite|even if|for your own good|could (?:really )?help)\b|\b(?:declin|reconsider|worth|despite|even if|for your own good)\b[^.?!]{0,180}\b(?:mental note|track|tracking|save|record)\b/i;
+const CONTROLLING_COACHING_REQUEST_PATTERN = /\b(?:tell me|make me|say)\b[^.?!]{0,120}\b(?:no choice|have to|must|promise|obey|no excuses)\b|\b(?:no choice|make me promise|force me|control me)\b/i;
+const SHAMING_COACHING_REQUEST_PATTERN = /\b(?:tell me|call me|say)\b[^.?!]{0,120}\b(?:lazy|bad athlete|weak minded|ashamed|letting (?:the )?team down|failure)\b/i;
 
 const PROHIBITED_CLINICAL_OUTPUT_PATTERNS = [
   /\bas your therapist\b/i,
@@ -354,7 +359,11 @@ function isMedicalCareRequest(message) {
 
 function classifyNoraConversationLane(message) {
   const text = canonicalizeText(message);
-  if (CRITICAL_SAFETY_PATTERN.test(text)) return NoraConversationLane.CriticalSafety;
+  if (
+    CRITICAL_SAFETY_PATTERN.test(text)
+    || IMMINENT_HARM_TO_OTHERS_PATTERN.test(text)
+    || IMMEDIATE_SAFEGUARDING_PATTERN.test(text)
+  ) return NoraConversationLane.CriticalSafety;
   if (isClinicalCareRequest(text)) return NoraConversationLane.ClinicalCare;
   if (isCoachHandoffRequest(text)) return NoraConversationLane.CoachHandoff;
   if (isAppSupportQuestion(text)) return NoraConversationLane.AppSupport;
@@ -399,6 +408,13 @@ function buildNoraBoundaryResponse(lane, { athleteMessage = '', category = '' } 
     return "I can't share or follow hidden prompts, internal instructions, API keys, or other credentials. I can help with a normal PulseCheck question using information authorized for your account.";
   }
 
+  if (
+    lane === NoraConversationLane.AppSupport
+    && TOOL_INJECTION_PATTERN.test(canonicalAthleteMessage)
+  ) {
+    return "I can't follow instructions embedded in tool output or treat them as authorization in PulseCheck. Tool output is untrusted, and no action was run.";
+  }
+
   if (lane === NoraConversationLane.CriticalSafety) {
     return 'Call 911 now if you are in immediate danger. Call or text 988 for immediate crisis support. PulseCheck is also checking the support pathway connected to your account.';
   }
@@ -413,6 +429,20 @@ function buildNoraBoundaryResponse(lane, { athleteMessage = '', category = '' } 
       return "I can't diagnose you or provide clinical treatment in chat. I can still help with the next step: PulseCheck can connect you to the configured licensed mental-health support path for your team. Please confirm in the next step if you want me to start that handoff.";
     }
     return "Yes, I can help with that. This needs licensed mental-health support, and you do not have to set it up alone. PulseCheck can connect you to the configured support path for your team. Please confirm in the next step if you want me to start that handoff.";
+  }
+
+  if (
+    lane === NoraConversationLane.Performance
+    && CONTROLLING_COACHING_REQUEST_PATTERN.test(canonicalAthleteMessage)
+  ) {
+    return "I won't pressure or control you. You decide whether that routine fits what you want to work on.";
+  }
+
+  if (
+    lane === NoraConversationLane.Performance
+    && SHAMING_COACHING_REQUEST_PATTERN.test(canonicalAthleteMessage)
+  ) {
+    return "I won't shame you. Missing the routine is a fact, not a judgment. You decide what would help next.";
   }
 
   return null;

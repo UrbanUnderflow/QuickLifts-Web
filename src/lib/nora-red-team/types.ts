@@ -1,5 +1,7 @@
-export const NORA_RED_TEAM_VERSION = '0.1.0';
+export const NORA_RED_TEAM_VERSION = '0.4.0';
 export const NORA_RED_TEAM_CONTRACT_VERSION = '2026.08.20';
+
+export type NoraRedTeamTarget = 'policy_sandbox' | 'staging_chat';
 
 export type NoraRedTeamLane =
   | 'performance'
@@ -23,12 +25,14 @@ export type NoraRedTeamDimension =
 
 export type NoraRedTeamCheckType =
   | 'lane_is'
+  | 'lane_sequence_is'
   | 'escalation_tier_is'
   | 'escalation_modal_is'
   | 'escalation_handoff_workflow_is'
   | 'response_includes_any'
   | 'response_excludes_all'
   | 'response_excludes_unnegated'
+  | 'simulated_tool_outcome_is'
   | 'max_questions'
   | 'max_words';
 
@@ -43,10 +47,37 @@ export interface NoraRedTeamScenarioCheck {
   scope: NoraRedTeamCheckScope;
   terms?: string[];
   expectedLane?: NoraRedTeamLane;
+  expectedLaneSequence?: NoraRedTeamLane[];
   expectedTier?: NoraRedTeamEscalationTier;
   expectedModal?: NoraRedTeamEscalationModal;
   expectedHandoffWorkflow?: 'none' | 'tier_2_pending_consent' | 'tier_3_started';
+  expectedTool?: string;
+  expectedToolOutcome?: NoraRedTeamToolOutcome;
+  expectedToolConfirmation?: boolean;
+  expectedToolAttempts?: number;
+  expectedDuplicatePrevented?: boolean;
   maximum?: number;
+}
+
+export type NoraRedTeamToolOutcome =
+  | 'not_called'
+  | 'blocked'
+  | 'failed'
+  | 'pending_consent'
+  | 'succeeded';
+
+export interface NoraRedTeamSimulatedTool {
+  tool: string;
+  authorization: 'allowed' | 'denied' | 'not_requested';
+  outcome: NoraRedTeamToolOutcome;
+  sideEffect: 'none';
+  confirmation: boolean;
+  confirmationId?: string;
+  attemptCount?: number;
+  duplicatePrevented?: boolean;
+  idempotencyKey?: string;
+  workflow?: string;
+  nextStep?: string;
 }
 
 export interface NoraRedTeamScenario {
@@ -60,10 +91,19 @@ export interface NoraRedTeamScenario {
   expectedEscalationTier: NoraRedTeamEscalationTier;
   seedAthleteMessage: string;
   fixedFinalAthleteMessage?: string;
+  additionalAthleteMessages?: string[];
+  syntheticHealthData?: {
+    label: string;
+    value: string;
+    observedAt: string;
+    freshness: string;
+    missingness: string;
+  };
   syntheticContext: string;
   attackGoal: string;
   contractRules: string[];
   checks: NoraRedTeamScenarioCheck[];
+  simulatedTool?: NoraRedTeamSimulatedTool;
 }
 
 export interface NoraRedTeamAttack {
@@ -203,7 +243,7 @@ export interface NoraRedTeamRun {
   familyLabel: string;
   expectedLane: NoraRedTeamLane;
   randomSeed: number;
-  platform: 'web-admin-policy-sandbox';
+  platform: 'web-admin-policy-sandbox' | 'web-staging-chat';
   build: string;
   targetModel: string;
   agentModel: string;
@@ -218,6 +258,7 @@ export interface NoraRedTeamRun {
   humanReview: {
     status: 'not_required' | 'pending' | 'confirmed' | 'inconclusive';
     reviewedAt: string | null;
+    reviewerEmail: string | null;
   };
   attack: NoraRedTeamAttack;
   turns: NoraRedTeamTurn[];
@@ -225,30 +266,173 @@ export interface NoraRedTeamRun {
   judge: NoraRedTeamJudgeResult;
   adjudication: NoraRedTeamAdjudication | null;
   agentTrace: NoraRedTeamAgentTrace[];
-  simulatedTools: Array<{
-    tool: string;
-    authorization: 'allowed' | 'denied' | 'not_requested';
-    outcome: 'not_called' | 'blocked' | 'failed' | 'pending_consent';
-    sideEffect: 'none';
-    confirmation: false;
-    workflow?: string;
-    nextStep?: string;
-  }>;
+  simulatedTools: NoraRedTeamSimulatedTool[];
   usage: NoraRedTeamUsage;
+  stagingEvidence?: {
+    syntheticUserId: string;
+    anonymousRequestDenied: boolean;
+    crossAccountRequestDenied: boolean;
+    stateSnapshotRead: boolean;
+    conversationWriteObserved: boolean;
+    escalationRecordWriteObserved: boolean;
+    coachHandoffWriteObserved: boolean;
+    coachHandoffWriteCount: number;
+    safetyStateWriteObserved: boolean;
+    tier2ClinicalRoutingLocked: boolean;
+    externalSideEffects: false;
+    cleanupCompleted: boolean;
+  };
   evidencePolicy: {
     syntheticOnly: true;
     productionWrites: false;
     responseStorage: false;
-    applicationPersistence: false;
+    applicationPersistence: boolean;
+    persistenceScope: 'none' | 'temporary_job_state' | 'protected_history';
+    retentionEndsAt: string | null;
     chainOfThoughtStored: false;
+    stagingWrites?: boolean;
+    externalSideEffects?: false;
   };
+}
+
+export type NoraRedTeamJobStatus =
+  | 'queued'
+  | 'running'
+  | 'cancelling'
+  | 'cancelled'
+  | 'completed'
+  | 'failed';
+
+export type NoraRedTeamJobStage =
+  | 'queued'
+  | 'loading_policy'
+  | 'generating_attack'
+  | 'running_nora'
+  | 'judging'
+  | 'adjudicating'
+  | 'finalizing'
+  | 'completed'
+  | 'cancelling'
+  | 'cancelled'
+  | 'failed';
+
+export interface NoraRedTeamRunLimits {
+  maxDurationMs: number;
+  requestTimeoutMs: number;
+  maxModelCalls: number;
+  maxRetriesPerRequest: number;
+  maxTotalTokens: number;
+}
+
+export interface NoraRedTeamJobProgress {
+  stage: NoraRedTeamJobStage;
+  percent: number;
+  message: string;
+  modelCalls: number;
+  retryCount: number;
+  usage: NoraRedTeamUsage;
+  updatedAt: string;
+}
+
+export interface NoraRedTeamJobError {
+  code: string;
+  message: string;
+  detail?: string;
+}
+
+export interface NoraRedTeamJob {
+  jobId: string;
+  scenarioId: string;
+  randomSeed: number;
+  target: NoraRedTeamTarget;
+  status: NoraRedTeamJobStatus;
+  progress: NoraRedTeamJobProgress;
+  limits: NoraRedTeamRunLimits;
+  storage: 'memory' | 'temporary_firestore';
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  expiresAt: string;
+  cancelRequested: boolean;
+  run: NoraRedTeamRun | null;
+  error: NoraRedTeamJobError | null;
 }
 
 export interface NoraRedTeamRunRequest {
   scenarioId: string;
   randomSeed: number;
+  target?: NoraRedTeamTarget;
 }
 
 export interface NoraRedTeamRunResponse {
   run: NoraRedTeamRun;
+}
+
+export interface NoraRedTeamJobResponse {
+  job: NoraRedTeamJob;
+}
+
+export type NoraRedTeamReleaseStatus = 'clear' | 'blocking' | 'resolved';
+
+export interface NoraRedTeamHistoryRecord {
+  runId: string;
+  scenarioId: string;
+  scenarioTitle: string;
+  verdict: NoraRedTeamVerdict;
+  severity: NoraRedTeamSeverity;
+  completedAt: string;
+  ownerEmail: string;
+  firebaseMode: 'prod' | 'dev';
+  createdAt: string;
+  updatedAt: string;
+  releaseStatus: NoraRedTeamReleaseStatus;
+  releaseResolvedAt: string | null;
+  releaseResolutionRunId: string | null;
+  promotedRegression: boolean;
+  promotedAt: string | null;
+  promotedBy: string | null;
+  run: NoraRedTeamRun;
+}
+
+export interface NoraRedTeamRegressionCase {
+  scenarioId: string;
+  sourceRunId: string;
+  promotedAt: string;
+  promotedBy: string;
+  enabled: boolean;
+  scenario: NoraRedTeamScenario;
+}
+
+export interface NoraRedTeamHistoryResponse {
+  history: NoraRedTeamHistoryRecord[];
+  openCriticalBlockers: number;
+  promotedRegressionCount: number;
+  latestSuite: NoraRedTeamSuiteRecord | null;
+}
+
+export interface NoraRedTeamSuiteRecord {
+  suiteId: string;
+  version: string;
+  contractVersion: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  scheduled: boolean;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  scenarioIds: string[];
+  completedScenarioIds: string[];
+  passed: number;
+  failed: number;
+  review: number;
+  openCriticalBlockers: number;
+  build: string;
+  error: string | null;
+}
+
+export interface NoraRedTeamReleaseGateResult {
+  releaseReady: boolean;
+  checkedAt: string;
+  latestSuite: NoraRedTeamSuiteRecord | null;
+  openCriticalBlockers: number;
+  reasons: string[];
 }
