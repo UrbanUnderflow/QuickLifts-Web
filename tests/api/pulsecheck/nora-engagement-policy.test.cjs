@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const repoRoot = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web';
+const repoRoot = path.resolve(__dirname, '../../..');
 const policy = require(path.join(repoRoot, 'netlify/functions/utils/noraEngagementPolicy.js'));
 
   const {

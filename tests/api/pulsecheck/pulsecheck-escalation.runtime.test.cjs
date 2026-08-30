@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const repoRoot = '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web';
+const repoRoot = path.resolve(__dirname, '../../..');
 const escalationPath = path.join(repoRoot, 'netlify/functions/pulsecheck-escalation.js');
 const configPath = path.join(repoRoot, 'netlify/functions/config/firebase.js');
 const pilotMetricsPath = path.join(repoRoot, 'netlify/functions/utils/pulsecheck-pilot-metrics.js');
