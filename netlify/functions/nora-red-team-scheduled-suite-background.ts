@@ -47,7 +47,10 @@ export const handler: Handler = async (event) => {
     bridgeOrigin: bridgeOrigin(),
     featureId: process.env.NORA_RED_TEAM_BRIDGE_FEATURE_ID?.trim() || 'noraRedTeam',
     firebaseProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() || 'quicklifts-dd3f1',
-    firebaseApiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() || '',
+    firebaseApiKey:
+      process.env.FIREBASE_WEB_API_KEY?.trim() ||
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
+      '',
     targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL?.trim() || 'gpt-4o-mini',
     agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o-mini',
     build: process.env.COMMIT_REF?.trim() || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim() || 'scheduled',
