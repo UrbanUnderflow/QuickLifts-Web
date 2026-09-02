@@ -34,6 +34,7 @@ import {
   ArrowDown,
   ArrowUp,
   BarChart3,
+  BookOpen,
   Building2,
   Calendar,
   ChevronDown,
@@ -80,11 +81,12 @@ import {
   emailStatusRank,
   type SyncedEmailEventSummary,
 } from '../utils/pipelistsEmailEventSync';
+import PipeListsRunbook from '../components/pipelists/PipeListsRunbook';
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 
 type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'nextStep';
-type ViewMode = 'pipeline' | 'metrics' | 'logs';
+type ViewMode = 'pipeline' | 'metrics' | 'logs' | 'runbook';
 type DetailModalMode = 'details' | 'logs' | 'email' | 'research' | 'ask';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
@@ -2742,7 +2744,8 @@ const PipelinePage: NextPage = () => {
   const personalListsRef = useRef<PipeList[]>(initialLists);
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
+  const [viewMode, setViewModeState] = useState<ViewMode>('pipeline');
+  const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | PipelinePriority>('all');
@@ -2932,10 +2935,33 @@ const PipelinePage: NextPage = () => {
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
   const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
   const canManageWorkspace = !isSharedView && Boolean(user);
+  const runbookAvailable = !isSharedView && Boolean(user) && (isOwner || editableListIds.size > 0);
   const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
   const isContactListActive = isContactList(activeList);
   const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
   const canAttemptAuth = authReady || authReadyTimedOut;
+
+  const setViewMode = (nextViewMode: ViewMode) => {
+    if (
+      viewMode === 'runbook' &&
+      nextViewMode !== 'runbook' &&
+      runbookHasUnsavedChanges &&
+      typeof window !== 'undefined' &&
+      !window.confirm('Discard your unsaved runbook changes?')
+    ) {
+      return;
+    }
+
+    if (nextViewMode !== 'runbook') setRunbookHasUnsavedChanges(false);
+    setViewModeState(nextViewMode);
+  };
+
+  useEffect(() => {
+    if (viewMode === 'runbook' && !runbookAvailable) {
+      setRunbookHasUnsavedChanges(false);
+      setViewModeState('pipeline');
+    }
+  }, [runbookAvailable, viewMode]);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -8018,6 +8044,13 @@ Rules:
   };
 
   const handleSignOut = async () => {
+    if (
+      runbookHasUnsavedChanges &&
+      typeof window !== 'undefined' &&
+      !window.confirm('Discard your unsaved runbook changes and sign out?')
+    ) {
+      return;
+    }
     await signOut(simpBudgetAuth);
     setUser(null);
     setDataReady(isSharedView);
@@ -8765,14 +8798,16 @@ Rules:
                   </>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={handleExport}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
-                title="Export current list"
-              >
-                <Download className="h-4 w-4" />
-              </button>
+              {viewMode !== 'runbook' && (
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
+                  title="Export current list"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              )}
               {isOwner && !isSharedView && (
                 <button
                   type="button"
@@ -8926,20 +8961,30 @@ Rules:
             <div className="mb-5 flex flex-col gap-4 border-b border-stone-200 pb-5 md:flex-row md:items-end md:justify-between">
               <div className="min-w-0">
                 <div className="mb-2 flex items-center gap-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${activeList.accent}`} />
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      viewMode === 'runbook' ? 'bg-sky-500' : activeList.accent
+                    }`}
+                  />
                   <span className="text-xs font-semibold uppercase text-stone-400">
-                    {templateCatalog[activeList.templateKey].label}
+                    {viewMode === 'runbook' ? 'Shared workspace' : templateCatalog[activeList.templateKey].label}
                   </span>
                 </div>
                 <h2 className="truncate text-3xl font-bold tracking-normal text-stone-950 md:text-4xl">
-                  {activeList.name}
+                  {viewMode === 'runbook' ? 'Sales Runbook' : activeList.name}
                 </h2>
-                {activeList.description && (
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">{activeList.description}</p>
+                {viewMode === 'runbook' ? (
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">
+                    The team's editable source for sales strategy, messaging, resources, and operating cadence.
+                  </p>
+                ) : (
+                  activeList.description && (
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">{activeList.description}</p>
+                  )
                 )}
               </div>
 
-              {canModify && (
+              {canModify && viewMode !== 'runbook' && (
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -8970,6 +9015,9 @@ Rules:
                 { id: 'pipeline' as const, label: 'Pipeline', icon: <Layers className="h-4 w-4" /> },
                 { id: 'metrics' as const, label: 'Metrics', icon: <BarChart3 className="h-4 w-4" /> },
                 { id: 'logs' as const, label: 'Logs', icon: <ClipboardList className="h-4 w-4" /> },
+                ...(runbookAvailable
+                  ? [{ id: 'runbook' as const, label: 'Runbook', icon: <BookOpen className="h-4 w-4" /> }]
+                  : []),
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -8986,6 +9034,10 @@ Rules:
                 </button>
               ))}
             </div>
+
+            {viewMode === 'runbook' && user && (
+              <PipeListsRunbook user={user} onDirtyChange={setRunbookHasUnsavedChanges} />
+            )}
 
             {viewMode === 'metrics' && (
               <div className="space-y-5">
